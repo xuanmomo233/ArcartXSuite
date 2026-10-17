@@ -1,13 +1,17 @@
-# AXS Extra Backpack — 旅行装备册
-# 天然帆布内页 / 胡桃皮革封边 / 分类收纳与装载提示。
-# 原版槽位与 ~Extra 真实扩展槽位仍由 ArcartX 原生处理拖动、半组、单放与交换。
-# 分类页只过滤共用仓位，不把分类 slotCount 当作总容量。
+# AXS Extra Backpack
+# 科幻风三栏背包界面：左侧装备面板 + 中央角色展示（相机偏转第三人称）
+# + 右侧背包面板（搜索/原版网格/扩容网格/快捷栏）。
+# 交互方式：纯拖动 —— 原版区为原生槽位（Backpack/Container），扩容区为 ArcartX
+# 真实扩展槽位（~Extra，id=axs_eb_<分类>_<序号>），放取/半组/单放/交换全部由
+# ArcartX 原生处理；服务端负责按分类匹配规则校验放入合法性。
+
 ui:
   isHud: false
   defaultOpen: false
   match:
     - 物品栏界面
   hide:
+    # 原版 HUD（背包打开期间全部遮蔽）
     - hotbar
     - crosshair
     - player_state
@@ -20,6 +24,7 @@ ui:
     - chat_panel
     - player_list
     - subtitles
+    # 自定义 HUD/UI（不存在的 id 会被忽略，覆盖本服已部署项）
     - HUD
     - online
     - 聊天栏
@@ -50,6 +55,23 @@ ui:
   itemSize: 16
   screenScale: true
   packetHandler:
+    # packetHandler: update
+    # 包字段:
+    #   - packetId: 服务端回包 ID，用于客户端 Packet.send 回传
+    #   - action_token: 操作令牌，防止重复提交
+    #   - activeCategory: 当前激活的分类页 ID
+    #   - categories: 分类页数据 map (key=分类索引, value=分类详情)
+    #   - categoryCount: 分类页总数
+    #   - slotCount: 当前分类页槽位数量（扩容槽位物品由 ~Extra 槽位自行渲染）
+    #   - used: 已使用槽位数
+    #   - capacityText: 容量显示文本 (如 "9/27")
+    #   - maxCapacity: 最大容量
+    #   - currencyText: 顶栏货币余额文本 (如 "点券 12,345   金币 678")
+    #   - canBuySlots: 是否可以购买更多槽位
+    #   - remainingSlots: 剩余可购买槽位数
+    #   - buySlotsText: 购买槽位提示文本
+    #   - passwordPanel: 密码面板状态 (visible/mode)
+    #   - destroyPanel: 销毁确认面板状态 (visible)
     update: |-
       var.packetId = packet['packetId']
       var.actionToken = packet['action_token']
@@ -65,28 +87,7 @@ ui:
       var.buySlotsText = packet['buySlotsText']
       var.passwordPanel = packet['passwordPanel']
       var.destroyPanel = packet['destroyPanel']
-      // 分类共有的已解锁仓位用于装载条，分类过滤不改变装载分母
-      var.装载容量 = var.categories[0.round()]['capacity']
-      var.装载率 = 0
-      if(var.装载容量 > 0){
-        var.装载率 = var.used / var.装载容量
-        if(var.装载率 > 1){ var.装载率 = 1 }
-      }
-      // 密码模式文案在脚本中选择，避免渲染属性的嵌套三元
-      var.密码标题 = '解锁行囊'
-      var.密码动作 = '解锁'
-      var.密码说明 = '输入二级密码后继续整理物品'
-      if(var.passwordPanel['mode'] == 'set'){
-        var.密码标题 = '设置二级密码'
-        var.密码动作 = '保存密码'
-        var.密码说明 = '已有密码时，先输入当前密码'
-      }else{
-        if(var.passwordPanel['mode'] == 'clear'){
-          var.密码标题 = '清除二级密码'
-          var.密码动作 = '确认清除'
-          var.密码说明 = '清除后，行囊不再受二级密码保护'
-        }
-      }
+      // 分类页签动态重建（模板 项 为索引 0）
       分类数 = var.categoryCount.round()
       现有分类数 = val.分类标签行.childrenCount() - 1
       if(现有分类数 != 分类数 - 1){
@@ -103,9 +104,11 @@ ui:
           }
         }
       }
-      // 槽位仍在 tick 统一重建，保留原生 Extra 槽位同步时序
+      // 扩容槽位重建统一推迟到 tick（update/滚轮翻页/resize 共用同一入口）
       var.待重建 = true
+      // 重建后需重新套用搜索过滤
       var.待过滤 = true
+      // update 包到达，重置防抖标志
       var.actionBusy = false
   action:
     seconds: |-
@@ -119,25 +122,28 @@ ui:
         var.actionBusySeconds = 0
       }
     tick: |-
+      // 相机偏转保持：玩家转向后重设状态相机（与 menu_esc 相同模式）
       if(server.player_yaw != var.yaw){
         var.yaw = server.player_yaw
         Camera.setState(-0.7, -0.5, 2.1, 210, 0.0, 600)
         Camera.setThirdPerson(true)
         var.相机计数 = 0
       }
+      // 周期重断言：其他 UI/系统可能清掉相机状态，每 10 tick 瞬移重设兜底
       var.相机计数 = var.相机计数 + 1
       if(var.相机计数 >= 10){
         var.相机计数 = 0
         Camera.setState(-0.7, -0.5, 2.1, 210, 0.0, 0)
         Camera.setThirdPerson(true)
       }
+      // 主武器 Icon 槽随主手物品变化刷新
       mh = Player.getMainHandItem()
       mk = mh == none ? '' : mh.getName() + '#' + mh.getCount()
       if(mk != var.主手缓存){
         var.主手缓存 = mk
-        主手图标 = mh == none ? '' : mh.toJson()
-        val.主武器槽.setItemIcon(主手图标)
+        val.主武器槽.setItemIcon(mh == none ? '' : mh.toJson())
       }
+      // 搜索过滤：对原版/扩容/快捷三网格逐槽位比对物品名
       if(var.待过滤 || (var.searchText != none && var.searchText != '')){
         var.待过滤 = false
         q = var.searchText == none ? '' : var.searchText
@@ -145,21 +151,22 @@ ui:
           sl = val.原版背包网格.get(i)
           st = sl.getSlotItemStack()
           nm = st == none ? '' : st.getName()
-          sl.alpha = (q == '' || nm.contains(q)) ? 1 : 0.3
+          sl.alpha = q == '' || nm.contains(q) ? 1 : 0.3
         }
         for(i in range(0, val.快捷栏网格.childrenCount() - 1)){
           sl = val.快捷栏网格.get(i)
           st = sl.getSlotItemStack()
           nm = st == none ? '' : st.getName()
-          sl.alpha = (q == '' || nm.contains(q)) ? 1 : 0.3
+          sl.alpha = q == '' || nm.contains(q) ? 1 : 0.3
         }
         for(i in range(1, val.扩容网格.childrenCount() - 1)){
           sl = val.扩容网格.get(i)
           st = sl.getSlotItemStack()
           nm = st == none ? '' : st.getName()
-          sl.alpha = (q == '' || nm.contains(q)) ? 1 : 0.3
+          sl.alpha = q == '' || nm.contains(q) ? 1 : 0.3
         }
       }
+      // 扩容槽位分页重建统一入口：update 包、滚轮翻页、resize 都置 var.待重建 后在此执行
       if(var.待重建){
         var.待重建 = false
         if(var.每页槽位数 == none){
@@ -232,11 +239,7 @@ ui:
       var.入场 = none
       var.相机计数 = 0
       var.图标已设 = false
-      var.装载率 = 0
-      var.装载容量 = 0
-      var.密码标题 = '解锁行囊'
-      var.密码动作 = '解锁'
-      var.密码说明 = '输入二级密码后继续整理物品'
+      // Adaptive 以 1920x1080 等比缩放，换算设计坐标系下的可用视口
       sx = Screen.getWidth() / 1920
       sy = Screen.getHeight() / 1080
       s = sx < sy ? sx : sy
@@ -248,10 +251,10 @@ ui:
       var.总页数 = 1
       var.已建页码 = -1
       var.待重建 = false
-      // 扩容仓从 510 开始；72 槽 + 8 间距；预留翻页与快捷栏
-      面板高 = var.viewH - 152
+      // 每页行数按可视高度自适应：扩容网格顶边 434，快捷栏顶边约在面板高-140
+      面板高 = var.viewH - 200
       行数 = 1
-      while(510 + (行数 + 1) * 80 - 8 <= 面板高 - 186){
+      while(434 + (行数 + 1) * 80 - 10 <= 面板高 - 140){
         行数 = 行数 + 1
       }
       var.每页槽位数 = 行数 * 9
@@ -262,9 +265,9 @@ ui:
       var.viewW = Screen.getWidth() / s
       var.viewH = Screen.getHeight() / s
       var.offX = (var.viewW - 1920) / 2
-      面板高 = var.viewH - 152
+      面板高 = var.viewH - 200
       行数 = 1
-      while(510 + (行数 + 1) * 80 - 8 <= 面板高 - 186){
+      while(434 + (行数 + 1) * 80 - 10 <= 面板高 - 140){
         行数 = 行数 + 1
       }
       var.每页槽位数 = 行数 * 9
@@ -274,6 +277,7 @@ ui:
       var.入场 = Lerp(0, 1, 450)
       Camera.setState(-0.7, -0.5, 2.1, 210, 0.0, 600)
       Camera.setThirdPerson(true)
+      // 顶栏货币图标（原版物品 NBT，按服务器喜好更换）
       val.金币图标.setItemIcon('{"id":"minecraft:gold_ingot","Count":1b}')
       val.点券图标.setItemIcon('{"id":"minecraft:emerald","Count":1b}')
     close: |-
@@ -289,11 +293,6 @@ ui:
       }
 
 controls:
-  世界底色:
-    type: Texture
-    attribute:
-      point: ~stretch_all
-      normal: ~35,30,23,85
   自适应全局布局:
     type: Adaptive
     attribute:
@@ -306,61 +305,141 @@ controls:
         attribute:
           point: ~top_left
           x: "-var.offX"
-          y: "-104 + (var.入场 == none ? 1 : var.入场.get()) * 104"
+          y: "-90 + (var.入场 == none ? 1 : var.入场.get()) * 90"
           width: "var.viewW"
-          height: 96
+          height: 88
         children:
           背景:
             type: Texture
-            attribute: { point: '~stretch_all', normal: '~65,43,31,250' }
-          下沿缝线:
-            type: Texture
-            attribute: { x: 24, y: 88, width: 'var.viewW - 48', height: 2, normal: '~181,145,93,255', through: true }
+            attribute:
+              point: ~stretch_all
+              normal: ~10,12,18,215
           标题图标:
             type: Texture
-            attribute: { x: 38, y: 23, width: 44, height: 46, normal: '~/纯色块背包/背包图案.png', through: true }
+            attribute:
+              x: 34
+              y: 20
+              width: 44
+              height: 46
+              normal: ~/纯色块背包/背包图案.png
+              through: true
           标题:
             type: Text
-            attribute: { x: 102, y: 12, texts: '~&f旅行装备册', fontSize: 64, through: true }
+            attribute:
+              x: 92
+              y: 18
+              texts: ~&f个人背包
+              fontSize: 48
           副标题:
             type: Text
-            attribute: { x: 104, y: 58, texts: '~&eFIELD FOLIO / 个人背包', fontSize: 36, through: true }
+            attribute:
+              x: 94
+              y: 48
+              texts: ~&7CHARACTER / INVENTORY
+              fontSize: 36
+          # 顶栏右侧状态区：Icon 槽位渲染物品图标 + 数字（变量/物品按自己服务器改）
           货币栏:
             type: HStack
-            attribute: { point: '~top_right', x: -322, y: 24, height: 48, spaceBetween: 24 }
+            attribute:
+              point: ~top_right
+              x: -190
+              y: 20
+              spaceBetween: 30
             children:
               容量组:
                 type: Canvas
-                attribute: { width: 220, height: 48, through: true }
+                attribute:
+                  width: 180
+                  height: 48
+                  through: true
                 children:
+                  容量图标:
+                    type: Texture
+                    attribute:
+                      x: 24
+                      y: 15
+                      width: 22
+                      height: 23
+                      normal: ~/纯色块背包/背包图案.png
+                      through: true
                   容量项:
                     type: Text
-                    attribute: { point: '~middle_left', texts: "'&f装载 ' + var.capacityText", fontSize: 36, through: true }
+                    attribute:
+                      x: 56
+                      y: 16
+                      texts: "'&f容量 ' + var.capacityText"
+                      shadow: true
+                      fontSize: 36
+                      through: true
               金币组:
                 type: Canvas
-                attribute: { width: 230, height: 48, through: true }
+                attribute:
+                  width: 260
+                  height: 48
+                  through: true
                 children:
                   金币图标:
                     type: Slot
                     val: 金币图标
-                    attribute: { slotType: '~Icon', x: 0, y: 2, width: 44, height: 44, normal: '~87,62,40,255', shape: '~round_rect', radius: 6, itemScale: 0.75, through: true }
+                    attribute:
+                      slotType: ~Icon
+                      x: 0
+                      y: 2
+                      width: 44
+                      height: 44
+                      normal: ~34,38,48,180
+                      shape: ~round_rect
+                      radius: 10
+                      itemScale: 0.75
+                      through: true
                   金币项:
                     type: Text
-                    attribute: { point: '~middle_left', x: 56, texts: "'&e金币 ' + server.rondo_balance_gold", fontSize: 36, through: true }
+                    attribute:
+                      x: 56
+                      y: 16
+                      texts: "'&e金币 ' + server.rondo_balance_gold"
+                      shadow: true
+                      fontSize: 36
+                      through: true
               点券组:
                 type: Canvas
-                attribute: { width: 190, height: 48, through: true }
+                attribute:
+                  width: 180
+                  height: 48
+                  through: true
                 children:
                   点券图标:
                     type: Slot
                     val: 点券图标
-                    attribute: { slotType: '~Icon', x: 0, y: 2, width: 44, height: 44, normal: '~87,62,40,255', shape: '~round_rect', radius: 6, itemScale: 0.75, through: true }
+                    attribute:
+                      slotType: ~Icon
+                      x: 0
+                      y: 2
+                      width: 44
+                      height: 44
+                      normal: ~34,38,48,180
+                      shape: ~round_rect
+                      radius: 10
+                      itemScale: 0.75
+                      through: true
                   点券项:
                     type: Text
-                    attribute: { point: '~middle_left', x: 56, texts: "'&e点券 ' + server.rondo_balance_points", fontSize: 36, through: true }
+                    attribute:
+                      x: 56
+                      y: 16
+                      texts: "'&e点券 ' + server.rondo_balance_points"
+                      shadow: true
+                      fontSize: 36
+                      through: true
           设置按钮:
             type: Canvas
-            attribute: { point: '~top_right', x: -184, y: 20, width: 122, height: 54, tip: '~购买槽位与背包设置' }
+            attribute:
+              point: ~top_right
+              x: -104
+              y: 16
+              width: 56
+              height: 56
+              tip: ~购买槽位与背包设置
             action:
               clickLeft: |-
                 if(var.设置面板开){
@@ -371,15 +450,29 @@ controls:
             children:
               按钮背景:
                 type: Texture
-                attribute: { point: '~stretch_all', normal: '~114,83,51,255', hover: '~139,106,64,255', shape: '~round_rect', radius: 6, through: true }
-                effect:
-                  stroke: { width: 1, color: '~196,163,111,255' }
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~40,44,54,230
+                  hover: ~Frosted:0;255,255,255,240
+                  shape: ~round_rect
+                  radius: 10
               按钮文字:
                 type: Text
-                attribute: { point: '~middle_center', texts: '~&f扩容设置', fontSize: 36, through: true }
+                attribute:
+                  point: ~middle_center
+                  texts: ~&f⚙
+                  fontSize: 36
+                  through: true
           关闭按钮:
             type: Canvas
-            attribute: { point: '~top_right', x: -40, y: 20, width: 122, height: 54, tip: '~关闭 / E / ESC' }
+            attribute:
+              point: ~top_right
+              x: -32
+              y: 16
+              width: 56
+              height: 56
+              tip: ~关闭
             action:
               clickLeft: |-
                 Camera.setThirdPerson(false)
@@ -388,343 +481,532 @@ controls:
             children:
               关闭背景:
                 type: Texture
-                attribute: { point: '~stretch_all', normal: '~83,58,40,255', hover: '~117,77,51,255', shape: '~round_rect', radius: 6, through: true }
-                effect:
-                  stroke: { width: 1, color: '~153,119,80,255' }
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~40,44,54,230
+                  hover: ~Frosted:0;255,90,90,240
+                  shape: ~round_rect
+                  radius: 10
               关闭文字:
                 type: Text
-                attribute: { point: '~middle_center', texts: '~&f合上 / E', fontSize: 36, through: true }
+                attribute:
+                  point: ~middle_center
+                  texts: ~&f✕
+                  fontSize: 36
+                  through: true
 
       左侧栏:
         type: Canvas
         attribute:
           point: ~top_left
           x: "40 - var.offX - (1 - (var.入场 == none ? 1 : var.入场.get())) * 500"
-          y: 112
+          y: 110
           width: 420
-          height: "var.viewH - 152"
+          height: "var.viewH - 160"
         children:
           背景:
             type: Texture
-            attribute: { point: '~stretch_all', normal: '~223,211,183,250', shape: '~round_rect', radius: 8 }
-            effect:
-              stroke: { width: 2, color: '~110,79,49,255' }
-          装订边:
-            type: Texture
-            attribute: { x: 0, y: 0, width: 8, height: 'self.parent.height', normal: '~105,73,43,255', through: true }
+            attribute:
+              point: ~stretch_all
+              normal: ~12,14,20,205
+              shape: ~round_rect
+              radius: 16
           装备标题:
             type: Text
-            attribute: { x: 24, y: 20, texts: '~&0穿戴清单', fontSize: 54, through: true }
+            attribute:
+              x: 24
+              y: 14
+              texts: ~&f装备
+              fontSize: 54
           部位数:
             type: Text
-            attribute: { point: '~top_right', x: -24, y: 28, texts: '~&801 / 6 部位', fontSize: 36, through: true }
+            attribute:
+              point: ~top_right
+              x: -24
+              y: 28
+              texts: ~&76 部位
+              fontSize: 36
           武器标签:
             type: Text
-            attribute: { x: 24, y: 82, texts: '~&8手持装备 / READY', fontSize: 36, through: true }
+            attribute:
+              x: 24
+              y: 82
+              texts: ~&7武器
+              fontSize: 36
           主武器行:
             type: Canvas
-            attribute: { x: 24, y: 122, width: 372, height: 84 }
+            attribute:
+              x: 24
+              y: 122
+              width: 372
+              height: 96
             children:
               行背景:
                 type: Texture
-                attribute: { point: '~stretch_all', normal: '~199,184,151,255', shape: '~round_rect', radius: 6, through: true }
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~255,255,255,12
+                  shape: ~round_rect
+                  radius: 10
               主武器槽:
                 type: Slot
                 val: 主武器槽
-                attribute: { x: 8, y: 8, width: 68, height: 68, slotType: '~Icon', normal: '~108,82,52,255', hover: '~140,111,67,255', shape: '~round_rect', radius: 6, itemScale: 0.76 }
+                attribute:
+                  x: 10
+                  y: 10
+                  width: 76
+                  height: 76
+                  slotType: ~Icon
+                  normal: ~38,42,52,255
+                  hover: ~Frosted:0;255,255,255,255
+                  shape: ~round_rect
+                  radius: 10
+                  itemScale: 0.76
                 effect:
-                  stroke: { width: 1, color: '~159,131,87,255' }
+                  stroke:
+                    width: 1
+                    color: ~0,0,0,255
               类型:
                 type: Text
-                attribute: { x: 94, y: 8, texts: '~&8主手 / 当前持有', fontSize: 36, through: true }
+                attribute:
+                  x: 104
+                  y: 12
+                  texts: ~&7主武器
+                  fontSize: 36
               装备名:
                 type: Text
                 attribute:
-                  x: 94
-                  y: 44
+                  x: 104
+                  y: 52
                   limit: 14
-                  texts: "Player.getMainHandItem() != none && Player.getMainHandItem().getCount() > 0 ? '&0' + Player.getMainHandItem().getName() : '&8未持有'"
+                  texts: "Player.getMainHandItem() != none && Player.getMainHandItem().getCount() > 0 ? '&f' + Player.getMainHandItem().getName() : '&7未持有'"
                   fontSize: 36
-                  through: true
           副武器行:
             type: Canvas
-            attribute: { x: 24, y: 214, width: 372, height: 84 }
+            attribute:
+              x: 24
+              y: 226
+              width: 372
+              height: 96
             children:
               行背景:
                 type: Texture
-                attribute: { point: '~stretch_all', normal: '~199,184,151,255', shape: '~round_rect', radius: 6, through: true }
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~255,255,255,12
+                  shape: ~round_rect
+                  radius: 10
               槽位:
                 type: Slot
-                attribute: { x: 8, y: 8, width: 68, height: 68, slotType: '~Container', id: 45, normal: '~108,82,52,255', hover: '~140,111,67,255', shape: '~round_rect', radius: 6, itemScale: 0.76 }
+                attribute:
+                  x: 10
+                  y: 10
+                  width: 76
+                  height: 76
+                  slotType: ~Container
+                  id: 45
+                  normal: ~38,42,52,255
+                  hover: ~Frosted:0;255,255,255,255
+                  shape: ~round_rect
+                  radius: 10
+                  itemScale: 0.76
                 effect:
-                  stroke: { width: 1, color: '~159,131,87,255' }
+                  stroke:
+                    width: 1
+                    color: ~0,0,0,255
               类型:
                 type: Text
-                attribute: { x: 94, y: 8, texts: '~&8副手', fontSize: 36, through: true }
+                attribute:
+                  x: 104
+                  y: 12
+                  texts: ~&7副武器
+                  fontSize: 36
               装备名:
                 type: Text
                 attribute:
-                  x: 94
-                  y: 44
+                  x: 104
+                  y: 52
                   limit: 14
-                  texts: "self.parent['槽位'].getSlotItemStack() != none && self.parent['槽位'].getSlotItemStack().getCount() > 0 ? '&0' + self.parent['槽位'].getSlotItemStack().getName() : '&8未装备'"
+                  texts: "self.parent['槽位'].getSlotItemStack() != none && self.parent['槽位'].getSlotItemStack().getCount() > 0 ? '&f' + self.parent['槽位'].getSlotItemStack().getName() : '&7未装备'"
                   fontSize: 36
-                  through: true
           防具标签:
             type: Text
-            attribute: { x: 24, y: 312, texts: '~&8防护装备 / PROTECTION', fontSize: 36, through: true }
+            attribute:
+              x: 24
+              y: 332
+              texts: ~&7防具
+              fontSize: 36
           装备列表:
             type: VStack
-            attribute: { x: 24, y: 352, width: 372, spaceBetween: 8 }
+            attribute:
+              x: 24
+              y: 376
+              width: 372
+              spaceBetween: 10
             children:
               头盔行:
                 type: Canvas
-                attribute: { width: 372, height: 84 }
+                attribute:
+                  width: 372
+                  height: 96
                 children:
                   行背景:
                     type: Texture
-                    attribute: { point: '~stretch_all', normal: '~199,184,151,255', shape: '~round_rect', radius: 6, through: true }
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~255,255,255,12
+                      shape: ~round_rect
+                      radius: 10
                   槽位:
                     type: Slot
-                    attribute: { x: 8, y: 8, width: 68, height: 68, slotType: '~Container', id: 5, normal: '~108,82,52,255', hover: '~140,111,67,255', shape: '~round_rect', radius: 6, itemScale: 0.76 }
+                    attribute:
+                      x: 10
+                      y: 10
+                      width: 76
+                      height: 76
+                      slotType: ~Container
+                      id: 5
+                      normal: ~38,42,52,255
+                      hover: ~Frosted:0;255,255,255,255
+                      shape: ~round_rect
+                      radius: 10
+                      itemScale: 0.76
                     effect:
-                      stroke: { width: 1, color: '~159,131,87,255' }
+                      stroke:
+                        width: 1
+                        color: ~0,0,0,255
                   类型:
                     type: Text
-                    attribute: { x: 94, y: 8, texts: '~&8头盔', fontSize: 36, through: true }
+                    attribute:
+                      x: 104
+                      y: 12
+                      texts: ~&7头盔
+                      fontSize: 36
                   装备名:
                     type: Text
                     attribute:
-                      x: 94
-                      y: 44
+                      x: 104
+                      y: 52
                       limit: 14
-                      texts: "self.parent['槽位'].getSlotItemStack() != none && self.parent['槽位'].getSlotItemStack().getCount() > 0 ? '&0' + self.parent['槽位'].getSlotItemStack().getName() : '&8未装备'"
+                      texts: "self.parent['槽位'].getSlotItemStack() != none && self.parent['槽位'].getSlotItemStack().getCount() > 0 ? '&f' + self.parent['槽位'].getSlotItemStack().getName() : '&7未装备'"
                       fontSize: 36
-                      through: true
               胸甲行:
                 type: Canvas
-                attribute: { width: 372, height: 84 }
+                attribute:
+                  width: 372
+                  height: 96
                 children:
                   行背景:
                     type: Texture
-                    attribute: { point: '~stretch_all', normal: '~199,184,151,255', shape: '~round_rect', radius: 6, through: true }
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~255,255,255,12
+                      shape: ~round_rect
+                      radius: 10
                   槽位:
                     type: Slot
-                    attribute: { x: 8, y: 8, width: 68, height: 68, slotType: '~Container', id: 6, normal: '~108,82,52,255', hover: '~140,111,67,255', shape: '~round_rect', radius: 6, itemScale: 0.76 }
+                    attribute:
+                      x: 10
+                      y: 10
+                      width: 76
+                      height: 76
+                      slotType: ~Container
+                      id: 6
+                      normal: ~38,42,52,255
+                      hover: ~Frosted:0;255,255,255,255
+                      shape: ~round_rect
+                      radius: 10
+                      itemScale: 0.76
                     effect:
-                      stroke: { width: 1, color: '~159,131,87,255' }
+                      stroke:
+                        width: 1
+                        color: ~0,0,0,255
                   类型:
                     type: Text
-                    attribute: { x: 94, y: 8, texts: '~&8胸甲', fontSize: 36, through: true }
+                    attribute:
+                      x: 104
+                      y: 12
+                      texts: ~&7上衣
+                      fontSize: 36
                   装备名:
                     type: Text
                     attribute:
-                      x: 94
-                      y: 44
+                      x: 104
+                      y: 52
                       limit: 14
-                      texts: "self.parent['槽位'].getSlotItemStack() != none && self.parent['槽位'].getSlotItemStack().getCount() > 0 ? '&0' + self.parent['槽位'].getSlotItemStack().getName() : '&8未装备'"
+                      texts: "self.parent['槽位'].getSlotItemStack() != none && self.parent['槽位'].getSlotItemStack().getCount() > 0 ? '&f' + self.parent['槽位'].getSlotItemStack().getName() : '&7未装备'"
                       fontSize: 36
-                      through: true
               护腿行:
                 type: Canvas
-                attribute: { width: 372, height: 84 }
+                attribute:
+                  width: 372
+                  height: 96
                 children:
                   行背景:
                     type: Texture
-                    attribute: { point: '~stretch_all', normal: '~199,184,151,255', shape: '~round_rect', radius: 6, through: true }
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~255,255,255,12
+                      shape: ~round_rect
+                      radius: 10
                   槽位:
                     type: Slot
-                    attribute: { x: 8, y: 8, width: 68, height: 68, slotType: '~Container', id: 7, normal: '~108,82,52,255', hover: '~140,111,67,255', shape: '~round_rect', radius: 6, itemScale: 0.76 }
+                    attribute:
+                      x: 10
+                      y: 10
+                      width: 76
+                      height: 76
+                      slotType: ~Container
+                      id: 7
+                      normal: ~38,42,52,255
+                      hover: ~Frosted:0;255,255,255,255
+                      shape: ~round_rect
+                      radius: 10
+                      itemScale: 0.76
                     effect:
-                      stroke: { width: 1, color: '~159,131,87,255' }
+                      stroke:
+                        width: 1
+                        color: ~0,0,0,255
                   类型:
                     type: Text
-                    attribute: { x: 94, y: 8, texts: '~&8护腿', fontSize: 36, through: true }
+                    attribute:
+                      x: 104
+                      y: 12
+                      texts: ~&7下装
+                      fontSize: 36
                   装备名:
                     type: Text
                     attribute:
-                      x: 94
-                      y: 44
+                      x: 104
+                      y: 52
                       limit: 14
-                      texts: "self.parent['槽位'].getSlotItemStack() != none && self.parent['槽位'].getSlotItemStack().getCount() > 0 ? '&0' + self.parent['槽位'].getSlotItemStack().getName() : '&8未装备'"
+                      texts: "self.parent['槽位'].getSlotItemStack() != none && self.parent['槽位'].getSlotItemStack().getCount() > 0 ? '&f' + self.parent['槽位'].getSlotItemStack().getName() : '&7未装备'"
                       fontSize: 36
-                      through: true
               鞋子行:
                 type: Canvas
-                attribute: { width: 372, height: 84 }
+                attribute:
+                  width: 372
+                  height: 96
                 children:
                   行背景:
                     type: Texture
-                    attribute: { point: '~stretch_all', normal: '~199,184,151,255', shape: '~round_rect', radius: 6, through: true }
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~255,255,255,12
+                      shape: ~round_rect
+                      radius: 10
                   槽位:
                     type: Slot
-                    attribute: { x: 8, y: 8, width: 68, height: 68, slotType: '~Container', id: 8, normal: '~108,82,52,255', hover: '~140,111,67,255', shape: '~round_rect', radius: 6, itemScale: 0.76 }
+                    attribute:
+                      x: 10
+                      y: 10
+                      width: 76
+                      height: 76
+                      slotType: ~Container
+                      id: 8
+                      normal: ~38,42,52,255
+                      hover: ~Frosted:0;255,255,255,255
+                      shape: ~round_rect
+                      radius: 10
+                      itemScale: 0.76
                     effect:
-                      stroke: { width: 1, color: '~159,131,87,255' }
+                      stroke:
+                        width: 1
+                        color: ~0,0,0,255
                   类型:
                     type: Text
-                    attribute: { x: 94, y: 8, texts: '~&8靴子', fontSize: 36, through: true }
+                    attribute:
+                      x: 104
+                      y: 12
+                      texts: ~&7鞋子
+                      fontSize: 36
                   装备名:
                     type: Text
                     attribute:
-                      x: 94
-                      y: 44
+                      x: 104
+                      y: 52
                       limit: 14
-                      texts: "self.parent['槽位'].getSlotItemStack() != none && self.parent['槽位'].getSlotItemStack().getCount() > 0 ? '&0' + self.parent['槽位'].getSlotItemStack().getName() : '&8未装备'"
+                      texts: "self.parent['槽位'].getSlotItemStack() != none && self.parent['槽位'].getSlotItemStack().getCount() > 0 ? '&f' + self.parent['槽位'].getSlotItemStack().getName() : '&7未装备'"
                       fontSize: 36
-                      through: true
           操作提示:
             type: Text
             attribute:
               point: ~bottom_left
               x: 24
-              y: -134
+              y: -150
+              visible: "var.viewH > 960"
               texts:
-                - ~&8拖动收纳 / 按分类规则放入
-                - ~&8滚轮或翻页按钮查看更多仓位
+                - ~&7拖动物品到扩容槽位存放/取回
+                - ~&7滚轮翻页查看更多槽位
               fontSize: 36
-              through: true
           销毁卡片:
             type: Canvas
-            attribute: { point: '~bottom_left', x: 24, y: -24, width: 372, height: 86, tip: '~只销毁光标上拿着的物品；需要确认' }
+            attribute:
+              point: ~bottom_left
+              x: 24
+              y: -24
+              width: 372
+              height: 110
             action:
               clickLeft: |-
                 Packet.send(var.packetId, 'destroy_request')
             children:
               销毁背景:
                 type: Texture
-                attribute: { point: '~stretch_all', normal: '~116,65,43,255', hover: '~143,74,46,255', shape: '~round_rect', radius: 6, through: true }
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~120,30,30,160
+                  hover: ~Frosted:0;255,120,120,230
+                  shape: ~round_rect
+                  radius: 12
                 effect:
-                  stroke: { width: 1, color: '~169,111,72,255' }
+                  stroke:
+                    width: 1
+                    color: ~255,100,100,200
               销毁标题:
                 type: Text
-                attribute: { x: 20, y: 10, texts: '~&f物品销毁', fontSize: 36, through: true }
+                attribute:
+                  x: 24
+                  y: 12
+                  texts: ~&f物品销毁
+                  fontSize: 36
+                  through: true
               销毁说明:
                 type: Text
-                attribute: { x: 20, y: 46, texts: '~&e光标物品 / 确认后丢弃', fontSize: 36, through: true }
-
-      角色章签:
-        type: Canvas
-        attribute: { point: '~top_left', x: 540, y: 124, width: 450, height: 100, through: true }
-        children:
-          章签背景:
-            type: Texture
-            attribute: { point: '~stretch_all', normal: '~65,43,31,225', shape: '~round_rect', radius: 6, through: true }
-          章签标题:
-            type: Text
-            attribute: { x: 24, y: 14, texts: '~&f02 / 出行装束', fontSize: 48, through: true }
-          章签说明:
-            type: Text
-            attribute: { x: 24, y: 58, texts: '~&e穿戴在左 · 收纳在右', fontSize: 36, through: true }
+                attribute:
+                  x: 24
+                  y: 58
+                  texts: ~&7点击销毁光标上的物品
+                  fontSize: 36
+                  through: true
 
       右侧栏:
         type: Canvas
         attribute:
           point: ~top_right
-          x: "var.offX - 40 + (1 - (var.入场 == none ? 1 : var.入场.get())) * 850"
-          y: 112
-          width: 800
-          height: "var.viewH - 152"
+          x: "var.offX - 40 + (1 - (var.入场 == none ? 1 : var.入场.get())) * 750"
+          y: 110
+          width: 690
+          height: "var.viewH - 180"
         children:
           背景:
             type: Texture
-            attribute: { point: '~stretch_all', normal: '~232,221,195,250', shape: '~round_rect', radius: 8 }
-            effect:
-              stroke: { width: 2, color: '~110,79,49,255' }
-          装订边:
-            type: Texture
-            attribute: { point: '~top_right', width: 8, height: 'self.parent.height', normal: '~105,73,43,255', through: true }
-          收纳标题:
-            type: Text
-            attribute: { x: 32, y: 16, texts: '~&003 / 行囊收纳', fontSize: 48, through: true }
-          装载状态:
-            type: Text
-            attribute: { point: '~top_right', x: -32, y: 23, texts: "'&8共用仓位 ' + var.capacityText", fontSize: 36, through: true }
-          装载底:
-            type: Texture
-            attribute: { x: 32, y: 52, width: 712, height: 5, normal: '~194,177,141,255', through: true }
-          装载填充:
-            type: Texture
-            attribute: { x: 32, y: 52, width: '712 * var.装载率', height: 5, normal: "var.装载率 >= 1 ? '157,79,47,255' : '110,125,72,255'", through: true }
+            attribute:
+              point: ~stretch_all
+              normal: ~12,14,20,205
+              shape: ~round_rect
+              radius: 16
           搜索容器:
             type: Canvas
-            attribute: { x: 32, y: 66, width: 712, height: 46 }
+            attribute:
+              x: 24
+              y: 20
+              width: 220
+              height: 44
             children:
               搜索底:
                 type: Texture
-                attribute: { point: '~stretch_all', normal: '~77,58,38,255', shape: '~round_rect', radius: 6, through: true }
+                attribute:
+                  point: ~stretch_all
+                  normal: ~38,42,52,255
+                  shape: ~round_rect
+                  radius: 10
                 effect:
-                  stroke: { width: 1, color: '~166,139,93,255' }
+                  stroke:
+                    width: 1
+                    color: "self.isHovered() ? '220,230,240,255' : '255,255,255,60'"
               搜索输入:
                 type: TextBox
-                attribute: { x: 14, y: 6, width: 684, height: 32, length: 12, emptyText: '~&e搜索物品名称 / 未匹配物品变暗', fontSize: 36 }
+                attribute:
+                  x: 14
+                  y: 8
+                  width: 192
+                  height: 36
+                  length: 12
+                  emptyText: ~&7搜索物品
+                  fontSize: 49
                 action:
                   textChange: |-
                     var.searchText = self.getContent()
                     var.待过滤 = true
-          分类滚动区:
-            type: Scroll
-            attribute: { x: 32, y: 122, width: 712, height: 42, moveX: "self.parent['分类滑块'].getDragXRatio()" }
-            action:
-              wheel: |-
-                if(self.moveX >= 0 && self.wheelValue > 0){
-                  self.parent['分类滑块'].setDragXRatio((self.moveX - self.wheelValue * 0.1).round(1))
-                }
-                if(self.moveX <= 1 && self.wheelValue < 0){
-                  self.parent['分类滑块'].setDragXRatio((self.moveX - self.wheelValue * 0.1).round(1))
-                }
+          分类标签行:
+            type: HGrid
+            val: 分类标签行
+            attribute:
+              x: 254
+              y: 20
+              width: 412
+              height: 44
+              column: 9
+              spaceBetweenX: 10
+              spaceBetweenY: 8
             children:
-              分类标签行:
-                type: HStack
-                val: 分类标签行
-                attribute: { height: 42, spaceBetween: 8 }
+              项:
+                type: Canvas
+                attribute:
+                  entryKey: 0.round()
+                  entry: var.categories[self.entryKey]
+                  visible: self.entry != none
+                  width: "var.categoryCount != none && var.categoryCount > 4 ? 412 / var.categoryCount - 10 : 110"
+                  height: 44
+                action:
+                  clickLeft: |-
+                    Packet.send(var.packetId, 'category', self.entry['id'])
                 children:
-                  项:
-                    type: Canvas
+                  项背景:
+                    type: Texture
                     attribute:
-                      entryKey: 0.round()
-                      entry: var.categories[self.entryKey]
-                      tip: "self.entry['name'] + ' / 已占 ' + self.entry['used'].round() + ' 格'"
-                      visible: self.entry != none
-                      width: 168
-                      height: 42
-                    action:
-                      clickLeft: |-
-                        Packet.send(var.packetId, 'category', self.entry['id'])
-                    children:
-                      项背景:
-                        type: Texture
-                        attribute:
-                          point: ~stretch_all
-                          through: true
-                          normal: "self.parent.entry['active'] ? '99,70,43,255' : '205,190,155,255'"
-                          hover: ~148,117,73,255
-                          shape: ~round_rect
-                          radius: 4
-                      项文字:
-                        type: Text
-                        attribute:
-                          point: ~middle_center
-                          limit: 8
-                          texts: "(self.parent.entry['active'] ? '&f' : '&0') + self.parent.entry['name']"
-                          fontSize: 36
-                          through: true
-          分类滑轨:
-            type: Texture
-            attribute: { x: 32, y: 170, width: 712, height: 6, normal: '~193,175,139,255', shape: '~round_rect', radius: 3, through: true, visible: 'var.categoryCount > 4' }
-          分类滑块:
-            type: Texture
-            attribute: { x: 32, y: 170, width: 112, height: 6, maxDragX: 600, normal: '~111,78,46,255', hover: '~145,109,59,255', shape: '~round_rect', radius: 3, visible: 'var.categoryCount > 4' }
+                      point: ~stretch_all
+                      through: true
+                      normal: "self.parent.entry != none && self.parent.entry['active'] ? '120,190,255,230' : '40,44,54,255'"
+                      hover: ~Frosted:0;255,255,255,240
+                      shape: ~round_rect
+                      radius: 10
+                    effect:
+                      stroke:
+                        width: 1
+                        color: ~0,0,0,255
+                  项文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: "self.parent.entry != none ? '&f' + self.parent.entry['name'] : none"
+                      fontSize: 36
+                      through: true
           原版背包标题:
             type: Text
-            attribute: { x: 32, y: 184, texts: '~&0随身仓 / 原版背包', fontSize: 36, through: true }
+            attribute:
+              x: 24
+              y: 86
+              texts: ~&7原版背包
+              fontSize: 36
           原版格数:
             type: Text
-            attribute: { point: '~top_right', x: -56, y: 184, texts: '~&827 格', fontSize: 36, through: true }
+            attribute:
+              point: ~top_right
+              x: -24
+              y: 90
+              texts: ~&727 格
+              fontSize: 36
           原版背包网格:
             type: HGrid
             val: 原版背包网格
-            attribute: { x: 32, y: 220, width: 712, height: 232, column: 9, spaceBetweenX: 8, spaceBetweenY: 8 }
+            attribute:
+              x: 24
+              y: 128
+              width: 622
+              height: 230
+              column: 9
+              spaceBetweenX: 10
+              spaceBetweenY: 10
             action:
               create: |-
                 for(i in range(1, 26)){
@@ -734,33 +1016,48 @@ controls:
             children:
               槽位:
                 type: Slot
-                attribute: { width: 72, height: 72, slotType: '~Backpack', id: 9, normal: '~113,90,58,255', hover: '~153,126,76,255', shape: '~round_rect', radius: 5, itemScale: 0.76 }
+                attribute:
+                  width: 62
+                  height: 62
+                  slotType: ~Backpack
+                  id: 9
+                  normal: ~38,42,52,255
+                  hover: ~Frosted:0;255,255,255,255
+                  shape: ~round_rect
+                  radius: 8
+                  itemScale: 0.76
                 effect:
-                  stroke: { width: 1, color: '~173,146,98,255' }
-                children:
-                  搜索遮色:
-                    type: Texture
-                    attribute:
-                      width: "self.parent.width"
-                      height: "self.parent.height"
-                      normal: ~76,59,37,185
-                      shape: ~round_rect
-                      radius: 5
-                      through: true
-                      visible: "var.searchText != none && var.searchText != '' && self.parent.getSlotItemStack() != none && self.parent.getSlotItemStack().getCount() > 0 && !self.parent.getSlotItemStack().getName().contains(var.searchText)"
-          仓位分隔线:
-            type: Texture
-            attribute: { x: 32, y: 460, width: 712, height: 1, normal: '~183,163,120,255', through: true }
+                  stroke:
+                    width: 1
+                    color: ~0,0,0,255
           扩容背包标题:
             type: Text
-            attribute: { x: 32, y: 470, texts: '~&0分类仓 / 扩容背包', fontSize: 36, through: true }
+            attribute:
+              x: 24
+              y: 382
+              texts: ~&7扩容背包
+              fontSize: 36
           容量状态:
             type: Text
-            attribute: { point: '~top_right', x: -56, y: 470, texts: "'&8本类仓位 ' + var.slotCount.round() + ' 格'", fontSize: 36, through: true }
+            attribute:
+              point: ~top_right
+              x: -24
+              y: 386
+              limit: 26
+              texts: "'&7' + var.capacityText + ' 格' + (var.总页数 > 1 ? ' · 第' + (var.页码.round() + 1) + '/' + var.总页数.round() + '页' : '')"
+              fontSize: 36
           扩容网格:
             type: HGrid
             val: 扩容网格
-            attribute: { x: 32, y: 510, width: 712, height: 'var.每页槽位数 / 9 * 80 - 8', column: 9, spaceBetweenX: 8, spaceBetweenY: 8 }
+            attribute:
+              x: 24
+              y: 434
+              width: 622
+              column: 9
+              spaceBetweenX: 10
+              spaceBetweenY: 10
+            # 滚轮翻页：网格空白区与槽位上都挂了 wheel；页码增量为赋值式去重，
+            # 同一帧内多级触发也只翻一页，实际翻页在 UI tick 中执行
             action:
               wheel: |-
                 var.页码增量 = self.wheelValue > 0 ? -1 : 1
@@ -768,84 +1065,61 @@ controls:
             children:
               扩容槽位:
                 type: Slot
-                attribute: { visible: false, slotType: '~Extra', id: '~axs_eb_none_0', lock: false, itemScale: 0.76, width: 72, height: 72, normal: '~124,113,74,255', hover: '~158,145,90,255', shape: '~round_rect', radius: 5 }
+                attribute:
+                  visible: false
+                  slotType: ~Extra
+                  id: ~axs_eb_none_0
+                  lock: false
+                  itemScale: 0.76
+                  width: 62
+                  height: 62
+                  normal: ~38,42,52,255
+                  hover: ~Frosted:0;255,255,255,255
+                  shape: ~round_rect
+                  radius: 8
                 action:
                   wheel: |-
                     var.页码增量 = self.wheelValue > 0 ? -1 : 1
                     var.待重建 = true
                 effect:
-                  stroke: { width: 1, color: '~178,164,105,255' }
-                children:
-                  搜索遮色:
-                    type: Texture
-                    attribute:
-                      width: "self.parent.width"
-                      height: "self.parent.height"
-                      normal: ~76,59,37,185
-                      shape: ~round_rect
-                      radius: 5
-                      through: true
-                      visible: "var.searchText != none && var.searchText != '' && self.parent.getSlotItemStack() != none && self.parent.getSlotItemStack().getCount() > 0 && !self.parent.getSlotItemStack().getName().contains(var.searchText)"
-          空仓提示:
-            type: Text
-            attribute:
-              x: 48
-              y: 550
-              visible: 'var.slotCount == 0'
-              texts:
-                - ~&8本分类暂无可用仓位
-                - ~&8切换分类，或在扩容设置购买仓位
-              fontSize: 36
-              through: true
-          翻页栏:
-            type: Canvas
-            attribute: { x: 32, y: 'self.parent.height - 180', width: 712, height: 34 }
-            children:
-              页码:
-                type: Text
-                attribute: { point: '~middle_center', texts: "'&8第 ' + (var.页码 + 1).round() + ' / ' + var.总页数.round() + ' 页 · 滚轮翻页'", fontSize: 36, through: true }
-              上页:
-                type: Canvas
-                attribute: { width: 122, height: 34, enable: 'var.页码 > 0' }
-                action:
-                  clickLeft: |-
-                    var.页码增量 = -1
-                    var.待重建 = true
-                children:
-                  上页底:
-                    type: Texture
-                    attribute: { point: '~stretch_all', normal: "var.页码 > 0 ? '108,80,48,255' : '200,185,151,255'", hover: '~140,108,61,255', shape: '~round_rect', radius: 4, through: true }
-                  上页字:
-                    type: Text
-                    attribute: { point: '~middle_center', texts: "var.页码 > 0 ? '&f< 上一页' : '&8< 上一页'", fontSize: 36, through: true }
-              下页:
-                type: Canvas
-                attribute: { point: '~top_right', width: 122, height: 34, enable: 'var.页码 < var.总页数 - 1' }
-                action:
-                  clickLeft: |-
-                    var.页码增量 = 1
-                    var.待重建 = true
-                children:
-                  下页底:
-                    type: Texture
-                    attribute: { point: '~stretch_all', normal: "var.页码 < var.总页数 - 1 ? '108,80,48,255' : '200,185,151,255'", hover: '~140,108,61,255', shape: '~round_rect', radius: 4, through: true }
-                  下页字:
-                    type: Text
-                    attribute: { point: '~middle_center', texts: "var.页码 < var.总页数 - 1 ? '&f下一页 >' : '&8下一页 >'", fontSize: 36, through: true }
+                  stroke:
+                    width: 1
+                    color: ~0,0,0,255
           快捷布局:
             type: Canvas
-            attribute: { point: '~bottom_left', x: 32, y: -24, width: 712, height: 112 }
+            attribute:
+              point: ~bottom_left
+              x: 24
+              y: -20
+              width: 622
+              height: 120
             children:
               快捷栏标题:
                 type: Text
-                attribute: { texts: '~&0快取带 / 快捷栏', fontSize: 36, through: true }
+                attribute:
+                  x: 0
+                  y: 0
+                  texts: ~&7快捷栏
+                  fontSize: 36
               快捷栏格数:
                 type: Text
-                attribute: { point: '~top_right', texts: '~&89 格', fontSize: 36, through: true }
+                attribute:
+                  point: ~top_right
+                  x: 0
+                  y: 4
+                  texts: ~&79 格
+                  fontSize: 36
               快捷栏网格:
                 type: HGrid
                 val: 快捷栏网格
-                attribute: { x: 0, y: 40, width: 712, height: 72, column: 9, spaceBetweenX: 8, spaceBetweenY: 8 }
+                attribute:
+                  x: 0
+                  y: 46
+                  width: 622
+                  height: 62
+                  column: 9
+                  spaceBetweenX: 10
+                  spaceBetweenY: 10
                 action:
                   create: |-
                     for(i in range(1, 8)){
@@ -855,114 +1129,163 @@ controls:
                 children:
                   槽位:
                     type: Slot
-                    attribute: { width: 72, height: 72, slotType: '~Backpack', id: 36, normal: '~90,66,43,255', hover: '~138,108,62,255', shape: '~round_rect', radius: 5, itemScale: 0.76 }
+                    attribute:
+                      width: 62
+                      height: 62
+                      slotType: ~Backpack
+                      id: 36
+                      normal: ~38,42,52,255
+                      hover: ~Frosted:0;255,255,255,255
+                      shape: ~round_rect
+                      radius: 8
+                      itemScale: 0.76
                     effect:
-                      stroke: { width: 1, color: '~185,151,96,255' }
-                    children:
-                      搜索遮色:
-                        type: Texture
-                        attribute:
-                          width: "self.parent.width"
-                          height: "self.parent.height"
-                          normal: ~76,59,37,185
-                          shape: ~round_rect
-                          radius: 5
-                          through: true
-                          visible: "var.searchText != none && var.searchText != '' && self.parent.getSlotItemStack() != none && self.parent.getSlotItemStack().getCount() > 0 && !self.parent.getSlotItemStack().getName().contains(var.searchText)"
+                      stroke:
+                        width: 1
+                        color: ~0,0,0,255
 
       玩家名签:
         type: Canvas
         attribute:
-          point: ~top_left
-          x: 540
-          y: 'var.viewH - 154'
-          width: 450
-          height: 100
+          point: ~bottom_center
+          x: -140
+          y: -50
+          width: 320
+          height: 54
           alpha: "var.入场 == none ? 1 : var.入场.get()"
           through: true
         children:
           名签底:
             type: Texture
-            attribute: { point: '~stretch_all', normal: '~65,43,31,230', shape: '~round_rect', radius: 6, through: true }
-            effect:
-              stroke: { width: 1, color: '~170,137,91,255' }
+            attribute:
+              point: ~stretch_all
+              through: true
+              normal: ~14,16,24,170
+              shape: ~round_rect
+              radius: 27
           名签文字:
             type: Text
-            attribute: { point: '~top_center', y: 16, texts: "'&f' + Player.getName() + '   &eLv ' + Player.getLevel().round()", fontSize: 48, through: true }
-          名签说明:
-            type: Text
-            attribute: { point: '~bottom_center', y: -16, texts: '~&eE / ESC 合上装备册', fontSize: 36, through: true }
+            attribute:
+              point: ~middle_center
+              texts: "'&f' + Player.getName() + '   &7Lv ' + Player.getLevel().round()"
+              fontSize: 36
+              shadow: true
+              through: true
 
-      面板遮罩:
-        type: Texture
-        attribute:
-          x: '-var.offX'
-          width: "var.viewW"
-          height: "var.viewH"
-          normal: ~32,25,19,200
-          visible: "var.设置面板开 || var.destroyPanel['visible'] || var.passwordPanel['visible']"
       设置副面板:
         type: Canvas
-        attribute: { point: '~top_center', y: '(var.viewH - 440) / 2', width: 720, height: 440, visible: "var.设置面板开 == true && !var.destroyPanel['visible'] && !var.passwordPanel['visible']" }
+        attribute:
+          point: ~middle_center
+          width: 520
+          height: 300
+          visible: var.设置面板开 == true
         children:
           设置副面板背景:
             type: Texture
-            attribute: { point: '~stretch_all', normal: '~232,221,195,255', shape: '~round_rect', radius: 8, through: true }
+            attribute:
+              point: ~stretch_all
+              through: true
+              normal: ~14,16,24,245
+              shape: ~round_rect
+              radius: 18
             effect:
-              stroke: { width: 2, color: '~130,92,53,255' }
-          设置封边:
-            type: Texture
-            attribute: { width: 720, height: 98, normal: '~65,43,31,255', through: true }
+              stroke:
+                width: 1
+                color: ~255,255,255,40
           设置副面板标题:
             type: Text
-            attribute: { x: 36, y: 18, texts: '~&f行囊扩容', fontSize: 54, through: true }
-          设置副标题:
-            type: Text
-            attribute: { x: 38, y: 62, texts: '~&e增加共用仓位 / 所有分类共享容量', fontSize: 36, through: true }
+            attribute:
+              point: ~middle_center
+              y: -110
+              texts: ~&f背包设置
+              fontSize: 48
+              through: true
           设置关闭按钮:
             type: Canvas
-            attribute: { point: '~top_right', x: -24, y: 20, width: 92, height: 48, tip: '~返回装备册' }
+            attribute:
+              point: ~top_right
+              x: -16
+              y: 16
+              width: 40
+              height: 40
+              tip: ~关闭
             action:
               clickLeft: |-
                 var.设置面板开 = false
             children:
               设置关闭背景:
                 type: Texture
-                attribute: { point: '~stretch_all', normal: '~100,73,46,255', hover: '~139,106,64,255', shape: '~round_rect', radius: 5, through: true }
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~40,44,54,230
+                  hover: ~Frosted:0;255,90,90,240
+                  shape: ~round_rect
+                  radius: 10
               设置关闭文字:
                 type: Text
-                attribute: { point: '~middle_center', texts: '~&f返回', fontSize: 36, through: true }
+                attribute:
+                  point: ~middle_center
+                  texts: ~&f✕
+                  fontSize: 36
+                  through: true
           设置容量状态:
             type: Text
-            attribute: { x: 40, y: 120, limit: 32, texts: "'&0装载 ' + var.capacityText + ' / 容量上限 ' + var.maxCapacity.round()", fontSize: 48, through: true }
+            attribute:
+              point: ~middle_center
+              y: -52
+              limit: 22
+              texts: "'&7容量 ' + var.capacityText + ' / 上限 ' + var.maxCapacity.round()"
+              fontSize: 36
+              through: true
           设置购买提示:
             type: Text
-            attribute: { x: 40, y: 182, limit: 32, texts: "'&8' + var.buySlotsText", fontSize: 36, through: true }
-          数量标签:
-            type: Text
-            attribute: { x: 40, y: 242, texts: '~&8购买数量', fontSize: 36, through: true }
+            attribute:
+              point: ~middle_center
+              y: -2
+              limit: 22
+              texts: "var.buySlotsText"
+              fontSize: 36
+              through: true
           数量输入容器:
             type: Canvas
-            attribute: { x: 40, y: 282, width: 220, height: 56 }
+            attribute:
+              x: 60
+              y: 210
+              width: 180
+              height: 56
             children:
               数量输入底:
                 type: Texture
-                attribute: { point: '~stretch_all', normal: '~77,58,38,255', shape: '~round_rect', radius: 6, through: true }
+                attribute:
+                  point: ~stretch_all
+                  normal: ~38,42,52,255
+                  shape: ~round_rect
+                  radius: 10
                 effect:
-                  stroke: { width: 1, color: '~166,139,93,255' }
+                  stroke:
+                    width: 1
+                    color: "self.isHovered() ? '220,230,240,255' : '255,255,255,60'"
               数量输入:
                 type: TextBox
-                attribute: { x: 12, y: 8, width: 196, height: 38, length: 6, emptyText: '~&e数量 = 1', fontSize: 36 }
+                attribute:
+                  x: 12
+                  y: 10
+                  width: 156
+                  height: 38
+                  length: 6
+                  emptyText: ~数量=1
+                  fontSize: 36
                 action:
                   textChange: |-
                     var.buyAmount = self.getContent()
           购买按钮:
             type: Canvas
             attribute:
-              x: 284
-              y: 282
-              width: 396
-              height: 56
+              x: 270
+              y: 212
+              width: 190
+              height: 52
               visible: var.canBuySlots
               enable: "!var.actionBusy && var.actionToken != none && var.actionToken != ''"
             action:
@@ -972,153 +1295,211 @@ controls:
             children:
               购买背景:
                 type: Texture
-                attribute: { point: '~stretch_all', normal: "var.actionBusy ? '177,165,133,255' : '105,121,67,255'", hover: '~130,147,85,255', shape: '~round_rect', radius: 6, through: true }
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~120,190,255,220
+                  hover: ~Frosted:0;255,255,255,240
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  stroke:
+                    width: 1
+                    color: ~0,0,0,255
               购买文字:
                 type: Text
-                attribute: { point: '~middle_center', texts: "var.actionBusy ? '&8正在提交...' : '&f购买仓位'", fontSize: 36, through: true }
-          购买不可用:
-            type: Text
-            attribute: { x: 284, y: 294, visible: '!var.canBuySlots', texts: '~&8当前不可购买', fontSize: 36, through: true }
-          余量说明:
-            type: Text
-            attribute: { x: 40, y: 372, texts: "'&8剩余可扩容 ' + var.remainingSlots.round() + ' 格 · 价格以服务端提示为准'", fontSize: 36, through: true }
+                attribute:
+                  point: ~middle_center
+                  texts: ~&0购买槽位
+                  fontSize: 36
+                  through: true
 
       销毁确认框:
         type: Canvas
-        attribute: { point: '~top_center', y: '(var.viewH - 340) / 2', width: 680, height: 340, visible: "var.destroyPanel != none && var.destroyPanel['visible'] && !var.passwordPanel['visible']" }
+        attribute:
+          point: ~middle_center
+          width: 560
+          height: 260
+          visible: var.destroyPanel != none && var.destroyPanel['visible']
         children:
           销毁确认框背景:
             type: Texture
-            attribute: { point: '~stretch_all', normal: '~232,221,195,255', shape: '~round_rect', radius: 8, through: true }
+            attribute:
+              point: ~stretch_all
+              through: true
+              normal: ~14,16,24,245
+              shape: ~round_rect
+              radius: 18
             effect:
-              stroke: { width: 2, color: '~146,82,45,255' }
-          销毁封边:
-            type: Texture
-            attribute: { width: 680, height: 88, normal: '~113,61,39,255', through: true }
+              stroke:
+                width: 1
+                color: ~255,100,100,120
           销毁确认框文字:
             type: Text
-            attribute: { x: 40, y: 22, texts: '~&f确认销毁光标物品？', fontSize: 54, through: true }
-          销毁警告:
-            type: Text
             attribute:
-              x: 40
-              y: 112
-              texts:
-                - ~&0只会销毁鼠标光标上拿着的物品。
-                - ~&8此操作不可撤销，请先确认物品。
+              point: ~middle_center
+              y: -70
+              texts: ~&f确认销毁光标上的物品？
               fontSize: 36
               through: true
           销毁确认:
             type: Canvas
-            attribute: { x: 40, y: 238, width: 280, height: 64 }
+            attribute:
+              x: 60
+              y: 160
+              width: 200
+              height: 60
             action:
               clickLeft: |-
                 Packet.send(var.packetId, 'destroy_confirm', var.actionToken)
             children:
               销毁确认背景:
                 type: Texture
-                attribute: { point: '~stretch_all', normal: '~144,70,43,255', hover: '~175,87,51,255', shape: '~round_rect', radius: 6, through: true }
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~200,60,60,220
+                  hover: ~Frosted:0;255,120,120,240
+                  shape: ~round_rect
+                  radius: 10
               销毁确认文字:
                 type: Text
-                attribute: { point: '~middle_center', texts: '~&f确认销毁', fontSize: 36, through: true }
+                attribute:
+                  point: ~middle_center
+                  texts: ~&f销毁
+                  fontSize: 36
+                  through: true
           销毁取消:
             type: Canvas
-            attribute: { x: 360, y: 238, width: 280, height: 64 }
+            attribute:
+              x: 300
+              y: 160
+              width: 200
+              height: 60
             action:
               clickLeft: |-
                 Packet.send(var.packetId, 'destroy_cancel')
             children:
               销毁取消背景:
                 type: Texture
-                attribute: { point: '~stretch_all', normal: '~199,183,147,255', hover: '~216,202,169,255', shape: '~round_rect', radius: 6, through: true }
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~40,44,54,255
+                  hover: ~Frosted:0;255,255,255,240
+                  shape: ~round_rect
+                  radius: 10
               销毁取消文字:
                 type: Text
-                attribute: { point: '~middle_center', texts: '~&0保留物品 / 取消', fontSize: 36, through: true }
+                attribute:
+                  point: ~middle_center
+                  texts: ~&f取消
+                  fontSize: 36
+                  through: true
 
       二级密码面板:
         type: Canvas
-        attribute: { point: '~top_center', y: '(var.viewH - 480) / 2', width: 720, height: 480, visible: "var.passwordPanel != none && var.passwordPanel['visible']" }
+        attribute:
+          point: ~middle_center
+          width: 640
+          height: 400
+          visible: var.passwordPanel != none && var.passwordPanel['visible']
         children:
           二级密码面板背景:
             type: Texture
-            attribute: { point: '~stretch_all', normal: '~232,221,195,255', shape: '~round_rect', radius: 8, through: true }
+            attribute:
+              point: ~stretch_all
+              through: true
+              normal: ~14,16,24,245
+              shape: ~round_rect
+              radius: 18
             effect:
-              stroke: { width: 2, color: '~130,92,53,255' }
-          密码封边:
-            type: Texture
-            attribute: { width: 720, height: 98, normal: '~65,43,31,255', through: true }
+              stroke:
+                width: 1
+                color: ~255,255,255,40
           二级密码面板文字:
             type: Text
-            attribute: { x: 40, y: 18, texts: "'&f' + var.密码标题", fontSize: 54, through: true }
-          密码说明:
-            type: Text
-            attribute: { x: 40, y: 62, texts: "'&e' + var.密码说明", fontSize: 36, through: true }
-          当前密码标签:
-            type: Text
-            attribute: { x: 40, y: 112, texts: '~&8当前密码', fontSize: 36, through: true }
+            attribute:
+              point: ~middle_center
+              y: -150
+              texts: "var.passwordPanel != none && var.passwordPanel['mode'] == 'set' ? '&f设置二级密码' : (var.passwordPanel != none && var.passwordPanel['mode'] == 'clear' ? '&f清除二级密码' : '&f解锁二级密码')"
+              fontSize: 48
+              through: true
           当前密码容器:
             type: Canvas
-            attribute: { x: 40, y: 150, width: 640, height: 56 }
+            attribute:
+              x: 40
+              y: 90
+              width: 560
+              height: 60
             children:
               当前密码底:
                 type: Texture
-                attribute: { point: '~stretch_all', normal: '~77,58,38,255', shape: '~round_rect', radius: 6, through: true }
+                attribute:
+                  point: ~stretch_all
+                  normal: ~38,42,52,255
+                  shape: ~round_rect
+                  radius: 10
                 effect:
-                  stroke: { width: 1, color: '~166,139,93,255' }
+                  stroke:
+                    width: 1
+                    color: "self.isHovered() ? '220,230,240,255' : '255,255,255,60'"
               当前密码:
                 type: TextBox
                 attribute:
                   x: 14
-                  y: 8
-                  width: 612
+                  y: 12
+                  width: 532
                   height: 38
                   length: 64
                   passwordChar: ~'*'
-                  emptyText: ~&e输入当前密码
+                  emptyText: ~&7当前密码（设置新密码时已有密码必填）
                   fontSize: 36
                 action:
                   textChange: |-
                     var.passwordCurrent = self.getContent()
-          新密码标签:
-            type: Text
-            attribute: { x: 40, y: 224, visible: "var.passwordPanel['mode'] == 'set'", texts: '~&8新密码', fontSize: 36, through: true }
           新密码容器:
             type: Canvas
-            attribute: { x: 40, y: 262, width: 640, height: 56, visible: "var.passwordPanel != none && var.passwordPanel['mode'] == 'set'" }
+            attribute:
+              x: 40
+              y: 165
+              width: 560
+              height: 60
+              visible: "var.passwordPanel != none && var.passwordPanel['mode'] == 'set'"
             children:
               新密码底:
                 type: Texture
-                attribute: { point: '~stretch_all', normal: '~77,58,38,255', shape: '~round_rect', radius: 6, through: true }
+                attribute:
+                  point: ~stretch_all
+                  normal: ~38,42,52,255
+                  shape: ~round_rect
+                  radius: 10
                 effect:
-                  stroke: { width: 1, color: '~166,139,93,255' }
+                  stroke:
+                    width: 1
+                    color: "self.isHovered() ? '220,230,240,255' : '255,255,255,60'"
               新密码:
                 type: TextBox
                 attribute:
                   x: 14
-                  y: 8
-                  width: 612
+                  y: 12
+                  width: 532
                   height: 38
                   length: 64
                   passwordChar: ~'*'
-                  emptyText: ~&e输入新密码
+                  emptyText: ~&7新密码
                   fontSize: 36
                 action:
                   textChange: |-
                     var.passwordNew = self.getContent()
-          安全提示:
-            type: Text
-            attribute:
-              x: 40
-              y: 244
-              visible: "var.passwordPanel['mode'] != 'set'"
-              texts:
-                - ~&8密码仅用于行囊二级验证。
-                - ~&8取消可返回装备册，不会提交密码。
-              fontSize: 36
-              through: true
           提交:
             type: Canvas
-            attribute: { x: 40, y: 344, width: 304, height: 60, enable: "!var.actionBusy || var.passwordPanel['mode'] == 'unlock'" }
+            attribute:
+              x: 60
+              y: 260
+              width: 240
+              height: 60
+              enable: "!var.actionBusy || var.passwordPanel['mode'] == 'unlock'"
             action:
               clickLeft: |-
                 if(var.passwordPanel['mode'] == 'set'){
@@ -1135,13 +1516,27 @@ controls:
             children:
               提交背景:
                 type: Texture
-                attribute: { point: '~stretch_all', normal: "(var.actionBusy && var.passwordPanel['mode'] != 'unlock') ? '177,165,133,255' : '105,121,67,255'", hover: '~130,147,85,255', shape: '~round_rect', radius: 6, through: true }
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~120,190,255,220
+                  hover: ~Frosted:0;255,255,255,240
+                  shape: ~round_rect
+                  radius: 10
               提交文字:
                 type: Text
-                attribute: { point: '~middle_center', texts: "'&f' + var.密码动作", fontSize: 36, through: true }
+                attribute:
+                  point: ~middle_center
+                  texts: "var.passwordPanel != none && var.passwordPanel['mode'] == 'set' ? '&0设置' : (var.passwordPanel != none && var.passwordPanel['mode'] == 'clear' ? '&0清除' : '&0解锁')"
+                  fontSize: 36
+                  through: true
           取消:
             type: Canvas
-            attribute: { x: 376, y: 344, width: 304, height: 60 }
+            attribute:
+              x: 340
+              y: 260
+              width: 240
+              height: 60
             action:
               clickLeft: |-
                 var.passwordPanel['visible'] = false
@@ -1149,13 +1544,29 @@ controls:
             children:
               取消背景:
                 type: Texture
-                attribute: { point: '~stretch_all', normal: '~199,183,147,255', hover: '~216,202,169,255', shape: '~round_rect', radius: 6, through: true }
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~40,44,54,255
+                  hover: ~Frosted:0;255,255,255,240
+                  shape: ~round_rect
+                  radius: 10
               取消文字:
                 type: Text
-                attribute: { point: '~middle_center', texts: '~&0取消', fontSize: 36, through: true }
+                attribute:
+                  point: ~middle_center
+                  texts: ~&f取消
+                  fontSize: 36
+                  through: true
           清除密码:
             type: Canvas
-            attribute: { point: '~bottom_center', y: -20, width: 220, height: 40, visible: "var.passwordPanel != none && var.passwordPanel['mode'] != 'set'", enable: "!var.actionBusy && var.actionToken != none && var.actionToken != ''" }
+            attribute:
+              x: 230
+              y: 336
+              width: 180
+              height: 40
+              visible: var.passwordPanel != none && var.passwordPanel['mode'] != 'set'
+              enable: "!var.actionBusy && var.actionToken != none && var.actionToken != ''"
             action:
               clickLeft: |-
                 var.actionBusy = true
@@ -1163,7 +1574,17 @@ controls:
             children:
               清除密码背景:
                 type: Texture
-                attribute: { point: '~stretch_all', normal: '~143,79,50,255', hover: '~170,95,57,255', shape: '~round_rect', radius: 5, through: true }
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~200,60,60,180
+                  hover: ~Frosted:0;255,255,255,240
+                  shape: ~round_rect
+                  radius: 10
               清除密码文字:
                 type: Text
-                attribute: { point: '~middle_center', texts: '~&f清除二级密码', fontSize: 36, through: true }
+                attribute:
+                  point: ~middle_center
+                  texts: ~&f清除密码
+                  fontSize: 36
+                  through: true

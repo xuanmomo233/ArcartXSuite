@@ -1,8 +1,10 @@
-# EntityTracker / reward audit ledger
-# /axs entitytracker rewards history | /axs entitytracker reload
-# History packets do not include aggregate success/failed/pending statistics: show only real totals.
-# Original filters, retry token position and pagination calls are unchanged.
-# Refresh, pagination and retry request all statuses in the existing server contract.
+# AXS 资源说明
+# 用途: EntityTracker 排行榜奖励发放历史查看界面，展示发放记录、筛选和重试。
+# 前置依赖: ArcartX；EntityTracker 模块排行榜奖励功能启用后自动注册。
+# 打开方式: /axs entitytracker rewards history 或从管理界面跳转
+# 数据交互: packetHandler 接收 history-list / statistics / result 推送；
+#             客户端通过 Packet.send('AXS_ENTITY_TRACKER_REWARD', ...) 发送操作指令。
+
 ui:
   background: true
   escClose: true
@@ -10,24 +12,6 @@ ui:
   show: true
   through: false
   screenScale: true
-  action:
-    load: |-
-      var.historyFilter = 'all'
-      sx = Screen.getWidth() / 1920
-      sy = Screen.getHeight() / 1080
-      s = sx < sy ? sx : sy
-      var.viewW = Screen.getWidth() / s
-      var.viewH = Screen.getHeight() / s
-      var.offX = (var.viewW - 1920) / 2
-      var.ledgerW = var.viewW - 160
-    resize: |-
-      sx = Screen.getWidth() / 1920
-      sy = Screen.getHeight() / 1080
-      s = sx < sy ? sx : sy
-      var.viewW = Screen.getWidth() / s
-      var.viewH = Screen.getHeight() / s
-      var.offX = (var.viewW - 1920) / 2
-      var.ledgerW = var.viewW - 160
   packetHandler:
     history-list: |-
       var.records = packet['records']
@@ -35,411 +19,284 @@ ui:
       var.totalPages = packet['totalPages']
       var.totalCount = packet['totalCount']
       var.actionToken = packet['action_token']
-      if(val.记录滑块 != none){ val.记录滑块.setDragYRatio(0) }
     result: |-
       var.resultMsg = packet['message']
+
 controls:
-  全屏底:
-    type: Texture
-    attribute:
-      point: ~stretch_all
-      normal: ~Frosted:18;12,18,24,245
   自适应全局布局:
     type: Adaptive
     attribute:
-      point: ~top_center
+      point: ~stretch_all
       width: 1920
       height: 1080
     children:
       根面板:
-        type: Canvas
+        type: Texture
         attribute:
-          x: "48 - var.offX"
-          y: 32
-          width: "var.viewW - 96"
-          height: "var.viewH - 64"
+          point: ~middle_center
+          width: 1200
+          height: 720
+          normal: ~30,30,35,235
+          shape: ~round_rect
+          radius: 16
+        effect:
+          stroke:
+            width: 2
+            color: ~130,100,200,180
+          shadow:
+            xOffset: 0
+            yOffset: 4
+            blur: 12
+            color: ~0,0,0,120
         children:
-          面板底:
+          标题栏:
             type: Texture
             attribute:
-              point: ~stretch_all
-              normal: ~22,30,38,250
+              x: 0
+              y: 0
+              width: 1200
+              height: 72
+              normal: ~40,40,50,255
               shape: ~round_rect
-              radius: 8
-          模块标记:
-            type: Text
-            attribute:
-              x: 32
-              y: 22
-              texts: ~&bENTITY TRACKER &7/ DISTRIBUTION AUDIT
-              fontSize: 36
-              through: true
-          标题文字:
-            type: Text
-            attribute:
-              x: 32
-              y: 54
-              texts: ~&f奖励发放历史
-              fontSize: 64
-              through: true
-          页面说明:
-            type: Text
-            attribute:
-              x: 32
-              y: 104
-              texts: ~&7按状态核对发放记录；先查看失败原因，再重试。
-              fontSize: 36
-              through: true
-          返回按钮:
-            type: Canvas
-            attribute:
-              point: ~top_right
-              x: -212
-              y: 32
-              width: 240
-              height: 56
-            action:
-              click: |-
-                Packet.send('AXS_ENTITY_TRACKER_REWARD', 'open-manage')
+              radius: 16
             children:
-              返回背景:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  normal: ~37,66,77,255
-                  hover: ~44,102,114,255
-                  through: true
-                  shape: ~round_rect
-                  radius: 4
-              返回文字:
+              标题文字:
                 type: Text
                 attribute:
-                  point: ~middle_center
-                  texts: ~&b< 返回奖励管理
-                  fontSize: 36
-                  through: true
-          关闭按钮:
-            type: Canvas
+                  x: 28
+                  y: 14
+                  fontSize: 42
+                  texts: "~&d奖励发放历史"
+              全部筛选按钮:
+                type: Canvas
+                attribute:
+                  x: 500
+                  y: 12
+                  width: 80
+                  height: 48
+                action:
+                  click: |-
+                    Packet.send('AXS_ENTITY_TRACKER_REWARD', 'history-list', none, none, 1)
+                children:
+                  全部筛选背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~80,80,100,200
+                      shape: ~round_rect
+                      radius: 8
+                  全部筛选文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 80
+                      texts: ~&f全部
+                      fontSize: 26
+                      through: true
+              成功筛选按钮:
+                type: Canvas
+                attribute:
+                  x: 592
+                  y: 12
+                  width: 80
+                  height: 48
+                action:
+                  click: |-
+                    Packet.send('AXS_ENTITY_TRACKER_REWARD', 'history-list', 'success', none, 1)
+                children:
+                  成功筛选背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~50,180,80,180
+                      shape: ~round_rect
+                      radius: 8
+                  成功筛选文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 80
+                      texts: ~&a成功
+                      fontSize: 26
+                      through: true
+              失败筛选按钮:
+                type: Canvas
+                attribute:
+                  x: 684
+                  y: 12
+                  width: 80
+                  height: 48
+                action:
+                  click: |-
+                    Packet.send('AXS_ENTITY_TRACKER_REWARD', 'history-list', 'failed', none, 1)
+                children:
+                  失败筛选背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~200,60,60,180
+                      shape: ~round_rect
+                      radius: 8
+                  失败筛选文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 80
+                      texts: ~&c失败
+                      fontSize: 26
+                      through: true
+              待发筛选按钮:
+                type: Canvas
+                attribute:
+                  x: 776
+                  y: 12
+                  width: 80
+                  height: 48
+                action:
+                  click: |-
+                    Packet.send('AXS_ENTITY_TRACKER_REWARD', 'history-list', 'pending', none, 1)
+                children:
+                  待发筛选背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~200,160,50,180
+                      shape: ~round_rect
+                      radius: 8
+                  待发筛选文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 80
+                      texts: ~&e待发
+                      fontSize: 26
+                      through: true
+              刷新按钮:
+                type: Canvas
+                attribute:
+                  x: 920
+                  y: 12
+                  width: 100
+                  height: 48
+                action:
+                  click: |-
+                    Packet.send('AXS_ENTITY_TRACKER_REWARD', 'history-list', none, none, var.currentPage)
+                children:
+                  刷新背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~60,130,200,200
+                      shape: ~round_rect
+                      radius: 8
+                  刷新文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 100
+                      texts: ~&f刷新
+                      fontSize: 26
+                      through: true
+              返回按钮:
+                type: Canvas
+                attribute:
+                  x: 1034
+                  y: 12
+                  width: 140
+                  height: 48
+                action:
+                  click: |-
+                    Packet.send('AXS_ENTITY_TRACKER_REWARD', 'open-manage')
+                children:
+                  返回背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~80,80,100,200
+                      shape: ~round_rect
+                      radius: 8
+                  返回文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 140
+                      texts: ~&f← 返回管理
+                      fontSize: 26
+                      through: true
+          # 统计摘要
+          统计栏:
+            type: Texture
             attribute:
-              point: ~top_right
-              x: -32
-              y: 32
-              width: 164
-              height: 56
-            action:
-              clickLeft: Screen.close()
+              x: 20
+              y: 80
+              width: 1160
+              height: 44
+              normal: ~50,50,60,150
+              shape: ~round_rect
+              radius: 6
             children:
-              关闭底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  normal: ~37,48,60,255
-                  hover: ~115,45,55,255
-                  through: true
-                  shape: ~round_rect
-                  radius: 4
-              关闭字:
-                type: Text
-                attribute:
-                  point: ~middle_center
-                  texts: ~&f关闭 / ESC
-                  fontSize: 36
-                  through: true
-          全部筛选按钮:
-            type: Canvas
-            attribute:
-              x: 32
-              y: 158
-              width: 160
-              height: 64
-            action:
-              click: |-
-                var.historyFilter = 'all'
-                Packet.send('AXS_ENTITY_TRACKER_REWARD', 'history-list', none, none, 1)
-            children:
-              全部筛选背景:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  normal: "var.historyFilter == 'all' ? '38,88,99,255' : '32,43,54,255'"
-                  hover: ~44,102,114,255
-                  through: true
-                  shape: ~round_rect
-                  radius: 4
-              全部筛选信号:
-                type: Texture
-                attribute:
-                  point: ~bottom_left
-                  width: 160
-                  height: 3
-                  normal: ~69,211,224,255
-                  visible: "var.historyFilter == 'all'"
-                  through: true
-              全部筛选文字:
-                type: Text
-                attribute:
-                  point: ~middle_center
-                  texts: ~&f全部记录
-                  fontSize: 48
-                  through: true
-          成功筛选按钮:
-            type: Canvas
-            attribute:
-              x: 204
-              y: 158
-              width: 160
-              height: 64
-            action:
-              click: |-
-                var.historyFilter = 'success'
-                Packet.send('AXS_ENTITY_TRACKER_REWARD', 'history-list', 'success', none, 1)
-            children:
-              成功筛选背景:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  normal: "var.historyFilter == 'success' ? '38,88,99,255' : '32,43,54,255'"
-                  hover: ~44,102,114,255
-                  through: true
-                  shape: ~round_rect
-                  radius: 4
-              成功筛选信号:
-                type: Texture
-                attribute:
-                  point: ~bottom_left
-                  width: 160
-                  height: 3
-                  normal: ~69,211,224,255
-                  visible: "var.historyFilter == 'success'"
-                  through: true
-              成功筛选文字:
-                type: Text
-                attribute:
-                  point: ~middle_center
-                  texts: ~&f成功
-                  fontSize: 48
-                  through: true
-          失败筛选按钮:
-            type: Canvas
-            attribute:
-              x: 376
-              y: 158
-              width: 160
-              height: 64
-            action:
-              click: |-
-                var.historyFilter = 'failed'
-                Packet.send('AXS_ENTITY_TRACKER_REWARD', 'history-list', 'failed', none, 1)
-            children:
-              失败筛选背景:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  normal: "var.historyFilter == 'failed' ? '108,42,54,255' : '32,43,54,255'"
-                  hover: ~139,49,63,255
-                  through: true
-                  shape: ~round_rect
-                  radius: 4
-              失败筛选信号:
-                type: Texture
-                attribute:
-                  point: ~bottom_left
-                  width: 160
-                  height: 3
-                  normal: ~239,79,89,255
-                  visible: "var.historyFilter == 'failed'"
-                  through: true
-              失败筛选文字:
-                type: Text
-                attribute:
-                  point: ~middle_center
-                  texts: ~&c失败 / 重试
-                  fontSize: 36
-                  through: true
-          待发筛选按钮:
-            type: Canvas
-            attribute:
-              x: 548
-              y: 158
-              width: 160
-              height: 64
-            action:
-              click: |-
-                var.historyFilter = 'pending'
-                Packet.send('AXS_ENTITY_TRACKER_REWARD', 'history-list', 'pending', none, 1)
-            children:
-              待发筛选背景:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  normal: "var.historyFilter == 'pending' ? '38,88,99,255' : '32,43,54,255'"
-                  hover: ~44,102,114,255
-                  through: true
-                  shape: ~round_rect
-                  radius: 4
-              待发筛选信号:
-                type: Texture
-                attribute:
-                  point: ~bottom_left
-                  width: 160
-                  height: 3
-                  normal: ~69,211,224,255
-                  visible: "var.historyFilter == 'pending'"
-                  through: true
-              待发筛选文字:
-                type: Text
-                attribute:
-                  point: ~middle_center
-                  texts: ~&f待发
-                  fontSize: 48
-                  through: true
-          刷新按钮:
-            type: Canvas
-            attribute:
-              point: ~top_right
-              x: -32
-              y: 158
-              width: 260
-              height: 64
-              enable: var.currentPage != none
-            action:
-              click: |-
-                var.historyFilter = 'all'
-                Packet.send('AXS_ENTITY_TRACKER_REWARD', 'history-list', none, none, var.currentPage)
-            children:
-              刷新背景:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  normal: ~32,43,54,255
-                  hover: ~44,102,114,255
-                  through: true
-                  shape: ~round_rect
-                  radius: 4
-              刷新文字:
-                type: Text
-                attribute:
-                  point: ~middle_center
-                  texts: ~&b刷新全部记录
-                  fontSize: 48
-                  through: true
-          清单标题:
-            type: Text
-            attribute:
-              x: 32
-              y: 250
-              texts: ~&f发放记录 / 审计清单
-              fontSize: 48
-              through: true
-          总计统计:
-            type: Text
-            attribute:
-              point: ~top_right
-              x: -32
-              y: 254
-              texts: "var.records == none ? '&7等待读取记录' : '&7匹配记录 &b' + var.totalCount + ' &7条'"
-              fontSize: 36
-              through: true
-          列表表头:
-            type: Canvas
-            attribute:
-              x: 32
-              y: 300
-              width: var.ledgerW
-              height: 48
-            children:
-              表头底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  normal: ~34,47,59,255
-                  through: true
-              周期列:
+              总计统计:
                 type: Text
                 attribute:
                   x: 20
-                  y: 12
-                  texts: ~&7周期 / 首领
-                  fontSize: 36
-                  through: true
-              玩家列:
+                  y: 8
+                  fontSize: 26
+                  texts: "~&6总计: &e{var.totalCount}"
+              成功统计:
                 type: Text
                 attribute:
-                  x: 360
-                  y: 12
-                  texts: ~&7玩家
-                  fontSize: 36
-                  through: true
-              排名列:
+                  x: 240
+                  y: 8
+                  fontSize: 26
+                  texts: "~&a成功: &f{var.successCount}"
+              失败统计:
                 type: Text
                 attribute:
-                  x: 620
-                  y: 12
-                  texts: ~&7排名
-                  fontSize: 36
-                  through: true
-              类型列:
+                  x: 480
+                  y: 8
+                  fontSize: 26
+                  texts: "~&c失败: &f{var.failedCount}"
+              待发统计:
                 type: Text
                 attribute:
-                  x: 760
-                  y: 12
-                  texts: ~&7类型
-                  fontSize: 36
-                  through: true
-              奖励列:
-                type: Text
-                attribute:
-                  x: 940
-                  y: 12
-                  texts: ~&7奖励 / 悬停阅读
-                  fontSize: 36
-                  through: true
-              状态列:
-                type: Text
-                attribute:
-                  point: ~top_right
-                  x: -220
-                  y: 12
-                  texts: ~&7状态
-                  fontSize: 36
-                  through: true
-              操作列:
-                type: Text
-                attribute:
-                  point: ~top_right
-                  x: -68
-                  y: 12
-                  texts: ~&7操作
-                  fontSize: 36
-                  through: true
-          记录滑轨:
-            type: Texture
+                  x: 720
+                  y: 8
+                  fontSize: 26
+                  texts: "~&e待发: &f{var.pendingCount}"
+
+          # 结果提示
+          结果提示:
+            type: Text
             attribute:
-              point: ~top_right
-              x: -32
-              y: 360
-              width: 10
-              height: "var.viewH - 520"
-              normal: ~44,57,66,255
+              x: 28
+              y: 690
+              fontSize: 24
+              texts: "~&e{var.resultMsg}"
+
+          # 记录列表
           记录滑块:
             type: Texture
             val: 记录滑块
             attribute:
-              point: ~top_right
-              x: -32
-              y: 360
-              width: 10
-              height: 88
-              normal: ~69,211,224,255
-              hover: ~142,239,245,255
-              maxDragY: "var.viewH - 608"
+              x: 1174
+              y: 132
+              width: 6
+              height: 50
+              normal: ~120,120,120,200
+              maxDragY: 460
           列表滚动区:
             type: Scroll
             attribute:
-              x: 32
-              y: 360
-              width: "var.ledgerW - 28"
-              height: "var.viewH - 520"
+              x: 20
+              y: 132
+              width: 1160
+              height: 510
               moveY: "self.parent['记录滑块'].getDragYRatio()"
             action:
               wheel: |-
@@ -450,293 +307,177 @@ controls:
                   self.parent['记录滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
                 }
             children:
-              清单布局:
-                type: VStack
+              列表表头:
+                type: Texture
                 attribute:
-                  width: "var.ledgerW - 28"
+                  x: 0
+                  y: 0
+                  width: 1160
+                  height: 40
+                  normal: ~50,50,60,200
+                  shape: ~round_rect
+                  radius: 6
                 children:
-                  列表内容:
-                    type: VGrid
+                  周期列:
+                    type: Text
                     attribute:
-                      width: "var.ledgerW - 28"
-                      eachHeight: 156
-                      dataList: var.records
+                      x: 16
+                      y: 6
+                      fontSize: 26
+                      texts: "~&b周期"
+                  玩家列:
+                    type: Text
+                    attribute:
+                      x: 160
+                      y: 6
+                      fontSize: 26
+                      texts: "~&b玩家"
+                  排名列:
+                    type: Text
+                    attribute:
+                      x: 340
+                      y: 6
+                      fontSize: 26
+                      texts: "~&b排名"
+                  类型列:
+                    type: Text
+                    attribute:
+                      x: 440
+                      y: 6
+                      fontSize: 26
+                      texts: "~&b类型"
+                  奖励列:
+                    type: Text
+                    attribute:
+                      x: 600
+                      y: 6
+                      fontSize: 26
+                      texts: "~&b奖励"
+                  状态列:
+                    type: Text
+                    attribute:
+                      x: 860
+                      y: 6
+                      fontSize: 26
+                      texts: "~&b状态"
+                  操作列:
+                    type: Text
+                    attribute:
+                      x: 1020
+                      y: 6
+                      fontSize: 26
+                      texts: "~&b操作"
+              列表内容:
+                type: VGrid
+                attribute:
+                  x: 0
+                  y: 46
+                  width: 1160
+                  eachHeight: 48
+                  dataList: var.records
+                children:
+                  行背景:
+                    type: Texture
+                    attribute:
+                      width: 1160
+                      height: 44
+                      normal: ~45,45,55,160
+                      shape: ~round_rect
+                      radius: 4
                     children:
-                      行背景:
+                      周期单元格:
+                        type: Text
+                        attribute:
+                          x: 16
+                          y: 8
+                          fontSize: 24
+                          texts: "~&f{each.periodDisplay}"
+                      玩家单元格:
+                        type: Text
+                        attribute:
+                          x: 160
+                          y: 8
+                          fontSize: 24
+                          texts: "~&f{each.playerName}"
+                      排名单元格:
+                        type: Text
+                        attribute:
+                          x: 340
+                          y: 8
+                          fontSize: 24
+                          texts: "~&f#{each.rank}"
+                      类型单元格:
+                        type: Text
+                        attribute:
+                          x: 440
+                          y: 8
+                          fontSize: 24
+                          texts: "~&7{each.rankingTypeDisplay}"
+                      奖励单元格:
+                        type: Text
+                        attribute:
+                          x: 600
+                          y: 8
+                          fontSize: 22
+                          texts: "~&a{each.rewardSummary}"
+                      状态单元格:
+                        type: Text
+                        attribute:
+                          x: 860
+                          y: 8
+                          fontSize: 24
+                          texts: "~{each.statusIcon}"
+                      重试按钮:
                         type: Canvas
                         attribute:
-                          width: "var.ledgerW - 28"
-                          height: 152
+                          x: 1020
+                          y: 4
+                          width: 80
+                          height: 36
+                          visible: |-
+                            each.status == 'failed'
+                        action:
+                          click: |-
+                            Packet.send('AXS_ENTITY_TRACKER_REWARD', 'retry', var.actionToken, each.id)
                         children:
-                          行底:
+                          重试背景:
                             type: Texture
                             attribute:
                               point: ~stretch_all
-                              normal: "each.status == 'failed' ? '49,31,40,255' : '27,37,47,255'"
                               through: true
-                          状态信号:
-                            type: Texture
-                            attribute:
-                              width: 3
-                              height: 152
-                              normal: "each.status == 'failed' ? '239,79,89,255' : '69,211,224,255'"
-                              through: true
-                          行分隔:
-                            type: Texture
-                            attribute:
-                              point: ~bottom_left
-                              width: "self.parent.width"
-                              height: 1
-                              normal: ~52,69,81,255
-                              through: true
-                          周期单元格:
+                              normal: ~200,120,50,180
+                              shape: ~round_rect
+                              radius: 6
+                          重试文字:
                             type: Text
                             attribute:
-                              x: 20
-                              y: 20
-                              texts: ~&f{each.periodDisplay}
-                              limit: 320
-                              fontSize: 36
+                              point: ~middle_center
+                              width: 80
+                              texts: ~&f重试
+                              fontSize: 22
                               through: true
-                          首领单元格:
-                            type: Text
-                            attribute:
-                              x: 20
-                              y: 62
-                              texts: ~&7首领 / &f{each.bossId}
-                              limit: 320
-                              fontSize: 36
-                              through: true
-                          玩家窗口:
-                            type: Scroll
-                            attribute:
-                              x: 360
-                              y: 16
-                              width: 240
-                              height: 50
-                              scrollAnim: none
-                              moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
-                            action:
-                              enter: self.scrollAnim = Lerp(0, 1, 4000)
-                              leave: self.scrollAnim = none
-                            children:
-                              玩家布局:
-                                type: HStack
-                                attribute:
-                                  height: 50
-                                children:
-                                  玩家单元格:
-                                    type: Text
-                                    attribute:
-                                      texts: ~&f{each.playerName}
-                                      fontSize: 48
-                                      through: true
-                          记录编号:
-                            type: Text
-                            attribute:
-                              x: 360
-                              y: 62
-                              texts: ~&7记录 / {each.id}
-                              fontSize: 36
-                              through: true
-                          排名单元格:
-                            type: Text
-                            attribute:
-                              x: 620
-                              y: 18
-                              texts: ~&b#{each.rank}
-                              fontSize: 48
-                              through: true
-                          类型单元格:
-                            type: Text
-                            attribute:
-                              x: 760
-                              y: 20
-                              texts: ~&7{each.rankingTypeDisplay}
-                              fontSize: 36
-                              limit: 160
-                              through: true
-                          奖励窗口:
-                            type: Scroll
-                            attribute:
-                              x: 940
-                              y: 18
-                              width: "var.ledgerW - 1298"
-                              height: 54
-                              scrollAnim: none
-                              moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
-                            action:
-                              enter: self.scrollAnim = Lerp(0, 1, 5000)
-                              leave: self.scrollAnim = none
-                            children:
-                              奖励布局:
-                                type: HStack
-                                attribute:
-                                  height: 54
-                                children:
-                                  奖励单元格:
-                                    type: Text
-                                    attribute:
-                                      texts: ~&f{each.rewardSummary}
-                                      fontSize: 36
-                                      through: true
-                          状态单元格:
-                            type: Text
-                            attribute:
-                              point: ~top_right
-                              x: -192
-                              y: 34
-                              texts: ~{each.statusIcon}
-                              fontSize: 36
-                              through: true
-                          明细窗口:
-                            type: Scroll
-                            attribute:
-                              x: 20
-                              y: 106
-                              width: "var.ledgerW - 268"
-                              height: 32
-                              scrollAnim: none
-                              moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
-                            action:
-                              enter: self.scrollAnim = Lerp(0, 1, 7000)
-                              leave: self.scrollAnim = none
-                            children:
-                              明细布局:
-                                type: HStack
-                                attribute:
-                                  height: 32
-                                children:
-                                  发放明细:
-                                    type: Text
-                                    attribute:
-                                      texts: "each.status == 'failed' ? '&c失败原因 / &f' + each.failureReason : '&7发放时间 / &f' + each.issuedTime"
-                                      fontSize: 36
-                                      through: true
-                          重试次数:
-                            type: Text
-                            attribute:
-                              point: ~top_right
-                              x: -12
-                              y: 106
-                              texts: ~&7重试 {each.retryCount} 次
-                              fontSize: 36
-                              through: true
-                          重试按钮:
-                            type: Canvas
-                            attribute:
-                              point: ~top_right
-                              x: -12
-                              y: 20
-                              width: 148
-                              height: 56
-                              visible: each.status == 'failed'
-                              enable: "var.actionToken != none && var.actionToken != ''"
-                            action:
-                              click: |-
-                                var.historyFilter = 'all'
-                                Packet.send('AXS_ENTITY_TRACKER_REWARD', 'retry', var.actionToken, each.id)
-                            children:
-                              重试背景:
-                                type: Texture
-                                attribute:
-                                  point: ~stretch_all
-                                  normal: ~145,47,59,255
-                                  hover: ~198,61,75,255
-                                  through: true
-                                  shape: ~round_rect
-                                  radius: 4
-                              重试文字:
-                                type: Text
-                                attribute:
-                                  point: ~middle_center
-                                  texts: ~&f重试发放
-                                  fontSize: 36
-                                  through: true
-          清单空态:
-            type: Canvas
-            attribute:
-              x: 32
-              y: 392
-              width: var.ledgerW
-              height: 160
-              visible: "var.records == none || var.totalCount == '0' || var.totalCount == 0"
-            children:
-              空态标题:
-                type: Text
-                attribute:
-                  point: ~top_center
-                  y: 28
-                  texts: "var.records == none ? '&b选择状态以读取发放记录' : '&f当前条件下没有发放记录'"
-                  fontSize: 48
-                  through: true
-              空态说明:
-                type: Text
-                attribute:
-                  point: ~top_center
-                  y: 82
-                  texts: ~&7可切换全部记录；失败记录才提供重试操作。
-                  fontSize: 36
-                  through: true
-          结果栏:
-            type: Canvas
-            attribute:
-              point: ~bottom_left
-              x: 32
-              y: -88
-              width: var.ledgerW
-              height: 56
-            children:
-              结果底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  normal: ~17,25,33,255
-                  through: true
-              结果提示:
-                type: Text
-                attribute:
-                  x: 20
-                  y: 16
-                  texts: "var.resultMsg != none ? var.resultMsg : '&7操作回执 / 翻页、刷新和重试后显示全部状态'"
-                  limit: "var.ledgerW - 40"
-                  fontSize: 36
-                  through: true
-          浏览说明:
-            type: Text
-            attribute:
-              point: ~bottom_left
-              x: 32
-              y: -38
-              texts: ~&7每页最多 20 条 / 滚轮或拖动滑块
-              fontSize: 36
-              through: true
+          # 分页控件
           分页控件:
-            type: Canvas
+            type: Texture
             attribute:
-              point: ~bottom_right
-              x: -32
-              y: -20
-              width: 600
-              height: 56
+              x: 400
+              y: 652
+              width: 400
+              height: 44
+              normal: ~50,50,60,150
+              shape: ~round_rect
+              radius: 8
             children:
-              页码:
-                type: Text
-                attribute:
-                  point: ~middle_center
-                  texts: "var.records == none ? '&7等待记录' : '&f' + var.currentPage + ' &7/ &f' + var.totalPages"
-                  fontSize: 48
-                  through: true
               上一页按钮:
                 type: Canvas
                 attribute:
-                  width: 164
-                  height: 56
-                  enable: "var.currentPage != none && var.currentPage > 1"
+                  x: 10
+                  y: 4
+                  width: 100
+                  height: 36
                 action:
                   click: |-
                     if (var.currentPage > 1) {
-                      var.historyFilter = 'all'
                       Packet.send('AXS_ENTITY_TRACKER_REWARD', 'history-list', none, none, var.currentPage - 1)
                     }
                 children:
@@ -744,29 +485,27 @@ controls:
                     type: Texture
                     attribute:
                       point: ~stretch_all
-                      normal: "self.parent.enable ? '37,66,77,255' : '31,39,48,255'"
-                      hover: ~44,102,114,255
                       through: true
+                      normal: ~60,130,200,180
                       shape: ~round_rect
-                      radius: 4
+                      radius: 6
                   上一页文字:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      texts: ~&f< 上一页
-                      fontSize: 36
-                      through: true
+                      width: 100
+                      fontSize: 24
+                      texts: "~&f上一页"
               下一页按钮:
                 type: Canvas
                 attribute:
-                  point: ~top_right
-                  width: 164
-                  height: 56
-                  enable: "var.currentPage != none && var.currentPage < var.totalPages"
+                  x: 290
+                  y: 4
+                  width: 100
+                  height: 36
                 action:
                   click: |-
                     if (var.currentPage < var.totalPages) {
-                      var.historyFilter = 'all'
                       Packet.send('AXS_ENTITY_TRACKER_REWARD', 'history-list', none, none, var.currentPage + 1)
                     }
                 children:
@@ -774,15 +513,15 @@ controls:
                     type: Texture
                     attribute:
                       point: ~stretch_all
-                      normal: "self.parent.enable ? '37,66,77,255' : '31,39,48,255'"
-                      hover: ~44,102,114,255
                       through: true
+                      normal: ~60,130,200,180
                       shape: ~round_rect
-                      radius: 4
+                      radius: 6
                   下一页文字:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      texts: ~&f下一页 >
-                      fontSize: 36
+                      width: 100
+                      texts: ~&f下一页
+                      fontSize: 24
                       through: true

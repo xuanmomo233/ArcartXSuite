@@ -10,21 +10,6 @@
 ui:
   isHud: true
   defaultOpen: true
-  action:
-    load: |-
-      sx = Screen.getWidth() / 1920
-      sy = Screen.getHeight() / 1080
-      s = sx < sy ? sx : sy
-      var.viewH = Screen.getHeight() / s
-      var.viewW = Screen.getWidth() / s
-      var.offX = (var.viewW - 1920) / 2
-    resize: |-
-      sx = Screen.getWidth() / 1920
-      sy = Screen.getHeight() / 1080
-      s = sx < sy ? sx : sy
-      var.viewH = Screen.getHeight() / s
-      var.viewW = Screen.getWidth() / s
-      var.offX = (var.viewW - 1920) / 2
   packetHandler:
     # packetHandler: combo
     # 包字段:
@@ -76,92 +61,61 @@ controls:
     attribute:
       width: 1920
       height: 1080
-      point: ~top_center
-      through: true
+      point: ~stretch_all
     children:
-      战斗视口:
+
+      连击展示区:
         type: Canvas
         attribute:
+          width: 300
+          height: 120
+          x: 1560
+          y: 350
           point: ~top_left
-          width: 1920
-          height: "var.viewH"
-          through: true
         children:
-          # 右侧边缘的战术读数；里程碑贴图放在数字上方，不遮挡实时计数。
-          连击展示区:
-            type: Canvas
+
+          连击背景:
+            type: Texture
             attribute:
-              point: ~middle_right
-              x: "var.offX - 48"
-              y: -90
-              width: 256
-              height: 184
+              normal: ~0,0,0,120
+              shape: ~round_rect
+              radius: ~8
+              width: 300
+              height: 120
+              point: ~top_left
               visible: "server.combo_count > 0 || var.combo_show"
-              through: true
-            children:
-              连击背景:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  normal: ~24,25,28,228
-                  shape: ~round_rect
-                  radius: 4
-                  through: true
-              暖银顶线:
-                type: Texture
-                attribute:
-                  point: ~top_left
-                  x: 20
-                  y: 0
-                  width: 216
-                  height: 2
-                  normal: ~213,195,167,255
-                  through: true
-              连击侧标:
-                type: Texture
-                attribute:
-                  point: ~top_right
-                  width: 3
-                  height: 184
-                  normal: "val.milestone_fx.visible ? '204,99,57,255' : '130,120,106,255'"
-                  through: true
-              连击标签:
-                type: Text
-                attribute:
-                  point: ~top_left
-                  x: 20
-                  y: 16
-                  texts: ~&7COMBO
-                  fontSize: 36
-                  through: true
-              # 已同步时以服务器变量为准（含 0）；未同步时显示包内计数。
-              连击数字:
-                type: Text
-                attribute:
-                  point: ~middle_left
-                  x: 20
-                  y: -4
-                  texts: "server.combo_count != none ? '&f' + server.combo_count.round() : '&f' + var.combo_count.round()"
-                  fontSize: 100
-                  through: true
-              连击状态:
-                type: Text
-                attribute:
-                  point: ~bottom_left
-                  x: 20
-                  y: -16
-                  texts: "val.milestone_fx.visible ? '&6里程碑达成' : '&7连击'"
-                  fontSize: 36
-                  through: true
-              里程碑特效:
-                type: Texture
-                val: milestone_fx
-                attribute:
-                  point: ~top_center
-                  y: -116
-                  normal: ~combat_effect/combo_milestone.png
-                  middleScale: 1
-                  width: 256
-                  height: 102
-                  visible: false
-                  through: true
+
+          连击数字:
+            type: Text
+            attribute:
+              texts: "~&f{server.combo_count}"
+              shadow: false
+              fontSize: 72
+              center: true
+              x: 150
+              y: 8
+              point: ~top_left
+              visible: "server.combo_count > 0 || var.combo_show"
+
+          连击标签:
+            type: Text
+            attribute:
+              texts: "'&eCOMBO'"
+              shadow: false
+              fontSize: 28
+              center: true
+              x: 150
+              y: 80
+              point: ~top_left
+              visible: "server.combo_count > 0 || var.combo_show"
+
+          里程碑特效:
+            type: Texture
+            val: milestone_fx
+            attribute:
+              normal: ~combat_effect/combo_milestone.png
+              middleScale: 1
+              width: 300
+              height: 120
+              point: ~top_left
+              visible: false

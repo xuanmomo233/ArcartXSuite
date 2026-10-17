@@ -35,10 +35,4 @@ tasks.compileTestJava {
 
 tasks.test {
     useJUnitPlatform()
-    inputs.files(rootProject.fileTree("modules") {
-        include("*/src/main/resources/arcartx/ui/*.yml")
-        include("chat/src/main/resources/chat/ui/axs_chat_completion.yml")
-        include("*/src/main/resources/*/card/*.yml")
-        include("combateffect/src/main/resources/arcartx/damage_display/*.yml")
-    }).withPropertyName("moduleUiResources").withPathSensitivity(PathSensitivity.RELATIVE)
 }

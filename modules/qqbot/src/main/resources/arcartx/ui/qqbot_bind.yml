@@ -1,4 +1,6 @@
-# QQBot / 账号关联 — 紧凑纸色凭证、梅紫验证流程、电青群内对话
+# AXS QQBot 绑定中心
+# 玩家可在此查看绑定状态、生成验证码、解绑等
+
 ui:
   isHud: false
   defaultOpen: false
@@ -11,6 +13,15 @@ ui:
   level: 15
   screenScale: true
   packetHandler:
+    # packetHandler: init
+    # 包字段:
+    #   - packetId: 通信标识，用于后续 Packet.send 回包
+    #   - bound: 玩家是否已绑定 QQ
+    #   - qqId: 绑定的 QQ 号（未绑定时为 none）
+    #   - playerName: 玩家名称
+    #   - bindTime: 绑定时间
+    #   - messages: 群消息列表
+    #   - msgCount: 群消息数量
     init: |-
       var.code = none
       var.codeExpire = 0
@@ -24,18 +35,37 @@ ui:
       var.tab = 'status'
       var.messages = packet['messages']
       var.msgCount = packet['msgCount']
+    # packetHandler: update
+    # 包字段:
+    #   - bound: 玩家是否已绑定 QQ
+    #   - qqId: 绑定的 QQ 号
+    #   - bindTime: 绑定时间
+    #   - message: 操作结果消息
+    #   - type: 结果类型（success/error/info）
     update: |-
       var.bound = packet['bound']
       var.qqId = packet['qqId']
       var.bindTime = packet['bindTime']
       var.result = packet['message']
       var.resultType = packet['type']
+    # packetHandler: code
+    # 包字段:
+    #   - code: 生成的验证码
+    #   - expire: 验证码过期剩余秒数
     code: |-
       var.code = packet['code']
       var.codeExpire = packet['expire']
+    # packetHandler: messages
+    # 包字段:
+    #   - messages: 群消息列表
+    #   - msgCount: 群消息数量
     messages: |-
       var.messages = packet['messages']
       var.msgCount = packet['msgCount']
+    # packetHandler: result
+    # 包字段:
+    #   - message: 操作结果消息
+    #   - type: 结果类型（success/error/info）
     result: |-
       var.result = packet['message']
       var.resultType = packet['type']
@@ -44,82 +74,56 @@ ui:
       var.msgCount = 0
       var.packetId = 'AXS_qqbot'
       var.tab = 'status'
-      sx = Screen.getWidth() / 1920
-      sy = Screen.getHeight() / 1080
-      s = sx < sy ? sx : sy
-      var.viewW = Screen.getWidth() / s
-      var.viewH = Screen.getHeight() / s
-      var.offX = (var.viewW - 1920) / 2
-      var.connectW = var.viewW - 568
-    resize: |-
-      sx = Screen.getWidth() / 1920
-      sy = Screen.getHeight() / 1080
-      s = sx < sy ? sx : sy
-      var.viewW = Screen.getWidth() / s
-      var.viewH = Screen.getHeight() / s
-      var.offX = (var.viewW - 1920) / 2
-      var.connectW = var.viewW - 568
+
 controls:
-  模态底:
-    type: Texture
-    attribute:
-      point: ~stretch_all
-      normal: ~17,23,30,245
   自适应全局布局:
     type: Adaptive
     attribute:
-      point: ~top_center
+      point: ~middle_center
       width: 1920
       height: 1080
     children:
       面板:
         type: Canvas
         attribute:
-          x: "48 - var.offX"
-          y: 40
-          width: "var.viewW - 96"
-          height: "var.viewH - 80"
+          point: ~middle_center
+          width: 720
+          height: 460
         children:
+          背景:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~26,32,42,235
+            effect:
+              stroke:
+                width: 2
+                color: ~80,180,255,180
+          # ── 顶部标题栏 ──
           标题栏强调:
             type: Texture
             attribute:
-              x: 0
-              y: 4
-              width: 8
-              height: 84
-              normal: ~28,232,205,255
-              through: true
-          模块标记:
-            type: Text
-            attribute:
               x: 28
-              y: 0
-              texts: ~&bQQBOT  /  CONNECT
-              fontSize: 36
-              through: true
+              y: 18
+              width: 5
+              height: 48
+              normal: ~80,180,255,255
+              shape: ~round_rect
+              radius: 3
           标题:
             type: Text
             attribute:
-              x: 26
-              y: 34
-              texts: ~&f账号关联与群消息
-              fontSize: 72
-              through: true
-          标题说明:
-            type: Text
-            attribute:
-              x: 28
-              y: 106
-              texts: ~&7核对身份，再完成验证；群消息与账号操作分区呈现。
-              fontSize: 36
-              through: true
+              x: 44
+              y: 20
+              texts: "~&fQQ 绑定中心"
+              fontSize: 49
           关闭按钮:
             type: Canvas
             attribute:
-              point: ~top_right
-              y: 16
-              width: 144
-              height: 64
+              x: 660
+              y: 18
+              width: 40
+              height: 40
             action:
               clickLeft: |-
                 var.replyText = none
@@ -130,184 +134,26 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~55,44,65,255
-                  hover: ~95,62,103,255
+                  normal: ~180,50,50,200
+                  hover: ~220,70,70,255
                   shape: ~round_rect
-                  radius: 12
+                  radius: 10
               关闭文字:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  texts: ~&f关闭
+                  width: 40
+                  texts: "~&f✕"
                   fontSize: 36
                   through: true
-          身份凭证:
-            type: Canvas
-            attribute:
-              y: 160
-              width: 440
-              height: 640
-            children:
-              背景:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  normal: ~232,228,218,255
-                  shape: ~round_rect
-                  radius: 20
-                  through: true
-              凭证标题:
-                type: Text
-                attribute:
-                  x: 28
-                  y: 28
-                  texts: ~&8你的连接凭证
-                  fontSize: 48
-                  through: true
-              凭证编号:
-                type: Text
-                attribute:
-                  x: 28
-                  y: 80
-                  texts: ~&8PLAYER  /  QQ
-                  fontSize: 36
-                  through: true
-              凭证分隔:
-                type: Texture
-                attribute:
-                  x: 28
-                  y: 132
-                  width: 384
-                  height: 2
-                  normal: ~187,179,168,255
-                  through: true
-              玩家标签:
-                type: Text
-                attribute:
-                  x: 28
-                  y: 164
-                  texts: ~&8游戏账号
-                  fontSize: 36
-                  through: true
-              玩家窗口:
-                type: Scroll
-                attribute:
-                  x: 28
-                  y: 202
-                  width: 384
-                  height: 72
-                  scrollAnim: none
-                  moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
-                action:
-                  enter: self.scrollAnim = Lerp(0, 1, 3000)
-                  leave: self.scrollAnim = none
-                children:
-                  玩家布局:
-                    type: HStack
-                    attribute:
-                      height: 72
-                    children:
-                      玩家名称:
-                        type: Text
-                        attribute:
-                          texts: "'&0' + var.playerName"
-                          fontSize: 64
-                          through: true
-              绑定状态图标:
-                type: Canvas
-                attribute:
-                  x: 28
-                  y: 302
-                  width: 384
-                  height: 64
-                children:
-                  绑定状态图标背景:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: "var.bound ? '28,232,205,255' : '211,202,217,255'"
-                      shape: ~round_rect
-                      radius: 12
-                  绑定状态图标文字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      texts: "var.bound ? '&0关联已确认' : '&8等待关联 QQ'"
-                      fontSize: 48
-                      through: true
-              QQ标签:
-                type: Text
-                attribute:
-                  x: 28
-                  y: 406
-                  texts: ~&8QQ 账号
-                  fontSize: 36
-                  through: true
-              绑定状态文字:
-                type: Text
-                attribute:
-                  x: 28
-                  y: 446
-                  texts: "var.bound ? '&0' + var.qqId : '&8尚未绑定'"
-                  fontSize: 48
-                  through: true
-              时间标签:
-                type: Text
-                attribute:
-                  x: 28
-                  y: 514
-                  texts: ~&8绑定时间
-                  fontSize: 36
-                  through: true
-              绑定时间:
-                type: Text
-                attribute:
-                  x: 28
-                  y: 554
-                  texts: "var.bound ? '&0' + var.bindTime : '&8验证完成后显示'"
-                  fontSize: 36
-                  through: true
-          验证须知:
-            type: Canvas
-            attribute:
-              y: 824
-              width: 440
-              height: "self.parent.height - 824"
-            children:
-              须知底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  normal: ~42,31,50,255
-                  shape: ~round_rect
-                  radius: 16
-                  through: true
-              须知标题:
-                type: Text
-                attribute:
-                  x: 24
-                  y: 18
-                  texts: ~&d仅限本人验证
-                  fontSize: 36
-                  through: true
-              须知内容:
-                type: Text
-                attribute:
-                  x: 24
-                  y: 64
-                  texts:
-                    - ~&7先核对玩家名与 QQ 号。
-                    - ~&7不要向其他玩家转交验证码。
-                  fontSize: 36
-                  through: true
+          # ── Tab 切换按钮 ──
           tab_状态:
             type: Canvas
             attribute:
-              x: 472
-              y: 160
-              width: 300
-              height: 64
+              x: 28
+              y: 76
+              width: 130
+              height: 38
             action:
               clickLeft: |-
                 var.tab = 'status'
@@ -317,24 +163,25 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: "var.tab == 'status' ? '111,64,119,255' : '34,44,52,255'"
-                  hover: ~124,83,130,255
+                  normal: "var.tab == 'status' ? '80,180,255,220' : '50,55,65,200'"
+                  hover: ~100,200,255,255
                   shape: ~round_rect
-                  radius: 12
+                  radius: 10
               tab_状态文字:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  texts: ~&f账号关联
-                  fontSize: 48
+                  width: 130
+                  texts: "~&f绑定状态"
+                  fontSize: 34
                   through: true
           tab_消息:
             type: Canvas
             attribute:
-              x: 792
-              y: 160
-              width: 340
-              height: 64
+              x: 168
+              y: 76
+              width: 130
+              height: 38
             action:
               clickLeft: |-
                 var.tab = 'messages'
@@ -345,161 +192,75 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: "var.tab == 'messages' ? '28,232,205,255' : '34,44,52,255'"
-                  hover: ~70,139,134,255
+                  normal: "var.tab == 'messages' ? '80,180,255,220' : '50,55,65,200'"
+                  hover: ~100,200,255,255
                   shape: ~round_rect
-                  radius: 12
+                  radius: 10
               tab_消息文字:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  texts: "var.tab == 'messages' ? '&0群消息 (' + var.msgCount.round() + ')' : '&f群消息 (' + var.msgCount.round() + ')'"
-                  fontSize: 48
+                  width: 130
+                  texts: "'&f群消息 (' + var.msgCount + ')'"
+                  fontSize: 34
                   through: true
+          # ── 绑定状态页 ──
           状态容器:
             type: Canvas
             attribute:
-              x: 472
-              y: 248
-              width: "var.connectW"
-              height: "var.viewH - 448"
+              x: 28
+              y: 126
+              width: 664
+              height: 310
               visible: var.tab == 'status'
             children:
-              关联底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  normal: ~42,31,50,255
-                  shape: ~round_rect
-                  radius: 20
-                  through: true
-              状态标题:
-                type: Text
-                attribute:
-                  x: 32
-                  y: 28
-                  texts: "var.bound ? '&f连接已确认' : '&f建立你的 QQ 连接'"
-                  fontSize: 64
-                  through: true
-              状态说明:
-                type: Text
-                attribute:
-                  x: 32
-                  y: 94
-                  texts: "var.bound ? '&7左侧凭证展示当前关联；群消息可在另一页查看。' : '&7从本页获取验证码，按群内机器人提示完成验证。'"
-                  fontSize: 36
-                  through: true
-              验证流程:
+              绑定状态图标:
                 type: Canvas
                 attribute:
-                  x: 32
-                  y: 158
-                  width: "self.parent.width - 64"
-                  height: 96
-                  visible: "!var.bound"
+                  x: 0
+                  y: 8
+                  width: 48
+                  height: 48
                 children:
-                  流程底:
+                  绑定状态图标背景:
                     type: Texture
                     attribute:
                       point: ~stretch_all
-                      normal: ~57,42,65,255
+                      through: true
+                      normal: "var.bound ? '80,200,120,255' : '200,80,80,255'"
                       shape: ~round_rect
-                      radius: 12
-                      through: true
-                  步骤一:
+                      radius: 24
+                  绑定状态图标文字:
                     type: Text
                     attribute:
-                      x: 20
-                      y: 18
-                      texts: ~&b01  游戏内获取
+                      point: ~middle_center
+                      width: 48
+                      texts: "var.bound ? '&f✔' : '&f✘'"
                       fontSize: 36
                       through: true
-                  步骤二:
-                    type: Text
-                    attribute:
-                      x: "self.parent.width / 3 + 12"
-                      y: 18
-                      texts: ~&f02  群内确认
-                      fontSize: 36
-                      through: true
-                  步骤三:
-                    type: Text
-                    attribute:
-                      x: "self.parent.width * 2 / 3 + 12"
-                      y: 18
-                      texts: ~&f03  重开核对
-                      fontSize: 36
-                      through: true
-                  流程注:
-                    type: Text
-                    attribute:
-                      x: 20
-                      y: 54
-                      texts: ~&7验证方式以服务器与群内机器人提示为准。
-                      fontSize: 36
-                      through: true
-              验证码面板:
-                type: Canvas
+              绑定状态文字:
+                type: Text
                 attribute:
-                  x: 32
-                  y: 278
-                  width: "self.parent.width - 64"
-                  height: 190
-                  visible: "!var.bound"
-                children:
-                  验证码底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      normal: ~23,31,38,255
-                      shape: ~round_rect
-                      radius: 16
-                      through: true
-                  验证码标签:
-                    type: Text
-                    attribute:
-                      x: 24
-                      y: 18
-                      texts: ~&d一次性验证凭证
-                      fontSize: 36
-                      through: true
-                  验证码显示:
-                    type: Text
-                    attribute:
-                      x: 24
-                      y: 62
-                      texts: "'&b' + var.code"
-                      fontSize: 100
-                      visible: "!var.bound && var.code != none"
-                      through: true
-                  验证码待生成:
-                    type: Text
-                    attribute:
-                      x: 24
-                      y: 72
-                      texts: ~&7尚未生成验证码
-                      fontSize: 54
-                      visible: var.code == none
-                      through: true
-                  有效期:
-                    type: Text
-                    attribute:
-                      x: 24
-                      y: 146
-                      texts: "'&7签发有效期 ' + var.codeExpire.round() + ' 秒  /  过期请重新获取'"
-                      fontSize: 36
-                      visible: var.code != none
-                      through: true
+                  x: 60
+                  y: 10
+                  texts: "var.bound ? '&a已绑定 QQ: &f' + var.qqId : '&c未绑定 QQ 账号'"
+                  fontSize: 38
+              绑定时间:
+                type: Text
+                attribute:
+                  x: 60
+                  y: 42
+                  texts: "var.bound ? '&7绑定时间: ' + var.bindTime : '&7请在QQ群获取验证码后绑定'"
+                  fontSize: 28
+              # 生成验证码按钮
               获取验证码按钮:
                 type: Canvas
                 attribute:
-                  point: ~bottom_left
-                  x: 32
-                  y: -32
-                  width: 300
-                  height: 72
+                  x: 0
+                  y: 80
+                  width: 200
+                  height: 44
                   visible: "!var.bound"
-                  enable: "var.actionToken != none && var.actionToken != ''"
                 action:
                   clickLeft: |-
                     Packet.send(var.packetId, 'request_code', var.actionToken)
@@ -509,93 +270,36 @@ controls:
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: "(var.actionToken != none && var.actionToken != '') ? '28,232,205,255' : '44,58,61,255'"
-                      hover: ~94,249,224,255
+                      normal: ~60,140,200,220
+                      hover: ~80,160,220,255
                       shape: ~round_rect
                       radius: 12
                   获取验证码文字:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      texts: "var.code != none ? '&0重新获取验证码' : '&0获取验证码'"
-                      alpha: "(var.actionToken != none && var.actionToken != '') ? 1 : 0.45"
-                      fontSize: 48
-                      through: true
-              验证安全提示:
-                type: Text
-                attribute:
-                  point: ~bottom_left
-                  x: 364
-                  y: -58
-                  texts: "(var.actionToken != none && var.actionToken != '') ? '&7在群内按机器人提示完成验证。' : '&7正在等待服务器授权，请稍候。'"
-                  fontSize: 36
-                  visible: "!var.bound"
-                  through: true
-              已绑定确认:
-                type: Canvas
-                attribute:
-                  x: 32
-                  y: 166
-                  width: "self.parent.width - 64"
-                  height: 220
-                  visible: var.bound
-                children:
-                  确认底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      normal: ~30,65,65,255
-                      shape: ~round_rect
-                      radius: 16
-                      through: true
-                  确认色带:
-                    type: Texture
-                    attribute:
-                      x: 28
-                      y: 196
-                      width: "self.parent.width - 56"
-                      height: 4
-                      normal: ~28,232,205,255
-                      through: true
-                  确认标题:
-                    type: Text
-                    attribute:
-                      x: 28
-                      y: 28
-                      texts: ~&b游戏账号与 QQ 已关联
-                      fontSize: 54
-                      through: true
-                  确认说明:
-                    type: Text
-                    attribute:
-                      x: 28
-                      y: 100
-                      texts:
-                        - ~&f请在左侧核对 QQ 号与绑定时间。
-                        - ~&7需要换绑时，先解除当前关联，再重新验证。
+                      width: 200
+                      texts: "~&f获取验证码"
                       fontSize: 36
                       through: true
-              已关联下一步:
+              # 验证码显示
+              验证码显示:
                 type: Text
                 attribute:
-                  x: 32
-                  y: 422
-                  texts:
-                    - ~&f下一步  /  查看群消息
-                    - ~&7切换上方标签，阅读最近对话或发送回复。
+                  x: 220
+                  y: 92
+                  texts: "var.code != none ? '&e验证码: &f' + var.code + ' &7(' + var.codeExpire + 's)' : none"
                   fontSize: 36
-                  visible: var.bound
-                  through: true
+                  visible: "!var.bound && var.code != none"
+              # 解绑按钮
               解绑按钮:
                 type: Canvas
                 attribute:
-                  point: ~bottom_left
-                  x: 32
-                  y: -32
-                  width: 240
-                  height: 64
+                  x: 0
+                  y: 80
+                  width: 160
+                  height: 44
                   visible: var.bound
-                  enable: "var.actionToken != none && var.actionToken != ''"
                 action:
                   clickLeft: |-
                     Packet.send(var.packetId, 'unbind', var.actionToken)
@@ -605,259 +309,114 @@ controls:
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: ~89,47,74,255
-                      hover: ~157,68,101,255
+                      normal: ~180,80,60,220
+                      hover: ~210,100,80,255
                       shape: ~round_rect
                       radius: 12
                   解绑文字:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      texts: ~&f解除当前绑定
+                      width: 160
+                      texts: "~&f解除绑定"
                       fontSize: 36
                       through: true
-              解绑提示:
+              # 结果消息
+              结果消息:
                 type: Text
                 attribute:
-                  point: ~bottom_left
-                  x: 300
-                  y: -54
-                  texts: ~&7点击会立即解除关联，请确认后操作。
-                  fontSize: 36
-                  visible: var.bound
-                  through: true
+                  x: 0
+                  y: 144
+                  texts: "var.resultType == 'success' ? '&a' + var.result : (var.resultType == 'error' ? '&c' + var.result : '&7' + var.result)"
+                  fontSize: 32
+                  visible: var.result != none
+          # ── 群消息页 ──
           消息容器:
             type: Canvas
             attribute:
-              x: 472
-              y: 248
-              width: "var.connectW"
-              height: "var.viewH - 448"
+              x: 28
+              y: 126
+              width: 664
+              height: 310
               visible: var.tab == 'messages'
             children:
-              消息底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  normal: ~23,31,38,255
-                  shape: ~round_rect
-                  radius: 20
-                  through: true
-              消息标题:
-                type: Text
-                attribute:
-                  x: 28
-                  y: 24
-                  texts: ~&f群内对话
-                  fontSize: 54
-                  through: true
-              消息提示:
-                type: Text
-                attribute:
-                  x: 28
-                  y: 76
-                  texts: ~&7最近 50 条  /  滚轮浏览记录  /  悬停长消息查看全文
-                  fontSize: 36
-                  through: true
               消息滚动区:
                 type: Canvas
                 attribute:
-                  x: 28
-                  y: 132
-                  width: "self.parent.width - 56"
-                  height: "self.parent.height - 258"
+                  x: 0
+                  y: 0
+                  width: 664
+                  height: 260
                 children:
-                  纵向滑轨:
-                    type: Texture
-                    attribute:
-                      point: ~top_right
-                      width: 12
-                      height: "self.parent.height"
-                      normal: ~55,64,72,255
-                      shape: ~round_rect
-                      radius: 6
-                      through: true
                   纵向滑块:
                     type: Texture
                     attribute:
                       point: ~top_right
-                      width: 12
-                      height: 80
-                      normal: ~28,232,205,255
-                      hover: ~94,249,224,255
+                      width: 8
+                      height: 60
+                      normal: ~120,120,130,180
                       shape: ~round_rect
-                      radius: 6
-                      maxDragY: "self.parent.height - 80"
+                      radius: 4
+                      maxDragY: 260 - 60
                   消息滚动栏:
                     type: Scroll
                     attribute:
-                      width: "self.parent.width - 30"
-                      height: "self.parent.height"
+                      width: 648
+                      height: 260
                       moveY: self.parent['纵向滑块'].getDragYRatio()
-                    action:
-                      wheel: |-
-                        self.parent['纵向滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
                     children:
                       消息列表:
                         val: msgList
                         type: VStack
                         attribute:
-                          width: "self.parent.width"
-                          spaceBetween: 12
-                        action:
-                          create: |-
-                            for(i in range(1, 49)){
-                              row = self.get(0).copy('消息_' + i.round())
-                              row.entryKey = i.round()
-                            }
+                          width: 640
+                          spaceBetween: 4
                         children:
                           消息条目:
-                            type: Canvas
+                            type: Texture
                             attribute:
-                              entryKey: 0.round()
-                              entry: var.messages.get(self.entryKey)
+                              entry: var.messages[self.key]
                               visible: self.entry != none
-                              width: "var.connectW - 86"
-                              height: 148
+                              width: 636
+                              height: 40
+                              normal: ~40,44,54,180
+                              shape: ~round_rect
+                              radius: 6
                             children:
-                              消息条目底:
-                                type: Texture
-                                attribute:
-                                  point: ~stretch_all
-                                  normal: ~34,44,52,255
-                                  shape: ~round_rect
-                                  radius: 12
-                                  through: true
-                              消息强调:
-                                type: Texture
-                                attribute:
-                                  x: 0
-                                  y: 18
-                                  width: 4
-                                  height: 112
-                                  normal: ~28,232,205,255
-                                  through: true
-                              发言人窗口:
-                                type: Scroll
-                                attribute:
-                                  x: 20
-                                  y: 16
-                                  width: "self.parent.width - 320"
-                                  height: 40
-                                  scrollAnim: none
-                                  moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
-                                action:
-                                  enter: self.scrollAnim = Lerp(0, 1, 4000)
-                                  leave: self.scrollAnim = none
-                                children:
-                                  发言人布局:
-                                    type: HStack
-                                    attribute:
-                                      height: 40
-                                    children:
-                                      发言人:
-                                        type: Text
-                                        attribute:
-                                          texts: "'&b' + self.parent.parent.parent.entry['nick']"
-                                          fontSize: 36
-                                          through: true
-                              消息时间:
+                              消息内容:
                                 type: Text
                                 attribute:
-                                  point: ~top_right
-                                  x: -20
-                                  y: 18
-                                  texts: "'&7' + self.parent.entry['time']"
-                                  fontSize: 36
+                                  x: 10
+                                  y: 6
                                   through: true
-                              对话分隔:
-                                type: Texture
-                                attribute:
-                                  x: 20
-                                  y: 64
-                                  width: "self.parent.width - 40"
-                                  height: 1
-                                  normal: ~58,77,83,255
-                                  through: true
-                              消息窗口:
-                                type: Scroll
-                                attribute:
-                                  x: 20
-                                  y: 82
-                                  width: "self.parent.width - 40"
-                                  height: 48
-                                  scrollAnim: none
-                                  moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
-                                action:
-                                  enter: self.scrollAnim = Lerp(0, 1, 9000)
-                                  leave: self.scrollAnim = none
-                                children:
-                                  消息布局:
-                                    type: HStack
-                                    attribute:
-                                      height: 48
-                                    children:
-                                      消息内容:
-                                        type: Text
-                                        attribute:
-                                          texts: "'&f' + self.parent.parent.parent.entry['msg']"
-                                          fontSize: 36
-                                          through: true
-                  消息空状态:
-                    type: Text
-                    attribute:
-                      x: 24
-                      y: 28
-                      texts:
-                        - ~&b还没有群消息
-                        - ~&7点击上方群消息标签可重新获取记录。
-                        - ~&7也可以在下方发送第一条消息。
-                      fontSize: 36
-                      visible: "var.messages == none || var.messages.size() == 0"
-                      through: true
-              回复输入区:
-                type: Canvas
+                                  texts: "'&b' + self.parent.entry['nick'] + ' &7' + self.parent.entry['time'] + '\n&f' + self.parent.entry['msg']"
+                                  fontSize: 26
+              # 回复区
+              回复输入框:
+                type: TextBox
                 attribute:
-                  point: ~bottom_left
-                  x: 28
-                  y: -54
-                  width: "self.parent.width - 290"
-                  height: 60
-                children:
-                  回复输入底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      normal: ~34,44,52,255
-                      shape: ~round_rect
-                      radius: 12
-                      through: true
-                    effect:
-                      stroke:
-                        width: 1
-                        color: ~80,115,119,255
-                  回复输入框:
-                    type: TextBox
-                    attribute:
-                      x: 12
-                      y: 8
-                      width: "self.parent.width - 24"
-                      height: 44
-                      length: 200
-                      emptyText: ~输入消息，发送到 QQ 群...
-                      fontSize: 36
-                    action:
-                      textChange: |-
-                        var.replyText = self.getContent()
+                  x: 0
+                  y: 268
+                  width: 540
+                  height: 36
+                  length: 200
+                  emptyText: ~输入消息发送到QQ群...
+                  fontSize: 28
+                  background: ~35,38,48,240
+                action:
+                  textChange: |-
+                    var.replyText = self.getContent()
+                effect:
+                  stroke:
+                    width: 1
+                    color: ~80,180,255,120
               发送按钮:
                 type: Canvas
                 attribute:
-                  point: ~bottom_right
-                  x: -28
-                  y: -54
-                  width: 220
-                  height: 60
-                  enable: "var.actionToken != none && var.actionToken != ''"
+                  x: 550
+                  y: 268
+                  width: 114
+                  height: 36
                 action:
                   clickLeft: |-
                     if(var.replyText != none){
@@ -870,72 +429,15 @@ controls:
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: "(var.actionToken != none && var.actionToken != '') ? '28,232,205,255' : '44,58,61,255'"
-                      hover: ~94,249,224,255
+                      normal: ~60,140,200,220
+                      hover: ~80,160,220,255
                       shape: ~round_rect
-                      radius: 12
+                      radius: 10
                   发送文字:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      texts: "(var.actionToken != none && var.actionToken != '') ? '&0发送到群' : '&7等待授权'"
-                      fontSize: 36
+                      width: 114
+                      texts: "~&f发送"
+                      fontSize: 30
                       through: true
-              发送说明:
-                type: Text
-                attribute:
-                  point: ~bottom_left
-                  x: 28
-                  y: -14
-                  texts: ~&7以游戏账号署名发送到已配置的 QQ 群。
-                  fontSize: 36
-                  through: true
-          结果提示:
-            type: Canvas
-            attribute:
-              point: ~bottom_right
-              y: -4
-              width: "var.connectW"
-              height: 92
-              visible: var.result != none
-            children:
-              结果底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  normal: "var.resultType == 'error' ? '83,40,53,255' : '30,65,65,255'"
-                  shape: ~round_rect
-                  radius: 12
-                  through: true
-              结果标签:
-                type: Text
-                attribute:
-                  x: 24
-                  y: 12
-                  texts: "var.resultType == 'error' ? '&c操作未完成' : '&b服务器回执'"
-                  fontSize: 36
-                  through: true
-              结果窗口:
-                type: Scroll
-                attribute:
-                  x: 24
-                  y: 50
-                  width: "self.parent.width - 48"
-                  height: 36
-                  scrollAnim: none
-                  moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
-                action:
-                  enter: self.scrollAnim = Lerp(0, 1, 5000)
-                  leave: self.scrollAnim = none
-                children:
-                  结果布局:
-                    type: HStack
-                    attribute:
-                      height: 36
-                    children:
-                      结果消息:
-                        type: Text
-                        attribute:
-                          texts: "var.resultType == 'error' ? '&c' + var.result : '&b' + var.result"
-                          fontSize: 36
-                          through: true

@@ -1,15 +1,12 @@
 # AXS CombatEffect — 暴击伤害飘字样式 (critical)
-# 说明: 暴击伤害使用最大数字尺寸，突出最高伤害提示层级
+# 说明: 暴击时显示的伤害数字样式，建议使用更醒目的颜色/更大字号
 # 文档: https://wiki.arcartx.com/docs/arcartx_v2/2_simple/9_damage_display
-# 部署: 自动导出跳过已有文件；更新此样式需手动同步到 plugins/ArcartX/damage_display/ 的同名文件。
 
 ArcartXSuite-critical:
-  # 普通伤害的 1.4 倍，保持 2:3 比例；暴击是最强视觉提示。
-  textureWidth: 56
-  textureHeight: 84
-  # 位置随机偏移（世界坐标单位）：略宽于普通伤害，仍紧贴目标。
+  textureWidth: 44
+  textureHeight: 66
   randomMin: 0
-  randomMax: 0.16
+  randomMax: 0.2
   # 小数位数：控制伤害数字显示几位小数。
   # 0 = 仅整数（小数部分被截断/舍入）；1 = 显示 1 位小数（如 12.5）；2 = 显示 2 位小数（如 12.50）。
   # 当此值 > 0 时，客户端会从 textures 列表第 11 张取小数点贴图渲染。

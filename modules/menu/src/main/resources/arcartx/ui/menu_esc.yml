@@ -1,9 +1,9 @@
-# AXS Menu ESC UI — 暂停指令台，继续游戏优先，工具常驻文字标签
-# 布局结构（1920x1080 自适应，956 宽左侧面板；220 宽工具栏，右侧保留角色展示）：
+# AXS Menu ESC UI — 替换暂停界面，仿原神派蒙菜单布局
+# 布局结构（设计分辨率 1920x1080，面板固定 820 宽，贴屏幕左缘滑入，右侧留给第三人称角色展示）：
 #   ┌ 通高窄工具栏（返回 / 页脚操作 / ESC 提示）
-#   ├ 紧凑身份卡保留头像/等级/经验；降低徽章权重，扩大任务浏览区
+#   ├ 右侧资料头部（圆形头像 / 昵称 / 等级+经验条 / 生命 / UID）
 #   ├ 分区标题行（菜单标题，多页时显示页码翻页器）
-#   └ 4 列快捷入口（Slot 图标）；紧凑资料头部扩大浏览区，底部固定操作说明
+#   └ 4 列深色方格 = 菜单按钮（统一渲染菜单配置的 icon，标签收进方格，底部显示操作说明）
 # 数据流: 服务端 sendPacket(init/update) -> packetHandler -> var.* -> 模板复制渲染
 # 客户端回包: Packet.send('AXS_MENU', 'click'/'footer', token, id) / page / esc_open
 ui:
@@ -156,7 +156,7 @@ ui:
       while(var.previewBody.length() >= 2 && (var.previewBody.charAt(0) == '&' || var.previewBody.charAt(0) == '§')){
         var.previewBody = var.previewBody.substring(2)
       }
-      var.previewColor = var.preview['enabled'] ? '&f' : '&c'
+      var.previewColor = var.preview['enabled'] ? '&8' : '&4'
     applyPacket: |-
       changedPage = var.resetMenu || var.menuId != var.incoming['menuId'] || var.pageId != var.incoming['pageId']
       var.packetId = var.incoming['packetId']
@@ -281,15 +281,15 @@ controls:
           菜单面板:
             type: Canvas
             attribute:
-              x: "-956 * var.anim.get()"
-              width: 956
+              x: "-820 * var.anim.get()"
+              width: 820
               height: "var.viewH"
             children:
               面板底:
                 type: Texture
                 attribute:
                   point: ~stretch_all
-                  normal: ~21,31,49,255
+                  normal: ~237,232,220,255
                 effect:
                   shadow:
                     xOffset: 12
@@ -299,16 +299,16 @@ controls:
               纸面下层:
                 type: Texture
                 attribute:
-                  x: 220
+                  x: 84
                   y: 308
                   width: 736
                   height: "var.viewH - 308"
-                  normal: ~21,31,49,255
+                  normal: ~237,232,220,255
                   through: true
                 effect:
                   gradient:
-                    color1: ~29,43,65,255
-                    color2: ~20,30,47,255
+                    color1: ~242,238,228,255
+                    color2: ~220,214,200,255
                     type: 0
                     angleDeg: 90
               面板右缘:
@@ -316,45 +316,45 @@ controls:
                 attribute:
                   point: ~vertical_stretch_right
                   width: 3
-                  normal: ~62,86,114,255
+                  normal: ~192,177,146,255
                   through: true
               玩家信息卡:
                 type: Canvas
                 attribute:
-                  x: 244
+                  x: 108
                   y: 24
                   width: 688
-                  height: 248
+                  height: 280
                 children:
                   卡片底:
                     type: Texture
                     attribute:
                       point: ~stretch_all
-                      normal: ~38,55,80,255
+                      normal: ~185,201,211,255
                       through: true
                     effect:
                       gradient:
-                        color1: ~41,63,94,255
-                        color2: ~27,41,64,255
+                        color1: ~149,174,193,255
+                        color2: ~226,224,212,255
                         type: 0
                         angleDeg: 90
                       stroke:
                         width: 1
-                        color: ~92,119,150,220
+                        color: ~251,247,235,255
                   顶部金线:
                     type: Texture
                     attribute:
                       width: 688
-                      height: 2
-                      normal: ~124,190,207,255
+                      height: 3
+                      normal: ~244,235,211,255
                       through: true
                   徽章外菱:
                     type: Texture
                     attribute:
-                      x: 573
+                      x: 533
                       y: 33
-                      width: 52
-                      height: 52
+                      width: 92
+                      height: 92
                       rotate: 45
                       normal: ~185,205,214,255
                       through: true
@@ -365,29 +365,29 @@ controls:
                   徽章内菱:
                     type: Texture
                     attribute:
-                      x: 585
-                      y: 45
-                      width: 28
-                      height: 28
+                      x: 553
+                      y: 53
+                      width: 52
+                      height: 52
                       rotate: 45
                       normal: ~164,186,201,255
                       through: true
                   徽章竖芒:
                     type: Texture
                     attribute:
-                      x: 597
-                      y: 25
-                      width: 4
-                      height: 68
+                      x: 575
+                      y: 19
+                      width: 8
+                      height: 120
                       normal: ~226,231,222,255
                       through: true
                   徽章横芒:
                     type: Texture
                     attribute:
-                      x: 565
-                      y: 57
-                      width: 68
-                      height: 4
+                      x: 519
+                      y: 75
+                      width: 120
+                      height: 8
                       normal: ~226,231,222,255
                       through: true
                   头像光环:
@@ -429,7 +429,7 @@ controls:
                     attribute:
                       x: 174
                       y: 28
-                      texts: "'&f' + Player.getName()"
+                      texts: "'&0' + Player.getName()"
                       fontSize: 64
                       limit: 16
                       through: true
@@ -438,7 +438,7 @@ controls:
                     attribute:
                       x: 174
                       y: 78
-                      texts: ~&7玩家资料 / 当前会话
+                      texts: ~&8每一段旅途，都值得铭记
                       fontSize: 36
                       through: true
                   UID标签:
@@ -447,7 +447,7 @@ controls:
                       x: 86
                       y: 174
                       center: true
-                      texts: ~&7UID
+                      texts: ~&8UID
                       fontSize: 36
                       through: true
                   UID值:
@@ -456,15 +456,15 @@ controls:
                       x: 86
                       y: 201
                       center: true
-                      texts: "'&7' + Player.getUUID().substring(0, 8)"
+                      texts: "'&8' + Player.getUUID().substring(0, 8)"
                       fontSize: 36
                       through: true
                   等级标签:
                     type: Text
                     attribute:
                       x: 174
-                      y: 108
-                      texts: ~&7冒险等级
+                      y: 124
+                      texts: ~&8冒险等级
                       fontSize: 36
                       through: true
                   等级值:
@@ -472,15 +472,15 @@ controls:
                     attribute:
                       point: ~top_right
                       x: -28
-                      y: 100
-                      texts: "'&f' + Player.getLevel().round()"
+                      y: 115
+                      texts: "'&0' + Player.getLevel().round()"
                       fontSize: 54
                       through: true
                   经验条底:
                     type: Texture
                     attribute:
                       x: 174
-                      y: 148
+                      y: 163
                       width: 486
                       height: 7
                       normal: ~119,143,156,255
@@ -489,7 +489,7 @@ controls:
                     type: Progress
                     attribute:
                       x: 174
-                      y: 148
+                      y: 163
                       width: 486
                       height: 7
                       texture: ~253,246,214,255
@@ -500,8 +500,8 @@ controls:
                     type: Text
                     attribute:
                       x: 174
-                      y: 168
-                      texts: ~&7冒险阅历
+                      y: 183
+                      texts: ~&8冒险阅历
                       fontSize: 36
                       through: true
                   经验数值:
@@ -509,16 +509,16 @@ controls:
                     attribute:
                       point: ~top_right
                       x: -28
-                      y: 168
+                      y: 183
                       expValue: "server.player_exp * server.player_exp_to_level"
-                      texts: "'&7' + self.expValue.round() + ' / ' + server.player_exp_to_level"
+                      texts: "'&8' + self.expValue.round() + ' / ' + server.player_exp_to_level"
                       fontSize: 36
                       through: true
                   资料分隔线:
                     type: Texture
                     attribute:
                       x: 174
-                      y: 198
+                      y: 218
                       width: 486
                       height: 1
                       normal: ~142,159,162,255
@@ -527,8 +527,8 @@ controls:
                     type: Text
                     attribute:
                       x: 174
-                      y: 216
-                      texts: ~&7生命值
+                      y: 235
+                      texts: ~&8生命值
                       fontSize: 36
                       through: true
                   生命值:
@@ -536,24 +536,24 @@ controls:
                     attribute:
                       point: ~top_right
                       x: -28
-                      y: 212
-                      texts: "'&7' + Player.getHealth().round() + ' / ' + Player.getMaxHealth().round()"
+                      y: 230
+                      texts: "'&8' + Player.getHealth().round() + ' / ' + Player.getMaxHealth().round()"
                       fontSize: 48
                       through: true
               分区标题:
                 type: Text
                 attribute:
-                  x: 252
-                  y: 288
-                  texts: "'&f' + var.displayTitle"
+                  x: 116
+                  y: 322
+                  texts: "'&8' + var.displayTitle"
                   fontSize: 48
                   limit: 20
                   through: true
               分区饰线:
                 type: Texture
                 attribute:
-                  x: 442
-                  y: 303
+                  x: 306
+                  y: 337
                   width: 254
                   height: 1
                   normal: ~190,180,159,255
@@ -562,8 +562,8 @@ controls:
               分区饰点:
                 type: Texture
                 attribute:
-                  x: 706
-                  y: 299
+                  x: 570
+                  y: 333
                   width: 9
                   height: 9
                   rotate: 45
@@ -575,7 +575,7 @@ controls:
                 attribute:
                   point: ~top_right
                   x: -28
-                  y: 280
+                  y: 314
                   width: 182
                   height: 40
                   visible: var.pageCount > 1
@@ -612,7 +612,7 @@ controls:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      texts: "'&7' + (var.pageIndex + 1).round() + ' / ' + var.pageCount.round()"
+                      texts: "'&8' + (var.pageIndex + 1).round() + ' / ' + var.pageCount.round()"
                       fontSize: 36
                       through: true
                   下一页按钮:
@@ -649,29 +649,28 @@ controls:
                 attribute:
                   x: 0
                   y: 0
-                  width: 220
+                  width: 84
                   height: "var.viewH"
                 children:
                   侧栏底:
                     type: Texture
                     attribute:
                       point: ~stretch_all
-                      normal: ~18,28,45,255
-                      through: true
+                      normal: ~62,77,92,255
                   侧栏右线:
                     type: Texture
                     attribute:
                       point: ~vertical_stretch_right
                       width: 2
-                      normal: ~62,86,114,255
+                      normal: ~173,161,132,255
                       through: true
                   关闭按钮:
                     type: Canvas
                     attribute:
                       point: ~top_center
                       y: 28
-                      width: 196
-                      height: 76
+                      width: 60
+                      height: 60
                     action:
                       clickLeft: |-
                         Sound.self('minecraft:ui.button.click', 0.9, 20)
@@ -681,27 +680,18 @@ controls:
                         type: Texture
                         attribute:
                           point: ~stretch_all
-                          normal: "self.parent.isHovered() ? '250,245,230,255' : '239,231,210,255'"
-                          shape: ~round_rect
-                          radius: 10
+                          normal: "self.parent.isHovered() ? '248,240,214,255' : '219,218,204,255'"
+                          shape: ~circle
                           through: true
                         effect:
                           stroke:
                             width: 2
                             color: ~137,151,159,255
-                      继续文字:
-                        type: Text
-                        attribute:
-                          x: 62
-                          y: 24
-                          texts: ~&0继续游戏
-                          fontSize: 48
-                          through: true
                       返回横线:
                         type: Texture
                         attribute:
                           x: 16
-                          y: 34
+                          y: 28
                           width: 31
                           height: 4
                           normal: ~67,84,102,255
@@ -710,7 +700,7 @@ controls:
                         type: Texture
                         attribute:
                           x: 14
-                          y: 28
+                          y: 22
                           width: 19
                           height: 4
                           rotate: -45
@@ -720,7 +710,7 @@ controls:
                         type: Texture
                         attribute:
                           x: 14
-                          y: 40
+                          y: 34
                           width: 19
                           height: 4
                           rotate: 45
@@ -729,37 +719,29 @@ controls:
                   导航饰线:
                     type: Texture
                     attribute:
-                      x: 18
-                      y: 152
-                      width: 184
-                      height: 1
+                      x: 41
+                      y: 118
+                      width: 2
+                      height: 158
                       normal: ~117,130,137,255
                       through: true
                   导航饰点:
                     type: Texture
                     attribute:
-                      x: 18
-                      y: 128
-                      width: 6
-                      height: 6
+                      x: 36
+                      y: 283
+                      width: 12
+                      height: 12
                       rotate: 45
-                      normal: ~96,173,190,255
-                      through: true
-                  工具标题:
-                    type: Text
-                    attribute:
-                      x: 38
-                      y: 120
-                      texts: ~&7实用工具 / 会话
-                      fontSize: 36
+                      normal: ~207,190,155,255
                       through: true
                   页脚滚动区:
                     type: Scroll
                     attribute:
-                      x: 8
-                      y: 170
-                      width: 204
-                      height: "var.viewH - 270"
+                      x: 6
+                      y: 328
+                      width: 72
+                      height: "var.viewH - 428"
                       moveY: val.footer_slider.getDragYRatio()
                     action:
                       wheel: |-
@@ -771,8 +753,8 @@ controls:
                         type: VStack
                         val: footer_rows
                         attribute:
-                          width: 204
-                          spaceBetween: 12
+                          width: 72
+                          spaceBetween: 16
                           maxSize: "var.footerCount + 1"
                         children:
                           页脚按钮:
@@ -781,11 +763,11 @@ controls:
                               entryKey: 0.round()
                               entry: var.footerRows[self.entryKey]
                               visible: self.entry != none
-                              width: 204
-                              height: 76
+                              width: 72
+                              height: 72
                               pressAnim: none
                               middleScale: "1 - self.pressAnim.get() * 0.04"
-                              surface: "(self.isHovered() && self.entry['enabled']) ? '47,69,95,255' : '30,44,65,255'"
+                              surface: "(self.isHovered() && self.entry['enabled']) ? '91,105,116,255' : '62,77,92,255'"
                             action:
                               create: |-
                                 self.pressAnim = Smooth(0, 0, 160)
@@ -818,16 +800,15 @@ controls:
                                 attribute:
                                   x: 5
                                   y: 5
-                                  width: 194
-                                  height: 66
-                                  normal: "self.parent.entry['clientAction'] == 'quit' ? '68,43,51,255' : self.parent.surface"
-                                  shape: ~round_rect
-                                  radius: 8
+                                  width: 62
+                                  height: 62
+                                  normal: self.parent.surface
+                                  shape: ~circle
                                   through: true
                                 effect:
                                   stroke:
                                     width: "self.parent.isHovered() ? 2 : 0"
-                                    color: "self.parent.entry['clientAction'] == 'quit' ? '202,126,116,235' : '139,211,223,255'"
+                                    color: ~239,222,183,255
                               图标:
                                 type: Slot
                                 attribute:
@@ -840,61 +821,34 @@ controls:
                                   normal: ~0,0,0,0
                                   through: true
                                   seticon: "self.setItemIcon(var.footerIconJsons[self.parent.entryKey])"
-                              工具文字:
-                                type: Text
-                                attribute:
-                                  x: 68
-                                  y: 14
-                                  texts: "'&f' + var.footerLabels[self.parent.entryKey]"
-                                  fontSize: 36
-                                  limit: 7
-                                  through: true
-                              工具说明:
-                                type: Text
-                                attribute:
-                                  x: 68
-                                  y: 44
-                                  texts: "self.parent.entry['clientAction'] == 'quit' ? '&7离开游戏' : (self.parent.entry['clientAction'] == 'options' ? '&7客户端设置' : '&7菜单快捷工具')"
-                                  fontSize: 36
-                                  through: true
-                              工具动作:
-                                type: Texture
-                                attribute:
-                                  x: 5
-                                  y: 18
-                                  width: 3
-                                  height: 40
-                                  normal: "self.parent.entry['clientAction'] == 'quit' ? '211,140,124,255' : '96,173,190,255'"
-                                  through: true
                               禁用遮色:
                                 type: Texture
                                 attribute:
                                   x: 5
                                   y: 5
-                                  width: 194
-                                  height: 66
-                                  normal: ~20,29,44,150
+                                  width: 62
+                                  height: 62
+                                  normal: ~62,77,92,170
                                   visible: "!self.parent.entry['enabled']"
-                                  shape: ~round_rect
-                                  radius: 8
+                                  shape: ~circle
                                   through: true
                   页脚滑块:
                     type: Texture
                     val: footer_slider
                     attribute:
-                      x: 213
-                      y: 170
+                      x: 79
+                      y: 328
                       width: 3
                       height: 48
-                      maxDragY: "var.viewH - 318"
-                      normal: ~96,173,190,255
-                      visible: "var.footerCount * 88 - 12 > var.viewH - 270"
+                      maxDragY: "var.viewH - 476"
+                      normal: ~224,209,177,255
+                      visible: "var.footerCount * 88 - 16 > var.viewH - 428"
                   返回提示:
                     type: Canvas
                     attribute:
                       point: ~bottom_center
                       y: -28
-                      width: 196
+                      width: 60
                       height: 44
                     action:
                       clickLeft: |-
@@ -916,16 +870,16 @@ controls:
                         type: Text
                         attribute:
                           point: ~middle_center
-                          texts: ~&fESC  返回世界
+                          texts: ~&fESC
                           fontSize: 36
                           through: true
               网格滚动区:
                 type: Scroll
                 attribute:
-                  x: 248
-                  y: 328
+                  x: 112
+                  y: 360
                   width: 684
-                  height: "var.viewH - 508"
+                  height: "var.viewH - 540"
                   moveY: val.grid_slider.getDragYRatio()
                 action:
                   wheel: |-
@@ -955,7 +909,7 @@ controls:
                           hoverAnim: none
                           pressAnim: none
                           middleScale: "1 - self.pressAnim.get() * 0.04"
-                          surface: "(self.isHovered() && self.entry['enabled']) ? '47,69,95,255' : '30,44,65,255'"
+                          surface: "(self.isHovered() && self.entry['enabled']) ? '85,102,121,255' : '64,79,98,255'"
                         action:
                           create: |-
                             self.hoverAnim = Smooth(0, 0, 130)
@@ -995,7 +949,7 @@ controls:
                             effect:
                               stroke:
                                 width: "(self.parent.isHovered() && self.parent.entry['enabled']) ? 3 : 1"
-                                color: "self.parent.isHovered() ? '139,211,223,255' : '79,103,129,255'"
+                                color: "self.parent.isHovered() ? '238,218,175,255' : '157,170,177,255'"
                           顶部细线:
                             type: Texture
                             attribute:
@@ -1024,7 +978,7 @@ controls:
                               y: 120
                               texts: "'&f' + var.labels[self.parent.entryKey]"
                               fontSize: 48
-                              limit: 6
+                              limit: 8
                               through: true
                           悬停下线:
                             type: Texture
@@ -1059,41 +1013,41 @@ controls:
               网格滑轨:
                 type: Texture
                 attribute:
-                  x: 940
-                  y: 328
+                  x: 804
+                  y: 360
                   width: 3
-                  height: "var.viewH - 508"
+                  height: "var.viewH - 540"
                   normal: ~197,188,167,255
-                  visible: "var.gridRows * 168 - 4 > var.viewH - 508"
+                  visible: "var.gridRows * 168 - 4 > var.viewH - 540"
                   through: true
               网格滑块:
                 type: Texture
                 val: grid_slider
                 attribute:
-                  x: 938
-                  y: 328
+                  x: 802
+                  y: 360
                   width: 7
                   height: 72
-                  maxDragY: "var.viewH - 580"
-                  normal: ~96,173,190,255
-                  hover: ~139,211,223,255
+                  maxDragY: "var.viewH - 612"
+                  normal: ~127,122,106,255
+                  hover: ~166,143,91,255
                   shape: ~round_rect
                   radius: 3
-                  visible: "var.gridRows * 168 - 4 > var.viewH - 508"
+                  visible: "var.gridRows * 168 - 4 > var.viewH - 540"
               空提示:
                 type: Text
                 attribute:
-                  x: 590
+                  x: 454
                   y: 530
                   center: true
-                  texts: ~&f这里暂时没有可用功能
+                  texts: ~&8这里暂时没有可用功能
                   fontSize: 48
                   visible: var.buttonCount <= 0
                   through: true
               操作说明:
                 type: Canvas
                 attribute:
-                  x: 248
+                  x: 112
                   y: "var.viewH - 156"
                   width: 680
                   height: 132
@@ -1121,7 +1075,7 @@ controls:
                     attribute:
                       x: 22
                       y: 18
-                      texts: "var.preview != none ? '&f' + var.previewTitle : '&f快捷导航'"
+                      texts: "var.preview != none ? '&8' + var.previewTitle : '&8旅途与探索'"
                       fontSize: 48
                       limit: 24
                       through: true
@@ -1130,7 +1084,7 @@ controls:
                     attribute:
                       x: 22
                       y: 58
-                      texts: "var.preview != none ? var.previewColor + var.previewBody : '&7悬停查看条件 · 点击入口执行 · 左上继续游戏'"
+                      texts: "var.preview != none ? var.previewColor + var.previewBody : '&8将鼠标移至图标，查看功能与使用条件'"
                       fontSize: 36
                       limit: 38
                       through: true
@@ -1139,7 +1093,7 @@ controls:
                     attribute:
                       x: 22
                       y: 98
-                      texts: "var.actionBusy ? '&e正在处理，请稍候…' : '&7左键选择  /  滚轮浏览'"
+                      texts: "var.actionBusy ? '&8正在处理，请稍候…' : '&8左键选择  /  滚轮浏览'"
                       fontSize: 36
                       through: true
                   返回说明:
@@ -1147,6 +1101,6 @@ controls:
                     attribute:
                       point: ~bottom_right
                       y: -8
-                      texts: ~&7ESC 返回世界
+                      texts: ~&8ESC 返回世界
                       fontSize: 36
                       through: true

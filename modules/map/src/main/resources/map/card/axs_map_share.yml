@@ -1,51 +1,40 @@
 # ArcartXSuite Map — 路径点/标记点分享卡片模板
-# 羊皮纸路线票：点位名称、分享者、独立位置区与全宽矿物蓝领取操作带。
-# 点击卡片 → Chat.say('/map claim <code>') 领取副本，与纯文本兜底命令一致。
-# 数据字段: type(waypoint|pin) / title / sender / world / coords / code / expire
-# 数据文字、图标与 background 保持在根卡片作用域，尺寸跟随完整文字自适应。
+# 玩家在大地图详情面板点击"分享"后，全服玩家聊天栏显示此卡片。
+# 点击卡片 → Chat.say('/map claim <code>') 领取点位副本（命令路径，与纯文本兜底一致）。
+# 数据字段（服务端 payload）: type(waypoint|pin) / title / sender / world / coords / code / expire
+# 卡片宽度与高度由 UI 侧根据 Text 控件实际渲染尺寸自适应
 root_control:
   type: card
   attribute:
-    width: "Math.max(620, Math.max(Math.max(val.share_label.x + val.share_label.width, val.title_label.x + val.title_label.width), Math.max(val.info_label.x + val.info_label.width, Math.max(val.sender_label.x + val.sender_label.width, Math.max(val.redeem_label.x + val.redeem_label.width, val.expiry_label.x + val.expiry_label.width)))) + 28)"
-    height: "Math.max(290, val.info_label.y + val.info_label.height + val.redeem_label.height + val.expiry_label.height + 80)"
+    width: "Math.max(560, Math.max(val.title_label.width, val.info_label.width) + 200)"
+    height: "Math.max(150, val.info_label.y + val.info_label.height + 18)"
   children:
     background:
       type: Texture
-      val: share_surface
       attribute:
         width: "self.parent.width"
         height: "self.parent.height"
-        normal: ~239,230,207,250
-        hover: ~249,240,216,255
+        normal: ~30,45,30,210
         shape: ~round_rect
         radius: 12
       effect:
         stroke:
-          width: 2
-          color: ~159,150,124,235
+          width: 3
+          color: ~255,255,255,170
       action:
         click: |-
           Chat.say('/map claim ' + self.parent.data['code'])
-    ticket_rule:
-      type: Texture
-      attribute:
-        x: 138
-        y: 24
-        width: 2
-        height: "val.info_label.y + val.info_label.height - 24"
-        normal: ~180,186,171,255
-        through: true
     icon_slot:
       type: Slot
       attribute:
         x: 24
-        y: 28
+        y: "self.parent.height/2 - 50"
         width: 100
         height: 100
-        normal: ~211,222,215,255
-        hover: ~211,222,215,255
+        normal: ~18,26,22,230
+        hover: ~18,26,22,230
         shape: ~round_rect
-        radius: 10
+        radius: 14
         slotType: ~Icon
         itemScale: 0.9
         seticon: "self.setItemIcon('{\"id\":\"minecraft:filled_map\",\"Count\":1b}')"
@@ -53,167 +42,25 @@ root_control:
       effect:
         stroke:
           width: 2
-          color: ~90,124,137,240
-    route_art:
-      type: Canvas
-      attribute:
-        x: 42
-        y: "val.info_label.y"
-        width: 64
-        height: "val.info_label.height"
-        through: true
-      children:
-        route_horizontal:
-          type: Texture
-          attribute:
-            x: 6
-            y: 4
-            width: 42
-            height: 2
-            normal: ~77,113,128,255
-            through: true
-        route_vertical:
-          type: Texture
-          attribute:
-            x: 46
-            y: 4
-            width: 2
-            height: "self.parent.height - 10"
-            normal: ~77,113,128,255
-            through: true
-        route_start:
-          type: Texture
-          attribute:
-            x: 0
-            y: 0
-            width: 10
-            height: 10
-            normal: ~131,156,150,255
-            shape: ~circle
-            through: true
-        route_destination:
-          type: Texture
-          attribute:
-            x: 41
-            y: "self.parent.height - 12"
-            width: 12
-            height: 12
-            normal: ~51,91,111,255
-            shape: ~circle
-            through: true
-    share_label:
-      type: Text
-      val: share_label
-      attribute:
-        fontSize: 36
-        x: 158
-        y: 20
-        texts: "'§8' + (self.parent.data['type'] == 'pin' ? '标记点' : '路径点') + ' / 分享票'"
-        through: true
+          color: ~255,255,255,140
     title_label:
       type: Text
       val: title_label
       attribute:
-        fontSize: 54
-        x: 158
-        y: "val.share_label.y + val.share_label.height + 12"
-        texts: "'§0' + self.parent.data['title']"
-        through: true
-    sender_label:
-      type: Text
-      val: sender_label
-      attribute:
-        fontSize: 36
-        x: 158
-        y: "val.title_label.y + val.title_label.height + 12"
-        texts: "'§8分享者  §0' + self.parent.data['sender']"
-        through: true
-    location_paper:
-      type: Texture
-      attribute:
+        fontSize: 48
         x: 150
-        y: "val.info_label.y - 10"
-        width: "self.parent.width - 170"
-        height: "val.info_label.height + 22"
-        normal: ~220,227,213,255
-        shape: ~round_rect
-        radius: 8
+        y: 18
+        texts: "'§e§l' + (self.parent.data['type'] == 'pin' ? '标记点' : '路径点') + '分享 §7来自 §f' + self.parent.data['sender']"
         through: true
     info_label:
       type: Text
       val: info_label
       attribute:
-        fontSize: 48
-        x: 176
-        y: "val.sender_label.y + val.sender_label.height + 20"
+        fontSize: 36
+        x: 150
+        y: 74
         through: true
         texts:
-          - "'§8世界  §0' + self.parent.data['world']"
-          - "'§8坐标  §0' + self.parent.data['coords']"
-    redeem_band:
-      type: Texture
-      attribute:
-        x: 16
-        y: "self.parent.height - self.height - 16"
-        width: "self.parent.width - 32"
-        height: "val.redeem_label.height + val.expiry_label.height + 36"
-        normal: "val.share_surface.isHovered() ? '65,111,132,255' : '51,91,111,255'"
-        shape: ~round_rect
-        radius: 8
-        through: true
-    redeem_arrow:
-      type: Canvas
-      attribute:
-        x: 32
-        y: "val.redeem_label.y + val.redeem_label.height / 2 - 10"
-        width: 24
-        height: 20
-        through: true
-      children:
-        arrow_line:
-          type: Texture
-          attribute:
-            x: 0
-            y: 9
-            width: 20
-            height: 2
-            normal: ~249,240,216,255
-            through: true
-        arrow_top:
-          type: Texture
-          attribute:
-            x: 12
-            y: 5
-            width: 10
-            height: 2
-            rotate: 45
-            normal: ~249,240,216,255
-            through: true
-        arrow_bottom:
-          type: Texture
-          attribute:
-            x: 12
-            y: 13
-            width: 10
-            height: 2
-            rotate: -45
-            normal: ~249,240,216,255
-            through: true
-    redeem_label:
-      type: Text
-      val: redeem_label
-      attribute:
-        fontSize: 48
-        x: 76
-        y: "self.parent.height - val.expiry_label.height - self.height - 38"
-        texts: ~§f点击领取点位副本
-        through: true
-    expiry_label:
-      type: Text
-      val: expiry_label
-      attribute:
-        fontSize: 36
-        x: 76
-        y: "self.parent.height - self.height - 30"
-        texts: "'§f有效期 ' + self.parent.data['expire'] + ' 分钟 / 分享码 §b' + self.parent.data['code']"
-        through: true
+          - "'§7名称: §f' + self.parent.data['title']"
+          - "'§7位置: §f' + self.parent.data['world'] + ' §7(§f' + self.parent.data['coords'] + '§7)'"
+          - "'§8点击卡片领取 · §7' + self.parent.data['expire'] + ' §8分钟内有效'"

@@ -3,9 +3,6 @@
 }
 
 dependencies {
-    testImplementation(platform("org.junit:junit-bom:5.10.2"))
-    testImplementation("org.junit.jupiter:junit-jupiter")
-    testImplementation("org.spigotmc:spigot-api:1.20.1-R0.1-SNAPSHOT")
     compileOnly(project(":axs-api"))
     compileOnly(project(":axs-core"))
     compileOnly("org.spigotmc:spigot-api:1.20.1-R0.1-SNAPSHOT")
@@ -20,16 +17,8 @@ tasks.compileJava {
     options.release = 17
 }
 
-tasks.compileTestJava {
-    options.encoding = "UTF-8"
-    options.release = 17
-}
-
-tasks.test {
-    useJUnitPlatform()
-}
-
 tasks.jar {
     archiveBaseName.set("ArcartXSuite-Mail")
     archiveClassifier.set("")
 }
+

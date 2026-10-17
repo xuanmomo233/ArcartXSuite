@@ -63,13 +63,13 @@ ui:
       var.邀请引用 = {}
       var.筛选轮次 = 0
       var.筛选引用 = {}
-      var.accent = '212,153,69,255'
-      var.accentDim = '113,93,67,215'
-      var.accentHover = '241,185,94,255'
-      var.cardBg = '30,34,34,255'
-      var.cardBgHover = '48,49,44,255'
-      var.green = '132,173,118,255'
-      var.blue = '195,140,61,255'
+      var.accent = '186,140,232,255'
+      var.accentDim = '96,80,140,190'
+      var.accentHover = '220,180,255,235'
+      var.cardBg = '38,30,58,255'
+      var.cardBgHover = '52,40,76,255'
+      var.green = '120,200,140,255'
+      var.blue = '110,170,240,255'
       self.actions['resize']()
     resize: |-
       sx = Screen.getWidth() / 1920
@@ -78,7 +78,7 @@ ui:
       var.viewW = Screen.getWidth() / s
       var.viewH = Screen.getHeight() / s
       var.offX = (var.viewW - 1920) / 2
-      var.leftW = var.viewW * 0.59
+      var.leftW = var.viewW * 0.62
       var.rightX = var.leftW + 28
       var.rightW = var.viewW - var.rightX - 72
     open: |-
@@ -137,7 +137,6 @@ ui:
         }
       }
       val.party_slider.setDragYRatio(0)
-      val.filter_slider.setDragXRatio(0)
 controls:
   自适应全局布局:
     type: Adaptive
@@ -157,36 +156,18 @@ controls:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~Frosted:20;14,17,18,245
-          铁板底幕:
+              normal: ~Frosted:30;20,16,38,245
+          暮色底幕:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~14,17,18,255
+              normal: ~16,12,30,255
             effect:
               gradient:
-                color1: ~34,36,34,255
-                color2: ~12,15,16,255
+                color1: ~30,22,52,255
+                color2: ~12,9,24,255
                 type: 0
                 angleDeg: 65
-          制图横线:
-            type: Texture
-            attribute:
-              x: 72
-              y: 216
-              width: "var.viewW - 144"
-              height: 2
-              normal: ~113,89,59,230
-              through: true
-          制图副线:
-            type: Texture
-            attribute:
-              x: 72
-              y: 224
-              width: "var.viewW - 144"
-              height: 1
-              normal: ~57,60,54,255
-              through: true
           # ── 页眉 ──
           页眉标线:
             type: Texture
@@ -202,7 +183,7 @@ controls:
             attribute:
               x: 120
               y: 46
-              texts: ~&6ABYSS  /  EXPEDITION DISPATCH   •   01
+              texts: ~&fA B Y S S  /  深渊回廊
               fontSize: 36
               alpha: 0.78
               through: true
@@ -211,15 +192,15 @@ controls:
             attribute:
               x: 72
               y: 104
-              texts: ~&f远征集结处
-              fontSize: 81
+              texts: ~&f组队大厅
+              fontSize: 88
               through: true
           引导语:
             type: Text
             attribute:
               x: 76
               y: 176
-              texts: ~&7公开队伍档案   /   搜索目标路线   /   整备出发
+              texts: ~&7寻找一支小队，或让深渊找到你。
               fontSize: 36
               through: true
           关闭按钮:
@@ -237,8 +218,9 @@ controls:
                 type: Texture
                 attribute:
                   point: ~stretch_all
-                  normal: ~85,39,34,255
-                  hover: ~153,59,41,255
+                  normal: ~150,58,58,235
+                  hover: ~190,75,75,245
+                  shape: ~circle
                   through: true
               关闭字:
                 type: Text
@@ -253,7 +235,7 @@ controls:
             attribute:
               x: 76
               y: 240
-              texts: "'&601  /  公开队伍  &f' + var.partyCount.round() + ' 支'"
+              texts: "'&7公开小队  &f' + var.partyCount.round() + ' 支'"
               fontSize: 36
               through: true
           列表分隔线:
@@ -263,7 +245,7 @@ controls:
               y: 292
               width: "var.leftW - 152"
               height: 1
-              normal: ~105,84,59,210
+              normal: ~96,80,140,160
               through: true
           队伍滑轨:
             type: Texture
@@ -272,7 +254,7 @@ controls:
               y: 306
               width: 10
               height: "var.viewH - 400"
-              normal: ~52,54,49,255
+              normal: ~40,32,62,220
               shape: ~round_rect
               radius: 5
               through: true
@@ -321,7 +303,7 @@ controls:
                       entry: var.partyRows[self.entryKey]
                       visible: self.entry != none
                       width: "var.leftW - 168"
-                      height: 118
+                      height: 100
                     children:
                       卡片底:
                         type: Texture
@@ -330,7 +312,7 @@ controls:
                           normal: var.cardBg
                           hover: var.cardBgHover
                           shape: ~round_rect
-                          radius: 4
+                          radius: 12
                           through: true
                         effect:
                           stroke:
@@ -342,44 +324,33 @@ controls:
                           point: ~middle_left
                           x: 0
                           width: 4
-                          height: 118
-                          normal: "self.parent.entry['joinMode'] == 'OPEN' ? var.accent : '146,64,46,255'"
+                          height: 64
+                          normal: "self.parent.entry['joinMode'] == 'OPEN' ? var.green : var.accent"
                           through: true
                       队伍名:
                         type: Text
                         attribute:
                           x: 22
-                          y: 12
+                          y: 14
                           texts: "'&f' + self.parent.entry['name']"
-                          fontSize: 48
+                          fontSize: 36
                           limit: 18
                           through: true
                       队伍信息:
                         type: Text
                         attribute:
                           x: 22
-                          y: 70
-                          texts: "'&7领队 &f' + self.parent.entry['leader'] + '   &7队员 &f' + self.parent.entry['size'].round() + '/' + self.parent.entry['max'].round() + '   &7目标 &6' + self.parent.entry['dungeonName']"
-                          fontSize: 36
-                          limit: 45
-                          through: true
-                      加入方式:
-                        type: Text
-                        attribute:
-                          point: ~top_right
-                          x: -156
-                          y: 14
-                          texts: "self.parent.entry['joinMode'] == 'OPEN' ? '&6直接加入' : '&c审批加入'"
+                          y: 58
+                          texts: "'&7队长 &f' + self.parent.entry['leader'] + '  &7人数 &f' + self.parent.entry['size'].round() + '/' + self.parent.entry['max'].round() + '  &7目标 &e' + self.parent.entry['dungeonName'] + '  &7' + (self.parent.entry['joinMode'] == 'OPEN' ? '&a直接加入' : '&e需要审批')"
                           fontSize: 36
                           through: true
                       加入按钮:
                         type: Canvas
                         attribute:
-                          point: ~top_right
+                          point: ~middle_right
                           x: -20
-                          y: 10
-                          width: 120
-                          height: 56
+                          width: 110
+                          height: 52
                           visible: "!self.parent.entry['full']"
                         action:
                           clickLeft: |-
@@ -389,14 +360,16 @@ controls:
                             type: Texture
                             attribute:
                               point: ~stretch_all
-                              normal: "self.parent.parent.entry['joinMode'] == 'OPEN' ? '166,115,51,255' : '116,66,43,255'"
-                              hover: ~214,155,69,255
+                              normal: "self.parent.entry['joinMode'] == 'OPEN' ? ~70,150,95,235 : ~170,120,220,235"
+                              hover: "self.parent.entry['joinMode'] == 'OPEN' ? ~90,180,115,245 : ~200,150,240,245"
+                              shape: ~round_rect
+                              radius: 10
                               through: true
                           加入字:
                             type: Text
                             attribute:
                               point: ~middle_center
-                              texts: "self.parent.parent.entry['joinMode'] == 'OPEN' ? '&f加入' : '&f申请'"
+                              texts: "self.parent.entry['joinMode'] == 'OPEN' ? '&f加入' : '&f申请'"
                               fontSize: 36
                               through: true
                       已满标签:
@@ -413,7 +386,7 @@ controls:
             attribute:
               x: 76
               y: 420
-              texts: ~&7暂无队伍情报。可在右侧建立远征队，等待同行者。
+              texts: ~&8暂时没有公开的小队 —— 在右侧创建一支，让队友来找你。
               fontSize: 36
               visible: "var.partyCount.round() == 0"
               through: true
@@ -425,7 +398,9 @@ controls:
               y: 240
               width: "var.rightW"
               height: "var.viewH - 336"
-              normal: ~23,27,28,245
+              normal: ~24,19,40,235
+              shape: ~round_rect
+              radius: 16
               through: true
             effect:
               stroke:
@@ -446,7 +421,7 @@ controls:
             attribute:
               x: "var.rightX + 28"
               y: 280
-              texts: ~&f02  /  查找远征队
+              texts: ~&f搜索小队
               fontSize: 36
               through: true
           搜索框底:
@@ -492,8 +467,10 @@ controls:
                 type: Texture
                 attribute:
                   point: ~stretch_all
-                  normal: ~185,131,60,255
-                  hover: ~224,166,76,255
+                  normal: ~80,160,240,230
+                  hover: ~110,185,255,245
+                  shape: ~round_rect
+                  radius: 10
                   through: true
               搜索字:
                 type: Text
@@ -508,7 +485,7 @@ controls:
             attribute:
               x: "var.rightX + 28"
               y: 404
-              texts: ~&6路线筛选  /  滚轮浏览目标
+              texts: ~&7按目标副本筛选
               fontSize: 36
               through: true
           全部标签:
@@ -539,77 +516,45 @@ controls:
                   texts: "var.dungeonFilter == '' ? '&0全部' : '&f全部'"
                   fontSize: 36
                   through: true
-          筛选滑轨:
-            type: Texture
-            attribute:
-              x: "var.rightX + 140"
-              y: 496
-              width: "var.rightW - 168"
-              height: 5
-              normal: ~57,56,48,255
-              through: true
-          筛选滑块:
-            type: Texture
-            val: filter_slider
-            attribute:
-              x: "var.rightX + 140"
-              y: 496
-              width: 90
-              height: 5
-              maxDragX: "var.rightW - 258"
-              normal: var.accent
-          筛选滚动区:
-            type: Scroll
+          筛选列表:
+            type: HStack
+            val: filter_rows
             attribute:
               x: "var.rightX + 140"
               y: 446
-              width: "var.rightW - 168"
-              height: 44
-              moveX: val.filter_slider.getDragXRatio()
-            action:
-              wheel: |-
-                ratio = self.moveX - self.wheelValue * 0.12
-                if(ratio < 0){ ratio = 0 }
-                if(ratio > 1){ ratio = 1 }
-                val.filter_slider.setDragXRatio(ratio)
+              height: 40
+              spaceBetween: 10
             children:
-              筛选列表:
-                type: HStack
-                val: filter_rows
+              筛选项:
+                type: Canvas
                 attribute:
+                  entryKey: 0.round()
+                  entry: var.dungeonRows[self.entryKey]
+                  visible: self.entry != none
+                  width: 140
                   height: 40
-                  spaceBetween: 10
+                action:
+                  clickLeft: |-
+                    var.dungeonFilter = self.entry['id']
+                    Packet.send(var.packetId, 'lobby_search', var.searchText, self.entry['id'], var.actionToken)
                 children:
-                  筛选项:
-                    type: Canvas
+                  筛选底:
+                    type: Texture
                     attribute:
-                      entryKey: 0.round()
-                      entry: var.dungeonRows[self.entryKey]
-                      visible: self.entry != none
-                      width: 140
-                      height: 40
-                    action:
-                      clickLeft: |-
-                        var.dungeonFilter = self.entry['id']
-                        Packet.send(var.packetId, 'lobby_search', var.searchText, self.entry['id'], var.actionToken)
-                    children:
-                      筛选底:
-                        type: Texture
-                        attribute:
-                          point: ~stretch_all
-                          normal: "var.dungeonFilter == self.parent.entry['id'] ? var.accent : var.cardBg"
-                          hover: var.cardBgHover
-                          shape: ~round_rect
-                          radius: 8
-                          through: true
-                      筛选字:
-                        type: Text
-                        attribute:
-                          point: ~middle_center
-                          texts: "var.dungeonFilter == self.parent.entry['id'] ? '&0' + self.parent.entry['name'] : '&f' + self.parent.entry['name']"
-                          fontSize: 36
-                          limit: 5
-                          through: true
+                      point: ~stretch_all
+                      normal: "var.dungeonFilter == self.parent.entry['id'] ? var.accent : var.cardBg"
+                      hover: var.cardBgHover
+                      shape: ~round_rect
+                      radius: 8
+                      through: true
+                  筛选字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: "var.dungeonFilter == self.parent.entry['id'] ? '&0' + self.parent.entry['name'] : '&f' + self.parent.entry['name']"
+                      fontSize: 36
+                      limit: 5
+                      through: true
           # 收到的邀请
           邀请标线:
             type: Texture
@@ -625,139 +570,102 @@ controls:
             attribute:
               x: "var.rightX + 28"
               y: 528
-              texts: "'&f03  /  待处理邀请  &6' + var.inviteCount.round()"
+              texts: "'&f收到的邀请  &7' + var.inviteCount.round()"
               fontSize: 36
               through: true
-          邀请滑轨:
-            type: Texture
-            attribute:
-              x: "var.rightX + var.rightW - 20"
-              y: 584
-              width: 8
-              height: "var.viewH - 804"
-              normal: ~54,56,50,255
-              through: true
-          邀请滑块:
-            type: Texture
-            val: invite_slider
-            attribute:
-              x: "var.rightX + var.rightW - 20"
-              y: 584
-              width: 8
-              height: 64
-              maxDragY: "var.viewH - 868"
-              normal: var.accent
-          邀请滚动区:
-            type: Scroll
+          邀请列表:
+            type: VStack
+            val: invite_rows
             attribute:
               x: "var.rightX + 28"
               y: 584
-              width: "var.rightW - 64"
-              height: "var.viewH - 804"
-              moveY: val.invite_slider.getDragYRatio()
-            action:
-              wheel: |-
-                ratio = self.moveY - self.wheelValue * 0.12
-                if(ratio < 0){ ratio = 0 }
-                if(ratio > 1){ ratio = 1 }
-                val.invite_slider.setDragYRatio(ratio)
+              width: "var.rightW - 56"
+              spaceBetween: 10
             children:
-              邀请列表:
-                type: VStack
-                val: invite_rows
+              邀请行:
+                type: Canvas
                 attribute:
-                  width: "var.rightW - 72"
-                  spaceBetween: 10
+                  entryKey: 0.round()
+                  entry: var.inviteRows[self.entryKey]
+                  visible: self.entry != none
+                  width: "var.rightW - 56"
+                  height: 64
                 children:
-                  邀请行:
+                  邀请行底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~46,72,52,235
+                      shape: ~round_rect
+                      radius: 10
+                      through: true
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~124,196,142,180
+                  邀请文本:
+                    type: Text
+                    attribute:
+                      point: ~middle_left
+                      x: 16
+                      texts: "'&f' + self.parent.entry['from'] + ' &7邀请你加入 &f' + self.parent.entry['partyName']"
+                      fontSize: 36
+                      limit: 22
+                      through: true
+                  拒绝按钮:
                     type: Canvas
                     attribute:
-                      entryKey: 0.round()
-                      entry: var.inviteRows[self.entryKey]
-                      visible: self.entry != none
-                      width: "var.rightW - 72"
-                      height: 88
+                      point: ~middle_right
+                      x: -12
+                      width: 72
+                      height: 40
+                    action:
+                      clickLeft: |-
+                        Packet.send(var.packetId, 'lobby_invite_decline', self.parent.entry['partyId'], var.actionToken)
                     children:
-                      邀请行底:
+                      拒绝底:
                         type: Texture
                         attribute:
                           point: ~stretch_all
-                          normal: ~36,39,34,255
+                          normal: ~150,58,58,230
+                          hover: ~190,75,75,245
+                          shape: ~round_rect
+                          radius: 8
                           through: true
-                        effect:
-                          stroke:
-                            width: 2
-                            color: var.accentDim
-                      邀请文本:
+                      拒绝字:
                         type: Text
                         attribute:
-                          x: 16
-                          y: 10
-                          texts:
-                            - "'&f' + self.parent.entry['from'] + ' &7邀请你加入'"
-                            - "'&6' + self.parent.entry['partyName']"
+                          point: ~middle_center
+                          texts: ~&f拒绝
                           fontSize: 36
-                          limit: 22
                           through: true
-                      拒绝按钮:
-                        type: Canvas
+                  接受按钮:
+                    type: Canvas
+                    attribute:
+                      point: ~middle_right
+                      x: -92
+                      width: 72
+                      height: 40
+                    action:
+                      clickLeft: |-
+                        Packet.send(var.packetId, 'lobby_invite_accept', self.parent.entry['partyId'], var.actionToken)
+                    children:
+                      接受底:
+                        type: Texture
                         attribute:
-                          point: ~middle_right
-                          x: -12
-                          width: 72
-                          height: 40
-                        action:
-                          clickLeft: |-
-                            Packet.send(var.packetId, 'lobby_invite_decline', self.parent.entry['partyId'], var.actionToken)
-                        children:
-                          拒绝底:
-                            type: Texture
-                            attribute:
-                              point: ~stretch_all
-                              normal: ~120,51,40,255
-                              hover: ~168,66,46,255
-                              through: true
-                          拒绝字:
-                            type: Text
-                            attribute:
-                              point: ~middle_center
-                              texts: ~&f拒绝
-                              fontSize: 36
-                              through: true
-                      接受按钮:
-                        type: Canvas
+                          point: ~stretch_all
+                          normal: ~70,150,95,230
+                          hover: ~90,180,115,245
+                          shape: ~round_rect
+                          radius: 8
+                          through: true
+                      接受字:
+                        type: Text
                         attribute:
-                          point: ~middle_right
-                          x: -92
-                          width: 72
-                          height: 40
-                        action:
-                          clickLeft: |-
-                            Packet.send(var.packetId, 'lobby_invite_accept', self.parent.entry['partyId'], var.actionToken)
-                        children:
-                          接受底:
-                            type: Texture
-                            attribute:
-                              point: ~stretch_all
-                              normal: ~181,127,56,255
-                              hover: ~221,165,74,255
-                              through: true
-                          接受字:
-                            type: Text
-                            attribute:
-                              point: ~middle_center
-                              texts: ~&0接受
-                              fontSize: 36
-                              through: true
-          无邀请提示:
-            type: Text
-            attribute:
-              x: "var.rightX + 44"
-              y: 620
-              texts: ~&7暂无邀请；可自行创建队伍。
-              fontSize: 36
-              visible: var.inviteCount.round() == 0
-              through: true
+                          point: ~middle_center
+                          texts: ~&f接受
+                          fontSize: 36
+                          through: true
           # 我的操作区
           操作分隔线:
             type: Texture
@@ -766,7 +674,7 @@ controls:
               y: "var.viewH - 208"
               width: "var.rightW - 56"
               height: 1
-              normal: ~113,89,59,180
+              normal: ~96,80,140,120
               through: true
           免打扰开关:
             type: Canvas
@@ -787,7 +695,7 @@ controls:
                   normal: var.cardBg
                   hover: var.cardBgHover
                   shape: ~round_rect
-                  radius: 4
+                  radius: 10
                   through: true
                 effect:
                   stroke:
@@ -826,8 +734,10 @@ controls:
                 type: Texture
                 attribute:
                   point: ~stretch_all
-                  normal: ~197,141,63,255
-                  hover: ~235,175,79,255
+                  normal: ~170,120,220,235
+                  hover: ~200,150,240,245
+                  shape: ~round_rect
+                  radius: 10
                   through: true
               创建字:
                 type: Text

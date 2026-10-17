@@ -1,4 +1,6 @@
-# QQBot / 群消息快讯 — 右上角消息带、纸色时标、8 秒消退，不接收输入
+# AXS QQBot 消息通知 HUD
+# 当QQ群有@玩家或重要消息时，在屏幕右上角弹出通知
+
 ui:
   isHud: true
   defaultOpen: true
@@ -9,6 +11,12 @@ ui:
   level: 50
   screenScale: true
   packetHandler:
+    # packetHandler: notify
+    # 包字段:
+    #   - nick: 发送者昵称
+    #   - msg: 消息内容
+    #   - time: 消息时间
+    #   - maxDisplay: 最大同时显示通知数
     notify: |-
       var.notifications.add({'nick': packet['nick'], 'msg': packet['msg'], 'time': packet['time'], 'alpha': 1.0, 'born': Time.now()})
       var.maxDisplay = packet['maxDisplay']
@@ -18,17 +26,15 @@ ui:
       var.notifications = []
       var.showCount = 0
       var.displayDuration = 8000
-      var.maxDisplay = 4
     tick: |-
       if(var.notifications.size() > 0){
         var.now = Time.now()
         var.toRemove = []
-        // ARIA range 包含结束值；只访问真实条目。
-        for(i in range(0, var.notifications.size() - 1)){
-          var.item = var.notifications.get(i.round())
+        for(i in range(0, var.notifications.size())){
+          var.item = var.notifications[i]
           var.elapsed = var.now - var.item['born']
           if(var.elapsed > var.displayDuration){
-            var.toRemove.add(i.round())
+            var.toRemove.add(i)
           }elif(var.elapsed > var.displayDuration - 1000){
             var.item['alpha'] = (var.displayDuration - var.elapsed) / 1000.0
           }
@@ -38,6 +44,7 @@ ui:
         }
         var.showCount = var.notifications.size()
       }
+
 controls:
   自适应全局布局:
     type: Adaptive
@@ -45,161 +52,70 @@ controls:
       point: ~top_right
       width: 1920
       height: 1080
-      through: true
     children:
       通知容器:
         type: Canvas
         attribute:
           point: ~top_right
-          x: -24
-          y: 96
-          width: 384
-          height: 440
+          x: -20
+          y: 60
+          width: 340
+          height: 400
           visible: var.showCount > 0
-          through: true
         children:
           通知列表:
             val: notifyList
             type: VStack
             attribute:
-              width: 384
-              spaceBetween: 8
-              through: true
-            action:
-              create: |-
-                for(i in range(1, 3)){
-                  row = self.get(0).copy('通知_' + i.round())
-                  row.entryKey = i.round()
-                }
+              width: 340
+              spaceBetween: 6
             children:
               通知条目:
-                type: Canvas
+                type: Texture
                 attribute:
-                  entryKey: 0.round()
-                  # 只展示最近的 maxDisplay 条，保留原始缓存与 8 秒生命周期。
-                  entry: "var.notifications.get((math.max(0, var.showCount - var.maxDisplay) + self.entryKey).round())"
-                  visible: "self.entry != none && self.entryKey < var.maxDisplay"
-                  width: 384
-                  height: 104
-                  through: true
+                  entry: var.notifications[self.key]
+                  visible: self.entry != none
+                  width: 340
+                  height: 58
+                  normal: ~20,26,36,200
+                  shape: ~round_rect
+                  radius: 10
+                  alpha: "self.entry != none ? self.entry['alpha'] : 0"
+                effect:
+                  stroke:
+                    width: 1
+                    color: ~80,180,255,100
                 children:
-                  通知底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      normal: ~38,29,47,240
-                      shape: ~round_rect
-                      radius: 8
-                      alpha: self.parent.entry['alpha']
-                      through: true
-                  连接强调:
-                    type: Texture
-                    attribute:
-                      x: 0
-                      y: 14
-                      width: 4
-                      height: 76
-                      normal: ~28,232,205,255
-                      alpha: self.parent.entry['alpha']
-                      through: true
                   QQ图标:
                     type: Text
                     attribute:
-                      x: 16
-                      y: 12
-                      texts: ~&bQQ
-                      fontSize: 36
-                      alpha: self.parent.entry['alpha']
+                      x: 12
+                      y: 6
                       through: true
-                  发送者窗口:
-                    type: Scroll
+                      texts: "~&b✉"
+                      fontSize: 32
+                  发送者:
+                    type: Text
                     attribute:
-                      x: 62
-                      y: 12
-                      width: 190
-                      height: 36
+                      x: 38
+                      y: 4
                       through: true
-                    children:
-                      发送者布局:
-                        type: HStack
-                        attribute:
-                          height: 36
-                          through: true
-                        children:
-                          发送者:
-                            type: Text
-                            attribute:
-                              texts: "'&f' + self.parent.parent.parent.entry['nick'].substring(0, math.min(9, self.parent.parent.parent.entry['nick'].length())) + (self.parent.parent.parent.entry['nick'].length() > 9 ? '...' : '')"
-                              fontSize: 36
-                              alpha: self.parent.parent.parent.entry['alpha']
-                              through: true
-                  时间标:
-                    type: Canvas
+                      texts: "'&f' + self.parent.entry['nick']"
+                      fontSize: 24
+                  时间:
+                    type: Text
                     attribute:
-                      point: ~top_right
-                      x: -16
-                      y: 8
-                      width: 100
-                      height: 36
+                      x: 38
+                      y: 24
                       through: true
-                    children:
-                      时标底:
-                        type: Texture
-                        attribute:
-                          point: ~stretch_all
-                          normal: ~232,228,218,255
-                          shape: ~round_rect
-                          radius: 4
-                          alpha: self.parent.parent.entry['alpha']
-                          through: true
-                      时间:
-                        type: Text
-                        attribute:
-                          point: ~middle_center
-                          texts: "'&8' + self.parent.parent.entry['time'].substring(math.max(0, self.parent.parent.entry['time'].length() - 5))"
-                          fontSize: 36
-                          alpha: self.parent.parent.entry['alpha']
-                          through: true
-                  消息预览窗口:
-                    type: Scroll
+                      texts: "'&7' + self.parent.entry['time']"
+                      fontSize: 20
+                  消息内容:
+                    type: Text
                     attribute:
-                      x: 16
-                      y: 50
-                      width: 352
-                      height: 36
+                      x: 12
+                      y: 34
                       through: true
-                    children:
-                      预览布局:
-                        type: HStack
-                        attribute:
-                          height: 36
-                          through: true
-                        children:
-                          消息内容:
-                            type: Text
-                            attribute:
-                              # HUD 只显示单行摘要，原文仍在通知缓存；群内对话在连接中心查看。
-                              texts: "'&f' + self.parent.parent.parent.entry['msg'].substring(0, math.min(17, self.parent.parent.parent.entry['msg'].length())) + (self.parent.parent.parent.entry['msg'].length() > 17 ? '...' : '')"
-                              fontSize: 36
-                              alpha: self.parent.parent.parent.entry['alpha']
-                              through: true
-                  自动消退轨:
-                    type: Texture
-                    attribute:
-                      x: 16
-                      y: 94
-                      width: 352
-                      height: 2
-                      normal: ~70,52,77,255
-                      alpha: self.parent.entry['alpha']
-                      through: true
-                  自动消退进度:
-                    type: Texture
-                    attribute:
-                      x: 16
-                      y: 94
-                      width: "352 * math.max(0, 1 - (Time.now() - self.parent.entry['born']) / var.displayDuration)"
-                      height: 2
-                      normal: ~28,232,205,255
-                      alpha: self.parent.entry['alpha']
-                      through: true
+                      width: 316
+                      texts: "'&f' + self.parent.entry['msg']"
+                      fontSize: 24

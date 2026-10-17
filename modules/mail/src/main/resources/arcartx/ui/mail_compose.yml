@@ -1,19 +1,24 @@
-# AXS Mail — 私人邮局
+# AXS Mail 写信（翠绿信使重写版）
+# 范式: 全屏玻璃底 + Adaptive(~top_center,1920x1080) + 顶栏贴顶铺满 + 左侧导航 + 内容区
+# 布局: 左导航(收件箱/日志/写信/兑换码/管理) + 内容区(左:附件+背包槽位 右:表单输入 底:发送/返回)
+# 配色: 翠绿信使 主色80,180,120 底30,32,38,110 抬升36,38,48,245 描边60,64,82,220
+# 逻辑: packetHandler/action/val引用/entryKey/copy 与原版一致，仅重构布局结构与配色
+
 ui:
   isHud: false
   defaultOpen: false
   hide:
-  - hotbar
-  - experience_bar
-  - crosshair
-  - item_name
-  - jump_bar
-  - mount_health
-  - player_state
-  - player_health
-  - armor_level
-  - food_level
-  - air_level
+    - hotbar
+    - experience_bar
+    - crosshair
+    - item_name
+    - jump_bar
+    - mount_health
+    - player_state
+    - player_health
+    - armor_level
+    - food_level
+    - air_level
   through: false
   background: false
   escClose: true
@@ -46,20 +51,42 @@ ui:
       var.actionBusy = false
       var.actionBusySeconds = 0
       var.air = '{"id":"minecraft:air","Count":1b}'
-      var.passwordPanelVisible = false
-      var.isAdmin = false
-      var.attachmentJsons = {}
-      self.actions['resize']()
+      // 视口换算
+      sx = Screen.getWidth() / 1920
+      sy = Screen.getHeight() / 1080
+      s = sx < sy ? sx : sy
+      var.viewH = Screen.getHeight() / s
+      var.viewW = Screen.getWidth() / s
+      var.offX = (var.viewW - 1920) / 2
+      var.contentW = var.viewW - 420
     resize: |-
       sx = Screen.getWidth() / 1920
       sy = Screen.getHeight() / 1080
       s = sx < sy ? sx : sy
-      var.viewW = Screen.getWidth() / s
       var.viewH = Screen.getHeight() / s
+      var.viewW = Screen.getWidth() / s
       var.offX = (var.viewW - 1920) / 2
-      var.contentW = var.viewW - 96
-      var.formW = var.contentW - 548
+      var.contentW = var.viewW - 420
   packetHandler:
+    # packetHandler: init
+    # 包字段:
+    #   - session_id: 写信会话 ID
+    #   - action_token: 操作令牌（防重放）
+    #   - base_fee: 基础邮费金额
+    #   - allow_vault: 是否允许附带金币附件
+    #   - quote_success: 费用报价是否成功
+    #   - quote_message: 报价提示信息
+    #   - item_fee: 物品附件手续费
+    #   - total_fee: 邮件总费用
+    #   - max_attachments: 最大物品附件槽数量
+    #   - attachment_count: 当前已放入的附件数量
+    #   - subject_max: 标题文字上限
+    #   - body_max: 正文文字上限
+    #   - password_panel: 二级密码面板信息（含 visible 子字段）
+    #   - currencies: 可用货币列表（Map，每项含 available 和 display_name）
+    #   - fee_currency: 当前邮费使用的货币 ID
+    #   - total_fee_currency: 总费用使用的货币 ID
+    #   - is_admin: 当前玩家是否为管理员
     init: |-
       var.composeBody = none
       var.composeRecipient = none
@@ -91,6 +118,11 @@ ui:
           }
         }
       }
+    # packetHandler: update
+    # 包字段:
+    #   - base_fee / allow_vault / quote_success / quote_message
+    #   - item_fee / total_fee / max_attachments / attachment_count
+    #   - password_panel / total_fee_currency / is_admin
     update: |-
       var.baseFee = packet['base_fee']
       var.allowVault = packet['allow_vault']
@@ -115,13 +147,18 @@ ui:
           }
         }
       }
+
+# ─── 控件树 ────────────────────────────────────────────────────────
+# 布局: 顶栏(标题色块+标题+关闭) + 左导航(5项) + 内容区(左:槽位 右:表单 底:按钮)
+# 配色: 翠绿信使 深底浅字 — 抬升面36,38,48 描边60,64,82 强调80,180,120
+# fontSize: 48(顶栏标题) / 36(区域标题/按钮/信息) / 32(小标签) — 全部标准档位
 controls:
   全屏玻璃底:
     type: Texture
     attribute:
       point: ~stretch_all
       through: true
-      normal: ~32,23,25,240
+      normal: ~Frosted:24;30,32,38,110
   自适应全局布局:
     type: Adaptive
     attribute:
@@ -129,27 +166,26 @@ controls:
       width: 1920
       height: 1080
     children:
+      # ── 顶栏 ──────────────────────────────────────────
       顶栏:
         type: Canvas
         attribute:
           point: ~top_left
-          x: -var.offX
-          width: var.viewW
+          x: "-var.offX"
+          width: "var.viewW"
           height: 96
         children:
           顶栏底:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~90,48,50,255
-              through: true
+              normal: ~Frosted:30;255,255,255,100
           顶栏底线:
             type: Texture
             attribute:
               point: ~horizontal_stretch_bottom
               height: 1
-              normal: ~175,147,97,255
-              through: true
+              normal: ~60,64,82,220
           标题色块:
             type: Texture
             attribute:
@@ -157,18 +193,16 @@ controls:
               x: 48
               width: 6
               height: 36
-              normal: ~175,147,97,255
+              normal: ~80,180,120,255
               shape: ~round_rect
               radius: 3
-              through: true
           标题:
             type: Text
             attribute:
               point: ~middle_left
               x: 68
-              texts: ~&f写信
-              fontSize: 64
-              through: true
+              texts: "~&f写信"
+              fontSize: 48
           关闭按钮:
             type: Canvas
             attribute:
@@ -177,130 +211,137 @@ controls:
               width: 48
               height: 48
             action:
-              clickLeft: Screen.close()
+              clickLeft: |-
+                Screen.close()
             children:
               关闭背景:
                 type: Texture
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~90,48,50,255
+                  normal: ~36,38,48,245
                   shape: ~round_rect
                   radius: 10
                 effect:
                   stroke:
-                    width: 1
-                    color: 'self.parent.isHovered() ? ''175,147,97,255'' : ''151,138,112,150'''
+                    width: 3
+                    color: "self.isHovered() ? '120,220,160,255' : '255,255,255,230'"
               关闭文字:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  texts: ~&f✕
+                  texts: "~&f✕"
                   fontSize: 36
                   through: true
-          副标题:
-            type: Text
-            attribute:
-              x: 340
-              y: 0
-              texts: ~&f私人邮局 / 信笺工作台
-              fontSize: 36
-              through: true
-              point: ~middle_left
-      邮件导航:
+
+      # ── 左侧导航 ──────────────────────────────────────
+      左侧导航:
         type: Canvas
         attribute:
           point: ~top_left
-          x: 48 - var.offX
-          y: 124
-          width: var.viewW - 96
-          height: 60
+          x: "48 - var.offX"
+          y: 120
+          width: 300
+          height: "var.viewH - 144"
         children:
+          导航底:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~Frosted:30;255,255,255,100
+              shape: ~round_rect
+              radius: 14
+            effect:
+              stroke:
+                width: 3
+                color: ~255,255,255,230
           导航收件箱:
             type: Canvas
             attribute:
               point: ~top_left
-              x: 0
-              y: 0
-              width: 160
-              height: 60
+              x: 14
+              y: 18
+              width: 272
+              height: 58
             action:
-              clickLeft: Packet.send('AXS_MAIL', 'open')
+              clickLeft: |-
+                Packet.send('AXS_MAIL', 'open')
             children:
               收件箱底:
                 type: Texture
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~90,48,50,255
+                  normal: ~36,38,48,245
                   shape: ~round_rect
                   radius: 10
                 effect:
-                  ripple: null
+                  ripple:
                   stroke:
-                    width: 1
-                    color: 'self.parent.isHovered() ? ''175,147,97,255'' : ''151,138,112,150'''
+                    width: 3
+                    color: "self.isHovered() ? '120,220,160,255' : '255,255,255,230'"
               收件箱文字:
                 type: Text
                 attribute:
                   point: ~middle_left
                   x: 28
-                  texts: ~&f收件箱
+                  texts: "~&f收件箱"
                   fontSize: 36
                   through: true
           导航日志:
             type: Canvas
             attribute:
               point: ~top_left
-              x: 176
-              y: 0
-              width: 160
-              height: 60
+              x: 14
+              y: 84
+              width: 272
+              height: 58
             action:
-              clickLeft: Packet.send('AXS_MAIL', 'logs')
+              clickLeft: |-
+                Packet.send('AXS_MAIL', 'logs')
             children:
               日志底:
                 type: Texture
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~90,48,50,255
+                  normal: ~36,38,48,245
                   shape: ~round_rect
                   radius: 10
                 effect:
-                  ripple: null
+                  ripple:
                   stroke:
-                    width: 1
-                    color: 'self.parent.isHovered() ? ''175,147,97,255'' : ''151,138,112,150'''
+                    width: 3
+                    color: "self.isHovered() ? '120,220,160,255' : '255,255,255,230'"
               日志文字:
                 type: Text
                 attribute:
                   point: ~middle_left
                   x: 28
-                  texts: ~&f日志
+                  texts: "~&f日志"
                   fontSize: 36
                   through: true
+          # 当前页：写信
           导航写信:
             type: Canvas
             attribute:
               point: ~top_left
-              x: 352
-              y: 0
-              width: 160
-              height: 60
+              x: 14
+              y: 150
+              width: 272
+              height: 58
             children:
               写信底:
                 type: Texture
                 attribute:
                   point: ~stretch_all
-                  normal: ~90,48,50,255
+                  normal: ~80,180,120,210
                   shape: ~round_rect
                   radius: 10
-                  through: true
                 effect:
                   stroke:
-                    width: 1
-                    color: 'self.parent.isHovered() ? ''175,147,97,255'' : ''151,138,112,150'''
+                    width: 3
+                    color: ~255,255,255,230
               写信高亮条:
                 type: Texture
                 attribute:
@@ -308,504 +349,144 @@ controls:
                   x: 8
                   width: 4
                   height: 28
-                  normal: ~175,147,97,255
+                  normal: ~80,180,120,255
                   shape: ~round_rect
                   radius: 2
-                  through: true
               写信文字:
                 type: Text
                 attribute:
                   point: ~middle_left
                   x: 28
-                  texts: ~&f写信
+                  texts: "~&0写信"
                   fontSize: 36
-                  through: true
           导航管理:
             type: Canvas
             attribute:
               point: ~top_left
-              x: 528
-              y: 0
-              width: 160
-              height: 60
-              visible: var.isAdmin == true
+              x: 14
+              y: 216
+              width: 272
+              height: 58
+              visible: "var.isAdmin == true"
             action:
-              clickLeft: Packet.send('AXS_MAIL', 'admin')
+              clickLeft: |-
+                Packet.send('AXS_MAIL', 'admin')
             children:
               管理底:
                 type: Texture
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~90,48,50,255
+                  normal: ~36,38,48,245
                   shape: ~round_rect
                   radius: 10
                 effect:
-                  ripple: null
+                  ripple:
                   stroke:
-                    width: 1
-                    color: 'self.parent.isHovered() ? ''175,147,97,255'' : ''151,138,112,150'''
+                    width: 3
+                    color: "self.isHovered() ? '120,220,160,255' : '255,255,255,230'"
               管理文字:
                 type: Text
                 attribute:
                   point: ~middle_left
                   x: 28
-                  texts: ~&f管理
+                  texts: "~&f管理"
                   fontSize: 36
                   through: true
-      页面说明:
-        type: Canvas
-        attribute:
-          point: ~top_left
-          x: 48 - var.offX
-          y: 204
-          width: var.viewW - 96
-          height: 40
-        children:
-          说明:
+          导航分隔线:
+            type: Texture
+            attribute:
+              point: ~top_left
+              x: 18
+              y: "var.isAdmin == true ? 298 : 216"
+              width: 264
+              height: 2
+              normal: ~60,64,82,220
+          提示标题:
             type: Text
             attribute:
-              x: 0
-              y: 0
-              texts: ~&7填写正文、整理附件；关闭页面时未发送的附件由服务端退回。
+              point: ~top_left
+              x: 20
+              y: "var.isAdmin == true ? 316 : 234"
+              texts: "~&f写信提示"
               fontSize: 36
-              through: true
-      信笺工作台:
+          提示文字:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 20
+              y: "var.isAdmin == true ? 362 : 280"
+              texts:
+                - "~&f左键背包物品放入1个"
+                - "~&f右键背包物品放入整组"
+                - "~&f左键附件退回背包"
+                - "~&f关闭界面物品自动退回"
+                - "~&f填写收件人与标题后发送"
+              fontSize: 32
+
+      # ── 内容区 ──────────────────────────────────────────
+      内容区:
         type: Canvas
         attribute:
           point: ~top_left
-          x: 48 - var.offX
-          y: 264
-          width: var.contentW
-          height: var.viewH - 312
+          x: "372 - var.offX"
+          y: 120
+          width: "var.contentW"
+          height: "var.viewH - 144"
         children:
+          # 内容区大白毛玻璃底
           内容底:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~238,228,210,255
+              normal: ~Frosted:30;255,255,255,100
               shape: ~round_rect
               radius: 14
-              through: true
             effect:
               stroke:
-                width: 1
-                color: 'self.parent.isHovered() ? ''175,147,97,255'' : ''151,138,112,150'''
-          信笺阅读区:
-            type: Canvas
-            attribute:
-              point: ~top_left
-              x: 0
-              y: 0
-              width: var.formW
-              height: var.viewH - 432
-            children:
-              信笺滑轨:
-                type: Texture
-                attribute:
-                  point: ~top_right
-                  x: -8
-                  y: 0
-                  width: 6
-                  height: var.viewH - 432
-                  normal: ~124,118,103,70
-                  through: true
-              信笺滑块:
-                type: Texture
-                val: 信笺滑块
-                attribute:
-                  point: ~top_right
-                  x: -8
-                  y: 0
-                  width: 6
-                  height: 64
-                  maxDragY: var.viewH - 432 - 64
-                  normal: ~175,147,97,255
-                  shape: ~round_rect
-                  radius: 3
-              信笺滚动:
-                type: Scroll
-                attribute:
-                  point: ~top_left
-                  x: 0
-                  y: 0
-                  width: var.formW
-                  height: var.viewH - 432
-                  moveY: val.信笺滑块.getDragYRatio()
-                action:
-                  wheel: |-
-                    ratio = self.moveY - self.wheelValue * 0.1
-                    ratio = ratio < 0 ? 0 : ratio
-                    ratio = ratio > 1 ? 1 : ratio
-                    val.信笺滑块.setDragYRatio(ratio)
-                children:
-                  信件表单:
-                    type: Canvas
-                    attribute:
-                      x: 0
-                      y: 0
-                      width: var.formW - 24
-                      height: 856
-                    children:
-                      表单底:
-                        type: Texture
-                        attribute:
-                          point: ~stretch_all
-                          through: true
-                          normal: ~238,228,210,255
-                          shape: ~round_rect
-                          radius: 12
-                        effect:
-                          stroke:
-                            width: 1
-                            color: 'self.parent.isHovered() ? ''175,147,97,255'' : ''151,138,112,150'''
-                      收件人标签:
-                        type: Text
-                        attribute:
-                          point: ~top_left
-                          x: 20
-                          y: 24
-                          texts: ~&0收件人
-                          fontSize: 36
-                          through: true
-                      收件人输入框:
-                        type: Canvas
-                        attribute:
-                          point: ~top_left
-                          x: 20
-                          y: 76
-                          width: 320
-                          height: 56
-                        children:
-                          收件人输入底:
-                            type: Texture
-                            attribute:
-                              point: ~stretch_all
-                              normal: ~249,243,230,255
-                              shape: ~round_rect
-                              radius: 10
-                              through: true
-                            effect:
-                              stroke:
-                                width: 1
-                                color: 'self.parent.isHovered() ? ''175,147,97,255'' : ''151,138,112,150'''
-                          收件人输入框文本:
-                            type: TextBox
-                            attribute:
-                              x: 12
-                              y: 10
-                              width: self.parent.width - 24
-                              height: 36
-                              length: 32
-                              emptyText: ~&0输入玩家名
-                              fontSize: 36
-                            action:
-                              textChange: var.composeRecipient = self.getContent()
-                      标题标签:
-                        type: Text
-                        attribute:
-                          point: ~top_left
-                          x: 360
-                          y: 24
-                          texts: ~&0标题
-                          fontSize: 36
-                          through: true
-                      标题输入框:
-                        type: Canvas
-                        attribute:
-                          point: ~top_left
-                          x: 360
-                          y: 76
-                          width: self.parent.width - 380
-                          height: 56
-                        children:
-                          标题输入底:
-                            type: Texture
-                            attribute:
-                              point: ~stretch_all
-                              normal: ~249,243,230,255
-                              shape: ~round_rect
-                              radius: 10
-                              through: true
-                            effect:
-                              stroke:
-                                width: 1
-                                color: 'self.parent.isHovered() ? ''175,147,97,255'' : ''151,138,112,150'''
-                          标题输入框文本:
-                            type: TextBox
-                            attribute:
-                              x: 12
-                              y: 10
-                              width: self.parent.width - 24
-                              height: 36
-                              length: var.subjectMax
-                              emptyText: ~&0输入邮件标题
-                              fontSize: 36
-                            action:
-                              textChange: var.composeSubject = self.getContent()
-                      正文标签:
-                        type: Text
-                        attribute:
-                          point: ~top_left
-                          x: 20
-                          y: 164
-                          texts: ~&0正文
-                          fontSize: 36
-                          through: true
-                      正文输入框:
-                        type: Canvas
-                        attribute:
-                          point: ~top_left
-                          x: 20
-                          y: 216
-                          width: self.parent.width - 40
-                          height: 264
-                        children:
-                          正文输入底:
-                            type: Texture
-                            attribute:
-                              point: ~stretch_all
-                              normal: ~249,243,230,255
-                              shape: ~round_rect
-                              radius: 10
-                              through: true
-                            effect:
-                              stroke:
-                                width: 1
-                                color: 'self.parent.isHovered() ? ''175,147,97,255'' : ''151,138,112,150'''
-                          正文输入框文本:
-                            type: TextBox
-                            attribute:
-                              x: 12
-                              y: 12
-                              width: self.parent.width - 24
-                              height: 240
-                              length: var.bodyMax
-                              allowNewLine: true
-                              emptyText: ~&0支持多行正文
-                              fontSize: 36
-                            action:
-                              textChange: var.composeBody = self.getContent()
-                      字数统计:
-                        type: Text
-                        attribute:
-                          point: ~top_left
-                          x: 20
-                          y: 496
-                          texts: '''&0标题上限 &2'' + var.subjectMax.round() + ''  &0正文上限 &2'' + var.bodyMax.round()'
-                          fontSize: 36
-                          through: true
-                      金币附件标签:
-                        type: Text
-                        attribute:
-                          point: ~top_left
-                          x: 20
-                          y: 552
-                          texts: '~&0邮寄金币数额:'
-                          fontSize: 36
-                          visible: var.allowVault == true
-                          through: true
-                      金币输入框:
-                        type: Canvas
-                        attribute:
-                          point: ~top_left
-                          x: 20
-                          y: 604
-                          width: self.parent.width - 40
-                          height: 56
-                          visible: var.allowVault == true
-                        children:
-                          金币输入底:
-                            type: Texture
-                            attribute:
-                              point: ~stretch_all
-                              normal: ~249,243,230,255
-                              shape: ~round_rect
-                              radius: 10
-                              through: true
-                            effect:
-                              stroke:
-                                width: 1
-                                color: 'self.parent.isHovered() ? ''175,147,97,255'' : ''151,138,112,150'''
-                          金币输入框文本:
-                            type: TextBox
-                            attribute:
-                              x: 12
-                              y: 10
-                              width: self.parent.width - 24
-                              height: 36
-                              length: 24
-                              emptyText: ~&8填写金币附件数量
-                              fontSize: 36
-                            action:
-                              textChange: var.composeVault = self.getContent()
-                      费用汇总底:
-                        type: Texture
-                        attribute:
-                          point: ~top_left
-                          x: 20
-                          y: 684
-                          width: self.parent.width - 40
-                          height: 52
-                          through: true
-                          normal: ~249,243,230,255
-                          shape: ~round_rect
-                          radius: 8
-                        effect:
-                          stroke:
-                            width: 1
-                            color: 'self.parent.isHovered() ? ''175,147,97,255'' : ''151,138,112,150'''
-                      费用汇总:
-                        type: Text
-                        attribute:
-                          point: ~top_left
-                          x: 36
-                          y: 696
-                          texts: '''&0邮费 &2'' + var.totalFee + '' '' + (var.totalFeeCurrencyName != none && var.totalFeeCurrencyName != '''' ?
-                            var.totalFeeCurrencyName : ''金币'') + '' &8(含手续费 &2'' + var.itemFee + '')'' + (var.quoteMessage == none ? '''' : ''  &2''
-                            + var.quoteMessage)'
-                          fontSize: 36
-                          through: true
-                          limit: 60
-                      二级密码面板:
-                        type: Canvas
-                        attribute:
-                          point: ~top_left
-                          x: 20
-                          y: 752
-                          width: self.parent.width - 40
-                          height: 80
-                          visible: var.passwordPanelVisible == true
-                        children:
-                          密码底:
-                            type: Texture
-                            attribute:
-                              point: ~stretch_all
-                              normal: ~249,243,230,255
-                              shape: ~round_rect
-                              radius: 10
-                              through: true
-                            effect:
-                              stroke:
-                                width: 1
-                                color: 'self.parent.isHovered() ? ''175,147,97,255'' : ''151,138,112,150'''
-                          密码提示:
-                            type: Text
-                            attribute:
-                              point: ~top_left
-                              x: 16
-                              y: 6
-                              texts: ~&2请输入二级密码解锁后重试
-                              fontSize: 36
-                              through: true
-                          密码输入框:
-                            type: Canvas
-                            attribute:
-                              point: ~top_left
-                              x: 16
-                              y: 34
-                              width: self.parent.width - 140
-                              height: 40
-                            children:
-                              密码输入底:
-                                type: Texture
-                                attribute:
-                                  point: ~stretch_all
-                                  normal: ~249,243,230,255
-                                  shape: ~round_rect
-                                  radius: 10
-                                  through: true
-                                effect:
-                                  stroke:
-                                    width: 1
-                                    color: 'self.parent.isHovered() ? ''175,147,97,255'' : ''151,138,112,150'''
-                              密码输入框文本:
-                                type: TextBox
-                                attribute:
-                                  x: 12
-                                  y: 4
-                                  width: self.parent.width - 24
-                                  height: 32
-                                  length: 64
-                                  emptyText: ~&8输入二级密码
-                                  passwordChar: ~*
-                                  fontSize: 48
-                                action:
-                                  textChange: var.passwordText = self.getContent()
-                          密码确认按钮:
-                            type: Canvas
-                            attribute:
-                              point: ~top_right
-                              x: -16
-                              y: 34
-                              width: 100
-                              height: 40
-                            action:
-                              clickLeft: |-
-                                Packet.send('AXS_MAIL', 'password-unlock', var.passwordText)
-                                var.passwordText = ''
-                            children:
-                              确认底:
-                                type: Texture
-                                attribute:
-                                  point: ~stretch_all
-                                  through: true
-                                  normal: ~90,48,50,255
-                                  shape: ~round_rect
-                                  radius: 10
-                                effect:
-                                  stroke:
-                                    width: 1
-                                    color: 'self.parent.isHovered() ? ''175,147,97,255'' : ''151,138,112,150'''
-                              确认文字:
-                                type: Text
-                                attribute:
-                                  point: ~middle_center
-                                  texts: ~&f解锁
-                                  fontSize: 36
-                                  through: true
+                width: 3
+                color: ~255,255,255,230
+          # 左列：附件 + 背包槽位
           附件面板:
             type: Canvas
             attribute:
               point: ~top_left
-              x: var.formW + 32
-              y: 0
-              width: 516
-              height: 196
+              x: 24
+              y: 24
+              width: 480
+              height: 200
             children:
               附件底:
                 type: Texture
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~249,243,230,255
+                  normal: ~36,38,48,210
                   shape: ~round_rect
                   radius: 12
                 effect:
                   stroke:
-                    width: 1
-                    color: 'self.parent.isHovered() ? ''175,147,97,255'' : ''151,138,112,150'''
+                    width: 3
+                    color: ~255,255,255,230
               附件标题:
                 type: Text
                 attribute:
                   point: ~top_left
                   x: 16
                   y: 12
-                  texts: '''&0物品附件 &2'' + var.attachmentCount.round() + ''&0/'' + var.maxAttachments.round()'
+                  texts: "'&f物品附件 &b' + var.attachmentCount.round() + '&f/' + var.maxAttachments.round()"
                   fontSize: 36
-                  through: true
               附件提示:
                 type: Text
                 attribute:
                   point: ~top_left
                   x: 16
                   y: 48
-                  texts: ~&0左键放入1个 右键放整组
-                  fontSize: 36
-                  through: true
+                  texts: "~&f左键放入1个 右键放整组"
+                  fontSize: 32
               槽位网格:
                 type: HGrid
-                val: 附件网格
+                val: "附件网格"
                 attribute:
                   point: ~top_left
                   x: 16
@@ -825,56 +506,56 @@ controls:
                     attribute:
                       width: 70
                       height: 70
-                      normal: ~238,228,210,255
-                      hover: ~224,216,190,255
+                      normal: "~Frosted:0;36,38,48,245"
+                      hover: "~Frosted:0;60,64,82,245"
                       shape: ~round_rect
                       radius: 6
                       itemScale: 0.72
                       slotType: ~Icon
                       lock: true
                       entryKey: 0.round()
-                      visible: self.entryKey < var.maxAttachments
-                      seticon: 'self.setItemIcon(var.attachmentJsons != none && var.attachmentJsons[self.entryKey] != none && var.attachmentJsons[self.entryKey]
-                        != '''' ? var.attachmentJsons[self.entryKey] : var.air)'
+                      visible: "self.entryKey < var.maxAttachments"
+                      seticon: "self.setItemIcon(var.attachmentJsons != none && var.attachmentJsons[self.entryKey] != none && var.attachmentJsons[self.entryKey] != '' ? var.attachmentJsons[self.entryKey] : var.air)"
                     action:
-                      clickLeft: Packet.send('AXS_MAIL', 'compose-remove-attachment', self.entryKey)
+                      clickLeft: |-
+                        Packet.send('AXS_MAIL', 'compose-remove-attachment', self.entryKey)
                     effect:
                       stroke:
                         width: 2
                         color: ~255,255,255,230
+
           背包面板:
             type: Canvas
             attribute:
               point: ~top_left
-              x: var.formW + 32
-              y: 212
-              width: 516
-              height: 552
+              x: 24
+              y: 240
+              width: 480
+              height: "var.viewH - 144 - 240 - 72"
             children:
               背包底:
                 type: Texture
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~249,243,230,255
+                  normal: ~36,38,48,210
                   shape: ~round_rect
                   radius: 12
                 effect:
                   stroke:
-                    width: 1
-                    color: 'self.parent.isHovered() ? ''175,147,97,255'' : ''151,138,112,150'''
+                    width: 3
+                    color: ~255,255,255,230
               背包标题:
                 type: Text
                 attribute:
                   point: ~top_left
                   x: 16
                   y: 12
-                  texts: ~&0背包 / 左键单个 · 右键整组
+                  texts: "~&f我的背包"
                   fontSize: 36
-                  through: true
               背包网格:
                 type: HGrid
-                val: 背包网格
+                val: "背包网格"
                 attribute:
                   point: ~top_left
                   x: 16
@@ -895,8 +576,8 @@ controls:
                     attribute:
                       width: 70
                       height: 70
-                      normal: ~238,228,210,255
-                      hover: ~224,216,190,255
+                      normal: "~Frosted:0;36,38,48,245"
+                      hover: "~Frosted:0;60,64,82,245"
                       shape: ~round_rect
                       radius: 6
                       itemScale: 0.72
@@ -905,80 +586,441 @@ controls:
                       id: 9.round()
                       entryKey: 9.round()
                     action:
-                      clickLeft: Packet.send('AXS_MAIL', 'compose-add-attachment', self.entryKey, '1')
-                      clickRight: Packet.send('AXS_MAIL', 'compose-add-attachment', self.entryKey, 'all')
+                      clickLeft: |-
+                        Packet.send('AXS_MAIL', 'compose-add-attachment', self.entryKey, '1')
+                      clickRight: |-
+                        Packet.send('AXS_MAIL', 'compose-add-attachment', self.entryKey, 'all')
                     effect:
                       stroke:
                         width: 2
                         color: ~255,255,255,230
+              # ── 分界线（带标题） ──
+              分界线左:
+                type: Texture
+                attribute:
+                  point: ~top_left
+                  x: 16
+                  y: 524
+                  width: 120
+                  height: 2
+                  normal: ~60,64,82,220
+              分界线标题:
+                type: Text
+                attribute:
+                  point: ~top_center
+                  y: 514
+                  texts: "~&7邮寄注意事项"
+                  fontSize: 32
+              分界线右:
+                type: Texture
+                attribute:
+                  point: ~top_right
+                  x: -16
+                  y: 524
+                  width: 120
+                  height: 2
+                  normal: ~60,64,82,220
+              注意事项:
+                type: Text
+                attribute:
+                  point: ~top_left
+                  x: 16
+                  y: 540
+                  texts:
+                    - "~&f• 言语文明，请勿在邮件中发送辱骂、骚扰或违规内容"
+                    - "~&f• 左键背包物品放入1个，右键放入整组"
+                    - "~&f• 左键附件槽位可退回物品到背包"
+                    - "~&f• 金币附件需填写数额，发送时一并扣除"
+                    - "~&f• 关闭界面时物品与金币将自动退回"
+                  fontSize: 36
+
+          # 右列：表单输入区
+          表单区:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 528
+              y: 24
+              width: "var.contentW - 552"
+              height: "var.viewH - 144 - 96"
+            children:
+              表单底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~36,38,48,210
+                  shape: ~round_rect
+                  radius: 12
+                effect:
+                  stroke:
+                    width: 3
+                    color: ~255,255,255,230
+              收件人标签:
+                type: Text
+                attribute:
+                  point: ~top_left
+                  x: 20
+                  y: 16
+                  texts: "~&f收件人"
+                  fontSize: 36
+              收件人输入框:
+                type: Canvas
+                attribute:
+                  point: ~top_left
+                  x: 20
+                  y: 52
+                  width: 320
+                  height: 40
+                children:
+                  收件人输入底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~36,38,48,245
+                      shape: ~round_rect
+                      radius: 10
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~255,255,255,230
+                  收件人输入框文本:
+                    type: TextBox
+                    attribute:
+                      x: 10
+                      y: 4
+                      width: 300
+                      height: 32
+                      length: 32
+                      emptyText: "~&f输入玩家名"
+                      fontSize: 50
+                    action:
+                      textChange: |-
+                        var.composeRecipient = self.getContent()
+              标题标签:
+                type: Text
+                attribute:
+                  point: ~top_left
+                  x: 360
+                  y: 16
+                  texts: "~&f标题"
+                  fontSize: 36
+              标题输入框:
+                type: Canvas
+                attribute:
+                  point: ~top_left
+                  x: 360
+                  y: 52
+                  width: "self.parent.width - 380"
+                  height: 40
+                children:
+                  标题输入底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~36,38,48,245
+                      shape: ~round_rect
+                      radius: 10
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~255,255,255,230
+                  标题输入框文本:
+                    type: TextBox
+                    attribute:
+                      x: 10
+                      y: 4
+                      width: "self.parent.width - 20"
+                      height: 32
+                      length: 48
+                      emptyText: "~&f输入邮件标题"
+                      fontSize: 50
+                    action:
+                      textChange: |-
+                        var.composeSubject = self.getContent()
+              正文标签:
+                type: Text
+                attribute:
+                  point: ~top_left
+                  x: 20
+                  y: 108
+                  texts: "~&f正文"
+                  fontSize: 36
+              正文输入框:
+                type: Canvas
+                attribute:
+                  point: ~top_left
+                  x: 20
+                  y: 144
+                  width: "self.parent.width - 40"
+                  height: 240
+                children:
+                  正文输入底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~36,38,48,245
+                      shape: ~round_rect
+                      radius: 10
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~255,255,255,230
+                  正文输入框文本:
+                    type: TextBox
+                    attribute:
+                      x: 10
+                      y: 6
+                      width: "self.parent.width - 20"
+                      height: 228
+                      length: 400
+                      allowNewLine: true
+                      emptyText: "~&f支持多行正文"
+                      fontSize: 50
+                    action:
+                      textChange: |-
+                        var.composeBody = self.getContent()
+              字数统计:
+                type: Text
+                attribute:
+                  point: ~top_left
+                  x: 20
+                  y: 396
+                  texts: "'&f标题上限 &b' + var.subjectMax.round() + '  &f正文上限 &b' + var.bodyMax.round()"
+                  fontSize: 32
+              # ── 金币附件区 ──
+              金币附件标签:
+                type: Text
+                attribute:
+                  point: ~top_left
+                  x: 20
+                  y: 440
+                  texts: "~&f邮寄金币数额:"
+                  fontSize: 36
+                  visible: "var.allowVault == true"
+              金币输入框:
+                type: Canvas
+                attribute:
+                  point: ~top_left
+                  x: 20
+                  y: 484
+                  width: "self.parent.width - 40"
+                  height: 40
+                  visible: "var.allowVault == true"
+                children:
+                  金币输入底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~36,38,48,245
+                      shape: ~round_rect
+                      radius: 10
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~255,255,255,230
+                  金币输入框文本:
+                    type: TextBox
+                    attribute:
+                      x: 12
+                      y: 4
+                      width: "self.parent.width - 24"
+                      height: 32
+                      length: 24
+                      emptyText: "~&7填写金币附件数量"
+                      fontSize: 50
+                    action:
+                      textChange: |-
+                        var.composeVault = self.getContent()
+              # ── 费用汇总区 ──
+              费用汇总底:
+                type: Texture
+                attribute:
+                  point: ~top_left
+                  x: 20
+                  y: 548
+                  width: "self.parent.width - 40"
+                  height: 44
+                  through: true
+                  normal: ~28,30,40,200
+                  shape: ~round_rect
+                  radius: 8
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~60,64,82,200
+              费用汇总:
+                type: Text
+                attribute:
+                  point: ~top_left
+                  x: 36
+                  y: 560
+                  texts: "'&f邮费 &a' + var.totalFee + ' ' + (var.totalFeeCurrencyName != none && var.totalFeeCurrencyName != '' ? var.totalFeeCurrencyName : '金币') + ' &7(含手续费 &a' + var.itemFee + ')' + (var.quoteMessage == none ? '' : '  &e' + var.quoteMessage)"
+                  fontSize: 32
+              # ── 二级密码面板（条件显示） ──
+              二级密码面板:
+                type: Canvas
+                attribute:
+                  point: ~top_left
+                  x: 20
+                  y: 608
+                  width: "self.parent.width - 40"
+                  height: 80
+                  visible: "var.passwordPanelVisible == true"
+                children:
+                  密码底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~48,36,28,220
+                      shape: ~round_rect
+                      radius: 10
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~235,180,90,220
+                  密码提示:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 16
+                      y: 6
+                      texts: "~&e请输入二级密码解锁后重试"
+                      fontSize: 28
+                  密码输入框:
+                    type: Canvas
+                    attribute:
+                      point: ~top_left
+                      x: 16
+                      y: 34
+                      width: "self.parent.width - 140"
+                      height: 40
+                    children:
+                      密码输入底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: ~28,30,40,245
+                          shape: ~round_rect
+                          radius: 10
+                        effect:
+                          stroke:
+                            width: 3
+                            color: ~255,255,255,180
+                      密码输入框文本:
+                        type: TextBox
+                        attribute:
+                          x: 12
+                          y: 4
+                          width: "self.parent.width - 24"
+                          height: 32
+                          length: 64
+                          emptyText: "~&7输入二级密码"
+                          passwordChar: ~*
+                          fontSize: 50
+                        action:
+                          textChange: |-
+                            var.passwordText = self.getContent()
+                  密码确认按钮:
+                    type: Canvas
+                    attribute:
+                      point: ~top_right
+                      x: -16
+                      y: 34
+                      width: 100
+                      height: 40
+                    action:
+                      clickLeft: |-
+                        Packet.send('AXS_MAIL', 'password-unlock', var.passwordText)
+                        var.passwordText = ''
+                    children:
+                      确认底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: ~80,180,120,230
+                          shape: ~round_rect
+                          radius: 10
+                        effect:
+                          stroke:
+                            width: 3
+                            color: ~255,255,255,200
+                      确认文字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: "~&f解锁"
+                          fontSize: 36
+                          through: true
+
+          # 底部按钮栏
           底部按钮栏:
             type: HStack
             attribute:
               point: ~bottom_left
-              x: 0
+              x: 24
               y: -16
-              height: 64
+              height: 48
               spaceBetween: 16
             children:
               发送按钮:
                 type: Canvas
                 attribute:
-                  width: 200
-                  height: 64
-                  enable: '!var.actionBusy && var.actionToken != '''''
+                  width: 180
+                  height: 48
+                  enable: "!var.actionBusy && var.actionToken != ''"
                 action:
                   clickLeft: |-
-                    if(!var.actionBusy && var.actionToken != ''){
-                      var.actionBusy = true
-                      var.actionBusySeconds = 0
-                      Packet.send('AXS_MAIL', 'compose-send', var.sessionId, var.composeRecipient, var.composeSubject, var.composeBody, var.composeVault, var.actionToken)
-                    }
+                    var.actionBusy = true
+                    Packet.send('AXS_MAIL', 'compose-send', var.sessionId, var.composeRecipient, var.composeSubject, var.composeBody, var.composeVault, var.actionToken)
                 children:
                   发送底:
                     type: Texture
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: '!var.actionBusy && var.actionToken != '''' ? ''90,48,50,255'' : ''105,104,93,220'''
+                      normal: ~80,180,120,230
                       shape: ~round_rect
                       radius: 10
                     effect:
-                      ripple: null
+                      ripple:
                       stroke:
-                        width: 1
-                        color: 'self.parent.isHovered() ? ''175,147,97,255'' : ''151,138,112,150'''
+                        width: 3
+                        color: "self.isHovered() ? '120,220,160,255' : '255,255,255,230'"
                   发送文字:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      texts: ~&f发送邮件
+                      texts: "~&0发送邮件"
                       fontSize: 36
                       through: true
               返回按钮:
                 type: Canvas
                 attribute:
-                  width: 200
-                  height: 64
+                  width: 180
+                  height: 48
                 action:
-                  clickLeft: Packet.send('AXS_MAIL', 'open')
+                  clickLeft: |-
+                    Packet.send('AXS_MAIL', 'open')
                 children:
                   返回底:
                     type: Texture
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: ~90,48,50,255
+                      normal: ~36,38,48,245
                       shape: ~round_rect
                       radius: 10
                     effect:
-                      ripple: null
+                      ripple:
                       stroke:
-                        width: 1
-                        color: 'self.parent.isHovered() ? ''175,147,97,255'' : ''151,138,112,150'''
+                        width: 3
+                        color: "self.isHovered() ? '120,220,160,255' : '255,255,255,230'"
                   返回文字:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      texts: ~&f返回邮箱
+                      texts: "~&f返回邮箱"
                       fontSize: 36
                       through: true

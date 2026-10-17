@@ -1,153 +1,60 @@
 # ArcartXSuite Chat — 私聊通知卡片模板
-# 点击卡片仍填充原回复命令；背景是唯一交互层，装饰与文字均穿透
-# 图标仅占标题行；整宽消息区和独立回复栏依次根据实际 Text 尺寸排布
+# 收到或发送私聊消息时显示此卡片，点击卡片自动填充回复命令
+# 卡片宽度与高度由 UI 侧根据 Text 控件实际渲染尺寸自适应
 root_control:
   type: card
   attribute:
-    width: "Math.max(400, Math.max(Math.max(val.title_label.x + val.title_label.width, val.message_label.x + val.message_label.width + 12), val.reply_hint.x + val.reply_hint.width + 12) + 24)"
-    height: "val.reply_hint.y + val.reply_hint.height + 24"
+    width: "Math.max(val.title_label.width, val.message_label.width) + 200 < 500 ? 500 : Math.max(val.title_label.width, val.message_label.width) + 200"
+    height: "Math.max(100, val.message_label.y + val.message_label.height + 20)"
   children:
     background:
       type: Texture
       attribute:
         width: "self.parent.width"
         height: "self.parent.height"
-        normal: ~39,28,47,242
-        hover: ~52,35,63,248
+        normal: ~25,25,35,200
         shape: ~round_rect
-        radius: 14
+        radius: 12
       effect:
         stroke:
           width: 2
-          color: ~166,111,180,225
+          color: ~255,255,255,120
       action:
         click: |-
           Chat.setMessage('/msg ' + self.parent.data['senderName'] + ' ')
-    accent:
-      type: Texture
-      attribute:
-        x: 8
-        y: 16
-        width: 4
-        height: "self.parent.height - 32"
-        normal: ~208,148,219,255
-        shape: ~round_rect
-        radius: 2
-        through: true
     icon:
-      type: Canvas
+      type: Text
       attribute:
-        x: 24
-        y: 16
-        width: 64
-        height: 64
+        fontSize: 260
+        x: 15
+        y: "self.parent.height/2 - 10"
+        texts: "'§d✎'"
         through: true
-      children:
-        badge:
-          type: Texture
-          attribute:
-            width: "self.parent.width"
-            height: "self.parent.height"
-            normal: ~77,48,88,255
-            shape: ~round_rect
-            radius: 16
-            through: true
-        envelope:
-          type: Texture
-          attribute:
-            x: 12
-            y: 20
-            width: 40
-            height: 28
-            normal: ~216,167,230,255
-            shape: ~round_rect
-            radius: 4
-            through: true
-        flap_left:
-          type: Texture
-          attribute:
-            x: 15
-            y: 25
-            width: 20
-            height: 3
-            rotate: 30
-            normal: ~77,48,88,255
-            through: true
-        flap_right:
-          type: Texture
-          attribute:
-            x: 29
-            y: 25
-            width: 20
-            height: 3
-            rotate: -30
-            normal: ~77,48,88,255
-            through: true
     title_label:
       type: Text
       val: title_label
       attribute:
-        fontSize: 54
-        x: 108
-        y: 20
+        fontSize: 64
+        x: 160
+        y: 15
         texts: "self.parent.data['direction'] == 'sender' ? '§d私聊 → §f' + self.parent.data['targetName'] : '§d私聊 ← §f' + self.parent.data['senderDisplayName']"
-        through: true
-    header_rule:
-      type: Texture
-      attribute:
-        x: 24
-        y: "val.message_label.y - 20"
-        width: "self.parent.width - 48"
-        height: 2
-        normal: ~104,70,117,255
-        through: true
-    message_surface:
-      type: Texture
-      attribute:
-        x: 24
-        y: "val.message_label.y - 8"
-        width: "self.parent.width - 48"
-        height: "val.message_label.height + 16"
-        normal: ~47,33,56,255
-        shape: ~round_rect
-        radius: 8
         through: true
     message_label:
       type: Text
       val: message_label
       attribute:
-        fontSize: 48
-        x: 36
-        y: "Math.max(104, val.title_label.y + val.title_label.height + 32)"
+        fontSize: 64
+        x: 160
+        y: 60
         through: true
         texts:
-          - "'§f' + self.parent.data['msg0']"
-          - "self.parent.data['msg1'] != none ? '§f' + self.parent.data['msg1'] : none"
-          - "self.parent.data['msg2'] != none ? '§f' + self.parent.data['msg2'] : none"
-          - "self.parent.data['msg3'] != none ? '§f' + self.parent.data['msg3'] : none"
-          - "self.parent.data['msg4'] != none ? '§f' + self.parent.data['msg4'] : none"
-          - "self.parent.data['msg5'] != none ? '§f' + self.parent.data['msg5'] : none"
-          - "self.parent.data['msg6'] != none ? '§f' + self.parent.data['msg6'] : none"
-          - "self.parent.data['msg7'] != none ? '§f' + self.parent.data['msg7'] : none"
-          - "self.parent.data['msg8'] != none ? '§f' + self.parent.data['msg8'] : none"
-          - "self.parent.data['msg9'] != none ? '§f' + self.parent.data['msg9'] : none"
-    reply_surface:
-      type: Texture
-      attribute:
-        x: 24
-        y: "val.reply_hint.y - 8"
-        width: "self.parent.width - 48"
-        height: "val.reply_hint.height + 16"
-        normal: ~81,51,94,255
-        shape: ~round_rect
-        radius: 8
-        through: true
-    reply_hint:
-      type: Text
-      val: reply_hint
-      attribute:
-        x: 36
-        y: "val.message_label.y + val.message_label.height + 28"
-        fontSize: 36
-        texts: "'§d点击卡片 §f填写回复'"
-        through: true
+          - "'§7' + self.parent.data['msg0']"
+          - "self.parent.data['msg1'] != none ? '§7' + self.parent.data['msg1'] : none"
+          - "self.parent.data['msg2'] != none ? '§7' + self.parent.data['msg2'] : none"
+          - "self.parent.data['msg3'] != none ? '§7' + self.parent.data['msg3'] : none"
+          - "self.parent.data['msg4'] != none ? '§7' + self.parent.data['msg4'] : none"
+          - "self.parent.data['msg5'] != none ? '§7' + self.parent.data['msg5'] : none"
+          - "self.parent.data['msg6'] != none ? '§7' + self.parent.data['msg6'] : none"
+          - "self.parent.data['msg7'] != none ? '§7' + self.parent.data['msg7'] : none"
+          - "self.parent.data['msg8'] != none ? '§7' + self.parent.data['msg8'] : none"
+          - "self.parent.data['msg9'] != none ? '§7' + self.parent.data['msg9'] : none"

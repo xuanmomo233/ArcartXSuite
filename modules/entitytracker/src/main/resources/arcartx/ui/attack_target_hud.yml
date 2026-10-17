@@ -34,7 +34,7 @@ ui:
     #   - entityType: Bukkit EntityType 枚举名
     #   - entityTypeName: 实体类型中文名
     #   - mythicMobId: MythicMob 内部 ID（非 MythicMob 实体则为 none）
-    #   - isPlayerTarget: 目标实体是否为玩家（EntityTargetSnapshot.playerTarget）
+    #   - isPlayerTarget: 是否为玩家主动选中的目标
     #   - lastHitAgoMs: 距上次攻击过去的毫秒数
     #   - timeoutMs: 目标超时阈值（毫秒，超过此时间未攻击则关闭 HUD）
     init: |-
@@ -62,13 +62,6 @@ ui:
       var.isPlayerTarget = packet['isPlayerTarget']
       var.lastHitAgoMs = packet['lastHitAgoMs']
       var.timeoutMs = packet['timeoutMs']
-      // Presentation-only timeout values; keep ternaries out of nested expressions.
-      var.lockRatio = 0
-      if(var.timeoutMs > 0){ var.lockRatio = 1 - var.lastHitAgoMs / var.timeoutMs }
-      if(var.lockRatio < 0){ var.lockRatio = 0 }
-      if(var.lockRatio > 1){ var.lockRatio = 1 }
-      var.lockSeconds = (var.timeoutMs - var.lastHitAgoMs) / 1000
-      if(var.lockSeconds < 0){ var.lockSeconds = 0 }
     # packetHandler: update
     # 包字段: 与 init 完全一致，详见 init 注释
     update: |-
@@ -96,13 +89,6 @@ ui:
       var.isPlayerTarget = packet['isPlayerTarget']
       var.lastHitAgoMs = packet['lastHitAgoMs']
       var.timeoutMs = packet['timeoutMs']
-      // Presentation-only timeout values; keep ternaries out of nested expressions.
-      var.lockRatio = 0
-      if(var.timeoutMs > 0){ var.lockRatio = 1 - var.lastHitAgoMs / var.timeoutMs }
-      if(var.lockRatio < 0){ var.lockRatio = 0 }
-      if(var.lockRatio > 1){ var.lockRatio = 1 }
-      var.lockSeconds = (var.timeoutMs - var.lastHitAgoMs) / 1000
-      if(var.lockSeconds < 0){ var.lockSeconds = 0 }
     # packetHandler: close
     # 服务端主动关闭 HUD 时执行，将所有变量重置为默认空值
     close: |-
@@ -113,173 +99,97 @@ ui:
       var.maxHealthText = '0'
       var.progress = 0
       var.timeoutMs = 0
-      var.lockRatio = 0
-      var.lockSeconds = 0
       var.isVisible = false
   action:
     # load 在 HUD 首次加载时执行，初始化所有变量为默认空值，避免数据包到达前显示脏数据
     load: |-
       var.isVisible = false
 
-# Tracking instrument: centered target strip; Boss instrument occupies the left edge.
-# No fullscreen backdrop. Decorative controls pass events; HUD configuration is unchanged.
+# controls 为主要可视控件区块，可在此调整布局、材质与文本绑定
 controls:
-  自适应全局布局:
+  自适应全局布局:                   # 设计分辨率容器，整树等比缩放
     type: Adaptive
     attribute:
-      point: ~top_center
-      width: 1920
-      height: 1080
+      point: ~stretch_all           # 拉伸铺满整个屏幕
+      width: 1920                   # 设计稿宽度
+      height: 1080                  # 设计稿高度
     children:
-      目标面板:
+      目标面板:                      # 目标信息面板容器，居中顶部偏下
         type: Canvas
         attribute:
-          point: ~top_center
-          y: 24
-          width: 660
-          height: 142
-          visible: var.isVisible
+          point: ~top_center        # 锚点：顶部居中
+          x: 0
+          y: 56
+          width: 620
+          height: 108
+          visible: var.isVisible    # 随 packetHandler 控制的可见性变量显隐
         children:
-          背景:
+          背景:                      # 面板背景：毛玻璃半透明底板
             type: Texture
             attribute:
               point: ~stretch_all
-              through: true
-              normal: ~Frosted:12;19,27,34,232
+              normal: ~Frosted:30;95,95,95,220  # 毛玻璃效果，模糊度30，RGBA(95,95,95,220)
+              shape: ~round_rect    # 圆角矩形
+              radius: 20            # 圆角半径
+            effect:
+              stroke:               # 描边特效
+                width: 3
+                color: ~0,0,0,255   # 黑色描边
+          标题:                      # 目标标题文字（左上角）
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 24
+              y: 14
+              texts: "var.title"    # 绑定 packetHandler 中的 title 变量
+              fontSize: 49
+          距离:                      # 距离文字（右上角）
+            type: Text
+            attribute:
+              point: ~top_right
+              x: -24
+              y: 18
+              texts: "'&f' + var.distanceText"  # 白色距离文本
+              fontSize: 36
+          血条背景:                   # 血条底框（深灰色圆角条）
+            type: Texture
+            attribute:
+              point: ~top_left
+              x: 24
+              y: 56
+              width: 572
+              height: 20
+              normal: ~40,40,40,210 # 深灰半透明底色
               shape: ~round_rect
-              radius: 6
+              radius: 10
             effect:
               stroke:
-                width: 1
-                color: ~72,103,117,230
-          信号边:
+                width: 2
+                color: ~0,0,0,180   # 半透明黑色描边
+          血条填充:                   # 血条填充层（红色，宽度随 progress 变化）
             type: Texture
             attribute:
-              x: 0
-              y: 8
-              width: 3
-              height: 116
-              normal: "var.progress <= 0.2 ? '239,79,89,255' : '69,211,224,255'"
-              through: true
-          目标标记:
+              point: ~top_left
+              x: 24
+              y: 56
+              width: 572 * var.progress  # 宽度 = 满宽 × 进度比值
+              height: 20
+              normal: ~220,72,72,255     # 红色填充
+              shape: ~round_rect
+              radius: 10
+          血量文字:                    # 血量数值文字（左下角，显示 当前/最大 (百分比%)）
             type: Text
             attribute:
-              x: 20
-              y: 10
-              texts: "var.isPlayerTarget ? '&bTARGET / 玩家' : '&bTARGET / 实体'"
+              point: ~top_left
+              x: 24
+              y: 80
+              texts: "'&f' + var.healthText + '&8/&f' + var.maxHealthText + ' &7(' + var.healthPercentText + '%)'"
               fontSize: 36
-              through: true
-          距离:
-            type: Text
-            attribute:
-              point: ~top_right
-              x: -20
-              y: 10
-              texts: "'&7距离 &f' + var.distanceText"
-              fontSize: 36
-              through: true
-          标题窗口:
-            type: Scroll
-            attribute:
-              x: 20
-              y: 34
-              width: 620
-              height: 32
-              through: true
-            children:
-              标题布局:
-                type: HStack
-                attribute:
-                  height: 32
-                  through: true
-                children:
-                  标题:
-                    type: Text
-                    attribute:
-                      texts: var.title
-                      fontSize: 48
-                      through: true
-          血条背景:
-            type: Texture
-            attribute:
-              x: 20
-              y: 72
-              width: 620
-              height: 10
-              normal: ~44,57,66,255
-              through: true
-          血条填充:
-            type: Texture
-            attribute:
-              x: 20
-              y: 72
-              width: "620 * (var.progress > 1 ? 1 : var.progress)"
-              height: 10
-              normal: "var.progress <= 0.2 ? '239,79,89,255' : '194,66,77,255'"
-              visible: var.progress > 0
-              through: true
-          血量文字:
-            type: Text
-            attribute:
-              x: 20
-              y: 88
-              texts: "'&7HP &f' + var.healthText + ' &7/ &f' + var.maxHealthText"
-              fontSize: 36
-              through: true
-          血量百分比:
+          超时文字:                    # 超时倒计时文字（右下角，显示 已过时间/超时阈值 ms）
             type: Text
             attribute:
               point: ~top_right
-              x: -20
-              y: 88
-              texts: "(var.progress <= 0.2 ? '&c' : '&f') + var.healthPercentText + '%'"
+              x: -24
+              y: 80
+              texts: "'&8' + var.lastHitAgoMs + '/' + var.timeoutMs + 'ms'"
               fontSize: 36
-              through: true
-          副标题窗口:
-            type: Scroll
-            attribute:
-              x: 20
-              y: 112
-              width: 360
-              height: 22
-              through: true
-            children:
-              副标题布局:
-                type: HStack
-                attribute:
-                  height: 22
-                  through: true
-                children:
-                  副标题:
-                    type: Text
-                    attribute:
-                      texts: "'&7' + var.subtitle"
-                      fontSize: 36
-                      through: true
-          超时文字:
-            type: Text
-            attribute:
-              point: ~top_right
-              x: -20
-              y: 112
-              texts: "'&7锁定剩余 &b' + var.lockSeconds.round(1) + 's'"
-              fontSize: 36
-              through: true
-          超时底线:
-            type: Texture
-            attribute:
-              point: ~bottom_left
-              y: 0
-              width: 660
-              height: 2
-              normal: ~44,57,66,255
-              through: true
-          超时信号:
-            type: Texture
-            attribute:
-              point: ~bottom_left
-              y: 0
-              width: "660 * var.lockRatio"
-              height: 2
-              normal: ~69,211,224,255
-              through: true

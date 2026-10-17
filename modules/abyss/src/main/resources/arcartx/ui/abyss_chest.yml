@@ -31,8 +31,8 @@ ui:
       self.actions['applyIcons']()
   action:
     load: |-
-      var.accent = '217,163,81,255'
-      var.accentDim = '117,86,59,235'
+      var.accent = '226,196,132,255'
+      var.accentDim = '150,128,90,180'
     open: |-
       Sound.self('minecraft:block.chest.open', 0.9, 10)
       self.delayAction(300, 'applyIcons')
@@ -50,7 +50,7 @@ controls:
     type: Texture
     attribute:
       point: ~stretch_all
-      normal: ~Frosted:26;8,10,11,225
+      normal: ~Frosted:30;16,12,30,210
       through: true
   自适应全局布局:
     type: Adaptive
@@ -63,15 +63,16 @@ controls:
         type: Canvas
         attribute:
           point: ~middle_center
-          width: 1012
-          height: 540
+          width: 560
+          height: 340
         children:
           面板背景:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~22,25,25,252
-              through: true
+              normal: ~Frosted:30;28,22,16,240
+              shape: ~round_rect
+              radius: 16
             effect:
               stroke:
                 width: 2
@@ -79,70 +80,42 @@ controls:
           标题标线:
             type: Texture
             attribute:
-              x: 48
-              y: 36
-              width: 8
-              height: 94
-              normal: ~151,56,42,255
-              through: true
-          档案眉题:
-            type: Text
-            attribute:
-              x: 76
-              y: 36
-              texts: ~&6ABYSS   /   RECOVERY MANIFEST   04
-              fontSize: 36
+              point: ~top_center
+              y: 26
+              width: 24
+              height: 3
+              normal: var.accent
               through: true
           标题:
             type: Text
             attribute:
-              x: 76
-              y: 84
+              point: ~top_center
+              y: 42
               texts: "'&f' + var.chestTitle"
-              fontSize: 64
-              limit: 18
+              fontSize: 48
+              limit: 12
               through: true
-          战利品数量:
-            type: Text
-            attribute:
-              point: ~top_right
-              x: -62
-              y: 94
-              texts: "'&6回收条目  /  &f' + var.itemCount.round()"
-              fontSize: 36
-              through: true
-          物资栏底:
-            type: Texture
-            attribute:
-              x: 48
-              y: 184
-              width: 916
-              height: 142
-              normal: ~14,17,18,255
-              through: true
-            effect:
-              stroke:
-                width: 2
-                color: ~91,72,54,255
           物品网格:
             type: HGrid
             val: 物品网格
             attribute:
               point: ~top_center
-              y: 213
-              width: 866
-              spaceBetween: 14
+              y: 120
+              width: 512
+              spaceBetween: 12
               column: 9
             children:
               槽位0:
                 type: Slot
                 val: 槽位0
                 attribute:
-                  width: 82
-                  height: 82
+                  width: 48
+                  height: 48
                   slotType: ~Icon
-                  normal: ~47,48,44,255
-                  itemScale: 0.82
+                  normal: ~62,52,36,235
+                  shape: ~round_rect
+                  radius: 8
+                  itemScale: 0.8
                   seticon: "self.setItemIcon(var.itemJson0)"
                 action:
                   clickLeft: "Packet.send(var.packetId, 'chest_claim_one', '0', var.actionToken)"
@@ -150,11 +123,13 @@ controls:
                 type: Slot
                 val: 槽位1
                 attribute:
-                  width: 82
-                  height: 82
+                  width: 48
+                  height: 48
                   slotType: ~Icon
-                  normal: ~47,48,44,255
-                  itemScale: 0.82
+                  normal: ~62,52,36,235
+                  shape: ~round_rect
+                  radius: 8
+                  itemScale: 0.8
                   seticon: "self.setItemIcon(var.itemJson1)"
                 action:
                   clickLeft: "Packet.send(var.packetId, 'chest_claim_one', '1', var.actionToken)"
@@ -162,11 +137,13 @@ controls:
                 type: Slot
                 val: 槽位2
                 attribute:
-                  width: 82
-                  height: 82
+                  width: 48
+                  height: 48
                   slotType: ~Icon
-                  normal: ~47,48,44,255
-                  itemScale: 0.82
+                  normal: ~62,52,36,235
+                  shape: ~round_rect
+                  radius: 8
+                  itemScale: 0.8
                   seticon: "self.setItemIcon(var.itemJson2)"
                 action:
                   clickLeft: "Packet.send(var.packetId, 'chest_claim_one', '2', var.actionToken)"
@@ -174,11 +151,13 @@ controls:
                 type: Slot
                 val: 槽位3
                 attribute:
-                  width: 82
-                  height: 82
+                  width: 48
+                  height: 48
                   slotType: ~Icon
-                  normal: ~47,48,44,255
-                  itemScale: 0.82
+                  normal: ~62,52,36,235
+                  shape: ~round_rect
+                  radius: 8
+                  itemScale: 0.8
                   seticon: "self.setItemIcon(var.itemJson3)"
                 action:
                   clickLeft: "Packet.send(var.packetId, 'chest_claim_one', '3', var.actionToken)"
@@ -186,11 +165,13 @@ controls:
                 type: Slot
                 val: 槽位4
                 attribute:
-                  width: 82
-                  height: 82
+                  width: 48
+                  height: 48
                   slotType: ~Icon
-                  normal: ~47,48,44,255
-                  itemScale: 0.82
+                  normal: ~62,52,36,235
+                  shape: ~round_rect
+                  radius: 8
+                  itemScale: 0.8
                   seticon: "self.setItemIcon(var.itemJson4)"
                 action:
                   clickLeft: "Packet.send(var.packetId, 'chest_claim_one', '4', var.actionToken)"
@@ -198,11 +179,13 @@ controls:
                 type: Slot
                 val: 槽位5
                 attribute:
-                  width: 82
-                  height: 82
+                  width: 48
+                  height: 48
                   slotType: ~Icon
-                  normal: ~47,48,44,255
-                  itemScale: 0.82
+                  normal: ~62,52,36,235
+                  shape: ~round_rect
+                  radius: 8
+                  itemScale: 0.8
                   seticon: "self.setItemIcon(var.itemJson5)"
                 action:
                   clickLeft: "Packet.send(var.packetId, 'chest_claim_one', '5', var.actionToken)"
@@ -210,11 +193,13 @@ controls:
                 type: Slot
                 val: 槽位6
                 attribute:
-                  width: 82
-                  height: 82
+                  width: 48
+                  height: 48
                   slotType: ~Icon
-                  normal: ~47,48,44,255
-                  itemScale: 0.82
+                  normal: ~62,52,36,235
+                  shape: ~round_rect
+                  radius: 8
+                  itemScale: 0.8
                   seticon: "self.setItemIcon(var.itemJson6)"
                 action:
                   clickLeft: "Packet.send(var.packetId, 'chest_claim_one', '6', var.actionToken)"
@@ -222,11 +207,13 @@ controls:
                 type: Slot
                 val: 槽位7
                 attribute:
-                  width: 82
-                  height: 82
+                  width: 48
+                  height: 48
                   slotType: ~Icon
-                  normal: ~47,48,44,255
-                  itemScale: 0.82
+                  normal: ~62,52,36,235
+                  shape: ~round_rect
+                  radius: 8
+                  itemScale: 0.8
                   seticon: "self.setItemIcon(var.itemJson7)"
                 action:
                   clickLeft: "Packet.send(var.packetId, 'chest_claim_one', '7', var.actionToken)"
@@ -234,39 +221,23 @@ controls:
                 type: Slot
                 val: 槽位8
                 attribute:
-                  width: 82
-                  height: 82
+                  width: 48
+                  height: 48
                   slotType: ~Icon
-                  normal: ~47,48,44,255
-                  itemScale: 0.82
+                  normal: ~62,52,36,235
+                  shape: ~round_rect
+                  radius: 8
+                  itemScale: 0.8
                   seticon: "self.setItemIcon(var.itemJson8)"
                 action:
                   clickLeft: "Packet.send(var.packetId, 'chest_claim_one', '8', var.actionToken)"
-          操作注释:
-            type: Text
-            attribute:
-              x: 52
-              y: 356
-              texts: ~&7逐件取回  /  点击上方物资格领取单件战利品
-              fontSize: 36
-              through: true
-          提示线:
-            type: Texture
-            attribute:
-              x: 50
-              y: 422
-              width: 912
-              height: 2
-              normal: ~107,79,54,255
-              through: true
           领取按钮:
             type: Canvas
             attribute:
-              point: ~bottom_right
-              x: -50
-              y: -40
-              width: 250
-              height: 66
+              point: ~bottom_center
+              y: -28
+              width: 180
+              height: 52
             action:
               clickLeft: |-
                 Packet.send(var.packetId, 'chest_claim', var.actionToken)
@@ -275,32 +246,26 @@ controls:
                 type: Texture
                 attribute:
                   point: ~stretch_all
-                  normal: ~189,123,65,255
-                  hover: ~227,168,89,255
+                  normal: ~200,160,80,240
+                  hover: ~230,190,110,250
+                  shape: ~round_rect
+                  radius: 10
                   through: true
               领取字:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  texts: ~&0全部取回
+                  texts: ~&0全部领取
                   fontSize: 36
                   through: true
-          回收说明:
-            type: Text
-            attribute:
-              x: 52
-              y: 466
-              texts: ~&8清点完毕后，可一次性取回所有剩余物资
-              fontSize: 36
-              through: true
           关闭按钮:
             type: Canvas
             attribute:
               point: ~top_right
-              x: -34
-              y: 32
-              width: 48
-              height: 48
+              x: -18
+              y: 18
+              width: 36
+              height: 36
             action:
               clickLeft: "Screen.close()"
             children:
@@ -308,13 +273,14 @@ controls:
                 type: Texture
                 attribute:
                   point: ~stretch_all
-                  normal: ~92,39,36,255
-                  hover: ~151,59,44,255
+                  normal: ~150,58,58,235
+                  hover: ~190,75,75,245
+                  shape: ~circle
                   through: true
               关闭字:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  texts: ~&fX
+                  texts: ~&f✕
                   fontSize: 36
                   through: true

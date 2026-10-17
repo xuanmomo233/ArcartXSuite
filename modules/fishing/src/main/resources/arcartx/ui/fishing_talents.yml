@@ -1,7 +1,14 @@
-# Lakeside field guide / 04 · A radial map of six techniques and their links.
-# Sand index, allocation summary and a lake-green network with visible pan handles.
-# Generation-based node/line references, delayed JSON icons, drag/zoom and guarded
-# upgrade/reset contracts retain the existing interaction model.
+# AXS 钓鱼天赋网络界面（五系常驻布局）
+# 打开方式: /fishing talents 或主界面导航跳转
+# 数据交互: packetHandler init (AXS_FISHING_TALENTS)
+# 布局: 全屏毛玻璃工作台 = 顶栏 + 左侧导航 + 内容区
+#       内容区 = 天赋点信息栏 + 滚动树画布（5棵树横向排列+联动天赋底部一排）
+#       每棵树 = 网格布局+xy位移调控，Texture纯色块连线，正方形Slot显示icon
+# 视觉规范:
+#   全屏玻璃 Frosted:24;12,22,38,110  面板玻璃 Frosted:30;255,255,255,100
+#   卡片底 26,34,46,210  卡片描边 80,200,220,240
+#   主色（青蓝）50,170,200  已点亮 124,196,142  悬停高亮 80,200,220
+#   连线已点亮 124,196,142,240  连线可点亮 50,170,200,120  连线锁定 80,200,220,100
 #
 # Java 端 pushTalentsData 发送字段:
 #   packetId, seasonId, level, talentPoints, unspentTalentPoints,
@@ -99,7 +106,7 @@ ui:
       var.viewReady = false
       var.emptyItemJson = '{"id":"minecraft:air","Count":1b}'
       // 中心发散布局参数
-      var.nodeSize = 64
+      var.nodeSize = 48
       var.lineW = 5
       var.canvasW = 1800
       var.canvasH = 1800
@@ -143,13 +150,13 @@ ui:
       var.t2Children['fortune'] = ['lucky', 'endure']
       // 节点颜色映射
       var.treeColors = {}
-      var.treeColors['steady'] = ['81,119,99,255', '157,190,169,255']
-      var.treeColors['swift'] = ['53,89,96,255', '131,183,188,255']
-      var.treeColors['pressure'] = ['122,88,72,255', '211,156,127,255']
-      var.treeColors['focus'] = ['91,92,116,255', '177,176,195,255']
-      var.treeColors['lucky'] = ['137,118,68,255', '231,222,196,255']
-      var.treeColors['endure'] = ['120,95,62,255', '202,177,132,255']
-      var.treeColors['meta'] = ['23,49,64,255', '157,190,169,255']
+      var.treeColors['steady'] = ['48,156,82,255', '72,238,112,255']
+      var.treeColors['swift'] = ['34,138,170,255', '48,208,248,255']
+      var.treeColors['pressure'] = ['172,48,48,255', '248,70,70,255']
+      var.treeColors['focus'] = ['144,54,180,255', '212,86,248,255']
+      var.treeColors['lucky'] = ['180,138,30,255', '252,198,42,255']
+      var.treeColors['endure'] = ['180,110,20,255', '255,165,0,255']
+      var.treeColors['meta'] = ['190,76,30,255', '255,128,42,255']
       // 角度参数（弧度）
       var.angleT4 = math.PI() / 12
       var.angleT5 = math.PI() / 12
@@ -254,7 +261,7 @@ ui:
           var.dragMoved = true
         }
         scrollRangeX = var.canvasW * var.zoomScale - (var.contentW - 48)
-        scrollRangeY = var.canvasH * var.zoomScale - (var.viewH - 376)
+        scrollRangeY = var.canvasH * var.zoomScale - (var.viewH - 176)
         if(scrollRangeX > 0){
           newSX = var.dragStartSX - dx / scrollRangeX
           if(newSX < 0) {
@@ -513,7 +520,7 @@ controls:
     type: Texture
     attribute:
       point: ~stretch_all
-      normal: ~Frosted:18;20,43,52,170
+      normal: ~Frosted:24;12,22,38,110
   # 自适配布局：宽高 = 设计分辨率 1920x1080
   自适应全局布局:
     type: Adaptive
@@ -535,13 +542,13 @@ controls:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~23,49,64,250
+              normal: ~Frosted:30;255,255,255,100
           顶栏底线:
             type: Texture
             attribute:
               point: ~horizontal_stretch_bottom
               height: 1
-              normal: ~53,89,96,230
+              normal: ~80,200,220,230
           标题色块:
             type: Texture
             attribute:
@@ -549,38 +556,38 @@ controls:
               x: 48
               width: 6
               height: 36
-              normal: ~157,190,169,255
+              normal: ~50,170,200,255
               shape: ~round_rect
               radius: 3
           标题:
             type: Text
             attribute:
               point: ~middle_left
-              x: 48
-              texts: "~&f湖畔手册"
-              fontSize: 54
+              x: 68
+              texts: "~&f钓鱼"
+              fontSize: 48
           标题竖线:
             type: Texture
             attribute:
               point: ~middle_left
-              x: 304
+              x: 168
               width: 1
               height: 30
-              normal: ~53,89,96,230
+              normal: ~80,200,220,230
           页名:
             type: Text
             attribute:
               point: ~middle_left
-              x: 340
-              texts: "~&7钓鱼 / &f技艺网络"
+              x: 188
+              texts: "~&f天赋树"
               fontSize: 36
           关闭按钮:
             type: Canvas
             attribute:
               point: ~middle_right
               x: -40
-              width: 112
-              height: 52
+              width: 40
+              height: 40
             action:
               clickLeft: |-
                 Screen.close()
@@ -590,19 +597,20 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~23,49,64,245
+                  normal: ~26,34,46,210
                   shape: ~round_rect
                   radius: 10
                 effect:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '53,89,96,255' : '53,89,96,240'"
+                    color: "self.isHovered() ? '80,200,220,255' : '80,200,220,240'"
               关闭文字:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  texts: "~&f关闭"
-                  fontSize: 36
+                  width: 40
+                  texts: "~&f✕"
+                  fontSize: 32
                   through: true
 
       # ── 左侧导航 ───────────────────────────────────────
@@ -619,21 +627,20 @@ controls:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~231,222,196,250
+              normal: ~Frosted:30;255,255,255,100
               shape: ~round_rect
               radius: 14
             effect:
               stroke:
                 width: 3
-                color: ~53,89,96,240
-          索引标题: {type: Text, attribute: {x: 24, y: 24, texts: '~&8FIELD GUIDE / 目录', fontSize: 36}}
+                color: ~80,200,220,240
           导航总览:
             type: Canvas
             attribute:
               point: ~top_left
               x: 14
-              y: 88
-              width: 268
+              y: 18
+              width: 272
               height: 58
             action:
               clickLeft: |-
@@ -644,20 +651,20 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~23,49,64,245
+                  normal: ~26,34,46,210
                   shape: ~round_rect
                   radius: 10
                 effect:
                   ripple:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '53,89,96,255' : '53,89,96,240'"
+                    color: "self.isHovered() ? '80,200,220,255' : '80,200,220,240'"
               总览文字:
                 type: Text
                 attribute:
                   point: ~middle_left
                   x: 28
-                  texts: "~&f01  垂钓日志"
+                  texts: "~&f总览"
                   fontSize: 36
                   through: true
           导航图鉴:
@@ -665,8 +672,8 @@ controls:
             attribute:
               point: ~top_left
               x: 14
-              y: 162
-              width: 268
+              y: 84
+              width: 272
               height: 58
             action:
               clickLeft: |-
@@ -677,20 +684,20 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~23,49,64,245
+                  normal: ~26,34,46,210
                   shape: ~round_rect
                   radius: 10
                 effect:
                   ripple:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '53,89,96,255' : '53,89,96,240'"
+                    color: "self.isHovered() ? '80,200,220,255' : '80,200,220,240'"
               图鉴文字:
                 type: Text
                 attribute:
                   point: ~middle_left
                   x: 28
-                  texts: "~&f02  鱼种图鉴"
+                  texts: "~&f图鉴"
                   fontSize: 36
                   through: true
           导航奖励:
@@ -698,8 +705,8 @@ controls:
             attribute:
               point: ~top_left
               x: 14
-              y: 236
-              width: 268
+              y: 150
+              width: 272
               height: 58
             action:
               clickLeft: |-
@@ -710,20 +717,20 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~23,49,64,245
+                  normal: ~26,34,46,210
                   shape: ~round_rect
                   radius: 10
                 effect:
                   ripple:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '53,89,96,255' : '53,89,96,240'"
+                    color: "self.isHovered() ? '80,200,220,255' : '80,200,220,240'"
               奖励文字:
                 type: Text
                 attribute:
                   point: ~middle_left
                   x: 28
-                  texts: "~&f03  成长奖励"
+                  texts: "~&f奖励"
                   fontSize: 36
                   through: true
           导航天赋:
@@ -731,21 +738,21 @@ controls:
             attribute:
               point: ~top_left
               x: 14
-              y: 310
-              width: 268
+              y: 216
+              width: 272
               height: 58
             children:
               天赋底:
                 type: Texture
                 attribute:
                   point: ~stretch_all
-                  normal: ~157,190,169,210
+                  normal: ~50,170,200,210
                   shape: ~round_rect
                   radius: 10
                 effect:
                   stroke:
                     width: 3
-                    color: ~157,190,169,230
+                    color: ~50,170,200,230
               天赋高亮条:
                 type: Texture
                 attribute:
@@ -753,7 +760,7 @@ controls:
                   x: 8
                   width: 4
                   height: 28
-                  normal: ~157,190,169,255
+                  normal: ~50,170,200,255
                   shape: ~round_rect
                   radius: 2
               天赋文字:
@@ -761,15 +768,15 @@ controls:
                 attribute:
                   point: ~middle_left
                   x: 28
-                  texts: "~&004  技艺网络"
+                  texts: "~&0天赋"
                   fontSize: 36
           导航任务:
             type: Canvas
             attribute:
               point: ~top_left
               x: 14
-              y: 384
-              width: 268
+              y: 282
+              width: 272
               height: 58
             action:
               clickLeft: |-
@@ -780,20 +787,20 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~23,49,64,245
+                  normal: ~26,34,46,210
                   shape: ~round_rect
                   radius: 10
                 effect:
                   ripple:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '53,89,96,255' : '53,89,96,240'"
+                    color: "self.isHovered() ? '80,200,220,255' : '80,200,220,240'"
               任务文字:
                 type: Text
                 attribute:
                   point: ~middle_left
                   x: 28
-                  texts: "~&f05  湖畔委托"
+                  texts: "~&f任务"
                   fontSize: 36
                   through: true
           导航饵料:
@@ -801,8 +808,8 @@ controls:
             attribute:
               point: ~top_left
               x: 14
-              y: 458
-              width: 268
+              y: 348
+              width: 272
               height: 58
             action:
               clickLeft: |-
@@ -813,20 +820,20 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~23,49,64,245
+                  normal: ~26,34,46,210
                   shape: ~round_rect
                   radius: 10
                 effect:
                   ripple:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '53,89,96,255' : '53,89,96,240'"
+                    color: "self.isHovered() ? '80,200,220,255' : '80,200,220,240'"
               饵料文字:
                 type: Text
                 attribute:
                   point: ~middle_left
                   x: 28
-                  texts: "~&f06  行前饵料"
+                  texts: "~&f饵料"
                   fontSize: 36
                   through: true
           导航分隔线:
@@ -834,34 +841,36 @@ controls:
             attribute:
               point: ~top_left
               x: 18
-              y: 558
+              y: 430
               width: 264
               height: 2
-              normal: ~53,89,96,220
+              normal: ~80,200,220,220
           天赋信息:
             type: Text
             attribute:
               point: ~top_left
               x: 18
-              y: 580
-              texts: "'&8可用点数 ' + var.unspentTalentPoints.round() + '/' + var.talentPoints.round()"
+              y: 444
+              width: 264
+              texts: "'&a可用 &f' + var.unspentTalentPoints.round() + '&7/&f' + var.talentPoints.round() + '  &7| &eLv.&f' + var.playerLevel.round()"
               fontSize: 36
           加成标题:
             type: Text
             attribute:
               point: ~top_left
               x: 18
-              y: 626
-              texts: "~&8已激活加成"
+              y: 486
+              width: 264
+              texts: "~&b已激活加成"
               fontSize: 36
           加成列表区:
             type: Scroll
             attribute:
               point: ~top_left
               x: 14
-              y: 674
-              width: 268
-              height: "var.viewH - 894"
+              y: 524
+              width: 272
+              height: "var.viewH - 524 - 120"
               moveY: "self.parent['加成滑块'].getDragYRatio()"
             action:
               wheel: |-
@@ -879,7 +888,8 @@ controls:
                     type: Text
                     attribute:
                       point: ~top_left
-                      texts: "var.activeBonuses != none && var.activeBonuses.size() > 0 ? var.activeBonuses : ['&8暂无已激活加成']"
+                      width: 248
+                      texts: "var.activeBonuses != none && var.activeBonuses.size() > 0 ? var.activeBonuses : ['&7暂无已激活加成']"
                       fontSize: 36
           加成滑块:
             type: Texture
@@ -887,11 +897,11 @@ controls:
             attribute:
               point: ~top_right
               x: -2
-              y: 674
-              width: 8
+              y: 524
+              width: 6
               height: 60
-              normal: ~157,190,169,80
-              maxDragY: "math.max(0, var.viewH - 954)"
+              normal: ~50,170,200,80
+              maxDragY: 100
           重置天赋按钮:
             type: Canvas
             attribute:
@@ -919,19 +929,20 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~23,49,64,245
+                  normal: ~26,34,46,210
                   shape: ~round_rect
                   radius: 10
                 effect:
                   ripple:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '53,89,96,255' : '53,89,96,240'"
+                    color: "self.isHovered() ? '80,200,220,255' : '80,200,220,240'"
               重置文字:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  texts: "var.actionBusy ? '&7正在保存...' : (var.resetArmed ? '&c再次点击确认重置' : '&f重置天赋')"
+                  width: 272
+                  texts: "var.resetArmed ? '&c再次点击确认重置' : '&f↻ 重置天赋树'"
                   fontSize: 36
                   through: true
 
@@ -949,27 +960,24 @@ controls:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~191,209,191,248
+              normal: ~Frosted:30;255,255,255,100
               shape: ~round_rect
               radius: 14
             effect:
               stroke:
                 width: 3
-                color: ~53,89,96,240
+                color: ~80,200,220,240
 
-          页标题: {type: Text, attribute: {x: 32, y: 24, texts: '~&0技艺网络', fontSize: 64}}
-          分配概览: {type: Text, attribute: {point: ~top_right, x: -32, y: 40, texts: "'&8Lv.' + var.playerLevel.round() + '  /  可用 ' + var.unspentTalentPoints.round() + ' 点'", fontSize: 36}}
-          网络图例: {type: Text, attribute: {x: 32, y: 98, texts: '~&8从中心向外成长 · 亮边已激活 / 灰边未激活 · 悬停查看前置与加成', fontSize: 36}}
-          # 滚动区：六系与联动节点常驻显示（拖拽滚动 + 滚轮缩放）
+          # 滚动区：五系与联动节点常驻显示（拖拽滚动 + 滚轮缩放）
           滚动区:
             type: Scroll
             val: 天赋视口
             attribute:
               point: ~top_left
               x: 24
-              y: 152
+              y: 16
               width: "var.contentW - 48"
-              height: "var.viewH - 376"
+              height: "var.viewH - 176"
               moveX: "self.parent['横向滑块'].getDragXRatio()"
               moveY: "self.parent['竖向滑块'].getDragYRatio()"
             action:
@@ -987,7 +995,7 @@ controls:
                 if(newZoom != oldZoom){
                   // 保持滚动位置：通过滑块 ratio 换算
                   viewW = var.contentW - 48
-                  viewH = var.viewH - 376
+                  viewH = var.viewH - 176
                   oldRangeX = var.canvasW * oldZoom - viewW
                   newRangeX = var.canvasW * newZoom - viewW
                   oldRangeY = var.canvasH * oldZoom - viewH
@@ -1046,8 +1054,9 @@ controls:
                         type: Text
                         attribute:
                           point: ~middle_center
+                          width: "(200 * var.zoomScale).round()"
                           texts: "var.treeNames[self.parent.treeId] != none ? var.treeNames[self.parent.treeId] : '&7未知'"
-                          fontSize: 36
+                          fontSize: "(34 * var.zoomScale).round()"
                           through: true
                   # 天赋节点模板（正方形 Slot + 连线 + Tooltip）
                   # tick 中 copy 后设置 entryId/treeId/isLink
@@ -1080,17 +1089,22 @@ controls:
                         type: Slot
                         attribute:
                           point: ~middle_center
-                          width: "62 * var.zoomScale"
-                          height: "62 * var.zoomScale"
+                          width: "46 * var.zoomScale"
+                          height: "46 * var.zoomScale"
                           slotType: ~Icon
                           itemScale: 0.75
-                          normal: ~23,49,64,245
+                          normal: ~Frosted:100;150,150,150,255
                           shape: ~round_rect
                           radius: "(10 * var.zoomScale).round()"
                         effect:
                           stroke:
                             width: "3 * var.zoomScale"
                             color: "self.parent.entry != none && self.parent.entry['unlocked'] == true ? self.parent.brightColor : self.parent.dimColor"
+                          neon:
+                            color: "self.parent.brightColor"
+                            size: "(5 * var.zoomScale).round()"
+                            intensity: "self.parent.entry != none && self.parent.entry['unlocked'] == true ? 1 : 0"
+                            animated: false
                         action:
                           clickLeft: |-
                             var.pressedNode = self.parent.entryId
@@ -1101,10 +1115,9 @@ controls:
                           point: ~bottom_right
                           x: "(-2 * var.zoomScale).round()"
                           y: "(-2 * var.zoomScale).round()"
-                          width: 80
-                          height: 42
-                          through: true
-                          visible: "var.zoomScale >= 1.5 && self.parent.entry != none && self.parent.entry['unlocked'] == true && self.parent.nodeMaxLevel > 1"
+                          width: "(24 * var.zoomScale).round()"
+                          height: "(14 * var.zoomScale).round()"
+                          visible: "self.parent.entry != none && self.parent.entry['unlocked'] == true && self.parent.nodeMaxLevel > 1"
                         children:
                           等级标签底:
                             type: Texture
@@ -1118,8 +1131,9 @@ controls:
                             type: Text
                             attribute:
                               point: ~middle_center
+                              width: "(24 * var.zoomScale).round()"
                               texts: "self.parent.parent.nodeLevel + '/' + self.parent.parent.nodeMaxLevel"
-                              fontSize: 36
+                              fontSize: "(12 * var.zoomScale).round()"
                               through: true
                   # 联动连线段模板（作为树画布直接子控件，避免节点 Canvas 裁剪）
                   # tick 中 copy 后设置世界坐标 x/y/width/height/normal/visible
@@ -1147,8 +1161,8 @@ controls:
             attribute:
               point: ~bottom_left
               x: 16
-              y: -32
-              texts: "var.actionBusy ? '&8正在保存天赋...' : '&8拖拽移动 · 滚轮缩放 · R 回到中心 · 点击节点分配'"
+              y: -16
+              texts: "var.actionBusy ? '&e正在保存天赋...' : '&f拖拽滚动 | 滚轮缩放 | R重置缩放'"
               fontSize: 36
           # 隐藏滑块：驱动 Scroll 的 moveX/moveY（不可见但保留拖拽功能）
           竖向滑块:
@@ -1157,19 +1171,19 @@ controls:
             attribute:
               point: ~top_right
               x: -2
-              y: 152
-              width: 10
+              y: 0
+              width: 8
               height: 80
-              normal: ~53,89,96,200
-              maxDragY: "math.max(0, var.viewH - 456)"
+              normal: ~50,170,200,0
+              maxDragY: "math.max(0, var.canvasH * var.zoomScale - (var.viewH - 176))"
           横向滑块:
             type: Texture
             val: 横向滑块
             attribute:
               point: ~bottom_left
-              x: 24
-              y: -12
+              x: 0
+              y: -2
               width: 80
-              height: 10
-              normal: ~53,89,96,200
-              maxDragX: "math.max(0, var.contentW - 128)"
+              height: 8
+              normal: ~50,170,200,0
+              maxDragX: "math.max(0, var.canvasW * var.zoomScale - (var.contentW - 48))"

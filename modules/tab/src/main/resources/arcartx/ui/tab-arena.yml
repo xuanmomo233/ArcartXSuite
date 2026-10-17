@@ -1,49 +1,38 @@
-# tab-arena / tabs/arena.yml / packet-handler: tab
-# Shared TAB language: navy glass, cerulean rules, silver scoreboard typography.
-# Idle: a small live team-count ribbon. Hold TAB: bounded, independently scrollable rosters.
-# Counts are roster sizes, not match scores. Other teams/spectators remain excluded.
+# 文件用途: 竞技场 / 枪战 PVP 风格 TAB HUD（红蓝双队左右分栏布局）。
+# 对应 Tab 定义: tabs/arena.yml（ui-id: "tab-arena"，packet-handler: "tab"）。
+# 消费 map 形态 pack（字典列表），每个元素含 team / uuid / name / status / health 字段。
+# 布局: 顶部居中面板，左侧红队列表 + 右侧蓝队列表，中间分隔线。
+# 特性: 常驻显示 + 按住 TAB 切换"详细模式"（额外显示血量），玩家头像 + 战斗状态图标。
 ui:
-  isHud: true
+  isHud: true  # 是否为 HUD（无界面容器，直接渲染到屏幕）
   hide:
-  - player_list
-  escClose: false
-  defaultOpen: true
+  - player_list  # 隐藏原版 player_list 控件
+  escClose: false  # 按 ESC 不关闭（HUD 常驻）
+  defaultOpen: true  # 模块加载时默认打开此 HUD
   action:
     load: |-
       var.ArenaTAB刷新轮次 = 0
       var.ArenaTAB详细 = false
-      var.ArenaTAB红队人数 = 0
-      var.ArenaTAB蓝队人数 = 0
-      var.ArenaTAB名称位移 = 0
+    # UI 加载时初始化变量
+    # 按下 TAB 键: 请求服务端刷新并开启详细模式（显示血量）
     keyPress: |-
       if(self.currentKeyPress() == "TAB"){
         Packet.send("TAB","update")
         var.ArenaTAB详细 = true
-        var.ArenaTAB名称位移 = 0
-        val.ArenaRedThumb.setDragYRatio(0)
-        val.ArenaBlueThumb.setDragYRatio(0)
       }
-      // HUDs have no captured cursor: arrow keys browse both team columns as well.
-      if(var.ArenaTAB详细 && self.currentKeyPress() == "DOWN"){
-        val.ArenaRedThumb.setDragYRatio(math.min(1, val.ArenaRedThumb.getDragYRatio() + 0.2))
-        val.ArenaBlueThumb.setDragYRatio(math.min(1, val.ArenaBlueThumb.getDragYRatio() + 0.2))
-      }
-      if(var.ArenaTAB详细 && self.currentKeyPress() == "UP"){
-        val.ArenaRedThumb.setDragYRatio(math.max(0, val.ArenaRedThumb.getDragYRatio() - 0.2))
-        val.ArenaBlueThumb.setDragYRatio(math.max(0, val.ArenaBlueThumb.getDragYRatio() - 0.2))
-      }
-      if(var.ArenaTAB详细 && self.currentKeyPress() == "RIGHT"){
-        var.ArenaTAB名称位移 = math.min(1, var.ArenaTAB名称位移 + 0.25)
-      }
-      if(var.ArenaTAB详细 && self.currentKeyPress() == "LEFT"){
-        var.ArenaTAB名称位移 = math.max(0, var.ArenaTAB名称位移 - 0.25)
-      }
+    # 松开 TAB 键: 关闭详细模式
     keyRelease: |-
       if(self.currentKeyReleased() == "TAB"){
         var.ArenaTAB详细 = false
       }
   packetHandler:
-    # Original map payload and synchronous PlayerSkin/text assignment order retained.
+    # 竞技场 / 枪战 PVP 风格示例：消费 map 形态 pack（team / uuid / name / status / health）。
+    # 服务端配置参考 ArcartXTab.yml 中的 tabs.arena，pack 字段：
+    #   team:   "%player_scoreboardteam%"   分队来源（可替换为 BedWars / MatrixDuels 等 PAPI）
+    #   uuid:   "{player_uuid}"             头像 PlayerSkin
+    #   name:   "%axstab_pvp_color%%axstab_vanish_color%%player_name%"
+    #   status: "%axstab_pvp%"              战斗中=1，UI 按值切图标
+    #   health: "%player_health%/%player_max_health%"
     tab: |-
       i = 0
       var.ArenaTAB刷新轮次 = var.ArenaTAB刷新轮次 + 1
@@ -53,19 +42,20 @@ ui:
       while(val.BlueList.childrenCount() > 1){
         val.BlueList.get(1).remove()
       }
-      // Preserve the original copy/delete sentinel and generation-qualified names.
+      //与 tab.yml 同款伪判断绕过 ax 控件复制 BUG（width 校验作为 sentinel）
       while(i < packet.size()){
         if(val.red_player_row != none){
           if(packet.get(i).team == "red"){
             ROW = val.red_player_row.copy('red_' + var.ArenaTAB刷新轮次 + '_' + i.round())
             ROW['头部'].normal = 'PlayerSkin:' + packet.get(i).uuid
             ROW['名称文字'].texts = packet.get(i).name
+            //status 字段服务端发的是 "1" / "0"；UI 端转图标
             if(packet.get(i).status == "1"){
               ROW['状态文字'].texts = "&c⚔"
             } else {
               ROW['状态文字'].texts = "&7•"
             }
-            ROW['血量文字'].texts = "&f" + packet.get(i).health
+            ROW['血量文字'].texts = "&c❤ " + packet.get(i).health
             ROW.visible = true
           }elif(packet.get(i).team == "blue"){
             ROW = val.blue_player_row.copy('blue_' + var.ArenaTAB刷新轮次 + '_' + i.round())
@@ -76,408 +66,156 @@ ui:
             } else {
               ROW['状态文字'].texts = "&7•"
             }
-            ROW['血量文字'].texts = "&f" + packet.get(i).health
+            ROW['血量文字'].texts = "&c❤ " + packet.get(i).health
             ROW.visible = true
           }
+          //其他 team（含空 / spectator）跳过不渲染
         }
         i++
       }
       var.ArenaTAB红队人数 = val.RedList.childrenCount() - 1
       var.ArenaTAB蓝队人数 = val.BlueList.childrenCount() - 1
+# ============ 控件定义 ============
 controls:
-  自适应全局布局:
+  自适应全局布局:  # 顶层自适应布局，锚定屏幕顶部居中
     type: Adaptive
     attribute:
       point: ~top_center
       width: 1920
       height: 1080
     children:
-      ArenaTAB背景:
+      ArenaTAB背景:  # 竞技场 TAB 毛玻璃背景面板，高度随队伍人数动态调整
         type: Canvas
         attribute:
           point: ~top_center
-          y: 24
-          width: "var.ArenaTAB详细 ? 1208 : 736"
-          height: "var.ArenaTAB详细 ? 208 + 52 * math.min(8, math.max(1, math.max(var.ArenaTAB红队人数, var.ArenaTAB蓝队人数))) : 96"
-          through: true
+          width: 720
+          height: 80 + 32 * math.max(var.ArenaTAB红队人数, var.ArenaTAB蓝队人数)  # 高度随最大队伍人数增长
+          y: 30
         children:
-          ArenaTAB背景背景:
+          ArenaTAB背景背景:  # 毛玻璃背景纹理，stretch_all 填充父控件
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~12,24,44,164
+              through: true
+              normal: ~Frosted:30;0,0,0,200  # 毛玻璃材质，30 模糊度，半透明黑
               shape: ~round_rect
-              radius: 8
-              through: true
-          顶部规则线:
-            type: Texture
-            attribute:
-              point: ~top_left
-              width: "self.parent.width"
-              height: 3
-              normal: ~35,159,214,230
-              through: true
-          ArenaTAB标题文字:
+              radius: 18
+            effect:
+              stroke:  # 描边
+                width: 3
+                color: ~0,0,0,255
+          ArenaTAB标题文字:  # 红蓝对阵标题"RED vs BLUE"
             type: Text
             attribute:
               point: ~top_center
-              y: 14
-              texts: ~&fARENA
-              fontSize: 36
+              width: 720
+              texts: ~&cRED  &fvs  &9BLUE
+              fontSize: 32
               through: true
-          详细提示:
-            type: Text
+          # ============ 红队（左侧）============
+          RedGrid:  # 红队玩家列表（VGrid），packetHandler 动态复制 red_player_row 填充
+            type: VGrid
+            val: RedList
             attribute:
-              point: ~top_center
-              y: 54
-              texts: "var.ArenaTAB详细 ? '&7队伍名册' : '&7按住 TAB 查看名册'"
-              fontSize: 36
-              through: true
-          红队人数:
-            type: Text
-            attribute:
-              point: ~top_left
-              x: 24
-              y: 18
-              texts: "'&cRED  &f' + var.ArenaTAB红队人数.round()"
-              fontSize: 54
-              through: true
-          蓝队人数:
-            type: Text
-            attribute:
-              point: ~top_right
-              x: -24
-              y: 18
-              texts: "'&f' + var.ArenaTAB蓝队人数.round() + '  &bBLUE'"
-              fontSize: 54
-              through: true
-          红队列标题:
-            type: Canvas
-            attribute:
-              x: 24
-              y: 104
-              width: 560
-              height: 44
-              visible: var.ArenaTAB详细
-              through: true
+              spaceBetweenY: 2
+              row: 16  # 每列最多 16 行
+              y: 60
+              x: 20
             children:
-              队员:
-                type: Text
+              red_player_row:  # 红队玩家行模板（Canvas），packetHandler 复制后填充头像/名称/状态/血量
+                type: Canvas
+                val: red_player_row
                 attribute:
-                  x: 48
-                  texts: ~&7队员
-                  fontSize: 36
-                  through: true
-              状态:
-                type: Text
-                attribute:
-                  x: 302
-                  texts: ~&7战斗
-                  fontSize: 36
-                  through: true
-              血量:
-                type: Text
-                attribute:
-                  point: ~top_right
-                  x: -8
-                  texts: ~&7生命 / 上限
-                  fontSize: 36
-                  through: true
-          蓝队列标题:
-            type: Canvas
-            attribute:
-              x: 624
-              y: 104
-              width: 560
-              height: 44
-              visible: var.ArenaTAB详细
-              through: true
-            children:
-              队员:
-                type: Text
-                attribute:
-                  x: 48
-                  texts: ~&7队员
-                  fontSize: 36
-                  through: true
-              状态:
-                type: Text
-                attribute:
-                  x: 302
-                  texts: ~&7战斗
-                  fontSize: 36
-                  through: true
-              血量:
-                type: Text
-                attribute:
-                  point: ~top_right
-                  x: -8
-                  texts: ~&7生命 / 上限
-                  fontSize: 36
-                  through: true
-          中线:
-            type: Texture
-            attribute:
-              x: 603
-              y: 104
-              width: 2
-              height: "self.parent.height - 164"
-              normal: ~137,167,187,120
-              visible: var.ArenaTAB详细
-              through: true
-          红队滚动区:
-            type: Scroll
-            attribute:
-              x: 24
-              y: 148
-              width: 560
-              height: "52 * math.min(8, math.max(1, math.max(var.ArenaTAB红队人数, var.ArenaTAB蓝队人数)))"
-              moveY: val.ArenaRedThumb.getDragYRatio()
-              visible: var.ArenaTAB详细
-            action:
-              wheel: |-
-                val.ArenaRedThumb.setDragYRatio(math.max(0, math.min(1, self.moveY - self.wheelValue * 0.1)))
-            children:
-              RedGrid:
-                type: VStack
-                val: RedList
-                attribute:
-                  width: 560
-                  spaceBetween: 4
+                  width: 320
+                  height: 30
+                  visible: false  # 默认隐藏，packetHandler 中设为 true
                 children:
-                  red_player_row:
-                    type: Canvas
-                    val: red_player_row
+                  头部:  # 玩家头像（Texture），normal 设为 PlayerSkin:<uuid>
+                    type: Texture
                     attribute:
-                      width: 560
-                      height: 48
-                      visible: false
-                      through: true
-                    children:
-                      行底:
-                        type: Texture
-                        attribute:
-                          point: ~stretch_all
-                          normal: ~21,37,57,164
-                          through: true
-                      头部:
-                        type: Texture
-                        attribute:
-                          point: ~middle_left
-                          x: 8
-                          width: 32
-                          height: 32
-                          normal: ~120,120,120,255
-                          through: true
-                      # Keep the packet's direct ROW['名称文字'].texts write intact.
-                      # The custom texts binding feeds a clipped, hover-readable name lane.
-                      名称文字:
-                        type: Scroll
-                        attribute:
-                          x: 48
-                          y: 6
-                          width: 246
-                          height: 36
-                          texts: ~none
-                          scrollAnim: none
-                          moveX: "self.scrollAnim != none ? self.scrollAnim.get() : var.ArenaTAB名称位移"
-                        action:
-                          enter: "self.scrollAnim = Lerp(0, 1, 3000)"
-                          leave: "self.scrollAnim = none"
-                        children:
-                          名称布局:
-                            type: HStack
-                            attribute:
-                              height: 36
-                            children:
-                              名称:
-                                type: Text
-                                attribute:
-                                  texts: self.parent.parent.texts
-                                  fontSize: 36
-                                  through: true
-                      状态文字:
-                        type: Text
-                        attribute:
-                          point: ~middle_left
-                          x: 320
-                          fontSize: 36
-                          texts: ~&7•
-                          through: true
-                      血量文字:
-                        type: Text
-                        attribute:
-                          point: ~middle_right
-                          x: -8
-                          fontSize: 36
-                          texts: ~none
-                          visible: var.ArenaTAB详细
-                          through: true
-          蓝队滚动区:
-            type: Scroll
+                      width: 28
+                      height: 28
+                      x: 0
+                      y: 0
+                      shape: ~round_rect
+                      radius: 4
+                      normal: "~120,120,120,255"
+                  名称文字:  # 玩家名称（含 PVP/vanish 颜色前缀）
+                    type: Text
+                    attribute:
+                      x: 36
+                      y: 0
+                      fontSize: 26
+                      texts: "~none"
+                      lineSpace: 4
+                  状态文字:  # 战斗状态图标（⚔ 战斗中 / · 正常）
+                    type: Text
+                    attribute:
+                      x: 220
+                      y: 0
+                      fontSize: 26
+                      texts: "~&7•"
+                      lineSpace: 4
+                  血量文字:  # 血量显示，仅详细模式（按住 TAB）可见
+                    type: Text
+                    attribute:
+                      x: 250
+                      y: 0
+                      fontSize: 26
+                      texts: "~none"
+                      lineSpace: 4
+                      visible: var.ArenaTAB详细
+          # ============ 蓝队（右侧）============
+          BlueGrid:  # 蓝队玩家列表（VGrid），packetHandler 动态复制 blue_player_row 填充
+            type: VGrid
+            val: BlueList
             attribute:
-              x: 624
-              y: 148
-              width: 560
-              height: "52 * math.min(8, math.max(1, math.max(var.ArenaTAB红队人数, var.ArenaTAB蓝队人数)))"
-              moveY: val.ArenaBlueThumb.getDragYRatio()
-              visible: var.ArenaTAB详细
-            action:
-              wheel: |-
-                val.ArenaBlueThumb.setDragYRatio(math.max(0, math.min(1, self.moveY - self.wheelValue * 0.1)))
+              spaceBetweenY: 2
+              row: 16
+              y: 60
+              x: 380
             children:
-              BlueGrid:
-                type: VStack
-                val: BlueList
+              blue_player_row:  # 蓝队玩家行模板（Canvas），packetHandler 复制后填充头像/名称/状态/血量
+                type: Canvas
+                val: blue_player_row
                 attribute:
-                  width: 560
-                  spaceBetween: 4
+                  width: 320
+                  height: 30
+                  visible: false  # 默认隐藏，packetHandler 中设为 true
                 children:
-                  blue_player_row:
-                    type: Canvas
-                    val: blue_player_row
+                  头部:  # 玩家头像（Texture），normal 设为 PlayerSkin:<uuid>
+                    type: Texture
                     attribute:
-                      width: 560
-                      height: 48
-                      visible: false
-                      through: true
-                    children:
-                      行底:
-                        type: Texture
-                        attribute:
-                          point: ~stretch_all
-                          normal: ~21,37,57,164
-                          through: true
-                      头部:
-                        type: Texture
-                        attribute:
-                          point: ~middle_left
-                          x: 8
-                          width: 32
-                          height: 32
-                          normal: ~120,120,120,255
-                          through: true
-                      名称文字:
-                        type: Scroll
-                        attribute:
-                          x: 48
-                          y: 6
-                          width: 246
-                          height: 36
-                          texts: ~none
-                          scrollAnim: none
-                          moveX: "self.scrollAnim != none ? self.scrollAnim.get() : var.ArenaTAB名称位移"
-                        action:
-                          enter: "self.scrollAnim = Lerp(0, 1, 3000)"
-                          leave: "self.scrollAnim = none"
-                        children:
-                          名称布局:
-                            type: HStack
-                            attribute:
-                              height: 36
-                            children:
-                              名称:
-                                type: Text
-                                attribute:
-                                  texts: self.parent.parent.texts
-                                  fontSize: 36
-                                  through: true
-                      状态文字:
-                        type: Text
-                        attribute:
-                          point: ~middle_left
-                          x: 320
-                          fontSize: 36
-                          texts: ~&7•
-                          through: true
-                      血量文字:
-                        type: Text
-                        attribute:
-                          point: ~middle_right
-                          x: -8
-                          fontSize: 36
-                          texts: ~none
-                          visible: var.ArenaTAB详细
-                          through: true
-          红队滑轨:
-            type: Texture
-            attribute:
-              x: 590
-              y: 148
-              width: 6
-              height: "52 * math.min(8, math.max(1, math.max(var.ArenaTAB红队人数, var.ArenaTAB蓝队人数)))"
-              normal: ~92,121,145,170
-              visible: var.ArenaTAB详细 && var.ArenaTAB红队人数 > 8
-              through: true
-          红队滑块:
-            type: Texture
-            val: ArenaRedThumb
-            attribute:
-              x: 590
-              y: 148
-              width: 6
-              height: 52
-              maxDragY: "math.max(1, 52 * math.min(8, math.max(1, math.max(var.ArenaTAB红队人数, var.ArenaTAB蓝队人数))) - 52)"
-              normal: ~188,210,224,230
-              hover: ~35,159,214,230
-              visible: var.ArenaTAB详细 && var.ArenaTAB红队人数 > 8
-          蓝队滑轨:
-            type: Texture
-            attribute:
-              x: 1190
-              y: 148
-              width: 6
-              height: "52 * math.min(8, math.max(1, math.max(var.ArenaTAB红队人数, var.ArenaTAB蓝队人数)))"
-              normal: ~92,121,145,170
-              visible: var.ArenaTAB详细 && var.ArenaTAB蓝队人数 > 8
-              through: true
-          蓝队滑块:
-            type: Texture
-            val: ArenaBlueThumb
-            attribute:
-              x: 1190
-              y: 148
-              width: 6
-              height: 52
-              maxDragY: "math.max(1, 52 * math.min(8, math.max(1, math.max(var.ArenaTAB红队人数, var.ArenaTAB蓝队人数))) - 52)"
-              normal: ~35,159,214,230
-              hover: ~188,210,224,230
-              visible: var.ArenaTAB详细 && var.ArenaTAB蓝队人数 > 8
-          红队空状态:
-            type: Text
-            attribute:
-              x: 72
-              y: 156
-              texts: ~&7红队暂无队员
-              fontSize: 36
-              visible: var.ArenaTAB详细 && var.ArenaTAB红队人数 == 0
-              through: true
-          蓝队空状态:
-            type: Text
-            attribute:
-              x: 672
-              y: 156
-              texts: ~&7蓝队暂无队员
-              fontSize: 36
-              visible: var.ArenaTAB详细 && var.ArenaTAB蓝队人数 == 0
-              through: true
-          名册说明:
-            type: Text
-            attribute:
-              point: ~bottom_left
-              x: 24
-              y: -16
-              texts: ~&7LEFT / RIGHT 浏览长名
-              fontSize: 36
-              visible: var.ArenaTAB详细
-              through: true
-          滚动说明:
-            type: Text
-            attribute:
-              point: ~bottom_right
-              x: -24
-              y: -16
-              texts: "math.max(var.ArenaTAB红队人数, var.ArenaTAB蓝队人数) > 8 ? '&bUP / DOWN &7浏览队员' : '&7松开 TAB 收起'"
-              fontSize: 36
-              visible: var.ArenaTAB详细
-              through: true
+                      width: 28
+                      height: 28
+                      x: 0
+                      y: 0
+                      shape: ~round_rect
+                      radius: 4
+                      normal: "~120,120,120,255"
+                  名称文字:  # 玩家名称（含 PVP/vanish 颜色前缀）
+                    type: Text
+                    attribute:
+                      x: 36
+                      y: 0
+                      fontSize: 26
+                      texts: "~none"
+                      lineSpace: 4
+                  状态文字:  # 战斗状态图标（⚔ 战斗中 / · 正常）
+                    type: Text
+                    attribute:
+                      x: 220
+                      y: 0
+                      fontSize: 26
+                      texts: "~&7•"
+                      lineSpace: 4
+                  血量文字:  # 血量显示，仅详细模式（按住 TAB）可见
+                    type: Text
+                    attribute:
+                      x: 250
+                      y: 0
+                      fontSize: 26
+                      texts: "~none"
+                      lineSpace: 4
+                      visible: var.ArenaTAB详细
+

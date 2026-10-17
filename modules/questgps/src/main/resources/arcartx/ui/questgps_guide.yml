@@ -1,7 +1,8 @@
-# QuestGPS · Expedition route HUD
-# A small limestone heading and three independent route strips; no full panel veil.
-# Cobalt waypoints / orange route thread / full-text overflow ticker.
-# HUD configuration and fixed tracking-slot bindings are retained.
+# AXS QuestGPS 任务指引 HUD — 紫罗兰多追踪版
+# 用途: 任务追踪时屏幕左上角常驻 HUD，展示所有追踪中任务的名称、进度、当前目标与导航坐标
+# 风格: 紫罗兰毛玻璃，与 questgps_menu 主菜单统一
+# 位置: 左上角偏下（x=16, y=220），避开聊天框/血条/小地图
+# 数据: 服务端 QuestGpsGuidePacketFactory 发送 init/update 包，最多3张任务卡片
 
 ui:
   isHud: true
@@ -13,6 +14,14 @@ ui:
   show: true
   level: 3
   packetHandler:
+    # packetHandler: init
+    # 包字段:
+    #   - packetId: 数据包 ID（用于客户端回传服务端）
+    #   - active: HUD 是否激活显示
+    #   - trackedCount: 追踪中的目标总数
+    #   - quests: 追踪任务卡片字典（key="0"~"2"，value含questId/name/label/progressText/taskText/taskDesc/navText/hasNav/navWorld）
+    #   - questCount: 卡片数（最多3）
+    #   - 兼容字段: questName/navWorld/navX/navY/navZ/hasNav（主追踪目标摘要）
     init: |-
       var.packetId = packet['packetId']
       var.active = packet['active']
@@ -35,6 +44,8 @@ ui:
         }
         var.taskIndex = var.taskIndex + 1
       }
+    # packetHandler: update
+    # 包字段: 与 init 相同，用于增量更新 HUD 数据
     update: |-
       var.packetId = packet['packetId']
       var.active = packet['active']
@@ -61,247 +72,279 @@ ui:
     load: |-
       var.trackedCount = 0
       var.quests = {}
-      var.guideTextSeconds = 0
-      var.guideTextAnim = Lerp(0, 1, 6000)
-      sx = Screen.getWidth() / 1920
-      sy = Screen.getHeight() / 1080
-      s = sx < sy ? sx : sy
-      var.viewW = Screen.getWidth() / s
-      var.offX = (var.viewW - 1920) / 2
-    resize: |-
-      sx = Screen.getWidth() / 1920
-      sy = Screen.getHeight() / 1080
-      s = sx < sy ? sx : sy
-      var.viewW = Screen.getWidth() / s
-      var.offX = (var.viewW - 1920) / 2
-    # Only text that exceeds its viewport moves. Short objectives remain stationary.
-    seconds: |-
-      if(var.active){
-        var.guideTextSeconds = var.guideTextSeconds + 1
-        if(var.guideTextSeconds >= 10){
-          var.guideTextSeconds = 0
-          var.guideTextAnim = Lerp(0, 1, 6000)
-        }
-      }
 
+# ─── 控件树 ────────────────────────────────────────────────────────
+# 布局: Adaptive stretch_all + 左上角偏下面板（420宽）
+# 结构: 毛玻璃底 + 紫罗兰强调条 + 标题 + 3张追踪任务卡片
+# 配色: 紫罗兰 主色170,120,220 底28,22,38,210 抬升50,44,68,245 描边170,120,220,240
 controls:
   自适应全局布局:
     type: Adaptive
-    attribute: {point: '~top_center', width: 1920, height: 1080, through: true}
+    attribute:
+      point: ~stretch_all
+      width: 1920
+      height: 1080
     children:
       任务面板:
         type: Canvas
         attribute:
           point: ~top_left
-          x: '20 - var.offX'
+          x: 16
           y: 220
-          width: 416
-          height: '44 + var.questCount * 116'
+          width: 420
+          height: 340
           visible: var.active
-          through: true
         effect:
           offsetAnimate:
-            duration: 250
+            duration: 300
             interpolator: decelerate
             x: -440
             y: 0
         children:
-          # The header alone is limestone. Empty space between route strips stays clear.
-          标题底:
+          # ── 面板背景 ────────────────────────────────
+          背景:
             type: Texture
-            attribute: {point: '~top_left', x: 24, width: 392, height: 44, normal: '~235,228,208,235', shape: '~round_rect', radius: 4, through: true}
-          标题:
-            type: Text
-            attribute: {point: '~top_left', x: 36, y: 4, texts: '~&0远征指引', fontSize: 36, through: true}
-          数量文字:
-            type: Text
-            attribute: {point: '~top_right', x: -12, y: 4, texts: "'&1' + var.trackedCount.round() + ' 个航点'", fontSize: 36, through: true}
+            attribute:
+              point: ~stretch_all
+              normal: ~20,16,30,235
+              shape: ~round_rect
+              radius: 16
+            effect:
+              stroke:
+                width: 3
+                color: ~170,120,220,240
+          # 紫罗兰强调条（左侧竖条）
           强调条:
             type: Texture
-            attribute: {point: '~top_left', x: 8, y: 0, width: 4, height: 44, normal: '~225,111,46,255', through: true}
+            attribute:
+              point: ~top_left
+              x: 0
+              y: 0
+              width: 5
+              height: 340
+              normal: ~170,120,220,255
+              shape: ~round_rect
+              radius: 4
+          # ── 头部（标题左 + 追踪数量右）─────────────
+          任务图标:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 20
+              y: 16
+              texts: "~&f⬡"
+              fontSize: 32
+              through: true
+          标题:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 48
+              y: 16
+              texts: "~&f任务追踪"
+              fontSize: 32
+              through: true
+          数量文字:
+            type: Text
+            attribute:
+              point: ~top_right
+              x: -16
+              y: 16
+              texts: "var.trackedCount > 0 ? '&f' + var.trackedCount + ' 个目标' : none"
+              fontSize: 32
+              through: true
+          # ── 头部分隔线 ──────────────────────────────
+          头部分隔线:
+            type: Texture
+            attribute:
+              point: ~top_left
+              x: 16
+              y: 56
+              width: 388
+              height: 2
+              normal: ~170,120,220,180
+          # ── 追踪任务卡片列表（3个固定槽位）───────────
           任务列表:
             val: guide_quest_list
             type: VStack
-            attribute: {point: '~top_left', y: 52, width: 416, spaceBetween: 8, through: true}
+            attribute:
+              point: ~top_left
+              x: 16
+              y: 68
+              width: 388
+              spaceBetween: 8
             children:
-              # Fixed slots are named exactly as used by init/update; no copy lifecycle on this HUD.
               追踪卡0:
                 type: Canvas
                 attribute:
-                  width: 416
-                  height: 108
+                  point: ~top_left
+                  width: 388
+                  height: 84
                   entryKey: none
                   visible: self.entryKey != none && var.quests[self.entryKey] != none
                   entry: var.quests[self.entryKey]
-                  through: true
                 children:
                   项背景:
                     type: Texture
-                    attribute: {point: '~top_left', x: 24, width: 392, height: 108, normal: '~25,46,79,222', shape: '~round_rect', radius: 4, through: true}
-                  路线线:
-                    type: Texture
-                    attribute: {point: '~top_left', x: 10, width: 2, height: 108, normal: '~225,111,46,230', through: true}
-                  航点:
-                    type: Texture
-                    attribute: {point: '~top_left', x: 4, y: 12, width: 14, height: 14, normal: '~42,83,154,255', shape: '~circle', through: true}
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~40,32,56,200
+                      shape: ~round_rect
+                      radius: 10
                     effect:
-                      stroke: {width: 2, color: '~235,228,208,240'}
+                      stroke:
+                        width: 2
+                        color: ~170,120,220,160
                   任务名:
-                    type: Scroll
-                    attribute: {point: '~top_left', x: 40, y: 0, width: 276, height: 36, moveX: 'var.guideTextAnim.get()', through: true}
-                    children:
-                      名称布局:
-                        type: HStack
-                        attribute: {height: 36, through: true}
-                        children:
-                          名称文字:
-                            type: Text
-                            attribute: {texts: "'&f' + self.parent.parent.parent.entry['name']", fontSize: 36, through: true}
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 12
+                      y: 6
+                      texts: "self.parent.entry != none ? '&f' + self.parent.entry['name'] : none"
+                      fontSize: 30
+                      through: true
                   进度文字:
                     type: Text
-                    attribute: {point: '~top_right', x: -12, y: 0, texts: "'&f' + self.parent.entry['progressText']", fontSize: 36, through: true}
+                    attribute:
+                      point: ~top_right
+                      x: -10
+                      y: 6
+                      texts: "self.parent.entry != none ? '&f' + self.parent.entry['progressText'] : none"
+                      fontSize: 30
+                      through: true
                   当前目标:
-                    type: Scroll
-                    attribute: {point: '~top_left', x: 40, y: 36, width: 364, height: 36, moveX: 'var.guideTextAnim.get()', through: true}
-                    children:
-                      目标布局:
-                        type: HStack
-                        attribute: {height: 36, through: true}
-                        children:
-                          目标文字:
-                            type: Text
-                            attribute: {texts: "'&f目标 / ' + self.parent.parent.parent.entry['taskText']", fontSize: 36, through: true}
-                  导航坐标:
-                    type: Scroll
-                    attribute: {point: '~top_left', x: 40, y: 72, width: 364, height: 36, moveX: 'var.guideTextAnim.get()', visible: "self.parent.entry['hasNav']", through: true}
-                    children:
-                      坐标布局:
-                        type: HStack
-                        attribute: {height: 36, through: true}
-                        children:
-                          坐标文字:
-                            type: Text
-                            attribute: {texts: "'&6位置 / ' + self.parent.parent.parent.entry['navText']", fontSize: 36, through: true}
-                  无坐标:
                     type: Text
-                    attribute: {point: '~top_left', x: 40, y: 72, texts: '~&7暂无坐标 / 继续任务', visible: "!self.parent.entry['hasNav']", fontSize: 36, through: true}
+                    attribute:
+                      point: ~top_left
+                      x: 12
+                      y: 38
+                      texts: "self.parent.entry != none ? '&7◈ ' + self.parent.entry['taskText'] : none"
+                      fontSize: 26
+                      through: true
+                  导航坐标:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 12
+                      y: 62
+                      texts: "self.parent.entry != none && self.parent.entry['hasNav'] ? '&8→ ' + self.parent.entry['navText'] : none"
+                      fontSize: 20
+                      through: true
               追踪卡1:
                 type: Canvas
                 attribute:
-                  width: 416
-                  height: 108
+                  point: ~top_left
+                  width: 388
+                  height: 84
                   entryKey: none
                   visible: self.entryKey != none && var.quests[self.entryKey] != none
                   entry: var.quests[self.entryKey]
-                  through: true
                 children:
                   项背景:
                     type: Texture
-                    attribute: {point: '~top_left', x: 24, width: 392, height: 108, normal: '~25,46,79,222', shape: '~round_rect', radius: 4, through: true}
-                  路线线:
-                    type: Texture
-                    attribute: {point: '~top_left', x: 10, width: 2, height: 108, normal: '~225,111,46,230', through: true}
-                  航点:
-                    type: Texture
-                    attribute: {point: '~top_left', x: 4, y: 12, width: 14, height: 14, normal: '~42,83,154,255', shape: '~circle', through: true}
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~40,32,56,200
+                      shape: ~round_rect
+                      radius: 10
                     effect:
-                      stroke: {width: 2, color: '~235,228,208,240'}
+                      stroke:
+                        width: 2
+                        color: ~170,120,220,160
                   任务名:
-                    type: Scroll
-                    attribute: {point: '~top_left', x: 40, y: 0, width: 276, height: 36, moveX: 'var.guideTextAnim.get()', through: true}
-                    children:
-                      名称布局:
-                        type: HStack
-                        attribute: {height: 36, through: true}
-                        children:
-                          名称文字:
-                            type: Text
-                            attribute: {texts: "'&f' + self.parent.parent.parent.entry['name']", fontSize: 36, through: true}
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 12
+                      y: 6
+                      texts: "self.parent.entry != none ? '&f' + self.parent.entry['name'] : none"
+                      fontSize: 30
+                      through: true
                   进度文字:
                     type: Text
-                    attribute: {point: '~top_right', x: -12, y: 0, texts: "'&f' + self.parent.entry['progressText']", fontSize: 36, through: true}
+                    attribute:
+                      point: ~top_right
+                      x: -10
+                      y: 6
+                      texts: "self.parent.entry != none ? '&f' + self.parent.entry['progressText'] : none"
+                      fontSize: 30
+                      through: true
                   当前目标:
-                    type: Scroll
-                    attribute: {point: '~top_left', x: 40, y: 36, width: 364, height: 36, moveX: 'var.guideTextAnim.get()', through: true}
-                    children:
-                      目标布局:
-                        type: HStack
-                        attribute: {height: 36, through: true}
-                        children:
-                          目标文字:
-                            type: Text
-                            attribute: {texts: "'&f目标 / ' + self.parent.parent.parent.entry['taskText']", fontSize: 36, through: true}
-                  导航坐标:
-                    type: Scroll
-                    attribute: {point: '~top_left', x: 40, y: 72, width: 364, height: 36, moveX: 'var.guideTextAnim.get()', visible: "self.parent.entry['hasNav']", through: true}
-                    children:
-                      坐标布局:
-                        type: HStack
-                        attribute: {height: 36, through: true}
-                        children:
-                          坐标文字:
-                            type: Text
-                            attribute: {texts: "'&6位置 / ' + self.parent.parent.parent.entry['navText']", fontSize: 36, through: true}
-                  无坐标:
                     type: Text
-                    attribute: {point: '~top_left', x: 40, y: 72, texts: '~&7暂无坐标 / 继续任务', visible: "!self.parent.entry['hasNav']", fontSize: 36, through: true}
+                    attribute:
+                      point: ~top_left
+                      x: 12
+                      y: 38
+                      texts: "self.parent.entry != none ? '&7◈ ' + self.parent.entry['taskText'] : none"
+                      fontSize: 26
+                      through: true
+                  导航坐标:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 12
+                      y: 62
+                      texts: "self.parent.entry != none && self.parent.entry['hasNav'] ? '&8→ ' + self.parent.entry['navText'] : none"
+                      fontSize: 20
+                      through: true
               追踪卡2:
                 type: Canvas
                 attribute:
-                  width: 416
-                  height: 108
+                  point: ~top_left
+                  width: 388
+                  height: 84
                   entryKey: none
                   visible: self.entryKey != none && var.quests[self.entryKey] != none
                   entry: var.quests[self.entryKey]
-                  through: true
                 children:
                   项背景:
                     type: Texture
-                    attribute: {point: '~top_left', x: 24, width: 392, height: 108, normal: '~25,46,79,222', shape: '~round_rect', radius: 4, through: true}
-                  路线线:
-                    type: Texture
-                    attribute: {point: '~top_left', x: 10, width: 2, height: 108, normal: '~225,111,46,230', through: true}
-                  航点:
-                    type: Texture
-                    attribute: {point: '~top_left', x: 4, y: 12, width: 14, height: 14, normal: '~42,83,154,255', shape: '~circle', through: true}
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~40,32,56,200
+                      shape: ~round_rect
+                      radius: 10
                     effect:
-                      stroke: {width: 2, color: '~235,228,208,240'}
+                      stroke:
+                        width: 2
+                        color: ~170,120,220,160
                   任务名:
-                    type: Scroll
-                    attribute: {point: '~top_left', x: 40, y: 0, width: 276, height: 36, moveX: 'var.guideTextAnim.get()', through: true}
-                    children:
-                      名称布局:
-                        type: HStack
-                        attribute: {height: 36, through: true}
-                        children:
-                          名称文字:
-                            type: Text
-                            attribute: {texts: "'&f' + self.parent.parent.parent.entry['name']", fontSize: 36, through: true}
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 12
+                      y: 6
+                      texts: "self.parent.entry != none ? '&f' + self.parent.entry['name'] : none"
+                      fontSize: 30
+                      through: true
                   进度文字:
                     type: Text
-                    attribute: {point: '~top_right', x: -12, y: 0, texts: "'&f' + self.parent.entry['progressText']", fontSize: 36, through: true}
+                    attribute:
+                      point: ~top_right
+                      x: -10
+                      y: 6
+                      texts: "self.parent.entry != none ? '&f' + self.parent.entry['progressText'] : none"
+                      fontSize: 30
+                      through: true
                   当前目标:
-                    type: Scroll
-                    attribute: {point: '~top_left', x: 40, y: 36, width: 364, height: 36, moveX: 'var.guideTextAnim.get()', through: true}
-                    children:
-                      目标布局:
-                        type: HStack
-                        attribute: {height: 36, through: true}
-                        children:
-                          目标文字:
-                            type: Text
-                            attribute: {texts: "'&f目标 / ' + self.parent.parent.parent.entry['taskText']", fontSize: 36, through: true}
-                  导航坐标:
-                    type: Scroll
-                    attribute: {point: '~top_left', x: 40, y: 72, width: 364, height: 36, moveX: 'var.guideTextAnim.get()', visible: "self.parent.entry['hasNav']", through: true}
-                    children:
-                      坐标布局:
-                        type: HStack
-                        attribute: {height: 36, through: true}
-                        children:
-                          坐标文字:
-                            type: Text
-                            attribute: {texts: "'&6位置 / ' + self.parent.parent.parent.entry['navText']", fontSize: 36, through: true}
-                  无坐标:
                     type: Text
-                    attribute: {point: '~top_left', x: 40, y: 72, texts: '~&7暂无坐标 / 继续任务', visible: "!self.parent.entry['hasNav']", fontSize: 36, through: true}
+                    attribute:
+                      point: ~top_left
+                      x: 12
+                      y: 38
+                      texts: "self.parent.entry != none ? '&7◈ ' + self.parent.entry['taskText'] : none"
+                      fontSize: 26
+                      through: true
+                  导航坐标:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 12
+                      y: 62
+                      texts: "self.parent.entry != none && self.parent.entry['hasNav'] ? '&8→ ' + self.parent.entry['navText'] : none"
+                      fontSize: 20
+                      through: true

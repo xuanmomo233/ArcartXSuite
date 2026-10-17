@@ -1,6 +1,22 @@
-# AXS Conversation — 附近对话：低遮挡的五行人物提示
-# HUD 保留世界中心；选中人物使用黄铜边标和暖黑底，距离独立对齐。
-# sync / close 与 confirm_npc / select_npc 的回包协议保持不变。
+# AXS 资源说明
+# 用途: Conversation 模块默认 NPC 选择 HUD，负责展示附近可触发对话的 NPC。
+# 前置依赖: ArcartX、Chemdah、Adyeshach；Conversation 模块启用后会自动注册或导出。
+# 启用开关: config.yml -> modules.conversation.enabled + modules.conversation.password
+# 关联文件: ArcartXConversation.yml、ui/conversation_dialog.yml
+# 重载命令: /axs conversation reload
+# 最小使用路径: ui + controls
+# 结构提示: 靠近屏幕中间的选项 HUD，风格与 conversation_dialog.yml 选项一致。
+#          Frosted 毛玻璃背景 + round_rect radius:25 + 白色描边高亮。
+#          选中态用 selected 字段驱动描边高亮（选择器支持键盘导航）。
+# 服务端 sync 字段:
+#   token, packetId, title, hintText, selectedNpcId, selectedNpcIndex,
+#   npcCount, npcScrollRatio, npcRows, maxNpcCount
+# npcRows 单行字段:
+#   id, text, distanceText, selected, index
+# 客户端回包:
+#   navigate_npc / confirm_npc / select_npc
+# 回包格式:
+#   action, token, targetId
 ui:
   isHud: true
   defaultOpen: false
@@ -9,10 +25,19 @@ ui:
   screenScale: true
   level: 0
   packetHandler:
+    # packetHandler: sync
+    # 包字段:
+    #   - token: 会话令牌，用于回包验证
+    #   - packetId: 通信标识，用于 Packet.send 回包
+    #   - title: 选择器标题
+    #   - hintText: 操作提示文字
+    #   - selectedNpcId: 当前选中的 NPC ID
+    #   - selectedNpcIndex: 当前选中的 NPC 索引
+    #   - npcCount: 可对话 NPC 总数
+    #   - npcScrollRatio: 列表滚动比例
+    #   - npcRows: NPC 行数据字典（每行含 id, text, distanceText, selected, index）
+    #   - maxNpcCount: NPC 行模板最大复制数
     sync: |-
-      oldNpcCount = var.maxNpcCount
-      oldNpcIndex = var.selectedNpcIndex
-      oldTitle = var.title
       var.token = packet['token']
       var.packetId = packet['packetId']
       var.title = packet['title']
@@ -23,38 +48,29 @@ ui:
       var.npcScrollRatio = packet['npcScrollRatio']
       var.npcRows = packet['npcRows']
       var.maxNpcCount = packet['maxNpcCount']
-      // 只在数量改变时复制，并保存引用以安全移除旧行。
-      if(oldNpcCount != var.maxNpcCount){
-        for(key in var.npcRefs.keys()){
-          var.npcRefs[key].remove()
+
+      if(val.selector_list.childrenCount() != var.maxNpcCount){
+        while(val.selector_list.childrenCount() > 1){
+          val.selector_list.get(1).remove()
         }
-        var.npcRefs = {}
-        var.npcRound = var.npcRound + 1
-        if(var.maxNpcCount > 1){
-          template = val.selector_list.get(0)
-          for(i in range(1, var.maxNpcCount - 1)){
-            ni = template.copy('选择器模板_' + var.npcRound.round() + '_' + i.round())
-            ni.entryKey = i.round()
-            var.npcRefs[i.round()] = ni
+        for(i in range(1, var.maxNpcCount - 1)){
+          key = i.round()
+          if(val.selector_list['选择器模板'] != none) {
+            ni = val.selector_list['选择器模板'].copy('选择器模板' + key)
+            ni.entryKey = key
           }
         }
       }
-      // 距离刷新保留手动滚动位置；只有选择/数量变化或重新出现才跟随。
-      if(oldTitle == none || oldNpcCount != var.maxNpcCount || oldNpcIndex != var.selectedNpcIndex){
-        val.选择器滑块.setDragYRatio(var.npcScrollRatio)
-      }
+    # packetHandler: close
+    # 包字段:
+    #   - packetId: 通信标识（可能为 none）
     close: |-
       var.title = none
       var.token = none
-      var.animatedNpcId = none
       var.packetId = packet['packetId'] == none ? none : packet['packetId']
   action:
     load: |-
-      var.npcRows = {}
-      var.npcRefs = {}
-      var.npcRound = 0
-      var.selectorViewportH = 48
-      var.npcNameAnim = Lerp(0, 1, 6000)
+      var.maxNpcWidth = 150
       var.interactKey = Keyboard.getKeyBindingKeyName("AXS_INTERACT")
       var.navPrevKey = Keyboard.getKeyBindingKeyName("AXS_NAVIGATE_PREV")
       var.navNextKey = Keyboard.getKeyBindingKeyName("AXS_NAVIGATE_NEXT")
@@ -64,120 +80,61 @@ ui:
       if(var.navNextKey == '下方向键'){
         var.navNextKey = "↓"
       }
-      self.actions['resize']()
-    resize: |-
-      sx = Screen.getWidth() / 1920
-      sy = Screen.getHeight() / 1080
-      s = sx < sy ? sx : sy
-      var.viewW = Screen.getWidth() / s
-      var.viewH = Screen.getHeight() / s
-      var.maxNpcWidth = 432
     tick: |-
-      var.selectorViewportH = 48
-      if(var.npcCount > 0){
-        var.selectorViewportH = var.npcCount < 5 ? var.npcCount * 52 - 4 : 256
+      mw = 0
+      for(i in range(0, val.selector_list.childrenCount())){
+        w = val.selector_list.get(i)['NPC名'].width
+        if(w > mw){
+          mw = w
+        }
       }
-      // 长名称仅在当前人物行缓慢展开，不扩大 HUD 的遮挡范围。
-      if(var.title != none && var.animatedNpcId != var.selectedNpcId){
-        var.animatedNpcId = var.selectedNpcId
-        var.npcNameAnim = Lerp(0, 1, 6000)
-      }
+      var.maxNpcWidth = mw + 120
 controls:
   自适应全局布局:
     type: Adaptive
     attribute:
-      point: ~top_center
+      point: ~stretch_all
       width: 1920
       height: 1080
     children:
       选择器面板:
         type: Canvas
         attribute:
-          point: ~top_left
-          x: 1184
-          y: "var.viewH / 2 - 56"
-          width: "var.maxNpcWidth + 48"
-          height: "var.selectorViewportH + 112"
-          visible: "var.title != none && var.npcCount > 0"
+          point: ~middle_center
+          x: 200
+          y: 80
+          width: var.maxNpcWidth + 10
+          height: 280
         children:
-          选择器底:
-            type: Texture
-            attribute:
-              point: ~stretch_all
-              normal: ~10,10,9,224
-              shape: ~round_rect
-              radius: 4
-              through: true
-          标题边标:
-            type: Texture
-            attribute:
-              point: ~top_left
-              x: 20
-              y: 18
-              width: 3
-              height: 24
-              normal: ~172,150,108,255
-              through: true
           选择器标题:
             type: Text
             attribute:
               point: ~top_left
-              x: 34
-              y: 12
-              texts: "'&6' + var.title"
-              fontSize: 36
-              alpha: 0.85
-              through: true
-          人物位置:
+              texts: "'&b' + var.title"
+              fontSize: 48
+          选择器提示:
             type: Text
             attribute:
-              point: ~top_right
-              x: -20
-              y: 12
-              texts: "'&7' + (var.selectedNpcIndex + 1).round() + ' / ' + var.npcCount.round()"
-              fontSize: 36
-              through: true
-          标题分隔:
-            type: Texture
-            attribute:
               point: ~top_left
-              x: 20
-              y: 54
-              width: "self.parent.width - 40"
-              height: 1
-              normal: ~72,65,49,255
-              through: true
-          选择器滑轨:
-            type: Texture
-            attribute:
-              point: ~top_right
-              x: -10
-              y: 64
-              width: 5
-              height: "var.selectorViewportH"
-              normal: ~49,45,37,240
-              visible: "var.npcCount > 5"
-              through: true
+              y: 28
+              texts: "var.navPrevKey + '/' + var.navNextKey + ' 切换，' + var.interactKey + ' 确认'"
+              fontSize: 32
           选择器滑块:
             type: Texture
             val: 选择器滑块
             attribute:
               point: ~top_right
-              x: -10
-              y: 64
-              width: 5
-              height: 40
-              normal: ~172,150,108,255
-              maxDragY: "var.selectorViewportH - 40"
-              visible: "var.npcCount > 5"
+              y: 56
+              width: 4
+              height: 30
+              normal: ~150,150,150,255
+              maxDragY: 148
           选择器滚动区:
             type: Scroll
             attribute:
-              point: ~top_left
-              x: 20
-              y: 64
-              width: "var.maxNpcWidth + 4"
-              height: "var.selectorViewportH"
+              y: 56
+              width: var.maxNpcWidth
+              height: 178
               moveY: "self.parent['选择器滑块'].getDragYRatio()"
             action:
               wheel: |-
@@ -192,8 +149,8 @@ controls:
                 val: selector_list
                 type: VStack
                 attribute:
-                  width: "var.maxNpcWidth"
-                  spaceBetween: 4
+                  width: var.maxNpcWidth
+                  spaceBetween: 5
                 children:
                   选择器模板:
                     type: Canvas
@@ -201,8 +158,8 @@ controls:
                       entryKey: 0.round()
                       entry: var.npcRows[self.entryKey]
                       visible: self.entry != none
-                      width: "var.maxNpcWidth"
-                      height: 48
+                      width: var.maxNpcWidth
+                      height: 56
                     action:
                       clickLeft: |-
                         if(self.entry != none && self.entry['selected']){
@@ -214,65 +171,30 @@ controls:
                       选项背景:
                         type: Texture
                         attribute:
-                          point: ~top_left
-                          x: 2
-                          y: 2
-                          width: "self.parent.width - 4"
-                          height: 44
+                          point: ~stretch_all
                           through: true
-                          normal: "self.parent.entry['selected'] ? '43,36,24,248' : '19,19,17,240'"
+                          normal: ~Frosted:30;0,0,0,255
                           shape: ~round_rect
-                          radius: 3
+                          radius: 25
                         effect:
                           stroke:
-                            width: 1
-                            color: "(self.parent.isHovered() || self.parent.entry['selected']) ? '228,218,194,255' : '60,56,45,240'"
-                      当前人物标记:
-                        type: Texture
+                            width: 3
+                            color: "(self.parent.isHovered() || (self.parent.entry != none && self.parent.entry['selected'])) ? '255,255,255,255' : '80,86,108,255'"
+                      NPC名:
+                        type: Text
                         attribute:
                           point: ~middle_left
-                          x: 3
-                          width: 3
-                          height: 26
-                          normal: ~172,150,108,255
-                          visible: self.parent.entry['selected']
+                          x: 14
+                          y: 0
+                          texts: "self.parent.entry != none ? self.parent.entry['text'] : none"
+                          fontSize: 48
                           through: true
-                      人物名称窗:
-                        type: Scroll
-                        attribute:
-                          point: ~middle_left
-                          x: 18
-                          width: "self.parent.width - 130"
-                          height: 36
-                          moveX: "self.parent.entry['selected'] ? var.npcNameAnim.get() : 0"
-                          through: true
-                        children:
-                          人物名称布局:
-                            type: HStack
-                            attribute:
-                              height: 36
-                              through: true
-                            children:
-                              NPC名:
-                                type: Text
-                                attribute:
-                                  texts: "'&f' + self.parent.parent.parent.entry['text']"
-                                  fontSize: 36
-                                  through: true
                       NPC距离:
                         type: Text
                         attribute:
                           point: ~middle_right
                           x: -14
-                          texts: "'&7' + self.parent.entry['distanceText']"
+                          y: 0
+                          texts: "self.parent.entry != none ? '&8' + self.parent.entry['distanceText'] : none"
                           fontSize: 36
                           through: true
-          选择器提示:
-            type: Text
-            attribute:
-              point: ~bottom_left
-              x: 20
-              y: -8
-              texts: "'&7' + var.navPrevKey + '/' + var.navNextKey + ' 切换  ·  &f' + var.interactKey + ' &7交谈'"
-              fontSize: 36
-              through: true

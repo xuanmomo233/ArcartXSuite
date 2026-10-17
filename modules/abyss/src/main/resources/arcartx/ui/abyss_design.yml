@@ -1,5 +1,5 @@
 # AXS 资源说明
-# 用途: Abyss 远征制图台——左侧层级路线与右侧节点对象台账
+# 用途: Abyss 设计模式主面板（battlepass 范式·数据驱动）——左导航节点链 + 对象卡片行
 # 前置依赖: ArcartX；Abyss 模块启用后自动注册导出。
 #
 # 通讯协议:
@@ -111,7 +111,7 @@ ui:
       var.viewH = Screen.getHeight() / s
       var.viewW = Screen.getWidth() / s
       var.offX = (var.viewW - 1920) / 2
-      var.contentW = var.viewW - 426
+      var.contentW = var.viewW - 392
       var.packetId = 'abyss'
       var.dirty = 0
       var.selNode = ''
@@ -129,7 +129,7 @@ ui:
       var.viewH = Screen.getHeight() / s
       var.viewW = Screen.getWidth() / s
       var.offX = (var.viewW - 1920) / 2
-      var.contentW = var.viewW - 426
+      var.contentW = var.viewW - 392
     open: |-
       Sound.self('minecraft:block.note_block.pling', 0.8, 8)
 controls:
@@ -137,7 +137,7 @@ controls:
     type: Texture
     attribute:
       point: ~stretch_all
-      normal: ~Frosted:24;8,9,10,238
+      normal: ~Frosted:30;10,8,20,235
       through: true
   自适应全局布局:
     type: Adaptive
@@ -154,17 +154,17 @@ controls:
           x: "-var.offX"
           width: "var.viewW"
           height: 100
-          normal: ~15,17,18,250
+          normal: ~Frosted:28;14,11,26,240
           through: true
       标题色块:
         type: Texture
         attribute:
           point: ~top_left
           x: "48 - var.offX"
-          y: 23
-          width: 6
-          height: 58
-          normal: ~178,69,46,255
+          y: 30
+          width: 8
+          height: 40
+          normal: "186,140,232,255"
           shape: ~round_rect
           radius: 4
           through: true
@@ -172,35 +172,35 @@ controls:
         type: Text
         attribute:
           point: ~top_left
-          x: "72 - var.offX"
-          y: 14
-          texts: "'&6远征制图  &8/  &f' + var.dungeonName"
-          fontSize: 54
+          x: "68 - var.offX"
+          y: 20
+          texts: "'&f设计模式 &8· &6' + var.dungeonName"
+          fontSize: 48
           through: true
       副标题:
         type: Text
         attribute:
           point: ~top_left
-          x: "74 - var.offX"
-          y: 70
-          texts: "'&7档案 ' + var.dungeonId + '   &8/   Esc 仅关闭制图台 · 未归档改动仅存于内存'"
-          fontSize: 36
+          x: "70 - var.offX"
+          y: 66
+          texts: ~&8Esc 关面板不退设计 · 杖左键空气或 /axs abyss design ui 重开 · 改动保存前仅内存生效
+          fontSize: 32
           through: true
       未保存角标:
         type: Canvas
         attribute:
           point: ~top_right
-          x: "-246 + var.offX"
-          y: 27
-          width: 198
-          height: 48
+          x: "-200 - var.offX"
+          y: 28
+          width: 190
+          height: 44
           visible: "var.dirty > 0"
         children:
           底:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~99,35,30,245
+              normal: ~180,60,64,235
               shape: ~round_rect
               radius: 10
               through: true
@@ -208,63 +208,44 @@ controls:
             type: Text
             attribute:
               point: ~middle_center
-              texts: "'&c待归档  /  ' + var.dirty + ' 处'"
-              fontSize: 36
+              texts: "'&f' + var.dirty + ' 处未保存'"
+              fontSize: 32
               through: true
-      已归档状态:
-        type: Text
-        attribute:
-          point: ~top_right
-          x: "-48 + var.offX"
-          y: 35
-          texts: ~&7档案状态  /  &6全部已保存
-          fontSize: 36
-          visible: "var.dirty == 0"
-          through: true
-      # ═══ 左栏：分层路线图 ═══
+      # ═══ 左栏：流程节点 ═══
       左栏底:
         type: Texture
         attribute:
           point: ~top_left
           x: "48 - var.offX"
-          y: 122
-          width: 310
-          height: "var.viewH - 146"
-          normal: ~17,19,20,246
+          y: 104
+          width: 264
+          height: "var.viewH - 128"
+          normal: ~18,14,30,238
           shape: ~round_rect
           radius: 14
           through: true
         effect:
           stroke:
             width: 1
-            color: ~108,91,73,170
+            color: ~255,255,255,50
       左栏标题:
         type: Text
         attribute:
           point: ~top_left
           x: "72 - var.offX"
-          y: 142
-          texts: ~&6I  /  层级路线
-          fontSize: 48
-          through: true
-      节点栏说明:
-        type: Text
-        attribute:
-          point: ~top_left
-          x: "74 - var.offX"
-          y: 194
-          texts: "'&7选择区域 · ' + var.nodeCount + ' 个路线节点'"
+          y: 124
+          texts: ~&8流程节点
           fontSize: 36
           through: true
       节点滑轨:
         type: Texture
         attribute:
           point: ~top_left
-          x: "336 - var.offX"
-          y: 250
-          width: 6
-          height: "var.viewH - 358"
-          normal: ~42,45,44,235
+          x: "292 - var.offX"
+          y: 170
+          width: 8
+          height: "var.viewH - 220"
+          normal: ~40,36,58,220
           shape: ~round_rect
           radius: 4
           through: true
@@ -273,22 +254,22 @@ controls:
         val: 节点滑块
         attribute:
           point: ~top_left
-          x: "336 - var.offX"
-          y: 250
-          width: 6
+          x: "292 - var.offX"
+          y: 170
+          width: 8
           height: 90
-          normal: ~194,139,65,255
-          maxDragY: "var.viewH - 448"
+          normal: "186,140,232,255"
+          maxDragY: "var.viewH - 310"
           shape: ~round_rect
           radius: 4
       节点滚动:
         type: Scroll
         attribute:
           point: ~top_left
-          x: "66 - var.offX"
-          y: 246
-          width: 258
-          height: "var.viewH - 354"
+          x: "64 - var.offX"
+          y: 166
+          width: 232
+          height: "var.viewH - 226"
           moveY: "self.parent['节点滑块'].getDragYRatio()"
         action:
           wheel: |-
@@ -303,14 +284,14 @@ controls:
             type: VStack
             val: 节点容器
             attribute:
-              width: 258
-              spaceBetween: 10
+              width: 224
+              spaceBetween: 8
             children:
               节点项:
                 type: Canvas
                 attribute:
-                  width: 258
-                  height: 68
+                  width: 224
+                  height: 54
                   entryKey: 0.round()
                   entry: "var.nodeRows[self.entryKey]"
                   visible: "self.entry != none"
@@ -320,123 +301,78 @@ controls:
                   底:
                     type: Texture
                     attribute:
-                      x: 2
-                      y: 2
-                      width: "self.parent.width - 4"
-                      height: "self.parent.height - 4"
-                      normal: "var.selNode == self.parent.entry['key'] ? '73,48,32,245' : '27,29,29,235'"
+                      point: ~stretch_all
+                      normal: "var.selNode == self.parent.entry['key'] ? '186,140,232,235' : '30,25,50,215'"
                       shape: ~round_rect
                       radius: 8
                       through: true
                     effect:
                       stroke:
                         width: "var.selNode == self.parent.entry['key'] ? 2 : 1"
-                        color: "var.selNode == self.parent.entry['key'] ? '209,149,74,250' : '90,91,81,145'"
+                        color: "var.selNode == self.parent.entry['key'] ? '255,255,255,235' : '255,255,255,60'"
                   缩进条:
                     type: Texture
                     attribute:
                       point: ~middle_left
                       x: 8
                       width: 4
-                      height: 44
-                      normal: ~172,67,45,255
+                      height: 30
+                      normal: "186,140,232,255"
                       shape: ~round_rect
                       radius: 2
                       visible: "self.parent.entry['depth'] == 0"
-                      through: true
-                  支路线:
-                    type: Texture
-                    attribute:
-                      point: ~middle_left
-                      x: 20
-                      width: 2
-                      height: 48
-                      normal: ~100,91,72,200
-                      visible: "self.parent.entry['depth'] > 0"
                       through: true
                   名:
                     type: Text
                     attribute:
                       point: ~middle_left
-                      x: "self.parent.entry['depth'] == 0 ? 22 : 36"
-                      y: -12
-                      texts: "self.parent.entry['depth'] == 0 ? '&6' + self.parent.entry['label'] : '&7└ ' + self.parent.entry['label']"
-                      fontSize: 36
-                      limit: 12
+                      x: "self.parent.entry['depth'] == 0 ? 20 : 34"
+                      texts: "self.parent.entry['depth'] == 0 ? '&f' + self.parent.entry['label'] : '&7└ ' + self.parent.entry['label']"
+                      fontSize: "self.parent.entry['depth'] == 0 ? 36 : 32"
+                      limit: 10
                       through: true
                   数:
                     type: Text
                     attribute:
                       point: ~middle_right
-                      x: -14
-                      y: 15
-                      texts: "'&7' + self.parent.entry['count'] + ' 件对象'"
-                      fontSize: 36
+                      x: -12
+                      texts: "'&8' + self.parent.entry['count'] + '项'"
+                      fontSize: 32
                       through: true
-      路线操作注:
-        type: Text
-        attribute:
-          point: ~top_left
-          x: "74 - var.offX"
-          y: "var.viewH - 82"
-          texts:
-            - ~&7Esc 仅关闭当前制图台
-            - ~&7杖左键空气可重新打开
-          fontSize: 36
-          through: true
-      # ═══ 右侧节点对象台账 ═══
+      # ═══ 内容区 ═══
       内容底:
         type: Texture
         attribute:
           point: ~top_left
-          x: "378 - var.offX"
-          y: 122
+          x: "332 - var.offX"
+          y: 104
           width: "var.contentW"
-          height: "var.viewH - 146"
-          normal: ~17,19,20,246
+          height: "var.viewH - 128"
+          normal: ~18,14,30,238
           shape: ~round_rect
           radius: 14
           through: true
         effect:
           stroke:
             width: 1
-            color: ~108,91,73,170
+            color: ~255,255,255,50
       内容标题:
         type: Text
         attribute:
           point: ~top_left
-          x: "406 - var.offX"
-          y: 142
-          texts: "'&6II  /  节点台账  &8—  &f' + var.objCount + ' 件对象'"
-          fontSize: 48
-          through: true
-      内容说明:
-        type: Text
-        attribute:
-          point: ~top_left
-          x: "408 - var.offX"
-          y: 196
-          texts: ~&7逐件核对位置、参数与触发条件；未保存对象显示锈红底色
+          x: "356 - var.offX"
+          y: 122
+          texts: "'&f对象 &8· ' + var.objCount + ' 项'"
           fontSize: 36
-          through: true
-      台账分割:
-        type: Texture
-        attribute:
-          point: ~top_left
-          x: "406 - var.offX"
-          y: 240
-          width: "var.contentW - 56"
-          height: 2
-          normal: ~111,86,60,180
           through: true
       添加钮:
         type: Canvas
         attribute:
           point: ~top_right
-          x: "-78 + var.offX"
-          y: 148
-          width: 210
-          height: 54
+          x: "-392 - var.offX"
+          y: 118
+          width: 200
+          height: 44
         action:
           clickLeft: "Packet.send(var.packetId, 'design_pick_open', var.selNode, var.actionToken)"
         children:
@@ -444,7 +380,7 @@ controls:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~190,137,65,245
+              normal: "186,140,232,235"
               shape: ~round_rect
               radius: 8
               through: true
@@ -456,18 +392,18 @@ controls:
             type: Text
             attribute:
               point: ~middle_center
-              texts: ~&0+  录入对象
+              texts: ~&0+ 添加对象
               fontSize: 36
               through: true
       内容滑轨:
         type: Texture
         attribute:
           point: ~top_right
-          x: "-72 + var.offX"
-          y: 262
-          width: 6
-          height: "var.viewH - 412"
-          normal: ~42,45,44,235
+          x: "-360 - var.offX"
+          y: 176
+          width: 8
+          height: "var.viewH - 290"
+          normal: ~40,36,58,220
           shape: ~round_rect
           radius: 4
           through: true
@@ -476,22 +412,22 @@ controls:
         val: 内容滑块
         attribute:
           point: ~top_right
-          x: "-72 + var.offX"
-          y: 262
-          width: 6
+          x: "-360 - var.offX"
+          y: 176
+          width: 8
           height: 90
-          normal: ~194,139,65,255
-          maxDragY: "var.viewH - 502"
+          normal: "186,140,232,255"
+          maxDragY: "var.viewH - 380"
           shape: ~round_rect
           radius: 4
       对象滚动:
         type: Scroll
         attribute:
           point: ~top_left
-          x: "406 - var.offX"
-          y: 258
-          width: "var.contentW - 70"
-          height: "var.viewH - 408"
+          x: "356 - var.offX"
+          y: 172
+          width: "var.contentW - 60"
+          height: "var.viewH - 296"
           moveY: "self.parent['内容滑块'].getDragYRatio()"
         action:
           wheel: |-
@@ -506,14 +442,14 @@ controls:
             type: VStack
             val: 对象容器
             attribute:
-              width: "var.contentW - 70"
-              spaceBetween: 12
+              width: "var.contentW - 60"
+              spaceBetween: 8
             children:
               行:
                 type: Canvas
                 attribute:
-                  width: "var.contentW - 70"
-                  height: 96
+                  width: "var.contentW - 60"
+                  height: 58
                   entryKey: 0.round()
                   entry: "var.objRows[self.entryKey]"
                   visible: "self.entry != none"
@@ -525,21 +461,21 @@ controls:
                       y: 2
                       width: "self.parent.width - 4"
                       height: "self.parent.height - 4"
-                      normal: "self.parent.entry['dirty'] ? '57,30,27,245' : '26,29,29,240'"
+                      normal: "self.parent.entry['dirty'] ? '42,32,60,225' : '26,22,44,215'"
                       shape: ~round_rect
                       radius: 8
                       through: true
                     effect:
                       stroke:
                         width: 1
-                        color: "self.parent.isHovered() ? '214,156,76,245' : '101,91,75,130'"
+                        color: "self.parent.isHovered() ? '245,205,130,200' : '255,255,255,40'"
                   色条:
                     type: Texture
                     attribute:
                       point: ~middle_left
                       x: 0
                       width: 5
-                      height: 84
+                      height: 58
                       normal: "self.parent.entry['kindColor'] + ',255'"
                       shape: ~round_rect
                       radius: 2
@@ -548,29 +484,27 @@ controls:
                     type: Text
                     attribute:
                       point: ~middle_left
-                      x: 22
+                      x: 18
                       texts: "self.parent.entry['icon']"
-                      fontSize: 48
+                      fontSize: 36
                       through: true
                   名:
                     type: Text
                     attribute:
                       point: ~middle_left
-                      x: 78
-                      y: -18
+                      x: 58
                       texts: "'&f' + self.parent.entry['id']"
-                      fontSize: 48
-                      limit: 16
+                      fontSize: 36
+                      limit: 11
                       through: true
                   徽标底:
                     type: Texture
                     attribute:
                       point: ~middle_left
-                      x: 80
-                      y: 26
-                      width: 144
-                      height: 28
-                      normal: "self.parent.entry['kindColor'] + ',95'"
+                      x: 390
+                      width: 140
+                      height: 34
+                      normal: "self.parent.entry['kindColor'] + ',40'"
                       shape: ~round_rect
                       radius: 8
                       through: true
@@ -578,29 +512,27 @@ controls:
                     type: Text
                     attribute:
                       point: ~middle_left
-                      x: 88
-                      y: 26
+                      x: 402
                       texts: "self.parent.entry['kindLabel']"
-                      fontSize: 36
+                      fontSize: 32
                       limit: 4
                       through: true
                   摘要:
                     type: Text
                     attribute:
                       point: ~middle_left
-                      x: 242
-                      y: 26
+                      x: 546
                       texts: "'&7' + self.parent.entry['summary']"
-                      fontSize: 36
-                      limit: 27
+                      fontSize: 32
+                      limit: 24
                       through: true
                   传送钮:
                     type: Canvas
                     attribute:
                       point: ~middle_right
-                      x: -304
-                      width: 90
-                      height: 48
+                      x: -252
+                      width: 76
+                      height: 38
                     action:
                       clickLeft: "Packet.send(var.packetId, 'design_tp', self.parent.entry['key'], var.actionToken)"
                     children:
@@ -608,7 +540,7 @@ controls:
                         type: Texture
                         attribute:
                           point: ~stretch_all
-                          normal: ~48,58,58,245
+                          normal: ~52,84,140,235
                           shape: ~round_rect
                           radius: 7
                           through: true
@@ -627,9 +559,9 @@ controls:
                     type: Canvas
                     attribute:
                       point: ~middle_right
-                      x: -204
-                      width: 90
-                      height: 48
+                      x: -166
+                      width: 76
+                      height: 38
                     action:
                       clickLeft: "Packet.send(var.packetId, 'design_edit', self.parent.entry['key'], var.actionToken)"
                     children:
@@ -637,7 +569,7 @@ controls:
                         type: Texture
                         attribute:
                           point: ~stretch_all
-                          normal: ~192,139,68,245
+                          normal: "186,140,232,240"
                           shape: ~round_rect
                           radius: 7
                           through: true
@@ -656,9 +588,9 @@ controls:
                     type: Canvas
                     attribute:
                       point: ~middle_right
-                      x: -104
-                      width: 90
-                      height: 48
+                      x: -80
+                      width: 76
+                      height: 38
                     action:
                       clickLeft: "Packet.send(var.packetId, 'design_del', self.parent.entry['key'], var.actionToken)"
                     children:
@@ -666,7 +598,7 @@ controls:
                         type: Texture
                         attribute:
                           point: ~stretch_all
-                          normal: ~128,49,38,245
+                          normal: "200,80,88,225"
                           shape: ~round_rect
                           radius: 7
                           through: true
@@ -684,10 +616,10 @@ controls:
       空提示:
         type: Text
         attribute:
-          point: ~top_left
-          x: "430 - var.offX"
-          y: 310
-          texts: ~&7该节点尚无记录 · 使用右上角「录入对象」布设机关
+          point: ~middle_center
+          x: "var.contentW / 2 - 628"
+          y: 60
+          texts: ~&8此节点暂无对象 —— 点右上「+ 添加对象」创建
           fontSize: 36
           visible: "var.objCount == 0"
           through: true
@@ -695,47 +627,37 @@ controls:
       底部分隔:
         type: Texture
         attribute:
-          point: ~top_left
-          x: "378 - var.offX"
-          y: "var.viewH - 146"
+          point: ~bottom_left
+          x: "332 - var.offX"
+          y: -102
           width: "var.contentW"
           height: 2
-          normal: ~111,86,60,180
+          normal: ~255,255,255,30
           through: true
       底部栏:
         type: Canvas
         attribute:
-          point: ~top_left
-          x: "378 - var.offX"
-          y: "var.viewH - 140"
+          point: ~bottom_left
+          x: "332 - var.offX"
+          y: -88
           width: "var.contentW"
-          height: 114
+          height: 76
         children:
           提示字:
             type: Text
             attribute:
-              point: ~top_left
-              x: 28
-              y: 22
-              texts: ~&6归档与部署
-              fontSize: 36
-              through: true
-          底栏副注:
-            type: Text
-            attribute:
-              point: ~top_left
-              x: 28
-              y: 68
-              texts: ~&7标记杖右键落点 · Shift+右键取消选区
-              fontSize: 36
+              point: ~middle_left
+              x: 8
+              texts: ~&8世界内可自由建造 · 标记杖右键落点/编辑 · Shift+右键取消选区
+              fontSize: 32
               through: true
           保存钮:
             type: Canvas
             attribute:
               point: ~middle_right
-              x: -558
+              x: -560
               width: 150
-              height: 52
+              height: 46
             action:
               clickLeft: "Packet.send(var.packetId, 'design_save', 'config', var.actionToken)"
             children:
@@ -743,7 +665,7 @@ controls:
                 type: Texture
                 attribute:
                   point: ~stretch_all
-                  normal: ~58,67,61,245
+                  normal: ~70,150,110,235
                   shape: ~round_rect
                   radius: 8
                   through: true
@@ -762,9 +684,9 @@ controls:
             type: Canvas
             attribute:
               point: ~middle_right
-              x: -358
+              x: -340
               width: 190
-              height: 52
+              height: 46
             action:
               clickLeft: "Packet.send(var.packetId, 'design_save', 'world', var.actionToken)"
             children:
@@ -772,7 +694,7 @@ controls:
                 type: Texture
                 attribute:
                   point: ~stretch_all
-                  normal: ~192,139,68,245
+                  normal: "232,180,90,235"
                   shape: ~round_rect
                   radius: 8
                   through: true
@@ -784,16 +706,16 @@ controls:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  texts: ~&0配置+世界
+                  texts: ~&f配置+世界
                   fontSize: 36
                   through: true
           退出钮:
             type: Canvas
             attribute:
               point: ~middle_right
-              x: -148
+              x: -170
               width: 120
-              height: 52
+              height: 46
             action:
               clickLeft: "Packet.send(var.packetId, 'design_exit', var.actionToken)"
             children:
@@ -801,7 +723,7 @@ controls:
                 type: Texture
                 attribute:
                   point: ~stretch_all
-                  normal: ~128,49,38,245
+                  normal: "200,80,88,225"
                   shape: ~round_rect
                   radius: 8
                   through: true

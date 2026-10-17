@@ -1,4 +1,26 @@
-# Lakeside field guide / 05 · A fieldwork checklist with separated description and progress.
+# AXS 钓鱼任务列表界面
+# 打开方式: /fishing tasks 或钓鱼主界面点击任务按钮
+# 数据交互: packetHandler init（服务端 pushTasksData 发送 init 包）
+# 全屏布局 = 顶栏 + 左侧导航（总览/图鉴/奖励/天赋/任务 + 每日/每周/赛季分类切换）+ 右侧内容区滚动任务列表
+# 每个任务条目展示：任务名称、描述、进度条（当前/目标）、完成状态、经验奖励
+# 完成的任务显示绿色勾选标记；进度条用 Texture + 宽度表达式实现
+#
+# 视觉规范（钓鱼青蓝主题，统一暗色玻璃 + 左侧导航）:
+#   全屏玻璃 Frosted:24;12,22,38,110   面板玻璃 Frosted:30;255,255,255,100
+#   卡片底 26,34,46,210   卡片描边 80,200,220,240
+#   主色（青蓝）50,170,200   已完成 124,196,142   悬停高亮 80,200,220
+#   文字默认 &f
+#   分区色: 每日 50,170,200 / 每周 150,180,210 / 赛季 186,140,232
+#
+# 数据包格式（packetHandler init）:
+#   packetId: "AXS_FISHING_TASKS"
+#   daily:    { "0": {id, name, description, category, progress, target, completed, percent, xpReward}, ... }
+#   weekly:   { ... }
+#   season:   { ... }
+# 客户端发送包:
+#   Packet.send(var.packetId, 'open_tasks')     — 界面打开时请求数据
+#   Packet.send(var.packetId, 'refresh_tasks')  — 刷新按钮请求重新推送
+
 ui:
   isHud: false
   background: false
@@ -9,6 +31,13 @@ ui:
   show: true
   level: 8
   packetHandler:
+    # packetHandler: init
+    # 接收服务端推送的任务数据，按分类写入三个字典并动态生成各列表子元素
+    # 包字段:
+    #   - packetId: 包标识符，用于后续 Packet.send 回传
+    #   - daily:    每日任务字典（key 为整数字符串 "0","1",...，含 id/name/description/category/progress/target/completed/percent/xpReward）
+    #   - weekly:   每周任务字典（结构同 daily）
+    #   - season:   赛季任务字典（结构同 daily）
     init: |-
       var.packetId = packet['packetId']
       var.daily = packet['daily']
@@ -17,50 +46,54 @@ ui:
       var.dailyCount = var.daily != none ? var.daily.size() : 0
       var.weeklyCount = var.weekly != none ? var.weekly.size() : 0
       var.seasonCount = var.season != none ? var.season.size() : 0
-      var.taskGeneration = (var.taskGeneration + 1).round()
-      for(key in var.dailyRefs.keys()){
-        var.dailyRefs[key].remove()
+      // 重建每日任务列表（模板在索引0，复制 1~count-1）
+      while(val.每日任务列表.childrenCount() > 1){
+        val.每日任务列表.get(1).remove()
       }
-      var.dailyRefs = {}
-      for(i in range(1, var.dailyCount - 1)){
-        key = i.round()
-        e = val.每日任务列表.get(0).copy('每日_' + var.taskGeneration + '_' + key)
-        e.entryKey = key
-        var.dailyRefs[key] = e
+      if(var.dailyCount > 1){
+        for(i in range(1, var.dailyCount - 1)){
+          key = i.round()
+          if(val.每日任务列表['任务项'] != none) {
+            e = val.每日任务列表['任务项'].copy('任务项' + key)
+            e.entryKey = key
+          }
+        }
       }
-      for(key in var.weeklyRefs.keys()){
-        var.weeklyRefs[key].remove()
+      // 重建每周任务列表
+      while(val.每周任务列表.childrenCount() > 1){
+        val.每周任务列表.get(1).remove()
       }
-      var.weeklyRefs = {}
-      for(i in range(1, var.weeklyCount - 1)){
-        key = i.round()
-        e = val.每周任务列表.get(0).copy('每周_' + var.taskGeneration + '_' + key)
-        e.entryKey = key
-        var.weeklyRefs[key] = e
+      if(var.weeklyCount > 1){
+        for(i in range(1, var.weeklyCount - 1)){
+          key = i.round()
+          if(val.每周任务列表['任务项'] != none) {
+            e = val.每周任务列表['任务项'].copy('任务项' + key)
+            e.entryKey = key
+          }
+        }
       }
-      for(key in var.seasonRefs.keys()){
-        var.seasonRefs[key].remove()
+      // 重建赛季任务列表
+      while(val.赛季任务列表.childrenCount() > 1){
+        val.赛季任务列表.get(1).remove()
       }
-      var.seasonRefs = {}
-      for(i in range(1, var.seasonCount - 1)){
-        key = i.round()
-        e = val.赛季任务列表.get(0).copy('赛季_' + var.taskGeneration + '_' + key)
-        e.entryKey = key
-        var.seasonRefs[key] = e
+      if(var.seasonCount > 1){
+        for(i in range(1, var.seasonCount - 1)){
+          key = i.round()
+          if(val.赛季任务列表['任务项'] != none) {
+            e = val.赛季任务列表['任务项'].copy('任务项' + key)
+            e.entryKey = key
+          }
+        }
       }
   action:
+    # load: 初始化变量 + 视口换算（Adaptive 以 1920x1080 等比缩放）
     load: |-
       var.dailyCount = 0
       var.packetId = 'AXS_FISHING_TASKS'
       var.seasonCount = 0
       var.weeklyCount = 0
       var.currentCategory = 'daily'
-      var.dailyRefs = {}
-      var.weeklyRefs = {}
-      var.seasonRefs = {}
-      var.taskGeneration = 0
-      var.categoryNames = {'daily':'&0每日委托', 'weekly':'&0每周委托', 'season':'&0赛季委托'}
-      var.categoryDescs = {'daily':'&8每日刷新，完成获取钓鱼经验', 'weekly':'&8每周刷新，奖励更丰厚', 'season':'&8赛季长期目标，记录持续成长'}
+      // 视口换算：把窗口实际宽高折算回设计坐标系
       sx = Screen.getWidth() / 1920
       sy = Screen.getHeight() / 1080
       s = sx < sy ? sx : sy
@@ -68,8 +101,10 @@ ui:
       var.viewW = Screen.getWidth() / s
       var.offX = (var.viewW - 1920) / 2
       var.contentW = var.viewW - 420
+    # open: 界面打开后主动请求服务端推送任务数据
     open: |-
       Packet.send(var.packetId, 'refresh_tasks')
+    # resize: 窗口尺寸变化后重算可用高宽
     resize: |-
       sx = Screen.getWidth() / 1920
       sy = Screen.getHeight() / 1080
@@ -78,188 +113,1235 @@ ui:
       var.viewW = Screen.getWidth() / s
       var.offX = (var.viewW - 1920) / 2
       var.contentW = var.viewW - 420
+
+# ─── 控件树 ────────────────────────────────────────────────────────
 controls:
-  全屏玻璃底: {type: Texture, attribute: {point: ~stretch_all, normal: '~Frosted:18;20,43,52,170'}}
+  # 全屏毛玻璃底（真高斯模糊世界背景）；置于顶层以覆盖整块屏幕
+  全屏玻璃底:
+    type: Texture
+    attribute:
+      point: ~stretch_all
+      normal: ~Frosted:24;12,22,38,110
+
+  # 自适配布局：宽高 = 设计分辨率 1920x1080，窗口分辨率变化时按比例缩放子控件
+  # 顶部锚点 ~top_center：1080 设计高度的顶边与窗口上边对齐，顶栏紧贴屏幕顶部
+  # 非 16:9 窗口多出来的纵向空间全落在下方，由 var.viewH 分配给左导航/内容区贴住底边
+  # 横向多出的空间（超宽屏）由 var.offX / var.viewW / var.contentW 分配
   自适应全局布局:
     type: Adaptive
-    attribute: {point: ~top_center, width: 1920, height: 1080}
+    attribute:
+      point: ~top_center
+      width: 1920
+      height: 1080
     children:
+      # ── 顶栏 ───────────────────────────────────────────
+      # 顶栏沿窗口整宽铺满（超宽屏时向两侧溢出 Adaptive 的 1920 设计宽度）
       顶栏:
         type: Canvas
-        attribute: {x: '-var.offX', width: 'var.viewW', height: 96}
+        attribute:
+          point: ~top_left
+          x: "-var.offX"
+          width: "var.viewW"
+          height: 96
         children:
-          顶栏底: {type: Texture, attribute: {point: ~stretch_all, normal: '~23,49,64,250'}}
-          标题: {type: Text, attribute: {point: ~middle_left, x: 48, texts: '~&f湖畔手册', fontSize: 54}}
-          页名: {type: Text, attribute: {point: ~middle_left, x: 340, texts: '~&7钓鱼 / &f湖畔委托', fontSize: 36}}
+          顶栏底:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~Frosted:30;255,255,255,100
+          顶栏底线:
+            type: Texture
+            attribute:
+              point: ~horizontal_stretch_bottom
+              height: 1
+              normal: ~80,200,220,230
+          标题色块:
+            type: Texture
+            attribute:
+              point: ~middle_left
+              x: 48
+              width: 6
+              height: 36
+              normal: ~50,170,200,255
+              shape: ~round_rect
+              radius: 3
+          标题:
+            type: Text
+            attribute:
+              point: ~middle_left
+              x: 68
+              texts: "~&f钓鱼"
+              fontSize: 48
+          标题竖线:
+            type: Texture
+            attribute:
+              point: ~middle_left
+              x: 168
+              width: 1
+              height: 30
+              normal: ~80,200,220,230
+          页名:
+            type: Text
+            attribute:
+              point: ~middle_left
+              x: 188
+              texts: "~&f任务"
+              fontSize: 36
           关闭按钮:
             type: Canvas
-            attribute: {point: ~middle_right, x: -40, width: 112, height: 52}
-            action: {clickLeft: 'Screen.close()'}
+            attribute:
+              point: ~middle_right
+              x: -40
+              width: 40
+              height: 40
+            action:
+              clickLeft: |-
+                Screen.close()
             children:
-              底: {type: Texture, attribute: {point: ~stretch_all, normal: '~48,75,83,255', hover: '~73,107,106,255', shape: ~round_rect, radius: 12, through: true}}
-              字: {type: Text, attribute: {point: ~middle_center, texts: '~&f关闭', fontSize: 36, through: true}}
+              关闭背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~26,34,46,210
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  stroke:
+                    width: 3
+                    color: "self.isHovered() ? '80,200,220,255' : '80,200,220,240'"
+              关闭文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  width: 40
+                  texts: "~&f✕"
+                  fontSize: 32
+                  through: true
+
+      # ── 左侧导航 ───────────────────────────────────────
       左侧导航:
         type: Canvas
-        attribute: {x: '48 - var.offX', y: 120, width: 300, height: 'var.viewH - 144'}
+        attribute:
+          point: ~top_left
+          x: "48 - var.offX"
+          y: 120
+          width: 300
+          height: "var.viewH - 144"
         children:
-          导航底: {type: Texture, attribute: {point: ~stretch_all, normal: '~231,222,196,250', shape: ~round_rect, radius: 18}}
-          索引标题: {type: Text, attribute: {x: 24, y: 24, texts: '~&8FIELD GUIDE / 目录', fontSize: 36}}
+          导航底:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~Frosted:30;255,255,255,100
+              shape: ~round_rect
+              radius: 14
+            effect:
+              stroke:
+                width: 3
+                color: ~80,200,220,240
+          # 非当前页：总览
           导航总览:
             type: Canvas
-            attribute: {x: 16, y: 88, width: 268, height: 62}
-            action: {clickLeft: "Packet.send(var.packetId, 'open_main')"}
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 18
+              width: 272
+              height: 58
+            action:
+              clickLeft: |-
+                Packet.send(var.packetId, 'open_main')
             children:
-              底: {type: Texture, attribute: {point: ~stretch_all, normal: '~23,49,64,245', hover: '~53,89,96,255', shape: ~round_rect, radius: 10, through: true}}
-              字: {type: Text, attribute: {point: ~middle_left, x: 20, texts: '~&f01  垂钓日志', fontSize: 36, through: true}}
+              总览底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~26,34,46,210
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  ripple:
+                  stroke:
+                    width: 3
+                    color: "self.isHovered() ? '80,200,220,255' : '80,200,220,240'"
+              总览文字:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: 28
+                  texts: "~&f总览"
+                  fontSize: 36
+                  through: true
+          # 非当前页：图鉴
           导航图鉴:
             type: Canvas
-            attribute: {x: 16, y: 162, width: 268, height: 62}
-            action: {clickLeft: "Packet.send(var.packetId, 'open_collection')"}
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 84
+              width: 272
+              height: 58
+            action:
+              clickLeft: |-
+                Packet.send(var.packetId, 'open_collection')
             children:
-              底: {type: Texture, attribute: {point: ~stretch_all, normal: '~23,49,64,245', hover: '~53,89,96,255', shape: ~round_rect, radius: 10, through: true}}
-              字: {type: Text, attribute: {point: ~middle_left, x: 20, texts: '~&f02  鱼种图鉴', fontSize: 36, through: true}}
+              图鉴底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~26,34,46,210
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  ripple:
+                  stroke:
+                    width: 3
+                    color: "self.isHovered() ? '80,200,220,255' : '80,200,220,240'"
+              图鉴文字:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: 28
+                  texts: "~&f图鉴"
+                  fontSize: 36
+                  through: true
+          # 非当前页：奖励
           导航奖励:
             type: Canvas
-            attribute: {x: 16, y: 236, width: 268, height: 62}
-            action: {clickLeft: "Packet.send(var.packetId, 'open_rewards')"}
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 150
+              width: 272
+              height: 58
+            action:
+              clickLeft: |-
+                Packet.send(var.packetId, 'open_rewards')
             children:
-              底: {type: Texture, attribute: {point: ~stretch_all, normal: '~23,49,64,245', hover: '~53,89,96,255', shape: ~round_rect, radius: 10, through: true}}
-              字: {type: Text, attribute: {point: ~middle_left, x: 20, texts: '~&f03  成长奖励', fontSize: 36, through: true}}
+              奖励底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~26,34,46,210
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  ripple:
+                  stroke:
+                    width: 3
+                    color: "self.isHovered() ? '80,200,220,255' : '80,200,220,240'"
+              奖励文字:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: 28
+                  texts: "~&f奖励"
+                  fontSize: 36
+                  through: true
+          # 非当前页：天赋
           导航天赋:
             type: Canvas
-            attribute: {x: 16, y: 310, width: 268, height: 62}
-            action: {clickLeft: "Packet.send(var.packetId, 'open_talents')"}
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 216
+              width: 272
+              height: 58
+            action:
+              clickLeft: |-
+                Packet.send(var.packetId, 'open_talents')
             children:
-              底: {type: Texture, attribute: {point: ~stretch_all, normal: '~23,49,64,245', hover: '~53,89,96,255', shape: ~round_rect, radius: 10, through: true}}
-              字: {type: Text, attribute: {point: ~middle_left, x: 20, texts: '~&f04  技艺网络', fontSize: 36, through: true}}
+              天赋底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~26,34,46,210
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  ripple:
+                  stroke:
+                    width: 3
+                    color: "self.isHovered() ? '80,200,220,255' : '80,200,220,240'"
+              天赋文字:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: 28
+                  texts: "~&f天赋"
+                  fontSize: 36
+                  through: true
+          # 当前页：任务（高亮）
           导航任务:
             type: Canvas
-            attribute: {x: 16, y: 384, width: 268, height: 62}
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 282
+              width: 272
+              height: 58
             children:
-              底: {type: Texture, attribute: {point: ~stretch_all, normal: '~157,190,169,255', shape: ~round_rect, radius: 10, through: true}}
-              字: {type: Text, attribute: {point: ~middle_left, x: 20, texts: '~&005  湖畔委托', fontSize: 36, through: true}}
+              任务底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~50,170,200,210
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  stroke:
+                    width: 3
+                    color: ~50,170,200,230
+              任务高亮条:
+                type: Texture
+                attribute:
+                  point: ~middle_left
+                  x: 8
+                  width: 4
+                  height: 28
+                  normal: ~50,170,200,255
+                  shape: ~round_rect
+                  radius: 2
+              任务文字:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: 28
+                  texts: "~&0任务"
+                  fontSize: 36
           导航饵料:
             type: Canvas
-            attribute: {x: 16, y: 458, width: 268, height: 62}
-            action: {clickLeft: "Packet.send(var.packetId, 'open_baits')"}
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 348
+              width: 272
+              height: 58
+            action:
+              clickLeft: |-
+                Packet.send(var.packetId, 'open_baits')
             children:
-              底: {type: Texture, attribute: {point: ~stretch_all, normal: '~23,49,64,245', hover: '~53,89,96,255', shape: ~round_rect, radius: 10, through: true}}
-              字: {type: Text, attribute: {point: ~middle_left, x: 20, texts: '~&f06  行前饵料', fontSize: 36, through: true}}
-          委托说明: {type: Text, attribute: {x: 24, y: 580, texts: ['~&8选择每日、每周', '~&8或赛季目标', '~&8捕获时自动累积进度', '~&8完成后获得钓鱼经验'], fontSize: 36}}
+              饵料底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~26,34,46,210
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  ripple:
+                  stroke:
+                    width: 3
+                    color: "self.isHovered() ? '80,200,220,255' : '80,200,220,240'"
+              饵料文字:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: 28
+                  texts: "~&f饵料"
+                  fontSize: 36
+                  through: true
+          导航分隔线:
+            type: Texture
+            attribute:
+              point: ~top_left
+              x: 18
+              y: 430
+              width: 264
+              height: 2
+              normal: ~80,200,220,230
+          # ── 任务分类切换（分隔线下方）──────────────────────
+          # 每日任务分类
+          导航每日:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 446
+              width: 272
+              height: 58
+            action:
+              clickLeft: |-
+                var.currentCategory = 'daily'
+                val.任务滑块.setDragYRatio(0)
+            children:
+              每日底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: "var.currentCategory == 'daily' ? '50,170,200,210' : '26,34,46,210'"
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  ripple:
+                  stroke:
+                    width: 3
+                    color: "var.currentCategory == 'daily' ? '50,170,200,230' : (self.isHovered() ? '80,200,220,255' : '80,200,220,240')"
+              每日高亮条:
+                type: Texture
+                attribute:
+                  point: ~middle_left
+                  x: 8
+                  width: 4
+                  height: 28
+                  normal: ~50,170,200,255
+                  shape: ~round_rect
+                  radius: 2
+                  visible: var.currentCategory == 'daily'
+                  through: true
+              每日文字:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: 28
+                  texts: "var.currentCategory == 'daily' ? '&0每日任务' : '&f每日任务'"
+                  fontSize: 36
+                  through: true
+              每日计数:
+                type: Text
+                attribute:
+                  point: ~middle_right
+                  x: -16
+                  texts: "'&f' + var.dailyCount.round() + ' 项'"
+                  fontSize: 26
+                  through: true
+          # 每周任务分类
+          导航每周:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 512
+              width: 272
+              height: 58
+            action:
+              clickLeft: |-
+                var.currentCategory = 'weekly'
+                val.任务滑块.setDragYRatio(0)
+            children:
+              每周底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: "var.currentCategory == 'weekly' ? '150,180,210,210' : '26,34,46,210'"
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  ripple:
+                  stroke:
+                    width: 3
+                    color: "var.currentCategory == 'weekly' ? '150,180,210,230' : (self.isHovered() ? '80,200,220,255' : '80,200,220,240')"
+              每周高亮条:
+                type: Texture
+                attribute:
+                  point: ~middle_left
+                  x: 8
+                  width: 4
+                  height: 28
+                  normal: ~150,180,210,255
+                  shape: ~round_rect
+                  radius: 2
+                  visible: var.currentCategory == 'weekly'
+                  through: true
+              每周文字:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: 28
+                  texts: "var.currentCategory == 'weekly' ? '&0每周任务' : '&f每周任务'"
+                  fontSize: 36
+                  through: true
+              每周计数:
+                type: Text
+                attribute:
+                  point: ~middle_right
+                  x: -16
+                  texts: "'&f' + var.weeklyCount.round() + ' 项'"
+                  fontSize: 26
+                  through: true
+          # 赛季任务分类
+          导航赛季:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 578
+              width: 272
+              height: 58
+            action:
+              clickLeft: |-
+                var.currentCategory = 'season'
+                val.任务滑块.setDragYRatio(0)
+            children:
+              赛季底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: "var.currentCategory == 'season' ? '186,140,232,210' : '26,34,46,210'"
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  ripple:
+                  stroke:
+                    width: 3
+                    color: "var.currentCategory == 'season' ? '186,140,232,230' : (self.isHovered() ? '80,200,220,255' : '80,200,220,240')"
+              赛季高亮条:
+                type: Texture
+                attribute:
+                  point: ~middle_left
+                  x: 8
+                  width: 4
+                  height: 28
+                  normal: ~186,140,232,255
+                  shape: ~round_rect
+                  radius: 2
+                  visible: var.currentCategory == 'season'
+                  through: true
+              赛季文字:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: 28
+                  texts: "var.currentCategory == 'season' ? '&0赛季任务' : '&f赛季任务'"
+                  fontSize: 36
+                  through: true
+              赛季计数:
+                type: Text
+                attribute:
+                  point: ~middle_right
+                  x: -16
+                  texts: "'&f' + var.seasonCount.round() + ' 项'"
+                  fontSize: 26
+                  through: true
+          # 刷新按钮
           刷新按钮:
             type: Canvas
-            attribute: {point: ~bottom_left, x: 16, y: -20, width: 268, height: 56}
-            action: {clickLeft: "Packet.send(var.packetId, 'refresh_tasks')"}
+            attribute:
+              point: ~bottom_left
+              x: 14
+              y: -18
+              width: 272
+              height: 52
+            action:
+              clickLeft: |-
+                Packet.send(var.packetId, 'refresh_tasks')
             children:
-              底: {type: Texture, attribute: {point: ~stretch_all, normal: '~23,49,64,255', hover: '~53,89,96,255', shape: ~round_rect, radius: 10, through: true}}
-              字: {type: Text, attribute: {point: ~middle_center, texts: '~&f刷新委托', fontSize: 36, through: true}}
+              刷新背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~26,34,46,210
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  ripple:
+                  stroke:
+                    width: 3
+                    color: "self.isHovered() ? '80,200,220,255' : '80,200,220,240'"
+              刷新文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  width: 272
+                  texts: "~&f⟳ 刷新任务"
+                  fontSize: 32
+                  through: true
+
+      # ── 内容区（任务列表）──────────────────────────────
       内容区:
         type: Canvas
-        attribute: {x: '372 - var.offX', y: 120, width: 'var.contentW', height: 'var.viewH - 144'}
+        attribute:
+          point: ~top_left
+          x: "372 - var.offX"
+          y: 120
+          width: "var.contentW"
+          height: "var.viewH - 144"
         children:
-          内容底: {type: Texture, attribute: {point: ~stretch_all, normal: '~191,209,191,248', shape: ~round_rect, radius: 18}}
-          页标题: {type: Text, attribute: {x: 32, y: 24, texts: 'var.categoryNames[var.currentCategory]', fontSize: 64}}
-          页标题说明: {type: Text, attribute: {point: ~top_right, x: -32, y: 40, texts: 'var.categoryDescs[var.currentCategory]', fontSize: 36}}
-          分类栏:
-            type: HStack
-            attribute: {x: 32, y: 116, height: 100, spaceBetween: 16}
-            children:
-              导航每日:
-                type: Canvas
-                attribute: {width: '(var.contentW - 96) / 3', height: 100}
-                action:
-                  clickLeft: |-
-                    var.currentCategory = 'daily'
-                    val.任务滑块.setDragYRatio(0)
-                children:
-                  底: {type: Texture, attribute: {point: ~stretch_all, normal: "var.currentCategory == 'daily' ? '23,49,64,255' : '231,222,196,255'", shape: ~round_rect, radius: 12, through: true}}
-                  字: {type: Text, attribute: {point: ~middle_center, texts: "(var.currentCategory == 'daily' ? '&f每日 / ' : '&0每日 / ') + var.dailyCount.round() + ' 项'", fontSize: 36, through: true}}
-              导航每周:
-                type: Canvas
-                attribute: {width: '(var.contentW - 96) / 3', height: 100}
-                action:
-                  clickLeft: |-
-                    var.currentCategory = 'weekly'
-                    val.任务滑块.setDragYRatio(0)
-                children:
-                  底: {type: Texture, attribute: {point: ~stretch_all, normal: "var.currentCategory == 'weekly' ? '23,49,64,255' : '231,222,196,255'", shape: ~round_rect, radius: 12, through: true}}
-                  字: {type: Text, attribute: {point: ~middle_center, texts: "(var.currentCategory == 'weekly' ? '&f每周 / ' : '&0每周 / ') + var.weeklyCount.round() + ' 项'", fontSize: 36, through: true}}
-              导航赛季:
-                type: Canvas
-                attribute: {width: '(var.contentW - 96) / 3', height: 100}
-                action:
-                  clickLeft: |-
-                    var.currentCategory = 'season'
-                    val.任务滑块.setDragYRatio(0)
-                children:
-                  底: {type: Texture, attribute: {point: ~stretch_all, normal: "var.currentCategory == 'season' ? '23,49,64,255' : '231,222,196,255'", shape: ~round_rect, radius: 12, through: true}}
-                  字: {type: Text, attribute: {point: ~middle_center, texts: "(var.currentCategory == 'season' ? '&f赛季 / ' : '&0赛季 / ') + var.seasonCount.round() + ' 项'", fontSize: 36, through: true}}
-          空状态: {type: Text, attribute: {point: ~middle_center, texts: '~&8此分类暂无委托', fontSize: 48, visible: "(var.currentCategory == 'daily' && var.dailyCount == 0) || (var.currentCategory == 'weekly' && var.weeklyCount == 0) || (var.currentCategory == 'season' && var.seasonCount == 0)"}}
-          任务滑轨: {type: Texture, attribute: {point: ~top_right, x: -16, y: 244, width: 12, height: 'var.viewH - 412', normal: '~140,166,151,255', shape: ~round_rect, radius: 6}}
+          内容底:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~Frosted:30;255,255,255,100
+              shape: ~round_rect
+              radius: 14
+            effect:
+              stroke:
+                width: 3
+                color: ~80,200,220,240
+          # 页标题：根据当前分类动态显示
+          页标题:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 32
+              y: 26
+              texts: "var.currentCategory == 'daily' ? '&f每日任务' : (var.currentCategory == 'weekly' ? '&f每周任务' : '&f赛季任务')"
+              fontSize: 40
+          页标题说明:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 220
+              y: 34
+              texts: "var.currentCategory == 'daily' ? '&f每日刷新，完成获取钓鱼经验' : (var.currentCategory == 'weekly' ? '&f每周刷新，奖励更丰厚' : '&f赛季长期任务，挑战极限')"
+              fontSize: 28
+
+          # ── 滚动区 ─────────────────────────────────────
+          任务滑轨:
+            type: Texture
+            attribute:
+              point: ~top_right
+              x: -16
+              y: 84
+              width: 12
+              height: "var.viewH - 264"
+              normal: ~15,25,38,220
+              shape: ~round_rect
+              radius: 6
+            effect:
+              stroke:
+                width: 2
+                color: ~80,200,220,240
           任务滑块:
             type: Texture
             val: 任务滑块
-            attribute: {point: ~top_right, x: -16, y: 244, width: 12, height: 120, maxDragY: 'var.viewH - 532', normal: '~23,49,64,255', shape: ~round_rect, radius: 6}
+            attribute:
+              point: ~top_right
+              x: -16
+              y: 84
+              width: 12
+              height: 120
+              normal: ~50,170,200,220
+              maxDragY: "var.viewH - 384"
+              shape: ~round_rect
+              radius: 6
           滚动区:
             type: Scroll
-            attribute: {x: 28, y: 244, width: 'var.contentW - 76', height: 'var.viewH - 412', moveY: 'val.任务滑块.getDragYRatio()'}
+            attribute:
+              point: ~top_left
+              x: 28
+              y: 84
+              width: "var.contentW - 80"
+              height: "var.viewH - 264"
+              moveY: "self.parent['任务滑块'].getDragYRatio()"
             action:
               wheel: |-
-                val.任务滑块.setDragYRatio(math.max(0, math.min(1, self.moveY - self.wheelValue * 0.1)))
+                if(self.moveY >= 0 && self.wheelValue > 0){
+                  self.parent['任务滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                }
+                if(self.moveY <= 1 && self.wheelValue < 0){
+                  self.parent['任务滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                }
             children:
               任务总容器:
-                type: VStack
                 val: 任务总容器
-                attribute: {width: 'var.contentW - 76', spaceBetween: 0}
+                type: VStack
+                attribute:
+                  width: "var.contentW - 80"
+                  spaceBetween: 20
                 children:
-                  每日任务列表:
-                    type: VStack
-                    val: 每日任务列表
-                    attribute: {width: 'var.contentW - 76', visible: "var.currentCategory == 'daily'", spaceBetween: 16}
+                  # ══════════════════════════════════════════════
+                  # 每日任务区（仅当 currentCategory == 'daily' 时可见）
+                  # ══════════════════════════════════════════════
+                  每日任务区:
+                    type: Canvas
+                    attribute:
+                      width: "var.contentW - 80"
+                      height: "var.dailyCount > 0 ? (var.dailyCount * 104 + 64) : 0"
+                      visible: var.currentCategory == 'daily' && var.dailyCount > 0
                     children:
-                      任务项:
-                        type: Canvas
-                        attribute: {entryKey: 0.round(), entry: 'var.daily[self.entryKey]', visible: 'self.entry != none', width: 'var.contentW - 76', height: 184}
+                      每日区底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: ~26,34,46,210
+                          shape: ~round_rect
+                          radius: 12
+                        effect:
+                          stroke:
+                            width: 2
+                            color: ~80,200,220,240
+                      每日标题条:
+                        type: Texture
+                        attribute:
+                          point: ~top_left
+                          x: 20
+                          y: 20
+                          width: 4
+                          height: 26
+                          normal: ~50,170,200,255
+                          shape: ~round_rect
+                          radius: 2
+                          through: true
+                      每日标题:
+                        type: Text
+                        attribute:
+                          point: ~top_left
+                          x: 34
+                          y: 18
+                          texts: "~&f每日任务"
+                          fontSize: 36
+                          through: true
+                      每日计数:
+                        type: Text
+                        attribute:
+                          point: ~top_right
+                          x: -24
+                          y: 22
+                          texts: "'&f共 &f' + var.dailyCount.round() + ' &f项任务'"
+                          fontSize: 30
+                          through: true
+                      每日任务列表:
+                        val: 每日任务列表
+                        type: VStack
+                        attribute:
+                          point: ~top_left
+                          x: 20
+                          y: 60
+                          width: "var.contentW - 120"
+                          spaceBetween: 8
                         children:
-                          底: {type: Texture, attribute: {point: ~stretch_all, normal: "self.parent.entry['completed'] == true ? '157,190,169,255' : '231,222,196,255'", shape: ~round_rect, radius: 14, through: true}}
-                          状态: {type: Text, attribute: {x: 24, y: 24, texts: "self.parent.entry['completed'] == true ? '&2完成' : '&8进行中'", fontSize: 36, through: true}}
-                          任务名: {type: Text, attribute: {x: 172, y: 20, texts: "'&0' + self.parent.entry['name']", fontSize: 48, limit: 17, through: true}}
-                          任务描述: {type: Text, attribute: {x: 24, y: 84, texts: "'&8' + self.parent.entry['description']", fontSize: 36, limit: 36, through: true}}
-                          奖励: {type: Text, attribute: {point: ~top_right, x: -24, y: 30, texts: "'&8+' + self.parent.entry['xpReward'].round() + ' 经验'", fontSize: 36, through: true}}
-                          进度: {type: Text, attribute: {point: ~bottom_right, x: -24, y: -22, texts: "'&8' + self.parent.entry['progress'].round() + '/' + self.parent.entry['target'].round() + ' · ' + self.parent.entry['percent'].round() + '%'", fontSize: 36, through: true}}
-                          进度底: {type: Texture, attribute: {x: 24, y: 148, width: 'var.contentW - 460', height: 10, normal: '~179,186,163,255', shape: ~round_rect, radius: 5, through: true}}
-                          进度填充: {type: Texture, attribute: {x: 24, y: 148, width: "math.max(0, math.min(100, self.parent.entry['percent'])) / 100 * (var.contentW - 460)", height: 10, normal: '~53,89,96,255', shape: ~round_rect, radius: 5, through: true}}
-                  每周任务列表:
-                    type: VStack
-                    val: 每周任务列表
-                    attribute: {width: 'var.contentW - 76', visible: "var.currentCategory == 'weekly'", spaceBetween: 16}
+                          # 任务项模板：Canvas 容器，背景为子 Texture（stretch_all + through）
+                          # entryKey 必须用 0.round() 声明为整数（§11 YAML 浮点数陷阱）
+                          # completed 是 Java boolean，用 == true 比较
+                          # percent 是 0-100 整数，进度条宽度 = percent/100 * barWidth
+                          任务项:
+                            type: Canvas
+                            attribute:
+                              entryKey: 0.round()
+                              entry: var.daily[self.entryKey]
+                              visible: self.entry != none
+                              width: "var.contentW - 120"
+                              height: 96
+                            children:
+                              任务项背景:
+                                type: Texture
+                                attribute:
+                                  point: ~stretch_all
+                                  through: true
+                                  normal: "self.parent.entry != none && self.parent.entry['completed'] == true ? '30,52,46,215' : '26,34,46,210'"
+                                  shape: ~round_rect
+                                  radius: 10
+                                effect:
+                                  stroke:
+                                    width: 2
+                                    color: "self.isHovered() ? '80,200,220,255' : (self.parent.entry != none && self.parent.entry['completed'] == true ? '124,196,142,240' : '80,200,220,240')"
+                              # 状态标记：完成显示绿色勾，进行中显示青蓝圆点
+                              状态标记:
+                                type: Canvas
+                                attribute:
+                                  point: ~middle_left
+                                  x: 18
+                                  width: 40
+                                  height: 40
+                                  entry: self.parent.entry
+                                children:
+                                  状态底:
+                                    type: Texture
+                                    attribute:
+                                      point: ~stretch_all
+                                      through: true
+                                      normal: "self.parent.entry != none && self.parent.entry['completed'] == true ? '124,196,142,230' : '26,34,46,210'"
+                                      shape: ~round_rect
+                                      radius: 10
+                                  状态勾:
+                                    type: Text
+                                    attribute:
+                                      point: ~middle_center
+                                      width: 40
+                                      texts: "self.parent.entry != none && self.parent.entry['completed'] == true ? '&0✔' : none"
+                                      fontSize: 30
+                                      through: true
+                                  状态进行中点:
+                                    type: Texture
+                                    attribute:
+                                      point: ~middle_center
+                                      width: 10
+                                      height: 10
+                                      visible: self.parent.entry != none && self.parent.entry['completed'] != true
+                                      normal: ~50,170,200,255
+                                      shape: ~circle
+                                      through: true
+                              任务名:
+                                type: Text
+                                attribute:
+                                  point: ~top_left
+                                  x: 74
+                                  y: 12
+                                  width: "var.contentW - 740"
+                                  texts: "self.parent.entry != none ? '&f' + self.parent.entry['name'] : none"
+                                  fontSize: 32
+                                  limit: 28
+                                  through: true
+                              任务描述:
+                                type: Text
+                                attribute:
+                                  point: ~top_left
+                                  x: 74
+                                  y: 46
+                                  width: "var.contentW - 740"
+                                  texts: "self.parent.entry != none ? '&f' + self.parent.entry['description'] : none"
+                                  fontSize: 26
+                                  limit: 38
+                                  through: true
+                              任务奖励:
+                                type: Text
+                                attribute:
+                                  point: ~top_right
+                                  x: -24
+                                  y: 14
+                                  texts: "self.parent.entry != none ? '&b+' + self.parent.entry['xpReward'].round() + ' 钓鱼经验' : none"
+                                  fontSize: 28
+                                  through: true
+                              任务进度:
+                                type: Text
+                                attribute:
+                                  point: ~top_right
+                                  x: -24
+                                  y: 48
+                                  texts: "self.parent.entry != none ? '&f' + self.parent.entry['progress'].round() + '&f/' + self.parent.entry['target'].round() + ' &f(' + self.parent.entry['percent'].round() + '%)' : none"
+                                  fontSize: 26
+                                  through: true
+                              # 进度条：Texture + 宽度表达式（percent/100 * barWidth）
+                              进度条背景:
+                                type: Texture
+                                attribute:
+                                  point: ~bottom_left
+                                  x: 74
+                                  y: -12
+                                  width: "var.contentW - 740"
+                                  height: 8
+                                  normal: ~15,25,38,220
+                                  shape: ~round_rect
+                                  radius: 4
+                                  through: true
+                                effect:
+                                  stroke:
+                                    width: 2
+                                    color: ~80,200,220,240
+                              进度条填充:
+                                type: Texture
+                                attribute:
+                                  point: ~bottom_left
+                                  x: 74
+                                  y: -12
+                                  width: "self.parent.entry != none && type.toNumber(self.parent.entry['percent']) > 0 ? (type.toNumber(self.parent.entry['percent']) / 100) * (var.contentW - 740) : 0"
+                                  height: 8
+                                  normal: "self.parent.entry != none && self.parent.entry['completed'] == true ? '124,196,142,255' : '50,170,200,255'"
+                                  shape: ~round_rect
+                                  radius: 4
+                                  through: true
+
+                  # ══════════════════════════════════════════════
+                  # 每周任务区（仅当 currentCategory == 'weekly' 时可见）
+                  # ══════════════════════════════════════════════
+                  每周任务区:
+                    type: Canvas
+                    attribute:
+                      width: "var.contentW - 80"
+                      height: "var.weeklyCount > 0 ? (var.weeklyCount * 104 + 64) : 0"
+                      visible: var.currentCategory == 'weekly' && var.weeklyCount > 0
                     children:
-                      任务项:
-                        type: Canvas
-                        attribute: {entryKey: 0.round(), entry: 'var.weekly[self.entryKey]', visible: 'self.entry != none', width: 'var.contentW - 76', height: 184}
+                      每周区底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: ~26,34,46,210
+                          shape: ~round_rect
+                          radius: 12
+                        effect:
+                          stroke:
+                            width: 2
+                            color: ~80,200,220,240
+                      每周标题条:
+                        type: Texture
+                        attribute:
+                          point: ~top_left
+                          x: 20
+                          y: 20
+                          width: 4
+                          height: 26
+                          normal: ~150,180,210,255
+                          shape: ~round_rect
+                          radius: 2
+                          through: true
+                      每周标题:
+                        type: Text
+                        attribute:
+                          point: ~top_left
+                          x: 34
+                          y: 18
+                          texts: "~&f每周任务"
+                          fontSize: 36
+                          through: true
+                      每周计数:
+                        type: Text
+                        attribute:
+                          point: ~top_right
+                          x: -24
+                          y: 22
+                          texts: "'&f共 &f' + var.weeklyCount.round() + ' &f项任务'"
+                          fontSize: 30
+                          through: true
+                      每周任务列表:
+                        val: 每周任务列表
+                        type: VStack
+                        attribute:
+                          point: ~top_left
+                          x: 20
+                          y: 60
+                          width: "var.contentW - 120"
+                          spaceBetween: 8
                         children:
-                          底: {type: Texture, attribute: {point: ~stretch_all, normal: "self.parent.entry['completed'] == true ? '157,190,169,255' : '231,222,196,255'", shape: ~round_rect, radius: 14, through: true}}
-                          状态: {type: Text, attribute: {x: 24, y: 24, texts: "self.parent.entry['completed'] == true ? '&2完成' : '&8进行中'", fontSize: 36, through: true}}
-                          任务名: {type: Text, attribute: {x: 172, y: 20, texts: "'&0' + self.parent.entry['name']", fontSize: 48, limit: 17, through: true}}
-                          任务描述: {type: Text, attribute: {x: 24, y: 84, texts: "'&8' + self.parent.entry['description']", fontSize: 36, limit: 36, through: true}}
-                          奖励: {type: Text, attribute: {point: ~top_right, x: -24, y: 30, texts: "'&8+' + self.parent.entry['xpReward'].round() + ' 经验'", fontSize: 36, through: true}}
-                          进度: {type: Text, attribute: {point: ~bottom_right, x: -24, y: -22, texts: "'&8' + self.parent.entry['progress'].round() + '/' + self.parent.entry['target'].round() + ' · ' + self.parent.entry['percent'].round() + '%'", fontSize: 36, through: true}}
-                          进度底: {type: Texture, attribute: {x: 24, y: 148, width: 'var.contentW - 460', height: 10, normal: '~179,186,163,255', shape: ~round_rect, radius: 5, through: true}}
-                          进度填充: {type: Texture, attribute: {x: 24, y: 148, width: "math.max(0, math.min(100, self.parent.entry['percent'])) / 100 * (var.contentW - 460)", height: 10, normal: '~53,89,96,255', shape: ~round_rect, radius: 5, through: true}}
-                  赛季任务列表:
-                    type: VStack
-                    val: 赛季任务列表
-                    attribute: {width: 'var.contentW - 76', visible: "var.currentCategory == 'season'", spaceBetween: 16}
+                          任务项:
+                            type: Canvas
+                            attribute:
+                              entryKey: 0.round()
+                              entry: var.weekly[self.entryKey]
+                              visible: self.entry != none
+                              width: "var.contentW - 120"
+                              height: 96
+                            children:
+                              任务项背景:
+                                type: Texture
+                                attribute:
+                                  point: ~stretch_all
+                                  through: true
+                                  normal: "self.parent.entry != none && self.parent.entry['completed'] == true ? '30,52,46,215' : '26,34,46,210'"
+                                  shape: ~round_rect
+                                  radius: 10
+                                effect:
+                                  stroke:
+                                    width: 2
+                                    color: "self.isHovered() ? '80,200,220,255' : (self.parent.entry != none && self.parent.entry['completed'] == true ? '124,196,142,240' : '80,200,220,240')"
+                              状态标记:
+                                type: Canvas
+                                attribute:
+                                  point: ~middle_left
+                                  x: 18
+                                  width: 40
+                                  height: 40
+                                  entry: self.parent.entry
+                                children:
+                                  状态底:
+                                    type: Texture
+                                    attribute:
+                                      point: ~stretch_all
+                                      through: true
+                                      normal: "self.parent.entry != none && self.parent.entry['completed'] == true ? '124,196,142,230' : '26,34,46,210'"
+                                      shape: ~round_rect
+                                      radius: 10
+                                  状态勾:
+                                    type: Text
+                                    attribute:
+                                      point: ~middle_center
+                                      width: 40
+                                      texts: "self.parent.entry != none && self.parent.entry['completed'] == true ? '&0✔' : none"
+                                      fontSize: 30
+                                      through: true
+                                  状态进行中点:
+                                    type: Texture
+                                    attribute:
+                                      point: ~middle_center
+                                      width: 10
+                                      height: 10
+                                      visible: self.parent.entry != none && self.parent.entry['completed'] != true
+                                      normal: ~150,180,210,255
+                                      shape: ~circle
+                                      through: true
+                              任务名:
+                                type: Text
+                                attribute:
+                                  point: ~top_left
+                                  x: 74
+                                  y: 12
+                                  width: "var.contentW - 740"
+                                  texts: "self.parent.entry != none ? '&f' + self.parent.entry['name'] : none"
+                                  fontSize: 32
+                                  limit: 28
+                                  through: true
+                              任务描述:
+                                type: Text
+                                attribute:
+                                  point: ~top_left
+                                  x: 74
+                                  y: 46
+                                  width: "var.contentW - 740"
+                                  texts: "self.parent.entry != none ? '&f' + self.parent.entry['description'] : none"
+                                  fontSize: 26
+                                  limit: 38
+                                  through: true
+                              任务奖励:
+                                type: Text
+                                attribute:
+                                  point: ~top_right
+                                  x: -24
+                                  y: 14
+                                  texts: "self.parent.entry != none ? '&b+' + self.parent.entry['xpReward'].round() + ' 钓鱼经验' : none"
+                                  fontSize: 28
+                                  through: true
+                              任务进度:
+                                type: Text
+                                attribute:
+                                  point: ~top_right
+                                  x: -24
+                                  y: 48
+                                  texts: "self.parent.entry != none ? '&f' + self.parent.entry['progress'].round() + '&f/' + self.parent.entry['target'].round() + ' &f(' + self.parent.entry['percent'].round() + '%)' : none"
+                                  fontSize: 26
+                                  through: true
+                              进度条背景:
+                                type: Texture
+                                attribute:
+                                  point: ~bottom_left
+                                  x: 74
+                                  y: -12
+                                  width: "var.contentW - 740"
+                                  height: 8
+                                  normal: ~15,25,38,220
+                                  shape: ~round_rect
+                                  radius: 4
+                                  through: true
+                                effect:
+                                  stroke:
+                                    width: 2
+                                    color: ~80,200,220,240
+                              进度条填充:
+                                type: Texture
+                                attribute:
+                                  point: ~bottom_left
+                                  x: 74
+                                  y: -12
+                                  width: "self.parent.entry != none && type.toNumber(self.parent.entry['percent']) > 0 ? (type.toNumber(self.parent.entry['percent']) / 100) * (var.contentW - 740) : 0"
+                                  height: 8
+                                  normal: "self.parent.entry != none && self.parent.entry['completed'] == true ? '124,196,142,255' : '150,180,210,255'"
+                                  shape: ~round_rect
+                                  radius: 4
+                                  through: true
+
+                  # ══════════════════════════════════════════════
+                  # 赛季任务区（仅当 currentCategory == 'season' 时可见）
+                  # ══════════════════════════════════════════════
+                  赛季任务区:
+                    type: Canvas
+                    attribute:
+                      width: "var.contentW - 80"
+                      height: "var.seasonCount > 0 ? (var.seasonCount * 104 + 64) : 0"
+                      visible: var.currentCategory == 'season' && var.seasonCount > 0
                     children:
-                      任务项:
-                        type: Canvas
-                        attribute: {entryKey: 0.round(), entry: 'var.season[self.entryKey]', visible: 'self.entry != none', width: 'var.contentW - 76', height: 184}
+                      赛季区底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: ~26,34,46,210
+                          shape: ~round_rect
+                          radius: 12
+                        effect:
+                          stroke:
+                            width: 2
+                            color: ~80,200,220,240
+                      赛季标题条:
+                        type: Texture
+                        attribute:
+                          point: ~top_left
+                          x: 20
+                          y: 20
+                          width: 4
+                          height: 26
+                          normal: ~186,140,232,255
+                          shape: ~round_rect
+                          radius: 2
+                          through: true
+                      赛季标题:
+                        type: Text
+                        attribute:
+                          point: ~top_left
+                          x: 34
+                          y: 18
+                          texts: "~&f赛季任务"
+                          fontSize: 36
+                          through: true
+                      赛季计数:
+                        type: Text
+                        attribute:
+                          point: ~top_right
+                          x: -24
+                          y: 22
+                          texts: "'&f共 &f' + var.seasonCount.round() + ' &f项任务'"
+                          fontSize: 30
+                          through: true
+                      赛季任务列表:
+                        val: 赛季任务列表
+                        type: VStack
+                        attribute:
+                          point: ~top_left
+                          x: 20
+                          y: 60
+                          width: "var.contentW - 120"
+                          spaceBetween: 8
                         children:
-                          底: {type: Texture, attribute: {point: ~stretch_all, normal: "self.parent.entry['completed'] == true ? '157,190,169,255' : '231,222,196,255'", shape: ~round_rect, radius: 14, through: true}}
-                          状态: {type: Text, attribute: {x: 24, y: 24, texts: "self.parent.entry['completed'] == true ? '&2完成' : '&8进行中'", fontSize: 36, through: true}}
-                          任务名: {type: Text, attribute: {x: 172, y: 20, texts: "'&0' + self.parent.entry['name']", fontSize: 48, limit: 17, through: true}}
-                          任务描述: {type: Text, attribute: {x: 24, y: 84, texts: "'&8' + self.parent.entry['description']", fontSize: 36, limit: 36, through: true}}
-                          奖励: {type: Text, attribute: {point: ~top_right, x: -24, y: 30, texts: "'&8+' + self.parent.entry['xpReward'].round() + ' 经验'", fontSize: 36, through: true}}
-                          进度: {type: Text, attribute: {point: ~bottom_right, x: -24, y: -22, texts: "'&8' + self.parent.entry['progress'].round() + '/' + self.parent.entry['target'].round() + ' · ' + self.parent.entry['percent'].round() + '%'", fontSize: 36, through: true}}
-                          进度底: {type: Texture, attribute: {x: 24, y: 148, width: 'var.contentW - 460', height: 10, normal: '~179,186,163,255', shape: ~round_rect, radius: 5, through: true}}
-                          进度填充: {type: Texture, attribute: {x: 24, y: 148, width: "math.max(0, math.min(100, self.parent.entry['percent'])) / 100 * (var.contentW - 460)", height: 10, normal: '~53,89,96,255', shape: ~round_rect, radius: 5, through: true}}
+                          任务项:
+                            type: Canvas
+                            attribute:
+                              entryKey: 0.round()
+                              entry: var.season[self.entryKey]
+                              visible: self.entry != none
+                              width: "var.contentW - 120"
+                              height: 96
+                            children:
+                              任务项背景:
+                                type: Texture
+                                attribute:
+                                  point: ~stretch_all
+                                  through: true
+                                  normal: "self.parent.entry != none && self.parent.entry['completed'] == true ? '30,52,46,215' : '26,34,46,210'"
+                                  shape: ~round_rect
+                                  radius: 10
+                                effect:
+                                  stroke:
+                                    width: 2
+                                    color: "self.isHovered() ? '80,200,220,255' : (self.parent.entry != none && self.parent.entry['completed'] == true ? '124,196,142,240' : '80,200,220,240')"
+                              状态标记:
+                                type: Canvas
+                                attribute:
+                                  point: ~middle_left
+                                  x: 18
+                                  width: 40
+                                  height: 40
+                                  entry: self.parent.entry
+                                children:
+                                  状态底:
+                                    type: Texture
+                                    attribute:
+                                      point: ~stretch_all
+                                      through: true
+                                      normal: "self.parent.entry != none && self.parent.entry['completed'] == true ? '124,196,142,230' : '26,34,46,210'"
+                                      shape: ~round_rect
+                                      radius: 10
+                                  状态勾:
+                                    type: Text
+                                    attribute:
+                                      point: ~middle_center
+                                      width: 40
+                                      texts: "self.parent.entry != none && self.parent.entry['completed'] == true ? '&0✔' : none"
+                                      fontSize: 30
+                                      through: true
+                                  状态进行中点:
+                                    type: Texture
+                                    attribute:
+                                      point: ~middle_center
+                                      width: 10
+                                      height: 10
+                                      visible: self.parent.entry != none && self.parent.entry['completed'] != true
+                                      normal: ~186,140,232,255
+                                      shape: ~circle
+                                      through: true
+                              任务名:
+                                type: Text
+                                attribute:
+                                  point: ~top_left
+                                  x: 74
+                                  y: 12
+                                  width: "var.contentW - 740"
+                                  texts: "self.parent.entry != none ? '&f' + self.parent.entry['name'] : none"
+                                  fontSize: 32
+                                  limit: 28
+                                  through: true
+                              任务描述:
+                                type: Text
+                                attribute:
+                                  point: ~top_left
+                                  x: 74
+                                  y: 46
+                                  width: "var.contentW - 740"
+                                  texts: "self.parent.entry != none ? '&f' + self.parent.entry['description'] : none"
+                                  fontSize: 26
+                                  limit: 38
+                                  through: true
+                              任务奖励:
+                                type: Text
+                                attribute:
+                                  point: ~top_right
+                                  x: -24
+                                  y: 14
+                                  texts: "self.parent.entry != none ? '&b+' + self.parent.entry['xpReward'].round() + ' 钓鱼经验' : none"
+                                  fontSize: 28
+                                  through: true
+                              任务进度:
+                                type: Text
+                                attribute:
+                                  point: ~top_right
+                                  x: -24
+                                  y: 48
+                                  texts: "self.parent.entry != none ? '&f' + self.parent.entry['progress'].round() + '&f/' + self.parent.entry['target'].round() + ' &f(' + self.parent.entry['percent'].round() + '%)' : none"
+                                  fontSize: 26
+                                  through: true
+                              进度条背景:
+                                type: Texture
+                                attribute:
+                                  point: ~bottom_left
+                                  x: 74
+                                  y: -12
+                                  width: "var.contentW - 740"
+                                  height: 8
+                                  normal: ~15,25,38,220
+                                  shape: ~round_rect
+                                  radius: 4
+                                  through: true
+                                effect:
+                                  stroke:
+                                    width: 2
+                                    color: ~80,200,220,240
+                              进度条填充:
+                                type: Texture
+                                attribute:
+                                  point: ~bottom_left
+                                  x: 74
+                                  y: -12
+                                  width: "self.parent.entry != none && type.toNumber(self.parent.entry['percent']) > 0 ? (type.toNumber(self.parent.entry['percent']) / 100) * (var.contentW - 740) : 0"
+                                  height: 8
+                                  normal: "self.parent.entry != none && self.parent.entry['completed'] == true ? '124,196,142,255' : '186,140,232,255'"
+                                  shape: ~round_rect
+                                  radius: 4
+                                  through: true
+
+                  # 空状态提示（当前分类无任务时显示）
+                  空状态:
+                    type: Canvas
+                    attribute:
+                      width: "var.contentW - 80"
+                      height: 120
+                      visible: "(var.currentCategory == 'daily' && var.dailyCount == 0) || (var.currentCategory == 'weekly' && var.weeklyCount == 0) || (var.currentCategory == 'season' && var.seasonCount == 0)"
+                    children:
+                      空状态底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: ~26,34,46,210
+                          shape: ~round_rect
+                          radius: 12
+                        effect:
+                          stroke:
+                            width: 2
+                            color: ~80,200,220,240
+                      空状态文字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          width: "var.contentW - 80"
+                          texts: "~&f暂无任务，请稍后再来"
+                          fontSize: 36
+                          through: true

@@ -1,7 +1,7 @@
 #
 # ArcartXSuite CombatEffect - 死亡缓冲界面
 # 当玩家即将死亡时，服务端发送 death 包触发本界面。
-# 缓冲期间保持模态，只轻度压暗世界；下方窄幅信息带显示原因与倒计时。
+# 界面在缓冲期间全屏覆盖，显示击杀者信息和倒计时。
 # 缓冲结束后由服务端关闭本 UI 或玩家真正死亡时自动关闭（closeDied: true）。
 #
 # packetHandler:
@@ -29,21 +29,6 @@ ui:
       val.death_overlay.visible = true
       val.death_info.visible = true
   action:
-    load: |-
-      sx = Screen.getWidth() / 1920
-      sy = Screen.getHeight() / 1080
-      s = sx < sy ? sx : sy
-      var.viewH = Screen.getHeight() / s
-      var.viewW = Screen.getWidth() / s
-      var.offX = (var.viewW - 1920) / 2
-    resize: |-
-      sx = Screen.getWidth() / 1920
-      sy = Screen.getHeight() / 1080
-      s = sx < sy ? sx : sy
-      var.viewH = Screen.getHeight() / s
-      var.viewW = Screen.getWidth() / s
-      var.offX = (var.viewW - 1920) / 2
-    # 沿用现有 3 秒客户端缓冲；真正死亡与关闭仍由服务端决定。
     tick: |-
       if (var.buffer_active) {
         var.elapsed = Time.currentTime() - var.buffer_start
@@ -61,168 +46,94 @@ controls:
     attribute:
       width: 1920
       height: 1080
-      point: ~top_center
+      point: ~stretch_all
     children:
-      # 遮罩覆盖真实视口但不模糊世界；保留死亡缓冲的事件阻挡。
+
       全屏遮罩:
         type: Texture
         val: death_overlay
         attribute:
-          point: ~top_left
-          x: "-var.offX"
-          normal: ~24,25,28,64
-          width: "var.viewW"
-          height: "var.viewH"
+          normal: ~0,0,0,180
+          width: 1920
+          height: 1080
+          point: ~stretch_all
           visible: false
-          through: false
 
       死亡信息区:
         type: Canvas
         val: death_info
         attribute:
-          point: ~top_center
-          y: "var.viewH - 312"
-          width: 1040
-          height: 240
+          width: 600
+          height: 300
+          point: ~middle_center
           visible: false
-          through: false
         children:
-          铁色信息底:
-            type: Texture
-            attribute:
-              point: ~stretch_all
-              normal: ~24,25,28,238
-              shape: ~round_rect
-              radius: 4
-              through: true
-          暖银顶线:
-            type: Texture
-            attribute:
-              point: ~top_left
-              x: 32
-              width: 976
-              height: 2
-              normal: ~213,195,167,255
-              through: true
-          余烬侧标:
-            type: Texture
-            attribute:
-              point: ~top_left
-              width: 4
-              height: 240
-              normal: ~204,99,57,255
-              through: true
-          缓冲标识:
-            type: Text
-            attribute:
-              point: ~top_left
-              x: 32
-              y: 24
-              texts: "~&7死亡缓冲  /  &f{var.victim_name}"
-              fontSize: 36
-              through: true
+
           死亡标题:
             type: Text
             attribute:
+              texts: "'&c你死了'"
+              shadow: false
+              fontSize: 72
+              center: true
+              x: 300
+              y: 20
               point: ~top_left
-              x: 32
-              y: 76
-              texts: ~&f你已倒下
-              fontSize: 64
-              through: true
+
           击杀者信息:
             type: Text
             attribute:
-              point: ~top_left
-              x: 32
-              y: 160
-              texts: "~&7被 &f{var.killer_name} &7击倒"
+              texts: "~&7被 &f{var.killer_name} &7击杀"
+              shadow: false
               fontSize: 36
-              visible: "var.killer_name != none && var.killer_name != ''"
-              through: true
+              center: true
+              x: 300
+              y: 110
+              point: ~top_left
+              visible: "var.killer_name != none && var.killer_name != none"
+
           环境死亡信息:
             type: Text
             attribute:
-              point: ~top_left
-              x: 32
-              y: 160
-              texts: ~&7环境伤害导致倒下
+              texts: "'&7你倒下了...'"
+              shadow: false
               fontSize: 36
-              visible: "var.killer_name == none || var.killer_name == ''"
-              through: true
+              center: true
+              x: 300
+              y: 110
+              point: ~top_left
+              visible: "var.killer_name == none || var.killer_name == none"
+
+          倒计时文本:
+            type: Text
+            attribute:
+              texts: ~&f{var.countdown}
+              shadow: false
+              fontSize: 96
+              center: true
+              x: 300
+              y: 170
+              point: ~top_left
+              visible: "var.buffer_active"
+
           分隔线:
             type: Texture
             attribute:
+              normal: ~255,255,255,60
+              width: 400
+              height: 2
+              x: 100
+              y: 150
               point: ~top_left
-              x: 780
-              y: 24
-              width: 2
-              height: 168
-              normal: ~105,98,88,235
-              through: true
-          剩余时间区:
-            type: Canvas
+
+          提示文本:
+            type: Text
             attribute:
-              point: ~top_right
-              x: -32
-              y: 8
-              width: 192
-              height: 204
-              through: true
-            children:
-              时间标签:
-                type: Text
-                attribute:
-                  point: ~top_center
-                  y: 4
-                  texts: ~&7剩余时间
-                  fontSize: 36
-                  visible: "var.buffer_active"
-                  through: true
-              倒计时文本:
-                type: Text
-                attribute:
-                  point: ~middle_center
-                  y: 4
-                  texts: "'&f' + var.countdown.round()"
-                  fontSize: 100
-                  visible: "var.buffer_active"
-                  through: true
-              提示文本:
-                type: Text
-                attribute:
-                  point: ~bottom_center
-                  y: -4
-                  texts: ~&7秒
-                  fontSize: 36
-                  visible: "var.buffer_active"
-                  through: true
-              等待结算:
-                type: Text
-                attribute:
-                  point: ~middle_center
-                  texts: ~&7等待结算
-                  fontSize: 36
-                  visible: "!var.buffer_active"
-                  through: true
-          缓冲余时底:
-            type: Texture
-            attribute:
+              texts: "'&8即将复活...'"
+              shadow: false
+              fontSize: 22
+              center: true
+              x: 300
+              y: 275
               point: ~top_left
-              x: 32
-              y: 216
-              width: 976
-              height: 4
-              normal: ~74,70,65,235
-              through: true
-          缓冲余时:
-            type: Texture
-            attribute:
-              point: ~top_left
-              x: 32
-              y: 216
-              width: "976 * math.max(0, math.min(1, var.remaining / 3000))"
-              height: 4
-              normal: ~204,99,57,255
               visible: "var.buffer_active"
-              through: true

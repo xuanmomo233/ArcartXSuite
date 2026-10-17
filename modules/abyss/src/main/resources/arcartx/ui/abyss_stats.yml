@@ -1,4 +1,6 @@
-# Abyss / after-action report: fixed metric columns, not space-padded text.
+﻿# AXS 资源说明
+# 用途: Abyss 副本战斗统计 —— 击杀/伤害/承伤/治疗
+# 前置依赖: ArcartX；Abyss 模块启用后自动注册导出。
 ui:
   isHud: false
   defaultOpen: false
@@ -9,6 +11,8 @@ ui:
   screenScale: true
   show: true
   packetHandler:
+    # packetHandler: init
+    # 包字段: packetId/action_token/dungeonName/statRows{idx:{name,kills,damage,taken,heal}}
     init: |-
       var.packetId = packet['packetId']
       var.actionToken = packet['action_token']
@@ -20,8 +24,6 @@ ui:
       var.stat3 = var.statRows != none ? var.statRows[3.round()] : none
       var.stat4 = var.statRows != none ? var.statRows[4.round()] : none
       var.stat5 = var.statRows != none ? var.statRows[5.round()] : none
-      var.statCount = var.statRows.keys().size()
-      var.dirty = true
   action:
     load: |-
       var.packetId = 'abyss'
@@ -34,32 +36,8 @@ ui:
       var.stat3 = none
       var.stat4 = none
       var.stat5 = none
-      var.statCount = 0
-      var.记录引用 = {}
-      var.记录轮次 = 0
-      var.dirty = false
-    tick: |-
-      if(var.dirty){
-        var.dirty = false
-        目标数 = var.statCount.round()
-        if(val.stats_rows.childrenCount() - 1 != 目标数 - 1){
-          for(key in var.记录引用.keys()){
-            var.记录引用[key].remove()
-          }
-          var.记录引用 = {}
-          var.记录轮次 = (var.记录轮次 + 1).round()
-          模板 = val.stats_rows.get(0)
-          模板.entryKey = 0.round()
-          if(目标数 > 1){
-            for(i in range(1, 目标数 - 1)){
-              row = 模板.copy('记录行_' + var.记录轮次 + '_' + i.round())
-              row.entryKey = i.round()
-              var.记录引用[i.round()] = row
-            }
-          }
-        }
-        val.stats_slider.setDragYRatio(0)
-      }
+      var.accent = '186,140,232,255'
+      var.accentDim = '96,80,140,190'
     open: |-
       Sound.self('minecraft:item.book.page_turn', 0.9, 14)
 controls:
@@ -67,7 +45,8 @@ controls:
     type: Texture
     attribute:
       point: ~stretch_all
-      normal: ~Frosted:26;8,10,11,228
+      normal: ~Frosted:30;16,12,30,210
+      through: true
   自适应全局布局:
     type: Adaptive
     attribute:
@@ -79,237 +58,184 @@ controls:
         type: Canvas
         attribute:
           point: ~middle_center
-          width: 1440
-          height: 864
+          width: 680
+          height: 480
         children:
           面板背景:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~22,25,25,253
-              through: true
+              normal: ~Frosted:30;24,19,40,240
+              shape: ~round_rect
+              radius: 16
             effect:
               stroke:
-                width: 3
-                color: ~108,82,56,255
-          顶部刻度:
+                width: 2
+                color: var.accentDim
+          标题标线:
             type: Texture
             attribute:
-              x: 60
-              y: 0
-              width: 220
-              height: 8
-              normal: ~147,61,43,255
-              through: true
-          眉题:
-            type: Text
-            attribute:
-              x: 60
-              y: 34
-              texts: ~&6ABYSS   /   AFTER-ACTION REPORT   06
-              fontSize: 36
+              point: ~top_center
+              y: 28
+              width: 26
+              height: 3
+              normal: var.accent
               through: true
           标题:
             type: Text
             attribute:
-              x: 58
-              y: 88
-              texts: "'&f战斗记录  /  &7' + var.dungeonName"
-              fontSize: 64
-              limit: 28
+              point: ~top_center
+              y: 44
+              texts: "'&f战斗统计  &7-  &f' + var.dungeonName"
+              fontSize: 54
+              through: true
+          表头底:
+            type: Texture
+            attribute:
+              x: 30
+              y: 118
+              width: 620
+              height: 44
+              normal: ~68,52,96,220
+              shape: ~round_rect
+              radius: 8
               through: true
           表头:
-            type: Canvas
-            attribute:
-              x: 60
-              y: 176
-              width: 1320
-              height: 52
-            children:
-              表头底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  normal: ~60,47,35,255
-                  through: true
-              玩家:
-                type: Text
-                attribute:
-                  point: ~middle_left
-                  x: 70
-                  texts: ~&f远征成员
-                  fontSize: 36
-                  through: true
-              击杀:
-                type: Text
-                attribute:
-                  point: ~middle_right
-                  x: -865
-                  texts: ~&c击杀
-                  fontSize: 36
-                  through: true
-              伤害:
-                type: Text
-                attribute:
-                  point: ~middle_right
-                  x: -585
-                  texts: ~&6输出伤害
-                  fontSize: 36
-                  through: true
-              承伤:
-                type: Text
-                attribute:
-                  point: ~middle_right
-                  x: -315
-                  texts: ~&7承受伤害
-                  fontSize: 36
-                  through: true
-              治疗:
-                type: Text
-                attribute:
-                  point: ~middle_right
-                  x: -50
-                  texts: ~&a治疗
-                  fontSize: 36
-                  through: true
-          数据滑轨:
-            type: Texture
-            attribute:
-              x: 1398
-              y: 246
-              width: 10
-              height: 504
-              normal: ~49,45,38,255
-              through: true
-          数据滑块:
-            type: Texture
-            val: stats_slider
-            attribute:
-              x: 1398
-              y: 246
-              width: 10
-              height: 100
-              maxDragY: 404
-              normal: ~211,155,78,255
-          数据滚动区:
-            type: Scroll
-            attribute:
-              x: 60
-              y: 246
-              width: 1334
-              height: 504
-              moveY: val.stats_slider.getDragYRatio()
-            action:
-              wheel: |-
-                ratio = self.moveY - self.wheelValue * 0.12
-                if(ratio < 0){ ratio = 0 }
-                if(ratio > 1){ ratio = 1 }
-                val.stats_slider.setDragYRatio(ratio)
-            children:
-              数据行:
-                type: VStack
-                val: stats_rows
-                attribute:
-                  width: 1320
-                  spaceBetween: 12
-                children:
-                  记录行:
-                    type: Canvas
-                    attribute:
-                      width: 1320
-                      height: 74
-                      entryKey: 0.round()
-                      entry: var.statRows[self.entryKey]
-                      visible: self.entry != none
-                    children:
-                      行底:
-                        type: Texture
-                        attribute:
-                          point: ~stretch_all
-                          normal: "self.parent.entryKey % 2 == 0 ? '34,37,37,255' : '28,31,32,255'"
-                          through: true
-                      编号:
-                        type: Text
-                        attribute:
-                          point: ~middle_left
-                          x: 18
-                          texts: "'&7' + (self.parent.entryKey + 1).round()"
-                          fontSize: 36
-                          through: true
-                      姓名:
-                        type: Text
-                        attribute:
-                          point: ~middle_left
-                          x: 70
-                          texts: "'&f' + self.parent.entry['name']"
-                          fontSize: 48
-                          limit: 16
-                          through: true
-                      击杀值:
-                        type: Text
-                        attribute:
-                          point: ~middle_right
-                          x: -865
-                          texts: "'&c' + self.parent.entry['kills'].round()"
-                          fontSize: 48
-                          through: true
-                      伤害值:
-                        type: Text
-                        attribute:
-                          point: ~middle_right
-                          x: -585
-                          texts: "'&6' + self.parent.entry['damage'].round()"
-                          fontSize: 48
-                          through: true
-                      承伤值:
-                        type: Text
-                        attribute:
-                          point: ~middle_right
-                          x: -315
-                          texts: "'&7' + self.parent.entry['taken'].round()"
-                          fontSize: 48
-                          through: true
-                      治疗值:
-                        type: Text
-                        attribute:
-                          point: ~middle_right
-                          x: -50
-                          texts: "'&a' + self.parent.entry['heal'].round()"
-                          fontSize: 48
-                          through: true
-          空态:
             type: Text
             attribute:
-              point: ~middle_center
-              texts: ~&7尚无战斗记录 · 完成行动后返回查看
-              fontSize: 48
-              visible: var.stat0 == none
+              x: 48
+              y: 126
+              texts: ~&f玩家                    击杀      伤害        承伤        治疗
+              fontSize: 36
               through: true
-          底线:
+          行底0:
             type: Texture
             attribute:
-              x: 60
-              y: 774
-              width: 1320
-              height: 2
-              normal: ~101,77,55,255
+              x: 30
+              y: 170
+              width: 620
+              height: 44
+              normal: ~38,30,58,160
+              shape: ~round_rect
+              radius: 6
+              visible: var.stat0 != none
               through: true
-          注释:
+          行0:
             type: Text
             attribute:
-              x: 62
-              y: 805
-              texts: ~&7行动复盘  /  滚轮浏览所有成员 · 本次副本的击杀、输出、承伤与治疗记录
+              x: 48
+              y: 178
+              texts: "var.stat0 != none ? '&f' + var.stat0['name'] + '    &c' + var.stat0['kills'].round() + '    &e' + var.stat0['damage'].round() + '    &7' + var.stat0['taken'].round() + '    &a' + var.stat0['heal'].round() : ''"
+              fontSize: 36
+              through: true
+          行底1:
+            type: Texture
+            attribute:
+              x: 30
+              y: 216
+              width: 620
+              height: 44
+              normal: ~30,24,48,160
+              shape: ~round_rect
+              radius: 6
+              visible: var.stat1 != none
+              through: true
+          行1:
+            type: Text
+            attribute:
+              x: 48
+              y: 224
+              texts: "var.stat1 != none ? '&f' + var.stat1['name'] + '    &c' + var.stat1['kills'].round() + '    &e' + var.stat1['damage'].round() + '    &7' + var.stat1['taken'].round() + '    &a' + var.stat1['heal'].round() : ''"
+              fontSize: 36
+              through: true
+          行底2:
+            type: Texture
+            attribute:
+              x: 30
+              y: 262
+              width: 620
+              height: 44
+              normal: ~38,30,58,160
+              shape: ~round_rect
+              radius: 6
+              visible: var.stat2 != none
+              through: true
+          行2:
+            type: Text
+            attribute:
+              x: 48
+              y: 270
+              texts: "var.stat2 != none ? '&f' + var.stat2['name'] + '    &c' + var.stat2['kills'].round() + '    &e' + var.stat2['damage'].round() + '    &7' + var.stat2['taken'].round() + '    &a' + var.stat2['heal'].round() : ''"
+              fontSize: 36
+              through: true
+          行底3:
+            type: Texture
+            attribute:
+              x: 30
+              y: 308
+              width: 620
+              height: 44
+              normal: ~30,24,48,160
+              shape: ~round_rect
+              radius: 6
+              visible: var.stat3 != none
+              through: true
+          行3:
+            type: Text
+            attribute:
+              x: 48
+              y: 316
+              texts: "var.stat3 != none ? '&f' + var.stat3['name'] + '    &c' + var.stat3['kills'].round() + '    &e' + var.stat3['damage'].round() + '    &7' + var.stat3['taken'].round() + '    &a' + var.stat3['heal'].round() : ''"
+              fontSize: 36
+              through: true
+          行底4:
+            type: Texture
+            attribute:
+              x: 30
+              y: 354
+              width: 620
+              height: 44
+              normal: ~38,30,58,160
+              shape: ~round_rect
+              radius: 6
+              visible: var.stat4 != none
+              through: true
+          行4:
+            type: Text
+            attribute:
+              x: 48
+              y: 362
+              texts: "var.stat4 != none ? '&f' + var.stat4['name'] + '    &c' + var.stat4['kills'].round() + '    &e' + var.stat4['damage'].round() + '    &7' + var.stat4['taken'].round() + '    &a' + var.stat4['heal'].round() : ''"
+              fontSize: 36
+              through: true
+          行底5:
+            type: Texture
+            attribute:
+              x: 30
+              y: 400
+              width: 620
+              height: 44
+              normal: ~30,24,48,160
+              shape: ~round_rect
+              radius: 6
+              visible: var.stat5 != none
+              through: true
+          行5:
+            type: Text
+            attribute:
+              x: 48
+              y: 408
+              texts: "var.stat5 != none ? '&f' + var.stat5['name'] + '    &c' + var.stat5['kills'].round() + '    &e' + var.stat5['damage'].round() + '    &7' + var.stat5['taken'].round() + '    &a' + var.stat5['heal'].round() : ''"
               fontSize: 36
               through: true
           关闭按钮:
             type: Canvas
             attribute:
               point: ~top_right
-              x: -36
-              y: 32
-              width: 48
-              height: 48
+              x: -18
+              y: 18
+              width: 36
+              height: 36
             action:
               clickLeft: "Screen.close()"
             children:
@@ -317,13 +243,14 @@ controls:
                 type: Texture
                 attribute:
                   point: ~stretch_all
-                  normal: ~92,39,36,255
-                  hover: ~151,59,44,255
+                  normal: ~150,58,58,235
+                  hover: ~190,75,75,245
+                  shape: ~circle
                   through: true
               关闭字:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  texts: ~&fX
+                  texts: ~&f✕
                   fontSize: 36
                   through: true

@@ -22,13 +22,6 @@ ui:
       var.subtitleLength = packet['length']
       var.subtitleTime = packet['time']
       var.subtitleShowBackground = packet['showBackground']
-      var.subtitlePlateW = var.subtitleLength * 54 + 216
-      if(var.subtitlePlateW < 480){
-        var.subtitlePlateW = 480
-      }
-      if(var.subtitlePlateW > 1360){
-        var.subtitlePlateW = 1360
-      }
       var.subtitleAnimation = Lerp(0, var.subtitleLength, var.subtitleTime)
     # packetHandler: close
     # 包字段: 无（仅通知客户端关闭字幕）
@@ -38,71 +31,47 @@ ui:
   action:
     load: |-
       var.subtitleVisible = false
-      var.subtitlePlateW = 480
       var.subtitleAnimation = Lerp(0, 0, 1)
-      self.actions['resize']()
-    resize: |-
-      sx = Screen.getWidth() / 1920
-      sy = Screen.getHeight() / 1080
-      s = sx < sy ? sx : sy
-      var.viewH = Screen.getHeight() / s
 
 controls:
   自适应全局布局:
     type: Adaptive
     attribute:
-      point: ~top_center
+      point: ~stretch_all
       width: 1920
       height: 1080
     children:
       字幕面板:
         type: Canvas
         attribute:
-          point: ~top_center
+          point: ~middle_center
           x: 0
-          y: "var.viewH - 230"
-          width: 1400
-          height: 110
-          through: true
+          y: 380
+          width: 1280
+          height: 72
           visible: var.subtitleVisible
         children:
           字幕背景:
             type: Texture
             attribute:
               point: ~middle_center
-              width: "var.subtitlePlateW"
-              height: 102
-              normal: ~16,21,30,154
+              width: 1220
+              height: 54
+              normal: ~Frosted:30;95,95,95,220
               shape: ~round_rect
-              radius: 12
-              through: true
+              radius: 16
               visible: var.subtitleShowBackground
-          字幕顶线:
-            type: Texture
-            attribute:
-              point: ~top_center
-              y: 4
-              width: 104
-              height: 3
-              normal: ~226,188,123,218
-              through: true
-              visible: var.subtitleShowBackground
-          字幕标识:
-            type: Text
-            attribute:
-              point: ~top_center
-              y: 13
-              texts: ~&7字幕  /  CAPTION
-              fontSize: 36
-              through: true
-              visible: var.subtitleShowBackground
+            effect:
+              stroke:
+                width: 3
+                color: ~0,0,0,255
           字幕文字:
             type: Text
             attribute:
               point: ~middle_center
-              y: 23
+              x: 0
+              y: 0
               limit: var.subtitleAnimation
               texts: "var.subtitleText"
-              fontSize: 54
-              through: true
+              fontSize: 50
               visible: var.subtitleVisible

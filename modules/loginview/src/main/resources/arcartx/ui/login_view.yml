@@ -1,5 +1,6 @@
-# AXS LoginView — focused gateway / quiet slate and golden signal.
-# Packet contracts and authentication behavior are intentionally unchanged.
+# AXS LoginView
+# 登录、注册与密码修改界面。
+
 ui:
   isHud: false
   hide:
@@ -24,20 +25,11 @@ ui:
       var.packetId = 'AXS_loginview'
       var.agreed = false
       var.showRules = false
-      sx = Screen.getWidth() / 1920
-      sy = Screen.getHeight() / 1080
-      s = sx < sy ? sx : sy
-      var.viewW = Screen.getWidth() / s
-      var.viewH = Screen.getHeight() / s
-      var.offX = (var.viewW - 1920) / 2
-    resize: |-
-      sx = Screen.getWidth() / 1920
-      sy = Screen.getHeight() / 1080
-      s = sx < sy ? sx : sy
-      var.viewW = Screen.getWidth() / s
-      var.viewH = Screen.getHeight() / s
-      var.offX = (var.viewW - 1920) / 2
   packetHandler:
+    # packetHandler: result
+    # 包字段:
+    #   - message: 操作结果消息文本
+    #   - success: 操作是否成功 (true/false)
     result: |-
       var.result = packet['message']
       var.resultAlpha = TwoLerp(1, 1, 0, 2000, 1000)
@@ -49,6 +41,24 @@ ui:
         var.newPassword = none
         var.changeConfirmPassword = none
       }
+    # packetHandler: init
+    # 包字段:
+    #   - packetId: 服务端回包 ID，用于客户端 Packet.send 回传
+    #   - type: 界面类型 (login/register/change/bypass/bypass_unbound)
+    #   - title: 界面标题文本
+    #   - mode: 模式 (standalone/authme)
+    #   - registered: 玩家是否已注册
+    #   - playerName: 玩家名称
+    #   - serverName: 服务器名称
+    #   - online: 当前在线人数
+    #   - maxPlayers: 最大玩家数
+    #   - address: 服务器 IP 地址
+    #   - time: 服务器时间字符串
+    #   - premiumBypass: 是否通过正版验证免登录
+    #   - qqBound: 是否已绑定 QQ
+    #   - bindPrompt: 未绑定 QQ 时的提示消息列表
+    #   - message: 初始结果消息
+    #   - requireTerms: 是否要求同意服务条款
     init: |-
       var.resultAlpha = 0
       var.packetId = packet['packetId']
@@ -75,597 +85,679 @@ ui:
       var.agreed = false
       var.showRules = false
       var.requireTerms = packet['requireTerms']
+    # packetHandler: close
+    # 包字段:
+    #   - message: 关闭时的结果消息
     close: "var.result = packet['message']"
   defaultOpen: false
 controls:
-  全屏底色:
-    type: Texture
-    attribute: {point: ~stretch_all, normal: '~15,22,29,245'}
   自适应全局布局:
     type: Adaptive
-    attribute: {point: ~top_center, width: 1920, height: 1080}
+    attribute:
+      point: ~stretch_all
+      width: 1920
+      height: 1080
     children:
-      顶部标识:
-        type: Canvas
-        attribute: {x: "56 - var.offX", y: 32, width: "var.viewW - 112", height: 48}
-        children:
-          信号:
-            type: Texture
-            attribute: {x: 0, y: 12, width: 8, height: 24, normal: '~224,184,100,255', through: true}
-          品牌:
-            type: Text
-            attribute: {x: 24, y: 4, texts: ~&fArcartX &7/ &eACCOUNT GATEWAY, fontSize: 36, through: true}
-          页码:
-            type: Text
-            attribute: {point: ~middle_right, texts: ~&701 &f/ 身份通行, fontSize: 36, through: true}
       面板:
         type: Canvas
-        attribute: {x: 260, y: "(var.viewH - 840) / 2", width: 1400, height: 840}
+        attribute:
+          point: ~middle_center
+          width: 680
+          height: 360
         children:
           背景:
             type: Texture
-            attribute: {point: ~stretch_all, normal: '~25,34,44,255', shape: ~round_rect, radius: 18}
+            attribute:
+              point: ~stretch_all
+              normal: ~26,32,42,232
             effect:
-              stroke: {width: 2, color: '~66,80,93,255'}
-          账号概览:
-            type: Canvas
-            attribute: {x: 0, y: 0, width: 420, height: 840}
-            children:
-              账号底:
-                type: Texture
-                attribute: {point: ~stretch_all, normal: '~20,29,38,255', shape: ~round_rect, radius: 18}
-              导向条:
-                type: Texture
-                attribute: {x: 38, y: 44, width: 48, height: 6, normal: '~224,184,100,255', through: true}
-              区域标识:
-                type: Text
-                attribute: {x: 38, y: 76, texts: ~&e01 / 账号概览, fontSize: 36, through: true}
-              欢迎:
-                type: Text
-                attribute: {x: 38, y: 130, texts: ~&f欢迎来到, fontSize: 54, through: true}
-              服务器名:
-                type: Text
-                attribute: {x: 38, y: 182, texts: "'&f' + var.serverName", fontSize: 48, limit: 18, through: true}
-              玩家标签:
-                type: Text
-                attribute: {x: 38, y: 280, texts: ~&7当前账号, fontSize: 36, through: true}
-              玩家名:
-                type: Text
-                attribute: {x: 38, y: 318, texts: "'&f' + var.playerName", fontSize: 36, through: true}
-              账号状态:
-                type: Text
-                attribute: {x: 38, y: 372, texts: "var.registered ? '&7已有账号 · 欢迎回来' : '&e新账号 · 完成注册后进入'", fontSize: 36, visible: "var.type != none", through: true}
-              分隔线:
-                type: Texture
-                attribute: {x: 38, y: 432, width: 344, height: 2, normal: '~64,79,92,255', through: true}
-              在线标签:
-                type: Text
-                attribute: {x: 38, y: 462, texts: ~&7当前在线, fontSize: 36, through: true}
-              在线人数:
-                type: Text
-                attribute: {x: 38, y: 500, texts: "'&e' + var.online.round() + ' &7/ ' + var.maxPlayers.round()", fontSize: 54, through: true}
-              地址标签:
-                type: Text
-                attribute: {x: 38, y: 574, texts: ~&7当前连接 IP, fontSize: 36, through: true}
-              地址:
-                type: Text
-                attribute: {x: 38, y: 612, texts: "'&f' + var.address", fontSize: 36, limit: 26, through: true}
-              安全提醒:
-                type: Text
-                attribute: {x: 38, y: 678, texts: ~&7请勿向他人提供账号密码。, fontSize: 36, through: true}
-              退出服务器:
-                type: Canvas
-                attribute: {x: 38, y: 750, width: 344, height: 52}
-                action:
-                  clickLeft: Game.quit()
-                children:
-                  退出服务器背景:
-                    type: Texture
-                    attribute: {point: ~stretch_all, normal: '~35,44,54,255', hover: '~71,44,43,255', through: true, shape: ~round_rect, radius: 8}
-                    effect:
-                      stroke: {width: 1, color: '~91,102,112,255'}
-                  退出服务器文字:
-                    type: Text
-                    attribute: {point: ~middle_center, texts: ~&7退出服务器, fontSize: 36, through: true}
-          通行表单:
-            type: Canvas
-            attribute: {x: 452, y: 0, width: 916, height: 840}
-            children:
-              通行标识:
-                type: Text
-                attribute: {x: 32, y: 36, texts: ~&e02 / 通行验证, fontSize: 36, through: true}
-              标题:
-                type: Text
-                attribute: {x: 32, y: 82, texts: "'&f' + var.title", fontSize: 64, through: true}
-              读取状态:
-                type: Text
-                attribute: {x: 32, y: 144, texts: ~&7正在读取账号状态，请稍候。, fontSize: 36, visible: "var.type == none", through: true}
-              登录说明:
-                type: Text
-                attribute: {x: 32, y: 144, texts: ~&7输入账号密码，验证后进入服务器。, fontSize: 36, visible: "var.type == 'login'", through: true}
-              注册说明:
-                type: Text
-                attribute: {x: 32, y: 144, texts: ~&7设置密码并再次确认，创建你的通行凭证。, fontSize: 36, visible: "var.type == 'register'", through: true}
-              改密说明:
-                type: Text
-                attribute: {x: 32, y: 144, texts: ~&7验证旧密码后更新；请勿与其他账号共用密码。, fontSize: 36, visible: "var.type == 'change'", through: true}
-              登录字段标签:
-                type: Text
-                attribute: {x: 32, y: 202, texts: ~&f账号密码, fontSize: 36, visible: "var.type == 'login'", through: true}
-              登录密码容器:
-                type: Canvas
-                attribute: {x: 32, y: 244, width: 852, height: 64, visible: "var.type == 'login'"}
-                children:
-                  输入底:
-                    type: Texture
-                    attribute: {point: ~stretch_all, normal: '~16,24,32,255', shape: ~round_rect, radius: 8, through: true}
-                    effect:
-                      stroke: {width: 2, color: "self.isHovered() ? '224,184,100,255' : '79,97,112,255'"}
-                  登录密码:
-                    type: TextBox
-                    attribute: {x: 16, y: 12, width: 820, height: 40, length: 64, emptyText: ~输入密码, fontSize: 36, passwordChar: ~※}
-                    action:
-                      textChange: var.password = self.getContent()
-              注册字段标签:
-                type: Text
-                attribute: {x: 32, y: 196, texts: ~&f设置密码, fontSize: 36, visible: "var.type == 'register'", through: true}
-              注册密码容器:
-                type: Canvas
-                attribute: {x: 32, y: 232, width: 852, height: 64, visible: "var.type == 'register'"}
-                children:
-                  输入底:
-                    type: Texture
-                    attribute: {point: ~stretch_all, normal: '~16,24,32,255', shape: ~round_rect, radius: 8, through: true}
-                    effect:
-                      stroke: {width: 2, color: "self.isHovered() ? '224,184,100,255' : '79,97,112,255'"}
-                  注册密码:
-                    type: TextBox
-                    attribute: {x: 16, y: 12, width: 820, height: 40, length: 64, emptyText: ~设置密码, fontSize: 36, passwordChar: ~※}
-                    action:
-                      textChange: var.password = self.getContent()
-              注册确认标签:
-                type: Text
-                attribute: {x: 32, y: 316, texts: ~&f再次确认, fontSize: 36, visible: "var.type == 'register'", through: true}
-              注册确认容器:
-                type: Canvas
-                attribute: {x: 32, y: 352, width: 852, height: 64, visible: "var.type == 'register'"}
-                children:
-                  输入底:
-                    type: Texture
-                    attribute: {point: ~stretch_all, normal: '~16,24,32,255', shape: ~round_rect, radius: 8, through: true}
-                    effect:
-                      stroke: {width: 2, color: "self.isHovered() ? '224,184,100,255' : '79,97,112,255'"}
-                  注册确认:
-                    type: TextBox
-                    attribute: {x: 16, y: 12, width: 820, height: 40, length: 64, emptyText: ~再次输入密码, fontSize: 36, passwordChar: ~※}
-                    action:
-                      textChange: var.confirmPassword = self.getContent()
-              登录须知:
-                type: Canvas
-                attribute: {x: 32, y: 438, width: 852, height: 46, visible: "(var.type == 'login' || var.type == 'register' || var.type == 'bypass') && var.requireTerms"}
-                action:
-                  click: var.showRules = true
-                children:
-                  条款底:
-                    type: Texture
-                    attribute: {point: ~stretch_all, normal: '~32,43,52,255', hover: '~48,59,67,255', through: true, shape: ~round_rect, radius: 6}
-                  方框:
-                    type: Texture
-                    attribute: {x: 16, y: 14, width: 18, height: 18, normal: "var.agreed ? '224,184,100,255' : '32,43,52,255'", through: true}
-                    effect:
-                      stroke: {width: 1, color: '~224,184,100,255'}
-                  须知文字:
-                    type: Text
-                    attribute: {point: ~middle_left, x: 48, texts: "var.agreed ? '&e已同意 &f服务器游玩须知 · 点击重读' : '&f阅读并同意服务器游玩须知 &e>'", fontSize: 36, through: true}
-              登录按钮:
-                type: Canvas
-                attribute: {x: 32, y: 510, width: 852, height: 64, visible: "var.type == 'login'"}
-                action:
-                  clickLeft: "Packet.send(var.packetId, 'login', var.password, var.agreed)"
-                children:
-                  登录按钮背景:
-                    type: Texture
-                    attribute: {point: ~stretch_all, through: true, normal: '~224,184,100,255', hover: '~245,207,134,255', shape: ~round_rect, radius: 8}
-                  登录按钮文字:
-                    type: Text
-                    attribute: {point: ~middle_center, texts: ~&0验证并登录  >, fontSize: 48, through: true}
-              切换修改密码:
-                type: Canvas
-                attribute: {x: 32, y: 594, width: 852, height: 52, visible: "var.type == 'login'"}
-                action:
-                  clickLeft: |-
-                    var.type = 'change'
-                    var.title = '修改密码'
-                    var.result = none
-                    var.password = none
-                    var.oldPassword = none
-                    var.newPassword = none
-                    var.changeConfirmPassword = none
-                children:
-                  切换修改密码背景:
-                    type: Texture
-                    attribute: {point: ~stretch_all, through: true, normal: '~36,47,59,255', hover: '~50,64,77,255', shape: ~round_rect, radius: 8}
-                    effect:
-                      stroke: {width: 1, color: '~91,107,122,255'}
-                  切换修改密码文字:
-                    type: Text
-                    attribute: {point: ~middle_center, texts: ~&f修改账号密码, fontSize: 36, through: true}
-              免登录状态:
-                type: Canvas
-                attribute: {x: 32, y: 218, width: 852, height: 174, visible: "var.type == 'bypass'"}
-                children:
-                  状态底:
-                    type: Texture
-                    attribute: {point: ~stretch_all, normal: '~29,48,45,255', shape: ~round_rect, radius: 10}
-                  状态信号:
-                    type: Texture
-                    attribute: {x: 24, y: 28, width: 6, height: 112, normal: '~134,187,152,255', through: true}
-                  免登录提示:
-                    type: Text
-                    attribute: {x: 54, y: 30, texts: ~&a身份已验证, fontSize: 54, through: true}
-                  免登说明:
-                    type: Text
-                    attribute: {x: 54, y: 92, texts: ~&f无需输入密码，可直接进入服务器。, fontSize: 36, through: true}
-                  绑定状态:
-                    type: Text
-                    attribute: {x: 54, y: 132, texts: "var.qqBound ? '&7绑定要求已满足' : '&7请按服务器提示完成验证'", fontSize: 36, through: true}
-              进入服务器:
-                type: Canvas
-                attribute: {x: 32, y: 510, width: 852, height: 64, visible: "var.type == 'bypass'"}
-                action:
-                  clickLeft: "Packet.send(var.packetId, 'bypass_enter', var.agreed)"
-                children:
-                  进入服务器背景:
-                    type: Texture
-                    attribute: {point: ~stretch_all, through: true, normal: '~224,184,100,255', hover: '~245,207,134,255', shape: ~round_rect, radius: 8}
-                  进入服务器文字:
-                    type: Text
-                    attribute: {point: ~middle_center, texts: ~&0进入服务器  >, fontSize: 48, through: true}
-              绑定说明:
-                type: Text
-                attribute: {x: 32, y: 144, texts: ~&e身份已验证 · 完成 QQ 绑定后继续。, fontSize: 36, visible: "var.type == 'bypass_unbound'", through: true}
-              绑定提示区:
-                type: Canvas
-                attribute: {x: 32, y: 198, width: 852, height: 158, visible: "var.type == 'bypass_unbound'"}
-                children:
-                  提示底:
-                    type: Texture
-                    attribute: {point: ~stretch_all, normal: '~37,43,45,255', shape: ~round_rect, radius: 8}
-                  提示滑轨:
-                    type: Texture
-                    attribute: {x: 828, y: 12, width: 8, height: 134, normal: '~60,72,82,255', through: true}
-                  提示滑块:
-                    type: Texture
-                    attribute: {x: 828, y: 12, width: 8, height: 44, maxDragY: 90, normal: '~224,184,100,255'}
-                  绑定提示滚动栏:
-                    type: Scroll
-                    attribute: {x: 20, y: 12, width: 792, height: 134, moveY: "self.parent['提示滑块'].getDragYRatio()"}
-                    action:
-                      wheel: |-
-                        if(self.moveY >= 0 && self.wheelValue > 0){
-                          self.parent['提示滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                        }
-                        if(self.moveY <= 1 && self.wheelValue < 0){
-                          self.parent['提示滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                        }
-                    children:
-                      提示内容:
-                        type: VStack
-                        attribute: {width: 792}
-                        children:
-                          绑定提示:
-                            type: Text
-                            attribute: {texts: var.bindPrompt, fontSize: 36, limit: 38, through: true}
-              绑定码容器:
-                type: Canvas
-                attribute: {x: 32, y: 390, width: 852, height: 64, visible: "var.type == 'bypass_unbound'"}
-                children:
-                  输入底:
-                    type: Texture
-                    attribute: {point: ~stretch_all, normal: '~16,24,32,255', shape: ~round_rect, radius: 8, through: true}
-                    effect:
-                      stroke: {width: 2, color: "self.isHovered() ? '224,184,100,255' : '79,97,112,255'"}
-                  绑定码输入框:
-                    type: TextBox
-                    attribute: {x: 16, y: 12, width: 820, height: 40, length: 6, emptyText: ~输入 6 位绑定验证码, fontSize: 36}
-                    action:
-                      textChange: var.bindCode = self.getContent()
-              确认绑定:
-                type: Canvas
-                attribute: {x: 32, y: 510, width: 852, height: 64, visible: "var.type == 'bypass_unbound'"}
-                action:
-                  clickLeft: "Packet.send(var.packetId, 'bind_code', var.bindCode)"
-                children:
-                  确认绑定背景:
-                    type: Texture
-                    attribute: {point: ~stretch_all, through: true, normal: '~224,184,100,255', hover: '~245,207,134,255', shape: ~round_rect, radius: 8}
-                  确认绑定文字:
-                    type: Text
-                    attribute: {point: ~middle_center, texts: ~&0确认绑定  >, fontSize: 48, through: true}
-              注册按钮:
-                type: Canvas
-                attribute: {x: 32, y: 510, width: 852, height: 64, visible: "var.type == 'register'"}
-                action:
-                  clickLeft: "Packet.send(var.packetId, 'register', var.password, var.confirmPassword, var.agreed)"
-                children:
-                  注册按钮背景:
-                    type: Texture
-                    attribute: {point: ~stretch_all, through: true, normal: '~224,184,100,255', hover: '~245,207,134,255', shape: ~round_rect, radius: 8}
-                  注册按钮文字:
-                    type: Text
-                    attribute: {point: ~middle_center, texts: ~&0注册并登录  >, fontSize: 48, through: true}
-              旧密码容器:
-                type: Canvas
-                attribute: {x: 32, y: 214, width: 852, height: 64, visible: "var.type == 'change'"}
-                children:
-                  输入底:
-                    type: Texture
-                    attribute: {point: ~stretch_all, normal: '~16,24,32,255', shape: ~round_rect, radius: 8, through: true}
-                    effect:
-                      stroke: {width: 2, color: "self.isHovered() ? '224,184,100,255' : '79,97,112,255'"}
-                  修改旧密码:
-                    type: TextBox
-                    attribute: {x: 16, y: 12, width: 820, height: 40, length: 64, emptyText: ~旧密码, fontSize: 36, passwordChar: ~※}
-                    action:
-                      textChange: var.oldPassword = self.getContent()
-              新密码容器:
-                type: Canvas
-                attribute: {x: 32, y: 310, width: 852, height: 64, visible: "var.type == 'change'"}
-                children:
-                  输入底:
-                    type: Texture
-                    attribute: {point: ~stretch_all, normal: '~16,24,32,255', shape: ~round_rect, radius: 8, through: true}
-                    effect:
-                      stroke: {width: 2, color: "self.isHovered() ? '224,184,100,255' : '79,97,112,255'"}
-                  修改新密码:
-                    type: TextBox
-                    attribute: {x: 16, y: 12, width: 820, height: 40, length: 64, emptyText: ~新密码, fontSize: 36, passwordChar: ~※}
-                    action:
-                      textChange: var.newPassword = self.getContent()
-              改密确认容器:
-                type: Canvas
-                attribute: {x: 32, y: 406, width: 852, height: 64, visible: "var.type == 'change'"}
-                children:
-                  输入底:
-                    type: Texture
-                    attribute: {point: ~stretch_all, normal: '~16,24,32,255', shape: ~round_rect, radius: 8, through: true}
-                    effect:
-                      stroke: {width: 2, color: "self.isHovered() ? '224,184,100,255' : '79,97,112,255'"}
-                  修改确认:
-                    type: TextBox
-                    attribute: {x: 16, y: 12, width: 820, height: 40, length: 64, emptyText: ~再次输入新密码, fontSize: 36, passwordChar: ~※}
-                    action:
-                      textChange: var.changeConfirmPassword = self.getContent()
-              修改按钮:
-                type: Canvas
-                attribute: {x: 32, y: 510, width: 852, height: 64, visible: "var.type == 'change'"}
-                action:
-                  clickLeft: "Packet.send(var.packetId, 'change_password', var.oldPassword, var.newPassword, var.changeConfirmPassword)"
-                children:
-                  修改按钮背景:
-                    type: Texture
-                    attribute: {point: ~stretch_all, through: true, normal: '~224,184,100,255', hover: '~245,207,134,255', shape: ~round_rect, radius: 8}
-                  修改按钮文字:
-                    type: Text
-                    attribute: {point: ~middle_center, texts: ~&0保存新密码, fontSize: 48, through: true}
-              返回登录:
-                type: Canvas
-                attribute: {x: 32, y: 594, width: 852, height: 52, visible: "var.type == 'change'"}
-                action:
-                  clickLeft: |-
-                    var.type = 'login'
-                    var.title = '登录服务器'
-                    var.result = none
-                    var.oldPassword = none
-                    var.newPassword = none
-                    var.changeConfirmPassword = none
-                children:
-                  返回登录背景:
-                    type: Texture
-                    attribute: {point: ~stretch_all, through: true, normal: '~36,47,59,255', hover: '~50,64,77,255', shape: ~round_rect, radius: 8}
-                    effect:
-                      stroke: {width: 1, color: '~91,107,122,255'}
-                  返回登录文字:
-                    type: Text
-                    attribute: {point: ~middle_center, texts: ~&f< 返回登录, fontSize: 36, through: true}
-              反馈区:
-                type: Canvas
-                attribute: {x: 32, y: 686, width: 852, height: 114}
-                children:
-                  反馈底:
-                    type: Texture
-                    attribute: {point: ~stretch_all, normal: '~21,30,39,255', shape: ~round_rect, radius: 8}
-                  反馈标签:
-                    type: Text
-                    attribute: {x: 18, y: 12, texts: ~&7服务器反馈, fontSize: 36, through: true}
-                  反馈滑轨:
-                    type: Texture
-                    attribute: {x: 826, y: 52, width: 6, height: 50, normal: '~60,72,82,255', visible: "var.result != none && var.result != ''", through: true}
-                  反馈滑块:
-                    type: Texture
-                    attribute: {x: 826, y: 52, width: 6, height: 20, maxDragY: 30, normal: '~224,184,100,255', visible: "var.result != none && var.result != ''"}
-                  反馈滚动栏:
-                    type: Scroll
-                    attribute: {x: 18, y: 52, width: 790, height: 50, moveY: "self.parent['反馈滑块'].getDragYRatio()", visible: "var.result != none && var.result != ''"}
-                    action:
-                      wheel: |-
-                        if(self.moveY >= 0 && self.wheelValue > 0){
-                          self.parent['反馈滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                        }
-                        if(self.moveY <= 1 && self.wheelValue < 0){
-                          self.parent['反馈滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                        }
-                    children:
-                      反馈内容:
-                        type: VStack
-                        attribute: {width: 790}
-                        children:
-                          结果:
-                            type: Text
-                            attribute: {texts: var.result, fontSize: 36, limit: 38, through: true}
-                  无反馈:
-                    type: Text
-                    attribute: {x: 18, y: 52, texts: ~&7完成上方验证后继续。, fontSize: 36, visible: "var.result == none || var.result == ''", through: true}
-                  反馈信号:
-                    type: Texture
-                    attribute: {x: 0, y: 0, width: 4, height: 114, normal: "var.lastSuccess ? '134,187,152,255' : '220,140,112,255'", alpha: var.resultAlpha, visible: "var.resultAlpha > 0", through: true}
-      服务器时间:
-        type: Text
-        attribute: {x: 260, y: "(var.viewH + 840) / 2 + 20", texts: "'&7时间: ' + (Placeholder.parse('%server_time_yyyy年MM月dd日hh:mm:ss%') != none ? Placeholder.parse('%server_time_yyyy年MM月dd日hh:mm:ss%') : var.time)", fontSize: 36, through: true}
-      # Modal is a sibling of the gateway, covering the entire derived viewport.
-      服规覆盖层:
-        type: Canvas
-        attribute: {x: "-var.offX", y: 0, width: "var.viewW", height: "var.viewH", visible: var.showRules}
-        children:
-          遮罩:
+              stroke:
+                width: 2
+                color: ~210,225,245,230
+              ripple:
+                duration: 1200
+                color: ~140,190,240,90
+                width: 0.05
+          顶部强调:
             type: Texture
-            attribute: {point: ~stretch_all, normal: '~8,13,18,240'}
-          服规面板:
-            type: Canvas
-            attribute: {point: ~middle_center, width: 1180, height: 820}
+            attribute:
+              x: 28
+              y: 20
+              width: 5
+              height: 64
+              normal: ~84,190,130,255
+              shape: ~round_rect
+              radius: 3
+          标题:
+            type: Text
+            attribute:
+              x: 42
+              y: 24
+              texts: "'&f' + var.title"
+              fontSize: 56
+          副标题:
+            type: Text
+            attribute:
+              x: 42
+              y: 66
+              texts: "'&b' + var.playerName"
+              fontSize: 38
+          服务器信息:
+            type: Text
+            attribute:
+              x: 42
+              y: 98
+              texts: "'&7' + var.serverName + '  在线 ' + var.online.round() + '/' + var.maxPlayers.round() + '  IP地址 ' + var.address"
+              fontSize: 34
+          服务器时间:
+            type: Text
+            attribute:
+              x: 42
+              y: 124
+              texts: "'&f时间: ' + (Placeholder.parse('%server_time_yyyy年MM月dd日hh:mm:ss%') != none ? Placeholder.parse('%server_time_yyyy年MM月dd日hh:mm:ss%') : var.time )"
+              fontSize: 28
+          登录须知:
+            type: Text
+            attribute:
+              x: 42
+              y: 160
+              texts: "var.agreed ? '&a✔ &f我已阅读并同意服务器游玩须知' : '      &f我已阅读并同意服务器游玩须知'"
+              fontSize: 36
+              visible: "(var.type == 'login' || var.type == 'register' || var.type == 'bypass') && var.requireTerms"
+            action:
+              click: var.showRules = true
             children:
-              服规背景:
+              方框:
                 type: Texture
-                attribute: {point: ~stretch_all, normal: '~25,34,44,255', shape: ~round_rect, radius: 16}
+                attribute:
+                  normal: ~26,32,42,232
+                  width: 15
+                  x: 5
+                  y: 2
+                  height: 15
+                  visible: "!var.agreed"
+                  through: true
                 effect:
-                  stroke: {width: 2, color: '~224,184,100,255'}
-              服规标识:
+                  stroke:
+                    width: 2.0
+                    color: ~255,255,255,255
+          登录密码:
+            type: TextBox
+            attribute:
+              x: 42
+              y: 190
+              width: 420
+              height: 42
+              length: 64
+              emptyText: ~密码
+              fontSize: 49
+              passwordChar: ~※
+              background: ~18,23,31,235
+              visible: "var.type == 'login'"
+            action:
+              textChange: var.password = self.getContent()
+            effect:
+              stroke:
+                width: 2
+                color: ~165,190,220,255
+          登录按钮:
+            type: Canvas
+            attribute:
+              x: 478
+              y: 190
+              width: 180
+              height: 42
+              visible: "var.type == 'login'"
+            action:
+              clickLeft: "Packet.send(var.packetId, 'login', var.password, var.agreed)"
+            children:
+              登录按钮背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~80,180,122,238
+                  hover: ~108,210,156,255
+                  shape: ~round_rect
+                  radius: 12
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~165,190,220,255
+              登录按钮文字:
                 type: Text
-                attribute: {x: 42, y: 32, texts: ~&eGATEWAY / 游玩约定, fontSize: 36, through: true}
-              服规标题:
+                attribute:
+                  point: ~middle_center
+                  width: 180
+                  texts: ~&f登录
+                  fontSize: 38
+                  through: true
+          切换修改密码:
+            type: Canvas
+            attribute:
+              x: 42
+              y: 246
+              width: 616
+              height: 38
+              visible: "var.type == 'login'"
+            action:
+              clickLeft: |-
+                var.type = 'change'
+                var.title = '修改密码'
+                var.result = none
+                var.password = none
+                var.oldPassword = none
+                var.newPassword = none
+                var.changeConfirmPassword = none
+            children:
+              切换修改密码背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~191,160,72,220
+                  hover: ~224,188,88,255
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~165,190,220,255
+              切换修改密码文字:
                 type: Text
-                attribute: {x: 42, y: 76, texts: ~&f服务器游玩须知, fontSize: 64, through: true}
-              阅读提示:
+                attribute:
+                  point: ~middle_center
+                  width: 616
+                  texts: ~&f修改密码
+                  fontSize: 38
+                  through: true
+          退出服务器:
+            type: Canvas
+            attribute:
+              x: 42
+              y: 300
+              width: 616
+              height: 42
+            action:
+              clickLeft: Game.quit()
+            children:
+              退出服务器背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~160,50,50,220
+                  hover: ~200,60,60,255
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~165,190,220,255
+              退出服务器文字:
                 type: Text
-                attribute: {x: 42, y: 148, texts: ~&7滚轮浏览或拖动右侧金色滑块，阅读后确认同意。, fontSize: 36, through: true}
-              服规滚动区:
+                attribute:
+                  point: ~middle_center
+                  width: 616
+                  texts: ~&f退出服务器
+                  fontSize: 38
+                  through: true
+          免登录提示:
+            type: Text
+            attribute:
+              x: 42
+              y: 190
+              texts: ~&a✔ &f身份已通过正版验证，无需输入密码
+              fontSize: 36
+              visible: "var.type == 'bypass'"
+          进入服务器:
+            type: Canvas
+            attribute:
+              x: 42
+              y: 240
+              width: 616
+              height: 42
+              visible: "var.type == 'bypass'"
+            action:
+              clickLeft: "Packet.send(var.packetId, 'bypass_enter', var.agreed)"
+            children:
+              进入服务器背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~80,180,122,238
+                  hover: ~108,210,156,255
+                  shape: ~round_rect
+                  radius: 12
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~165,190,220,255
+              进入服务器文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  width: 616
+                  texts: ~&f进入服务器
+                  fontSize: 38
+                  through: true
+          绑定提示:
+            type: Text
+            attribute:
+              x: 42
+              y: 152
+              width: 600
+              texts: var.bindPrompt
+              fontSize: 30
+              visible: "var.type == 'bypass_unbound'"
+          绑定码输入框:
+            type: TextBox
+            attribute:
+              x: 42
+              y: 218
+              width: 420
+              height: 42
+              length: 6
+              emptyText: ~绑定验证码
+              fontSize: 49
+              background: ~18,23,31,235
+              visible: "var.type == 'bypass_unbound'"
+            action:
+              textChange: var.bindCode = self.getContent()
+            effect:
+              stroke:
+                width: 2
+                color: ~165,190,220,255
+          确认绑定:
+            type: Canvas
+            attribute:
+              x: 478
+              y: 218
+              width: 180
+              height: 42
+              visible: "var.type == 'bypass_unbound'"
+            action:
+              clickLeft: "Packet.send(var.packetId, 'bind_code', var.bindCode)"
+            children:
+              确认绑定背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~80,180,122,238
+                  hover: ~108,210,156,255
+                  shape: ~round_rect
+                  radius: 12
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~165,190,220,255
+              确认绑定文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  width: 180
+                  texts: ~&f确认绑定
+                  fontSize: 38
+                  through: true
+          注册密码:
+            type: TextBox
+            attribute:
+              x: 42
+              y: 190
+              width: 300
+              height: 42
+              length: 64
+              emptyText: ~设置密码
+              fontSize: 42
+              passwordChar: ~※
+              background: ~18,23,31,235
+              visible: "var.type == 'register'"
+            action:
+              textChange: var.password = self.getContent()
+            effect:
+              stroke:
+                width: 2
+                color: ~165,190,220,255
+          注册确认:
+            type: TextBox
+            attribute:
+              x: 358
+              y: 190
+              width: 300
+              height: 42
+              length: 64
+              emptyText: ~确认密码
+              fontSize: 42
+              passwordChar: ~※
+              background: ~18,23,31,235
+              visible: "var.type == 'register'"
+            action:
+              textChange: var.confirmPassword = self.getContent()
+            effect:
+              stroke:
+                width: 2
+                color: ~165,190,220,255
+          注册按钮:
+            type: Canvas
+            attribute:
+              x: 42
+              y: 246
+              width: 616
+              height: 42
+              visible: "var.type == 'register'"
+            action:
+              clickLeft: "Packet.send(var.packetId, 'register', var.password, var.confirmPassword, var.agreed)"
+            children:
+              注册按钮背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~80,180,122,238
+                  hover: ~108,210,156,255
+                  shape: ~round_rect
+                  radius: 12
+              注册按钮文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  width: 616
+                  texts: ~&f注册并登录
+                  fontSize: 38
+                  through: true
+          修改旧密码:
+            type: TextBox
+            attribute:
+              x: 42
+              y: 190
+              width: 196
+              height: 40
+              length: 64
+              emptyText: ~旧密码
+              fontSize: 34
+              passwordChar: ~※
+              background: ~18,23,31,235
+              visible: "var.type == 'change'"
+            action:
+              textChange: var.oldPassword = self.getContent()
+            effect:
+              stroke:
+                width: 2
+                color: ~165,190,220,255
+          修改新密码:
+            type: TextBox
+            attribute:
+              x: 252
+              y: 190
+              width: 196
+              height: 40
+              length: 64
+              emptyText: ~新密码
+              fontSize: 34
+              passwordChar: ~※
+              background: ~18,23,31,235
+              visible: "var.type == 'change'"
+            action:
+              textChange: var.newPassword = self.getContent()
+            effect:
+              stroke:
+                width: 2
+                color: ~165,190,220,255
+          修改确认:
+            type: TextBox
+            attribute:
+              x: 462
+              y: 190
+              width: 196
+              height: 40
+              length: 64
+              emptyText: ~确认
+              fontSize: 34
+              passwordChar: ~※
+              background: ~18,23,31,235
+              visible: "var.type == 'change'"
+            action:
+              textChange: var.changeConfirmPassword = self.getContent()
+            effect:
+              stroke:
+                width: 2
+                color: ~165,190,220,255
+          修改按钮:
+            type: Canvas
+            attribute:
+              x: 42
+              y: 246
+              width: 300
+              height: 42
+              visible: "var.type == 'change'"
+            action:
+              clickLeft: "Packet.send(var.packetId, 'change_password', var.oldPassword, var.newPassword, var.changeConfirmPassword)"
+            children:
+              修改按钮背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~191,160,72,225
+                  hover: ~224,188,88,255
+                  shape: ~round_rect
+                  radius: 12
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~165,190,220,255
+              修改按钮文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  width: 300
+                  texts: ~&f修改密码
+                  fontSize: 38
+                  through: true
+          返回登录:
+            type: Canvas
+            attribute:
+              x: 358
+              y: 246
+              width: 300
+              height: 42
+              visible: "var.type == 'change'"
+            action:
+              clickLeft: |-
+                var.type = 'login'
+                var.title = '登录服务器'
+                var.result = none
+                var.oldPassword = none
+                var.newPassword = none
+                var.changeConfirmPassword = none
+            children:
+              返回登录背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~86,112,148,225
+                  hover: ~145,170,205,255
+                  shape: ~round_rect
+                  radius: 12
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~165,190,220,255
+              返回登录文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  width: 300
+                  texts: ~&f返回登录
+                  fontSize: 38
+                  through: true
+          结果:
+            type: Text
+            attribute:
+              point: ~middle_center
+              width: 616
+              texts: var.result
+              fontSize: 81
+              alpha: var.resultAlpha
+              visible: var.resultAlpha > 0
+          服规覆盖层:
+            type: Canvas
+            attribute:
+              point: ~stretch_all
+              visible: var.showRules
+            children:
+              遮罩:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~0,0,0,200
+              服规面板:
                 type: Canvas
-                attribute: {x: 42, y: 210, width: 1096, height: 444}
+                attribute:
+                  point: ~middle_center
+                  width: 600
+                  height: 300
                 children:
-                  滑轨:
+                  服规背景:
                     type: Texture
-                    attribute: {x: 1082, y: 0, width: 10, height: 444, normal: '~60,74,87,255', shape: ~round_rect, radius: 5, through: true}
-                  纵向滑块:
-                    type: Texture
-                    attribute: {x: 1082, y: 0, width: 10, height: 96, normal: '~224,184,100,255', maxDragY: 348, shape: ~round_rect, radius: 5}
-                  服规滚动栏:
-                    type: Scroll
-                    attribute: {x: 0, y: 0, width: 1056, height: 444, moveY: "self.parent['纵向滑块'].getDragYRatio()"}
-                    action:
-                      wheel: |-
-                        if(self.moveY >= 0){
-                          if(self.wheelValue > 0){
-                            self.parent['纵向滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                          }
-                        }
-                        if(self.moveY <= 1){
-                          if(self.wheelValue < 0){
-                            self.parent['纵向滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                          }
-                        }
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~26,32,42,255
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~210,225,245,230
+                  服规标题:
+                    type: Text
+                    attribute:
+                      x: 20
+                      y: 12
+                      texts: ~&f服务器游玩须知
+                      fontSize: 48
+                  服规滚动区:
+                    type: Canvas
+                    attribute:
+                      x: 20
+                      y: 52
+                      width: 560
+                      height: 180
                     children:
-                      服规内容区:
-                        type: VStack
-                        attribute: {width: 1056, spaceBetween: 14}
+                      纵向滑块:
+                        type: Texture
+                        attribute:
+                          point: ~top_right
+                          width: 15
+                          height: 40
+                          normal: ~120,130,140,255
+                          maxDragY: 140
+                        effect:
+                          stroke:
+                            width: 2
+                            color: ~255,255,255,120
+                      服规滚动栏:
+                        type: Scroll
+                        attribute:
+                          width: 545
+                          height: 180
+                          moveY: self.parent['纵向滑块'].getDragYRatio()
+                        action:
+                          wheel: |-
+                            if(self.moveY >= 0){
+                              if(self.wheelValue > 0){
+                                self.parent['纵向滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                              }
+                            }
+                            if(self.moveY <= 1){
+                              if(self.wheelValue < 0){
+                                self.parent['纵向滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                              }
+                            }
                         children:
-                          规则一:
+                          服规内容区:
                             type: Canvas
-                            attribute: {width: 1056, height: 90}
+                            attribute:
+                              width: 545
+                              height: 280
                             children:
-                              编号:
-                                type: Text
-                                attribute: {x: 0, y: 4, texts: ~&e01, fontSize: 48, through: true}
                               服规内容:
                                 type: Text
-                                attribute: {x: 76, y: 6, texts: [~&f禁止使用作弊软件、外挂, ~&f或任何破坏游戏公平性的工具。], fontSize: 36, through: true}
-                          规则二:
-                            type: Canvas
-                            attribute: {width: 1056, height: 90}
-                            children:
-                              编号:
-                                type: Text
-                                attribute: {x: 0, y: 4, texts: ~&e02, fontSize: 48, through: true}
-                              内容:
-                                type: Text
-                                attribute: {x: 76, y: 6, texts: [~&f禁止恶意破坏他人建筑、, ~&f偷窃或骚扰其他玩家。], fontSize: 36, through: true}
-                          规则三:
-                            type: Canvas
-                            attribute: {width: 1056, height: 90}
-                            children:
-                              编号:
-                                type: Text
-                                attribute: {x: 0, y: 4, texts: ~&e03, fontSize: 48, through: true}
-                              内容:
-                                type: Text
-                                attribute: {x: 76, y: 6, texts: [~&f禁止在公共频道发布广告、色情、, ~&f暴力或政治敏感内容。], fontSize: 36, through: true}
-                          规则四:
-                            type: Canvas
-                            attribute: {width: 1056, height: 90}
-                            children:
-                              编号:
-                                type: Text
-                                attribute: {x: 0, y: 4, texts: ~&e04, fontSize: 48, through: true}
-                              内容:
-                                type: Text
-                                attribute: {x: 76, y: 6, texts: [~&f请尊重其他玩家和管理员，, ~&f禁止辱骂、人身攻击或恶意挑衅。], fontSize: 36, through: true}
-                          规则五:
-                            type: Canvas
-                            attribute: {width: 1056, height: 90}
-                            children:
-                              编号:
-                                type: Text
-                                attribute: {x: 0, y: 4, texts: ~&e05, fontSize: 48, through: true}
-                              内容:
-                                type: Text
-                                attribute: {x: 76, y: 6, texts: [~&f禁止使用红石/高频装置等, ~&f造成服务器卡顿的行为。], fontSize: 36, through: true}
-                          规则六:
-                            type: Canvas
-                            attribute: {width: 1056, height: 90}
-                            children:
-                              编号:
-                                type: Text
-                                attribute: {x: 0, y: 4, texts: ~&e06, fontSize: 48, through: true}
-                              内容:
-                                type: Text
-                                attribute: {x: 76, y: 6, texts: [~&f禁止利用游戏漏洞或 BUG, ~&f获取不正当利益。], fontSize: 36, through: true}
-                          规则七:
-                            type: Canvas
-                            attribute: {width: 1056, height: 90}
-                            children:
-                              编号:
-                                type: Text
-                                attribute: {x: 0, y: 4, texts: ~&e07, fontSize: 48, through: true}
-                              内容:
-                                type: Text
-                                attribute: {x: 76, y: 6, texts: [~&f账号安全由玩家本人负责，, ~&f请勿共享账号密码。], fontSize: 36, through: true}
-              底部分隔:
-                type: Texture
-                attribute: {x: 42, y: 682, width: 1096, height: 2, normal: '~63,79,93,255', through: true}
-              同意按钮:
-                type: Canvas
-                attribute: {x: 42, y: 724, width: 700, height: 60}
-                action:
-                  clickLeft: |-
-                    var.agreed = true
-                    var.showRules = false
-                children:
-                  同意按钮背景:
-                    type: Texture
-                    attribute: {point: ~stretch_all, through: true, normal: '~224,184,100,255', hover: '~245,207,134,255', shape: ~round_rect, radius: 8}
-                  同意按钮文字:
-                    type: Text
-                    attribute: {point: ~middle_center, texts: ~&0我已阅读并同意, fontSize: 48, through: true}
-              关闭按钮:
-                type: Canvas
-                attribute: {x: 770, y: 724, width: 368, height: 60}
-                action:
-                  clickLeft: var.showRules = false
-                children:
-                  关闭按钮背景:
-                    type: Texture
-                    attribute: {point: ~stretch_all, through: true, normal: '~36,47,59,255', hover: '~50,64,77,255', shape: ~round_rect, radius: 8}
-                    effect:
-                      stroke: {width: 1, color: '~91,107,122,255'}
-                  关闭按钮文字:
-                    type: Text
-                    attribute: {point: ~middle_center, texts: ~&f返回验证, fontSize: 36, through: true}
+                                attribute:
+                                  x: 0
+                                  y: 0
+                                  width: 545
+                                  texts:
+                                    - ~&f1. 禁止使用作弊软件、外挂或任何破坏游戏公平性的工具。
+                                    - ~&f2. 禁止恶意破坏他人建筑、偷窃或骚扰其他玩家。
+                                    - ~&f3. 禁止在公共频道发布广告、色情、暴力或政治敏感内容。
+                                    - ~&f4. 请尊重其他玩家和管理员，禁止辱骂、人身攻击或恶意挑衅。
+                                    - ~&f5. 禁止使用红石/高频装置等造成服务器卡顿的行为。
+                                    - ~&f6. 禁止利用游戏漏洞或 BUG 获取不正当利益。
+                                    - ~&f7. 账号安全由玩家本人负责，请勿共享账号密码。
+                                  fontSize: 36
+                  同意按钮:
+                    type: Canvas
+                    attribute:
+                      x: 170
+                      y: 250
+                      width: 120
+                      height: 38
+                    action:
+                      clickLeft: |-
+                        var.agreed = true
+                        var.showRules = false
+                    children:
+                      同意按钮背景:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: ~80,180,122,238
+                          hover: ~108,210,156,255
+                          shape: ~round_rect
+                          radius: 10
+                        effect:
+                          stroke:
+                            width: 2
+                            color: ~165,190,220,255
+                      同意按钮文字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          width: 120
+                          texts: ~&f同意
+                          fontSize: 36
+                          through: true
+                  关闭按钮:
+                    type: Canvas
+                    attribute:
+                      x: 310
+                      y: 250
+                      width: 120
+                      height: 38
+                    action:
+                      clickLeft: var.showRules = false
+                    children:
+                      关闭按钮背景:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: ~160,50,50,220
+                          hover: ~200,60,60,255
+                          shape: ~round_rect
+                          radius: 10
+                        effect:
+                          stroke:
+                            width: 2
+                            color: ~165,190,220,255
+                      关闭按钮文字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          width: 120
+                          texts: ~&f关闭
+                          fontSize: 36
+                          through: true

@@ -1,8 +1,8 @@
 # AXS 资源说明
-# 用途: Regions 管理员地籍工作台：区域登记、边界复核、成员与世界规则。
+# 用途: Regions 管理员区域管理面板，支持区域列表/区域编辑/成员管理。
+# 前置依赖: ArcartX；Regions 模块启用后自动注册。
 # 打开方式: /axs regions admin
-# 协议: AXS_REGIONS_ADMIN；所有写操作保留服务端 action_token 顺序。
-# 设计: 管理端地籍总簿；红色审批印记、奶油图纸与网格绿刻度。
+# 数据交互: packetHandler 接收 init 推送；客户端通过 Packet.send('AXS_REGIONS_ADMIN', ...) 发送管理指令。
 
 ui:
   background: true
@@ -11,29 +11,24 @@ ui:
   show: true
   through: false
   screenScale: true
-  action:
-    load: |-
-      sx = Screen.getWidth() / 1920
-      sy = Screen.getHeight() / 1080
-      s = sx < sy ? sx : sy
-      var.viewW = Screen.getWidth() / s
-      var.viewH = Screen.getHeight() / s
-      var.offX = (var.viewW - 1920) / 2
-      var.boardW = var.viewW - 436
-      var.regionRowRefs = {}
-      var.memberRowRefs = {}
-      var.flagRowRefs = {}
-      var.worldRowRefs = {}
-      var.rowGeneration = 0
-    resize: |-
-      sx = Screen.getWidth() / 1920
-      sy = Screen.getHeight() / 1080
-      s = sx < sy ? sx : sy
-      var.viewW = Screen.getWidth() / s
-      var.viewH = Screen.getHeight() / s
-      var.offX = (var.viewW - 1920) / 2
-      var.boardW = var.viewW - 436
   packetHandler:
+    # packetHandler: init
+    # 包字段:
+    #   - page: 当前页面 (regions/edit)
+    #   - packetId: 服务端回包 ID，用于客户端 Packet.send 回传
+    #   - regions: 所有区域数据列表
+    #   - regionCount: 区域总数
+    #   - selId: 当前选中区域 ID
+    #   - selWorld: 选中区域所在世界
+    #   - selPriority: 选中区域优先级
+    #   - selParent: 选中区域父区域
+    #   - selMin: 选中区域最小坐标
+    #   - selMax: 选中区域最大坐标
+    #   - selVolume: 选中区域体积 (方块数)
+    #   - selFlags: 选中区域标志列表
+    #   - selMembers: 选中区域成员列表
+    #   - worlds: 世界规则页的世界列表
+    #   - worldCount: 世界数量
     init: |-
       var.newRegionName = ''
       var.renameValue = ''
@@ -78,223 +73,202 @@ ui:
           var.worldList.add(var.worlds[key])
         }
       }
-      // 按数据数量建立行；保留模板，并使用引用清理副本，避免固定池截断档案。
-      var.rowGeneration = (var.rowGeneration + 1).round()
-      count = var.regionList.length > 0 ? var.regionList.length : 1
-      if(val.region_data.childrenCount() != count){
-        for(key in var.regionRowRefs.keys()){
-          var.regionRowRefs[key].remove()
-        }
-        var.regionRowRefs = {}
-        template = val.region_data.get(0)
-        for(i in range(1, count - 1)){
-          row = template.copy('区域行_' + var.rowGeneration + '_' + i.round())
-          row.entryKey = i.round()
-          var.regionRowRefs[i.round()] = row
-        }
-      }
-      count = var.memberList.length > 0 ? var.memberList.length : 1
-      if(val.member_data.childrenCount() != count){
-        for(key in var.memberRowRefs.keys()){
-          var.memberRowRefs[key].remove()
-        }
-        var.memberRowRefs = {}
-        template = val.member_data.get(0)
-        for(i in range(1, count - 1)){
-          row = template.copy('成员行_' + var.rowGeneration + '_' + i.round())
-          row.entryKey = i.round()
-          var.memberRowRefs[i.round()] = row
-        }
-      }
-      count = var.flagList.length > 0 ? var.flagList.length : 1
-      if(val.flag_data.childrenCount() != count){
-        for(key in var.flagRowRefs.keys()){
-          var.flagRowRefs[key].remove()
-        }
-        var.flagRowRefs = {}
-        template = val.flag_data.get(0)
-        for(i in range(1, count - 1)){
-          row = template.copy('标志行_' + var.rowGeneration + '_' + i.round())
-          row.entryKey = i.round()
-          var.flagRowRefs[i.round()] = row
-        }
-      }
-      count = var.worldList.length > 0 ? var.worldList.length : 1
-      if(val.world_rule_data.childrenCount() != count){
-        for(key in var.worldRowRefs.keys()){
-          var.worldRowRefs[key].remove()
-        }
-        var.worldRowRefs = {}
-        template = val.world_rule_data.get(0)
-        for(i in range(1, count - 1)){
-          row = template.copy('世界规则行_' + var.rowGeneration + '_' + i.round())
-          row.entryKey = i.round()
-          var.worldRowRefs[i.round()] = row
-        }
-      }
 
 controls:
-  测绘纸底:
-    type: Texture
-    attribute: {point: ~stretch_all, normal: "~235,232,217,255"}
   自适应全局布局:
     type: Adaptive
-    attribute: {point: ~top_center, width: 1920, height: 1080}
+    attribute:
+      point: ~middle_center
+      width: 1920
+      height: 1080
     children:
       主面板:
-        type: Canvas
-        attribute: {x: "-var.offX", y: 0, width: "var.viewW", height: "var.viewH"}
+        type: Texture
+        attribute:
+          point: ~middle_center
+          width: 1040
+          height: 680
+          normal: ~25,25,30,240
+          shape: ~round_rect
+          radius: 14
+        effect:
+          stroke:
+            width: 2
+            color: ~220,160,60,180
+          shadow:
+            xOffset: 0
+            yOffset: 4
+            blur: 12
+            color: ~0,0,0,100
         children:
+          # ═══ 标题栏 ═══
           标题栏:
-            type: Canvas
-            attribute: {x: 48, y: 28, width: "var.viewW - 96", height: 100}
+            type: Texture
+            attribute:
+              x: 0
+              y: 0
+              width: 1040
+              height: 58
+              normal: ~40,35,25,255
+              shape: ~round_rect
+              radius: 14
             children:
-              标题色标:
-                type: Texture
-                attribute: {x: 0, y: 8, width: 8, height: 84, normal: "~153,66,54,255", through: true}
               标题文字:
                 type: Text
-                attribute: {x: 28, y: 0, fontSize: 72, texts: "~&0区域地籍总簿", through: true}
-              标题索引:
-                type: Text
-                attribute: {x: 30, y: 64, fontSize: 36, texts: "~&8CADASTRE / ADMINISTRATION   ·   边界、权属与世界规则", through: true}
+                attribute:
+                  x: 24
+                  y: 8
+                  fontSize: 38
+                  texts: "~&6区域管理"
               区域数量:
                 type: Text
-                attribute: {point: ~top_right, x: -230, y: 16, fontSize: 36, texts: "var.page == 'world_rules' ? '&4世界卷  &0' + var.worldCount : '&4登记卷  &0' + var.regionCount", through: true}
-              关闭按钮:
-                type: Canvas
-                attribute: {point: ~top_right, x: 0, y: 10, width: 180, height: 60}
-                action:
-                  click: Screen.close()
-                children:
-                  关闭底:
-                    type: Texture
-                    attribute: {point: ~stretch_all, normal: "~220,223,205,255", hover: "~208,215,194,255", through: true}
-                  关闭字:
-                    type: Text
-                    attribute: {point: ~middle_center, fontSize: 36, texts: "~&0关闭 / ESC", through: true}
-          标题基线:
-            type: Texture
-            attribute: {x: 48, y: 134, width: "var.viewW - 96", height: 3, normal: "~153,66,54,255", through: true}
+                attribute:
+                  x: 860
+                  y: 14
+                  fontSize: 28
+                  texts: "~&7区域数: &f{var.regionCount}"
+
+          # ═══ 左侧导航 ═══
           导航栏:
-            type: Canvas
-            attribute: {x: 48, y: 152, width: 268, height: "var.viewH - 188"}
+            type: Texture
+            attribute:
+              x: 0
+              y: 58
+              width: 160
+              height: 622
+              normal: ~30,30,38,255
             children:
-              导航纸底:
-                type: Texture
-                attribute: {point: ~stretch_all, normal: "~223,227,209,255", through: true}
-              导航册脊:
-                type: Texture
-                attribute: {x: 0, y: 0, width: 6, height: "var.viewH - 188", normal: "~153,66,54,255", through: true}
-              导航索引:
-                type: Text
-                attribute: {x: 18, y: 20, fontSize: 36, texts: "~&4A / 管理卷宗", through: true}
               导航区域入口:
                 type: Canvas
-                attribute: {x: 18, y: 76, width: 232, height: 72}
+                attribute:
+                  x: 10
+                  y: 16
+                  width: 140
+                  height: 40
                 action:
                   click: |-
                     Packet.send(var.packetId, 'navigate', 'regions')
                 children:
                   导航区域背景:
                     type: Texture
-                    attribute: {point: ~stretch_all, normal: "var.page == 'regions' ? '153,66,54,255' : '238,240,224,255'", hover: "var.page == 'regions' ? '181,79,64,255' : '198,214,190,255'", through: true}
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: "var.page == 'regions' ? '180,130,40,200' : (self.isHovered() ? '65,65,80,210' : '45,45,55,180')"
+                      shape: ~round_rect
+                      radius: 8
                   导航区域文字:
                     type: Text
-                    attribute: {point: ~middle_left, x: 16, fontSize: 36, texts: "var.page == 'regions' ? '&f01  区域登记' : '&001  区域登记'", through: true}
+                    attribute:
+                      point: ~middle_center
+                      width: 140
+                      through: true
+                      fontSize: 28
+                      texts: "~&f区域列表"
+
               导航编辑入口:
                 type: Canvas
-                attribute: {x: 18, y: 162, width: 232, height: 72}
+                attribute:
+                  x: 10
+                  y: 66
+                  width: 140
+                  height: 40
                 action:
                   click: |-
                     Packet.send(var.packetId, 'navigate', 'edit')
                 children:
                   导航编辑背景:
                     type: Texture
-                    attribute: {point: ~stretch_all, normal: "var.page == 'edit' ? '153,66,54,255' : '238,240,224,255'", hover: "var.page == 'edit' ? '181,79,64,255' : '198,214,190,255'", through: true}
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: "var.page == 'edit' ? '180,130,40,200' : (self.isHovered() ? '65,65,80,210' : '45,45,55,180')"
+                      shape: ~round_rect
+                      radius: 8
                   导航编辑文字:
                     type: Text
-                    attribute: {point: ~middle_left, x: 16, fontSize: 36, texts: "var.page == 'edit' ? '&f02  边界与权限' : '&002  边界与权限'", through: true}
+                    attribute:
+                      point: ~middle_center
+                      width: 140
+                      through: true
+                      fontSize: 28
+                      texts: "~&f编辑"
+
               导航世界规则入口:
                 type: Canvas
-                attribute: {x: 18, y: 248, width: 232, height: 72}
+                attribute:
+                  x: 10
+                  y: 116
+                  width: 140
+                  height: 40
                 action:
                   click: |-
                     Packet.send(var.packetId, 'select_world_rule')
                 children:
                   导航世界规则背景:
                     type: Texture
-                    attribute: {point: ~stretch_all, normal: "var.page == 'world_rules' ? '153,66,54,255' : '238,240,224,255'", hover: "var.page == 'world_rules' ? '181,79,64,255' : '198,214,190,255'", through: true}
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: "var.page == 'world_rules' ? '180,130,40,200' : (self.isHovered() ? '65,65,80,210' : '45,45,55,180')"
+                      shape: ~round_rect
+                      radius: 8
                   导航世界规则文字:
                     type: Text
-                    attribute: {point: ~middle_left, x: 16, fontSize: 36, texts: "var.page == 'world_rules' ? '&f03  世界规则' : '&003  世界规则'", through: true}
-              工作流说明:
-                type: Text
-                attribute:
-                  x: 18
-                  y: 362
-                  fontSize: 36
-                  texts: ["~&4登记流程 / 01—03", "~&0两点圈定边界", "~&0签入区域编号", "~&0复核权属与规则"]
-                  through: true
-              图例线:
-                type: Texture
-                attribute: {x: 18, y: 530, width: 232, height: 2, normal: "~151,169,142,255", through: true}
-              管理提示:
-                type: Text
-                attribute:
-                  x: 18
-                  y: 554
-                  fontSize: 36
-                  texts: ["~&2绿 / 准许生效", "~&4红 / 禁止或移除", "~&8灰 / 未设置", "~&8列表可滚轮 / 拖动"]
-                  through: true
-              管理标记:
-                type: Text
-                attribute: {point: ~bottom_left, x: 18, y: -22, fontSize: 36, texts: "~&4ADMIN / 管理操作", through: true}
+                    attribute:
+                      point: ~middle_center
+                      width: 140
+                      through: true
+                      fontSize: 28
+                      texts: "~&f世界规则"
+
+          # ═══ 内容区 ═══
           内容区:
-            type: Canvas
-            attribute: {x: 340, y: 152, width: "var.viewW - 388", height: "var.viewH - 188"}
+            type: Texture
+            attribute:
+              x: 160
+              y: 58
+              width: 880
+              height: 622
+              normal: ~20,20,25,100
             children:
-              内容纸底:
-                type: Texture
-                attribute: {point: ~stretch_all, normal: "~247,244,232,255", through: true}
-              纸张左刻度:
-                type: Texture
-                attribute: {x: 12, y: 24, width: 2, height: "var.viewH - 236", normal: "~204,211,192,255", through: true}
-              纸张右刻度:
-                type: Texture
-                attribute: {point: ~top_right, x: -12, y: 24, width: 2, height: "var.viewH - 236", normal: "~204,211,192,255", through: true}
+              # ─── 区域列表 ───
               区域列表布局:
                 type: Canvas
-                attribute: {x: 24, y: 24, width: "var.boardW", height: "var.viewH - 236", visible: "var.page == 'regions'"}
+                attribute:
+                  x: 20
+                  y: 16
+                  width: 840
+                  height: 590
+                  visible: "var.page == 'regions'"
                 children:
                   区域列表标题:
                     type: Text
-                    attribute: {x: 0, y: 0, fontSize: 54, texts: "~&0区域登记簿 / 全域索引", through: true}
-                  登记卷号:
-                    type: Text
-                    attribute: {point: ~top_right, x: -16, y: 8, fontSize: 36, texts: "~&4A—01  /  {var.regionCount} 宗档案", through: true}
-                  登记说明:
-                    type: Text
-                    attribute: {x: 0, y: 52, fontSize: 36, texts: "~&8登记索引  /  按编号核对世界、优先级与占地体积；新增区域使用当前两点选区。", through: true}
-                  登记分规:
-                    type: Texture
-                    attribute: {x: 0, y: 92, width: "var.boardW", height: 2, normal: "~189,202,179,255", through: true}
-                  新建区域字段:
-                    type: Canvas
-                    attribute: {x: 0, y: 104, width: 480, height: 64}
-                    children:
-                      输入纸底:
-                        type: Texture
-                        attribute: {point: ~stretch_all, normal: "~230,233,215,255", through: true}
-                      新建区域输入框:
-                        type: TextBox
-                        attribute: {x: 12, y: 8, width: 456, height: 44, length: 32, fontSize: 36, emptyText: "~&8新区域编号 / 名称"}
-                        action:
-                          textChange: |-
-                            var.newRegionName = self.text
+                    attribute:
+                      x: 0
+                      y: 0
+                      fontSize: 36
+                      texts: "~&6所有区域"
+                  新建区域输入框:
+                    type: TextBox
+                    attribute:
+                      x: 320
+                      y: 4
+                      width: 280
+                      height: 36
+                      length: 32
+                      emptyText: "~&8输入新区域名称..."
+                      background: "~45,45,55,200"
+                    action:
+                      textChange: |-
+                        var.newRegionName = self.text
                   创建区域按钮:
                     type: Canvas
-                    attribute: {x: 496, y: 104, width: 184, height: 64, enable: "var.actionToken != none && var.actionToken != ''"}
+                    attribute:
+                      x: 620
+                      y: 0
+                      width: 100
+                      height: 40
                     action:
                       click: |-
                         if(var.newRegionName != null && var.newRegionName != ''){
@@ -303,32 +277,38 @@ controls:
                     children:
                       创建按钮背景:
                         type: Texture
-                        attribute: {point: ~stretch_all, normal: "~52,80,64,255", hover: "~70,104,80,255", through: true}
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: "self.isHovered() ? '60,160,80,230' : '40,140,60,200'"
+                          shape: ~round_rect
+                          radius: 8
                       创建按钮文字:
                         type: Text
-                        attribute: {point: ~middle_center, fontSize: 36, texts: "~&f登记区域 +", through: true}
-                  登记注意:
-                    type: Text
-                    attribute: {x: 710, y: 120, fontSize: 36, texts: "~&4前置条件  /  木斧选定两点", through: true}
-                  表头底:
-                    type: Texture
-                    attribute: {x: 0, y: 202, width: "var.boardW - 28", height: 42, normal: "~219,225,205,255", through: true}
-                  登记表头:
-                    type: Text
-                    attribute: {x: 20, y: 210, fontSize: 36, texts: "~&8区域编号 / 所在世界", through: true}
-                  数值表头:
-                    type: Text
-                    attribute: {x: "var.boardW - 680", y: 210, fontSize: 36, texts: "~&8优先级     /     体积（方块）", through: true}
-                  区域列表滑轨:
-                    type: Texture
-                    attribute: {x: "var.boardW - 12", y: 256, width: 12, height: "var.viewH - 532", normal: "~213,222,202,255", through: true}
+                        attribute:
+                          point: ~middle_center
+                          width: 100
+                          through: true
+                          fontSize: 28
+                          texts: "~&f+ 创建"
                   区域列表滑块:
                     type: Texture
                     val: 区域列表滑块
-                    attribute: {x: "var.boardW - 12", y: 256, width: 12, height: 88, normal: "~86,111,95,255", hover: "~153,66,54,255", maxDragY: "var.viewH - 620"}
+                    attribute:
+                      x: 834
+                      y: 50
+                      width: 6
+                      height: 50
+                      normal: ~120,120,120,200
+                      maxDragY: 480
                   区域滚动栏:
                     type: Scroll
-                    attribute: {x: 0, y: 256, width: "var.boardW - 28", height: "var.viewH - 532", moveY: "self.parent['区域列表滑块'].getDragYRatio()"}
+                    attribute:
+                      x: 0
+                      y: 50
+                      width: 840
+                      height: 530
+                      moveY: "self.parent['区域列表滑块'].getDragYRatio()"
                     action:
                       wheel: |-
                         if(self.moveY >= 0 && self.wheelValue > 0){
@@ -341,98 +321,188 @@ controls:
                       regions_list:
                         val: region_data
                         type: VStack
-                        attribute: {width: "var.boardW - 28", spaceBetween: 8}
+                        attribute:
+                          x: 0
+                          y: 0
+                          width: 840
+                          spaceBetween: 6
+                        action:
+                          create: |-
+                            for(i in range(1, 50)){
+                              row = self['区域行'].copy('区域行' + i.round)
+                              row.entryKey = i.round()
+                            }
                         children:
                           区域行:
-                            type: Canvas
-                            attribute: {entryKey: 0.round(), entry: "var.regionList.get(self.entryKey)", visible: self.entry != none, width: "var.boardW - 28", height: 90}
+                            type: Texture
+                            attribute:
+                              entryKey: 0.round()
+                              entry: "var.regionList != null ? var.regionList[self.entryKey] : none"
+                              visible: self.entry != none
+                              width: 820
+                              height: 50
+                              normal: ~40,40,50,180
+                              shape: ~round_rect
+                              radius: 6
                             children:
-                              区域行底:
-                                type: Texture
-                                attribute: {point: ~stretch_all, normal: "~235,236,221,255", through: true}
-                              区域行标尺:
-                                type: Texture
-                                attribute: {x: 0, y: 0, width: 4, height: 90, normal: "~86,111,95,255", through: true}
                               区域编号文字:
                                 type: Text
-                                attribute: {x: 20, y: 12, fontSize: 48, texts: "~&0{self.parent.entry['id']}", limit: "self.parent.width - 700", through: true}
+                                attribute:
+                                  x: 16
+                                  y: 12
+                                  through: true
+                                  fontSize: 28
+                                  texts: "~&f{self.parent.entry['id']}"
                               区域世界文字:
                                 type: Text
-                                attribute: {x: 20, y: 54, fontSize: 36, texts: "~&8世界 / {self.parent.entry['world']}", limit: "self.parent.width - 700", through: true}
+                                attribute:
+                                  x: 260
+                                  y: 14
+                                  through: true
+                                  fontSize: 26
+                                  texts: "~&7{self.parent.entry['world']}"
                               区域优先级文字:
                                 type: Text
-                                attribute: {x: "self.parent.width - 652", y: 30, fontSize: 36, texts: "~&2P {self.parent.entry['priority']}", limit: 160, through: true}
+                                attribute:
+                                  x: 440
+                                  y: 14
+                                  through: true
+                                  fontSize: 26
+                                  texts: "~&7P:{self.parent.entry['priority']}"
                               区域体积文字:
                                 type: Text
-                                attribute: {x: "self.parent.width - 470", y: 30, fontSize: 36, texts: "~&0{self.parent.entry['volume']}", limit: 220, through: true}
+                                attribute:
+                                  x: 530
+                                  y: 14
+                                  through: true
+                                  fontSize: 26
+                                  texts: "~&7{self.parent.entry['volume']}格"
                               编辑按钮:
                                 type: Canvas
-                                attribute: {x: "self.parent.width - 236", y: 18, width: 108, height: 54}
+                                attribute:
+                                  x: 650
+                                  y: 8
+                                  width: 70
+                                  height: 34
                                 action:
                                   click: |-
                                     Packet.send(var.packetId, 'select_region', self.parent.entry['id'])
                                 children:
                                   编辑按钮背景:
                                     type: Texture
-                                    attribute: {point: ~stretch_all, normal: "~52,80,64,255", hover: "~70,104,80,255", through: true}
+                                    attribute:
+                                      point: ~stretch_all
+                                      through: true
+                                      normal: "self.isHovered() ? '80,160,240,230' : '60,140,220,200'"
+                                      shape: ~round_rect
+                                      radius: 6
                                   编辑按钮文字:
                                     type: Text
-                                    attribute: {point: ~middle_center, fontSize: 36, texts: "~&f复核", through: true}
+                                    attribute:
+                                      point: ~middle_center
+                                      width: 70
+                                      through: true
+                                      fontSize: 26
+                                      texts: "~&f编辑"
                               删除按钮:
                                 type: Canvas
-                                attribute: {x: "self.parent.width - 116", y: 18, width: 100, height: 54, enable: "var.actionToken != none && var.actionToken != ''"}
+                                attribute:
+                                  x: 730
+                                  y: 8
+                                  width: 70
+                                  height: 34
                                 action:
                                   click: |-
                                     Packet.send(var.packetId, 'delete_region', var.actionToken, self.parent.entry['id'])
                                 children:
                                   删除按钮背景:
                                     type: Texture
-                                    attribute: {point: ~stretch_all, normal: "~153,66,54,255", hover: "~181,79,64,255", through: true}
+                                    attribute:
+                                      point: ~stretch_all
+                                      through: true
+                                      normal: "self.isHovered() ? '220,80,80,230' : '200,60,60,200'"
+                                      shape: ~round_rect
+                                      radius: 6
                                   删除按钮文字:
                                     type: Text
-                                    attribute: {point: ~middle_center, fontSize: 36, texts: "~&f删除", through: true}
-                  登记空状态:
-                    type: Text
-                    attribute: {x: 24, y: 292, fontSize: 48, texts: "~&8尚无区域登记。先选定两点，再填写编号。", visible: "var.regionCount == '0'", through: true}
-                  登记页脚:
-                    type: Text
-                    attribute: {point: ~bottom_left, x: 0, y: -4, fontSize: 36, texts: "~&4删除会移除区域保护   &8|   滚轮浏览 / 拖动右侧滑条", through: true}
+                                    attribute:
+                                      point: ~middle_center
+                                      width: 70
+                                      through: true
+                                      fontSize: 26
+                                      texts: "~&f删除"
+
+              # ─── 区域编辑视图 ───
               编辑布局:
                 type: Canvas
-                attribute: {x: 24, y: 24, width: "var.boardW", height: "var.viewH - 236", visible: "var.page == 'edit'"}
+                attribute:
+                  x: 20
+                  y: 16
+                  width: 840
+                  height: 590
+                  visible: "var.page == 'edit'"
                 children:
                   编辑标题:
                     type: Text
-                    attribute: {x: 0, y: 0, fontSize: 54, texts: "~&4A—02 &0边界复核 / {var.selId}", limit: "var.boardW - 320", through: true}
-                  返回按钮:
+                    attribute:
+                      x: 0
+                      y: 0
+                      fontSize: 36
+                      texts: "~&6编辑: &f{var.selId}"
+                  重定义按钮:
                     type: Canvas
-                    attribute: {x: "var.boardW - 160", y: 0, width: 160, height: 56}
+                    attribute:
+                      x: 620
+                      y: 0
+                      width: 100
+                      height: 40
                     action:
                       click: |-
-                        Packet.send(var.packetId, 'navigate', 'regions')
+                        Packet.send(var.packetId, 'redefine_region', var.actionToken, var.selId)
                     children:
-                      返回按钮背景:
+                      重定义按钮背景:
                         type: Texture
-                        attribute: {point: ~stretch_all, normal: "~220,225,205,255", hover: "~205,216,195,255", through: true}
-                      返回按钮文字:
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: "self.isHovered() ? '80,140,220,230' : '60,120,200,200'"
+                          shape: ~round_rect
+                          radius: 8
+                      重定义按钮文字:
                         type: Text
-                        attribute: {point: ~middle_center, fontSize: 36, texts: "~&0返回登记簿", through: true}
-                  重命名字段:
-                    type: Canvas
-                    attribute: {x: 0, y: 76, width: 380, height: 58}
-                    children:
-                      重命名纸底:
-                        type: Texture
-                        attribute: {point: ~stretch_all, normal: "~230,233,215,255", through: true}
-                      重命名输入框:
-                        type: TextBox
-                        attribute: {x: 12, y: 8, width: 356, height: 38, length: 32, fontSize: 36, emptyText: "~&8新区域编号 / 名称"}
-                        action:
-                          textChange: |-
-                            var.renameValue = self.text
+                        attribute:
+                          point: ~middle_center
+                          width: 100
+                          through: true
+                          fontSize: 26
+                          texts: "~&f重定义"
+                  编辑信息文字:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 46
+                      fontSize: 26
+                      texts: "~&7世界: &f{var.selWorld}  &7优先级: &f{var.selPriority}  &7父: &f{var.selParent != none ? var.selParent : '无'}"
+                  重命名输入框:
+                    type: TextBox
+                    attribute:
+                      x: 500
+                      y: 46
+                      width: 200
+                      height: 32
+                      length: 32
+                      emptyText: "~&8新名称..."
+                      background: "~45,45,55,200"
+                    action:
+                      textChange: |-
+                        var.renameValue = self.text
                   重命名按钮:
                     type: Canvas
-                    attribute: {x: 396, y: 76, width: 144, height: 58, enable: "var.actionToken != none && var.actionToken != '' && var.selId != none && var.selId != ''"}
+                    attribute:
+                      x: 720
+                      y: 44
+                      width: 80
+                      height: 36
                     action:
                       click: |-
                         if(var.renameValue != null && var.renameValue != ''){
@@ -441,70 +511,54 @@ controls:
                     children:
                       重命名按钮背景:
                         type: Texture
-                        attribute: {point: ~stretch_all, normal: "~52,80,64,255", hover: "~70,104,80,255", through: true}
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: "self.isHovered() ? '180,140,60,230' : '160,120,40,200'"
+                          shape: ~round_rect
+                          radius: 6
                       重命名按钮文字:
                         type: Text
-                        attribute: {point: ~middle_center, fontSize: 36, texts: "~&f重命名", through: true}
-                  重定义按钮:
-                    type: Canvas
-                    attribute: {x: "var.boardW - 284", y: 76, width: 284, height: 58, enable: "var.actionToken != none && var.actionToken != '' && var.selId != none && var.selId != ''"}
-                    action:
-                      click: |-
-                        Packet.send(var.packetId, 'redefine_region', var.actionToken, var.selId)
-                    children:
-                      重定义按钮背景:
-                        type: Texture
-                        attribute: {point: ~stretch_all, normal: "~153,66,54,255", hover: "~181,79,64,255", through: true}
-                      重定义按钮文字:
-                        type: Text
-                        attribute: {point: ~middle_center, fontSize: 36, texts: "~&f用当前选区重定义", through: true}
-                  编辑信息文字:
+                        attribute:
+                          point: ~middle_center
+                          width: 80
+                          through: true
+                          fontSize: 26
+                          texts: "~&f重命名"
+                  编辑边界文字:
                     type: Text
-                    attribute: {x: 0, y: 152, fontSize: 36, texts: "~&8所在世界 &0{var.selWorld}   &8优先级 &0{var.selPriority}   &8父区域 &0{var.selParent != none && var.selParent != '' ? var.selParent : '无'}", limit: "var.boardW", through: true}
-                  边界测量卡:
-                    type: Canvas
-                    attribute: {x: 0, y: 206, width: "var.boardW", height: 108}
-                    children:
-                      坐标纸底:
-                        type: Texture
-                        attribute: {point: ~stretch_all, normal: "~222,230,210,255", through: true}
-                      坐标顶规:
-                        type: Texture
-                        attribute: {x: 0, y: 0, width: "var.boardW", height: 4, normal: "~153,66,54,255", through: true}
-                      坐标底规:
-                        type: Texture
-                        attribute: {x: 20, y: 96, width: "var.boardW - 40", height: 1, normal: "~189,202,179,255", through: true}
-                      坐标分线:
-                        type: Texture
-                        attribute: {x: "var.boardW / 2", y: 16, width: 2, height: 76, normal: "~151,169,142,255", through: true}
-                      最小坐标标签:
-                        type: Text
-                        attribute: {x: 20, y: 10, fontSize: 36, texts: "~&4MIN / 最小坐标 / X · Y · Z", through: true}
-                      编辑边界文字:
-                        type: Text
-                        attribute: {x: 20, y: 50, fontSize: 48, texts: "~&0{var.selMin}", limit: "var.boardW / 2 - 40", through: true}
-                      最大坐标标签:
-                        type: Text
-                        attribute: {x: "var.boardW / 2 + 20", y: 10, fontSize: 36, texts: "~&2MAX / 最大坐标 / X · Y · Z", through: true}
-                      最大坐标文字:
-                        type: Text
-                        attribute: {x: "var.boardW / 2 + 20", y: 50, fontSize: 48, texts: "~&0{var.selMax}", limit: "var.boardW / 2 - 40", through: true}
+                    attribute:
+                      x: 0
+                      y: 78
+                      fontSize: 26
+                      texts: "~&7范围: &f{var.selMin} ~ {var.selMax}  &7体积: &f{var.selVolume}"
+
+                  # 成员列表
                   成员文字:
                     type: Text
-                    attribute: {x: 0, y: 336, fontSize: 48, texts: "~&0权属与成员   &8{var.memberList.length.round()} 条", through: true}
-                  标志文字:
-                    type: Text
-                    attribute: {x: 480, y: 336, fontSize: 48, texts: "~&0保护规则   &8{var.flagList.length.round()} 项", through: true}
-                  编辑成员滑轨:
-                    type: Texture
-                    attribute: {x: 438, y: 394, width: 12, height: "var.viewH - 666", normal: "~213,222,202,255", through: true}
+                    attribute:
+                      x: 0
+                      y: 118
+                      fontSize: 28
+                      texts: "~&b成员:"
                   编辑成员滑块:
                     type: Texture
                     val: 编辑成员滑块
-                    attribute: {x: 438, y: 394, width: 12, height: 72, maxDragY: "var.viewH - 738", normal: "~86,111,95,255", hover: "~153,66,54,255"}
+                    attribute:
+                      x: 394
+                      y: 150
+                      width: 6
+                      height: 20
+                      normal: ~120,120,120,200
+                      maxDragY: 120
                   成员滚动栏:
                     type: Scroll
-                    attribute: {x: 0, y: 394, width: 422, height: "var.viewH - 666", moveY: "self.parent['编辑成员滑块'].getDragYRatio()"}
+                    attribute:
+                      x: 0
+                      y: 150
+                      width: 400
+                      height: 140
+                      moveY: "self.parent['编辑成员滑块'].getDragYRatio()"
                     action:
                       wheel: |-
                         if(self.moveY >= 0 && self.wheelValue > 0){
@@ -517,47 +571,100 @@ controls:
                       members_list:
                         val: member_data
                         type: VStack
-                        attribute: {width: 422, spaceBetween: 8}
+                        attribute:
+                          x: 0
+                          y: 0
+                          width: 400
+                          spaceBetween: 4
+                        action:
+                          create: |-
+                            for(i in range(1, 30)){
+                              row = self['成员行'].copy('成员行' + i.round)
+                              row.entryKey = i.round()
+                            }
                         children:
                           成员行:
-                            type: Canvas
-                            attribute: {entryKey: 0.round(), entry: "var.memberList.get(self.entryKey)", visible: self.entry != none, width: 422, height: 92}
+                            type: Texture
+                            attribute:
+                              entryKey: 0.round()
+                              entry: "var.memberList != null ? var.memberList[self.entryKey] : none"
+                              visible: self.entry != none
+                              width: 380
+                              height: 34
+                              normal: ~38,38,48,160
+                              shape: ~round_rect
+                              radius: 4
                             children:
-                              成员行底:
-                                type: Texture
-                                attribute: {point: ~stretch_all, normal: "~235,236,221,255", through: true}
                               成员名称文字:
                                 type: Text
-                                attribute: {x: 16, y: 12, fontSize: 36, texts: "~&0{self.parent.entry['name']}", limit: 274, through: true}
+                                attribute:
+                                  x: 12
+                                  y: 5
+                                  through: true
+                                  fontSize: 26
+                                  texts: "~&f{self.parent.entry['name']}"
                               成员身份文字:
                                 type: Text
-                                attribute: {x: 16, y: 52, fontSize: 36, texts: "self.parent.entry['role'] == 'owner' ? '&4所有者' : '&2成员'", through: true}
+                                attribute:
+                                  x: 180
+                                  y: 6
+                                  through: true
+                                  fontSize: 26
+                                  texts: "~{self.parent.entry['role'] == 'owner' ? '&6所有者' : '&b成员'}"
                               移除成员按钮:
                                 type: Canvas
-                                attribute: {x: 306, y: 22, width: 100, height: 48, enable: "var.actionToken != none && var.actionToken != ''"}
+                                attribute:
+                                  x: 310
+                                  y: 3
+                                  width: 60
+                                  height: 28
                                 action:
                                   click: |-
                                     Packet.send(var.packetId, 'remove_member', var.actionToken, var.selId, self.parent.entry['uuid'])
                                 children:
                                   移除成员背景:
                                     type: Texture
-                                    attribute: {point: ~stretch_all, normal: "~153,66,54,255", hover: "~181,79,64,255", through: true}
+                                    attribute:
+                                      point: ~stretch_all
+                                      through: true
+                                      normal: "self.isHovered() ? '200,70,70,210' : '180,50,50,180'"
+                                      shape: ~round_rect
+                                      radius: 4
                                   移除成员文字:
                                     type: Text
-                                    attribute: {point: ~middle_center, fontSize: 36, texts: "~&f移除", through: true}
-                  成员空状态:
+                                    attribute:
+                                      point: ~middle_center
+                                      width: 60
+                                      through: true
+                                      fontSize: 26
+                                      texts: "~&f移除"
+
+                  # 标志列表
+                  标志文字:
                     type: Text
-                    attribute: {x: 16, y: 420, fontSize: 36, texts: "~&8暂无成员记录", visible: "var.selId != none && var.memberList.length == 0", through: true}
-                  编辑标志滑轨:
-                    type: Texture
-                    attribute: {x: "var.boardW - 12", y: 394, width: 12, height: "var.viewH - 666", normal: "~213,222,202,255", through: true}
+                    attribute:
+                      x: 0
+                      y: 300
+                      fontSize: 28
+                      texts: "~&e标志设置:"
                   编辑标志滑块:
                     type: Texture
                     val: 编辑标志滑块
-                    attribute: {x: "var.boardW - 12", y: 394, width: 12, height: 72, maxDragY: "var.viewH - 738", normal: "~86,111,95,255", hover: "~153,66,54,255"}
+                    attribute:
+                      x: 834
+                      y: 332
+                      width: 6
+                      height: 30
+                      normal: ~120,120,120,200
+                      maxDragY: 220
                   标志滚动栏:
                     type: Scroll
-                    attribute: {x: 480, y: 394, width: "var.boardW - 508", height: "var.viewH - 666", moveY: "self.parent['编辑标志滑块'].getDragYRatio()"}
+                    attribute:
+                      x: 0
+                      y: 332
+                      width: 840
+                      height: 250
+                      moveY: "self.parent['编辑标志滑块'].getDragYRatio()"
                     action:
                       wheel: |-
                         if(self.moveY >= 0 && self.wheelValue > 0){
@@ -570,114 +677,206 @@ controls:
                       flags_list:
                         val: flag_data
                         type: VStack
-                        attribute: {width: "var.boardW - 508", spaceBetween: 8}
+                        attribute:
+                          x: 0
+                          y: 0
+                          width: 840
+                          spaceBetween: 4
+                        action:
+                          create: |-
+                            for(i in range(1, 40)){
+                              row = self['标志行'].copy('标志行' + i.round)
+                              row.entryKey = i.round()
+                            }
                         children:
                           标志行:
-                            type: Canvas
-                            attribute: {entryKey: 0.round(), entry: "var.flagList.get(self.entryKey)", visible: self.entry != none, width: "var.boardW - 508", height: 96}
+                            type: Texture
+                            attribute:
+                              entryKey: 0.round()
+                              entry: "var.flagList != null ? var.flagList[self.entryKey] : none"
+                              visible: self.entry != none
+                              width: 820
+                              height: 38
+                              normal: ~38,38,48,160
+                              shape: ~round_rect
+                              radius: 4
                             children:
-                              标志行底:
-                                type: Texture
-                                attribute: {point: ~stretch_all, normal: "~235,236,221,255", through: true}
                               标志名称文字:
                                 type: Text
-                                attribute: {x: 16, y: 10, fontSize: 36, texts: "~&0{self.parent.entry['key']}", limit: "self.parent.width - 420", through: true}
+                                attribute:
+                                  x: 12
+                                  y: 7
+                                  through: true
+                                  fontSize: 26
+                                  texts: "~&b{self.parent.entry['key']}"
                               标志描述文字:
                                 type: Text
-                                attribute: {x: 16, y: 52, fontSize: 36, texts: "~&8{self.parent.entry['desc']}", limit: "self.parent.width - 420", through: true}
+                                attribute:
+                                  x: 200
+                                  y: 8
+                                  through: true
+                                  fontSize: 26
+                                  texts: "~&7{self.parent.entry['desc']}"
                               标志状态文字:
                                 type: Text
-                                attribute: {x: "self.parent.width - 396", y: 32, fontSize: 36, texts: "~&8未设置", visible: "self.parent.entry['state'] != 'allow' && self.parent.entry['state'] != 'deny'", through: true}
-                              标志允许状态:
-                                type: Text
-                                attribute: {x: "self.parent.width - 396", y: 32, fontSize: 36, texts: "~&2允许", visible: "self.parent.entry['state'] == 'allow'", through: true}
-                              标志拒绝状态:
-                                type: Text
-                                attribute: {x: "self.parent.width - 396", y: 32, fontSize: 36, texts: "~&4拒绝", visible: "self.parent.entry['state'] == 'deny'", through: true}
+                                attribute:
+                                  x: 520
+                                  y: 8
+                                  through: true
+                                  fontSize: 26
+                                  texts: "~{self.parent.entry['state'] == 'allow' ? '&a允许' : self.parent.entry['state'] == 'deny' ? '&c拒绝' : '&8未设置'}"
                               允许按钮:
                                 type: Canvas
-                                attribute: {x: "self.parent.width - 276", y: 24, width: 80, height: 48, enable: "var.actionToken != none && var.actionToken != ''"}
+                                attribute:
+                                  x: 620
+                                  y: 4
+                                  width: 56
+                                  height: 30
                                 action:
                                   click: |-
                                     Packet.send(var.packetId, 'set_flag', var.actionToken, var.selId, self.parent.entry['key'], 'allow')
                                 children:
                                   允许按钮背景:
                                     type: Texture
-                                    attribute: {point: ~stretch_all, normal: "self.parent.parent.entry['state'] == 'allow' ? '52,80,64,255' : '202,217,191,255'", hover: "self.parent.parent.entry['state'] == 'allow' ? '70,104,80,255' : '179,203,166,255'", through: true}
+                                    attribute:
+                                      point: ~stretch_all
+                                      through: true
+                                      normal: "self.isHovered() ? '60,160,80,220' : '40,140,60,180'"
+                                      shape: ~round_rect
+                                      radius: 4
                                   允许按钮文字:
                                     type: Text
-                                    attribute: {point: ~middle_center, fontSize: 36, texts: "self.parent.parent.entry['state'] == 'allow' ? '&f允许' : '&0允许'", through: true}
+                                    attribute:
+                                      point: ~middle_center
+                                      width: 56
+                                      through: true
+                                      fontSize: 26
+                                      texts: "~&f允许"
                               拒绝按钮:
                                 type: Canvas
-                                attribute: {x: "self.parent.width - 188", y: 24, width: 80, height: 48, enable: "var.actionToken != none && var.actionToken != ''"}
+                                attribute:
+                                  x: 684
+                                  y: 4
+                                  width: 56
+                                  height: 30
                                 action:
                                   click: |-
                                     Packet.send(var.packetId, 'set_flag', var.actionToken, var.selId, self.parent.entry['key'], 'deny')
                                 children:
                                   拒绝按钮背景:
                                     type: Texture
-                                    attribute: {point: ~stretch_all, normal: "self.parent.parent.entry['state'] == 'deny' ? '153,66,54,255' : '232,207,193,255'", hover: "self.parent.parent.entry['state'] == 'deny' ? '181,79,64,255' : '218,178,160,255'", through: true}
+                                    attribute:
+                                      point: ~stretch_all
+                                      through: true
+                                      normal: "self.isHovered() ? '200,70,70,220' : '180,50,50,180'"
+                                      shape: ~round_rect
+                                      radius: 4
                                   拒绝按钮文字:
                                     type: Text
-                                    attribute: {point: ~middle_center, fontSize: 36, texts: "self.parent.parent.entry['state'] == 'deny' ? '&f拒绝' : '&4拒绝'", through: true}
+                                    attribute:
+                                      point: ~middle_center
+                                      width: 56
+                                      through: true
+                                      fontSize: 26
+                                      texts: "~&f拒绝"
                               清除标志按钮:
                                 type: Canvas
-                                attribute: {x: "self.parent.width - 100", y: 24, width: 84, height: 48, enable: "var.actionToken != none && var.actionToken != ''"}
+                                attribute:
+                                  x: 748
+                                  y: 4
+                                  width: 56
+                                  height: 30
                                 action:
                                   click: |-
                                     Packet.send(var.packetId, 'remove_flag', var.actionToken, var.selId, self.parent.entry['key'])
                                 children:
                                   清除按钮背景:
                                     type: Texture
-                                    attribute: {point: ~stretch_all, normal: "~217,221,204,255", hover: "~201,210,191,255", through: true}
+                                    attribute:
+                                      point: ~stretch_all
+                                      through: true
+                                      normal: "self.isHovered() ? '80,80,95,210' : '60,60,70,180'"
+                                      shape: ~round_rect
+                                      radius: 4
                                   清除按钮文字:
                                     type: Text
-                                    attribute: {point: ~middle_center, fontSize: 36, texts: "~&0清除", through: true}
-                  编辑页脚:
-                    type: Text
-                    attribute: {point: ~bottom_left, x: 0, y: -4, fontSize: 36, texts: "~&8体积 &0{var.selVolume} 方块   &4| 重定义会替换边界   &8| 两栏独立滚动", through: true}
-                  未选择区域:
+                                    attribute:
+                                      point: ~middle_center
+                                      width: 56
+                                      through: true
+                                      fontSize: 26
+                                      texts: "~&7清除"
+
+                  返回按钮:
                     type: Canvas
-                    attribute: {x: 0, y: 146, width: "var.boardW", height: "var.viewH - 382", visible: "var.selId == none || var.selId == ''"}
+                    attribute:
+                      x: 720
+                      y: 0
+                      width: 100
+                      height: 36
+                    action:
+                      click: |-
+                        Packet.send(var.packetId, 'navigate', 'regions')
                     children:
-                      未选择底:
+                      返回按钮背景:
                         type: Texture
-                        attribute: {point: ~stretch_all, normal: "~247,244,232,255"}
-                      未选择说明:
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: "self.isHovered() ? '80,80,95,230' : '60,60,70,200'"
+                          shape: ~round_rect
+                          radius: 8
+                      返回按钮文字:
                         type: Text
-                        attribute: {x: 32, y: 60, fontSize: 48, texts: "~&8请先从区域登记簿选择一个区域进行复核。", through: true}
+                        attribute:
+                          point: ~middle_center
+                          width: 100
+                          through: true
+                          fontSize: 26
+                          texts: "~&f← 返回"
+
+              # ─── 世界规则视图 ───
               世界规则布局:
                 type: Canvas
-                attribute: {x: 24, y: 24, width: "var.boardW", height: "var.viewH - 236", visible: "var.page == 'world_rules'"}
+                attribute:
+                  x: 20
+                  y: 16
+                  width: 840
+                  height: 590
+                  visible: "var.page == 'world_rules'"
                 children:
                   世界规则标题:
                     type: Text
-                    attribute: {x: 0, y: 0, fontSize: 54, texts: "~&0世界规则台账", through: true}
-                  世界卷号:
-                    type: Text
-                    attribute: {point: ~top_right, x: -16, y: 8, fontSize: 36, texts: "~&4A—03  /  {var.worldCount} 个世界", through: true}
+                    attribute:
+                      x: 0
+                      y: 0
+                      fontSize: 36
+                      texts: "~&6世界规则管理"
                   世界规则说明:
                     type: Text
-                    attribute: {x: 0, y: 60, fontSize: 36, texts: "~&8全域规则  /  飞行与活塞按钮点击即切换；禁交互材料只读，不影响地块权属。", through: true}
-                  世界表头底:
-                    type: Texture
-                    attribute: {x: 0, y: 116, width: "var.boardW - 28", height: 44, normal: "~219,225,205,255", through: true}
-                  世界表头:
-                    type: Text
-                    attribute: {x: 20, y: 124, fontSize: 36, texts: "~&8世界名称 / 禁交互材料", through: true}
-                  开关表头:
-                    type: Text
-                    attribute: {x: "var.boardW - 484", y: 124, fontSize: 36, texts: "~&8飞行限制           活塞限制", through: true}
-                  世界规则滑轨:
-                    type: Texture
-                    attribute: {x: "var.boardW - 12", y: 176, width: 12, height: "var.viewH - 452", normal: "~213,222,202,255", through: true}
+                    attribute:
+                      x: 0
+                      y: 46
+                      fontSize: 26
+                      texts: "~&7点击开关切换禁飞/禁活塞状态"
                   世界规则滑块:
                     type: Texture
                     val: 世界规则滑块
-                    attribute: {x: "var.boardW - 12", y: 176, width: 12, height: 88, maxDragY: "var.viewH - 540", normal: "~86,111,95,255", hover: "~153,66,54,255"}
+                    attribute:
+                      x: 834
+                      y: 90
+                      width: 6
+                      height: 50
+                      normal: ~120,120,120,200
+                      maxDragY: 480
                   世界规则滚动栏:
                     type: Scroll
-                    attribute: {x: 0, y: 176, width: "var.boardW - 28", height: "var.viewH - 452", moveY: "self.parent['世界规则滑块'].getDragYRatio()"}
+                    attribute:
+                      x: 0
+                      y: 90
+                      width: 840
+                      height: 490
+                      moveY: "self.parent['世界规则滑块'].getDragYRatio()"
                     action:
                       wheel: |-
                         if(self.moveY >= 0 && self.wheelValue > 0){
@@ -690,56 +889,97 @@ controls:
                       world_rules_list:
                         val: world_rule_data
                         type: VStack
-                        attribute: {width: "var.boardW - 28", spaceBetween: 12}
+                        attribute:
+                          x: 0
+                          y: 0
+                          width: 840
+                          spaceBetween: 6
+                        action:
+                          create: |-
+                            for(i in range(1, 30)){
+                              row = self['世界规则行'].copy('世界规则行' + i.round)
+                              row.entryKey = i.round()
+                            }
                         children:
                           世界规则行:
-                            type: Canvas
-                            attribute: {entryKey: 0.round(), entry: "var.worldList.get(self.entryKey)", visible: self.entry != none, width: "var.boardW - 28", height: 144}
+                            type: Texture
+                            attribute:
+                              entryKey: 0.round()
+                              entry: "var.worldList != null ? var.worldList[self.entryKey] : none"
+                              visible: self.entry != none
+                              width: 820
+                              height: 60
+                              normal: ~40,40,50,180
+                              shape: ~round_rect
+                              radius: 6
                             children:
-                              世界规则底:
-                                type: Texture
-                                attribute: {point: ~stretch_all, normal: "~235,236,221,255", through: true}
-                              世界索引条:
-                                type: Texture
-                                attribute: {x: 0, y: 0, width: 5, height: 144, normal: "~153,66,54,255", through: true}
                               世界名称文字:
                                 type: Text
-                                attribute: {x: 20, y: 18, fontSize: 48, texts: "~&0{self.parent.entry['name']}", limit: "self.parent.width - 516", through: true}
+                                attribute:
+                                  x: 16
+                                  y: 18
+                                  through: true
+                                  fontSize: 28
+                                  texts: "~&f{self.parent.entry['name']}"
                               禁飞按钮:
                                 type: Canvas
-                                attribute: {x: "self.parent.width - 472", y: 16, width: 216, height: 58, enable: "var.actionToken != none && var.actionToken != ''"}
+                                attribute:
+                                  x: 260
+                                  y: 14
+                                  width: 100
+                                  height: 34
                                 action:
                                   click: |-
                                     Packet.send(var.packetId, 'toggle_no_fly', var.actionToken, self.parent.entry['name'])
                                 children:
                                   禁飞按钮背景:
                                     type: Texture
-                                    attribute: {point: ~stretch_all, normal: "self.parent.parent.entry['noFly'] == 'true' ? '153,66,54,255' : '52,80,64,255'", hover: "self.parent.parent.entry['noFly'] == 'true' ? '181,79,64,255' : '70,104,80,255'", through: true}
+                                    attribute:
+                                      point: ~stretch_all
+                                      through: true
+                                      normal: "self.parent.entry['noFly'] == 'true' ? '200,60,60,220' : (self.isHovered() ? '70,70,85,210' : '50,50,60,180')"
+                                      shape: ~round_rect
+                                      radius: 6
                                   禁飞按钮文字:
                                     type: Text
-                                    attribute: {point: ~middle_center, fontSize: 36, texts: "self.parent.parent.entry['noFly'] == 'true' ? '&f禁飞 / 已开启' : '&f飞行 / 允许'", through: true}
+                                    attribute:
+                                      point: ~middle_center
+                                      width: 100
+                                      through: true
+                                      fontSize: 26
+                                      texts: "~{self.parent.entry['noFly'] == 'true' ? '&f禁飞' : '&7飞行'}"
                               禁活塞按钮:
                                 type: Canvas
-                                attribute: {x: "self.parent.width - 240", y: 16, width: 220, height: 58, enable: "var.actionToken != none && var.actionToken != ''"}
+                                attribute:
+                                  x: 380
+                                  y: 14
+                                  width: 110
+                                  height: 34
                                 action:
                                   click: |-
                                     Packet.send(var.packetId, 'toggle_no_piston', var.actionToken, self.parent.entry['name'])
                                 children:
                                   禁活塞按钮背景:
                                     type: Texture
-                                    attribute: {point: ~stretch_all, normal: "self.parent.parent.entry['noPiston'] == 'true' ? '153,66,54,255' : '52,80,64,255'", hover: "self.parent.parent.entry['noPiston'] == 'true' ? '181,79,64,255' : '70,104,80,255'", through: true} #总代理联系    : өзиниң
+                                    attribute:
+                                      point: ~stretch_all
+                                      through: true
+                                      normal: "self.parent.entry['noPiston'] == 'true' ? '200,60,60,220' : (self.isHovered() ? '70,70,85,210' : '50,50,60,180')"
+                                      shape: ~round_rect
+                                      radius: 6
                                   禁活塞按钮文字:
                                     type: Text
-                                    attribute: {point: ~middle_center, fontSize: 36, texts: "self.parent.parent.entry['noPiston'] == 'true' ? '&f禁活塞 / 开启' : '&f活塞 / 允许'", through: true}
-                              世界行分线:
-                                type: Texture
-                                attribute: {x: 20, y: 86, width: "self.parent.width - 40", height: 1, normal: "~189,202,179,255", through: true}
+                                    attribute:
+                                      point: ~middle_center
+                                      width: 110
+                                      through: true
+                                      fontSize: 26
+                                      texts: "~{self.parent.entry['noPiston'] == 'true' ? '&f禁活塞' : '&7活塞'}"
                               禁交互文字:
                                 type: Text
-                                attribute: {x: 20, y: 104, fontSize: 36, texts: "~&8禁交互材料 / &0{self.parent.entry['interactions'] != none && self.parent.entry['interactions'] != '' ? self.parent.entry['interactions'] : '无'}", limit: "self.parent.width - 40", through: true}
-                  世界空状态:
-                    type: Text
-                    attribute: {x: 20, y: 206, fontSize: 48, texts: "~&8没有可显示的世界规则。", visible: "var.worldCount == '0'", through: true}
-                  世界页脚:
-                    type: Text
-                    attribute: {point: ~bottom_left, x: 0, y: -4, fontSize: 36, texts: "~&4红色 = 限制已开启   &2绿色 = 允许   &8|   世界规则影响整个世界", through: true}
+                                attribute:
+                                  x: 510
+                                  y: 18
+                                  through: true
+                                  fontSize: 26
+                                  texts: "~&7交互: &f{self.parent.entry['interactions'] != none && self.parent.entry['interactions'] != '' ? self.parent.entry['interactions'] : '&8无'}"

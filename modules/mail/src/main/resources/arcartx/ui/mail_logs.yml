@@ -1,6 +1,9 @@
-# 私人邮局 / 往来存档
-# 同一邮局导航，独立的只读档案层级：摘要卷宗 + 象牙纸质流水记录。
-# 原有包字段、分页状态和列表引用不变；长记录悬停横向展开。
+# AXS Mail 日志（翠绿信使重写版）
+# 范式: 全屏玻璃底 + Adaptive(~top_center,1920x1080) + 顶栏贴顶铺满 + 左侧导航 + 内容区
+# 布局: 左导航(收件箱/日志/写信/兑换码/管理 + 底部摘要) + 内容区(日志列表 + 分页)
+# 配色: 翠绿信使 主色80,180,120 底30,32,38,110 抬升36,38,48,245 描边60,64,82,220
+# 逻辑: packetHandler/action/val引用/entryKey/copy 与原版一致，仅重构布局结构与配色
+
 ui:
   isHud: false
   background: false
@@ -26,14 +29,14 @@ ui:
   action:
     load: |-
       var.totalCount = 0
-      var.logsReady = false
+      // 视口换算
       sx = Screen.getWidth() / 1920
       sy = Screen.getHeight() / 1080
       s = sx < sy ? sx : sy
       var.viewH = Screen.getHeight() / s
       var.viewW = Screen.getWidth() / s
       var.offX = (var.viewW - 1920) / 2
-      var.contentW = var.viewW - 452
+      var.contentW = var.viewW - 420
     open: |-
       Packet.send('AXS_MAIL', 'refresh')
     resize: |-
@@ -43,8 +46,16 @@ ui:
       var.viewH = Screen.getHeight() / s
       var.viewW = Screen.getWidth() / s
       var.offX = (var.viewW - 1920) / 2
-      var.contentW = var.viewW - 452
+      var.contentW = var.viewW - 420
   packetHandler:
+    # packetHandler: init
+    # 包字段:
+    #   - logs: 日志列表（Map，键为索引，每项含 type_text/created_at/content 等子字段）
+    #   - page: 当前页码
+    #   - max_page: 最大页码数
+    #   - total_count: 日志总条数
+    #   - maxLogCount: 日志列表最大显示条数（用于动态生成列表项）
+    #   - is_admin: 当前玩家是否为管理员
     init: |-
       var.logs = packet['logs']
       var.page = packet['page']
@@ -52,7 +63,6 @@ ui:
       var.totalCount = packet['total_count']
       var.maxLogCount = packet['maxLogCount']
       var.isAdmin = packet['is_admin']
-      var.logsReady = true
       while(val.logs_list.childrenCount() > 1){
         val.logs_list.get(1).remove()
       }
@@ -63,6 +73,7 @@ ui:
           e.entryKey = key
         }
       }
+    # packetHandler: update（字段与 init 相同）
     update: |-
       var.logs = packet['logs']
       var.page = packet['page']
@@ -70,7 +81,6 @@ ui:
       var.totalCount = packet['total_count']
       var.maxLogCount = packet['maxLogCount']
       var.isAdmin = packet['is_admin']
-      var.logsReady = true
       while(val.logs_list.childrenCount() > 1){
         val.logs_list.get(1).remove()
       }
@@ -81,12 +91,18 @@ ui:
           e.entryKey = key
         }
       }
+
+# ─── 控件树 ────────────────────────────────────────────────────────
+# 布局: 顶栏(标题色块+标题+关闭) + 左导航(5项+摘要) + 内容区(日志列表+分页)
+# 配色: 翠绿信使 深底浅字 — 抬升面36,38,48 描边60,64,82 强调80,180,120
+# fontSize: 48(顶栏标题) / 36(区域标题/按钮/信息) / 32(小标签) — 全部标准档位
 controls:
   全屏玻璃底:
     type: Texture
     attribute:
       point: ~stretch_all
-      normal: ~32,23,25,240
+      through: true
+      normal: ~Frosted:24;30,32,38,110
   自适应全局布局:
     type: Adaptive
     attribute:
@@ -94,6 +110,7 @@ controls:
       width: 1920
       height: 1080
     children:
+      # ── 顶栏 ──────────────────────────────────────────
       顶栏:
         type: Canvas
         attribute:
@@ -106,15 +123,13 @@ controls:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~90,48,50,255
-              through: true
+              normal: ~Frosted:30;255,255,255,100
           顶栏底线:
             type: Texture
             attribute:
               point: ~horizontal_stretch_bottom
               height: 1
-              normal: ~175,147,97,255
-              through: true
+              normal: ~60,64,82,220
           标题色块:
             type: Texture
             attribute:
@@ -122,30 +137,22 @@ controls:
               x: 48
               width: 6
               height: 36
-              normal: ~175,147,97,255
-              through: true
+              normal: ~80,180,120,255
+              shape: ~round_rect
+              radius: 3
           标题:
             type: Text
             attribute:
               point: ~middle_left
               x: 68
-              texts: ~&f日志
-              fontSize: 64
-              through: true
-          邮局副标题:
-            type: Text
-            attribute:
-              point: ~middle_left
-              x: 300
-              texts: ~&f私人邮局 / 往来存档
-              fontSize: 36
-              through: true
+              texts: "~&f邮件日志"
+              fontSize: 48
           关闭按钮:
             type: Canvas
             attribute:
               point: ~middle_right
               x: -48
-              width: 96
+              width: 48
               height: 48
             action:
               clickLeft: |-
@@ -155,350 +162,304 @@ controls:
                 type: Texture
                 attribute:
                   point: ~stretch_all
-                  normal: ~249,243,230,255
-                  hover: ~232,220,197,255
-                  shape: ~round_rect
-                  radius: 10
                   through: true
-              关闭文字:
-                type: Text
-                attribute:
-                  point: ~middle_center
-                  texts: ~&0关闭
-                  fontSize: 36
-                  through: true
-      邮件导航:
-        type: Canvas
-        attribute:
-          point: ~top_left
-          x: "48 - var.offX"
-          y: 124
-          width: "var.viewW - 96"
-          height: 60
-        children:
-          导航收件箱:
-            type: Canvas
-            attribute:
-              x: 0
-              width: 160
-              height: 60
-            action:
-              clickLeft: |-
-                Packet.send('AXS_MAIL', 'open')
-            children:
-              底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  normal: ~90,48,50,255
-                  hover: ~119,65,64,255
-                  through: true
-                  shape: ~round_rect
-                  radius: 10
-              字:
-                type: Text
-                attribute:
-                  point: ~middle_center
-                  texts: ~&f收件箱
-                  fontSize: 36
-                  through: true
-          导航日志:
-            type: Canvas
-            attribute:
-              x: 176
-              width: 160
-              height: 60
-            children:
-              底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  normal: ~90,48,50,255
-                  through: true
+                  normal: ~36,38,48,245
                   shape: ~round_rect
                   radius: 10
                 effect:
                   stroke:
-                    width: 1
-                    color: ~175,147,97,255
-              标记:
+                    width: 3
+                    color: "self.isHovered() ? '120,220,160,255' : '255,255,255,230'"
+              关闭文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "~&f✕"
+                  fontSize: 36
+                  through: true
+
+      # ── 左侧导航 ──────────────────────────────────────
+      左侧导航:
+        type: Canvas
+        attribute:
+          point: ~top_left
+          x: "48 - var.offX"
+          y: 120
+          width: 300
+          height: "var.viewH - 144"
+        children:
+          导航底:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~Frosted:30;255,255,255,100
+              shape: ~round_rect
+              radius: 14
+            effect:
+              stroke:
+                width: 3
+                color: ~255,255,255,230
+          导航收件箱:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 18
+              width: 272
+              height: 58
+            action:
+              clickLeft: |-
+                Packet.send('AXS_MAIL', 'open')
+            children:
+              收件箱底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~36,38,48,245
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  ripple:
+                  stroke:
+                    width: 3
+                    color: "self.isHovered() ? '120,220,160,255' : '255,255,255,230'"
+              收件箱文字:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: 28
+                  texts: "~&f收件箱"
+                  fontSize: 36
+                  through: true
+          # 当前页：日志
+          导航日志:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 84
+              width: 272
+              height: 58
+            children:
+              日志底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~80,180,120,210
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  stroke:
+                    width: 3
+                    color: ~255,255,255,230
+              日志高亮条:
                 type: Texture
                 attribute:
                   point: ~middle_left
                   x: 8
                   width: 4
                   height: 28
-                  normal: ~175,147,97,255
-                  through: true
-              字:
+                  normal: ~80,180,120,255
+                  shape: ~round_rect
+                  radius: 2
+              日志文字:
                 type: Text
                 attribute:
-                  point: ~middle_center
-                  texts: ~&f日志
+                  point: ~middle_left
+                  x: 28
+                  texts: "~&0日志"
                   fontSize: 36
-                  through: true
           导航写信:
             type: Canvas
             attribute:
-              x: 352
-              width: 160
-              height: 60
+              point: ~top_left
+              x: 14
+              y: 150
+              width: 272
+              height: 58
             action:
               clickLeft: |-
                 Packet.send('AXS_MAIL', 'compose')
             children:
-              底:
+              写信底:
                 type: Texture
                 attribute:
                   point: ~stretch_all
-                  normal: ~90,48,50,255
-                  hover: ~119,65,64,255
                   through: true
+                  normal: ~36,38,48,245
                   shape: ~round_rect
                   radius: 10
-              字:
+                effect:
+                  ripple:
+                  stroke:
+                    width: 3
+                    color: "self.isHovered() ? '120,220,160,255' : '255,255,255,230'"
+              写信文字:
                 type: Text
                 attribute:
-                  point: ~middle_center
-                  texts: ~&f写信
+                  point: ~middle_left
+                  x: 28
+                  texts: "~&f写信"
                   fontSize: 36
                   through: true
           导航管理:
             type: Canvas
             attribute:
-              x: 528
-              width: 160
-              height: 60
+              point: ~top_left
+              x: 14
+              y: 216
+              width: 272
+              height: 58
               visible: "var.isAdmin == true"
             action:
               clickLeft: |-
                 Packet.send('AXS_MAIL', 'admin')
             children:
-              底:
+              管理底:
                 type: Texture
                 attribute:
                   point: ~stretch_all
-                  normal: ~90,48,50,255
-                  hover: ~119,65,64,255
                   through: true
+                  normal: ~36,38,48,245
                   shape: ~round_rect
                   radius: 10
-              字:
+                effect:
+                  ripple:
+                  stroke:
+                    width: 3
+                    color: "self.isHovered() ? '120,220,160,255' : '255,255,255,230'"
+              管理文字:
                 type: Text
                 attribute:
-                  point: ~middle_center
-                  texts: ~&f管理
+                  point: ~middle_left
+                  x: 28
+                  texts: "~&f管理"
                   fontSize: 36
                   through: true
-      页面说明:
-        type: Text
-        attribute:
-          point: ~top_left
-          x: "48 - var.offX"
-          y: 212
-          texts: ~&7寄件、领取与删除留有记录；这里仅供查阅，不会修改信件。
-          fontSize: 36
-          through: true
-      存档卷宗:
-        type: Canvas
-        attribute:
-          point: ~top_left
-          x: "48 - var.offX"
-          y: 264
-          width: 332
-          height: "var.viewH - 312"
-        children:
-          卷宗底:
+          导航分隔线:
             type: Texture
             attribute:
-              point: ~stretch_all
-              normal: ~42,33,33,255
-              shape: ~round_rect
-              radius: 12
-              through: true
-          卷宗印章:
-            type: Texture
-            attribute:
-              x: 24
-              y: 24
-              width: 6
-              height: 44
-              normal: ~175,147,97,255
-              through: true
+              point: ~top_left
+              x: 18
+              y: "var.isAdmin == true ? 298 : 216"
+              width: 264
+              height: 2
+              normal: ~60,64,82,220
           摘要标题:
             type: Text
             attribute:
-              x: 44
-              y: 28
-              texts: ~&f存档卷宗
-              fontSize: 48
-              through: true
-          总量标签:
-            type: Text
-            attribute:
-              x: 24
-              y: 112
-              texts: ~&7累计操作记录
+              point: ~top_left
+              x: 20
+              y: "var.isAdmin == true ? 316 : 234"
+              texts: "~&f日志概览"
               fontSize: 36
-              through: true
           摘要总数:
             type: Text
             attribute:
-              x: 24
-              y: 164
-              texts: "'&f' + var.totalCount.round()"
-              fontSize: 100
-              through: true
-          摘要单位:
-            type: Text
-            attribute:
-              x: 24
-              y: 276
-              texts: ~&7条留存记录
-              fontSize: 36
-              through: true
-          卷宗横线:
-            type: Texture
-            attribute:
-              x: 24
-              y: 336
-              width: 284
-              height: 1
-              normal: ~151,138,112,150
-              through: true
-          页码标签:
-            type: Text
-            attribute:
-              x: 24
-              y: 368
-              texts: ~&7服务端档案页
-              fontSize: 36
-              through: true
-          当前页码:
-            type: Text
-            attribute:
-              x: 24
-              y: 420
-              texts: "var.logsReady ? '&f' + var.page.round() + ' / ' + var.maxPage.round() : '&7等待载入'"
-              fontSize: 54
-              through: true
-          当页数量:
-            type: Text
-            attribute:
-              x: 24
-              y: 492
-              texts: "'&7本页留存 ' + var.logs.size().round() + ' 条'"
-              fontSize: 36
-              through: true
-              visible: "var.logsReady"
-          阅读指引:
-            type: Text
-            attribute:
-              point: ~bottom_left
-              x: 24
-              y: -40
-              texts:
-                - ~&7滚轮或滑块浏览
-                - ~&7悬停展开长记录
-                - ~&7服务端记录为准
-              fontSize: 36
-              through: true
+              point: ~top_left
+              x: 20
+              y: "var.isAdmin == true ? 362 : 280"
+              texts: "'&f总日志 &b' + var.totalCount.round()"
+              fontSize: 32
+
+      # ── 内容区 ──────────────────────────────────────────
+      # 范式: 大白毛玻璃底(255,255,255,100) + 暗色面板分区(36,38,48,210)
       内容区:
         type: Canvas
         attribute:
           point: ~top_left
-          x: "404 - var.offX"
-          y: 264
+          x: "372 - var.offX"
+          y: 120
           width: "var.contentW"
-          height: "var.viewH - 312"
+          height: "var.viewH - 144"
         children:
+          # 内容区大白毛玻璃底
           内容底:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~238,228,210,255
+              normal: ~Frosted:30;255,255,255,100
               shape: ~round_rect
               radius: 14
-              through: true
             effect:
               stroke:
-                width: 1
-                color: ~151,138,112,150
-          档案标题:
-            type: Text
-            attribute:
-              x: 28
-              y: 24
-              texts: ~&0往来记录
-              fontSize: 64
-              through: true
-          档案说明:
-            type: Text
-            attribute:
-              x: 28
-              y: 92
-              texts: ~&8操作类型 / 发生时间 / 记录内容
-              fontSize: 36
-              through: true
-          档案横线:
-            type: Texture
-            attribute:
-              x: 28
-              y: 144
-              width: "self.parent.width - 56"
-              height: 1
-              normal: ~151,138,112,180
-              through: true
+                width: 3
+                color: ~255,255,255,230
+          # 日志列表区（暗色面板）
           日志列表区:
             type: Canvas
             attribute:
               point: ~top_left
-              x: 28
-              y: 168
-              width: "self.parent.width - 56"
-              height: "self.parent.height - 260"
+              x: 24
+              y: 24
+              width: "var.contentW - 48"
+              height: "var.viewH - 144 - 48"
             children:
+              列表底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~36,38,48,210
+                  shape: ~round_rect
+                  radius: 12
+                effect:
+                  stroke:
+                    width: 3
+                    color: ~255,255,255,230
               日志滑轨:
                 type: Texture
                 attribute:
                   point: ~top_right
-                  x: -2
-                  width: 6
-                  height: "self.parent.height"
-                  normal: ~151,138,112,150
-                  through: true
+                  x: -12
+                  y: 12
+                  width: 10
+                  height: "self.parent.height - 24"
+                  normal: ~40,44,52,225
+                  shape: ~round_rect
+                  radius: 5
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~120,220,160,230
               日志滑块:
                 type: Texture
                 val: 日志滑块
                 attribute:
                   point: ~top_right
-                  x: -2
-                  width: 6
-                  height: 64
-                  normal: ~175,147,97,255
-                  maxDragY: "self.parent.height - 64"
+                  x: -12
+                  y: 12
+                  width: 10
+                  height: 50
+                  normal: ~80,180,120,230
+                  maxDragY: "self.parent.height - 74"
                   shape: ~round_rect
-                  radius: 3
+                  radius: 5
               日志滚动栏:
                 type: Scroll
                 attribute:
                   point: ~top_left
-                  width: "self.parent.width - 24"
-                  height: "self.parent.height"
+                  x: 14
+                  y: 12
+                  width: "self.parent.width - 40"
+                  height: "self.parent.height - 24"
                   moveY: "self.parent['日志滑块'].getDragYRatio()"
                 action:
                   wheel: |-
-                    ratio = self.moveY - self.wheelValue * 0.1
-                    ratio = ratio < 0 ? 0 : ratio
-                    ratio = ratio > 1 ? 1 : ratio
-                    self.parent['日志滑块'].setDragYRatio(ratio)
+                    if(self.moveY >= 0 && self.wheelValue > 0){
+                      self.parent['日志滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                    }
+                    if(self.moveY <= 1 && self.wheelValue < 0){
+                      self.parent['日志滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                    }
                 children:
                   log_stack:
                     val: logs_list
                     type: VStack
                     attribute:
-                      width: "self.parent.width - 4"
-                      spaceBetween: 14
+                      width: "self.parent.width - 24"
+                      spaceBetween: 8
                     children:
                       日志项目:
                         type: Canvas
@@ -506,118 +467,58 @@ controls:
                           entryKey: 0.round()
                           entry: var.logs[self.entryKey]
                           width: "self.parent.width"
-                          height: 148
+                          height: 100
                           visible: "self.entry != none"
                         children:
                           项目底:
                             type: Texture
                             attribute:
                               point: ~stretch_all
-                              normal: ~249,243,230,255
+                              through: true
+                              normal: ~36,38,48,245
                               shape: ~round_rect
-                              radius: 8
-                              through: true
-                          存档边线:
-                            type: Texture
-                            attribute:
-                              x: 0
-                              y: 14
-                              width: 3
-                              height: 120
-                              normal: ~90,48,50,255
-                              through: true
+                              radius: 10
+                            effect:
+                              stroke:
+                                width: 3
+                                color: ~255,255,255,230
                           类型标签:
                             type: Canvas
                             attribute:
                               point: ~top_left
-                              x: 20
-                              y: 18
-                              width: 128
-                              height: 44
+                              x: 14
+                              y: 14
+                              width: 80
+                              height: 32
                             children:
                               类型标签底:
                                 type: Texture
                                 attribute:
                                   point: ~stretch_all
-                                  normal: ~90,48,50,255
-                                  shape: ~round_rect
-                                  radius: 6
                                   through: true
+                                  normal: ~80,180,120,210
+                                  shape: ~round_rect
+                                  radius: 8
                               类型标签文字:
                                 type: Text
                                 attribute:
                                   point: ~middle_center
-                                  texts: "'&f' + self.parent.parent.entry['type_text']"
-                                  fontSize: 36
+                                  texts: "self.parent.parent.entry['type_text']"
+                                  fontSize: 32
                                   through: true
                           时间文字:
                             type: Text
                             attribute:
                               point: ~top_left
-                              x: 172
-                              y: 24
-                              texts: "'&8' + self.parent.entry['created_at']"
-                              fontSize: 36
-                              through: true
-                          记录序号:
+                              x: 108
+                              y: 18
+                              texts: "'&f' + self.parent.entry['created_at']"
+                              fontSize: 32
+                          内容文字:
                             type: Text
                             attribute:
-                              point: ~top_right
-                              x: -20
-                              y: 24
-                              texts: "'&8#' + self.parent.entry['id']"
-                              fontSize: 36
-                              through: true
-                          内容窗口:
-                            type: Scroll
-                            attribute:
                               point: ~top_left
-                              x: 20
-                              y: 84
-                              width: "self.parent.width - 40"
-                              height: 48
-                              scrollAnim: none
-                              moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
-                            action:
-                              enter: self.scrollAnim = Lerp(0, 1, 7000)
-                              leave: self.scrollAnim = none
-                            children:
-                              内容布局:
-                                type: HStack
-                                attribute:
-                                  height: 48
-                                children:
-                                  内容文字:
-                                    type: Text
-                                    attribute:
-                                      texts: "'&0' + self.parent.parent.parent.entry['content']"
-                                      fontSize: 36
-                                      through: true
-          等待提示:
-            type: Text
-            attribute:
-              point: ~middle_center
-              texts: ~&8正在读取往来存档…
-              fontSize: 48
-              visible: "!var.logsReady"
-              through: true
-          空状态提示:
-            type: Text
-            attribute:
-              point: ~middle_center
-              texts:
-                - ~&0本页暂无往来记录
-                - ~&8邮件操作发生后，可在此查阅留存记录
-              fontSize: 48
-              visible: "var.logsReady && var.logs.size() == 0"
-              through: true
-          档案页脚:
-            type: Text
-            attribute:
-              point: ~bottom_left
-              x: 28
-              y: -28
-              texts: "'&8档案页 ' + var.page.round() + ' / ' + var.maxPage.round() + '  ·  本页 ' + var.logs.size().round() + ' 条'"
-              fontSize: 36
-              visible: "var.logsReady"
-              through: true
+                              x: 14
+                              y: 50
+                              texts: "'&f' + self.parent.entry['content']"
+                              fontSize: 32

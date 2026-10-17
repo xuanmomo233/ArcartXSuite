@@ -1,5 +1,5 @@
 # AXS 资源说明
-# 用途: Abyss 机关校验终端——现场提示、剩余尝试与口令输入
+# 用途: Abyss 机关输入面板 —— puzzles.yml input 型机关的密码/口令输入
 # 前置依赖: ArcartX；Abyss 模块启用后自动注册导出。
 #
 # 通讯协议:
@@ -42,12 +42,6 @@ ui:
       val.输入框.setFocus(true)
   action:
     load: |-
-      sx = Screen.getWidth() / 1920
-      sy = Screen.getHeight() / 1080
-      s = sx < sy ? sx : sy
-      var.viewH = Screen.getHeight() / s
-      var.viewW = Screen.getWidth() / s
-      var.offX = (var.viewW - 1920) / 2
       var.packetId = 'abyss'
       var.actionToken = ''
       var.puzzleId = ''
@@ -57,15 +51,8 @@ ui:
       var.pattern = ''
       var.masked = '0'
       var.attemptsText = ''
-      var.accent = '194,139,65,255'
-      var.accentDim = '112,83,53,210'
-    resize: |-
-      sx = Screen.getWidth() / 1920
-      sy = Screen.getHeight() / 1080
-      s = sx < sy ? sx : sy
-      var.viewH = Screen.getHeight() / s
-      var.viewW = Screen.getWidth() / s
-      var.offX = (var.viewW - 1920) / 2
+      var.accent = '186,140,232,255'
+      var.accentDim = '96,80,140,190'
     open: |-
       Sound.self('minecraft:block.note_block.pling', 0.8, 12)
 controls:
@@ -73,29 +60,28 @@ controls:
     type: Texture
     attribute:
       point: ~stretch_all
-      normal: ~Frosted:20;8,9,10,205
+      normal: ~Frosted:30;16,12,30,220
   自适应全局布局:
     type: Adaptive
     attribute:
-      point: ~top_center
+      point: ~middle_center
       width: 1920
       height: 1080
     children:
       输入面板:
         type: Canvas
         attribute:
-          point: ~top_center
-          y: "(var.viewH - 570) / 2"
-          width: 860
-          height: 570
+          point: ~middle_center
+          width: 520
+          height: 340
         children:
           面板背景:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~17,19,20,250
+              normal: ~Frosted:30;24,19,40,240
               shape: ~round_rect
-              radius: 6
+              radius: 16
             effect:
               stroke:
                 width: 2
@@ -103,167 +89,72 @@ controls:
           标题标线:
             type: Texture
             attribute:
-              point: ~top_left
-              x: 36
-              y: 72
-              width: 788
-              height: 2
+              point: ~top_center
+              y: 30
+              width: 26
+              height: 3
               normal: var.accent
-              through: true
-          终端编号:
-            type: Text
-            attribute:
-              point: ~top_left
-              x: 36
-              y: 30
-              texts: ~&6机关校验  /  远征终端
-              fontSize: 36
-              through: true
-          机关档案:
-            type: Text
-            attribute:
-              point: ~top_right
-              x: -36
-              y: 30
-              texts: "'&7' + var.puzzleId"
-              fontSize: 36
-              limit: 22
               through: true
           标题:
             type: Text
             attribute:
-              point: ~top_left
-              x: 36
-              y: 94
+              point: ~top_center
+              y: 48
               texts: "'&f' + var.title"
               fontSize: 54
-              limit: 25
-              through: true
-          提示题:
-            type: Text
-            attribute:
-              point: ~top_left
-              x: 38
-              y: 168
-              texts: ~&6现场线索
-              fontSize: 36
-              through: true
-          线索阅读注:
-            type: Text
-            attribute:
-              point: ~top_right
-              x: -36
-              y: 168
-              texts: ~&7悬停阅读完整线索
-              fontSize: 36
+              limit: 14
               through: true
           提示:
-            type: Scroll
+            type: Text
             attribute:
-              point: ~top_left
-              x: 38
-              y: 206
-              width: 784
-              height: 40
-              scrollAnim: none
-              moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
-            action:
-              enter: "self.scrollAnim = Lerp(0, 1, 6000)"
-              leave: "self.scrollAnim = none"
-            children:
-              线索布局:
-                type: HStack
-                attribute:
-                  height: 40
-                children:
-                  线索全文:
-                    type: Text
-                    attribute:
-                      texts: "'&7' + var.hint"
-                      fontSize: 36
-                      through: true
-          风险底:
-            type: Texture
-            attribute:
-              point: ~top_left
-              x: 36
-              y: 260
-              width: 788
-              height: 50
-              normal: "var.attemptsText != '' ? '63,29,25,245' : '32,39,35,245'"
-              through: true
-          风险标线:
-            type: Texture
-            attribute:
-              point: ~top_left
-              x: 36
-              y: 260
-              width: 4
-              height: 50
-              normal: ~174,65,42,255
+              point: ~top_center
+              y: 118
+              texts: "'&7' + var.hint"
+              fontSize: 36
+              limit: 26
               through: true
           次数行:
             type: Text
             attribute:
-              point: ~top_left
-              x: 54
-              y: 274
-              texts: "var.attemptsText != '' ? '&c校验余量  &8/  &f' + var.attemptsText : '&7此机关不限制尝试次数'"
-              fontSize: 36
-              through: true
-          输入题:
-            type: Text
-            attribute:
-              point: ~top_left
-              x: 38
-              y: 334
-              texts: ~&6提交口令
-              fontSize: 36
-              through: true
-          长度提示:
-            type: Text
-            attribute:
-              point: ~top_right
-              x: -36
-              y: 334
-              texts: "'&7上限 ' + var.length.round() + ' 字符 · 回车提交'"
+              point: ~top_center
+              y: 156
+              texts: "'&8' + var.attemptsText"
               fontSize: 36
               through: true
           # §26：TextBox 渲染尺寸大于声明值——Canvas 承载布局 + Texture 承载视觉 + TextBox 留 padding
           输入框容器:
             type: Canvas
             attribute:
-              point: ~top_left
-              x: 36
-              y: 376
-              width: 788
-              height: 66
+              point: ~top_center
+              y: 218
+              width: 420
+              height: 56
               through: true
             children:
               输入框底:
                 type: Texture
                 attribute:
                   point: ~stretch_all
-                  normal: ~8,10,11,250
+                  normal: ~10,8,20,230
                   shape: ~round_rect
                   radius: 10
                   through: true
                 effect:
                   stroke:
                     width: 2
-                    color: "self.parent.isHovered() ? '214,156,76,245' : '112,83,53,210'"
+                    color: "self.parent.isHovered() ? '186,140,232,220' : '96,80,140,140'"
               输入框:
                 type: TextBox
                 val: "输入框"
                 attribute:
-                  x: 16
-                  y: 13
-                  width: 756
+                  x: 12
+                  y: 8
+                  width: 396
                   height: 40
                   length: 16
                   fontSize: 36
-                  cursorColor: ~194,139,65
-                  emptyText: ~&7输入口令以校验
+                  cursorColor: ~186,140,232
+                  emptyText: ~&8点击输入
                   canLoseFocus: true
                 action:
                   enter: |-
@@ -276,15 +167,15 @@ controls:
             type: HStack
             attribute:
               point: ~bottom_center
-              y: -42
-              height: 56
-              spaceBetween: 24
+              y: -30
+              height: 48
+              spaceBetween: 20
             children:
               确认按钮:
                 type: Canvas
                 attribute:
-                  width: 240
-                  height: 56
+                  width: 150
+                  height: 48
                 action:
                   clickLeft: |-
                     if(val.输入框.getContent() != '') {
@@ -296,8 +187,8 @@ controls:
                     type: Texture
                     attribute:
                       point: ~stretch_all
-                      normal: ~192,139,68,245
-                      hover: ~215,162,87,255
+                      normal: ~170,120,220,230
+                      hover: ~200,150,240,245
                       shape: ~round_rect
                       radius: 10
                       through: true
@@ -305,14 +196,14 @@ controls:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      texts: ~&0校验并提交
+                      texts: ~&0确 认
                       fontSize: 36
                       through: true
               取消按钮:
                 type: Canvas
                 attribute:
-                  width: 200
-                  height: 56
+                  width: 150
+                  height: 48
                 action:
                   clickLeft: "Screen.close()"
                 children:
@@ -320,8 +211,8 @@ controls:
                     type: Texture
                     attribute:
                       point: ~stretch_all
-                      normal: ~47,53,51,245
-                      hover: ~61,66,59,255
+                      normal: ~62,66,74,230
+                      hover: ~82,90,105,245
                       shape: ~round_rect
                       radius: 10
                       through: true
@@ -333,6 +224,6 @@ controls:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      texts: ~&f暂不尝试
+                      texts: ~&f取 消
                       fontSize: 36
                       through: true

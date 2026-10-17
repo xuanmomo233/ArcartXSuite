@@ -1,124 +1,48 @@
 # ArcartXSuite Chat — 系统提示卡片模板
-# data['type']: mute / filter；警告图形不依赖巨型文本字形
-# 整宽警告详情与标题/图标分区；永久禁言与拦截消息默认值保持不变
+# 禁言提示、敏感词拦截等系统通知时显示此卡片
+# data['type'] 可能的值: mute, filter
+# 卡片宽度与高度由 UI 侧根据 Text 控件实际渲染尺寸自适应
 root_control:
   type: card
   attribute:
-    width: "Math.max(360, Math.max(val.title_label.x + val.title_label.width, val.detail_label.x + val.detail_label.width + 12) + 24)"
-    height: "Math.max(148, val.detail_label.y + val.detail_label.height + 24)"
+    width: "Math.max(val.title_label.width, val.detail_label.width) + 200 < 500 ? 500 : Math.max(val.title_label.width, val.detail_label.width) + 200"
+    height: "Math.max(100, val.detail_label.y + val.detail_label.height + 20)"
   children:
     background:
       type: Texture
       attribute:
         width: "self.parent.width"
         height: "self.parent.height"
-        normal: ~44,28,43,242
+        normal: ~25,25,35,200
         shape: ~round_rect
-        radius: 14
-        through: true
+        radius: 12
       effect:
         stroke:
           width: 2
-          color: ~211,129,132,230
-    accent:
-      type: Texture
-      attribute:
-        x: 8
-        y: 16
-        width: 4
-        height: "self.parent.height - 32"
-        normal: ~246,151,126,255
-        shape: ~round_rect
-        radius: 2
-        through: true
+          color: ~255,255,255,120
     icon:
-      type: Canvas
+      type: Text
       attribute:
-        x: 24
-        y: 16
-        width: 64
-        height: 64
+        fontSize: 200
+        x: 25
+        y: 3
+        texts: "'§c⚠'"
         through: true
-      children:
-        badge:
-          type: Texture
-          attribute:
-            width: "self.parent.width"
-            height: "self.parent.height"
-            normal: ~88,47,59,255
-            shape: ~round_rect
-            radius: 16
-            through: true
-        warning_diamond:
-          type: Texture
-          attribute:
-            x: 14
-            y: 14
-            width: 36
-            height: 36
-            rotate: 45
-            normal: ~246,172,135,255
-            shape: ~round_rect
-            radius: 4
-            through: true
-        warning_stem:
-          type: Texture
-          attribute:
-            x: 29
-            y: 18
-            width: 6
-            height: 20
-            normal: ~88,47,59,255
-            shape: ~round_rect
-            radius: 2
-            through: true
-        warning_dot:
-          type: Texture
-          attribute:
-            x: 29
-            y: 42
-            width: 6
-            height: 6
-            normal: ~88,47,59,255
-            shape: ~circle
-            through: true
     title_label:
       type: Text
       val: title_label
       attribute:
-        fontSize: 54
-        x: 108
-        y: 20
-        texts: "self.parent.data['type'] == 'mute' ? '§c你已被禁言' : '§c消息被拦截'"
-        through: true
-    header_rule:
-      type: Texture
-      attribute:
-        x: 24
-        y: "val.detail_label.y - 20"
-        width: "self.parent.width - 48"
-        height: 2
-        normal: ~110,66,78,255
-        through: true
-    detail_surface:
-      type: Texture
-      attribute:
-        x: 24
-        y: "val.detail_label.y - 8"
-        width: "self.parent.width - 48"
-        height: "val.detail_label.height + 16"
-        normal: ~64,36,49,255
-        shape: ~round_rect
-        radius: 8
+        fontSize: 64
+        x: 160
+        y: 15
+        texts: "self.parent.data['type'] == 'mute' ? '§c§l你已被禁言' : '§c§l消息被拦截'"
         through: true
     detail_label:
       type: Text
       val: detail_label
       attribute:
-        fontSize: 48
-        x: 36
-        y: "Math.max(104, val.title_label.y + val.title_label.height + 32)"
-        remaining_text: "self.parent.data['remaining'] != none ? self.parent.data['remaining'] : '永久'"
-        warning_message: "self.parent.data['message'] != none ? self.parent.data['message'] : '内容违规'"
-        texts: "self.parent.data['type'] == 'mute' ? '§7剩余时间: §f' + self.remaining_text : '§f' + self.warning_message"
+        fontSize: 64
+        x: 160
+        y: 60
+        texts: "self.parent.data['type'] == 'mute' ? '§7剩余时间: §f' + (self.parent.data['remaining'] != none ? self.parent.data['remaining'] : '永久') : '§7' + (self.parent.data['message'] != none ? self.parent.data['message'] : '内容违规')"
         through: true

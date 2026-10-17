@@ -11,28 +11,13 @@ ui:
   hide:
     - crosshair
   action:
-    # 将实际视口换算回设计坐标；HUD 始终围绕真实屏幕中心，不拉伸准星。
-    load: |-
-      sx = Screen.getWidth() / 1920
-      sy = Screen.getHeight() / 1080
-      s = sx < sy ? sx : sy
-      var.viewH = Screen.getHeight() / s
-      var.viewW = Screen.getWidth() / s
-      var.offX = (var.viewW - 1920) / 2
-    resize: |-
-      sx = Screen.getWidth() / 1920
-      sy = Screen.getHeight() / 1080
-      s = sx < sy ? sx : sy
-      var.viewH = Screen.getHeight() / s
-      var.viewW = Screen.getWidth() / s
-      var.offX = (var.viewW - 1920) / 2
-    # 暖银色轻微呼吸，不再以彩虹色干扰瞄准。
+    # 我在这里写了一个自定义准星的动画，就是教你如何自定义准星，你甚至可以联动ac，根据玩家状态来调整准星样式
     tick: |-
       var.t = Time.currentTime() / 1000.0
-      var.r = Cast.toInt(222 + 12 * math.sin(var.t * 3)).round()
-      var.g = Cast.toInt(208 + 10 * math.sin(var.t * 3)).round()
-      var.b = Cast.toInt(189 + 8 * math.sin(var.t * 3)).round()
-      var.crosshairColor = var.r + ',' + var.g + ',' + var.b + ',235'
+      var.r = Cast.toInt(128 + 127 * math.sin(var.t * 3)).round()
+      var.g = Cast.toInt(128 + 127 * math.sin(var.t * 3 + 2.094)).round()
+      var.b = Cast.toInt(128 + 127 * math.sin(var.t * 3 + 4.189)).round()
+      var.crosshairColor = var.r + ',' + var.g + ',' + var.b + ',200'
 
   packetHandler:
     # packetHandler: attack
@@ -75,155 +60,68 @@ controls:
     attribute:
       width: 1920
       height: 1080
-      point: ~top_center
-      through: true
+      point: ~stretch_all
     children:
-      战斗视口:
+      自定义准心:
         type: Canvas
         attribute:
-          point: ~top_left
-          width: 1920
-          height: "var.viewH"
-          through: true
+          point: ~middle_center
+          width: 16
+          height: 16
         children:
-          自定义准心:
-            type: Canvas
+          准心横线:
+            type: Texture
+            val: crosshair_h
             attribute:
               point: ~middle_center
-              width: 20
-              height: 20
-              through: true
-            children:
-              准心横衬:
-                type: Texture
-                attribute:
-                  point: ~middle_center
-                  width: 20
-                  height: 4
-                  normal: ~22,23,25,220
-                  through: true
-              准心竖衬:
-                type: Texture
-                attribute:
-                  point: ~middle_center
-                  width: 4
-                  height: 20
-                  normal: ~22,23,25,220
-                  through: true
-              准心横线:
-                type: Texture
-                val: crosshair_h
-                attribute:
-                  point: ~middle_center
-                  width: 18
-                  height: 2
-                  normal: var.crosshairColor
-                  through: true
-              准心竖线:
-                type: Texture
-                val: crosshair_v
-                attribute:
-                  point: ~middle_center
-                  width: 2
-                  height: 18
-                  normal: var.crosshairColor
-                  through: true
+              width: 16
+              height: 3
+              normal: var.crosshairColor
+          准心竖线:
+            type: Texture
+            val: crosshair_v
+            attribute:
+              point: ~middle_center
+              width: 3
+              height: 16
+              normal: var.crosshairColor
+
+      击杀特效展示区:
+        type: Canvas
+        attribute:
+          width: 200
+          y: 80
+          point: ~horizontal_stretch_middle
+          height: 200
+        children:
 
           命中特效贴图:
             type: Texture
             val: attack_fx
             attribute:
-              point: ~middle_center
-              y: 32
               normal: ~combat_effect/hit.png
               middleScale: 1
-              width: 32
-              height: 32
+              width: 128
+              height: 128
+              point: ~top_center
               visible: false
-              through: true
 
-          # 击杀贴图只占 48px；击杀数是准星下方独立的短时铁色轨道。
-          击杀特效展示区:
-            type: Canvas
+          击杀特效贴图:
+            type: Texture
+            val: kill_fx
             attribute:
-              point: ~middle_center
-              y: 104
-              width: 330
-              height: 78
-              through: true
-            children:
-              击杀特效贴图:
-                type: Texture
-                val: kill_fx
-                attribute:
-                  point: ~middle_left
-                  x: 6
-                  normal: ~combat_effect/kill.png
-                  middleScale: 1
-                  width: 48
-                  height: 48
-                  visible: false
-                  through: true
-              击杀轨道:
-                type: Canvas
-                attribute:
-                  point: ~top_right
-                  width: 256
-                  height: 78
-                  visible: "var.击杀数 != none && var.击杀数 > 0"
-                  through: true
-                children:
-                  铁色底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      normal: ~24,25,28,228
-                      shape: ~round_rect
-                      radius: 4
-                      through: true
-                  余烬标记:
-                    type: Texture
-                    attribute:
-                      point: ~top_left
-                      width: 3
-                      height: 78
-                      normal: ~204,99,57,255
-                      through: true
-                  击杀计数文本:
-                    type: Text
-                    attribute:
-                      point: ~middle_left
-                      x: 20
-                      y: -4
-                      texts: "'&f' + var.击杀数.round()"
-                      fontSize: 64
-                      through: true
-                  击杀标签:
-                    type: Text
-                    attribute:
-                      point: ~middle_right
-                      x: -20
-                      y: -4
-                      texts: ~&7击杀
-                      fontSize: 36
-                      through: true
-                  连杀余时底:
-                    type: Texture
-                    attribute:
-                      point: ~top_left
-                      x: 20
-                      y: 68
-                      width: 216
-                      height: 3
-                      normal: ~74,70,65,235
-                      through: true
-                  连杀余时:
-                    type: Texture
-                    attribute:
-                      point: ~top_left
-                      x: 20
-                      y: 68
-                      width: "216 * math.max(0, math.min(1, 1 - (Time.currentTime() - var.上次击杀时间) / 5000))"
-                      height: 3
-                      normal: ~213,195,167,255
-                      through: true
+              normal: ~combat_effect/kill.png
+              middleScale: 1
+              width: 128
+              height: 128
+              point: ~top_center
+              visible: false
+
+          击杀计数文本:
+            type: Text
+            attribute:
+              texts: "~§c ✦ {var.击杀数} 击杀"
+              fontSize: 49
+              y: 134
+              point: ~top_center
+              visible: "var.击杀数 != none && var.击杀数 > 0"

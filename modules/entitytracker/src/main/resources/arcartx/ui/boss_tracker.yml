@@ -1,50 +1,76 @@
 # ArcartXEntityTracker Boss Tracker HUD
-# Tracking instruments: left-edge Boss stack; centered attack_target_hud stays unobstructed.
-# Flat slot1_..slotN_ packet contract and all HUD flags are retained.
-# Copy references are retained by generation; ordinary updates do not rebuild cards.
-# Reload: /axs entitytracker reload
+# AXS 资源说明
+# 用途: EntityTracker 模块默认 HUD 模板，负责展示 Boss 血条、目标信息与伤害排行。
+# 前置依赖: ArcartX、MythicMobs / MythicBukkit；EntityTracker 模块启用后会自动导出到 plugins/ArcartXSuite/ui。
+# 启用开关: config.yml -> modules.entitytracker.enabled + modules.entitytracker.password
+# 关联文件: ArcartXEntityTracker.yml
+# 重载命令: /axs entitytracker reload
+# 最小使用路径: ui + controls
+# 结构提示: packetHandler 接收 Boss 快照；controls 只保留一个血条卡片模板，运行时按 Boss 数量 copy 生成卡片。
+
 ui:
-  isHud: true
-  through: false
-  background: false
-  closeDied: true
-  show: true
-  level: 2
-  screenScale: true
-  defaultOpen: false
-  hide:
-    - boss_event_progress
+  isHud: true                    # 是否为 HUD（常驻叠加层，不弹光标）
+  through: false                 # 是否点击穿透
+  background: false              # 是否绘制全屏背景遮罩
+  closeDied: true                # 玩家死亡时是否自动关闭 HUD
+  show: true                     # 是否显示
+  level: 2                       # HUD 渲染优先级（越大越先渲染=越底层）
+  screenScale: true              # 是否启用屏幕等比缩放
+  defaultOpen: false             # 是否默认打开（由服务端 packet 驱动显隐）
+  hide:                          # 本 HUD 存在时隐藏的原版 HUD 列表
+    - boss_event_progress        # 隐藏原版 Boss 进度条，避免与自定义血条重叠
+  # packetHandler 负责接收服务端下发的数据包并刷新本地血条卡片。
+  # 服务端仍然按 slot1_ / slot2_ ... 的扁平字段下发每条 Boss 的数据，
+  # 这里不再为固定 5 个槽位硬编码控件，而是参考 tab.yml 的做法：
+  # 只保留一个「血条卡片模板」，每次收到数据包就按 bossCount 复制出对应数量的卡片。
   packetHandler:
+    # packetHandler: init
+    # 包字段（按 slot 前缀下发，slot1_ ~ slotN_，N=bossCount）:
+    #   - bossCount: 当前可见 Boss 数量（需 .round() 转整数）
+    #   - totalBossCount: 当前存活 Boss 总数（含未显示的）
+    #   - maxVisibleBars: 最大可见血条数上限
+    #   - slot{n}_title: 第 n 个 Boss 的标题文本
+    #   - slot{n}_distanceText: 第 n 个 Boss 与玩家的距离文本
+    #   - slot{n}_viewerRankText: 玩家在该 Boss 伤害排行中的名次文本
+    #   - slot{n}_viewerDamageText: 玩家在该 Boss 的伤害文本
+    #   - slot{n}_healthText: 第 n 个 Boss 的当前血量文本
+    #   - slot{n}_maxHealthText: 第 n 个 Boss 的最大血量文本
+    #   - slot{n}_progress: 第 n 个 Boss 的血条进度比值（0~1）
+    # init 会在 HUD 首次打开时执行一次，逻辑与 update 完全一致。
     init: |-
       var.isVisible = true
+      // 关键：ARIA 中数字默认是浮点数（如 1.0），拼接成字符串会变成 'slot1.0_xxx'，
+      // 与服务端 'slot1_xxx' 对不上导致取不到值，所以所有用于拼 key/命名的数字都必须 .round() 成整数。
       var.bossCount = packet.get('bossCount').round()
       var.totalBossCount = packet.get('totalBossCount')
       var.maxVisibleBars = packet.get('maxVisibleBars')
+      // 只有「卡片数量」和「Boss 数量」不一致时才重建控件树，
+      // 平时每帧只就地更新数值，避免 remove+copy 造成的血条闪烁。
       现有卡片数 = val.血条容器.childrenCount() - 1
       if(现有卡片数 != var.bossCount){
-        var.刷新轮次 = (var.刷新轮次 + 1).round()
-        for(key in var.卡片引用.keys()){
-          var.卡片引用[key].remove()
+        // 轮次自增，配合唯一命名，规避 ax 控件复制/删除的缓存 BUG。
+        var.刷新轮次 = var.刷新轮次 + 1
+        while(val.血条容器.childrenCount() > 1){
+          val.血条容器.get(1).remove()
         }
-        var.卡片引用 = {}
         if(var.bossCount > 0){
           for(序号 in range(1, var.bossCount)){
-            if(val.卡片模板 != none){
-              卡片 = val.卡片模板.copy('boss卡片_' + var.刷新轮次 + '_' + 序号.round())
-              var.卡片引用[序号.round()] = 卡片
+            if(val.卡片模板 != none) {
+              val.卡片模板.copy('boss卡片_' + var.刷新轮次 + '_' + 序号.round())
             }
           }
         }
       }
+      // 就地刷新每张卡片的数据（不销毁控件，因此不会闪烁）。
       if(var.bossCount > 0){
         for(序号 in range(1, var.bossCount)){
           n = 序号.round()
-          卡片 = var.卡片引用[n]
-          if(卡片 != none){
+          if(val.血条容器 != none) {
+            卡片 = val.血条容器.get(n)
             进度 = packet.get('slot' + n + '_progress')
             卡片['Boss标题文字'].texts = packet.get('slot' + n + '_title')
-            卡片['数值说明文字'].texts = '&7距离 &f' + packet.get('slot' + n + '_distanceText') + '  &7排名 &b' + packet.get('slot' + n + '_viewerRankText') + '  &7伤害 &f' + packet.get('slot' + n + '_viewerDamageText')
-            卡片['血条文字'].texts = '&7HP &f' + packet.get('slot' + n + '_healthText') + ' &7/ &f' + packet.get('slot' + n + '_maxHealthText')
+            卡片['数值说明文字'].texts = '&8' + packet.get('slot' + n + '_distanceText') + '  R' + packet.get('slot' + n + '_viewerRankText') + '  ' + packet.get('slot' + n + '_viewerDamageText')
+            卡片['血条文字'].texts = '&f' + packet.get('slot' + n + '_healthText') + '/' + packet.get('slot' + n + '_maxHealthText')
             卡片['血条层a'].width = 480 * 进度
             卡片['血条层a'].visible = 进度 > 0
             卡片['血条层b'].width = 480 * 进度
@@ -59,6 +85,9 @@ ui:
           }
         }
       }
+    # packetHandler: update
+    # 包字段: 与 init 完全一致，详见 init 注释
+    # update 在刷新周期内持续触发：只有 Boss 数量变化时才重建卡片，其余时候就地更新数值。
     update: |-
       var.isVisible = true
       var.bossCount = packet.get('bossCount').round()
@@ -66,16 +95,14 @@ ui:
       var.maxVisibleBars = packet.get('maxVisibleBars')
       现有卡片数 = val.血条容器.childrenCount() - 1
       if(现有卡片数 != var.bossCount){
-        var.刷新轮次 = (var.刷新轮次 + 1).round()
-        for(key in var.卡片引用.keys()){
-          var.卡片引用[key].remove()
+        var.刷新轮次 = var.刷新轮次 + 1
+        while(val.血条容器.childrenCount() > 1){
+          val.血条容器.get(1).remove()
         }
-        var.卡片引用 = {}
         if(var.bossCount > 0){
           for(序号 in range(1, var.bossCount)){
-            if(val.卡片模板 != none){
-              卡片 = val.卡片模板.copy('boss卡片_' + var.刷新轮次 + '_' + 序号.round())
-              var.卡片引用[序号.round()] = 卡片
+            if(val.卡片模板 != none) {
+              val.卡片模板.copy('boss卡片_' + var.刷新轮次 + '_' + 序号.round())
             }
           }
         }
@@ -83,12 +110,12 @@ ui:
       if(var.bossCount > 0){
         for(序号 in range(1, var.bossCount)){
           n = 序号.round()
-          卡片 = var.卡片引用[n]
-          if(卡片 != none){
+          if(val.血条容器 != none) {
+            卡片 = val.血条容器.get(n)
             进度 = packet.get('slot' + n + '_progress')
             卡片['Boss标题文字'].texts = packet.get('slot' + n + '_title')
-            卡片['数值说明文字'].texts = '&7距离 &f' + packet.get('slot' + n + '_distanceText') + '  &7排名 &b' + packet.get('slot' + n + '_viewerRankText') + '  &7伤害 &f' + packet.get('slot' + n + '_viewerDamageText')
-            卡片['血条文字'].texts = '&7HP &f' + packet.get('slot' + n + '_healthText') + ' &7/ &f' + packet.get('slot' + n + '_maxHealthText')
+            卡片['数值说明文字'].texts = '&8' + packet.get('slot' + n + '_distanceText') + '  R' + packet.get('slot' + n + '_viewerRankText') + '  ' + packet.get('slot' + n + '_viewerDamageText')
+            卡片['血条文字'].texts = '&f' + packet.get('slot' + n + '_healthText') + '/' + packet.get('slot' + n + '_maxHealthText')
             卡片['血条层a'].width = 480 * 进度
             卡片['血条层a'].visible = 进度 > 0
             卡片['血条层b'].width = 480 * 进度
@@ -103,171 +130,160 @@ ui:
           }
         }
       }
+    # packetHandler: close
+    # 包字段: 无（关闭包不携带数据，仅触发清理逻辑）
+    # close 在 HUD 被服务端主动关闭时执行：清零计数并移除所有复制出来的卡片。
     close: |-
       var.bossCount = 0
       var.totalBossCount = 0
       var.isVisible = false
-      for(key in var.卡片引用.keys()){
-        var.卡片引用[key].remove()
+      while(val.血条容器.childrenCount() > 1){
+        val.血条容器.get(1).remove()
       }
-      var.卡片引用 = {}
   action:
     load: |-
       var.刷新轮次 = 0
-      var.卡片引用 = {}
       var.isVisible = false
-      sx = Screen.getWidth() / 1920
-      sy = Screen.getHeight() / 1080
-      s = sx < sy ? sx : sy
-      var.viewW = Screen.getWidth() / s
-      var.offX = (var.viewW - 1920) / 2
-    resize: |-
-      sx = Screen.getWidth() / 1920
-      sy = Screen.getHeight() / 1080
-      s = sx < sy ? sx : sy
-      var.viewW = Screen.getWidth() / s
-      var.offX = (var.viewW - 1920) / 2
+# controls 为主要可视控件区块，可在此调整布局、材质与文本绑定。
 controls:
-  自适应全局布局:
-    type: Adaptive
+  自适应全局布局:                   # 设计分辨率容器，整树等比缩放
+    type: adaptive
     attribute:
-      point: ~top_center
-      width: 1920
-      height: 1080
+      point: ~stretch_all           # 拉伸铺满整个屏幕
+      width: 1920                   # 设计稿宽度
+      height: 1080                  # 设计稿高度
     action:
+      # create 会在 HUD 控件第一次创建时执行，准备好本地变量默认值，
+      # 避免 HUD 刚打开但服务端数据包还没到时出现脏数据。
       create: |-
         var.isVisible = false
     children:
-      首领追踪标题文字:
-        type: Text
+      首领追踪标题文字:               # 顶部标题，显示 "首领追踪 当前/总数"
+        type: text
         attribute:
-          x: "24 - var.offX"
-          y: 24
-          texts: "'&bBOSS / 首领追踪 &f' + var.bossCount.round() + ' &7/ ' + var.totalBossCount.round()"
+          point: ~top_center        # 锚点：顶部居中
+          x: 0
+          y: 32
+          texts: "'&f首领追踪 &8' + var.bossCount.round() + '/' + var.totalBossCount.round()"
           fontSize: 36
           visible: var.isVisible
-          through: true
-      血条排列布局:
-        type: VStack
-        val: 血条容器
+      血条排列布局:                   # 纵向排列容器，存放所有 Boss 血条卡片
+        type: Vstack
+        val: 血条容器                # 脚本引用名，packetHandler 中通过 val.血条容器 操作
         attribute:
-          x: "24 - var.offX"
-          y: 54
-          width: 520
-          spaceBetween: 8
+          point: ~top_center
+          x: -240
+          y: 58
+          width: 480
+          spaceBetween: 8           # 卡片间距 8 像素
           visible: var.isVisible
         children:
+          # 血条卡片模板：唯一的一份硬编码卡片，运行时被复制。
+          # 自身 visible=false，永不直接显示；复制体在 packetHandler 中被置为可见并填充数据。
           Boss血条卡片模板:
-            type: Canvas
-            val: 卡片模板
+            type: canvas
+            val: 卡片模板            # 脚本引用名，packetHandler 中通过 val.卡片模板.copy() 复制
             attribute:
-              width: 520
-              height: 98
-              visible: false
+              width: 480
+              height: 58
+              visible: false         # 模板自身不可见，仅复制体显示
             children:
-              仪表底:
-                type: Texture
+              Boss标题文字:           # Boss 名称（左上角）
+                type: text
                 attribute:
-                  point: ~stretch_all
-                  normal: ~Frosted:12;19,27,34,232
-                  shape: ~round_rect
-                  radius: 6
-                  through: true
-                effect:
-                  stroke:
-                    width: 1
-                    color: ~72,103,117,230
-              信号边:
-                type: Texture
-                attribute:
+                  point: ~top_left
                   x: 0
-                  y: 8
-                  width: 3
-                  height: 82
-                  normal: ~69,211,224,255
-                  through: true
-              Boss标题文字:
-                type: Text
-                attribute:
-                  x: 20
-                  y: 8
-                  texts: "''"
-                  limit: 480
+                  y: 0
+                  texts: "''"        # 初始空文本，运行时由 packetHandler 填充
                   fontSize: 36
-                  through: true
-              血条文字:
-                type: Text
+              数值说明文字:           # 距离/排名/伤害信息（右上角）
+                type: text
                 attribute:
-                  x: 20
-                  y: 30
+                  point: ~top_right
+                  x: 0
+                  y: 4
                   texts: "''"
-                  fontSize: 36
-                  through: true
-              血条底框:
-                type: Texture
+                  fontSize: 24
+              血条底框:              # 血条背景框（深色圆角条）
+                type: texture
                 attribute:
-                  x: 20
-                  y: 54
+                  point: ~top_left
+                  x: 0
+                  y: 26
                   width: 480
-                  height: 8
-                  normal: ~44,57,66,255
-                  through: true
-              血条层a:
-                type: Texture
+                  height: 22
+                  normal: ~30,30,30,220  # 深灰半透明底色
+                  shape: ~round_rect
+                  radius: 11
+                effect:
+                  stroke:           # 描边特效
+                    width: 2
+                    color: ~0,0,0,255
+              血条层a:              # 血条分层a（暗红，progress>0 时显示）
+                type: texture
                 attribute:
-                  x: 20
-                  y: 54
-                  width: 0
-                  height: 8
-                  normal: ~239,79,89,255
+                  point: ~top_left
+                  x: 0
+                  y: 26
+                  width: 0           # 运行时由 packetHandler 设置为 480 * progress
+                  height: 22
+                  normal: ~140,60,60,255
+                  shape: ~round_rect
+                  radius: 11
                   visible: false
-                  through: true
-              血条层b:
-                type: Texture
+              血条层b:              # 血条分层b（中红，progress>0.2 时显示）
+                type: texture
                 attribute:
-                  x: 20
-                  y: 54
+                  point: ~top_left
+                  x: 0
+                  y: 26
                   width: 0
-                  height: 8
-                  normal: ~211,69,81,255
+                  height: 22
+                  normal: ~180,50,50,255
+                  shape: ~round_rect
+                  radius: 11
                   visible: false
-                  through: true
-              血条层c:
-                type: Texture
+              血条层c:              # 血条分层c（亮红，progress>0.4 时显示）
+                type: texture
                 attribute:
-                  x: 20
-                  y: 54
+                  point: ~top_left
+                  x: 0
+                  y: 26
                   width: 0
-                  height: 8
-                  normal: ~193,64,76,255
+                  height: 22
+                  normal: ~200,40,40,255
+                  shape: ~round_rect
+                  radius: 11
                   visible: false
-                  through: true
-              血条层d:
-                type: Texture
+              血条层d:              # 血条分层d（鲜红，progress>0.6 时显示）
+                type: texture
                 attribute:
-                  x: 20
-                  y: 54
+                  point: ~top_left
+                  x: 0
+                  y: 26
                   width: 0
-                  height: 8
-                  normal: ~177,60,73,255
+                  height: 22
+                  normal: ~220,35,35,255
+                  shape: ~round_rect
+                  radius: 11
                   visible: false
-                  through: true
-              血条层e:
-                type: Texture
+              血条层e:              # 血条分层e（最亮红，progress>0.8 时显示）
+                type: texture
                 attribute:
-                  x: 20
-                  y: 54
+                  point: ~top_left
+                  x: 0
+                  y: 26
                   width: 0
-                  height: 8
-                  normal: ~161,57,70,255
+                  height: 22
+                  normal: ~240,30,30,255
+                  shape: ~round_rect
+                  radius: 11
                   visible: false
-                  through: true
-              数值说明文字:
-                type: Text
+              血条文字:              # 血量数值文字（居中显示 当前/最大）
+                type: text
                 attribute:
-                  x: 20
-                  y: 70
+                  point: ~top_center
+                  x: 0
+                  y: 27
                   texts: "''"
-                  limit: 480
                   fontSize: 36
-                  through: true

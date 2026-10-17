@@ -1,18 +1,25 @@
+# AXS Warehouse Storage - 翡翠宝库绿重写版
+# 范式: 全屏玻璃底 + Adaptive(~top_center,1920x1080) + 顶栏贴顶铺满 + 左侧导航 + 内容区
+# 布局: 左导航(仓库/银行/管理 + 底部仓库状态卡片) + 内容区(检索侧栏 + 仓库主区 + 背包区)
+# 配色: 银灰金库 主色160,170,180 底20,24,28,110 抬升36,40,46,245 描边80,90,100,220 强调160,170,180
+# 顶栏: fishing 风格(标题色块+固定标题+右侧关闭，无副标题/无竖线/无操作组)
+# 逻辑: packetHandler/action/val引用/entryKey/copy 与原版一致，仅重构布局结构与配色
+
 ui:
   isHud: false
   defaultOpen: false
   hide:
-  - hotbar
-  - experience_bar
-  - crosshair
-  - item_name
-  - jump_bar
-  - mount_health
-  - player_state
-  - player_health
-  - armor_level
-  - food_level
-  - air_level
+    - hotbar
+    - experience_bar
+    - crosshair
+    - item_name
+    - jump_bar
+    - mount_health
+    - player_state
+    - player_health
+    - armor_level
+    - food_level
+    - air_level
   through: false
   background: false
   escClose: true
@@ -23,6 +30,49 @@ ui:
   itemSize: 16
   screenScale: true
   packetHandler:
+    # packetHandler: update
+    # 包字段:
+    #   - packetId: 包标识符（'AXS_WAREHOUSE'）
+    #   - action_token: 操作令牌（防重放）
+    #   - ownerType: 仓库所有者类型（personal / shared）
+    #   - ownerId: 所有者 ID
+    #   - warehouseId: 仓库 ID
+    #   - warehouseName: 仓库名称
+    #   - categoryId: 当前分类 ID
+    #   - search: 搜索关键词
+    #   - categories: 分类列表
+    #   - categoryTexts: 分类显示文本
+    #   - personalWarehouses: 个人仓库列表
+    #   - personalWarehouseTexts: 个人仓库显示文本
+    #   - sharedWarehouses: 共享仓库列表
+    #   - sharedWarehouseStorageTexts: 共享仓库存储显示文本
+    #   - slots: 仓库槽位数据
+    #   - selectedSlot: 当前选中的槽位索引
+    #   - selectedItem: 当前选中的物品
+    #   - backpack: 玩家背包数据（每格 entry 含 locked 物品锁定标记）
+    #   - unlocked: 二级密码是否已解锁
+    #   - hasPassword: 是否已设置二级密码
+    #   - readOnly: 是否只读模式
+    #   - sharedEditMode: 共享仓库是否处于编辑模式
+    #   - sharedCanEdit: 当前玩家是否有编辑权限
+    #   - lockOwner: 编辑锁持有者
+    #   - page: 当前页码
+    #   - pageTotal: 总页数
+    #   - pageText: 页码显示文本
+    #   - capacityText: 容量显示文本
+    #   - used: 已使用容量
+    #   - capacity: 总容量
+    #   - level: 仓库等级（共享仓库等级；个人仓库恒为 1，逐格解锁不显示等级）
+    #   - canUpgrade: 是否可扩容（个人=还能再买一格，共享=可升下一级）
+    #   - slotPriceText: 个人仓库单格价格文本
+    #   - nextUpgradeText: 扩容提示文本（个人=槽位价格提示，共享=下一级信息）
+    #   - usedSlots: 已使用的槽位集合
+    #   - matchedSlots: 搜索匹配的槽位集合
+    #   - slotCount: 槽位总数
+    #   - pageSize: 每页槽位数量
+    #   - maxPersonalCount: 个人仓库最大数量（用于动态创建控件）
+    #   - maxSharedCount: 共享仓库最大数量
+    #   - maxCategoryCount: 分类最大数量
     update: |-
       var.itemJsons = {}
       // 保存旧数量，用于判断是否需要重建列表（首次 update 时旧数量为 0，数量从 0 变为 N 时触发重建）
@@ -81,8 +131,8 @@ ui:
         }
         if(var.maxPersonalCount > 1){
           for(序号 in range(1, var.maxPersonalCount - 1)){
-            if(val.个人仓库列表.get(0) != none) {
-              项 = val.个人仓库列表.get(0).copy('个人仓库项_' + var.刷新轮次.round() + '_' + 序号.round())
+            if(val.个人仓库列表['项'] != none) {
+              项 = val.个人仓库列表['项'].copy('个人仓库项_' + var.刷新轮次.round() + '_' + 序号.round())
               项.entryKey = 序号.round()
             }
           }
@@ -96,8 +146,8 @@ ui:
         }
         if(var.maxSharedCount > 1){
           for(序号 in range(1, var.maxSharedCount - 1)){
-            if(val.共享仓库列表.get(0) != none) {
-              项 = val.共享仓库列表.get(0).copy('共享仓库项_' + var.刷新轮次.round() + '_' + 序号.round())
+            if(val.共享仓库列表['项'] != none) {
+              项 = val.共享仓库列表['项'].copy('共享仓库项_' + var.刷新轮次.round() + '_' + 序号.round())
               项.entryKey = 序号.round()
             }
           }
@@ -111,8 +161,8 @@ ui:
         }
         if(var.maxCategoryCount > 1){
           for(序号 in range(1, var.maxCategoryCount - 1)){
-            if(val.分类列表.get(0) != none) {
-              项 = val.分类列表.get(0).copy('分类项_' + var.刷新轮次.round() + '_' + 序号.round())
+            if(val.分类列表['项'] != none) {
+              项 = val.分类列表['项'].copy('分类项_' + var.刷新轮次.round() + '_' + 序号.round())
               项.entryKey = 序号.round()
             }
           }
@@ -122,7 +172,7 @@ ui:
       if(var.slots != none){
         for(key in var.slots.keys()){
           json = packet['slotItemJson' + key]
-          if(json != none && json != ''){
+          if(json != none){
             var.itemJsons[key] = json
           } else {
             var.itemJsons[key] = var.air
@@ -132,31 +182,25 @@ ui:
       // ── 仓库网格（Slot 控件）：仅在数量变化时重建 ──
       if(var.pageSize != oldPageSize){
         var.刷新轮次 = (var.刷新轮次 + 1).round()
-        for(key in var.仓库槽引用.keys()){
-          var.仓库槽引用[key].remove()
+        while(val.仓库网格.childrenCount() > 1){
+          val.仓库网格.get(1).remove()
         }
-        var.仓库槽引用 = {}
         if(var.pageSize > 1){
-          模板 = val.仓库网格.get(0)
           for(序号 in range(1, var.pageSize - 1)){
-            slot = 模板.copy('仓库物品图标_' + var.刷新轮次.round() + '_' + 序号.round())
-            slot.entryKey = 序号.round()
-            var.仓库槽引用[序号.round()] = slot
+            if(val.仓库网格['物品图标'] != none) {
+              slot = val.仓库网格['物品图标'].copy('仓库物品图标_' + var.刷新轮次.round() + '_' + 序号.round())
+              slot.entryKey = 序号.round()
+            }
           }
         }
       }
-      // 数据到达后再为模板和副本分别注入物品；不从刚复制的容器回查子控件。
-      if(var.pageSize > 0){
-        模板 = val.仓库网格.get(0)
-        if(模板 != none){
-          模板.seticon()
-        }
-        if(var.pageSize > 1){
-          for(i in range(1, var.pageSize - 1)){
-            icon = var.仓库槽引用[i.round()]
-            if(icon != none){
-              icon.seticon()
-            }
+      // 对已存在的 Slot 控件重新调用 seticon（数据变了但 seticon 不会自动刷新）
+      // 注意：icon 为裸变量块级作用域，seticon 必须放在赋值所在的 if 块内
+      for(i in range(0, var.pageSize - 1)){
+        if(val.仓库网格 != none){
+          icon = val.仓库网格.get(i.round())
+          if(icon != none){
+            icon.seticon()
           }
         }
       }
@@ -181,9 +225,7 @@ ui:
       var.categoryTexts = {}
       var.hasPassword = false
       var.lastBackpackClickTime = 0
-      var.lastBackpackClickSlot = none
       var.lastSlotClickTime = 0
-      var.lastSlotClickSlot = none
       var.level = 1
       var.packetId = 'AXS_WAREHOUSE'
       var.page = 1
@@ -202,7 +244,6 @@ ui:
       var.amount = 1.round()
       var.emptyItemJson = '{"id": "minecraft:air","Count":1b}'
       var.刷新轮次 = 0.round()
-      var.仓库槽引用 = {}
       var.renderBackpackAmounts = -> {
         if(val.背包网格 != none){
           for(raw in range(9,44)){
@@ -221,48 +262,61 @@ ui:
           }
         }
       }
-      var.categories = {}
-      var.personalWarehouses = {}
-      var.sharedWarehouses = {}
-      var.slots = {}
-      var.backpack = {}
-      var.itemJsons = {}
-      var.usedSlots = []
-      var.matchedSlots = []
-      var.maxCategoryCount = 0
-      var.maxPersonalCount = 0
-      var.maxSharedCount = 0
-      var.pageSize = 0
-      var.ownerType = 'personal'
-      var.search = none
-      var.readOnly = false
-      self.actions['resize']()
-    open: Packet.send(var.packetId, 'refresh')
-    resize: |-
+      // 视口换算：Adaptive 以 1920x1080 设计基准等比缩放
       sx = Screen.getWidth() / 1920
       sy = Screen.getHeight() / 1080
       s = sx < sy ? sx : sy
-      var.viewW = Screen.getWidth() / s
       var.viewH = Screen.getHeight() / s
+      var.viewW = Screen.getWidth() / s
       var.offX = (var.viewW - 1920) / 2
       var.contentW = var.viewW - 420
-      var.rightW = 320
+      var.rightW = 300
       var.gridW = var.contentW - var.rightW - 24
-      var.slotSize = 58
+      var.slotSize = 66
       var.gridGap = 6
       var.whGridW = 12 * var.slotSize + 11 * var.gridGap
       var.whGridH = 6 * var.slotSize + 5 * var.gridGap
       var.bpGridW = 12 * var.slotSize + 11 * var.gridGap
       var.bpGridH = 3 * var.slotSize + 2 * var.gridGap
       var.gridBgW = var.whGridW + 32
-      var.gridBgX = (var.gridW - var.gridBgW) / 2
+      var.toolW = 200
+      var.gridAreaW = var.gridW - var.toolW - 30
+      var.gridBgX = (var.gridAreaW - var.gridBgW) / 2
+    open: |-
+      Packet.send(var.packetId, 'refresh')
+    # 窗口尺寸变化后重算可用高宽
+    resize: |-
+      sx = Screen.getWidth() / 1920
+      sy = Screen.getHeight() / 1080
+      s = sx < sy ? sx : sy
+      var.viewH = Screen.getHeight() / s
+      var.viewW = Screen.getWidth() / s
+      var.offX = (var.viewW - 1920) / 2
+      var.contentW = var.viewW - 420
+      var.rightW = 300
+      var.gridW = var.contentW - var.rightW - 24
+      var.slotSize = 66
+      var.gridGap = 6
+      var.whGridW = 12 * var.slotSize + 11 * var.gridGap
+      var.whGridH = 6 * var.slotSize + 5 * var.gridGap
+      var.bpGridW = 12 * var.slotSize + 11 * var.gridGap
+      var.bpGridH = 3 * var.slotSize + 2 * var.gridGap
+      var.gridBgW = var.whGridW + 32
+      var.toolW = 200
+      var.gridAreaW = var.gridW - var.toolW - 30
+      var.gridBgX = (var.gridAreaW - var.gridBgW) / 2
+
+# ─── 控件树 ────────────────────────────────────────────────────────
+# 布局: 左导航(3项+搜索+分类滚动) + 中间主区(网格居中 + 右侧工具条竖排 + 底部操作区) + 右侧栏(仓库信息+我的仓库列表)
+# 配色: 银灰金库 深底浅字 — 抬升面44,50,58 槽位52,58,66 选中64,72,82 描边100,110,120 输入/网格底36,42,50
+# fontSize: 48(顶栏标题) / 36(区域标题/按钮/信息/输入/提示) — 全部标准档位
 controls:
   全屏玻璃底:
     type: Texture
     attribute:
       point: ~stretch_all
       through: true
-      normal: ~Frosted:18;17,14,12,195
+      normal: ~Frosted:24;20,24,28,110
   自适应全局布局:
     type: Adaptive
     attribute:
@@ -270,25 +324,26 @@ controls:
       width: 1920
       height: 1080
     children:
+      # ── 顶栏 ──────────────────────────────────────────
       顶栏:
         type: Canvas
         attribute:
           point: ~top_left
-          x: -var.offX
-          width: var.viewW
+          x: "-var.offX"
+          width: "var.viewW"
           height: 96
         children:
           顶栏底:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~38,31,27,250
+              normal: ~Frosted:30;255,255,255,100
           顶栏底线:
             type: Texture
             attribute:
               point: ~horizontal_stretch_bottom
               height: 1
-              normal: ~112,83,64,235
+              normal: ~100,110,120,220
           标题色块:
             type: Texture
             attribute:
@@ -296,7 +351,7 @@ controls:
               x: 48
               width: 6
               height: 36
-              normal: ~190,122,79,255
+              normal: ~180,190,200,255
               shape: ~round_rect
               radius: 3
           标题:
@@ -304,16 +359,8 @@ controls:
             attribute:
               point: ~middle_left
               x: 68
-              texts: ~&f储物台  &6/  库位操作
-              fontSize: 54
-          顶栏副题:
-            type: Text
-            attribute:
-              point: ~middle_left
-              x: 430
-              texts: ~&7索引库房 · 核对库存 · 按需存取
-              fontSize: 36
-              through: true
+              texts: "~&fAXS 仓库"
+              fontSize: 48
           关闭按钮:
             type: Canvas
             attribute:
@@ -331,40 +378,42 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~56,43,36,255
+                  normal: ~44,50,58,245
                   shape: ~round_rect
                   radius: 10
                 effect:
                   stroke:
                     width: 3
-                    color: 'self.isHovered() ? ''241,208,157,255'' : ''112,83,64,235'''
+                    color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
               关闭文字:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  texts: ~&f✕
+                  texts: "~&f✕"
                   fontSize: 36
                   through: true
+
+      # ── 左侧导航 ──────────────────────────────────────
       左侧导航:
         type: Canvas
         attribute:
           point: ~top_left
-          x: 48 - var.offX
+          x: "48 - var.offX"
           y: 120
           width: 300
-          height: var.viewH - 144
+          height: "var.viewH - 144"
         children:
           导航底:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~38,31,27,250
+              normal: ~Frosted:30;255,255,255,100
               shape: ~round_rect
               radius: 14
             effect:
               stroke:
                 width: 3
-                color: ~112,83,64,235
+                color: ~100,110,120,220
           导航仓库:
             type: Canvas
             attribute:
@@ -378,13 +427,13 @@ controls:
                 type: Texture
                 attribute:
                   point: ~stretch_all
-                  normal: ~190,122,79,255
+                  normal: ~180,190,200,255
                   shape: ~round_rect
                   radius: 10
                 effect:
                   stroke:
                     width: 3
-                    color: ~226,179,124,255
+                    color: ~255,255,255,255
               仓库高亮条:
                 type: Texture
                 attribute:
@@ -392,7 +441,7 @@ controls:
                   x: 8
                   width: 4
                   height: 28
-                  normal: ~190,122,79,255
+                  normal: ~180,190,200,255
                   shape: ~round_rect
                   radius: 2
               仓库文字:
@@ -400,9 +449,8 @@ controls:
                 attribute:
                   point: ~middle_left
                   x: 28
-                  texts: ~&f  01  储物台
+                  texts: "~&0仓库"
                   fontSize: 36
-                  through: true
           导航银行:
             type: Canvas
             attribute:
@@ -412,27 +460,28 @@ controls:
               width: 272
               height: 58
             action:
-              clickLeft: Packet.send(var.packetId, 'bank')
+              clickLeft: |-
+                Packet.send(var.packetId, 'bank')
             children:
               银行底:
                 type: Texture
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~56,43,36,255
+                  normal: ~44,50,58,245
                   shape: ~round_rect
                   radius: 10
                 effect:
-                  ripple: null
+                  ripple:
                   stroke:
                     width: 3
-                    color: 'self.isHovered() ? ''241,208,157,255'' : ''112,83,64,235'''
+                    color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
               银行文字:
                 type: Text
                 attribute:
                   point: ~middle_left
                   x: 28
-                  texts: ~&f  02  资金账本
+                  texts: "~&f银行"
                   fontSize: 36
                   through: true
           导航管理:
@@ -444,27 +493,28 @@ controls:
               width: 272
               height: 58
             action:
-              clickLeft: Packet.send(var.packetId, 'manage')
+              clickLeft: |-
+                Packet.send(var.packetId, 'manage')
             children:
               管理底:
                 type: Texture
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~56,43,36,255
+                  normal: ~44,50,58,245
                   shape: ~round_rect
                   radius: 10
                 effect:
-                  ripple: null
+                  ripple:
                   stroke:
                     width: 3
-                    color: 'self.isHovered() ? ''241,208,157,255'' : ''112,83,64,235'''
+                    color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
               管理文字:
                 type: Text
                 attribute:
                   point: ~middle_left
                   x: 28
-                  texts: ~&f  03  库房管控
+                  texts: "~&f管理"
                   fontSize: 36
                   through: true
           导航分隔线:
@@ -472,44 +522,154 @@ controls:
             attribute:
               point: ~top_left
               x: 18
-              y: 230
+              y: 232
               width: 264
               height: 2
-              normal: ~112,83,64,235
+              normal: ~100,110,120,220
+          检索标题:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 20
+              y: 250
+              texts: "~&f检索"
+              fontSize: 36
+          搜索框:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 296
+              width: 272
+              height: 48
+            children:
+              搜索框底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~36,42,50,225
+                  shape: ~round_rect
+                  radius: 12
+                effect:
+                  stroke:
+                    width: 3
+                    color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
+              输入框:
+                type: TextBox
+                attribute:
+                  x: 10
+                  y: 8
+                  width: 252
+                  height: 36
+                  length: 32
+                  emptyText: ~&7搜索物品
+                  fontSize: 42
+                action:
+                  textChange: |-
+                    var.search = self.getContent()
+                  enter: |-
+                    Packet.send(var.packetId, 'search', var.search)
+          搜索按钮组:
+            type: HStack
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 352
+              width: 272
+              height: 48
+              spaceBetween: 10
+            children:
+              搜索:
+                type: Canvas
+                attribute:
+                  width: 131
+                  height: 48
+                action:
+                  clickLeft: |-
+                    Packet.send(var.packetId, 'search', var.search)
+                children:
+                  搜索底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~44,50,58,245
+                      shape: ~round_rect
+                      radius: 12
+                    effect:
+                      stroke:
+                        width: 3
+                        color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
+                  搜索字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: "~&f搜索"
+                      fontSize: 36
+                      through: true
+              重置:
+                type: Canvas
+                attribute:
+                  width: 131
+                  height: 48
+                action:
+                  clickLeft: |-
+                    var.search = none
+                    Packet.send(var.packetId, 'search', none)
+                children:
+                  重置底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~44,50,58,245
+                      shape: ~round_rect
+                      radius: 12
+                    effect:
+                      stroke:
+                        width: 3
+                        color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
+                  重置字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: "~&f重置"
+                      fontSize: 36
+                      through: true
           分类标题:
             type: Text
             attribute:
               point: ~top_left
               x: 20
-              y: 570
-              texts: ~&e02 / 物品分类
-              fontSize: 48
+              y: 416
+              texts: "~&f分类"
+              fontSize: 36
           分类滑轨:
             type: Texture
             attribute:
               point: ~top_right
               x: -12
-              y: 612
+              y: 460
               width: 10
-              height: var.viewH - 780
-              normal: ~53,40,33,245
+              height: "var.viewH - 658"
+              normal: ~40,44,52,225
               shape: ~round_rect
               radius: 5
             effect:
               stroke:
                 width: 2
-                color: ~224,194,152,230
+                color: ~255,255,255,230
           分类滑块:
             type: Texture
             val: 分类滑块
             attribute:
               point: ~top_right
               x: -12
-              y: 612
+              y: 460
               width: 10
               height: 50
-              normal: ~190,122,79,255
-              maxDragY: var.viewH - 830
+              normal: ~180,190,200,255
+              maxDragY: "var.viewH - 708"
               shape: ~round_rect
               radius: 5
           分类滚动:
@@ -518,10 +678,10 @@ controls:
             attribute:
               point: ~top_left
               x: 14
-              y: 612
+              y: 460
               width: 258
-              height: var.viewH - 780
-              moveY: self.parent['分类滑块'].getDragYRatio()
+              height: "var.viewH - 658"
+              moveY: "self.parent['分类滑块'].getDragYRatio()"
             action:
               wheel: |-
                 if(self.moveY >= 0 && self.wheelValue > 0){
@@ -547,32 +707,27 @@ controls:
                       width: 258
                       height: 48
                     action:
-                      clickLeft: Packet.send(var.packetId, 'category', self.entry['id'])
+                      clickLeft: |-
+                        Packet.send(var.packetId, 'category', self.entry['id'])
                     children:
                       项底:
                         type: Texture
                         attribute:
-                          point: ~middle_center
-                          width: self.parent.width - 6
-                          height: self.parent.height
+                          point: ~stretch_all
                           through: true
-                          normal: 'self.parent.entry != none && self.parent.entry[''id''] == var.categoryId ? ''105,66,47,250''
-                            : ''56,43,36,255'''
+                          normal: "self.parent.entry != none && self.parent.entry['id'] == var.categoryId ? '64,72,82,225' : '44,50,58,245'"
                           shape: ~round_rect
                           radius: 12
                         effect:
                           stroke:
                             width: 3
-                            color: 'self.isHovered() ? ''241,208,157,255'' : (self.parent.entry != none && self.parent.entry[''id'']
-                              == var.categoryId ? ''226,179,124,255'' : ''112,83,64,235'')'
+                            color: "self.isHovered() ? '220,230,240,255' : (self.parent.entry != none && self.parent.entry['id'] == var.categoryId ? '255,255,255,255' : '100,110,120,220')"
                       项字:
                         type: Text
                         attribute:
-                          point: ~middle_left
-                          x: 18
-                          texts: '''&f'' + var.categoryTexts[self.parent.entryKey]'
+                          point: ~middle_center
+                          texts: "'&f' + var.categoryTexts[self.parent.entryKey]"
                           fontSize: 36
-                          limit: 218
                           through: true
           导航提示:
             type: Text
@@ -580,43 +735,919 @@ controls:
               point: ~bottom_left
               x: 20
               y: -20
-              texts: ~&7先选仓库，再按分类浏览
+              texts: "~&fESC 关闭界面"
               fontSize: 36
               through: true
+
+      # ── 中间主区（网格居中 + 右侧工具条竖排 + 底部操作区）──────────
+      中间主区:
+        type: Canvas
+        attribute:
+          point: ~top_left
+          x: "372 - var.offX"
+          y: 120
+          width: "var.gridW"
+          height: "var.viewH - 144"
+        children:
+          主区底:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~Frosted:30;255,255,255,100
+              shape: ~round_rect
+              radius: 14
+            effect:
+              stroke:
+                width: 3
+                color: ~100,110,120,220
+
+          # ── 仓库网格区（12列6行，居中）────────────────────
+          仓库区标题:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: "var.gridBgX"
+              y: 15
+              texts: "~&f仓库物品"
+              fontSize: 36
+          仓库网格底:
+            type: Texture
+            attribute:
+              point: ~top_left
+              x: "var.gridBgX"
+              y: 52
+              width: "var.gridBgW"
+              height: "var.whGridH + 30"
+              through: true
+              normal: ~36,42,50,225
+              shape: ~round_rect
+              radius: 14
+            effect:
+              stroke:
+                width: 3
+                color: ~100,110,120,220
+          仓库网格:
+            type: HGrid
+            val: 仓库网格
+            attribute:
+              point: ~top_left
+              x: "var.gridBgX + 16"
+              y: 67
+              width: "var.whGridW"
+              height: "var.whGridH"
+              column: 12
+              spaceBetweenX: 6
+              spaceBetweenY: 6
+            children:
+              物品图标:
+                type: Slot
+                attribute:
+                  entryKey: 0.round()
+                  entry: var.slots[self.entryKey]
+                  visible: self.entry != none
+                  slotType: ~Icon
+                  itemScale: 0.9
+                  width: 66
+                  height: 66
+                  normal: "self.entryKey == var.selectedSlot ? '160,170,180,230' : '52,58,66,235'"
+                  shape: ~round_rect
+                  radius: 12
+                  seticon: "self.setItemIcon(var.itemJsons[self.entryKey])"
+                action:
+                  clickLeft: |-
+                    now = Time.currentTime()
+                    if(var.lastSlotClickSlot == self.entryKey && now - var.lastSlotClickTime < 300){
+                      Packet.send(var.packetId, 'withdraw_quick', self.entryKey, 64)
+                      var.lastSlotClickSlot = none
+                    }else{
+                      Packet.send(var.packetId, 'select', self.entryKey)
+                      var.lastSlotClickSlot = self.entryKey
+                      var.lastSlotClickTime = now
+                    }
+                effect:
+                  stroke:
+                    width: 3
+                    color: "self.isHovered() ? '220,230,240,255' : (self.entryKey == var.selectedSlot ? '160,170,180,255' : '100,110,120,220')"
+                children:
+                  数量:
+                    type: Text
+                    attribute:
+                      x: 6
+                      y: 38
+                      texts: "self.parent.entry != none && !self.parent.entry['empty'] ? '&f' + self.parent.entry['amount'].round() : none"
+                      fontSize: 36
+                      through: true
+          # ── 工具条（竖排，中间主区右侧，一个按键占一行）────────────
+          工具条:
+            type: VStack
+            attribute:
+              point: ~top_left
+              x: "var.gridAreaW"
+              y: 52
+              width: "var.toolW"
+              spaceBetween: 10
+            children:
+              模式切换:
+                type: Canvas
+                attribute:
+                  visible: var.ownerType == 'shared'
+                  width: "var.toolW"
+                  height: 48
+                  enable: "!var.actionBusy && var.actionToken != ''"
+                action:
+                  clickLeft: |-
+                    if(var.sharedEditMode){
+                      Packet.send(var.packetId, 'shared_mode', 'readonly')
+                    }else{
+                      Packet.send(var.packetId, 'shared_mode', 'edit')
+                    }
+                children:
+                  模式切换底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: "var.sharedEditMode ? '160,170,180,230' : '44,50,58,245'"
+                      shape: ~round_rect
+                      radius: 12
+                    effect:
+                      stroke:
+                        width: 3
+                        color: "self.isHovered() ? '220,230,240,255' : (var.sharedEditMode ? '160,170,180,255' : '100,110,120,220')"
+                  模式切换字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: "var.sharedEditMode ? '&f存取模式' : '&f只读模式'"
+                      fontSize: 36
+                      through: true
+              排序:
+                type: Canvas
+                attribute:
+                  width: "var.toolW"
+                  height: 48
+                action:
+                  clickLeft: |-
+                    Packet.send(var.packetId, 'sort')
+                children:
+                  排序底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~44,50,58,245
+                      shape: ~round_rect
+                      radius: 12
+                    effect:
+                      stroke:
+                        width: 3
+                        color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
+                  排序字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: "'&f排序 &e' + var.sortText"
+                      fontSize: 36
+                      through: true
+              刷新:
+                type: Canvas
+                attribute:
+                  width: "var.toolW"
+                  height: 48
+                action:
+                  clickLeft: |-
+                    Packet.send(var.packetId, 'refresh')
+                children:
+                  刷新底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~44,50,58,245
+                      shape: ~round_rect
+                      radius: 12
+                    effect:
+                      stroke:
+                        width: 3
+                        color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
+                  刷新字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: "~&f刷新"
+                      fontSize: 36
+                      through: true
+              展示:
+                type: Canvas
+                attribute:
+                  width: "var.toolW"
+                  height: 48
+                action:
+                  clickLeft: |-
+                    Packet.send(var.packetId, 'showcase')
+                children:
+                  展示底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~44,50,58,245
+                      shape: ~round_rect
+                      radius: 12
+                    effect:
+                      stroke:
+                        width: 3
+                        color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
+                  展示字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: "~&f展示"
+                      fontSize: 36
+                      through: true
+              上页:
+                type: Canvas
+                attribute:
+                  width: "var.toolW"
+                  height: 48
+                action:
+                  clickLeft: |-
+                    Packet.send(var.packetId, 'page', var.page - 1)
+                children:
+                  上页底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~44,50,58,245
+                      shape: ~round_rect
+                      radius: 12
+                    effect:
+                      stroke:
+                        width: 3
+                        color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
+                  上页字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: "~&f上页"
+                      fontSize: 36
+                      through: true
+              页码:
+                type: Canvas
+                attribute:
+                  width: "var.toolW"
+                  height: 48
+                children:
+                  页码底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~36,42,50,225
+                      shape: ~round_rect
+                      radius: 12
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~100,110,120,220
+                  页码字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: "'&f' + var.pageText"
+                      fontSize: 36
+                      through: true
+              下页:
+                type: Canvas
+                attribute:
+                  width: "var.toolW"
+                  height: 48
+                action:
+                  clickLeft: |-
+                    Packet.send(var.packetId, 'page', var.page + 1)
+                children:
+                  下页底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~44,50,58,245
+                      shape: ~round_rect
+                      radius: 12
+                    effect:
+                      stroke:
+                        width: 3
+                        color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
+                  下页字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: "~&f下页"
+                      fontSize: 36
+                      through: true
+
+          # ── 存取工具条（竖排，与背包底背景 y 持平）────────────
+          存取工具条:
+            type: VStack
+            attribute:
+              point: ~top_left
+              x: "var.gridAreaW"
+              y: "52 + var.whGridH + 94"
+              width: "var.toolW"
+              spaceBetween: 5
+            children:
+              数量输入:
+                type: Canvas
+                attribute:
+                  width: "var.toolW"
+                  height: 44
+                children:
+                  数量输入底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~36,42,50,225
+                      shape: ~round_rect
+                      radius: 12
+                    effect:
+                      stroke:
+                        width: 3
+                        color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
+                  输入框:
+                    type: TextBox
+                    attribute:
+                      x: 10
+                      y: 6
+                      width: "var.toolW - 20"
+                      height: 32
+                      length: 32
+                      emptyText: ~&7数量
+                      fontSize: 36
+                    action:
+                      textChange: |-
+                        var.amount = self.getContent()
+              取出:
+                type: Canvas
+                attribute:
+                  width: "var.toolW"
+                  height: 44
+                action:
+                  clickLeft: |-
+                    Packet.send(var.packetId, 'withdraw', var.selectedSlot, var.amount)
+                children:
+                  取出底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~44,50,58,245
+                      shape: ~round_rect
+                      radius: 12
+                    effect:
+                      stroke:
+                        width: 3
+                        color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
+                  取出字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: "~&f取出选中"
+                      fontSize: 36
+                      through: true
+              全部取出:
+                type: Canvas
+                attribute:
+                  width: "var.toolW"
+                  height: 44
+                action:
+                  clickLeft: |-
+                    Packet.send(var.packetId, 'withdraw_all', var.selectedSlot)
+                children:
+                  全部取出底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~44,50,58,245
+                      shape: ~round_rect
+                      radius: 12
+                    effect:
+                      stroke:
+                        width: 3
+                        color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
+                  全部取出字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: "~&f全取选中"
+                      fontSize: 36
+                      through: true
+              全部存入:
+                type: Canvas
+                attribute:
+                  width: "var.toolW"
+                  height: 44
+                action:
+                  clickLeft: |-
+                    Packet.send(var.packetId, 'deposit_all_backpack')
+                children:
+                  全部存入底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~44,50,58,245
+                      shape: ~round_rect
+                      radius: 12
+                    effect:
+                      stroke:
+                        width: 3
+                        color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
+                  全部存入字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: "~&f全部存入"
+                      fontSize: 36
+                      through: true
+              存入:
+                type: Canvas
+                attribute:
+                  width: "var.toolW"
+                  height: 44
+                action:
+                  clickLeft: |-
+                    if(var.selectedBackpackSlot != (-1).round()){
+                      Packet.send(var.packetId, 'deposit_slot', var.selectedBackpackSlot, var.amount)
+                    }
+                children:
+                  存入底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~44,50,58,245
+                      shape: ~round_rect
+                      radius: 12
+                    effect:
+                      stroke:
+                        width: 3
+                        color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
+                  存入字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: "~&f存入选中"
+                      fontSize: 36
+                      through: true
+              锁定:
+                type: Canvas
+                attribute:
+                  width: "var.toolW"
+                  height: 44
+                action:
+                  clickLeft: |-
+                    if(var.selectedBackpackSlot != (-1).round()){
+                      Packet.send(var.packetId, 'toggle_lock', var.selectedBackpackSlot)
+                    }
+                children:
+                  锁定底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: "var.backpack[var.selectedBackpackSlot] != none && var.backpack[var.selectedBackpackSlot]['locked'] == true ? '104,84,46,245' : '44,50,58,245'"
+                      shape: ~round_rect
+                      radius: 12
+                    effect:
+                      stroke:
+                        width: 3
+                        color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
+                  锁定字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: "var.backpack[var.selectedBackpackSlot] != none && var.backpack[var.selectedBackpackSlot]['locked'] == true ? '&e解锁选中' : '&f锁定选中'"
+                      fontSize: 36
+                      through: true
+
+          # ── 背包网格区（12列3行，居中）────────────────────
+          背包区标题:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: "var.gridBgX"
+              y: "52 + var.whGridH + 54"
+              texts: "~&f我的背包"
+              fontSize: 36
+          背包网格底:
+            type: Texture
+            attribute:
+              point: ~top_left
+              x: "var.gridBgX"
+              y: "52 + var.whGridH + 94"
+              width: "var.gridBgW"
+              height: "var.bpGridH + 30"
+              through: true
+              normal: ~36,42,50,225
+              shape: ~round_rect
+              radius: 14
+            effect:
+              stroke:
+                width: 3
+                color: ~100,110,120,220
+          背包网格:
+            type: HGrid
+            val: 背包网格
+            attribute:
+              point: ~top_left
+              x: "var.gridBgX + 16"
+              y: "52 + var.whGridH + 109"
+              width: "var.bpGridW"
+              height: "var.bpGridH"
+              column: 12
+              spaceBetweenX: 6
+              spaceBetweenY: 6
+            action:
+              create: |-
+                for(i in range(1,35)){
+                  slot = self['背包槽'].copy('背包槽' + i.round)
+                  slot.entryKey = (9 + i).round()
+                  slot.id = (9 + i).round()
+                }
+            children:
+              背包槽:
+                type: Slot
+                attribute:
+                  id: 9
+                  slotType: ~Backpack
+                  itemScale: 0.72
+                  through: false
+                  lock: true
+                  entryKey: 9.round()
+                  entry: var.backpack[self.entryKey]
+                  width: 66
+                  height: 66
+                  normal: "self.entry != none && self.entry['locked'] == true ? '92,74,44,235' : (self.entryKey == var.selectedBackpackSlot ? '160,170,180,230' : '52,58,66,235')"
+                  shape: ~round_rect
+                  radius: 12
+                action:
+                  clickLeft: |-
+                    now = Time.currentTime()
+                    if(var.lastBackpackClickSlot == self.entryKey && now - var.lastBackpackClickTime < 300){
+                      Packet.send(var.packetId, 'deposit_slot', self.entryKey, 0)
+                      var.lastBackpackClickSlot = none
+                    }else{
+                      var.selectedBackpackSlot = self.entryKey
+                      var.lastBackpackClickSlot = self.entryKey
+                      var.lastBackpackClickTime = now
+                    }
+                effect:
+                  stroke:
+                    width: 3
+                    color: "self.isHovered() ? '220,230,240,255' : (self.entry != none && self.entry['locked'] == true ? '232,180,90,255' : (self.entryKey == var.selectedBackpackSlot ? '160,170,180,255' : '100,110,120,220'))"
+
+          # ── 底部密码栏（背包网格下方，独立背景）──────────────
+          底部密码栏:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: "(var.gridBgX).round()"
+              y: "52 + var.whGridH + 84 + var.bpGridH + 50"
+              width: "var.gridBgW"
+              height: 64
+            children:
+              密码栏底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~36,42,50,225
+                  shape: ~round_rect
+                  radius: 14
+                effect:
+                  stroke:
+                    width: 3
+                    color: ~100,110,120,220
+              密码标题:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: 20
+                  texts: "!var.hasPassword ? '&e设置密码' : (var.unlocked ? '&e已解锁' : '&c输入密码')"
+                  fontSize: 36
+                  through: true
+              密码输入:
+                type: Canvas
+                attribute:
+                  point: ~middle_left
+                  x: 220
+                  width: "var.gridBgW - 360"
+                  height: 48
+                children:
+                  密码输入底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~44,50,58,245
+                      shape: ~round_rect
+                      radius: 12
+                    effect:
+                      stroke:
+                        width: 3
+                        color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
+                  输入框:
+                    type: TextBox
+                    attribute:
+                      x: 10
+                      y: 6
+                      width: "var.gridBgW - 380"
+                      height: 36
+                      length: 32
+                      emptyText: ~&7密码
+                      fontSize: 36
+                    action:
+                      textChange: |-
+                        var.passwordText = self.getContent()
+              解锁:
+                type: Canvas
+                attribute:
+                  point: ~middle_right
+                  x: -10
+                  width: 120
+                  height: 48
+                  visible: "!var.unlocked || !var.hasPassword"
+                  enable: "!var.actionBusy && (var.hasPassword || var.actionToken != '')"
+                action:
+                  clickLeft: |-
+                    if(var.hasPassword){
+                      Packet.send(var.packetId, 'password_unlock', var.passwordText)
+                    }else{
+                      var.actionBusy = true
+                      Packet.send(var.packetId, 'password_set', var.passwordText, var.actionToken)
+                    }
+                children:
+                  解锁底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~44,50,58,245
+                      shape: ~round_rect
+                      radius: 12
+                    effect:
+                      stroke:
+                        width: 3
+                        color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
+                  解锁字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: "var.hasPassword ? '&f解锁' : '&f设置'"
+                      fontSize: 36
+                      through: true
+              锁定:
+                type: Canvas
+                attribute:
+                  point: ~middle_right
+                  x: -10
+                  width: 120
+                  height: 48
+                  visible: "var.unlocked && var.hasPassword"
+                  enable: "!var.actionBusy && var.actionToken != ''"
+                action:
+                  clickLeft: |-
+                    var.actionBusy = true
+                    Packet.send(var.packetId, 'password_lock', var.actionToken)
+                children:
+                  锁定底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~44,50,58,245
+                      shape: ~round_rect
+                      radius: 12
+                    effect:
+                      stroke:
+                        width: 3
+                        color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
+                  锁定字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: "~&f锁定"
+                      fontSize: 36
+                      through: true
+
+          筛选提示:
+            type: Text
+            attribute:
+              point: ~bottom_left
+              x: "var.gridBgX + 16"
+              y: -16
+              texts: "~&e筛选与搜索只影响当前显示"
+              fontSize: 36
+              through: true
+
+      # ── 右侧栏（仓库信息 + 我的仓库列表）─────────────────────
+      右侧栏:
+        type: Canvas
+        attribute:
+          point: ~top_left
+          x: "372 + var.gridW + 24 - var.offX"
+          y: 120
+          width: "var.rightW"
+          height: "var.viewH - 144"
+        children:
+          右侧栏底:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~Frosted:30;255,255,255,100
+              shape: ~round_rect
+              radius: 14
+            effect:
+              stroke:
+                width: 3
+                color: ~100,110,120,220
+          信息标题:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 20
+              y: 20
+              texts: "~&f当前仓库"
+              fontSize: 36
+          仓库名行:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 64
+              width: 272
+              height: 48
+            children:
+              仓库名底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~44,50,58,245
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  stroke:
+                    width: 3
+                    color: ~100,110,120,220
+              仓库名圆点:
+                type: Texture
+                attribute:
+                  point: ~middle_left
+                  x: 14
+                  width: 10
+                  height: 10
+                  normal: ~180,190,200,255
+                  shape: ~circle
+              仓库名文字:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: 32
+                  texts: "'&f' + var.warehouseName"
+                  fontSize: 36
+          等级行:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 120
+              width: 272
+              height: 48
+              enable: "var.ownerType == 'personal' && var.canUpgrade && !var.actionBusy"
+            action:
+              clickLeft: |-
+                if(var.ownerType == 'personal' && var.canUpgrade && var.actionToken != ''){
+                  var.actionBusy = true
+                  Packet.send(var.packetId, 'warehouse_upgrade', var.actionToken)
+                }
+            children:
+              等级底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~44,50,58,245
+                  shape: ~round_rect
+                  radius: 10
+                  through: true
+                effect:
+                  stroke:
+                    width: 3
+                    color: "self.isHovered() && var.canUpgrade && var.ownerType == 'personal' ? '140,220,140,255' : '100,110,120,220'"
+              等级圆点:
+                type: Texture
+                attribute:
+                  point: ~middle_left
+                  x: 14
+                  width: 10
+                  height: 10
+                  normal: "var.canUpgrade ? '120,200,120,255' : '160,170,180,255'"
+                  shape: ~circle
+                  through: true
+              等级文字:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: 32
+                  texts: "var.ownerType == 'personal' ? (var.canUpgrade ? '&e+1格 ' + var.slotPriceText : '&f槽位已满') : ('&fLv.&e' + var.level.round())"
+                  fontSize: 36
+                  through: true
+              等级状态:
+                type: Text
+                attribute:
+                  point: ~middle_right
+                  x: -16
+                  texts: "'&f' + var.capacityText + ' 格'"
+                  fontSize: 36
+                  through: true
+          解锁行:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 176
+              width: 272
+              height: 48
+            children:
+              解锁底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~44,50,58,245
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  stroke:
+                    width: 3
+                    color: ~100,110,120,220
+              解锁圆点:
+                type: Texture
+                attribute:
+                  point: ~middle_left
+                  x: 14
+                  width: 10
+                  height: 10
+                  normal: "var.readOnly ? '235,100,100,255' : (!var.hasPassword ? '235,160,60,255' : (var.unlocked ? '160,170,180,255' : '196,200,208,255'))"
+                  shape: ~circle
+              解锁文字:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: 32
+                  texts: "var.readOnly ? '&c只读 ' + var.lockOwner : (!var.hasPassword ? '&e未设置密码' : (var.unlocked ? '&e密码已解锁' : '&f密码未解锁'))"
+                  fontSize: 36
+          仓库列表分隔:
+            type: Texture
+            attribute:
+              point: ~top_left
+              x: 18
+              y: 240
+              width: 264
+              height: 2
+              normal: ~100,110,120,220
           仓库列表标题:
             type: Text
             attribute:
               point: ~top_left
               x: 20
-              y: 246
-              texts: ~&e01 / 仓库索引
-              fontSize: 48
+              y: 256
+              texts: "~&f我的仓库"
+              fontSize: 36
           仓库滑轨:
             type: Texture
             attribute:
               point: ~top_right
               x: -12
-              y: 288
+              y: 304
               width: 10
-              height: 250
-              normal: ~53,40,33,245
+              height: "var.viewH - 482"
+              normal: ~40,44,52,225
               shape: ~round_rect
               radius: 5
             effect:
               stroke:
                 width: 2
-                color: ~224,194,152,230
+                color: ~255,255,255,230
           仓库滑块:
             type: Texture
             val: 仓库滑块
             attribute:
               point: ~top_right
               x: -12
-              y: 288
+              y: 304
               width: 10
               height: 50
-              normal: ~190,122,79,255
-              maxDragY: 200
+              normal: ~180,190,200,255
+              maxDragY: "var.viewH - 532"
               shape: ~round_rect
               radius: 5
           仓库滚动:
@@ -625,10 +1656,10 @@ controls:
             attribute:
               point: ~top_left
               x: 14
-              y: 288
+              y: 304
               width: 258
-              height: 250
-              moveY: self.parent['仓库滑块'].getDragYRatio()
+              height: "var.viewH - 482"
+              moveY: "self.parent['仓库滑块'].getDragYRatio()"
             action:
               wheel: |-
                 if(self.moveY >= 0 && self.wheelValue > 0){
@@ -660,31 +1691,27 @@ controls:
                           width: 258
                           height: 48
                         action:
-                          clickLeft: Packet.send(var.packetId, 'warehouse', self.entry['id'])
+                          clickLeft: |-
+                            Packet.send(var.packetId, 'warehouse', self.entry['id'])
                         children:
                           项底:
                             type: Texture
                             attribute:
-                              point: ~middle_center
-                              width: self.parent.width - 6
-                              height: self.parent.height
+                              point: ~stretch_all
                               through: true
-                              normal: 'var.ownerType == ''personal'' && self.parent.entry != none && self.parent.entry[''id'']
-                                == var.warehouseId ? ''105,66,47,250'' : ''56,43,36,255'''
+                              normal: "var.ownerType == 'personal' && self.parent.entry != none && self.parent.entry['id'] == var.warehouseId ? '64,72,82,225' : '44,50,58,245'"
                               shape: ~round_rect
                               radius: 12
                             effect:
                               stroke:
                                 width: 3
-                                color: 'self.isHovered() ? ''241,208,157,255'' : (var.ownerType == ''personal'' && self.parent.entry
-                                  != none && self.parent.entry[''id''] == var.warehouseId ? ''226,179,124,255'' : ''112,83,64,235'')'
+                                color: "self.isHovered() ? '220,230,240,255' : (var.ownerType == 'personal' && self.parent.entry != none && self.parent.entry['id'] == var.warehouseId ? '255,255,255,255' : '100,110,120,220')"
                           项字:
                             type: Text
                             attribute:
                               point: ~middle_center
-                              texts: '''&f'' + var.personalWarehouseTexts[self.parent.entryKey]'
+                              texts: "'&f' + var.personalWarehouseTexts[self.parent.entryKey]"
                               fontSize: 36
-                              limit: 226
                               through: true
                   共享仓库列表:
                     type: VStack
@@ -702,1051 +1729,25 @@ controls:
                           width: 258
                           height: 48
                         action:
-                          clickLeft: Packet.send(var.packetId, 'shared', self.entry['id'])
+                          clickLeft: |-
+                            Packet.send(var.packetId, 'shared', self.entry['id'])
                         children:
                           项底:
                             type: Texture
                             attribute:
-                              point: ~middle_center
-                              width: self.parent.width - 6
-                              height: self.parent.height
+                              point: ~stretch_all
                               through: true
-                              normal: 'var.ownerType == ''shared'' && self.parent.entry != none && self.parent.entry[''id'']
-                                == var.ownerId ? ''105,66,47,250'' : ''56,43,36,255'''
+                              normal: "var.ownerType == 'shared' && self.parent.entry != none && self.parent.entry['id'] == var.ownerId ? '64,72,82,225' : '44,50,58,245'"
                               shape: ~round_rect
                               radius: 12
                             effect:
                               stroke:
                                 width: 3
-                                color: 'self.isHovered() ? ''241,208,157,255'' : (var.ownerType == ''shared'' && self.parent.entry
-                                  != none && self.parent.entry[''id''] == var.ownerId ? ''226,179,124,255'' : ''112,83,64,235'')'
+                                color: "self.isHovered() ? '220,230,240,255' : (var.ownerType == 'shared' && self.parent.entry != none && self.parent.entry['id'] == var.ownerId ? '255,255,255,255' : '100,110,120,220')"
                           项字:
                             type: Text
                             attribute:
                               point: ~middle_center
-                              texts: '''&f'' + var.sharedWarehouseStorageTexts[self.parent.entryKey]'
+                              texts: "'&f' + var.sharedWarehouseStorageTexts[self.parent.entryKey]"
                               fontSize: 36
-                              limit: 226
                               through: true
-      中间主区:
-        type: Canvas
-        attribute:
-          point: ~top_left
-          x: 372 - var.offX
-          y: 120
-          width: var.gridW
-          height: var.viewH - 144
-        children:
-          主区底:
-            type: Texture
-            attribute:
-              point: ~stretch_all
-              normal: ~38,31,27,250
-              shape: ~round_rect
-              radius: 14
-            effect:
-              stroke:
-                width: 3
-                color: ~112,83,64,235
-          仓库区标题:
-            type: Text
-            attribute:
-              point: ~top_left
-              x: var.gridBgX
-              y: 144
-              texts: '''&e库房库存 &f'' + var.capacityText'
-              fontSize: 48
-          仓库网格底:
-            type: Texture
-            attribute:
-              point: ~top_left
-              x: var.gridBgX
-              y: 182
-              width: var.gridBgW
-              height: var.whGridH + 30
-              through: true
-              normal: ~27,23,21,245
-              shape: ~round_rect
-              radius: 14
-            effect:
-              stroke:
-                width: 3
-                color: ~112,83,64,235
-          仓库网格:
-            type: HGrid
-            val: 仓库网格
-            attribute:
-              point: ~top_left
-              x: var.gridBgX + 16
-              y: 198
-              width: var.whGridW
-              height: var.whGridH
-              column: 12
-              spaceBetweenX: 6
-              spaceBetweenY: 6
-            children:
-              物品图标:
-                type: Slot
-                attribute:
-                  entryKey: 0.round()
-                  entry: var.slots[self.entryKey]
-                  visible: self.entry != none
-                  slotType: ~Icon
-                  itemScale: 0.9
-                  width: var.slotSize
-                  height: var.slotSize
-                  normal: 'self.entryKey == var.selectedSlot ? ''145,89,59,250'' : ''49,38,32,250'''
-                  shape: ~round_rect
-                  radius: 12
-                  seticon: self.setItemIcon(var.itemJsons[self.entryKey])
-                action:
-                  clickLeft: |-
-                    now = Time.currentTime()
-                    if(var.lastSlotClickSlot == self.entryKey && now - var.lastSlotClickTime < 300){
-                      Packet.send(var.packetId, 'withdraw_quick', self.entryKey, 64)
-                      var.lastSlotClickSlot = none
-                    }else{
-                      Packet.send(var.packetId, 'select', self.entryKey)
-                      var.lastSlotClickSlot = self.entryKey
-                      var.lastSlotClickTime = now
-                    }
-                effect:
-                  stroke:
-                    width: 3
-                    color: 'self.isHovered() ? ''241,208,157,255'' : (self.entryKey == var.selectedSlot ? ''190,120,78,255''
-                      : ''112,83,64,235'')'
-                children:
-                  数量:
-                    type: Text
-                    attribute:
-                      x: 6
-                      y: var.slotSize - 26
-                      texts: 'self.parent.entry != none && !self.parent.entry[''empty''] ? ''&f'' + self.parent.entry[''amount''].round()
-                        : none'
-                      fontSize: 36
-                      through: true
-          工具条:
-            type: HStack
-            attribute:
-              point: ~top_left
-              x: 20
-              y: 82
-              width: var.gridW - 40
-              spaceBetween: 8
-              height: 48
-            children:
-              模式切换:
-                type: Canvas
-                attribute:
-                  visible: var.ownerType == 'shared'
-                  width: (var.gridW - 88) / 7
-                  height: 48
-                  enable: '!var.actionBusy && var.actionToken != '''''
-                action:
-                  clickLeft: |-
-                    if(var.sharedEditMode){
-                      Packet.send(var.packetId, 'shared_mode', 'readonly')
-                    }else{
-                      Packet.send(var.packetId, 'shared_mode', 'edit')
-                    }
-                children:
-                  模式切换底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: 'var.sharedEditMode ? ''165,102,68,245'' : ''56,43,36,255'''
-                      shape: ~round_rect
-                      radius: 12
-                    effect:
-                      stroke:
-                        width: 3
-                        color: 'self.isHovered() ? ''241,208,157,255'' : (var.sharedEditMode ? ''190,120,78,255'' : ''112,83,64,235'')'
-                  模式切换字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      texts: 'var.sharedEditMode ? ''&f存取模式'' : ''&f只读模式'''
-                      fontSize: 36
-                      through: true
-              排序:
-                type: Canvas
-                attribute:
-                  width: (var.gridW - 88) / 7
-                  height: 48
-                action:
-                  clickLeft: Packet.send(var.packetId, 'sort')
-                children:
-                  排序底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: ~56,43,36,255
-                      shape: ~round_rect
-                      radius: 12
-                    effect:
-                      stroke:
-                        width: 3
-                        color: 'self.isHovered() ? ''241,208,157,255'' : ''112,83,64,235'''
-                  排序字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      texts: '''&f排序 &e'' + var.sortText'
-                      fontSize: 36
-                      through: true
-              刷新:
-                type: Canvas
-                attribute:
-                  width: (var.gridW - 88) / 7
-                  height: 48
-                action:
-                  clickLeft: Packet.send(var.packetId, 'refresh')
-                children:
-                  刷新底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: ~56,43,36,255
-                      shape: ~round_rect
-                      radius: 12
-                    effect:
-                      stroke:
-                        width: 3
-                        color: 'self.isHovered() ? ''241,208,157,255'' : ''112,83,64,235'''
-                  刷新字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      texts: ~&f刷新
-                      fontSize: 36
-                      through: true
-              展示:
-                type: Canvas
-                attribute:
-                  width: (var.gridW - 88) / 7
-                  height: 48
-                action:
-                  clickLeft: Packet.send(var.packetId, 'showcase')
-                children:
-                  展示底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: ~56,43,36,255
-                      shape: ~round_rect
-                      radius: 12
-                    effect:
-                      stroke:
-                        width: 3
-                        color: 'self.isHovered() ? ''241,208,157,255'' : ''112,83,64,235'''
-                  展示字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      texts: ~&f展示
-                      fontSize: 36
-                      through: true
-              上页:
-                type: Canvas
-                attribute:
-                  width: (var.gridW - 88) / 7
-                  height: 48
-                action:
-                  clickLeft: Packet.send(var.packetId, 'page', var.page - 1)
-                children:
-                  上页底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: ~56,43,36,255
-                      shape: ~round_rect
-                      radius: 12
-                    effect:
-                      stroke:
-                        width: 3
-                        color: 'self.isHovered() ? ''241,208,157,255'' : ''112,83,64,235'''
-                  上页字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      texts: ~&f上页
-                      fontSize: 36
-                      through: true
-              页码:
-                type: Canvas
-                attribute:
-                  width: (var.gridW - 88) / 7
-                  height: 48
-                children:
-                  页码底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: ~27,23,21,245
-                      shape: ~round_rect
-                      radius: 12
-                    effect:
-                      stroke:
-                        width: 3
-                        color: ~112,83,64,235
-                  页码字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      texts: '''&f'' + var.pageText'
-                      fontSize: 36
-                      through: true
-              下页:
-                type: Canvas
-                attribute:
-                  width: (var.gridW - 88) / 7
-                  height: 48
-                action:
-                  clickLeft: Packet.send(var.packetId, 'page', var.page + 1)
-                children:
-                  下页底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: ~56,43,36,255
-                      shape: ~round_rect
-                      radius: 12
-                    effect:
-                      stroke:
-                        width: 3
-                        color: 'self.isHovered() ? ''241,208,157,255'' : ''112,83,64,235'''
-                  下页字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      texts: ~&f下页
-                      fontSize: 36
-                      through: true
-          背包区标题:
-            type: Text
-            attribute:
-              point: ~top_left
-              x: var.gridBgX
-              y: 598
-              texts: ~&e随身物品 / 选择后在右侧存入
-              fontSize: 48
-          背包网格底:
-            type: Texture
-            attribute:
-              point: ~top_left
-              x: var.gridBgX
-              y: 638
-              width: var.gridBgW
-              height: var.bpGridH + 30
-              through: true
-              normal: ~27,23,21,245
-              shape: ~round_rect
-              radius: 14
-            effect:
-              stroke:
-                width: 3
-                color: ~112,83,64,235
-          背包网格:
-            type: HGrid
-            val: 背包网格
-            attribute:
-              point: ~top_left
-              x: var.gridBgX + 16
-              y: 654
-              width: var.bpGridW
-              height: var.bpGridH
-              column: 12
-              spaceBetweenX: 6
-              spaceBetweenY: 6
-            action:
-              create: |-
-                for(i in range(1,35)){
-                  slot = self['背包槽'].copy('背包槽' + i.round())
-                  slot.entryKey = (9 + i).round()
-                  slot.id = (9 + i).round()
-                }
-            children:
-              背包槽:
-                type: Slot
-                attribute:
-                  id: 9
-                  slotType: ~Backpack
-                  itemScale: 0.72
-                  through: false
-                  lock: true
-                  entryKey: 9.round()
-                  entry: var.backpack[self.entryKey]
-                  width: var.slotSize
-                  height: var.slotSize
-                  normal: 'self.entry != none && self.entry[''locked''] == true ? ''94,73,45,250'' : (self.entryKey == var.selectedBackpackSlot
-                    ? ''145,89,59,250'' : ''49,38,32,250'')'
-                  shape: ~round_rect
-                  radius: 12
-                action:
-                  clickLeft: |-
-                    now = Time.currentTime()
-                    if(var.lastBackpackClickSlot == self.entryKey && now - var.lastBackpackClickTime < 300){
-                      Packet.send(var.packetId, 'deposit_slot', self.entryKey, 0)
-                      var.lastBackpackClickSlot = none
-                    }else{
-                      var.selectedBackpackSlot = self.entryKey
-                      var.lastBackpackClickSlot = self.entryKey
-                      var.lastBackpackClickTime = now
-                    }
-                effect:
-                  stroke:
-                    width: 3
-                    color: 'self.isHovered() ? ''241,208,157,255'' : (self.entry != none && self.entry[''locked''] == true
-                      ? ''232,180,90,255'' : (self.entryKey == var.selectedBackpackSlot ? ''190,120,78,255'' : ''112,83,64,235''))'
-          底部密码栏:
-            type: Canvas
-            attribute:
-              point: ~top_left
-              x: (var.gridBgX).round()
-              y: var.viewH - 216
-              width: var.gridBgW
-              height: 64
-            children:
-              密码栏底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  normal: ~27,23,21,245
-                  shape: ~round_rect
-                  radius: 14
-                effect:
-                  stroke:
-                    width: 3
-                    color: ~112,83,64,235
-              密码标题:
-                type: Text
-                attribute:
-                  point: ~middle_left
-                  x: 20
-                  texts: '!var.hasPassword ? ''&e设置密码'' : (var.unlocked ? ''&e已解锁'' : ''&c输入密码'')'
-                  fontSize: 36
-                  through: true
-              密码输入:
-                type: Canvas
-                attribute:
-                  point: ~middle_left
-                  x: 220
-                  width: var.gridBgW - 360
-                  height: 48
-                children:
-                  密码输入底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      normal: ~56,43,36,255
-                      shape: ~round_rect
-                      radius: 12
-                    effect:
-                      stroke:
-                        width: 3
-                        color: 'self.isHovered() ? ''241,208,157,255'' : ''112,83,64,235'''
-                  输入框:
-                    type: TextBox
-                    attribute:
-                      x: 10
-                      y: 6
-                      width: var.gridBgW - 380
-                      height: 36
-                      length: 32
-                      emptyText: ~&7密码
-                      fontSize: 36
-                    action:
-                      textChange: var.passwordText = self.getContent()
-              解锁:
-                type: Canvas
-                attribute:
-                  point: ~middle_right
-                  x: -10
-                  width: 120
-                  height: 48
-                  visible: '!var.unlocked || !var.hasPassword'
-                  enable: '!var.actionBusy && (var.hasPassword || var.actionToken != '''')'
-                action:
-                  clickLeft: |-
-                    if(var.hasPassword){
-                      Packet.send(var.packetId, 'password_unlock', var.passwordText)
-                    }else{
-                      var.actionBusy = true
-                      Packet.send(var.packetId, 'password_set', var.passwordText, var.actionToken)
-                    }
-                children:
-                  解锁底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: ~56,43,36,255
-                      shape: ~round_rect
-                      radius: 12
-                    effect:
-                      stroke:
-                        width: 3
-                        color: 'self.isHovered() ? ''241,208,157,255'' : ''112,83,64,235'''
-                  解锁字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      texts: 'var.hasPassword ? ''&f解锁'' : ''&f设置'''
-                      fontSize: 36
-                      through: true
-              锁定:
-                type: Canvas
-                attribute:
-                  point: ~middle_right
-                  x: -10
-                  width: 120
-                  height: 48
-                  visible: var.unlocked && var.hasPassword
-                  enable: '!var.actionBusy && var.actionToken != '''''
-                action:
-                  clickLeft: |-
-                    var.actionBusy = true
-                    Packet.send(var.packetId, 'password_lock', var.actionToken)
-                children:
-                  锁定底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: ~56,43,36,255
-                      shape: ~round_rect
-                      radius: 12
-                    effect:
-                      stroke:
-                        width: 3
-                        color: 'self.isHovered() ? ''241,208,157,255'' : ''112,83,64,235'''
-                  锁定字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      texts: ~&f锁定
-                      fontSize: 36
-                      through: true
-          检索工作台:
-            type: Canvas
-            attribute:
-              point: ~top_left
-              x: 20
-              y: 20
-              width: var.gridW - 40
-              height: 48
-            children:
-              搜索框:
-                type: Canvas
-                attribute:
-                  point: ~top_left
-                  x: 0
-                  y: 0
-                  width: var.gridW - 360
-                  height: 48
-                children:
-                  搜索框底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      normal: ~27,23,21,245
-                      shape: ~round_rect
-                      radius: 12
-                    effect:
-                      stroke:
-                        width: 3
-                        color: 'self.isHovered() ? ''241,208,157,255'' : ''112,83,64,235'''
-                  输入框:
-                    type: TextBox
-                    attribute:
-                      x: 10
-                      y: 8
-                      width: var.gridW - 380
-                      height: 36
-                      length: 32
-                      emptyText: ~&7搜索物品
-                      fontSize: 36
-                    action:
-                      textChange: var.search = self.getContent()
-                      enter: Packet.send(var.packetId, 'search', var.search)
-              搜索按钮组:
-                type: HStack
-                attribute:
-                  point: ~top_left
-                  x: var.gridW - 332
-                  y: 0
-                  width: 272
-                  height: 48
-                  spaceBetween: 10
-                children:
-                  搜索:
-                    type: Canvas
-                    attribute:
-                      width: 131
-                      height: 48
-                    action:
-                      clickLeft: Packet.send(var.packetId, 'search', var.search)
-                    children:
-                      搜索底:
-                        type: Texture
-                        attribute:
-                          point: ~stretch_all
-                          through: true
-                          normal: ~56,43,36,255
-                          shape: ~round_rect
-                          radius: 12
-                        effect:
-                          stroke:
-                            width: 3
-                            color: 'self.isHovered() ? ''241,208,157,255'' : ''112,83,64,235'''
-                      搜索字:
-                        type: Text
-                        attribute:
-                          point: ~middle_center
-                          texts: ~&f搜索
-                          fontSize: 36
-                          through: true
-                  重置:
-                    type: Canvas
-                    attribute:
-                      width: 131
-                      height: 48
-                    action:
-                      clickLeft: |-
-                        var.search = none
-                        Packet.send(var.packetId, 'search', none)
-                    children:
-                      重置底:
-                        type: Texture
-                        attribute:
-                          point: ~stretch_all
-                          through: true
-                          normal: ~56,43,36,255
-                          shape: ~round_rect
-                          radius: 12
-                        effect:
-                          stroke:
-                            width: 3
-                            color: 'self.isHovered() ? ''241,208,157,255'' : ''112,83,64,235'''
-                      重置字:
-                        type: Text
-                        attribute:
-                          point: ~middle_center
-                          texts: ~&f重置
-                          fontSize: 36
-                          through: true
-      右侧栏:
-        type: Canvas
-        attribute:
-          point: ~top_left
-          x: 372 + var.gridW + 24 - var.offX
-          y: 120
-          width: var.rightW
-          height: var.viewH - 144
-        children:
-          右侧栏底:
-            type: Texture
-            attribute:
-              point: ~stretch_all
-              normal: ~38,31,27,250
-              shape: ~round_rect
-              radius: 14
-            effect:
-              stroke:
-                width: 3
-                color: ~112,83,64,235
-          信息标题:
-            type: Text
-            attribute:
-              point: ~top_left
-              x: 20
-              y: 20
-              texts: ~&e当前库房 / 权限
-              fontSize: 48
-          仓库名行:
-            type: Canvas
-            attribute:
-              point: ~top_left
-              x: 14
-              y: 64
-              width: var.rightW - 28
-              height: 48
-            children:
-              仓库名底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  normal: ~56,43,36,255
-                  shape: ~round_rect
-                  radius: 10
-                effect:
-                  stroke:
-                    width: 3
-                    color: ~112,83,64,235
-              仓库名圆点:
-                type: Texture
-                attribute:
-                  point: ~middle_left
-                  x: 14
-                  width: 10
-                  height: 10
-                  normal: ~190,122,79,255
-                  shape: ~circle
-              仓库名文字:
-                type: Text
-                attribute:
-                  point: ~middle_left
-                  x: 32
-                  texts: '''&f'' + var.warehouseName'
-                  fontSize: 36
-                  limit: var.rightW - 76
-          等级行:
-            type: Canvas
-            attribute:
-              point: ~top_left
-              x: 14
-              y: 120
-              width: var.rightW - 28
-              height: 60
-              enable: var.ownerType == 'personal' && var.canUpgrade && !var.actionBusy
-            action:
-              clickLeft: |-
-                if(var.ownerType == 'personal' && var.canUpgrade && var.actionToken != ''){
-                  var.actionBusy = true
-                  Packet.send(var.packetId, 'warehouse_upgrade', var.actionToken)
-                }
-            children:
-              等级底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  normal: ~56,43,36,255
-                  shape: ~round_rect
-                  radius: 10
-                  through: true
-                effect:
-                  stroke:
-                    width: 3
-                    color: 'self.isHovered() && var.canUpgrade && var.ownerType == ''personal'' ? ''140,220,140,255'' : ''112,83,64,235'''
-              等级圆点:
-                type: Texture
-                attribute:
-                  point: ~middle_left
-                  x: 14
-                  width: 10
-                  height: 10
-                  normal: 'var.canUpgrade ? ''120,200,120,255'' : ''190,120,78,255'''
-                  shape: ~circle
-                  through: true
-              等级文字:
-                type: Text
-                attribute:
-                  point: ~top_left
-                  x: 32
-                  texts: 'var.ownerType == ''personal'' ? (var.canUpgrade ? ''&e+1格 '' + var.slotPriceText : ''&f槽位已满'') :
-                    (''&fLv.&e'' + var.level.round())'
-                  fontSize: 36
-                  through: true
-                  y: 8
-                  limit: var.rightW - 76
-              等级状态:
-                type: Text
-                attribute:
-                  point: ~bottom_left
-                  x: 32
-                  texts: '''&f'' + var.capacityText + '' 格'''
-                  fontSize: 36
-                  through: true
-                  y: -8
-          解锁行:
-            type: Canvas
-            attribute:
-              point: ~top_left
-              x: 14
-              y: 192
-              width: var.rightW - 28
-              height: 48
-            children:
-              解锁底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  normal: ~56,43,36,255
-                  shape: ~round_rect
-                  radius: 10
-                effect:
-                  stroke:
-                    width: 3
-                    color: ~112,83,64,235
-              解锁圆点:
-                type: Texture
-                attribute:
-                  point: ~middle_left
-                  x: 14
-                  width: 10
-                  height: 10
-                  normal: 'var.readOnly ? ''235,100,100,255'' : (!var.hasPassword ? ''235,160,60,255'' : (var.unlocked ? ''190,120,78,255''
-                    : ''196,200,208,255''))'
-                  shape: ~circle
-              解锁文字:
-                type: Text
-                attribute:
-                  point: ~middle_left
-                  x: 32
-                  texts: 'var.readOnly ? ''&c只读 '' + var.lockOwner : (!var.hasPassword ? ''&e未设置密码'' : (var.unlocked ? ''&e密码已解锁''
-                    : ''&f密码未解锁''))'
-                  fontSize: 36
-                  limit: var.rightW - 76
-          存取工具条:
-            type: VStack
-            attribute:
-              point: ~top_left
-              x: 20
-              y: 306
-              width: var.rightW - 40
-              spaceBetween: 12
-            children:
-              数量输入:
-                type: Canvas
-                attribute:
-                  width: var.rightW - 40
-                  height: 52
-                children:
-                  数量输入底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      normal: ~27,23,21,245
-                      shape: ~round_rect
-                      radius: 12
-                    effect:
-                      stroke:
-                        width: 3
-                        color: 'self.isHovered() ? ''241,208,157,255'' : ''112,83,64,235'''
-                  输入框:
-                    type: TextBox
-                    attribute:
-                      x: 10
-                      y: 6
-                      width: var.rightW - 60
-                      height: 38
-                      length: 32
-                      emptyText: ~&7数量
-                      fontSize: 36
-                    action:
-                      textChange: var.amount = self.getContent()
-              取出:
-                type: Canvas
-                attribute:
-                  width: var.rightW - 40
-                  height: 52
-                action:
-                  clickLeft: Packet.send(var.packetId, 'withdraw', var.selectedSlot, var.amount)
-                children:
-                  取出底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: ~56,43,36,255
-                      shape: ~round_rect
-                      radius: 12
-                    effect:
-                      stroke:
-                        width: 3
-                        color: 'self.isHovered() ? ''241,208,157,255'' : ''112,83,64,235'''
-                  取出字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      texts: ~&f取出选中
-                      fontSize: 36
-                      through: true
-              全部取出:
-                type: Canvas
-                attribute:
-                  width: var.rightW - 40
-                  height: 52
-                action:
-                  clickLeft: Packet.send(var.packetId, 'withdraw_all', var.selectedSlot)
-                children:
-                  全部取出底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: ~56,43,36,255
-                      shape: ~round_rect
-                      radius: 12
-                    effect:
-                      stroke:
-                        width: 3
-                        color: 'self.isHovered() ? ''241,208,157,255'' : ''112,83,64,235'''
-                  全部取出字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      texts: ~&f全取选中
-                      fontSize: 36
-                      through: true
-              全部存入:
-                type: Canvas
-                attribute:
-                  width: var.rightW - 40
-                  height: 52
-                action:
-                  clickLeft: Packet.send(var.packetId, 'deposit_all_backpack')
-                children:
-                  全部存入底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: ~56,43,36,255
-                      shape: ~round_rect
-                      radius: 12
-                    effect:
-                      stroke:
-                        width: 3
-                        color: 'self.isHovered() ? ''241,208,157,255'' : ''112,83,64,235'''
-                  全部存入字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      texts: ~&f全部存入
-                      fontSize: 36
-                      through: true
-              存入:
-                type: Canvas
-                attribute:
-                  width: var.rightW - 40
-                  height: 52
-                action:
-                  clickLeft: |-
-                    if(var.selectedBackpackSlot != (-1).round()){
-                      Packet.send(var.packetId, 'deposit_slot', var.selectedBackpackSlot, var.amount)
-                    }
-                children:
-                  存入底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: ~56,43,36,255
-                      shape: ~round_rect
-                      radius: 12
-                    effect:
-                      stroke:
-                        width: 3
-                        color: 'self.isHovered() ? ''241,208,157,255'' : ''112,83,64,235'''
-                  存入字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      texts: ~&f存入选中
-                      fontSize: 36
-                      through: true
-              锁定:
-                type: Canvas
-                attribute:
-                  width: var.rightW - 40
-                  height: 52
-                action:
-                  clickLeft: |-
-                    if(var.selectedBackpackSlot != (-1).round()){
-                      Packet.send(var.packetId, 'toggle_lock', var.selectedBackpackSlot)
-                    }
-                children:
-                  锁定底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: 'var.backpack[var.selectedBackpackSlot] != none && var.backpack[var.selectedBackpackSlot][''locked'']
-                        == true ? ''104,84,46,245'' : ''56,43,36,255'''
-                      shape: ~round_rect
-                      radius: 12
-                    effect:
-                      stroke:
-                        width: 3
-                        color: 'self.isHovered() ? ''241,208,157,255'' : ''112,83,64,235'''
-                  锁定字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      texts: 'var.backpack[var.selectedBackpackSlot] != none && var.backpack[var.selectedBackpackSlot][''locked'']
-                        == true ? ''&e解锁选中'' : ''&f锁定选中'''
-                      fontSize: 36
-                      through: true
-          操作分隔:
-            type: Texture
-            attribute:
-              point: ~top_left
-              through: true
-              normal: ~190,122,79,160
-              x: 20
-              y: 248
-              width: var.rightW - 40
-              height: 1
-          操作标题:
-            type: Text
-            attribute:
-              x: 20
-              y: 266
-              texts: ~&e03 / 存取操作
-              fontSize: 36
-              through: true
-          操作说明:
-            type: Canvas
-            attribute:
-              point: ~top_left
-              x: 20
-              y: 720
-              width: var.rightW - 40
-              height: 170
-            children:
-              底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  through: true
-                  normal: ~56,43,36,255
-                  shape: ~round_rect
-                  radius: 8
-              标题:
-                type: Text
-                attribute:
-                  x: 14
-                  y: 16
-                  texts: ~&e操作指南
-                  fontSize: 36
-                  through: true
-              提示:
-                type: Text
-                attribute:
-                  x: 14
-                  y: 52
-                  texts:
-                  - ~&7单击选中物品
-                  - ~&7双击快速存取
-                  - ~&7锁定物品不参与批量存入
-                  fontSize: 36
-                  through: true
-                  limit: var.rightW - 68
-          筛选提示:
-            type: Text
-            attribute:
-              point: ~bottom_left
-              x: 20
-              y: -14
-              texts: 'var.search != none && var.search != '''' ? ''&e搜索高亮显示匹配槽位'' : ''&7选择 → 数量 → 存取'''
-              fontSize: 36
-              through: true
-              limit: var.rightW - 40
