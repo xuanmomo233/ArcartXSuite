@@ -332,7 +332,7 @@ public final class CloudModuleService {
         java.util.function.Function<String, HttpRequest> requestFactory,
         java.util.function.Function<SignedCloudResponse, SignedCloudResponse> responseProcessor
     ) {
-        return sendSignedWithFailover(operation, requestFactory, responseProcessor, orderedApiBaseUrls(), 0, 0);
+        return sendSignedWithFailover(operation, requestFactory, responseProcessor, orderedApiBaseUrls(), 0, 0, false);
     }
 
     private CompletableFuture<SignedCloudResponse> sendSignedWithFailover(
@@ -341,7 +341,8 @@ public final class CloudModuleService {
         java.util.function.Function<SignedCloudResponse, SignedCloudResponse> responseProcessor,
         List<String> endpoints,
         int index,
-        int attempt
+        int attempt,
+        boolean sawTransient
     ) {
         if (endpoints == null || index >= endpoints.size()) {
             return CompletableFuture.completedFuture(new SignedCloudResponse(CloudStatus.TRANSIENT, null, 0, null, operation + " exhausted", null, null, null));
@@ -356,10 +357,31 @@ public final class CloudModuleService {
                 if (processed.isTransient()) {
                     if (processed.httpStatus() == 0 && attempt < 1) {
                         return retryDelay().thenCompose(v ->
-                            sendSignedWithFailover(operation, requestFactory, responseProcessor, endpoints, index, attempt + 1));
+                            sendSignedWithFailover(operation, requestFactory, responseProcessor, endpoints, index, attempt + 1, true));
                     }
                     if (index + 1 < endpoints.size()) {
-                        return sendSignedWithFailover(operation, requestFactory, responseProcessor, endpoints, index + 1, 0);
+                        return sendSignedWithFailover(operation, requestFactory, responseProcessor, endpoints, index + 1, 0, true);
+                    }
+                }
+                // 主备库可能尚未同步；先寻找认识此服务器码的端点，不能直接重绑生成新码。
+                if ("refresh".equals(operation) && processed.isRejected()
+                    && CloudRefreshPolicy.isMissingServer(processed.httpStatus(), processed.rawBody())) {
+                    if (index + 1 < endpoints.size()) {
+                        plugin.consoleWarn("[Cloud] 当前端点未找到服务器记录，尝试备用端点: " + endpoint);
+                        return sendSignedWithFailover(operation, requestFactory, responseProcessor, endpoints, index + 1, 0, sawTransient)
+                            .thenApply(alternative -> {
+                                // 备用端在主站健康时默认关闭；明确的维护响应不能阻止主站修复失效码。
+                                if (!sawTransient && alternative.isTransient()
+                                    && CloudRefreshPolicy.isStandbyDisabled(alternative.httpStatus(), alternative.rawBody())
+                                    && java.util.Objects.equals(alternative.message(), alternative.rawBody())) {
+                                    return processed;
+                                }
+                                return alternative;
+                            });
+                    }
+                    if (sawTransient) {
+                        return CompletableFuture.completedFuture(transientSignedResponse(processed,
+                            "部分端点不可用，无法确认服务器记录缺失，保留原绑定"));
                     }
                 }
                 return CompletableFuture.completedFuture(processed);
@@ -474,15 +496,6 @@ public final class CloudModuleService {
         return serverCode != null && !serverCode.isEmpty();
     }
 
-    private void clearServerCode() {
-        this.serverCode = null;
-        plugin.getServer().getScheduler().runTask(plugin.host(), () -> {
-            plugin.getConfig().set("cloud.server-code", "");
-            plugin.saveConfig();
-        });
-    }
-
-
     // -- 服务器首次绑定 ---------------------------------------
 
 
@@ -587,23 +600,28 @@ public final class CloudModuleService {
         return refreshToken(true);
     }
 
-    private CompletableFuture<Boolean> refreshToken(boolean isRebind) {
-        return refreshTokenGate(isRebind).thenApply(CloudResponse::isOk);
+    private CompletableFuture<Boolean> refreshToken(boolean forceRefresh) {
+        return refreshTokenGate(forceRefresh).thenApply(CloudResponse::isOk);
     }
 
-    private CompletableFuture<CloudResponse<Void>> refreshTokenGate(boolean isRebind) {
+    private CompletableFuture<CloudResponse<Void>> refreshTokenGate(boolean forceRefresh) {
+        return refreshTokenGate(forceRefresh, false);
+    }
+
+    private CompletableFuture<CloudResponse<Void>> refreshTokenGate(boolean forceRefresh, boolean recoveryAttempted) {
 
         // 自动修复重新绑定后必须强制刷新，以获取正确的 allowedModules
 
-        if (!isRebind && moduleToken != null && System.currentTimeMillis() < tokenExpiry - 300_000) {
+        if (!forceRefresh && moduleToken != null && System.currentTimeMillis() < tokenExpiry - 300_000) {
             return CompletableFuture.completedFuture(new CloudResponse<>(CloudStatus.OK, null, 200, apiBaseUrl, null, null));
         }
         if (!hasServerCode()) {
             return CompletableFuture.completedFuture(new CloudResponse<>(CloudStatus.REJECTED, null, 0, null, "missing server code", null));
         }
 
+        String requestServerCode = serverCode;
         long timestamp = System.currentTimeMillis();
-        String signMessage = "POST\n/v1/servers/refresh\n" + timestamp + "\n" + serverCode;
+        String signMessage = "POST\n/v1/servers/refresh\n" + timestamp + "\n" + requestServerCode;
 
         debugLog("[Cloud] 签名消息: " + signMessage.replace("\n", "\\n"));
 
@@ -617,21 +635,12 @@ public final class CloudModuleService {
             + "\"apiKey\":\"" + escapeJson(apiKey) + "\""
             + ",\"keyAnchor\":\"" + escapeJson(serverSecretB64()) + "\""
             + "}";
-        HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create(apiBaseUrl + "/v1/servers/refresh"))
-            .header("Content-Type", "application/json")
-            .header("X-Server-Code", serverCode)
-            .header("X-Timestamp", String.valueOf(timestamp))
-            .header("X-Signature", signature)
-            .POST(HttpRequest.BodyPublishers.ofString(refreshPayload))
-            .build();
-
         return sendSignedWithFailover(
             "refresh",
             endpoint -> HttpRequest.newBuilder()
                 .uri(URI.create(endpoint + "/v1/servers/refresh"))
                 .header("Content-Type", "application/json")
-                .header("X-Server-Code", serverCode)
+                .header("X-Server-Code", requestServerCode)
                 .header("X-Timestamp", String.valueOf(timestamp))
                 .header("X-Signature", signature)
                 .POST(HttpRequest.BodyPublishers.ofString(refreshPayload))
@@ -640,18 +649,20 @@ public final class CloudModuleService {
         ).thenCompose(resp -> {
             if (!resp.isOk()) {
                 String body = resp.rawBody();
-                if (resp.isRejected() && resp.httpStatus() == 403 && !isRebind
-                    && (body != null && (body.contains("SIGNATURE_VERIFICATION_ERROR") || body.contains("SIGNATURE_VERIFICATION_FAILED")))) {
+                boolean missingServer = CloudRefreshPolicy.isMissingServer(resp.httpStatus(), body);
+                if (resp.isRejected() && !recoveryAttempted
+                    && (missingServer || CloudRefreshPolicy.isSignatureMismatch(resp.httpStatus(), body))) {
 
-                    plugin.consoleWarn("[Cloud] 签名验证失败，自动重新绑定服务器...");
+                    plugin.consoleWarn(missingServer
+                        ? "[Cloud] 云端服务器记录不存在且备用端无可用记录，使用现有密钥尝试重新绑定一次..."
+                        : "[Cloud] 签名验证失败，使用现有密钥尝试重新绑定一次...");
 
-                    clearServerCode();
                     return bindServerGate().thenCompose(bound -> {
                         if (bound.isOk()) {
 
                             plugin.consoleInfo("[Cloud] 重新绑定成功，再次刷新令牌...");
 
-                            return refreshTokenGate(true);
+                            return refreshTokenGate(true, true);
                         }
 
                         plugin.consoleWarn("[Cloud] 自动重新绑定失败，跳过云端模块同步。");
@@ -661,7 +672,7 @@ public final class CloudModuleService {
                 }
                 if (resp.isTransient()) {
 
-                    plugin.consoleWarn("[Cloud] 刷新令牌暂时失败: " + resp.httpStatus() + " " + body);
+                    plugin.consoleWarn("[Cloud] 刷新令牌暂时失败: " + resp.httpStatus() + " " + resp.message());
 
                 } else {
 
