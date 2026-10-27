@@ -26,7 +26,8 @@ import xuanmo.arcartxsuite.api.scheduler.ScheduledTask;
 public final class AbyssInstance {
 
     private final UUID instanceId;
-    private final AbyssTemplate template;
+    private volatile AbyssTemplate template;
+    private boolean designMode;
     private final @Nullable xuanmo.arcartxsuite.abyss.party.Party party;   // 可空（单人）
     private final long createTime;
 
@@ -76,6 +77,9 @@ public final class AbyssInstance {
 
     public UUID getInstanceId() { return instanceId; }
     public AbyssTemplate getTemplate() { return template; }
+    public boolean designMode() { return designMode; }
+    public void designMode(boolean value) { designMode = value; }
+    public void updateDesignTemplate(AbyssTemplate template) { this.template = template; }
     public @Nullable xuanmo.arcartxsuite.abyss.party.Party getParty() { return party; }
     public long getCreateTime() { return createTime; }
     public AbyssStatus getStatus() { return status.get(); }

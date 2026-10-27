@@ -121,7 +121,7 @@ public final class ProcGenMaterializer {
             a.doors.add(doorBox(awx, floorY + 1, da[1], da[0], da[2], 'x'));
             b.doors.add(doorBox(bwx, floorY + 1, db[1], db[0], db[2], 'x'));
             // 走廊中心对齐 a 侧门心（默认门即格轴心 cx；定制门对齐自己一侧）
-            corridorTube(world, awx + 1, bwx - 1, floorY, da[1], dw, dh, 'x', cfg);
+            connectCorridor(world, awx + 1, bwx - 1, floorY, da, db, 'x', cfg);
         } else {
             int cz = cellAxisX(a, b);
             int anz = a.worldZ + a.d - 1;    // a 南墙面
@@ -132,7 +132,7 @@ public final class ProcGenMaterializer {
             cutHole(world, db[1], floorY + 1, bnz, db[0], db[2], 'z');
             a.doors.add(doorBox(anz, floorY + 1, da[1], da[0], da[2], 'z'));
             b.doors.add(doorBox(bnz, floorY + 1, db[1], db[0], db[2], 'z'));
-            corridorTube(world, anz + 1, bnz - 1, floorY, da[1], dw, dh, 'z', cfg);
+            connectCorridor(world, anz + 1, bnz - 1, floorY, da, db, 'z', cfg);
         }
     }
 
@@ -179,7 +179,6 @@ public final class ProcGenMaterializer {
     private static String rotateWall(String localWall, int rot) {
         String w = localWall.toLowerCase();
         int r = ((rot % 360) + 360) % 360;
-        if (r == 0) return w;
         String[] order = {"n", "e", "s", "w"};   // 顺时针
         int idx = switch (w) {
             case "n", "north" -> 0; case "e", "east" -> 1;
@@ -189,6 +188,34 @@ public final class ProcGenMaterializer {
         if (idx < 0) return w;
         int shift = r / 90;
         return order[(idx + shift) % 4];
+    }
+
+    private record Segment(int from, int to, int center, char axis) { }
+
+    /** Offset custom doors are joined by a dogleg; carve the union after all shells to keep bends open. */
+    private void connectCorridor(World world, int from, int to, int floorY,
+                                 int[] a, int[] b, char axis, ProcGenConfig cfg) {
+        if (to < from) return;
+        int width = Math.min(cfg.corridor().doorWidth(), Math.min(a[0], b[0]));
+        int height = Math.min(cfg.corridor().doorHeight(), Math.min(a[2], b[2]));
+        if (width < 1 || height < 1) throw new IllegalArgumentException("门洞宽高必须大于0");
+        List<Segment> segments = new ArrayList<>();
+        if (a[1] == b[1]) segments.add(new Segment(from, to, a[1], axis));
+        else {
+            int mid = from + (to - from) / 2;
+            segments.add(new Segment(from, mid, a[1], axis));
+            segments.add(new Segment(Math.min(a[1], b[1]), Math.max(a[1], b[1]), mid, axis == 'x' ? 'z' : 'x'));
+            segments.add(new Segment(mid, to, b[1], axis));
+        }
+        for (Segment segment : segments)
+            corridorTube(world, segment.from(), segment.to(), floorY, segment.center(), width, height, segment.axis(), cfg);
+        for (Segment segment : segments) for (int t = segment.from(); t <= segment.to(); t++)
+            for (int offset = -width / 2; offset <= (width - 1) / 2; offset++)
+                for (int y = floorY + 1; y <= floorY + height; y++) {
+                    int x = segment.axis() == 'x' ? t : segment.center() + offset;
+                    int z = segment.axis() == 'x' ? segment.center() + offset : t;
+                    world.getBlockAt(x, y, z).setType(Material.AIR, false);
+                }
     }
 
     /**
@@ -239,17 +266,17 @@ public final class ProcGenMaterializer {
                               int center, int dw, int dh, char axis,
                               ProcGenConfig cfg) {
         if (to < from) return;
-        int hw = dw / 2;
+        int low = -dw / 2, high = (dw - 1) / 2;
         Material fl = cfg.corridor().floor();
         Material wl = cfg.corridor().wall();
         Material ce = cfg.corridor().ceiling();
         for (int t = from; t <= to; t++) {
-            for (int o = -hw - 1; o <= hw + 1; o++) {
+            for (int o = low - 1; o <= high + 1; o++) {
                 for (int y = floorY; y <= floorY + dh + 1; y++) {
                     Material m;
                     if (y == floorY) m = fl;
                     else if (y == floorY + dh + 1) m = ce;
-                    else if (o == -hw - 1 || o == hw + 1) m = wl;
+                    else if (o == low - 1 || o == high + 1) m = wl;
                     else m = Material.AIR;
                     int bx = axis == 'x' ? t : center + o;
                     int bz = axis == 'x' ? center + o : t;

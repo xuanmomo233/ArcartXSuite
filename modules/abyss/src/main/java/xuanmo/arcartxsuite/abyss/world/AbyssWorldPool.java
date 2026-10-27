@@ -34,6 +34,7 @@ public final class AbyssWorldPool {
     private final AbyssModuleConfiguration.AbyssSection cfg;
     private final Logger logger;
     private final ExecutorService ioExecutor;
+    private final Map<UUID, CompletableFuture<Void>> worldWrites = new ConcurrentHashMap<>();
     private volatile NmsWorldLoader nmsLoader;
     private volatile SchematicWorldService schematicService;
 
@@ -81,9 +82,27 @@ public final class AbyssWorldPool {
         return instanceWorldDirs.get(instanceId);
     }
 
+    /** A persisted world must be closed before copying its region files. Main thread only. */
+    public boolean suspendForSnapshot(UUID instanceId) {
+        String name = instanceWorldNames.get(instanceId);
+        World world = name != null ? Bukkit.getWorld(name) : null;
+        if (world == null || !world.getPlayers().isEmpty()) return false;
+        SchematicWorldService.Session session = schematicSessions.remove(instanceId);
+        if (session != null) session.close();
+        return Bukkit.unloadWorld(world, true);
+    }
+
+    public World resumeAfterSnapshot(UUID instanceId, AbyssTemplate template) {
+        String name = instanceWorldNames.get(instanceId);
+        if (name == null) throw new IllegalStateException("设计实例已被回收");
+        return loadAndConfigure(name, template);
+    }
+
     /** 在世界池 IO 线程跑任务（设计模式世界回拷用）。 */
-    public void runIo(Runnable r) {
-        ioExecutor.submit(r);
+    public CompletableFuture<Void> runIo(UUID instanceId, Runnable r) {
+        CompletableFuture<Void> future = CompletableFuture.runAsync(r, ioExecutor);
+        worldWrites.put(instanceId, future);
+        return future;
     }
 
     /**
@@ -107,6 +126,10 @@ public final class AbyssWorldPool {
             bind(instanceId, mat);
             return mat.world();
         });
+    }
+    public CompletableFuture<World> acquireDesignWorld(AbyssTemplate template, UUID instanceId) {
+        // Authoring must not consume the worlds reserved for players in a strict preload pool.
+        return materialize(template).thenApply(world -> { bind(instanceId, world); return world.world(); });
     }
 
     /** 把已建好的世界绑定到实例（回收时按此卸载/删目录/关会话）。 */
@@ -358,7 +381,9 @@ public final class AbyssWorldPool {
         if (dir == null) dir = worldDir(name);
         final File toDelete = dir;
         // 删除目录异步化（大目录删除也耗时）
-        ioExecutor.submit(() -> WorldCopyUtil.deleteRecursively(toDelete));
+        CompletableFuture<Void> pending = worldWrites.remove(instanceId);
+        if (pending == null) ioExecutor.submit(() -> WorldCopyUtil.deleteRecursively(toDelete));
+        else pending.whenComplete((v, error) -> WorldCopyUtil.deleteRecursively(toDelete));
     }
 
     /** 启动时扫描并回收残留世界（上次非正常关服的副本世界）。 */

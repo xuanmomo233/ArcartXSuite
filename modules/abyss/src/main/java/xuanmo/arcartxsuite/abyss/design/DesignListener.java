@@ -63,9 +63,8 @@ public final class DesignListener implements Listener {
 
     /** 收回玩家背包里的标记杖（退出设计时）。 */
     public void removeWand(Player p) {
-        for (ItemStack it : p.getInventory().getContents()) {
-            if (isWand(it)) it.setAmount(0);
-        }
+        for (int slot = 0; slot < p.getInventory().getSize(); slot++)
+            if (isWand(p.getInventory().getItem(slot))) p.getInventory().setItem(slot, null);
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = false)
@@ -73,6 +72,7 @@ public final class DesignListener implements Listener {
         Player p = e.getPlayer();
         DesignSession s = manager.session(p);
         if (s == null) return;
+        if (s.saving()) { e.setCancelled(true); return; }
         if (!isWand(e.getItem())) return;
         if (e.getClickedBlock() == null) {
             // 左键空气 = 重开主面板（无 pending 时的重开入口）
@@ -102,5 +102,55 @@ public final class DesignListener implements Listener {
             manager.handleMarkClick(p, e.getClickedBlock().getLocation(), true);
         }
         // REGION pending 下左键已被上面分支消费；无 pending 的左键不响应（防误触）
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onBreak(org.bukkit.event.block.BlockBreakEvent e) {
+        DesignSession s = manager.session(e.getPlayer());
+        if (s != null && s.saving()) e.setCancelled(true);
+    }
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onPlace(org.bukkit.event.block.BlockPlaceEvent e) {
+        DesignSession s = manager.session(e.getPlayer());
+        if (s != null && s.saving()) e.setCancelled(true);
+    }
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onBuilt(org.bukkit.event.block.BlockPlaceEvent e) {
+        DesignSession s = manager.session(e.getPlayer());
+        if (s != null) s.markBuilt(e.getBlock().getLocation());
+    }
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onBroken(org.bukkit.event.block.BlockBreakEvent e) {
+        DesignSession s = manager.session(e.getPlayer());
+        if (s != null) s.markBuilt(e.getBlock().getLocation());
+    }
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onDrop(org.bukkit.event.player.PlayerDropItemEvent e) {
+        if (manager.session(e.getPlayer()) != null && isWand(e.getItemDrop().getItemStack()))
+            e.setCancelled(true);
+    }
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onBucket(org.bukkit.event.player.PlayerBucketEmptyEvent e) {
+        DesignSession s = manager.session(e.getPlayer());
+        if (s == null) return;
+        if (s.saving()) e.setCancelled(true);
+        else s.markBuilt(e.getBlockClicked().getRelative(e.getBlockFace()).getLocation());
+    }
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onBucketFill(org.bukkit.event.player.PlayerBucketFillEvent e) {
+        DesignSession s = manager.session(e.getPlayer());
+        if (s == null) return;
+        if (s.saving()) e.setCancelled(true);
+        else s.markBuilt(e.getBlockClicked().getLocation());
+    }
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onBuildCommand(org.bukkit.event.player.PlayerCommandPreprocessEvent e) {
+        DesignSession s = manager.session(e.getPlayer());
+        if (s == null) return;
+        String command = e.getMessage().split(" ", 2)[0].toLowerCase(java.util.Locale.ROOT);
+        if (!(command.startsWith("//") || java.util.Set.of("/we", "/worldedit", "/brush", "/br",
+            "/setblock", "/fill", "/clone", "/minecraft:fill", "/minecraft:setblock").contains(command))) return;
+        if (s.saving()) { e.setCancelled(true); e.getPlayer().sendMessage("§e正在保存，暂不能修改建筑。"); }
+        else s.markUnknownBuild();
     }
 }

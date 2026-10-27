@@ -15,8 +15,10 @@ ui:
   through: false
   screenScale: true
   show: true
+  level: 8
   packetHandler:
     init: |-
+      if(packet['view_nonce'] != none){ var.viewNonce = packet['view_nonce'] }
       var.packetId = packet['packetId']
       var.actionToken = packet['action_token']
       var.nodeKey = packet['nodeKey']
@@ -24,7 +26,8 @@ ui:
       var.kindCount = packet['kindCount']
       // 卡片 copy（§15.5 引用字典 + 轮次名 + 数量变化才重建）
       卡片目标数 = var.kindCount.round()
-      if(val.类型网格.childrenCount() - 1 != 卡片目标数 - 1){
+      if(var.已建_类型网格 != 卡片目标数){
+        var.已建_类型网格 = 卡片目标数
         for(key in var.卡片引用.keys()){
           var.卡片引用[key].remove()
         }
@@ -32,14 +35,32 @@ ui:
         var.轮次 = (var.轮次 + 1).round()
         模板 = val.类型网格.get(0)
         模板.entryKey = 0.round()
-        for(i in range(1, 卡片目标数 - 1)){
-          e = 模板.copy('卡_' + var.轮次 + '_' + i.round())
-          e.entryKey = i.round()
-          var.卡片引用[i.round()] = e
+        if(卡片目标数 > 1){
+          for(i in range(1, 卡片目标数 - 1)){
+            e = 模板.copy('卡_' + var.轮次 + '_' + i.round())
+            e.entryKey = i.round()
+            var.卡片引用[i.round()] = e
+          }
         }
       }
+    # Generation-bound close notification prevents stale close events cancelling a newly opened screen.
+
   action:
+    close: |-
+      if(var.actionToken != '' && var.viewNonce != ''){
+        Packet.send(var.packetId, 'close_view', 'design_pick', var.actionToken, var.viewNonce)
+      }
     load: |-
+      sx = Screen.getWidth() / 1920
+      sy = Screen.getHeight() / 1080
+      s = sx < sy ? sx : sy
+      var.viewH = Screen.getHeight() / s
+      var.viewW = Screen.getWidth() / s
+      var.offX = (var.viewW - 1920) / 2
+      var.catalogW = var.viewW - 480
+      var.kindCardW = (var.catalogW - 120) / 3
+      var.已建_类型网格 = -1
+      var.viewNonce = ''
       var.packetId = 'abyss'
       var.actionToken = ''
       var.nodeKey = ''
@@ -47,6 +68,15 @@ ui:
       var.kindCount = 0
       var.卡片引用 = {}
       var.轮次 = 0
+    resize: |-
+      sx = Screen.getWidth() / 1920
+      sy = Screen.getHeight() / 1080
+      s = sx < sy ? sx : sy
+      var.viewH = Screen.getHeight() / s
+      var.viewW = Screen.getWidth() / s
+      var.offX = (var.viewW - 1920) / 2
+      var.catalogW = var.viewW - 480
+      var.kindCardW = (var.catalogW - 120) / 3
     open: |-
       Sound.self('minecraft:ui.button.click', 0.8, 8)
 controls:
@@ -54,80 +84,291 @@ controls:
     type: Texture
     attribute:
       point: ~stretch_all
-      normal: ~Frosted:30;10,8,20,230
+      normal: ~Frosted:24;8,9,10,238
       through: true
   自适应全局布局:
     type: Adaptive
     attribute:
-      point: ~middle_center
+      visible: "var.actionToken != ''"
+      point: ~top_center
       width: 1920
       height: 1080
     children:
-      # §16：point 锚点只在顶层/Canvas/Adaptive 下生效——面板改 Canvas，所有子控件锚到面板
-      面板:
+      顶栏底:
+        type: Texture
+        attribute:
+          point: ~top_left
+          x: "-var.offX"
+          width: "var.viewW"
+          height: 108
+          normal: ~15,17,18,250
+          through: true
+      标题色块:
+        type: Texture
+        attribute:
+          point: ~top_left
+          x: "48 - var.offX"
+          y: 23
+          width: 6
+          height: 58
+          normal: ~178,69,46,255
+          through: true
+      标题:
+        type: Text
+        attribute:
+          point: ~top_left
+          x: "72 - var.offX"
+          y: 14
+          texts: ~&6对象布设  &7/  &f选择构件类型
+          fontSize: 36
+          through: true
+      副标题:
+        type: Text
+        attribute:
+          point: ~top_left
+          x: "74 - var.offX"
+          y: 72
+          texts: "'&7目标节点  &f' + var.nodeKey + '   &7/   &7' + var.kindCount + ' 种可用构件'"
+          fontSize: 24
+          limit: 60
+          through: true
+      取消钮:
         type: Canvas
         attribute:
-          point: ~middle_center
-          width: 940
-          height: 500
-          through: true
+          point: ~top_right
+          x: "-48 + var.offX"
+          y: 28
+          width: 200
+          height: 52
+        action:
+          clickLeft: "Packet.send(var.packetId, 'design_back', var.actionToken)"
         children:
-          面板底:
+          底:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~18,14,30,242
+              normal: ~48,54,52,245
               shape: ~round_rect
-              radius: 18
+              radius: 6
               through: true
             effect:
               stroke:
-                width: 2
-                color: ~186,140,232,200
-          标题色块:
+                width: 1
+                color: "self.parent.isHovered() ? '214,156,76,255' : '105,97,80,180'"
+          字:
+            type: Text
+            attribute:
+              point: ~middle_center
+              texts: ~&f‹  返回路线图
+              fontSize: 24
+              through: true
+      布设须知:
+        type: Canvas
+        attribute:
+          point: ~top_left
+          x: "48 - var.offX"
+          y: 130
+          width: 360
+          height: "var.viewH - 154"
+        children:
+          底:
             type: Texture
             attribute:
-              point: ~top_center
-              y: 30
-              width: 8
-              height: 36
-              normal: ~186,140,232,255
+              point: ~stretch_all
+              normal: ~17,19,20,246
               shape: ~round_rect
-              radius: 4
+              radius: 6
               through: true
-          标题:
+            effect:
+              stroke:
+                width: 1
+                color: ~108,91,73,170
+          题:
             type: Text
             attribute:
-              point: ~top_center
-              y: 26
-              texts: ~&f添加对象
-              fontSize: 48
-              through: true
-          提示:
-            type: Text
-            attribute:
-              point: ~top_center
-              y: 90
-              texts: ~&8标记方式：黄色=点杖落点 · 蓝色=杖圈选区域 · 绿色=直接创建
+              point: ~top_left
+              x: 24
+              y: 22
+              texts: ~&6布设规程
               fontSize: 32
               through: true
+          说明:
+            type: Text
+            attribute:
+              lineSpace: 8
+              point: ~top_left
+              x: 26
+              y: 82
+              texts:
+                - ~&7选择构件后按其标记方式
+                - ~&7在世界内完成位置布设。
+              fontSize: 24
+              through: true
+          点位底:
+            type: Texture
+            attribute:
+              point: ~top_left
+              x: 24
+              y: 192
+              width: 312
+              height: 154
+              normal: ~48,39,26,245
+              through: true
+          点位:
+            type: Text
+            attribute:
+              lineSpace: 8
+              point: ~top_left
+              x: 42
+              y: 212
+              texts:
+                - ~&6A  /  单点标定
+                - ~&f标记杖右键目标方块
+                - ~&7落点后进入参数编辑
+              fontSize: 24
+              through: true
+          区域底:
+            type: Texture
+            attribute:
+              point: ~top_left
+              x: 24
+              y: 368
+              width: 312
+              height: 154
+              normal: ~48,28,25,245
+              through: true
+          区域:
+            type: Text
+            attribute:
+              lineSpace: 8
+              point: ~top_left
+              x: 42
+              y: 388
+              texts:
+                - ~&cB  /  区域圈定
+                - ~&f标记杖左键 A / 右键 B
+                - ~&7两个角点定义作用范围
+              fontSize: 24
+              through: true
+          直接底:
+            type: Texture
+            attribute:
+              point: ~top_left
+              x: 24
+              y: 544
+              width: 312
+              height: 154
+              normal: ~32,39,35,245
+              through: true
+          直接:
+            type: Text
+            attribute:
+              lineSpace: 8
+              point: ~top_left
+              x: 42
+              y: 564
+              texts:
+                - ~&7C  /  无需标记
+                - ~&f直接创建并打开编辑
+                - ~&7随后配置对象参数
+              fontSize: 24
+              through: true
+          安全注:
+            type: Text
+            attribute:
+              point: ~bottom_left
+              x: 26
+              y: -34
+              texts: ~&7Shift+右键取消选区
+              fontSize: 24
+              through: true
+      目录底:
+        type: Texture
+        attribute:
+          point: ~top_left
+          x: "432 - var.offX"
+          y: 130
+          width: "var.catalogW"
+          height: "var.viewH - 154"
+          normal: ~17,19,20,246
+          shape: ~round_rect
+          radius: 6
+          through: true
+        effect:
+          stroke:
+            width: 1
+            color: ~108,91,73,170
+      目录题:
+        type: Text
+        attribute:
+          point: ~top_left
+          x: "460 - var.offX"
+          y: 152
+          texts: ~&6III  /  构件目录
+          fontSize: 32
+          through: true
+      目录说明:
+        type: Text
+        attribute:
+          point: ~top_left
+          x: "462 - var.offX"
+          y: 210
+          texts: ~&7卡片下缘标明部署流程 · 点击即选择 · 滚轮浏览全部类型
+          fontSize: 24
+          through: true
+      目录滑轨:
+        type: Texture
+        attribute:
+          point: ~top_right
+          x: "-68 + var.offX"
+          y: 282
+          width: 8
+          height: "var.viewH - 330"
+          normal: ~44,46,42,245
+          through: true
+      目录滑块:
+        type: Texture
+        val: 目录滑块
+        attribute:
+          point: ~top_right
+          x: "-68 + var.offX"
+          y: 282
+          width: 8
+          height: 96
+          maxDragY: "var.viewH - 426"
+          normal: ~194,139,65,255
+      目录滚动:
+        type: Scroll
+        attribute:
+          point: ~top_left
+          x: "460 - var.offX"
+          y: 278
+          width: "var.catalogW - 72"
+          height: "var.viewH - 326"
+          moveY: "self.parent['目录滑块'].getDragYRatio()"
+        action:
+          wheel: |-
+            if(self.moveY >= 0 && self.wheelValue > 0){
+              self.parent['目录滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+            }
+            if(self.moveY <= 1 && self.wheelValue < 0){
+              self.parent['目录滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+            }
+        children:
           类型网格:
             type: HGrid
             val: 类型网格
             attribute:
-              point: ~middle_center
-              y: 16
-              width: 860
-              height: 280
-              hSpace: 18
-              vSpace: 18
-              column: 4
+              width: "var.catalogW - 72"
+              spaceBetweenX: 24
+              spaceBetweenY: 24
+              column: 3
             children:
               卡:
                 type: Canvas
                 attribute:
-                  width: 195
-                  height: 128
+                  width: "var.kindCardW"
+                  height: 224
                   entryKey: 0.round()
                   entry: "var.kindRows[self.entryKey]"
                   visible: "self.entry != none"
@@ -137,76 +378,97 @@ controls:
                   底:
                     type: Texture
                     attribute:
-                      point: ~stretch_all
-                      normal: ~30,25,48,235
+                      x: 3
+                      y: 3
+                      width: "self.parent.width - 6"
+                      height: "self.parent.height - 6"
+                      normal: "self.parent.isHovered() ? '54,44,30,245' : '28,31,30,245'"
                       shape: ~round_rect
-                      radius: 12
+                      radius: 6
                       through: true
                     effect:
                       stroke:
                         width: 2
-                        color: "self.parent.isHovered() ? self.parent.entry['kindColor'] + ',255' : '255,255,255,50'"
+                        color: "self.parent.isHovered() ? '214,156,76,255' : '105,97,80,150'"
+                  类别标线:
+                    type: Texture
+                    attribute:
+                      point: ~top_left
+                      x: 22
+                      y: 24
+                      width: 4
+                      height: 54
+                      normal: "self.parent.entry['kindColor'] + ',255'"
+                      through: true
                   图标:
                     type: Text
                     attribute:
-                      point: ~top_center
-                      y: 16
+                      point: ~top_left
+                      x: 42
+                      y: 24
                       texts: "self.parent.entry['icon']"
-                      fontSize: 48
+                      fontSize: 36
                       through: true
                   名:
                     type: Text
                     attribute:
-                      point: ~middle_center
-                      y: 18
+                      limitControl: self
+                      height: 40
+                      width: "self.parent.width - 48"
+                      point: ~top_left
+                      x: 24
+                      y: 100
                       texts: "'&f' + self.parent.entry['label']"
-                      fontSize: 36
+                      fontSize: 32
+                      limit: 11
                       through: true
                   标记底:
                     type: Texture
                     attribute:
-                      point: ~bottom_center
-                      y: -12
-                      width: 144
-                      height: 34
-                      normal: ~14,11,24,240
-                      shape: ~round_rect
-                      radius: 8
+                      point: ~bottom_left
+                      x: 22
+                      y: -22
+                      width: "self.parent.width - 44"
+                      height: 42
+                      normal: ~11,13,14,250
                       through: true
-                  标记字:
+                  点位标记:
                     type: Text
                     attribute:
-                      point: ~bottom_center
-                      y: -18
-                      texts: "self.parent.entry['mark'] == 'point' ? '&e点杖落点' : (self.parent.entry['mark'] == 'region' ? '&b杖选区域' : '&a直接创建')"
-                      fontSize: 32
+                      point: ~bottom_left
+                      x: 34
+                      y: -29
+                      texts: ~&6A  /  标记杖右键落点
+                      fontSize: 24
+                      visible: "self.parent.entry['mark'] == 'point'"
                       through: true
-          取消钮:
-            type: Canvas
-            attribute:
-              point: ~bottom_center
-              y: -18
-              width: 190
-              height: 48
-            action:
-              clickLeft: "Packet.send(var.packetId, 'design_back', var.actionToken)"
-            children:
-              底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  normal: ~56,50,74,235
-                  shape: ~round_rect
-                  radius: 9
-                  through: true
-                effect:
-                  stroke:
-                    width: 1
-                    color: "self.parent.isHovered() ? '255,255,255,200' : '255,255,255,60'"
-              字:
-                type: Text
-                attribute:
-                  point: ~middle_center
-                  texts: ~返回主面板
-                  fontSize: 36
-                  through: true
+                  区域标记:
+                    type: Text
+                    attribute:
+                      point: ~bottom_left
+                      x: 34
+                      y: -29
+                      texts: ~&cB  /  左键 A · 右键 B
+                      fontSize: 24
+                      visible: "self.parent.entry['mark'] == 'region'"
+                      through: true
+                  直接标记:
+                    type: Text
+                    attribute:
+                      point: ~bottom_left
+                      x: 34
+                      y: -29
+                      texts: ~&7C  /  直接创建并配置
+                      fontSize: 24
+                      visible: "self.parent.entry['mark'] != 'point' && self.parent.entry['mark'] != 'region'"
+                      through: true
+      目录空态:
+        type: Text
+        attribute:
+          point: ~top_left
+          x: "488 - var.offX"
+          y: 320
+          texts: ~&7当前节点没有可布设的构件类型
+          fontSize: 24
+          visible: "var.kindCount == 0"
+          through: true

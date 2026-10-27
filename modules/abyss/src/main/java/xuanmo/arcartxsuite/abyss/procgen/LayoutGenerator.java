@@ -153,6 +153,7 @@ public final class LayoutGenerator {
             PlacedRoom r = place(layout, cells, byKind, RoomKind.COMBAT,
                 ci, cj, pitch, baseY, originX, originZ, rnd, true);
             if (r == null) return null;
+            connect(layout, chain.get(chain.size() - 1), r);
             chain.add(r);
         }
         int[] bossCell = freeNeighbor(cells, ci, cj, rnd);
@@ -161,6 +162,7 @@ public final class LayoutGenerator {
             bossCell[0], bossCell[1], pitch, baseY, originX, originZ, rnd, true);
         if (boss == null) return null;
         layout.boss = boss;
+        connect(layout, chain.get(chain.size() - 1), boss);
         chain.add(boss);
 
         // ── 支线房挂接到主链随机格（不挂 start/boss）──
@@ -181,23 +183,24 @@ public final class LayoutGenerator {
                     if (cell == null) continue;
                     PlacedRoom r = place(layout, cells, byKind, kind,
                         cell[0], cell[1], pitch, baseY, originX, originZ, rnd, false);
-                    if (r != null) { placed = true; break; }
+                    if (r != null) { connect(layout, host, r); placed = true; break; }
                 }
                 if (!placed) break; // 支线房塞不下就跳过剩余
             }
         }
 
-        // ── 门边：所有相邻格对（只迭代 +x/+z 正方向——a 恒为西/北侧，
-        //    每条边恰好生成一次且朝向确定，cutDoorPair 依赖这个不变量）──
-        for (PlacedRoom a : layout.rooms) {
-            for (int[] dir : new int[][]{{1, 0}, {0, 1}}) {
-                PlacedRoom b = cells.get(key(a.cellI + dir[0], a.cellJ + dir[1]));
-                if (b != null) {
-                    layout.edges.add(new DoorEdge(a, b, dir[0] != 0 ? 'x' : 'z'));
-                }
-            }
-        }
+        // Only intentional chain/branch edges get doors. Spatial neighbours are not shortcuts.
         return layout;
+    }
+
+    private static void connect(Layout layout, PlacedRoom first, PlacedRoom second) {
+        if (first.cellI != second.cellI) {
+            layout.edges.add(new DoorEdge(first.cellI < second.cellI ? first : second,
+                first.cellI < second.cellI ? second : first, 'x'));
+        } else {
+            layout.edges.add(new DoorEdge(first.cellJ < second.cellJ ? first : second,
+                first.cellJ < second.cellJ ? second : first, 'z'));
+        }
     }
 
     private static long key(int i, int j) {

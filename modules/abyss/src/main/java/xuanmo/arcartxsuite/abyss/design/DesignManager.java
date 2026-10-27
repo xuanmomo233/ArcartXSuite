@@ -80,7 +80,8 @@ public final class DesignManager {
 
     /** objKey → 贴图 id（sanitize 为安全字符）。 */
     private static String markerId(String objKey) {
-        return "design_" + objKey.replaceAll("[^A-Za-z0-9_-]", "_");
+        return "design_" + UUID.nameUUIDFromBytes(objKey.getBytes(java.nio.charset.StandardCharsets.UTF_8))
+            .toString().replace("-", "");
     }
 
     /**
@@ -134,8 +135,10 @@ public final class DesignManager {
 
     /** 建立会话：加载模板对象快照 → 归属推断 → 注册。 */
     public DesignSession open(Player player, AbyssInstance instance) {
+        instance.designMode(true);
         DesignSession s = new DesignSession(player.getUniqueId(), instance);
         s.putAll(loadObjects(instance.getTemplate()));
+        DesignWriter.captureBaseline(instance.getTemplate(), s);
         sessions.put(player.getUniqueId(), s);
         byInstance.put(instance.getInstanceId(), s);
         s.selectedNode(defaultNode(instance.getTemplate()));
@@ -153,6 +156,7 @@ public final class DesignManager {
     public void close(Player player) {
         DesignSession s = sessions.remove(player.getUniqueId());
         if (s != null) {
+            DesignWriter.saveDraft(s.instance().getTemplate(), s, logger);
             byInstance.remove(s.instance().getInstanceId(), s);
             clearMarkers(s);
         }
@@ -162,12 +166,16 @@ public final class DesignManager {
     public void refresh(DesignSession s) {
         s.resetTracking();
         s.putAll(loadObjects(s.instance().getTemplate()));
+        DesignWriter.captureBaseline(s.instance().getTemplate(), s);
+        if (buildNodes(s).stream().noneMatch(n -> n.key().equals(s.selectedNode())))
+            s.selectedNode(defaultNode(s.instance().getTemplate()));
         syncMarkers(s);
     }
 
     public void closeInstance(AbyssInstance instance) {
         DesignSession s = byInstance.remove(instance.getInstanceId());
         if (s != null) {
+            DesignWriter.saveDraft(instance.getTemplate(), s, logger);
             sessions.remove(s.playerId(), s);
             clearMarkers(s);
         }
@@ -196,6 +204,8 @@ public final class DesignManager {
         loadSection(out, t, dir, "tasks.yml", "", DesignObject.Kind.TASK, roomBoxes);
         loadSection(out, t, dir, "rewards.yml", "rewards", DesignObject.Kind.REWARD, roomBoxes);
         loadSection(out, t, dir, "rewards.yml", "chest-rewards", DesignObject.Kind.CHEST, roomBoxes);
+        loadSection(out, t, dir, "rewards.yml", "chest_rewards", DesignObject.Kind.CHEST, roomBoxes);
+        loadSection(out, t, dir, "chest_rewards.yml", "", DesignObject.Kind.CHEST, roomBoxes);
         loadSection(out, t, dir, "buffs.yml", "pools", DesignObject.Kind.BUFF, roomBoxes);
 
         // floors：房间模板本身 + 房内怪组
@@ -253,7 +263,21 @@ public final class DesignManager {
             }
             fixed.add(o);
         }
-        return crossLink(fixed);
+        List<DesignObject> result = crossLink(fixed);
+        for (String file : DesignWriter.FILES) {
+            try {
+                File source = new File(dir, file);
+                List<String> content = source.isFile()
+                    ? java.nio.file.Files.readAllLines(source.toPath(), java.nio.charset.StandardCharsets.UTF_8)
+                    : new ArrayList<>();
+                result.add(new DesignObject("document:" + file, DesignObject.Kind.DOCUMENT, file,
+                    file, "", "完整YAML配置 · 保存时校验", null, null, "misc:files",
+                    new LinkedHashMap<>(Map.of("content", new ArrayList<>(content))), false));
+            } catch (java.io.IOException ex) {
+                throw new IllegalStateException("读取配置文件失败: " + file, ex);
+            }
+        }
+        return result;
     }
 
     /** 脚本动作 → 其首个参数指向的对象类型（交叉引用吸附白名单）。 */
@@ -327,8 +351,10 @@ public final class DesignManager {
         YamlConfiguration yml = loadYaml(dir, file);
         if (yml == null) return;
         ConfigurationSection root = path.isEmpty() ? yml : yml.getConfigurationSection(path);
+        if (root == null && kind == DesignObject.Kind.REWARD) root = yml;
         if (root == null) return;
         for (String id : root.getKeys(false)) {
+            if (kind == DesignObject.Kind.REWARD && (id.equals("chest-rewards") || id.equals("chest_rewards"))) continue;
             ConfigurationSection sec = root.getConfigurationSection(id);
             if (sec == null) continue;
             Map<String, Object> vals = deepValues(sec);
@@ -337,7 +363,7 @@ public final class DesignManager {
                 ? DesignCoords.box(strListRaw(vals, "region")) : null;
             String node = inferNode(t, anchor, box, roomBoxes, kind);
             out.add(new DesignObject(kind.name().toLowerCase() + ":" + id, kind, id,
-                file, path, summaryOf(kind, id, vals, anchor, box), anchor, box,
+                file, root == yml ? "" : path, summaryOf(kind, id, vals, anchor, box), anchor, box,
                 node, vals, false));
         }
     }
@@ -409,6 +435,7 @@ public final class DesignManager {
             out.add(new Node("misc:reward", "奖励结算", 0,
                 s.nodeObjects("misc:reward").size()));
         }
+        out.add(new Node("misc:files", "完整配置文件", 0, s.nodeObjects("misc:files").size()));
         return out;
     }
 
@@ -453,6 +480,9 @@ public final class DesignManager {
     private void landPoint(DesignSession s, Player p, DesignSession.PendingMark pending,
                            Location loc) {
         int[] pt = {loc.getBlockX(), loc.getBlockY(), loc.getBlockZ()};
+        if (pending.objKind() == DesignObject.Kind.GROUP
+            || pending.objKind() == DesignObject.Kind.ROOM_GROUP
+            || pending.objKind() == DesignObject.Kind.NPC) pt[1]++;
         if (pending.targetKey() != null) {
             // 重新定位已有对象
             DesignObject o = s.get(pending.targetKey());
@@ -467,8 +497,8 @@ public final class DesignManager {
                 Object cur = vals.get("monsters");
                 if (cur instanceof List<?> l) spawns.addAll(l);
                 Map<String, Object> spawn = new LinkedHashMap<>();
-                spawn.put("mob-id", "?");
-                spawn.put("location", DesignCoords.pointStr(pt));
+                spawn.put("mob-id", "vanilla:zombie");
+                spawn.put("location", DesignCoords.pointStr(localPoint(s, o, pt)));
                 spawn.put("amount", 1);
                 spawn.put("level", 1);
                 spawns.add(spawn);
@@ -482,13 +512,21 @@ public final class DesignManager {
                 return;
             }
             Map<String, Object> vals = new LinkedHashMap<>(o.values());
-            vals.put(field, DesignCoords.pointStr(pt));
+            vals.put(field, DesignCoords.pointStr("origin".equals(field) ? pt : localPoint(s, o, pt)));
             DesignObject next = new DesignObject(o.key(), o.kind(), o.id(), o.file(), o.path(),
                 o.summary(), pt, o.box(),
                 inferNode(s.instance().getTemplate(), pt, o.box(),
                     floorsRegionBoxes(s.instance().getTemplate()), o.kind()),
                 vals, true);
             s.put(next);
+            postEdit(s, next);
+            if (o.kind() == DesignObject.Kind.CHEST) {
+                DesignObject interact = s.get("interact:" + o.str("design-interact"));
+                if (interact != null) {
+                    s.put(interact.withValue("location", DesignCoords.pointStr(pt)));
+                    postEdit(s, s.get(interact.key()));
+                }
+            }
             s.pending(null);
             messager.accept(p, msg("design.relocated", "id", o.id()));
             syncMarkers(s);
@@ -497,14 +535,19 @@ public final class DesignManager {
         }
         // 新建对象
         DesignObject.Kind kind = pending.objKind();
-        String id = "point_" + (s.objects().size() + 1);
+        String id = s.nextId(kind, "point");
         Map<String, Object> vals = new LinkedHashMap<>();
         seedDefaults(kind, vals);
         if ("monsters".equals(pending.field())
             && (kind == DesignObject.Kind.GROUP || kind == DesignObject.Kind.ROOM_GROUP)) {
             Map<String, Object> spawn = new LinkedHashMap<>();
-            spawn.put("mob-id", "?");
-            spawn.put("location", DesignCoords.pointStr(pt));
+            spawn.put("mob-id", "vanilla:zombie");
+            int[] local = pt;
+            if (kind == DesignObject.Kind.ROOM_GROUP && s.selectedNode() != null) {
+                DesignObject room = s.get(s.selectedNode());
+                if (room != null) local = localPoint(s, room, pt);
+            }
+            spawn.put("location", DesignCoords.pointStr(local));
             spawn.put("amount", 1);
             spawn.put("level", 1);
             vals.put("monsters", new ArrayList<>(List.of(spawn)));
@@ -514,10 +557,28 @@ public final class DesignManager {
         }
         AbyssTemplate t = s.instance().getTemplate();
         String node = inferNode(t, pt, null, floorsRegionBoxes(t), kind);
+        String path = kind.path();
         String key = s.uniqueKey(kind, id);
-        DesignObject o = new DesignObject(key, kind, id, kind.file(), kind.path(),
+        if (kind == DesignObject.Kind.ROOM_GROUP && s.selectedNode() != null
+            && s.selectedNode().startsWith("room:")) {
+            String rid = s.selectedNode().substring(5);
+            path = "rooms." + rid + ".groups";
+            key = "group:" + rid + "." + id;
+            node = s.selectedNode();
+        }
+        DesignObject o = new DesignObject(key, kind, id, kind.file(), path,
             kind.label() + " " + DesignCoords.pointStr(pt), pt, null, node, vals, true);
         s.put(o);
+        if (kind == DesignObject.Kind.CHEST) {
+            String interactId = s.nextId(DesignObject.Kind.INTERACT, "chest");
+            Map<String, Object> interact = new LinkedHashMap<>();
+            interact.put("type", "RIGHT_CLICK_BLOCK");
+            interact.put("location", DesignCoords.pointStr(pt));
+            interact.put("script", List.of("open_chest_ui @trigger " + id));
+            s.put(new DesignObject("interact:" + interactId, DesignObject.Kind.INTERACT, interactId,
+                "interacts.yml", "", "宝箱交互 " + id, pt, null, node, interact, true));
+            s.put(o.withValue("design-interact", interactId));
+        }
         s.pending(null);
         messager.accept(p, msg("design.marked", "id", id));
         syncMarkers(s);
@@ -558,18 +619,23 @@ public final class DesignManager {
             DesignObject o = s.get(pending.targetKey());
             if (o == null) return;
             Map<String, Object> vals = new LinkedHashMap<>(o.values());
+            if (o.kind() == DesignObject.Kind.ROOM) {
+                regionStr = List.of(DesignCoords.pointStr(localPoint(s, o, a)),
+                    DesignCoords.pointStr(localPoint(s, o, b)));
+            }
             vals.put(pending.field() != null ? pending.field() : "region", regionStr);
             DesignObject next = new DesignObject(o.key(), o.kind(), o.id(), o.file(), o.path(),
                 o.summary(), o.anchor(), box,
                 inferNode(t, o.anchor(), box, floorsRegionBoxes(t), o.kind()), vals, true);
             s.put(next);
+            postEdit(s, next);
             messager.accept(p, msg("design.relocated", "id", o.id()));
             syncMarkers(s);
             if (ui != null) ui.openEdit(p, s, o.key());
             return;
         }
         DesignObject.Kind kind = pending != null ? pending.objKind() : DesignObject.Kind.OBSTACLE;
-        String id = "region_" + (s.objects().size() + 1);
+        String id = s.nextId(kind, "region");
         Map<String, Object> vals = new LinkedHashMap<>();
         seedDefaults(kind, vals);
         String summaryTail = regionStr.get(0);
@@ -653,6 +719,19 @@ public final class DesignManager {
 
     // ═══ 编辑操作 ═══
 
+    /** Room fields are persisted relative to their editable origin; other objects are absolute. */
+    private static int[] localPoint(DesignSession s, DesignObject o, int[] absolute) {
+        DesignObject room = o;
+        if (o.kind() == DesignObject.Kind.ROOM_GROUP) {
+            String path = o.path();
+            String rid = path.substring("rooms.".length(), path.length() - ".groups".length());
+            room = s.get("room:" + rid);
+        } else if (o.kind() != DesignObject.Kind.ROOM) return absolute.clone();
+        int[] origin = room != null ? DesignCoords.point(room.str("origin")) : null;
+        return origin == null ? absolute.clone() : new int[]{absolute[0] - origin[0],
+            absolute[1] - origin[1], absolute[2] - origin[2]};
+    }
+
     /** 字段写入（UI 回包 design_set）。raw 已按 editor 类型格式化。 */
     public boolean setField(DesignSession s, String key, String field, String raw) {
         DesignObject o = s.get(key);
@@ -660,16 +739,20 @@ public final class DesignManager {
         DesignObject.FieldSpec spec = specOf(o.kind(), field);
         Object value;
         if (spec == null) {
-            value = raw;
+            throw new IllegalArgumentException("未知字段: " + field);
         } else {
             value = switch (spec.editor()) {
                 case NUMBER -> parseNum(raw);
                 case TOGGLE -> "true".equalsIgnoreCase(raw) || "1".equals(raw);
-                case SCRIPT, LIST -> null; // 走 script_* 动作
+                case SCRIPT, LIST, YAML -> null; // 走行编辑动作
                 default -> raw.isBlank() ? null : raw;
             };
+            if (value instanceof Number n && (n.doubleValue() < 0 || !Double.isFinite(n.doubleValue())))
+                throw new IllegalArgumentException("数值必须是有限的非负数");
+            if ("rows".equals(field) && value instanceof Number n && (n.intValue() < 1 || n.intValue() > 6))
+                throw new IllegalArgumentException("宝箱行数必须为1到6");
             if (spec.editor() == DesignObject.Editor.SCRIPT
-                || spec.editor() == DesignObject.Editor.LIST) {
+                || spec.editor() == DesignObject.Editor.LIST || spec.editor() == DesignObject.Editor.YAML) {
                 return false;
             }
             if (value == null) {
@@ -699,11 +782,52 @@ public final class DesignManager {
     }
 
     /** 脚本/列表行追加。 */
+    public List<String> lines(DesignObject o, String field) {
+        DesignObject.FieldSpec spec = specOf(o.kind(), field);
+        if (spec != null && spec.editor() == DesignObject.Editor.YAML) {
+            Object raw = o.values().get(field);
+            if (raw instanceof List<?> list) return list.stream().map(DesignValues::flow).toList();
+            return List.of();
+        }
+        return o.strList(field);
+    }
+
+    private List<Object> editableLines(DesignObject o, String field) {
+        DesignObject.FieldSpec spec = specOf(o.kind(), field);
+        if (spec == null || !(spec.editor() == DesignObject.Editor.SCRIPT
+            || spec.editor() == DesignObject.Editor.LIST || spec.editor() == DesignObject.Editor.YAML))
+            throw new IllegalArgumentException("该字段不支持行编辑");
+        Object raw = o.values().get(field);
+        return raw instanceof List<?> list ? new ArrayList<>(list) : new ArrayList<>(o.strList(field));
+    }
+
+    private Object parseLine(DesignObject o, String field, String line) {
+        if (line.length() > 8192) throw new IllegalArgumentException("单行长度不能超过8192");
+        var spec = specOf(o.kind(), field);
+        if (spec != null && spec.editor() == DesignObject.Editor.YAML) {
+            try {
+                YamlConfiguration yaml = new YamlConfiguration();
+                yaml.loadFromString("value: " + line);
+                Object value = DesignValues.copyValue(yaml.get("value"));
+                if (!(value instanceof Map)) throw new IllegalArgumentException("请填写JSON对象，例如 {\"mob-id\":\"vanilla:zombie\",\"location\":\"0,65,0\",\"amount\":1,\"level\":1}");
+                return value;
+            } catch (org.bukkit.configuration.InvalidConfigurationException ex) {
+                throw new IllegalArgumentException("对象格式错误: " + ex.getMessage());
+            }
+        }
+        if ("times".equals(field)) {
+            try { return Integer.parseInt(line.trim()); }
+            catch (NumberFormatException ex) { throw new IllegalArgumentException("触发时间必须是整数秒"); }
+        }
+        return line;
+    }
+
     public void lineAdd(DesignSession s, String key, String field, String line) {
         DesignObject o = s.get(key);
-        if (o == null || line.isBlank()) return;
-        List<String> lines = new ArrayList<>(o.strList(field));
-        lines.add(line);
+        if (o == null) return;
+        List<Object> lines = editableLines(o, field);
+        if (lines.size() >= 4096) throw new IllegalArgumentException("列表最多4096行");
+        lines.add(parseLine(o, field, line));
         s.put(o.withValue(field, lines));
         postEdit(s, s.get(key));
     }
@@ -711,9 +835,9 @@ public final class DesignManager {
     public void lineSet(DesignSession s, String key, String field, int idx, String line) {
         DesignObject o = s.get(key);
         if (o == null) return;
-        List<String> lines = new ArrayList<>(o.strList(field));
+        List<Object> lines = editableLines(o, field);
         if (idx < 0 || idx >= lines.size()) return;
-        lines.set(idx, line);
+        lines.set(idx, parseLine(o, field, line));
         s.put(o.withValue(field, lines));
         postEdit(s, s.get(key));
     }
@@ -721,7 +845,7 @@ public final class DesignManager {
     public void lineDel(DesignSession s, String key, String field, int idx) {
         DesignObject o = s.get(key);
         if (o == null) return;
-        List<String> lines = new ArrayList<>(o.strList(field));
+        List<Object> lines = editableLines(o, field);
         if (idx < 0 || idx >= lines.size()) return;
         lines.remove(idx);
         s.put(o.withValue(field, lines));
@@ -731,12 +855,10 @@ public final class DesignManager {
     public void lineMove(DesignSession s, String key, String field, int idx, int dir) {
         DesignObject o = s.get(key);
         if (o == null) return;
-        List<String> lines = new ArrayList<>(o.strList(field));
+        List<Object> lines = editableLines(o, field);
         int to = idx + dir;
         if (idx < 0 || idx >= lines.size() || to < 0 || to >= lines.size()) return;
-        String tmp = lines.get(idx);
-        lines.set(idx, lines.get(to));
-        lines.set(to, tmp);
+        java.util.Collections.swap(lines, idx, to);
         s.put(o.withValue(field, lines));
         postEdit(s, s.get(key));
     }
@@ -744,7 +866,8 @@ public final class DesignManager {
     /** 重命名 id。 */
     public boolean rename(DesignSession s, String key, String newId) {
         DesignObject o = s.get(key);
-        if (o == null || newId.isBlank() || !newId.matches("[a-zA-Z0-9_\\-]+")) return false;
+        if (o == null || o.kind() == DesignObject.Kind.DOCUMENT
+            || newId.isBlank() || !newId.matches("[\\p{L}\\p{N}_\\-]{1,64}")) return false;
         if (s.idTaken(o.kind(), newId, key)) return false;
         s.put(o.withId(newId));
         postEdit(s, s.get(key));
@@ -753,6 +876,11 @@ public final class DesignManager {
 
     /** 删除对象。 */
     public void delete(DesignSession s, String key) {
+        if (s.get(key) != null && s.get(key).kind() == DesignObject.Kind.DOCUMENT)
+            throw new IllegalArgumentException("配置文件不能从对象面板删除，请编辑文件内容");
+        DesignObject object = s.get(key);
+        if (object != null && object.kind() == DesignObject.Kind.CHEST && !object.str("design-interact").isEmpty())
+            s.remove("interact:" + object.str("design-interact"));
         s.remove(key);
         syncMarkers(s);
     }
@@ -766,11 +894,24 @@ public final class DesignManager {
         int[] na = anchorOf(o.kind(), o.values());
         int[] nb = o.kind() == DesignObject.Kind.INTERACT
             ? DesignCoords.box(strListRaw(o.values(), "region")) : o.box();
+        if (o.kind() == DesignObject.Kind.ROOM) {
+            int[] origin = DesignCoords.point(o.str("origin"));
+            nb = DesignCoords.box(o.strList("region"));
+            if (nb != null && origin != null) nb = DesignCoords.boxOffsetBy(origin, nb);
+            na = nb != null ? DesignCoords.center(nb) : origin;
+        } else if (o.kind() == DesignObject.Kind.ROOM_GROUP) {
+            String rid = o.path().substring(6, o.path().length() - 7);
+            DesignObject room = s.get("room:" + rid);
+            int[] origin = room != null ? DesignCoords.point(room.str("origin")) : null;
+            na = groupAnchor(o.values(), origin);
+        }
         if (!Arrays.equals(na, o.anchor()) || !Arrays.equals(nb, o.box())) {
             AbyssTemplate t = s.instance().getTemplate();
             s.put(new DesignObject(o.key(), o.kind(), o.id(), o.file(), o.path(),
                 summaryOf(o.kind(), o.id(), o.values(), na, nb), na, nb,
-                inferNode(t, na, nb, floorsRegionBoxes(t), o.kind()),
+                (o.kind() == DesignObject.Kind.ROOM || o.kind() == DesignObject.Kind.ROOM_GROUP
+                    || o.kind() == DesignObject.Kind.DOCUMENT) ? o.node()
+                    : inferNode(t, na, nb, floorsRegionBoxes(t), o.kind()),
                 o.values(), true));
         }
         syncMarkers(s);
@@ -786,7 +927,7 @@ public final class DesignManager {
         List<String> out = new ArrayList<>();
         for (DesignObject.FieldSpec f : DesignObject.schema(o.kind())) {
             if (f.editor() == DesignObject.Editor.SCRIPT
-                || f.editor() == DesignObject.Editor.LIST) continue;
+                || f.editor() == DesignObject.Editor.LIST || f.editor() == DesignObject.Editor.YAML) continue;
             String val = fieldStr(o, f.name());
             String valZh = (f.editor() == DesignObject.Editor.CYCLE
                 || f.editor() == DesignObject.Editor.TOGGLE) ? zh(val) : val;
@@ -803,13 +944,10 @@ public final class DesignManager {
         List<String> out = new ArrayList<>();
         for (DesignObject.FieldSpec f : DesignObject.schema(o.kind())) {
             if (f.editor() != DesignObject.Editor.SCRIPT
-                && f.editor() != DesignObject.Editor.LIST) continue;
+                && f.editor() != DesignObject.Editor.LIST && f.editor() != DesignObject.Editor.YAML) continue;
             Object v = o.values().get(f.name());
             if (v == null) v = o.values().get(f.name().replace('-', '_'));
-            if (v instanceof List<?> l && !l.isEmpty() && l.get(0) instanceof Map) {
-                continue; // 结构化字段（monsters/options/pool）走专用通道
-            }
-            out.add(f.name() + "|" + f.label() + "|" + o.strList(f.name()).size());
+            out.add(f.name() + "|" + f.label() + "|" + lines(o, f.name()).size());
         }
         return out;
     }
@@ -846,7 +984,7 @@ public final class DesignManager {
             if (raw.contains(".")) return Double.parseDouble(raw);
             return Integer.parseInt(raw.trim());
         } catch (NumberFormatException e) {
-            return raw;
+            throw new IllegalArgumentException("请输入有效数字");
         }
     }
 
@@ -866,7 +1004,7 @@ public final class DesignManager {
                 int[] b = DesignCoords.box(strListRaw(vals, "region"));
                 yield b != null ? DesignCoords.center(b) : null;
             }
-            case NPC -> DesignCoords.point(str(vals, "location"));
+            case NPC, CHEST -> DesignCoords.point(str(vals, "location"));
             case GROUP, ROOM_GROUP -> groupAnchor(vals, null);
             case OBSTACLE -> {
                 List<String> blocks = strListRaw(vals, "blocks");
@@ -907,6 +1045,7 @@ public final class DesignManager {
             case CHEST -> str(vals, "title");
             case BUFF -> str(vals, "name");
             case ROOM -> zh(str(vals, "type"));
+            case DOCUMENT -> id;
         };
         String pos = anchor != null ? " " + DesignCoords.pointStr(anchor)
             : (box != null ? " 区域" : "");
@@ -942,9 +1081,14 @@ public final class DesignManager {
             case PUZZLE -> vals.put("type", "sequence");
             case TASK -> vals.put("type", "TIMED");
             case REWARD -> vals.put("items", new ArrayList<>());
-            case CHEST -> vals.put("rows", 3);
+            case CHEST -> {
+                vals.put("rows", 3);
+                vals.put("options", new ArrayList<>(List.of(new LinkedHashMap<>(Map.of(
+                    "item", "material:IRON_INGOT:1", "weight", 10)))));
+            }
             case ROOM -> vals.put("type", "combat");
             case BUFF -> { vals.put("pick", 1); vals.put("presentation", "panel"); }
+            case DOCUMENT -> { }
         }
     }
 
@@ -958,7 +1102,7 @@ public final class DesignManager {
 
     /** 节 → 深拷贝 Map（kebab/snake 键原样保留，写回时统一 kebab）。 */
     private static Map<String, Object> deepValues(ConfigurationSection sec) {
-        return deepCopy(sec.getValues(false));
+        return DesignValues.properties(sec.getValues(false));
     }
 
     @SuppressWarnings("unchecked")
@@ -1017,8 +1161,11 @@ public final class DesignManager {
     private static List<String> scanBox(@Nullable org.bukkit.World w, int[] box) {
         List<String> out = new ArrayList<>();
         if (w == null) return out;
-        int vol = (box[3] - box[0] + 1) * (box[4] - box[1] + 1) * (box[5] - box[2] + 1);
-        if (vol > 4000) return out; // 防误圈巨大区域卡服
+        long width = (long) box[3] - box[0] + 1;
+        long height = (long) box[4] - box[1] + 1;
+        long depth = (long) box[5] - box[2] + 1;
+        if (width <= 0 || height <= 0 || depth <= 0 || width > 4000 || height > 4000
+            || depth > 4000 || width * height * depth > 4000) return out;
         for (int x = box[0]; x <= box[3]; x++) {
             for (int y = box[1]; y <= box[4]; y++) {
                 for (int z = box[2]; z <= box[5]; z++) {

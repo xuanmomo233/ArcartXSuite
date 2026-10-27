@@ -39,11 +39,21 @@ public final class DesignSession {
     private final Map<String, String> deletions = new LinkedHashMap<>();
     /** 原 id 索引（重命名时删旧键用）：key → 原始 id。 */
     private final Map<String, String> originalIds = new ConcurrentHashMap<>();
+    private final Map<String, DesignObject> originalObjects = new LinkedHashMap<>();
 
     private volatile PendingMark pending;
     private volatile int[] regionPointA;
     private volatile String selectedNode;
     private volatile long lastAction = System.currentTimeMillis();
+    private boolean saving;
+    private boolean worldDirty;
+    private boolean worldSnapshot;
+    private boolean unknownWorldEdits;
+    private final java.util.Set<String> editedBlocks = new java.util.LinkedHashSet<>();
+    private long discardRequestedAt;
+    private final Map<String, Long> deletionRequests = new LinkedHashMap<>();
+    private final Map<String, Integer> linePages = new LinkedHashMap<>();
+    private final Map<String, String> fileHashes = new LinkedHashMap<>();
 
     public DesignSession(UUID playerId, AbyssInstance instance) {
         this.playerId = playerId;
@@ -53,17 +63,71 @@ public final class DesignSession {
     public UUID playerId() { return playerId; }
     public AbyssInstance instance() { return instance; }
     public String designToken() { return designToken; }
+    public boolean saving() { return saving; }
+    public void saving(boolean value) { saving = value; }
+    public boolean worldDirty() { return worldDirty; }
+    public boolean worldSnapshot() { return worldSnapshot; }
+    public void worldSnapshot(boolean value) { worldSnapshot = value; }
+    public void worldDirty(boolean value) {
+        worldDirty = value;
+        if (!value) { editedBlocks.clear(); unknownWorldEdits = false; }
+        discardRequestedAt = 0;
+    }
+    public void markBuilt(org.bukkit.Location location) {
+        editedBlocks.add(location.getBlockX() + "," + location.getBlockY() + "," + location.getBlockZ());
+        worldDirty(true);
+    }
+    public void markUnknownBuild() { unknownWorldEdits = true; worldDirty(true); }
+    public void acknowledgeRegion(int[] bounds) {
+        editedBlocks.removeIf(value -> {
+            int[] p = DesignCoords.point(value);
+            return p != null && DesignCoords.inBox(bounds, p[0], p[1], p[2]);
+        });
+        worldDirty = unknownWorldEdits || !editedBlocks.isEmpty();
+    }
+    public Map<String, String> fileHashes() { return fileHashes; }
+    public int linePage(String object, String field) { return linePages.getOrDefault(object + ":" + field, 0); }
+    public void linePage(String object, String field, int page) {
+        linePages.put(object + ":" + field, Math.max(0, Math.min(4096, page)));
+    }
+    public boolean confirmDiscard() {
+        long now = System.currentTimeMillis();
+        if (discardRequestedAt > 0 && now - discardRequestedAt < 10000) return true;
+        discardRequestedAt = now;
+        return false;
+    }
+    public boolean confirmDeletion(String key) {
+        long now = System.currentTimeMillis();
+        Long previous = deletionRequests.put(key, now);
+        if (previous != null && now - previous < 10000) {
+            deletionRequests.remove(key);
+            return true;
+        }
+        return false;
+    }
+    public String nextId(DesignObject.Kind kind, String prefix) {
+        for (int i = 1; ; i++) {
+            String id = prefix + "_" + i;
+            String key = kind.name().toLowerCase() + ":" + id;
+            if (!idTaken(kind, id, null) && !objects.containsKey(key)
+                && !deletions.containsKey(key)) return id;
+        }
+    }
 
     public Map<String, DesignObject> objects() { return objects; }
     public @Nullable DesignObject get(String key) { return objects.get(key); }
 
     public void put(DesignObject obj) {
         objects.put(obj.key(), obj);
-        originalIds.putIfAbsent(obj.key(), obj.id());
+        discardRequestedAt = 0;
     }
 
     public void putAll(List<DesignObject> list) {
-        for (DesignObject o : list) put(o);
+        for (DesignObject o : list) {
+            put(o);
+            originalIds.putIfAbsent(o.key(), o.id());
+            originalObjects.put(o.key(), o);
+        }
     }
 
     /** 删除对象（新建的物理移除；模板原有的进删除名单）。 */
@@ -75,13 +139,20 @@ public final class DesignSession {
     }
 
     public Map<String, String> deletions() { return deletions; }
-    public String originalId(String key) { return originalIds.getOrDefault(key, key); }
+    public @Nullable DesignObject originalObject(String key) { return originalObjects.get(key); }
+    public String originalId(String key) {
+        DesignObject o = objects.get(key);
+        return originalIds.getOrDefault(key, o != null ? o.id() : key);
+    }
 
     /** 保存后重置追踪态（对象表/删除名单/原 id 索引全清，由 loadObjects 重建）。 */
     public void resetTracking() {
         objects.clear();
         deletions.clear();
         originalIds.clear();
+        originalObjects.clear();
+        fileHashes.clear();
+        linePages.clear();
         pending = null;
         regionPointA = null;
     }
@@ -131,11 +202,18 @@ public final class DesignSession {
 
     /** 会话内某类型对象 id 是否已被占（新建/重命名校验）。 */
     public boolean idTaken(DesignObject.Kind kind, String id, @Nullable String exceptKey) {
+        DesignObject edited = exceptKey != null ? objects.get(exceptKey) : null;
         for (DesignObject o : objects.values()) {
+            if (kind == DesignObject.Kind.ROOM_GROUP && edited != null && !edited.path().equals(o.path())) continue;
             if (o.kind() == kind && o.id().equals(id)
                 && (exceptKey == null || !o.key().equals(exceptKey))) {
                 return true;
             }
+        }
+        // Reserve original addresses until a successful save. Otherwise A->B and B->C can delete a newly written B.
+        for (DesignObject o : originalObjects.values()) {
+            if (kind == DesignObject.Kind.ROOM_GROUP && edited != null && !edited.path().equals(o.path())) continue;
+            if (o.kind() == kind && o.id().equals(id) && !o.key().equals(exceptKey)) return true;
         }
         return false;
     }

@@ -56,6 +56,7 @@ public final class ProcGenManager {
         Layout layout;
         List<RoomRuntime> rooms;
         ProcGenConfig cfg;
+        final Map<String, Map<String, String>> assetBaselines = new HashMap<>();
         /** 房间运行态：roomIndex → state。 */
         final Map<Integer, RoomState> roomState = new HashMap<>();
         final Map<Integer, Long> clearedAt = new HashMap<>();
@@ -138,6 +139,8 @@ public final class ProcGenManager {
         st.layout = layout;
         st.rooms = res.rooms;
         st.cfg = cfg;
+        for (var room : res.rooms) st.assetBaselines.putIfAbsent(room.placed.asset.name(),
+            assetHashes(library.dir(cfg.roomSet()), room.placed.asset.name()));
         for (int i = 0; i < res.rooms.size(); i++) {
             st.roomState.put(i, RoomState.WAITING);
         }
@@ -346,6 +349,18 @@ public final class ProcGenManager {
         return st != null && st.roomState.get(roomIdx) == RoomState.CLEARED;
     }
 
+    public int[] progress(AbyssInstance instance) {
+        InstState state = states.get(instance.getInstanceId());
+        if (state == null) return new int[]{0, 0};
+        int total = 0, done = 0;
+        for (int i = 0; i < state.rooms.size(); i++) {
+            if (state.rooms.get(i).placed.asset.kind() == RoomKind.START) continue;
+            total++;
+            if (state.roomState.get(i) == RoomState.CLEARED) done++;
+        }
+        return new int[]{total, done};
+    }
+
     /** 按构件名或 "房idx" 数字查已清状态；无 procgen 态返回 null（交回 floors 判定）。 */
     public @Nullable Boolean roomClearedByName(AbyssInstance instance, String ref) {
         InstState st = states.get(instance.getInstanceId());
@@ -360,6 +375,78 @@ public final class ProcGenManager {
         }
         return false;
     }
+
+    /** A room save captures Bukkit blocks on the main thread and writes detached YAML on the IO worker. */
+    public record DesignRoomCapture(java.io.File root,
+            xuanmo.arcartxsuite.abyss.template.RegionTemplate volume,
+            String name, org.bukkit.configuration.file.YamlConfiguration metadata,
+            Map<String, String> baseline, int[] bounds) {
+        public void save() throws Exception {
+            java.nio.file.Path geometry = new java.io.File(root, name + ".region.yml").toPath();
+            java.nio.file.Path meta = new java.io.File(root, name + ".yml").toPath();
+            java.nio.file.Path temp = java.nio.file.Files.createTempFile(root.toPath(), ".capture-", ".yml");
+            try {
+                volume.save(temp.toFile());
+                var writes = new java.util.LinkedHashMap<java.nio.file.Path, byte[]>();
+                writes.put(geometry, java.nio.file.Files.readAllBytes(temp));
+                metadata.set("geometry-source", "region");
+                writes.put(meta, metadata.saveToString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                xuanmo.arcartxsuite.abyss.design.DesignWriter.commit(writes, baseline, root.toPath());
+            } finally { java.nio.file.Files.deleteIfExists(temp); }
+        }
+    }
+
+    public DesignRoomCapture captureDesignRoom(AbyssInstance instance, Location location) throws Exception {
+        InstState state = states.get(instance.getInstanceId());
+        if (state == null || instance.getWorld() == null) throw new IllegalStateException("随机房间尚未生成");
+        for (RoomRuntime room : state.rooms) {
+            if (!room.contains(location)) continue;
+            var placed = room.placed;
+            var volume = xuanmo.arcartxsuite.abyss.template.RegionTemplate.capture(instance.getWorld(),
+                room.minX, room.minY, room.minZ, room.maxX, room.maxY, room.maxZ)
+                .rotatedCopy((360 - placed.rotDeg) % 360);
+            List<int[]> generatedDoors = new ArrayList<>();
+            for (DoorBox door : room.doorBoxes)
+                for (int x = door.x1; x <= door.x2; x++) for (int y = door.y1; y <= door.y2; y++)
+                    for (int z = door.z1; z <= door.z2; z++) {
+                        int[] local = placed.asset.region().rotatedSize(placed.rotDeg);
+                        // The captured volume is in world orientation; inverse rotation uses that footprint.
+                        int lx = x - room.minX, ly = y - room.minY, lz = z - room.minZ;
+                        int[] point = switch (placed.rotDeg) {
+                            case 90 -> new int[]{lz, ly, local[0] - 1 - lx};
+                            case 180 -> new int[]{local[0] - 1 - lx, ly, local[2] - 1 - lz};
+                            case 270 -> new int[]{local[2] - 1 - lz, ly, lx};
+                            default -> new int[]{lx, ly, lz};
+                        };
+                        generatedDoors.add(point);
+                    }
+            volume = volume.restoreGeneratedAir(placed.asset.region(), generatedDoors);
+            java.io.File root = library.dir(state.cfg.roomSet());
+            java.io.File geometry = new java.io.File(root, placed.asset.name() + ".region.yml");
+            java.io.File meta = new java.io.File(root, placed.asset.name() + ".yml");
+            var yaml = xuanmo.arcartxsuite.abyss.design.DesignWriter.load(meta.toPath());
+            return new DesignRoomCapture(root, volume, placed.asset.name(), yaml,
+                state.assetBaselines.get(placed.asset.name()),
+                new int[]{room.minX, room.minY, room.minZ, room.maxX, room.maxY, room.maxZ});
+        }
+        throw new IllegalArgumentException("请站在要保存的房间内部；走廊不属于房间构件");
+    }
+
+    private static Map<String, String> assetHashes(java.io.File root, String name) {
+        Map<String, String> hashes = new java.util.LinkedHashMap<>();
+        try {
+            for (String suffix : List.of(".yml", ".region.yml", ".schem", ".schematic"))
+                hashes.put(name + suffix, xuanmo.arcartxsuite.abyss.design.DesignWriter.hash(
+                    new java.io.File(root, name + suffix).toPath()));
+        } catch (Exception ex) { throw new IllegalStateException("读取构件基线失败: " + name, ex); }
+        return hashes;
+    }
+
+    public void acknowledgeDesignRoom(AbyssInstance instance, DesignRoomCapture capture) {
+        InstState state = states.get(instance.getInstanceId());
+        if (state != null) state.assetBaselines.put(capture.name(), assetHashes(capture.root(), capture.name()));
+    }
+
 
     public void cleanup(AbyssInstance instance) {
         states.remove(instance.getInstanceId());
@@ -432,7 +519,9 @@ public final class ProcGenManager {
         }
         // Boss 房清完 → 评级 + 通关（连战加赏重放 boss 波次的再清不重复结算）
         if (rr.placed.asset.kind() == RoomKind.BOSS && !instance.isFinished()) {
-            gradeAndFinish(instance, st);
+            finishIfMainCleared(instance, st);
+        } else if (!instance.isFinished()) {
+            finishIfMainCleared(instance, st);
         }
         service.publishEvent("axs.abyss.procgen_room_clear", null,
             Map.of("room", rr.placed.asset.name(), "index", ri));
@@ -556,6 +645,15 @@ public final class ProcGenManager {
         instance.getVariables().put("procgen_modifier_" + ri, def.id());
     }
 
+    private void finishIfMainCleared(AbyssInstance instance, InstState st) {
+        for (int i = 0; i < st.rooms.size(); i++) {
+            var placed = st.rooms.get(i).placed;
+            if (placed.mainChain && placed.asset.kind() != RoomKind.START
+                && st.roomState.get(i) != RoomState.CLEARED) return;
+        }
+        gradeAndFinish(instance, st);
+    }
+
     private void gradeAndFinish(AbyssInstance instance, InstState st) {
         var g = st.cfg.grading();
         // 探索分：已清房/可清房（除 start）
@@ -652,4 +750,3 @@ public final class ProcGenManager {
         catch (Exception e) { return def; }
     }
 }
-

@@ -250,7 +250,7 @@ final class BuiltinActions {
             }
         });
         reg.register("run_script", (ctx, args, s) ->
-            service.get().runCustomScript(ctx.getInstance(), ctx.replace(args), ctx.getTrigger()));
+            service.get().runCustomScript(ctx.getInstance(), ctx.replace(args), ctx.getTrigger(), ctx.allowsFinishedInstance()));
         // 阶段机：立即完成当前阶段并推进 next（manual 阶段/事件房手动清房的出口）
         reg.register("complete_stage", (ctx, args, s) ->
             service.get().stages().completeCurrent(ctx.getInstance(), ctx.getTrigger()));

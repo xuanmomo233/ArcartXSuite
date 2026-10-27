@@ -1,146 +1,239 @@
 package xuanmo.arcartxsuite.abyss.design;
 
-import java.io.File;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.io.*;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.*;
+import java.security.MessageDigest;
+import java.util.*;
 import java.util.logging.Logger;
-import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 import xuanmo.arcartxsuite.abyss.template.AbyssTemplate;
 
-/**
- * 设计保存：把会话快照写回地牢目录 YAML。
- * <p>
- * 策略：按文件分组 → 原文件 load → 对每个脏对象整节 set（快照即全量，等于整节覆盖）
- * → 删除名单 remove → save。同义 snake 键在写回前清除，统一落 kebab 风格。
- */
+/** Strict YAML parsing, conflict detection, staging, durable backups and rollback. */
 public final class DesignWriter {
-
     public record Result(boolean ok, int objects, int deletions, List<String> errors) { }
-
+    public static final List<String> FILES = List.of("config.yml", "floors.yml", "rooms.yml",
+        "monsters.yml", "interacts.yml", "obstacles.yml", "npcs.yml", "puzzles.yml", "tasks.yml",
+        "rewards.yml", "chest_rewards.yml", "buffs.yml", "shops.yml", "scripts.yml",
+        "stages.yml", "quests.yml", "procgen.yml");
     private DesignWriter() { }
 
-    /** 写回全部脏对象 + 删除名单。返回统计。 */
-    public static Result save(AbyssTemplate template, DesignSession session, Logger logger) {
-        // file → {path → 对象集}；删除 key → 原 id
-        Map<String, Map<String, List<DesignObject>>> byFile = new LinkedHashMap<>();
-        Map<String, List<String[]>> delsByFile = new LinkedHashMap<>(); // file → [path,id]
-        List<String> errors = new ArrayList<>();
-        int count = 0;
-
-        for (DesignObject o : session.objects().values()) {
-            if (!o.dirty()) continue;
-            byFile.computeIfAbsent(o.file(), k -> new LinkedHashMap<>())
-                .computeIfAbsent(o.path(), k -> new ArrayList<>())
-                .add(o);
-            count++;
-        }
-        // 删除名单按对象 kind 反查文件
-        for (var e : session.deletions().entrySet()) {
-            String key = e.getKey();
-            String origId = e.getValue();
-            DesignObject.Kind kind = kindOfKey(key);
-            if (kind == null) continue;
-            String path = kind.path();
-            // 房内怪组 key 形如 group:room.gid → path rooms.<room>.groups
-            if (kind == DesignObject.Kind.ROOM_GROUP && key.startsWith("group:")) {
-                String compound = key.substring(6);
-                int dot = compound.indexOf('.');
-                if (dot > 0) path = "rooms." + compound.substring(0, dot) + ".groups";
-            }
-            delsByFile.computeIfAbsent(kind.file(), k -> new ArrayList<>())
-                .add(new String[]{path, origId});
-        }
-
-        for (var fe : byFile.entrySet()) {
-            File f = new File(template.dir(), fe.getKey());
-            try {
-                YamlConfiguration yml = f.isFile()
-                    ? YamlConfiguration.loadConfiguration(f) : new YamlConfiguration();
-                for (var pe : fe.getValue().entrySet()) {
-                    for (DesignObject o : pe.getValue()) {
-                        String fullPath = pe.getKey().isEmpty() ? o.id()
-                            : pe.getKey() + "." + o.id();
-                        // 重命名：旧键删除
-                        String orig = session.originalId(o.key());
-                        String origPath = pe.getKey().isEmpty() ? orig
-                            : pe.getKey() + "." + orig;
-                        if (!orig.equals(o.id())) {
-                            yml.set(origPath, null);
-                        }
-                        // 写回：整节覆盖（快照即全量）+ 清 snake 别名
-                        normalizeKeys(o.values());
-                        yml.set(fullPath, o.values());
-                    }
-                }
-                // 本文件删除名单
-                List<String[]> dels = delsByFile.remove(fe.getKey());
-                if (dels != null) {
-                    for (String[] d : dels) {
-                        yml.set(d[0].isEmpty() ? d[1] : d[0] + "." + d[1], null);
-                    }
-                }
-                yml.save(f);
-            } catch (IOException | RuntimeException ex) {
-                errors.add(fe.getKey() + ": " + ex.getMessage());
-                logger.warning("[abyss] 设计保存失败 " + fe.getKey() + ": " + ex.getMessage());
-            }
-        }
-        // 删除名单落在未变动文件里的情况
-        for (var fe : delsByFile.entrySet()) {
-            File f = new File(template.dir(), fe.getKey());
-            if (!f.isFile()) continue;
-            try {
-                YamlConfiguration yml = YamlConfiguration.loadConfiguration(f);
-                for (String[] d : fe.getValue()) {
-                    yml.set(d[0].isEmpty() ? d[1] : d[0] + "." + d[1], null);
-                }
-                yml.save(f);
-            } catch (IOException | RuntimeException ex) {
-                errors.add(fe.getKey() + ": " + ex.getMessage());
-            }
-        }
-        int dels = session.deletions().size();
-        return new Result(errors.isEmpty(), count, dels, errors);
+    public static String hash(Path path) throws Exception {
+        if (!Files.exists(path)) return "-";
+        return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(path)));
     }
-
+    public static void captureBaseline(AbyssTemplate template, DesignSession session) {
+        session.fileHashes().clear();
+        for (String file : FILES) {
+            try { session.fileHashes().put(file, hash(template.dir().toPath().resolve(file))); }
+            catch (Exception ex) { throw new IllegalStateException("无法读取设计基线: " + file, ex); }
+        }
+    }
+    public static YamlConfiguration load(Path path) throws Exception {
+        YamlConfiguration yaml = new YamlConfiguration();
+        yaml.options().parseComments(true);
+        if (Files.exists(path)) yaml.load(path.toFile());
+        return yaml;
+    }
+    public static Result save(AbyssTemplate template, DesignSession session, Logger logger) {
+        try {
+            Map<String, YamlConfiguration> files = prepare(template, session);
+            Map<Path, byte[]> writes = new LinkedHashMap<>();
+            for (var entry : files.entrySet()) {
+                Path path = template.dir().toPath().resolve(entry.getKey());
+                DesignObject document = session.get("document:" + entry.getKey());
+                if (document != null && document.dirty() && document.strList("content").isEmpty()
+                    && !entry.getKey().equals("config.yml")) {
+                    if (Files.exists(path)) writes.put(path, null);
+                    continue;
+                }
+                byte[] bytes = entry.getValue().saveToString().getBytes(StandardCharsets.UTF_8);
+                if (!Files.exists(path) && entry.getValue().getKeys(false).isEmpty()) continue;
+                if (!Files.exists(path) || !load(path).saveToString().equals(entry.getValue().saveToString())) writes.put(path, bytes);
+            }
+            commit(writes, session.fileHashes(), template.dir().toPath());
+            return new Result(true, (int) session.objects().values().stream().filter(DesignObject::dirty).count(),
+                session.deletions().size(), List.of());
+        } catch (Exception ex) {
+            saveDraft(template, session, logger);
+            logger.warning("[abyss] 设计未保存，编辑内容已保留: " + ex.getMessage());
+            return new Result(false, 0, 0, List.of(String.valueOf(ex.getMessage())));
+        }
+    }
+    /** A readable recovery copy, separate from published definitions and their conflict baselines. */
+    public static void saveDraft(AbyssTemplate template, DesignSession session, Logger logger) {
+        if (!session.hasDirty()) return;
+        try {
+            YamlConfiguration draft = new YamlConfiguration();
+            draft.set("dungeon", template.id()); draft.set("player", session.playerId().toString());
+            draft.set("world-save-pending", session.saving() || session.worldSnapshot());
+            List<Map<String, Object>> objects = new ArrayList<>();
+            for (DesignObject object : session.objects().values()) {
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("key", object.key()); row.put("kind", object.kind().name());
+                row.put("id", object.id()); row.put("original-id", session.originalId(object.key()));
+                row.put("file", object.file()); row.put("path", object.path());
+                row.put("dirty", object.dirty()); row.put("values", DesignValues.copy(object.values()));
+                objects.add(row);
+            }
+            draft.set("objects", objects); draft.set("deletions", new LinkedHashMap<>(session.deletions()));
+            Path folder = template.dir().toPath().resolve(".design-drafts"); Files.createDirectories(folder);
+            Path target = folder.resolve(System.currentTimeMillis() + "-" + session.designToken() + ".yml");
+            Files.writeString(target, draft.saveToString(), StandardCharsets.UTF_8);
+            logger.info("[abyss] 未发布设计草稿已保留: " + target);
+        } catch (Exception failure) { logger.warning("[abyss] 草稿恢复副本写入失败: " + failure.getMessage()); }
+    }
+    public static Map<String, YamlConfiguration> prepare(AbyssTemplate template, DesignSession session) throws Exception {
+        Map<String, YamlConfiguration> files = new LinkedHashMap<>();
+        for (String file : FILES) files.put(file, load(template.dir().toPath().resolve(file)));
+        Set<String> documents = new HashSet<>();
+        for (DesignObject o : session.objects().values()) {
+            if (!o.dirty() || o.kind() != DesignObject.Kind.DOCUMENT) continue;
+            YamlConfiguration yaml = new YamlConfiguration();
+            yaml.options().parseComments(true);
+            yaml.loadFromString(String.join("\n", o.strList("content")));
+            files.put(o.file(), yaml); documents.add(o.file());
+        }
+        Map<String, String> roomRenames = new LinkedHashMap<>();
+        Set<String> addresses = new HashSet<>();
+        for (DesignObject o : session.objects().values()) {
+            if (o.kind() == DesignObject.Kind.DOCUMENT) continue;
+            if (!addresses.add(o.file() + ":" + o.path() + ":" + o.id())) throw new IOException("对象ID冲突: " + o.id());
+            if (o.dirty() && documents.contains(o.file())) throw new IOException(o.file() + " 同时存在文件编辑和对象编辑，请先分别保存");
+            if (o.kind() == DesignObject.Kind.ROOM && !session.originalId(o.key()).equals(o.id()))
+                roomRenames.put(session.originalId(o.key()), o.id());
+        }
+        // Parent snapshots are applied before child mutations, including renames and deletions.
+        for (DesignObject o : session.objects().values()) {
+            if (!o.dirty() || o.kind() == DesignObject.Kind.DOCUMENT || o.kind() == DesignObject.Kind.ROOM_GROUP) continue;
+            YamlConfiguration yaml = files.get(o.file());
+            String old = session.originalId(o.key());
+            if (!old.equals(o.id())) yaml.set(join(o.path(), old), null);
+            yaml.set(join(o.path(), o.id()), DesignValues.copy(o.values()));
+        }
+        // Bukkit set(path, Map) does not create child sections; materialize parents before child writes.
+        materialize(files);
+        for (var deletion : session.deletions().entrySet()) {
+            DesignObject.Kind kind = kindOfKey(deletion.getKey());
+            if (kind == null) continue;
+            DesignObject original = session.originalObject(deletion.getKey());
+            String path = original != null ? original.path() : kind.path();
+            String file = original != null ? original.file() : kind.file();
+            if (kind == DesignObject.Kind.ROOM_GROUP) {
+                String compound = deletion.getKey().substring(6);
+                String room = compound.substring(0, compound.indexOf('.'));
+                path = "rooms." + roomRenames.getOrDefault(room, room) + ".groups";
+            }
+            files.get(file).set(join(path, deletion.getValue()), null);
+        }
+        for (DesignObject o : session.objects().values()) {
+            if (o.kind() != DesignObject.Kind.ROOM_GROUP || !o.dirty()) continue;
+            String oldRoom = o.path().substring(6, o.path().length() - 7);
+            if (session.deletions().containsKey("room:" + oldRoom)) throw new IOException("房间已删除，不能继续修改其怪组: " + oldRoom);
+            String path = "rooms." + roomRenames.getOrDefault(oldRoom, oldRoom) + ".groups";
+            YamlConfiguration yaml = files.get(o.file());
+            String old = session.originalId(o.key());
+            if (!old.equals(o.id())) yaml.set(join(path, old), null);
+            yaml.set(join(path, o.id()), DesignValues.copy(o.values()));
+        }
+        for (var entry : files.entrySet()) {
+            YamlConfiguration parsed = new YamlConfiguration();
+            parsed.options().parseComments(true);
+            parsed.loadFromString(entry.getValue().saveToString()); entry.setValue(parsed);
+        }
+        for (DesignObject o : session.objects().values()) {
+            String old = session.originalId(o.key());
+            if (o.kind() == DesignObject.Kind.DOCUMENT || old.equals(o.id())) continue;
+            DesignReferences.migrate(files, o.kind(), old, o.id(), o.path(), roomRenames);
+        }
+        materialize(files);
+        for (var deletion : session.deletions().entrySet()) {
+            DesignObject.Kind kind = kindOfKey(deletion.getKey());
+            DesignObject original = session.originalObject(deletion.getKey());
+            boolean referenced = kind == DesignObject.Kind.ROOM_GROUP && original != null
+                ? DesignReferences.roomGroupReferenced(files, deletion.getValue(), original.path(), roomRenames)
+                : kind != null && DesignReferences.isReferenced(files, kind, deletion.getValue());
+            if (referenced)
+                throw new IOException("对象仍被流程引用，请先移除引用再删除: " + deletion.getValue());
+        }
+        if (session.worldSnapshot()) {
+            YamlConfiguration config = files.get("config.yml");
+            config.set("world.template", "world"); config.set("world-source", null);
+            config.set("world_source", null); config.set("world.design-snapshot", true);
+        }
+        DesignValidation.validate(files);
+        return files;
+    }
+    private static void materialize(Map<String, YamlConfiguration> files) throws Exception {
+        for (var entry : files.entrySet()) {
+            YamlConfiguration parsed = new YamlConfiguration();
+            parsed.options().parseComments(true);
+            parsed.loadFromString(entry.getValue().saveToString());
+            entry.setValue(parsed);
+        }
+    }
+    /** Back up all original bytes before the first replacement; restore all targets on failure. */
+    public static void commit(Map<Path, byte[]> writes, Map<String, String> baseline, Path root) throws Exception {
+        commit(writes, baseline, root, DesignWriter::replace);
+    }
+    @FunctionalInterface interface Mover { void move(Path from, Path to) throws IOException; }
+    static void commit(Map<Path, byte[]> writes, Map<String, String> baseline, Path root, Mover mover) throws Exception {
+        for (var entry : baseline.entrySet()) {
+            if (!entry.getValue().equals(hash(root.resolve(entry.getKey()))))
+                throw new IOException(entry.getKey() + " 已被外部修改，请保留编辑内容并重新进入设计");
+        }
+        if (writes.isEmpty()) return;
+        Path backup = root.resolve(".design-backups").resolve(java.time.Instant.now().toEpochMilli()
+            + "-" + UUID.randomUUID().toString().substring(0, 8));
+        Files.createDirectories(backup);
+        Map<Path, Path> staged = new LinkedHashMap<>();
+        Map<Path, byte[]> originals = new LinkedHashMap<>();
+        List<Path> committed = new ArrayList<>();
+        try {
+            for (var entry : writes.entrySet()) {
+                Path target = entry.getKey();
+                byte[] original = Files.exists(target) ? Files.readAllBytes(target) : null;
+                originals.put(target, original);
+                if (original != null) Files.write(backup.resolve(target.getFileName()), original);
+                if (entry.getValue() == null) staged.put(target, null);
+                else {
+                    Path temp = Files.createTempFile(root, ".design-", ".tmp");
+                    staged.put(target, temp); Files.write(temp, entry.getValue());
+                }
+            }
+            for (var entry : baseline.entrySet()) {
+                if (!entry.getValue().equals(hash(root.resolve(entry.getKey()))))
+                    throw new IOException(entry.getKey() + " 在保存期间被修改，已取消写入");
+            }
+            for (var entry : staged.entrySet()) {
+                committed.add(entry.getKey());
+                if (entry.getValue() == null) Files.deleteIfExists(entry.getKey());
+                else mover.move(entry.getValue(), entry.getKey());
+            }
+        } catch (Exception failure) {
+            java.util.Collections.reverse(committed);
+            for (Path target : committed) {
+                try {
+                    if (originals.get(target) == null) Files.deleteIfExists(target);
+                    else {
+                        Path recovery = Files.createTempFile(root, ".restore-", ".tmp");
+                        Files.write(recovery, originals.get(target)); replace(recovery, target);
+                    }
+                } catch (Exception rollback) { failure.addSuppressed(rollback); }
+            }
+            throw failure;
+        } finally { for (Path temp : staged.values()) if (temp != null) Files.deleteIfExists(temp); }
+    }
+    private static void replace(Path from, Path to) throws IOException {
+        try { Files.move(from, to, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING); }
+        catch (AtomicMoveNotSupportedException ex) { Files.move(from, to, StandardCopyOption.REPLACE_EXISTING); }
+    }
+    private static String join(String path, String id) { return path.isEmpty() ? id : path + "." + id; }
     private static DesignObject.Kind kindOfKey(String key) {
         int i = key.indexOf(':');
-        if (i <= 0) return null;
-        String prefix = key.substring(0, i);
-        if ("group".equals(prefix) && key.substring(i + 1).contains(".")) {
-            return DesignObject.Kind.ROOM_GROUP;
-        }
-        try {
-            return DesignObject.Kind.valueOf(prefix.toUpperCase());
-        } catch (IllegalArgumentException e) {
-            return null;
-        }
-    }
-
-    /** 递归把 snake_case 键归一为 kebab-case（同名 kebab 已存在时不覆盖）。 */
-    @SuppressWarnings("unchecked")
-    private static void normalizeKeys(Map<String, Object> map) {
-        List<String> renames = new ArrayList<>();
-        for (String k : new ArrayList<>(map.keySet())) {
-            if (k.contains("_")) {
-                String kebab = k.replace('_', '-');
-                if (!map.containsKey(kebab)) renames.add(k);
-            }
-            Object v = map.get(k);
-            if (v instanceof Map<?, ?> m) {
-                normalizeKeys((Map<String, Object>) m);
-            } else if (v instanceof List<?> l) {
-                for (Object o : l) {
-                    if (o instanceof Map<?, ?> m2) normalizeKeys((Map<String, Object>) m2);
-                }
-            }
-        }
-        for (String k : renames) {
-            map.put(k.replace('_', '-'), map.remove(k));
-        }
+        if (i < 1) return null;
+        if (key.startsWith("group:") && key.substring(i + 1).contains(".")) return DesignObject.Kind.ROOM_GROUP;
+        try { return DesignObject.Kind.valueOf(key.substring(0, i).toUpperCase(Locale.ROOT)); }
+        catch (IllegalArgumentException ex) { return null; }
     }
 }

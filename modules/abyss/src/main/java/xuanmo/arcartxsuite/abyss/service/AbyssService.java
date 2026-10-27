@@ -163,6 +163,7 @@ public final class AbyssService {
 
     /** worldName → instanceId（事件反向定位实例）。 */
     private final Map<String, UUID> worldIndex = new ConcurrentHashMap<>();
+    private final Map<String, UUID> designOwners = new ConcurrentHashMap<>();
     /** 玩家 → 进入 Essentials AFK 状态的起始时间戳（afk-kick 判定）。 */
     private final Map<UUID, Long> afkSince = new ConcurrentHashMap<>();
     /** EventBus 提供者（模块注入 capability）。 */
@@ -719,6 +720,19 @@ public final class AbyssService {
     }
 
     /** 玩家单人进本入口。 */
+    public EnterResult enterFromPlayer(Player player, String templateId, @Nullable String plan) {
+        Party party = partyManager.partyOf(player);
+        if (party != null && party.size() > 1) {
+            if (!party.isLeader(player.getUniqueId()))
+                return EnterResult.fail(msg("error.not-party-leader"));
+            if (!party.allReady()) return EnterResult.fail(msg("party.not-all-ready"));
+            if (party.onlineMembers().size() != party.size())
+                return EnterResult.fail("队伍成员未全部在线");
+            return enterDungeon(party.onlineMembers(), templateId, plan);
+        }
+        return enterDungeon(List.of(player), templateId, plan);
+    }
+
     public EnterResult enterDungeon(Player player, String templateId) {
         return enterDungeon(List.of(player), templateId, null);
     }
@@ -872,7 +886,7 @@ public final class AbyssService {
 
     /** 是否为设计实例（冻结玩法、编辑配置用）。 */
     public boolean isDesignInstance(AbyssInstance instance) {
-        return designManager != null && designManager.isDesign(instance);
+        return instance.designMode();
     }
 
     /**
@@ -900,9 +914,14 @@ public final class AbyssService {
             }
         }
         AbyssInstance instance = instances.createInstance(template, null);
+        instance.designMode(true);
+        if (designOwners.putIfAbsent(template.id(), instance.getInstanceId()) != null) {
+            instances.destroyInstance(instance);
+            return EnterResult.fail("该副本正在被其他设计会话编辑");
+        }
         instances.playerEnterInstance(player, instance);
         player.sendMessage(msg("design.preparing"));
-        worldPool.acquireWorld(template, instance.getInstanceId())
+        worldPool.acquireDesignWorld(template, instance.getInstanceId())
             .thenAccept(world -> runOnMain(() -> onDesignWorldReady(instance, world, player)))
             .exceptionally(t -> {
                 runOnMain(() -> {
@@ -916,8 +935,10 @@ public final class AbyssService {
     }
 
     private void onDesignWorldReady(AbyssInstance instance, World world, Player player) {
-        if (instance.isFinished() || !player.isOnline()) {
-            worldPool.releaseWorld(instance.getInstanceId());
+        if (instance.isFinished() || !player.isOnline() || !instance.hasPlayer(player.getUniqueId())
+            || instances.getInstance(instance.getInstanceId()) != instance) {
+            if (instances.getInstance(instance.getInstanceId()) == instance) destroyInstance(instance, true);
+            else worldPool.releaseWorld(instance.getInstanceId());
             return;
         }
         instance.setWorld(world);
@@ -930,14 +951,19 @@ public final class AbyssService {
         //（不注册运行时——design 不跑 startInstance，怪组/交互/NPC 不落）
         if (instance.getTemplate().procgen() != null && procgenManager != null) {
             try {
-                procgenManager.materialize(instance, world);
+                Location generatedSpawn = procgenManager.materialize(instance, world);
+                if (generatedSpawn == null) throw new IllegalStateException("无法生成设计预览");
+                spawn = generatedSpawn;
             } catch (Throwable t) {
                 logger.warning("[abyss] procgen 设计物化失败: " + t.getMessage());
+                destroyInstance(instance, true);
+                player.sendMessage("§c随机房间预览生成失败，已安全退出。");
+                return;
             }
         }
         // world_init 是传送前的造地形段——设计模式也要跑，否则脚本建图的副本是空虚空；
         // init/start 等玩法脚本仍跳过（实例不激活玩法系统）
-        runLifecycleScript(instance, "world_init", null);
+        if (!usesDesignSnapshot(instance.getTemplate())) runLifecycleScript(instance, "world_init", null);
         ensureFooting(world, spawn);
         if (!teleportWithRetry(player, spawn, 3)) {
             player.sendMessage(msg("error.enter-failed", "reason", "传送失败"));
@@ -950,7 +976,13 @@ public final class AbyssService {
         player.setGameMode(GameMode.CREATIVE);
         var session = designManager.open(player, instance);
         // 发标记杖（第一空格）
-        player.getInventory().setItem(0, designListener.wandItem());
+        int wandSlot = player.getInventory().firstEmpty();
+        if (wandSlot < 0) {
+            player.sendMessage("§c请留出一个背包空位用于设计标记杖。");
+            destroyInstance(instance, true);
+            return;
+        }
+        player.getInventory().setItem(wandSlot, designListener.wandItem());
         player.sendMessage(msg("design.entered",
             "dungeon", instance.getTemplate().name()));
         if (uiFacade instanceof AbyssUiService ui) {
@@ -962,47 +994,124 @@ public final class AbyssService {
      * 保存设计：会话快照写回地牢目录 YAML；withWorld 且模板为 FOLDER 源时
      * 同步把实例世界存盘并回拷模板 world/ 目录。完成后重载模板并刷新会话快照。
      */
+    private boolean usesDesignSnapshot(AbyssTemplate template) {
+        return org.bukkit.configuration.file.YamlConfiguration.loadConfiguration(
+            new File(template.dir(), "config.yml")).getBoolean("world.design-snapshot", false);
+    }
+
     public void saveDesign(Player player, boolean withWorld) {
         var session = designManager != null ? designManager.session(player) : null;
-        if (session == null) {
-            player.sendMessage(msg("design.no-session"));
-            return;
-        }
+        if (session == null) { player.sendMessage(msg("design.no-session")); return; }
+        if (session.saving()) { player.sendMessage("§e正在保存，请稍候。"); return; }
         AbyssInstance instance = session.instance();
         AbyssTemplate template = instance.getTemplate();
-        if (withWorld) {
-            if (template.worldSource().kind() != AbyssTemplate.WorldSource.Kind.FOLDER) {
-                player.sendMessage(msg("design.world-unsupported"));
-            } else {
-                World w = instance.getWorld();
-                File srcDir = worldPool != null ? worldPool.worldDirOf(instance.getInstanceId()) : null;
-                File dstDir = template.worldSource().file();
-                if (w != null && srcDir != null && dstDir != null) {
-                    try {
-                        w.save(); // 同步落盘区块
-                    } catch (Throwable t) {
-                        logger.warning("[abyss] 设计世界保存失败: " + t.getMessage());
+        try {
+            xuanmo.arcartxsuite.abyss.design.DesignWriter.prepare(template, session);
+        } catch (Exception ex) {
+            player.sendMessage("§c未保存，编辑内容已保留: " + ex.getMessage());
+            return;
+        }
+        if (!withWorld) { finishDesignSave(player, session, false); return; }
+        session.saving(true);
+        if (uiFacade instanceof AbyssUiService ui) ui.pushDesignMain(player, session);
+        player.sendMessage("§e正在保存建筑和配置，请等待完成提示。");
+        if (template.procgen() != null) {
+            try {
+                var capture = procgenManager.captureDesignRoom(instance, player.getLocation());
+                worldPool.runIo(instance.getInstanceId(), () -> {
+                    try { capture.save(); }
+                    catch (Exception ex) { throw new java.util.concurrent.CompletionException(ex); }
+                }).whenComplete((v, error) -> runOnMain(() -> {
+                    if (error != null) designSaveFailed(player, session, error);
+                    else {
+                        session.acknowledgeRegion(capture.bounds());
+                        procgenManager.acknowledgeDesignRoom(instance, capture);
+                        roomSetLibrary.reload(); finishDesignSave(player, session, true);
                     }
-                    // 目录回拷走世界池 IO 线程
-                    final File src = srcDir, dst = dstDir;
-                    worldPool.runIo(() -> {
-                        try {
-                            xuanmo.arcartxsuite.abyss.world.WorldCopyUtil.copyWorldFolder(src, dst);
-                        } catch (Throwable t) {
-                            logger.warning("[abyss] 设计世界回写失败: " + t.getMessage());
-                        }
-                    });
+                }));
+            } catch (Exception ex) { designSaveFailed(player, session, ex); }
+            return;
+        }
+        World world = instance.getWorld();
+        File source = worldPool.worldDirOf(instance.getInstanceId());
+        if (world == null || source == null) {
+            designSaveFailed(player, session, new IllegalStateException("设计世界尚未就绪"));
+            return;
+        }
+        Location designLocation = player.getLocation().clone();
+        Location waiting = instance.getOriginalLocation(player.getUniqueId());
+        if (waiting == null || !teleportWithRetry(player, waiting, 3)) {
+            designSaveFailed(player, session, new IllegalStateException("无法移动到安全等候位置，建筑未保存"));
+            return;
+        }
+        try {
+            if (!worldPool.suspendForSnapshot(instance.getInstanceId())) {
+                teleportWithRetry(player, designLocation, 3);
+                throw new IllegalStateException("世界无法安全卸载，建筑未保存");
+            }
+        } catch (Throwable error) { designSaveFailed(player, session, error); return; }
+        File target = new File(template.dir(), "world");
+        worldPool.runIo(instance.getInstanceId(), () -> {
+            try { xuanmo.arcartxsuite.abyss.world.WorldCopyUtil.replaceWorldFolder(source, target); }
+            catch (Exception ex) { throw new java.util.concurrent.CompletionException(ex); }
+        }).whenComplete((v, error) -> runOnMain(() -> {
+            if (instances.getInstance(instance.getInstanceId()) == instance) {
+                try {
+                    World resumed = worldPool.resumeAfterSnapshot(instance.getInstanceId(), template);
+                    instance.setWorld(resumed);
+                    if (player.isOnline() && designManager.session(player) == session) {
+                        Location back = new Location(resumed, designLocation.getX(), designLocation.getY(),
+                            designLocation.getZ(), designLocation.getYaw(), designLocation.getPitch());
+                        if (!teleportWithRetry(player, back, 3)) throw new IllegalStateException("无法返回设计世界");
+                    }
+                } catch (Throwable resumeError) {
+                    designSaveFailed(player, session, resumeError);
+                    // Keep configuration drafts and the original return location available for recovery.
+                    return;
                 }
             }
+            if (error != null) designSaveFailed(player, session, error);
+            else {
+                session.worldSnapshot(true);
+                finishDesignSave(player, session, true);
+            }
+        }));
+    }
+
+    private void designSaveFailed(Player player,
+            xuanmo.arcartxsuite.abyss.design.DesignSession session, Throwable error) {
+        session.saving(false);
+        logger.warning("[abyss] 设计保存失败，保留编辑内容: " + error);
+        player.sendMessage("§c建筑未保存，配置编辑仍保留: " +
+            (error.getCause() != null ? error.getCause().getMessage() : error.getMessage()));
+        if (uiFacade instanceof AbyssUiService ui) ui.pushDesignMain(player, session);
+    }
+
+    private void finishDesignSave(Player player,
+            xuanmo.arcartxsuite.abyss.design.DesignSession session, boolean savedWorld) {
+        var result = xuanmo.arcartxsuite.abyss.design.DesignWriter.save(
+            session.instance().getTemplate(), session, logger);
+        session.saving(false);
+        if (!result.ok()) {
+            player.sendMessage("§c配置未保存，编辑内容已保留: " + String.join("; ", result.errors())
+                + (savedWorld ? " §e建筑已单独保存，可修正配置后重试。" : ""));
+            return;
         }
-        var result = xuanmo.arcartxsuite.abyss.design.DesignWriter.save(template, session, logger);
         reloadTemplates();
-        // 保存后刷新会话快照（对象表重建、dirty 清零）
+        AbyssTemplate updated = instances.getTemplate(session.instance().getTemplate().id());
+        if (updated == null) {
+            player.sendMessage("§c文件已写入，但模板重载失败；编辑状态已保留，请检查日志。");
+            return;
+        }
+        session.instance().updateDesignTemplate(updated);
+        session.worldSnapshot(false);
+        if (savedWorld && updated.procgen() == null) session.worldDirty(false);
         designManager.refresh(session);
-        player.sendMessage(msg(result.ok() ? "design.saved" : "design.saved-partial",
-            "count", String.valueOf(result.objects()),
-            "del", String.valueOf(result.deletions()),
-            "errors", String.valueOf(result.errors().size())));
+        player.sendMessage("§a" + (savedWorld
+            ? (updated.procgen() != null ? "当前房间构件和配置已保存；其他房间请分别保存。" : "建筑和配置已完整保存。")
+            : "配置已保存。建筑改动需使用建筑保存按钮。"));
+        if (uiFacade instanceof AbyssUiService ui && designManager.session(player) == session)
+            ui.pushDesignMain(player, session);
     }
 
     /** 重开设计主面板（/axs abyss design ui）。 */
@@ -1019,6 +1128,11 @@ public final class AbyssService {
     public void exitDesign(Player player) {
         var session = designManager != null ? designManager.session(player) : null;
         if (session == null) return;
+        if (session.saving()) { player.sendMessage("§e正在保存，请等待完成后再退出。"); return; }
+        if ((session.hasDirty() || session.worldDirty()) && !session.confirmDiscard()) {
+            player.sendMessage("§e还有未保存的改动。请先保存，或在10秒内再次点击退出以放弃改动。");
+            return;
+        }
         AbyssInstance instance = session.instance();
         designManager.close(player);
         designListener.removeWand(player);
@@ -1088,7 +1202,7 @@ public final class AbyssService {
 
     /** 世界就绪：传送玩家 → 全员进图 → prepare → start。 */
     private void onWorldReady(AbyssInstance instance, World world, List<Player> players) {
-        if (instance.isFinished()) {
+        if (instance.isFinished() || instances.getInstance(instance.getInstanceId()) != instance) {
             worldPool.releaseWorld(instance.getInstanceId());
             return;
         }
@@ -1132,13 +1246,13 @@ public final class AbyssService {
             }
         }
         // world-init 段：玩家传送前跑（造平台/铺场景），init 保持原位（进图后）
-        runLifecycleScript(instance, "world_init", null);
+        if (!usesDesignSnapshot(instance.getTemplate())) runLifecycleScript(instance, "world_init", null);
         // 落点兜底：spawn 下方 4 格无支撑时垫一块，防虚空模板直接坠亡
         ensureFooting(world, spawn);
 
         // 逐人存档+传送；扣费只算传送成功的玩家（传送失败不花门票）
         for (Player p : players) {
-            if (!p.isOnline() || instance.isFinished()) continue;
+            if (!p.isOnline() || instance.isFinished() || !instance.hasPlayer(p.getUniqueId())) continue;
             instance.saveOriginalLocation(p, p.getLocation());
             instance.savePlayerGameMode(p);
             boolean ok = teleportWithRetry(p, spawn, 3);
@@ -1368,6 +1482,7 @@ public final class AbyssService {
         AbyssTemplate t = instance.getTemplate();
         // 怪物组（AUTO_START/DELAYED 自动调度）
         mobGroups.initInstance(instance);
+        if (instance.isFinished()) return;
         // floors 模式：物化楼层房间链（pool 粘贴/组注册，须在怪组表建好后）
         if (t.mode() == AbyssTemplate.Mode.FLOORS && roomManager != null) {
             try {
@@ -1422,17 +1537,20 @@ public final class AbyssService {
 
     /** 通关：状态→COMPLETED，跑 complete 脚本，记成绩，延时撤出+清理。 */
     public void completeDungeon(AbyssInstance instance) {
+        if (isDesignInstance(instance)) return;
         if (!instance.transitionTo(AbyssStatus.ACTIVE, AbyssStatus.COMPLETED)
             && !instance.transitionTo(AbyssStatus.PREPARING, AbyssStatus.COMPLETED)) {
             return;
         }
         AbyssTemplate t = instance.getTemplate();
+        List<UUID> completedPlayers = new ArrayList<>(instance.getPlayerUUIDs());
+        List<Player> completedOnlinePlayers = instance.getPlayers();
         runLifecycleScript(instance, "complete", null);
         broadcast(instance, msg("dungeon.completed",
             "dungeon", t.name(), "time", formatTime(instance.getRunningTime())));
         // 成绩/排行
         long time = instance.getRunningTime();
-        for (UUID u : instance.getPlayerUUIDs()) {
+        for (UUID u : completedPlayers) {
             playerData.saveRecord(u, t.id(), time);
             leaderboard.recordCompletion(u, t.id(), time);
         }
@@ -1440,11 +1558,11 @@ public final class AbyssService {
             "dungeon", t.id(), "instance", instance.getInstanceId().toString(),
             "time_seconds", time));
         // 玩家级通关事件（每名队员一条，供战令/任务/统计订阅）
-        for (Player p : instance.getPlayers()) {
+        for (Player p : completedOnlinePlayers) {
             publishEvent("axs.abyss.player_complete", p, Map.of(
                 "dungeon", t.id(), "instance", instance.getInstanceId().toString(),
                 "time_seconds", time,
-                "party-size", instance.getPlayerUUIDs().size()));
+                "party-size", completedPlayers.size()));
         }
         // 声明式联动（links 节）：通关播报 / QQ 群通知
         if (links != null && t.links() != null) {
@@ -1473,16 +1591,18 @@ public final class AbyssService {
 
     /** 失败：状态→FAILED，跑 fail 脚本，撤出+清理。 */
     public void failDungeon(AbyssInstance instance, FailReason reason) {
+        if (isDesignInstance(instance)) { cancelDungeon(instance); return; }
         AbyssStatus cur = instance.getStatus();
         if (cur != AbyssStatus.ACTIVE && cur != AbyssStatus.PREPARING) return;
         if (!instance.transitionTo(cur, AbyssStatus.FAILED)) return;
         AbyssTemplate t = instance.getTemplate();
+        List<Player> failedPlayers = instance.getPlayers();
         runLifecycleScript(instance, "fail", null);
         broadcast(instance, msg("dungeon.failed", "reason", failReasonText(reason)));
         publishEvent("axs.abyss.fail", null, Map.of(
             "dungeon", t.id(), "instance", instance.getInstanceId().toString(),
             "reason", reason.name()));
-        for (Player p : instance.getPlayers()) {
+        for (Player p : failedPlayers) {
             publishEvent("axs.abyss.player_fail", p, Map.of(
                 "dungeon", t.id(), "instance", instance.getInstanceId().toString(),
                 "reason", reason.name()));
@@ -1511,6 +1631,7 @@ public final class AbyssService {
     /** 玩家退出副本（主动/结束/管理）：传送回原位置 + 恢复模式。 */
     public void playerExit(AbyssInstance instance, Player player, LeaveReason reason) {
         if (!instance.hasPlayer(player.getUniqueId())) return;
+        boolean designing = isDesignInstance(instance);
         // 先取快照再移除：removePlayer 会清掉 originalLocations/savedGameModes
         Location back = instance.getOriginalLocation(player.getUniqueId());
         GameMode saved = instance.getSavedGameMode(player.getUniqueId());
@@ -1541,7 +1662,9 @@ public final class AbyssService {
         if (uiFacade instanceof AbyssUiService ui) {
             ui.closeHud(player);
             ui.flushPendingChest(player);
+            ui.closeInstanceViews(player);
         }
+        if (!designing) runLifecycleScript(instance, "exit", player);
         if (reason != LeaveReason.END && reason != LeaveReason.DISCONNECT) {
             player.sendMessage(msg("dungeon.exited"));
         }
@@ -1568,7 +1691,10 @@ public final class AbyssService {
             ui0.onPlayerGone(player);
         }
         if (guideService != null) guideService.handleQuit(player);
-        if (designManager != null) designManager.close(player);
+        if (designManager != null) {
+            designManager.close(player);
+            if (designListener != null) designListener.removeWand(player);
+        }
         if (crossDungeon != null) crossDungeon.onPlayerQuit(player);
         AbyssInstance instance = instances.getInstance(player);
         if (instance == null) return;
@@ -1708,7 +1834,7 @@ public final class AbyssService {
     /** 执行动作行列表（统一入口）。 */
     public xuanmo.arcartxsuite.abyss.script.ScriptSession runScript(
             AbyssInstance instance, List<String> lines, ScriptContext context) {
-        if (lines == null || lines.isEmpty() || instance.isFinished()) {
+        if (lines == null || lines.isEmpty() || (instance.isFinished() && !context.allowsFinishedInstance())) {
             return null;
         }
         return scriptRunner.run("script", lines, context, instance);
@@ -1729,15 +1855,21 @@ public final class AbyssService {
             default -> List.of();
         };
         if (!lines.isEmpty()) {
-            runScript(instance, lines, ScriptContext.of(instance, trigger));
+            boolean settlement = "complete".equals(kind) || "fail".equals(kind) || "exit".equals(kind);
+            runScript(instance, lines, settlement ? ScriptContext.settlement(instance, trigger)
+                : ScriptContext.of(instance, trigger));
         }
     }
 
     /** 自定义脚本段（run_script 动作）。 */
     public void runCustomScript(AbyssInstance instance, String name, @Nullable Player trigger) {
+        runCustomScript(instance, name, trigger, false);
+    }
+    public void runCustomScript(AbyssInstance instance, String name, @Nullable Player trigger, boolean settlement) {
         List<String> lines = instance.getTemplate().scripts().customs().get(name.toLowerCase());
         if (lines != null && !lines.isEmpty()) {
-            runScript(instance, lines, ScriptContext.of(instance, trigger));
+            runScript(instance, lines, settlement ? ScriptContext.settlement(instance, trigger)
+                : ScriptContext.of(instance, trigger));
         }
     }
 
@@ -1944,6 +2076,7 @@ public final class AbyssService {
 
     /** 销毁实例：清理全部子系统 + 释放世界 + 从注册表移除。 */
     public void destroyInstance(AbyssInstance instance, boolean releasePlayers) {
+        designOwners.remove(instance.getTemplate().id(), instance.getInstanceId());
         if (releasePlayers) {
             for (Player p : instance.getPlayers()) {
                 try { playerExit(instance, p, LeaveReason.END); } catch (Throwable ignored) { }
@@ -2069,7 +2202,14 @@ public final class AbyssService {
         if (!started) return;
         for (AbyssInstance i : new ArrayList<>(instances.getAllInstances())) {
             // 设计实例冻结：不做消失扫描/超时/兜底回收/AFK 踢
-            if (isDesignInstance(i)) continue;
+            if (isDesignInstance(i)) {
+                if (i.getStatus() == AbyssStatus.PREPARING && System.currentTimeMillis() - i.getCreateTime()
+                    > Math.max(1000L, config.abyss().worldLoadTimeout())) {
+                    logger.warning("[abyss] 设计世界准备超时，回收实例: " + i.getInstanceId());
+                    cancelDungeon(i);
+                }
+                continue;
+            }
             try {
                 // 消失扫描（怪被刷掉兜底）
                 mobGroups.sweepVanished(i);
@@ -2152,6 +2292,11 @@ public final class AbyssService {
 
     /** 怪物组回调实现（MonsterGroupManager.GroupCallback）。 */
     private final class GroupCallbackImpl implements MonsterGroupManager.GroupCallback {
+        @Override
+        public void onSpawnFailed(AbyssInstance instance, String groupName) {
+            broadcast(instance, "§c怪组 " + groupName + " 生成失败，请联系管理员检查配置。");
+            failDungeon(instance, FailReason.SCRIPTED);
+        }
         @Override
         public void onGroupStart(AbyssInstance instance, String groupName) {
             instanceTasks.fireEvent(instance, "wave_start",

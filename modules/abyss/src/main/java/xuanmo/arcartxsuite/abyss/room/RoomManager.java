@@ -194,6 +194,17 @@ public final class RoomManager {
      * <p>世界须已就绪（instance.getWorld()）。pool 模式房间逐一粘贴；
      * 任一房粘贴失败 → 抛异常由上层 fail 处理。</p>
      */
+    public int[] progress(AbyssInstance instance) {
+        InstanceRuntime state = states.get(instance.getInstanceId());
+        if (state == null) return new int[]{0, 0};
+        int total = 0, done = 0;
+        for (FloorRuntime floor : state.floors) for (RoomRuntime room : floor.rooms) {
+            total++;
+            if (room.state == RoomState.CLEARED) done++;
+        }
+        return new int[]{total, done};
+    }
+
     public void initInstance(AbyssInstance instance) {
         FloorConfig fc = instance.getTemplate().floors();
         if (fc == null || fc.floors().isEmpty()) return;

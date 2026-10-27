@@ -21,6 +21,28 @@ public final class WorldCopyUtil {
 
     private WorldCopyUtil() { }
 
+    /** Copy to a sibling staging directory, then swap. Keep the previous world for recovery. */
+    public static void replaceWorldFolder(File source, File target) throws IOException {
+        Path src = source.toPath().toRealPath();
+        Path dst = target.toPath().toAbsolutePath().normalize();
+        if (src.equals(dst) || src.startsWith(dst) || dst.startsWith(src))
+            throw new IOException("世界源目录与目标目录不能重叠");
+        Files.createDirectories(dst.getParent());
+        String suffix = java.util.UUID.randomUUID().toString();
+        Path stage = dst.resolveSibling(dst.getFileName() + ".stage-" + suffix);
+        Path backup = dst.resolveSibling(dst.getFileName() + ".backup-" + suffix);
+        boolean moved = false;
+        try {
+            copyWorldFolder(source, stage.toFile());
+            if (Files.exists(dst)) { Files.move(dst, backup); moved = true; }
+            try { Files.move(stage, dst); }
+            catch (IOException failure) {
+                if (moved) Files.move(backup, dst);
+                throw failure;
+            }
+        } finally { deleteRecursively(stage.toFile()); }
+    }
+
     /** 异步复制模板世界目录到目标目录（排除运行期文件）。 */
     public static void copyWorldFolder(File source, File target) throws IOException {
         Path src = source.toPath();

@@ -670,6 +670,7 @@ public final class AbyssAdminCommand implements ModuleCommandHandler {
     private @Nullable String captureRoom(
             xuanmo.arcartxsuite.abyss.procgen.RoomSetLibrary lib,
             String set, String room, String type, Player p) {
+        if (!xuanmo.arcartxsuite.abyss.procgen.RoomSetLibrary.validName(room)) return "非法房间名";
         var lib2 = service.regions();
         var sel = lib2 != null ? lib2.selection(p.getUniqueId()) : null;
         if (sel == null || !sel.complete()) {
@@ -723,6 +724,7 @@ public final class AbyssAdminCommand implements ModuleCommandHandler {
     private @Nullable String capturePoint(
             xuanmo.arcartxsuite.abyss.procgen.RoomSetLibrary lib,
             String set, String room, String target, Player p) {
+        if (!xuanmo.arcartxsuite.abyss.procgen.RoomSetLibrary.validName(room)) return "非法房间名";
         java.io.File metaFile = new java.io.File(lib.dir(set), room + ".yml");
         if (!metaFile.isFile()) return "房间不存在（先 capture 建构件）";
         org.bukkit.configuration.file.YamlConfiguration meta =
@@ -736,6 +738,8 @@ public final class AbyssAdminCommand implements ModuleCommandHandler {
         String loc = rel[0] + "," + rel[1] + "," + rel[2];
 
         String[] t = target.split(":", 2);
+        if (!"spawn".equalsIgnoreCase(t[0]) && (t.length < 2 || t[1].isBlank()))
+            return "目标需要填写引用ID，例如 mob:vanilla:zombie 或 chest:宝箱ID";
         switch (t[0].toLowerCase(Locale.ROOT)) {
             case "spawn" -> meta.set("spawn", loc);
             case "chest" -> appendList(meta, "chests", loc + ": " + t[1]);

@@ -10,6 +10,7 @@ ui:
   through: false
   screenScale: true
   show: true
+  level: 8
   packetHandler:
     # packetHandler: init
     # 包字段: packetId/action_token/hasParty/isLeader/partyName/myUuid/maxMembers
@@ -20,21 +21,36 @@ ui:
     #         listed/joinMode/allReady
     #         allDungeonRows{idx:{id,name,difficulty}}/allDungeonCount
     init: |-
+      if(packet['view_nonce'] != none){ var.viewNonce = packet['view_nonce'] }
       var.packetId = packet['packetId']
       var.actionToken = packet['action_token']
-      self.actions['apply'](packet)
+      var.incoming = packet
+      self.actions['apply']()
       self.actions['refresh']()
     # packetHandler: update —— 队伍数据变更全量推送（无 action_token）
     update: |-
-      self.actions['apply'](packet)
+      var.incoming = packet
+      self.actions['apply']()
       self.actions['refresh']()
     # packetHandler: online_list —— 邀请副面板的在线玩家列表
     online_list: |-
       var.onlineRows = packet['onlineRows']
       var.onlineCount = packet['onlineCount']
       self.actions['refreshOnline']()
+    # Generation-bound close notification prevents stale close events cancelling a newly opened screen.
+
   action:
+    close: |-
+      if(var.actionToken != '' && var.viewNonce != ''){
+        Packet.send(var.packetId, 'close_view', 'party', var.actionToken, var.viewNonce)
+      }
     load: |-
+      var.已建_member_row = -1
+      var.已建_feed_rows = -1
+      var.已建_apply_rows = -1
+      var.已建_dungeon_rows = -1
+      var.已建_online_rows = -1
+      var.viewNonce = ''
       var.packetId = 'abyss'
       var.actionToken = ''
       var.hasParty = false
@@ -87,36 +103,38 @@ ui:
       var.viewW = Screen.getWidth() / s
       var.viewH = Screen.getHeight() / s
       var.offX = (var.viewW - 1920) / 2
-      var.leftW = var.viewW * 0.66
+      var.leftW = var.viewW * 0.62
       var.rightX = var.leftW + 24
       var.rightW = var.viewW - var.rightX - 72
     open: |-
       Sound.self('minecraft:item.book.page_turn', 0.9, 14)
     # 统一读取房间数据（init/update 共用）
     apply: |-
-      var.hasParty = packet['hasParty']
-      var.isLeader = packet['isLeader']
-      var.partyName = packet['partyName']
-      var.myUuid = packet['myUuid']
-      var.maxMembers = packet['maxMembers']
-      var.memberRows = packet['memberRows']
-      var.memberCount = packet['memberCount']
-      var.hasDungeon = packet['hasDungeon']
-      var.dungeon = packet['dungeon']
-      var.feedRows = packet['feedRows']
-      var.feedCount = packet['feedCount']
-      var.applicantRows = packet['applicantRows']
-      var.applicantCount = packet['applicantCount']
-      var.listed = packet['listed']
-      var.joinMode = packet['joinMode']
-      var.allReady = packet['allReady']
-      var.myReady = packet['myReady']
-      var.allDungeonRows = packet['allDungeonRows']
-      var.allDungeonCount = packet['allDungeonCount']
+      var.shouldFollowFeed = var.feedCount == 0 || val.feed_slider.getDragYRatio() >= 0.95
+      var.hasParty = var.incoming['hasParty']
+      var.isLeader = var.incoming['isLeader']
+      var.partyName = var.incoming['partyName']
+      var.myUuid = var.incoming['myUuid']
+      var.maxMembers = var.incoming['maxMembers']
+      var.memberRows = var.incoming['memberRows']
+      var.memberCount = var.incoming['memberCount']
+      var.hasDungeon = var.incoming['hasDungeon']
+      var.dungeon = var.incoming['dungeon']
+      var.feedRows = var.incoming['feedRows']
+      var.feedCount = var.incoming['feedCount']
+      var.applicantRows = var.incoming['applicantRows']
+      var.applicantCount = var.incoming['applicantCount']
+      var.listed = var.incoming['listed']
+      var.joinMode = var.incoming['joinMode']
+      var.allReady = var.incoming['allReady']
+      var.myReady = var.incoming['myReady']
+      var.allDungeonRows = var.incoming['allDungeonRows']
+      var.allDungeonCount = var.incoming['allDungeonCount']
     # 重建成员卡片 + 消息流 + 申请列表
     refresh: |-
       目标数 = var.hasParty ? var.memberCount.round() : 0
-      if(val.member_row.childrenCount() - 1 != 目标数 - 1){
+      if(var.已建_member_row != 目标数){
+        var.已建_member_row = 目标数
         for(key in var.成员引用.keys()){
           var.成员引用[key].remove()
         }
@@ -133,7 +151,8 @@ ui:
         }
       }
       消息数 = var.hasParty ? var.feedCount.round() : 0
-      if(val.feed_rows.childrenCount() - 1 != 消息数 - 1){
+      if(var.已建_feed_rows != 消息数){
+        var.已建_feed_rows = 消息数
         for(key in var.消息引用.keys()){
           var.消息引用[key].remove()
         }
@@ -149,9 +168,10 @@ ui:
           }
         }
       }
-      val.feed_slider.setDragYRatio(1)
+      if(var.shouldFollowFeed){ val.feed_slider.setDragYRatio(1) }
       申请数 = var.hasParty && var.isLeader ? var.applicantCount.round() : 0
-      if(val.apply_rows.childrenCount() - 1 != 申请数 - 1){
+      if(var.已建_apply_rows != 申请数){
+        var.已建_apply_rows = 申请数
         for(key in var.申请引用.keys()){
           var.申请引用[key].remove()
         }
@@ -168,7 +188,8 @@ ui:
         }
       }
       副本数 = var.allDungeonCount.round()
-      if(val.dungeon_rows.childrenCount() - 1 != 副本数 - 1){
+      if(var.已建_dungeon_rows != 副本数){
+        var.已建_dungeon_rows = 副本数
         for(key in var.副本引用.keys()){
           var.副本引用[key].remove()
         }
@@ -189,7 +210,8 @@ ui:
     # 在线玩家列表重建（邀请副面板）
     refreshOnline: |-
       在线数 = var.onlineCount.round()
-      if(val.online_rows.childrenCount() - 1 != 在线数 - 1){
+      if(var.已建_online_rows != 在线数){
+        var.已建_online_rows = 在线数
         for(key in var.在线引用.keys()){
           var.在线引用[key].remove()
         }
@@ -209,6 +231,7 @@ controls:
   自适应全局布局:
     type: Adaptive
     attribute:
+      visible: "var.actionToken != ''"
       point: ~top_center
       width: 1920
       height: 1080
@@ -224,18 +247,27 @@ controls:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~Frosted:30;20,16,38,245
-          暮色底幕:
+              normal: ~Frosted:20;14,17,18,245
+          黑曜石台面:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~16,12,30,255
+              normal: ~14,17,18,255
             effect:
               gradient:
-                color1: ~30,22,52,255
-                color2: ~12,9,24,255
+                color1: ~34,36,34,255
+                color2: ~12,15,16,255
                 type: 0
                 angleDeg: 65
+          制图基线:
+            type: Texture
+            attribute:
+              x: 72
+              y: 216
+              width: "var.viewW - 144"
+              height: 2
+              normal: ~113,89,59,230
+              through: true
           # ── 页眉 ──
           页眉标线:
             type: Texture
@@ -251,8 +283,8 @@ controls:
             attribute:
               x: 120
               y: 46
-              texts: ~&fA B Y S S  /  深渊回廊
-              fontSize: 36
+              texts: ~&6ABYSS  /  OPERATIONS TABLE   •   02
+              fontSize: 24
               alpha: 0.78
               through: true
           标题:
@@ -260,8 +292,8 @@ controls:
             attribute:
               x: 72
               y: 104
-              texts: ~&f副本房间
-              fontSize: 88
+              texts: ~&f远征整备室
+              fontSize: 56
               through: true
           副标题:
             type: Text
@@ -269,7 +301,7 @@ controls:
               x: 76
               y: 176
               texts: "'&7' + var.partyName + '  ·  ' + var.memberCount.round() + '/' + var.maxMembers.round() + ' 人' + (var.allReady ? '  ·  &a全员就绪' : '')"
-              fontSize: 36
+              fontSize: 24
               through: true
           关闭按钮:
             type: Canvas
@@ -295,7 +327,7 @@ controls:
                 attribute:
                   point: ~middle_center
                   texts: ~&f✕
-                  fontSize: 36
+                  fontSize: 24
                   through: true
           # ── 左中：成员模型舞台 ──
           舞台底:
@@ -305,14 +337,12 @@ controls:
               y: 230
               width: "var.leftW - 96"
               height: "var.viewH - 400"
-              normal: ~14,11,26,240
-              shape: ~round_rect
-              radius: 18
+              normal: ~18,23,24,255
               through: true
             effect:
               gradient:
-                color1: ~38,28,64,230
-                color2: ~14,11,26,240
+                color1: ~35,41,39,255
+                color2: ~17,22,23,255
                 type: 0
                 angleDeg: 90
               stroke:
@@ -332,124 +362,254 @@ controls:
             attribute:
               x: 88
               y: 274
-              texts: ~&7房间成员
-              fontSize: 36
+              texts: ~&601  /  编队点名
+              fontSize: 24
               through: true
-          成员模型行:
-            type: HStack
-            val: member_row
+          成员滑轨:
+            type: Texture
             attribute:
-              point: ~middle_center
-              x: 0
-              y: 20
-              height: 560
-              spaceBetween: 40
+              x: 88
+              y: 800
+              width: "var.leftW - 156"
+              height: 6
+              normal: ~63,65,58,255
+              through: true
+          成员滑块:
+            type: Texture
+            val: member_slider
+            attribute:
+              x: 88
+              y: 800
+              width: 150
+              height: 6
+              maxDragX: "var.leftW - 306"
+              normal: var.accent
+          成员滚动区:
+            type: Scroll
+            attribute:
+              x: 88
+              y: 338
+              width: "var.leftW - 156"
+              height: 420
+              moveX: val.member_slider.getDragXRatio()
+            action:
+              wheel: |-
+                ratio = self.moveX - self.wheelValue * 0.12
+                if(ratio < 0){ ratio = 0 }
+                if(ratio > 1){ ratio = 1 }
+                val.member_slider.setDragXRatio(ratio)
             children:
-              成员卡:
-                type: Canvas
+              成员模型行:
+                type: HStack
+                val: member_row
                 attribute:
-                  entryKey: 0.round()
-                  entry: var.memberRows[self.entryKey]
-                  visible: self.entry != none
-                  width: 210
-                  height: 560
+                  maxSize: 2147483647
+                  height: 404
+                  spaceBetween: 22
                 children:
-                  卡底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      normal: ~30,24,50,200
-                      shape: ~round_rect
-                      radius: 14
-                      through: true
-                    effect:
-                      stroke:
-                        width: 2
-                        color: "self.parent.entry['leader'] ? var.accent : ~70,60,100,160"
-                  成员模型:
-                    type: Entity
-                    attribute:
-                      point: ~top_center
-                      x: 0
-                      y: 60
-                      scale: 5
-                      uuid: self.parent.entry['uuid']
-                      hideTag: true
-                      followMouse: true
-                  离线遮罩:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      normal: ~10,8,18,140
-                      shape: ~round_rect
-                      radius: 14
-                      visible: "!self.parent.entry['online']"
-                      through: true
-                  队长冠标:
-                    type: Text
-                    attribute:
-                      point: ~top_center
-                      y: 14
-                      texts: ~&e♛
-                      fontSize: 48
-                      visible: self.parent.entry['leader']
-                      through: true
-                  成员名:
-                    type: Text
-                    attribute:
-                      point: ~bottom_center
-                      y: -64
-                      texts: "'&f' + self.parent.entry['name']"
-                      fontSize: 36
-                      limit: 10
-                      through: true
-                  准备状态:
-                    type: Text
-                    attribute:
-                      point: ~bottom_center
-                      y: -22
-                      texts: "self.parent.entry['leader'] ? '&e队长' : (self.parent.entry['ready'] ? '&a已准备' : '&8未准备')"
-                      fontSize: 36
-                      through: true
-                  踢出按钮:
+                  成员卡:
                     type: Canvas
                     attribute:
-                      point: ~top_right
-                      x: -10
-                      y: 10
-                      width: 52
-                      height: 34
-                      visible: "var.isLeader && !self.parent.entry['leader']"
-                    action:
-                      clickLeft: |-
-                        Packet.send(var.packetId, 'party_kick', self.parent.entry['uuid'], var.actionToken)
+                      entryKey: 0.round()
+                      entry: var.memberRows[self.entryKey]
+                      visible: self.entry != none
+                      width: 230
+                      height: 404
                     children:
-                      踢底:
+                      卡底:
                         type: Texture
                         attribute:
                           point: ~stretch_all
-                          normal: ~235,100,100,225
-                          hover: ~255,130,130,245
-                          shape: ~round_rect
-                          radius: 8
+                          normal: ~30,36,36,255
                           through: true
-                      踢字:
+                        effect:
+                          stroke:
+                            width: 2
+                            color: "self.parent.entry['leader'] ? var.accent : '80,88,81,200'"
+                      岗位编号:
                         type: Text
                         attribute:
-                          point: ~middle_center
-                          texts: ~&f踢
-                          fontSize: 36
+                          x: 14
+                          y: 10
+                          texts: "'&6' + (self.parent.entryKey + 1).round() + ' / CREW'"
+                          fontSize: 24
                           through: true
+                      成员模型:
+                        type: Entity
+                        attribute:
+                          point: ~top_center
+                          x: 0
+                          y: 58
+                          scale: 3.2
+                          uuid: self.parent.entry['uuid']
+                          hideTag: true
+                          followMouse: true
+                      离线遮罩:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: ~10,13,14,160
+                          visible: "!self.parent.entry['online']"
+                          through: true
+                      队长冠标:
+                        type: Text
+                        attribute:
+                          point: ~top_center
+                          y: 274
+                          texts: ~&6队长
+                          fontSize: 24
+                          visible: self.parent.entry['leader']
+                          through: true
+                      成员名:
+                        type: Text
+                        attribute:
+                          limitControl: self
+                          height: 28
+                          width: 202
+                          point: ~bottom_center
+                          y: -60
+                          texts: "'&f' + self.parent.entry['name']"
+                          fontSize: 20
+                          limit: 16
+                          through: true
+                      准备状态:
+                        type: Text
+                        attribute:
+                          point: ~bottom_center
+                          y: -18
+                          texts: "self.parent.entry['ready'] ? '&a已准备' : '&7待准备'"
+                          fontSize: 24
+                          visible: "self.parent.entry['online'] && !self.parent.entry['leader']"
+                          through: true
+                      离线状态:
+                        type: Text
+                        attribute:
+                          point: ~bottom_center
+                          y: -18
+                          texts: ~&c离线 / 无信号
+                          fontSize: 24
+                          visible: "!self.parent.entry['online']"
+                          through: true
+                      踢出按钮:
+                        type: Canvas
+                        attribute:
+                          point: ~top_right
+                          x: -10
+                          y: 10
+                          width: 52
+                          height: 34
+                          visible: "var.isLeader && !self.parent.entry['leader']"
+                        action:
+                          clickLeft: |-
+                            Packet.send(var.packetId, 'party_kick', self.parent.entry['uuid'], var.actionToken)
+                        children:
+                          踢底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              normal: ~138,55,40,255
+                              hover: ~187,72,46,255
+                              through: true
+                          踢字:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              texts: ~&f踢
+                              fontSize: 24
+                              through: true
+          编队提示:
+            type: Text
+            attribute:
+              x: 88
+              y: 802
+              texts: ~&7编队席位  /  滚轮或拖动琥珀刻度浏览人员
+              fontSize: 24
+              through: true
           舞台提示:
             type: Text
             attribute:
-              point: ~bottom_center
-              x: 0
-              y: "0 - (var.viewH - 400) / 2 + 40"
-              texts: ~&8等待队友加入… 点击底部「邀请玩家」召集小队
-              fontSize: 36
+              x: 88
+              y: "var.viewH - 230"
+              texts: ~&7编队未满：点击下方「邀请玩家」补充队员
+              fontSize: 24
               visible: "var.memberCount.round() <= 1"
               through: true
+          # 示意路线是整备流程，不冒充服务端地牢坐标。
+          远征流程图:
+            type: Canvas
+            attribute:
+              x: 88
+              y: "var.viewH - 240"
+              width: "var.leftW - 156"
+              height: 70
+              visible: var.memberCount.round() > 1
+              through: true
+            children:
+              路线:
+                type: Texture
+                attribute:
+                  x: 8
+                  y: 14
+                  width: "var.leftW - 180"
+                  height: 2
+                  normal: ~101,83,58,255
+                  through: true
+              集结点:
+                type: Texture
+                attribute:
+                  x: 8
+                  y: 8
+                  width: 14
+                  height: 14
+                  normal: var.accent
+                  shape: ~circle
+                  through: true
+              目标点:
+                type: Texture
+                attribute:
+                  x: "(var.leftW - 156) / 2"
+                  y: 8
+                  width: 14
+                  height: 14
+                  normal: "var.hasDungeon ? var.accent : '87,94,86,255'"
+                  shape: ~circle
+                  through: true
+              执行点:
+                type: Texture
+                attribute:
+                  point: ~top_right
+                  x: -10
+                  y: 8
+                  width: 14
+                  height: 14
+                  normal: "var.allReady ? var.accent : '147,59,43,255'"
+                  shape: ~circle
+                  through: true
+              集结标签:
+                type: Text
+                attribute:
+                  x: 8
+                  y: 32
+                  texts: ~&6编队已集结
+                  fontSize: 24
+                  through: true
+              目标标签:
+                type: Text
+                attribute:
+                  point: ~top_center
+                  y: 32
+                  texts: "var.hasDungeon ? '&6路线已确定' : '&7等待目标'"
+                  fontSize: 24
+                  through: true
+              执行标签:
+                type: Text
+                attribute:
+                  point: ~top_right
+                  x: -10
+                  y: 32
+                  texts: "var.allReady ? '&6全员就绪' : '&c等待准备'"
+                  fontSize: 24
+                  through: true
           # ── 右栏 ──
           副本卡底:
             type: Texture
@@ -458,9 +618,9 @@ controls:
               y: 230
               width: "var.rightW"
               height: 300
-              normal: ~24,19,40,235
+              normal: ~23,27,28,245
               shape: ~round_rect
-              radius: 16
+              radius: 4
               through: true
             effect:
               stroke:
@@ -480,65 +640,66 @@ controls:
             attribute:
               x: "var.rightX + 26"
               y: 270
-              texts: ~&f目标副本
-              fontSize: 36
+              texts: ~&f02  /  目标情报
+              fontSize: 24
               through: true
           副本图标:
             type: Slot
             val: 副本图标
             attribute:
               x: "var.rightX + 26"
-              y: 322
+              y: 316
               width: 72
               height: 72
               iconSize: 56
+              slotType: ~Icon
               normal: var.cardBg
-              seticon: "self.setItemIcon(var.hasDungeon && var.dungeon != none && var.dungeon['iconJson'] != none && var.dungeon['iconJson'] != '' ? var.dungeon['iconJson'] : var.air)"
+              seticon: |-
+                iconJson = (var.hasDungeon && var.dungeon != none && var.dungeon['iconJson'] != none && var.dungeon['iconJson'] != '') ? var.dungeon['iconJson'] : var.air
+                self.setItemIcon(iconJson)
               seticonscale: 1.0
               visible: var.hasDungeon
-            children:
-              图标底座:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  normal: var.cardBg
-                  shape: ~round_rect
-                  radius: 10
-                  through: true
           副本名:
             type: Text
             attribute:
               x: "var.rightX + 116"
-              y: 326
-              texts: "var.hasDungeon ? '&f' + var.dungeon['name'] : '&8尚未选择'"
-              fontSize: 48
+              y: 312
+              texts: "var.hasDungeon ? '&f' + var.dungeon['name'] : '&7尚未选择'"
+              fontSize: 32
               limit: 12
               through: true
           副本信息行:
             type: Text
             attribute:
+              lineSpace: 8
               x: "var.rightX + 116"
-              y: 384
-              texts: "var.hasDungeon ? '&7难度 &e' + var.dungeon['difficulty'] + '  &7人数 &f' + var.dungeon['minPlayers'].round() + '-' + var.dungeon['maxPlayers'].round() + '  &7体力 &f' + var.dungeon['staminaCost'].round() : '&7队长点击右下角「更换副本」'"
-              fontSize: 36
+              y: 366
+              texts:
+                - "var.hasDungeon ? '&7危险等级 &6' + var.dungeon['difficulty'] + '  &7编队 &f' + var.dungeon['minPlayers'].round() + '-' + var.dungeon['maxPlayers'].round() : '&7队长点击「更换副本」'"
+                - "var.hasDungeon ? '&7体力消耗 &f' + var.dungeon['staminaCost'].round() + '   &7时限 &6' + var.dungeon['timeLimit'].round() + 's' : '&7选择目标后检查编队条件'"
+              fontSize: 24
               visible: "var.hasDungeon || var.isLeader"
               through: true
           副本信息行2:
             type: Text
             attribute:
-              x: "var.rightX + 116"
-              y: 426
-              texts: "var.hasDungeon ? '&7时限 &f' + var.dungeon['timeLimit'].round() + 's  &7' + var.dungeon['desc0'] : '&7等待队长选择目标副本'"
-              fontSize: 36
+              limitControl: self
+              height: 32
+              width: "var.rightW - 52"
+              x: "var.rightX + 26"
+              y: 440
+              texts: "var.hasDungeon ? '&7' + var.dungeon['desc0'] : '&7等待队长选择目标副本'"
+              fontSize: 24
+              limit: 23
               visible: "var.hasDungeon || !var.isLeader"
               through: true
           更换副本按钮:
             type: Canvas
             attribute:
               x: "var.rightX + 26"
-              y: 464
-              width: 150
-              height: 46
+              y: 480
+              width: 160
+              height: 36
               visible: var.isLeader
             action:
               clickLeft: |-
@@ -552,7 +713,7 @@ controls:
                   normal: var.cardBg
                   hover: var.cardBgHover
                   shape: ~round_rect
-                  radius: 10
+                  radius: 4
                   through: true
                 effect:
                   stroke:
@@ -563,7 +724,7 @@ controls:
                 attribute:
                   point: ~middle_center
                   texts: ~&f更换副本
-                  fontSize: 36
+                  fontSize: 24
                   through: true
           # ── 右下：消息流 + 队聊 ──
           消息底:
@@ -573,9 +734,9 @@ controls:
               y: 546
               width: "var.rightW"
               height: "var.viewH - 642"
-              normal: ~24,19,40,235
+              normal: ~23,27,28,245
               shape: ~round_rect
-              radius: 16
+              radius: 4
               through: true
             effect:
               stroke:
@@ -595,17 +756,17 @@ controls:
             attribute:
               x: "var.rightX + 26"
               y: 586
-              texts: ~&f队伍频道
-              fontSize: 36
+              texts: ~&f03  /  无线电频道
+              fontSize: 24
               through: true
           消息滑轨:
             type: Texture
             attribute:
               x: "var.rightX + var.rightW - 20"
-              y: 636
+              y: "var.isLeader && var.applicantCount.round() > 0 ? 790 : 636"
               width: 8
-              height: "var.viewH - 790"
-              normal: ~40,32,62,220
+              height: "var.viewH - (var.isLeader && var.applicantCount.round() > 0 ? 944 : 790)"
+              normal: ~54,56,50,255
               shape: ~round_rect
               radius: 4
               through: true
@@ -614,20 +775,20 @@ controls:
             val: feed_slider
             attribute:
               x: "var.rightX + var.rightW - 20"
-              y: 636
+              y: "var.isLeader && var.applicantCount.round() > 0 ? 790 : 636"
               width: 8
-              height: 80
+              height: 60
               normal: var.accent
-              maxDragY: "var.viewH - 790 - 80"
+              maxDragY: "var.viewH - (var.isLeader && var.applicantCount.round() > 0 ? 1004 : 850)"
               shape: ~round_rect
               radius: 4
           消息滚动区:
             type: Scroll
             attribute:
               x: "var.rightX + 22"
-              y: 636
+              y: "var.isLeader && var.applicantCount.round() > 0 ? 790 : 636"
               width: "var.rightW - 60"
-              height: "var.viewH - 790"
+              height: "var.viewH - (var.isLeader && var.applicantCount.round() > 0 ? 944 : 790)"
               moveY: val.feed_slider.getDragYRatio()
             action:
               wheel: |-
@@ -640,6 +801,7 @@ controls:
                 type: VStack
                 val: feed_rows
                 attribute:
+                  maxSize: 2147483647
                   width: "var.rightW - 72"
                   spaceBetween: 6
                 children:
@@ -649,9 +811,10 @@ controls:
                       entryKey: 0.round()
                       entry: var.feedRows[self.entryKey]
                       visible: self.entry != none
-                      texts: "self.entry['sender'] == '' ? '&8· ' + self.entry['text'] : '&d' + self.entry['sender'] + ' &7: &f' + self.entry['text']"
-                      fontSize: 36
-                      limit: 34
+                      texts: "self.entry['display']"
+                      width: "var.rightW - 72"
+                      height: 28
+                      fontSize: 22
                       through: true
           队聊框底:
             type: Texture
@@ -669,6 +832,7 @@ controls:
                 color: var.accentDim
           队聊输入:
             type: TextBox
+            val: party_chat_input
             attribute:
               x: "var.rightX + 34"
               y: "var.viewH - 130"
@@ -676,7 +840,7 @@ controls:
               height: 34
               length: 48
               emptyText: ~&7说点什么…
-              fontSize: 36
+              fontSize: 24
             action:
               textChange: |-
                 var.chatMsg = self.getContent()
@@ -692,14 +856,15 @@ controls:
                 if(var.chatMsg != none && var.chatMsg != ''){
                   Packet.send(var.packetId, 'party_chat', var.chatMsg, var.actionToken)
                   var.chatMsg = ''
+                  val.party_chat_input.setContent('')
                 }
             children:
               发送底:
                 type: Texture
                 attribute:
                   point: ~stretch_all
-                  normal: ~80,160,240,230
-                  hover: ~110,185,255,245
+                  normal: ~70,79,73,255
+                  hover: ~112,122,107,255
                   shape: ~round_rect
                   radius: 8
                   through: true
@@ -708,117 +873,158 @@ controls:
                 attribute:
                   point: ~middle_center
                   texts: ~&0发送
-                  fontSize: 36
+                  fontSize: 24
                   through: true
-          # ── 加入申请（仅队长可见，浮于消息区上方）──
-          申请列表:
-            type: VStack
-            val: apply_rows
+          # 申请占独立滚动带，不再覆盖目标情报；频道随其显隐让出空间。
+          申请标题:
+            type: Text
             attribute:
               x: "var.rightX + 22"
-              y: "var.viewH - 642 - 120"
-              width: "var.rightW - 44"
-              spaceBetween: 8
+              y: 616
+              texts: "'&6入队申请 / ' + var.applicantCount.round()"
+              fontSize: 24
               visible: "var.isLeader && var.applicantCount.round() > 0"
+              through: true
+          申请滑轨:
+            type: Texture
+            attribute:
+              x: "var.rightX + var.rightW - 20"
+              y: 654
+              width: 8
+              height: 120
+              normal: ~54,56,50,255
+              visible: "var.isLeader && var.applicantCount.round() > 0"
+              through: true
+          申请滑块:
+            type: Texture
+            val: apply_slider
+            attribute:
+              x: "var.rightX + var.rightW - 20"
+              y: 654
+              width: 8
+              height: 40
+              maxDragY: 80
+              normal: var.accent
+              visible: "var.isLeader && var.applicantCount.round() > 0"
+          申请滚动区:
+            type: Scroll
+            attribute:
+              x: "var.rightX + 22"
+              y: 654
+              width: "var.rightW - 60"
+              height: 120
+              moveY: val.apply_slider.getDragYRatio()
+              visible: "var.isLeader && var.applicantCount.round() > 0"
+            action:
+              wheel: |-
+                ratio = self.moveY - self.wheelValue * 0.12
+                if(ratio < 0){ ratio = 0 }
+                if(ratio > 1){ ratio = 1 }
+                val.apply_slider.setDragYRatio(ratio)
             children:
-              申请行:
-                type: Canvas
+              申请列表:
+                type: VStack
+                val: apply_rows
                 attribute:
-                  entryKey: 0.round()
-                  entry: var.applicantRows[self.entryKey]
-                  visible: self.entry != none
-                  width: "var.rightW - 44"
-                  height: 56
+                  maxSize: 2147483647
+                  width: "var.rightW - 72"
+                  spaceBetween: 8
                 children:
-                  申请行底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      normal: ~64,52,30,235
-                      shape: ~round_rect
-                      radius: 10
-                      through: true
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~200,170,90,170
-                  申请文本:
-                    type: Text
-                    attribute:
-                      point: ~middle_left
-                      x: 14
-                      texts: "'&e' + self.parent.entry['name'] + ' &7申请加入'"
-                      fontSize: 36
-                      limit: 16
-                      through: true
-                  拒按钮:
+                  申请行:
                     type: Canvas
                     attribute:
-                      point: ~middle_right
-                      x: -10
-                      width: 66
-                      height: 38
-                    action:
-                      clickLeft: |-
-                        Packet.send(var.packetId, 'party_apply_no', self.parent.entry['uuid'], var.actionToken)
+                      entryKey: 0.round()
+                      entry: var.applicantRows[self.entryKey]
+                      visible: self.entry != none
+                      width: "var.rightW - 72"
+                      height: 56
                     children:
-                      拒底:
+                      申请行底:
                         type: Texture
                         attribute:
                           point: ~stretch_all
-                          normal: ~150,58,58,230
-                          hover: ~190,75,75,245
-                          shape: ~round_rect
-                          radius: 8
+                          normal: ~61,49,32,255
                           through: true
-                      拒字:
+                        effect:
+                          stroke:
+                            width: 2
+                            color: var.accentDim
+                      申请文本:
                         type: Text
                         attribute:
-                          point: ~middle_center
-                          texts: ~&f拒
-                          fontSize: 36
+                          limitControl: self
+                          height: 32
+                          width: "self.parent.width - 176"
+                          point: ~middle_left
+                          x: 14
+                          texts: "'&e' + self.parent.entry['name']"
+                          fontSize: 24
+                          limit: 16
                           through: true
-                  准按钮:
-                    type: Canvas
-                    attribute:
-                      point: ~middle_right
-                      x: -84
-                      width: 66
-                      height: 38
-                    action:
-                      clickLeft: |-
-                        Packet.send(var.packetId, 'party_apply_ok', self.parent.entry['uuid'], var.actionToken)
-                    children:
-                      准底:
-                        type: Texture
+                      拒按钮:
+                        type: Canvas
                         attribute:
-                          point: ~stretch_all
-                          normal: ~70,150,95,230
-                          hover: ~90,180,115,245
-                          shape: ~round_rect
-                          radius: 8
-                          through: true
-                      准字:
-                        type: Text
+                          point: ~middle_right
+                          x: -10
+                          width: 66
+                          height: 38
+                        action:
+                          clickLeft: |-
+                            Packet.send(var.packetId, 'party_apply_no', self.parent.entry['uuid'], var.actionToken)
+                        children:
+                          拒底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              normal: ~130,54,40,255
+                              hover: ~177,68,45,255
+                              through: true
+                          拒字:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              texts: ~&f拒
+                              fontSize: 24
+                              through: true
+                      准按钮:
+                        type: Canvas
                         attribute:
-                          point: ~middle_center
-                          texts: ~&f准
-                          fontSize: 36
-                          through: true
+                          point: ~middle_right
+                          x: -84
+                          width: 66
+                          height: 38
+                        action:
+                          clickLeft: |-
+                            Packet.send(var.packetId, 'party_apply_ok', self.parent.entry['uuid'], var.actionToken)
+                        children:
+                          准底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              normal: ~177,127,57,255
+                              hover: ~225,165,76,255
+                              through: true
+                          准字:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              texts: ~&0准
+                              fontSize: 24
+                              through: true
           # ── 底部操作栏 ──
           底栏:
             type: HStack
             attribute:
               point: ~bottom_left
               x: 76
-              y: -140
+              y: -70
               height: 56
               spaceBetween: 14
             children:
               邀请按钮:
                 type: Canvas
                 attribute:
-                  width: 170
+                  width: 145
                   height: 56
                 action:
                   clickLeft: |-
@@ -830,17 +1036,17 @@ controls:
                     type: Texture
                     attribute:
                       point: ~stretch_all
-                      normal: ~80,160,240,230
-                      hover: ~110,185,255,245
+                      normal: ~70,79,73,255
+                      hover: ~112,122,107,255
                       shape: ~round_rect
-                      radius: 10
+                      radius: 4
                       through: true
                   邀请字:
                     type: Text
                     attribute:
                       point: ~middle_center
                       texts: ~&0邀请玩家
-                      fontSize: 36
+                      fontSize: 24
                       through: true
               准备按钮:
                 type: Canvas
@@ -859,19 +1065,19 @@ controls:
                       normal: ~70,150,95,235
                       hover: ~90,180,115,245
                       shape: ~round_rect
-                      radius: 10
+                      radius: 4
                       through: true
                   准备字:
                     type: Text
                     attribute:
                       point: ~middle_center
                       texts: "var.myReady ? '&f取消准备' : '&f准 备'"
-                      fontSize: 36
+                      fontSize: 24
                       through: true
               开始按钮:
                 type: Canvas
                 attribute:
-                  width: 210
+                  width: 185
                   height: 56
                   visible: var.isLeader
                 action:
@@ -882,22 +1088,22 @@ controls:
                     type: Texture
                     attribute:
                       point: ~stretch_all
-                      normal: "var.allReady ? ~170,120,220,235 : ~90,80,110,235"
-                      hover: ~200,150,240,245
+                      normal: "var.allReady ? '197,141,63,255' : '68,65,53,255'"
+                      hover: ~235,175,79,255
                       shape: ~round_rect
-                      radius: 10
+                      radius: 4
                       through: true
                   开始字:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      texts: ~&f开始游戏
-                      fontSize: 36
+                      texts: ~&f执行远征
+                      fontSize: 24
                       through: true
               公开开关:
                 type: Canvas
                 attribute:
-                  width: 150
+                  width: 132
                   height: 56
                   visible: var.isLeader
                 action:
@@ -911,7 +1117,7 @@ controls:
                       normal: var.cardBg
                       hover: var.cardBgHover
                       shape: ~round_rect
-                      radius: 10
+                      radius: 4
                       through: true
                     effect:
                       stroke:
@@ -922,12 +1128,12 @@ controls:
                     attribute:
                       point: ~middle_center
                       texts: "var.listed ? '&a已公开' : '&f公开到大厅'"
-                      fontSize: 36
+                      fontSize: 24
                       through: true
               审批开关:
                 type: Canvas
                 attribute:
-                  width: 150
+                  width: 132
                   height: 56
                   visible: var.isLeader
                 action:
@@ -941,7 +1147,7 @@ controls:
                       normal: var.cardBg
                       hover: var.cardBgHover
                       shape: ~round_rect
-                      radius: 10
+                      radius: 4
                       through: true
                     effect:
                       stroke:
@@ -952,12 +1158,12 @@ controls:
                     attribute:
                       point: ~middle_center
                       texts: "var.joinMode == 'OPEN' ? '&f直接加入' : '&f需要审批'"
-                      fontSize: 36
+                      fontSize: 24
                       through: true
               离开按钮:
                 type: Canvas
                 attribute:
-                  width: 150
+                  width: 120
                   height: 56
                 action:
                   clickLeft: |-
@@ -968,10 +1174,10 @@ controls:
                     type: Texture
                     attribute:
                       point: ~stretch_all
-                      normal: ~62,66,74,230
-                      hover: ~82,90,105,245
+                      normal: ~57,58,53,255
+                      hover: ~82,82,69,255
                       shape: ~round_rect
-                      radius: 10
+                      radius: 4
                       through: true
                     effect:
                       stroke:
@@ -981,13 +1187,13 @@ controls:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      texts: ~&f离开队伍
-                      fontSize: 36
+                      texts: ~&f离队
+                      fontSize: 24
                       through: true
               解散按钮:
                 type: Canvas
                 attribute:
-                  width: 150
+                  width: 120
                   height: 56
                   visible: var.isLeader
                 action:
@@ -999,24 +1205,24 @@ controls:
                     type: Texture
                     attribute:
                       point: ~stretch_all
-                      normal: ~235,100,100,230
-                      hover: ~255,130,130,245
+                      normal: ~146,58,41,230
+                      hover: ~193,75,46,245
                       shape: ~round_rect
-                      radius: 10
+                      radius: 4
                       through: true
                   解散字:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      texts: ~&f解散队伍
-                      fontSize: 36
+                      texts: ~&f解散
+                      fontSize: 24
                       through: true
           # ═══════ 邀请副面板（居中模态）═══════
           邀请遮罩:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~8,6,16,190
+              normal: ~7,10,11,215
               visible: var.invitePanel
           邀请面板:
             type: Canvas
@@ -1030,9 +1236,9 @@ controls:
                 type: Texture
                 attribute:
                   point: ~stretch_all
-                  normal: ~26,21,44,255
+                  normal: ~24,29,29,255
                   shape: ~round_rect
-                  radius: 18
+                  radius: 4
                   through: true
                 effect:
                   stroke:
@@ -1052,8 +1258,8 @@ controls:
                 attribute:
                   x: 30
                   y: 44
-                  texts: ~&f邀请玩家
-                  fontSize: 54
+                  texts: ~&f人员征召 / 邀请
+                  fontSize: 36
                   through: true
               面板提示:
                 type: Text
@@ -1061,7 +1267,7 @@ controls:
                   x: 30
                   y: 104
                   texts: ~&7同一玩家 60 秒内只能邀请一次；已关闭邀请的玩家不会出现在列表中
-                  fontSize: 36
+                  fontSize: 24
                   limit: 30
                   through: true
               关闭按钮:
@@ -1089,21 +1295,48 @@ controls:
                     attribute:
                       point: ~middle_center
                       texts: ~&f✕
-                      fontSize: 36
+                      fontSize: 24
                       through: true
+              在线滑轨:
+                type: Texture
+                attribute:
+                  x: 578
+                  y: 150
+                  width: 8
+                  height: 380
+                  normal: ~54,56,50,255
+                  through: true
+              在线滑块:
+                type: Texture
+                val: online_slider
+                attribute:
+                  x: 578
+                  y: 150
+                  width: 8
+                  height: 80
+                  maxDragY: 300
+                  normal: var.accent
               在线列表区:
                 type: Scroll
                 attribute:
                   x: 30
                   y: 150
-                  width: 560
+                  width: 548
                   height: 380
+                  moveY: val.online_slider.getDragYRatio()
+                action:
+                  wheel: |-
+                    ratio = self.moveY - self.wheelValue * 0.12
+                    if(ratio < 0){ ratio = 0 }
+                    if(ratio > 1){ ratio = 1 }
+                    val.online_slider.setDragYRatio(ratio)
                 children:
                   在线列表:
                     type: VStack
                     val: online_rows
                     attribute:
-                      width: 548
+                      maxSize: 2147483647
+                      width: 536
                       spaceBetween: 8
                     children:
                       在线行:
@@ -1112,7 +1345,7 @@ controls:
                           entryKey: 0.round()
                           entry: var.onlineRows[self.entryKey]
                           visible: self.entry != none
-                          width: 548
+                          width: 536
                           height: 56
                         children:
                           在线行底:
@@ -1122,7 +1355,7 @@ controls:
                               normal: var.cardBg
                               hover: var.cardBgHover
                               shape: ~round_rect
-                              radius: 10
+                              radius: 4
                               through: true
                           在线名:
                             type: Text
@@ -1130,7 +1363,8 @@ controls:
                               point: ~middle_left
                               x: 16
                               texts: "'&f' + self.parent.entry['name']"
-                              fontSize: 36
+                              fontSize: 24
+                              limit: 18
                               through: true
                           邀请小按钮:
                             type: Canvas
@@ -1147,8 +1381,8 @@ controls:
                                 type: Texture
                                 attribute:
                                   point: ~stretch_all
-                                  normal: ~170,120,220,235
-                                  hover: ~200,150,240,245
+                                  normal: ~197,141,63,255
+                                  hover: ~235,175,79,255
                                   shape: ~round_rect
                                   radius: 8
                                   through: true
@@ -1157,15 +1391,15 @@ controls:
                                 attribute:
                                   point: ~middle_center
                                   texts: ~&0邀请
-                                  fontSize: 36
+                                  fontSize: 24
                                   through: true
               无在线提示:
                 type: Text
                 attribute:
                   x: 30
                   y: 300
-                  texts: ~&8暂无可邀请的在线玩家
-                  fontSize: 36
+                  texts: ~&7暂无可邀请的在线玩家
+                  fontSize: 24
                   visible: "var.onlineCount.round() == 0"
                   through: true
               邀请输入底:
@@ -1177,7 +1411,7 @@ controls:
                   height: 52
                   normal: var.cardBg
                   shape: ~round_rect
-                  radius: 10
+                  radius: 4
                 effect:
                   stroke:
                     width: 2
@@ -1191,7 +1425,7 @@ controls:
                   height: 36
                   length: 16
                   emptyText: ~&7输入玩家名邀请…
-                  fontSize: 36
+                  fontSize: 24
                 action:
                   textChange: |-
                     var.inviteName = self.getContent()
@@ -1212,17 +1446,17 @@ controls:
                     type: Texture
                     attribute:
                       point: ~stretch_all
-                      normal: ~170,120,220,235
-                      hover: ~200,150,240,245
+                      normal: ~197,141,63,255
+                      hover: ~235,175,79,255
                       shape: ~round_rect
-                      radius: 10
+                      radius: 4
                       through: true
                   名邀字:
                     type: Text
                     attribute:
                       point: ~middle_center
                       texts: ~&0邀 请
-                      fontSize: 36
+                      fontSize: 24
                       through: true
               刷新列表按钮:
                 type: Canvas
@@ -1242,7 +1476,7 @@ controls:
                       normal: var.cardBg
                       hover: var.cardBgHover
                       shape: ~round_rect
-                      radius: 10
+                      radius: 4
                       through: true
                     effect:
                       stroke:
@@ -1253,14 +1487,14 @@ controls:
                     attribute:
                       point: ~middle_center
                       texts: ~&f刷新列表
-                      fontSize: 36
+                      fontSize: 24
                       through: true
           # ═══════ 副本选择副面板（居中模态）═══════
           副本遮罩:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~8,6,16,190
+              normal: ~7,10,11,215
               visible: var.dungeonPanel
           副本面板:
             type: Canvas
@@ -1274,9 +1508,9 @@ controls:
                 type: Texture
                 attribute:
                   point: ~stretch_all
-                  normal: ~26,21,44,255
+                  normal: ~24,29,29,255
                   shape: ~round_rect
-                  radius: 18
+                  radius: 4
                   through: true
                 effect:
                   stroke:
@@ -1287,8 +1521,8 @@ controls:
                 attribute:
                   x: 30
                   y: 30
-                  texts: ~&f选择目标副本
-                  fontSize: 54
+                  texts: ~&f路线档案 / 选择目标
+                  fontSize: 36
                   through: true
               副本关闭:
                 type: Canvas
@@ -1315,21 +1549,56 @@ controls:
                     attribute:
                       point: ~middle_center
                       texts: ~&f✕
-                      fontSize: 36
+                      fontSize: 24
                       through: true
+              副本刻度说明:
+                type: Text
+                attribute:
+                  x: 30
+                  y: 76
+                  texts: ~&7点击路线确认  /  滚轮浏览危险等级
+                  fontSize: 24
+                  through: true
+              副本滑轨:
+                type: Texture
+                attribute:
+                  x: 578
+                  y: 110
+                  width: 8
+                  height: 472
+                  normal: ~54,56,50,255
+                  through: true
+              副本滑块:
+                type: Texture
+                val: dungeon_slider
+                attribute:
+                  x: 578
+                  y: 110
+                  width: 8
+                  height: 80
+                  maxDragY: 392
+                  normal: var.accent
               副本列表区:
                 type: Scroll
                 attribute:
                   x: 30
                   y: 110
-                  width: 560
-                  height: 500
+                  width: 548
+                  height: 472
+                  moveY: val.dungeon_slider.getDragYRatio()
+                action:
+                  wheel: |-
+                    ratio = self.moveY - self.wheelValue * 0.12
+                    if(ratio < 0){ ratio = 0 }
+                    if(ratio > 1){ ratio = 1 }
+                    val.dungeon_slider.setDragYRatio(ratio)
                 children:
                   副本列表:
                     type: VStack
                     val: dungeon_rows
                     attribute:
-                      width: 548
+                      maxSize: 2147483647
+                      width: 536
                       spaceBetween: 8
                     children:
                       副本行:
@@ -1338,8 +1607,8 @@ controls:
                           entryKey: 0.round()
                           entry: var.allDungeonRows[self.entryKey]
                           visible: self.entry != none
-                          width: 548
-                          height: 72
+                          width: 536
+                          height: 86
                         action:
                           clickLeft: |-
                             Packet.send(var.packetId, 'party_set_dungeon', self.entry['id'], var.actionToken)
@@ -1349,10 +1618,10 @@ controls:
                             type: Texture
                             attribute:
                               point: ~stretch_all
-                              normal: "var.hasDungeon && var.dungeon['id'] == self.parent.entry['id'] ? ~68,52,96,255 : var.cardBg"
+                              normal: "(var.hasDungeon && var.dungeon['id'] == self.parent.entry['id']) ? '97,70,38,255' : var.cardBg"
                               hover: var.cardBgHover
                               shape: ~round_rect
-                              radius: 10
+                              radius: 4
                               through: true
                             effect:
                               stroke:
@@ -1361,16 +1630,17 @@ controls:
                           副本行名:
                             type: Text
                             attribute:
-                              point: ~middle_left
                               x: 16
-                              texts: "'&f' + self.parent.entry['name'] + '  &8' + self.parent.entry['id']"
-                              fontSize: 36
+                              y: 10
+                              texts: "'&f' + self.parent.entry['name']"
+                              limit: 20
+                              fontSize: 24
                               through: true
                           副本难度:
                             type: Text
                             attribute:
-                              point: ~middle_right
-                              x: -16
-                              texts: "'&e难度' + self.parent.entry['difficulty'].round()"
-                              fontSize: 36
+                              x: 16
+                              y: 44
+                              texts: "'&6难度 / ' + self.parent.entry['difficulty']"
+                              fontSize: 24
                               through: true

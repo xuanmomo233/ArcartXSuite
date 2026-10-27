@@ -64,7 +64,7 @@ public final class AbyssPlayerCommand implements TabExecutor {
                 }
                 // 可选第三参：作战方案 id（模板定义了 plans 时生效）
                 String plan = args.length >= 3 ? args[2] : null;
-                var r = service.enterDungeon(members, args[1], plan);
+                var r = service.enterFromPlayer(player, args[1], plan);
                 if (!r.ok()) player.sendMessage(service.msg("error.enter-failed", "reason", r.reason()));
             }
             case "leave", "quit" -> {

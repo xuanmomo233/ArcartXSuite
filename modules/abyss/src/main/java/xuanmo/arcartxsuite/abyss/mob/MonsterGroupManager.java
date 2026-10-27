@@ -54,6 +54,7 @@ public final class MonsterGroupManager {
     public interface GroupCallback {
         void onGroupStart(AbyssInstance instance, String groupName);
         void onGroupComplete(AbyssInstance instance, String groupName);
+        default void onSpawnFailed(AbyssInstance instance, String groupName) { }
         void onMobDeath(AbyssInstance instance, UUID entityUuid, @Nullable Player killer);
         void runGroupScript(AbyssInstance instance, List<String> lines, String groupName,
                             @Nullable Player trigger);
@@ -150,12 +151,19 @@ public final class MonsterGroupManager {
         }
         logger.fine("[abyss] 组 " + groupName + " 生成 " + spawned + " 只怪 (实例 "
             + instance.getInstanceId() + ")");
+        if (spawned == 0 && !rt.group.monsters().isEmpty()) {
+            rt.state = GroupState.REMOVED;
+            logger.warning("[abyss] 怪组生成失败，终止副本以避免锁房: " + groupName);
+            callback.onSpawnFailed(instance, groupName);
+            return false;
+        }
         callback.onGroupStart(instance, groupName);
         callback.runGroupScript(instance, rt.group.onStart(), groupName, trigger);
         callback.publishEvent("axs.abyss.mob_group_start", Map.of(
             "dungeon", instance.getTemplate().id(),
             "instance", instance.getInstanceId().toString(),
             "group", groupName));
+        checkGroupComplete(instance, rt);
         return true;
     }
 

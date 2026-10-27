@@ -49,7 +49,8 @@ public record DesignObject(
         REWARD("❖", "奖励", "rewards.yml", "rewards", "245,200,110"),
         CHEST("▤", "宝箱", "rewards.yml", "chest-rewards", "230,160,90"),
         ROOM("⌂", "房间", "rooms.yml", "rooms", "170,170,190"),
-        BUFF("✦", "增益池", "buffs.yml", "pools", "240,150,200");
+        BUFF("✦", "增益池", "buffs.yml", "pools", "240,150,200"),
+        DOCUMENT("≡", "配置文件", "", "", "150,200,220");
 
         private final String icon;
         private final String label;
@@ -85,7 +86,7 @@ public record DesignObject(
     }
 
     /** 字段编辑器类型（UI 按此渲染控件）。 */
-    public enum Editor { TEXT, NUMBER, TOGGLE, CYCLE, COORD, REGION, SCRIPT, LIST }
+    public enum Editor { TEXT, NUMBER, TOGGLE, CYCLE, COORD, REGION, SCRIPT, LIST, YAML }
 
     /** 字段描述：name=YAML 键 / label=显示名 / editor / options(CYCLE 的可选值)。 */
     public record FieldSpec(String name, String label, Editor editor, List<String> options) {
@@ -99,6 +100,7 @@ public record DesignObject(
         static FieldSpec region(String n, String l) { return new FieldSpec(n, l, Editor.REGION, List.of()); }
         static FieldSpec script(String n, String l) { return new FieldSpec(n, l, Editor.SCRIPT, List.of()); }
         static FieldSpec list(String n, String l) { return new FieldSpec(n, l, Editor.LIST, List.of()); }
+        static FieldSpec yaml(String n, String l) { return new FieldSpec(n, l, Editor.YAML, List.of()); }
     }
 
     /** 各类型字段 schema（编辑器显隐/控件由服务端决定，UI 纯渲染）。 */
@@ -133,7 +135,8 @@ public record DesignObject(
                 FieldSpec.list("trigger-after", "前置组"),
                 // monsters 是 List<Map>（mob-id/location/amount/level），
                 // 不走行编辑；编辑器上此字段渲染为"标记追加刷怪点"按钮。
-                FieldSpec.coord("monsters", "刷怪点(点杖追加)"),
+                FieldSpec.coord("spawn-point", "追加刷怪点"),
+                FieldSpec.yaml("monsters", "怪物条目(JSON对象)"),
                 FieldSpec.num("complete-when-alive-below", "完成存活线"),
                 FieldSpec.list("plans", "限定方案"),
                 FieldSpec.script("on-start", "开刷时"),
@@ -175,8 +178,9 @@ public record DesignObject(
                 FieldSpec.text("event", "事件名"),
                 FieldSpec.script("script", "脚本"));
             case REWARD -> List.of(
-                FieldSpec.toggle("random", "随机池"),
+                FieldSpec.cycle("type", "奖励类型", "fixed", "random"),
                 FieldSpec.num("picks", "抽取次数"),
+                FieldSpec.yaml("pool", "奖励权重池(JSON对象)"),
                 FieldSpec.list("items", "物品"),
                 FieldSpec.list("mythic-items", "Mythic物品"),
                 FieldSpec.num("money", "金币"),
@@ -185,26 +189,34 @@ public record DesignObject(
                 FieldSpec.list("commands", "命令"));
             case CHEST -> List.of(
                 FieldSpec.text("title", "界面标题"),
-                FieldSpec.num("rows", "行数(1-6)"));
+                FieldSpec.coord("location", "宝箱点位"),
+                FieldSpec.num("rows", "行数(1-6)"),
+                FieldSpec.yaml("options", "宝箱选项(JSON对象)"));
             case ROOM -> List.of(
                 FieldSpec.cycle("type", "类型", "combat", "safe", "boss", "shop"),
                 FieldSpec.coord("origin", "原点"),
                 FieldSpec.region("region", "房间区"),
                 FieldSpec.coord("spawn", "进房站位"),
+                FieldSpec.region("exit", "出口区域"),
+                FieldSpec.yaml("doors", "门盒(JSON对象)"),
                 FieldSpec.script("on-enter", "进房时"),
                 FieldSpec.script("on-lock", "锁门时"),
                 FieldSpec.script("on-clear", "清完时"));
             case BUFF -> List.of(
                 FieldSpec.text("name", "池名"),
                 FieldSpec.num("pick", "选取数"),
+                FieldSpec.num("candidates", "候选数"),
                 FieldSpec.cycle("presentation", "呈现", "panel", "hud", "random"),
-                FieldSpec.num("timeout", "超时(秒)"));
+                FieldSpec.num("timeout", "超时(秒)"),
+                FieldSpec.yaml("options", "增益选项(JSON对象)"));
+            case DOCUMENT -> List.of(FieldSpec.list("content", "YAML文件行(保留缩进，保存时校验)"));
         };
     }
 
     /** 生成改脏后的新对象。 */
     public DesignObject withValue(String field, Object value) {
-        Map<String, Object> next = new LinkedHashMap<>(values);
+        Map<String, Object> next = DesignValues.copy(values);
+        next.remove(field.replace('-', '_'));
         if (value == null) {
             next.remove(field);
         } else {
@@ -244,6 +256,7 @@ public record DesignObject(
 
     public List<String> strList(String field) {
         Object v = values.get(field);
+        if (v == null) v = values.get(field.replace('-', '_'));
         if (v instanceof List<?> l) {
             List<String> out = new ArrayList<>();
             for (Object o : l) out.add(String.valueOf(o));
@@ -254,6 +267,7 @@ public record DesignObject(
 
     public String str(String field) {
         Object v = values.get(field);
+        if (v == null) v = values.get(field.replace('-', '_'));
         return v != null ? String.valueOf(v) : "";
     }
 }

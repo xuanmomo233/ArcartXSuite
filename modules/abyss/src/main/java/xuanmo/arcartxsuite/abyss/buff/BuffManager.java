@@ -42,7 +42,7 @@ public final class BuffManager {
 
     /** 一次进行中的增益选择；picked 记录已选玩家（防回包重放重复领取）。 */
     private record Offer(Pool pool, List<Option> candidates, long deadlineEpochMs,
-                         java.util.Set<UUID> picked) { }
+                         Map<UUID, java.util.Set<String>> choices) { }
 
     public interface Callback {
         /** 执行效果脚本行（effects 逐行，trigger=选择者）。 */
@@ -120,7 +120,7 @@ public final class BuffManager {
         long deadline = pool.timeout() > 0
             ? System.currentTimeMillis() + pool.timeout() * 1000L : 0L;
         map.put(poolId, new Offer(pool, candidates, deadline,
-            ConcurrentHashMap.newKeySet()));
+            new ConcurrentHashMap<>()));
 
         for (Player p : instance.getPlayers()) {
             callback.openBuffUi(p, instance, pool, candidates, pool.timeout());
@@ -142,17 +142,24 @@ public final class BuffManager {
         Map<String, Offer> map = offers.get(instance.getInstanceId());
         Offer offer = map != null ? map.get(poolId) : null;
         if (offer == null) return false;
-        // 每玩家限领一次：buff_pick 回包可能被重放/快速双击
-        if (!offer.picked().add(player.getUniqueId())) return false;
-        Option opt = null;
-        for (Option o : offer.candidates()) {
-            if (o.id().equals(optionId)) { opt = o; break; }
+        if (offer.deadlineEpochMs() > 0 && System.currentTimeMillis() >= offer.deadlineEpochMs()) return false;
+        java.util.Set<String> selected = offer.choices().computeIfAbsent(player.getUniqueId(),
+            key -> ConcurrentHashMap.newKeySet());
+        int required = Math.min(Math.max(1, offer.pool().pick()), offer.candidates().size());
+        if (selected.size() >= required || selected.contains(optionId)) return false;
+        Option chosen = offer.candidates().stream().filter(o -> o.id().equals(optionId)).findFirst().orElse(null);
+        if (chosen == null || !selected.add(optionId)) return false;
+        grant(instance, player, offer.pool(), chosen);
+        int left = required - selected.size();
+        if (left > 0 && !instance.isFinished()) {
+            List<Option> remaining = offer.candidates().stream().filter(o -> !selected.contains(o.id())).toList();
+            Pool p = offer.pool();
+            Pool continuation = new Pool(p.id(), p.name(), left, p.candidates(), p.presentation(), p.timeout(),
+                p.timeoutAuto(), p.oncePerInstance(), p.options());
+            int seconds = offer.deadlineEpochMs() <= 0 ? 0
+                : (int) Math.max(1, (offer.deadlineEpochMs() - System.currentTimeMillis() + 999) / 1000);
+            callback.openBuffUi(player, instance, continuation, remaining, seconds);
         }
-        if (opt == null) {
-            offer.picked().remove(player.getUniqueId()); // 无效选项不消耗领取资格
-            return false;
-        }
-        grant(instance, player, offer.pool(), opt);
         return true;
     }
 
@@ -213,20 +220,25 @@ public final class BuffManager {
     private void scheduleTimeout(AbyssInstance instance, String poolId) {
         Pool pool = pool(instance, poolId);
         if (pool == null) return;
+        Offer expected = offers.get(instance.getInstanceId()).get(poolId);
         instance.registerTask(scheduler.scheduleOnceSeconds(plugin, () -> {
             Map<String, Offer> map = offers.get(instance.getInstanceId());
             Offer offer = map != null ? map.get(poolId) : null;
-            if (offer == null) return;
+            if (offer == null || offer != expected) return;
             // 超时兜底：first/random/none（跳过已手动选过的玩家）
-            for (Player p : instance.getPlayers()) {
-                if (!offer.picked().add(p.getUniqueId())) continue;
-                Option pick = switch (pool.timeoutAuto()) {
-                    case "first" -> offer.candidates().get(0);
-                    case "none" -> null;
-                    default -> offer.candidates().get(
-                        ThreadLocalRandom.current().nextInt(offer.candidates().size()));
-                };
-                if (pick != null) grant(instance, p, offer.pool(), pick);
+            for (Player player : instance.getPlayers()) {
+                var selected = offer.choices().computeIfAbsent(player.getUniqueId(), key -> ConcurrentHashMap.newKeySet());
+                int required = Math.min(Math.max(1, offer.pool().pick()), offer.candidates().size());
+                if ("none".equals(offer.pool().timeoutAuto())) continue;
+                List<Option> remaining = new ArrayList<>(offer.candidates().stream()
+                    .filter(option -> !selected.contains(option.id())).toList());
+                while (selected.size() < required && !remaining.isEmpty()) {
+                    int index = "first".equals(offer.pool().timeoutAuto()) ? 0
+                        : ThreadLocalRandom.current().nextInt(remaining.size());
+                    Option option = remaining.remove(index);
+                    selected.add(option.id());
+                    grant(instance, player, offer.pool(), option);
+                }
             }
             map.remove(poolId);
         }, pool.timeout()));

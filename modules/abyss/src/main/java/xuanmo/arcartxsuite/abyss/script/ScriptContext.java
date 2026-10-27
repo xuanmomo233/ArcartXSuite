@@ -21,6 +21,7 @@ public final class ScriptContext {
     private final @Nullable Player trigger;
     private final @Nullable String mobGroup;     // 怪物组回调时的组名
     private final Map<String, String> extraVars; // 运行时额外变量（如 {task_time}）
+    private boolean settlement;
 
     public ScriptContext(AbyssInstance instance, @Nullable Player trigger,
                          @Nullable String mobGroup, @Nullable Map<String, String> extraVars) {
@@ -33,6 +34,12 @@ public final class ScriptContext {
     public static ScriptContext of(AbyssInstance instance, @Nullable Player trigger) {
         return new ScriptContext(instance, trigger, null, null);
     }
+    public static ScriptContext settlement(AbyssInstance instance, @Nullable Player trigger) {
+        ScriptContext context = of(instance, trigger);
+        context.settlement = true;
+        return context;
+    }
+    public boolean allowsFinishedInstance() { return settlement; }
 
     public static ScriptContext group(AbyssInstance instance, String group, @Nullable Player trigger) {
         return new ScriptContext(instance, trigger, group, null);

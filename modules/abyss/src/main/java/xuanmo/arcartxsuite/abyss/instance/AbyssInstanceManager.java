@@ -46,7 +46,7 @@ public final class AbyssInstanceManager {
     public int getInstanceCount(String templateId) {
         int n = 0;
         for (AbyssInstance i : instances.values()) {
-            if (i.getTemplate().id().equals(templateId)) n++;
+            if (i.getTemplate().id().equals(templateId) && !i.designMode()) n++;
         }
         return n;
     }

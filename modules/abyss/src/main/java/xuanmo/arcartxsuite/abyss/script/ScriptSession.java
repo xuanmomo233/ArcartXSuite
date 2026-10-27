@@ -40,6 +40,7 @@ public final class ScriptSession {
         int idx;
         while ((idx = cursor.getAndIncrement()) < lines.size()) {
             if (cancelled.get()) return;
+            if (context.getInstance().isFinished() && !context.allowsFinishedInstance()) return;
             String line = lines.get(idx);
             if (line == null || line.isBlank() || line.trim().startsWith("#")) {
                 continue;

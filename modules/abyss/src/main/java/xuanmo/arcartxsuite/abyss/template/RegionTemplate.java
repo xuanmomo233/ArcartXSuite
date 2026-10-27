@@ -191,11 +191,62 @@ public final class RegionTemplate {
         };
     }
 
+    /** Detached rotated volume used to return edited procgen geometry to its original orientation. */
+    public RegionTemplate rotatedCopy(int rotDeg) {
+        int[] size = rotatedSize(rotDeg);
+        byte[][] rotated = new byte[height][size[0] * size[2] * 2];
+        for (int y = 0; y < height; y++) for (int z = 0; z < depth; z++) for (int x = 0; x < width; x++) {
+            int[] target = rotatePoint(x, y, z, rotDeg);
+            int oldOffset = (z * width + x) * 2;
+            int offset = (target[2] * size[0] + target[0]) * 2;
+            rotated[y][offset] = layers[y][oldOffset];
+            rotated[y][offset + 1] = layers[y][oldOffset + 1];
+        }
+        var rotation = switch (((rotDeg % 360) + 360) % 360) {
+            case 90 -> org.bukkit.block.structure.StructureRotation.CLOCKWISE_90;
+            case 180 -> org.bukkit.block.structure.StructureRotation.CLOCKWISE_180;
+            case 270 -> org.bukkit.block.structure.StructureRotation.COUNTERCLOCKWISE_90;
+            default -> org.bukkit.block.structure.StructureRotation.NONE;
+        };
+        List<String> rotatedPalette = new ArrayList<>();
+        for (String value : palette) {
+            BlockData data = resolve(value);
+            if (data == null) throw new IllegalArgumentException("无法旋转方块: " + value);
+            data.rotate(rotation);
+            rotatedPalette.add(data.getAsString());
+        }
+        return new RegionTemplate(size[0], height, size[2], rotatedPalette, rotated);
+    }
+
     private static boolean isAirData(String s) {
         for (String a : AIR_DATA) {
             if (s.equals(a)) return true;
         }
         return false;
+    }
+
+    /** Engine-cut door apertures must not become permanent holes in the reusable room asset. */
+    public RegionTemplate restoreGeneratedAir(RegionTemplate original, List<int[]> positions) {
+        if (width != original.width || height != original.height || depth != original.depth)
+            throw new IllegalArgumentException("房间构件尺寸发生变化，请重新捕获");
+        List<String> merged = new ArrayList<>(palette);
+        byte[][] copy = new byte[layers.length][];
+        for (int y = 0; y < layers.length; y++) copy[y] = layers[y].clone();
+        for (int[] p : positions) {
+            int x = p[0], y = p[1], z = p[2];
+            if (x < 0 || x >= width || y < 0 || y >= height || z < 0 || z >= depth) continue;
+            int offset = (z * width + x) * 2;
+            int index = (copy[y][offset] & 255) | ((copy[y][offset + 1] & 255) << 8);
+            int before = (original.layers[y][offset] & 255) | ((original.layers[y][offset + 1] & 255) << 8);
+            if (index >= merged.size() || before >= original.palette.size() || !isAirData(merged.get(index))) continue;
+            String replacement = original.palette.get(before);
+            int target = merged.indexOf(replacement);
+            if (target < 0) { target = merged.size(); merged.add(replacement); }
+            if (target >= 65536) throw new IllegalArgumentException("构件调色板超过65536项");
+            copy[y][offset] = (byte) target;
+            copy[y][offset + 1] = (byte) (target >> 8);
+        }
+        return new RegionTemplate(width, height, depth, merged, copy);
     }
 
     /** BlockData 串解析：全串失败时退回材质名部分（跨版本字段不兼容兜底）。 */

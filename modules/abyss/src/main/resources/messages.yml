@@ -178,7 +178,7 @@ design:
   mark-region: "{prefix}&e选区模式：标记杖 &f左键=A点·右键=B点 &e圈「{kind}」（Shift+右键取消）"
   region-a: "{prefix}&7已设 A 点，右键落 B 点完成选区"
   region-empty: "{prefix}&c选区内没有非空气方块"
-  spawn-added: "{prefix}&a已向 &f{id} &a追加刷怪点（mob-id 待编辑）"
+  spawn-added: "{prefix}&a已向 &f{id} &a追加原版僵尸刷怪点；可在怪物条目中修改类型、数量和等级"
   mark-cancelled: "{prefix}&7已取消标记"
   marked: "{prefix}&a已标记新对象: &f{id}"
   relocated: "{prefix}&a对象 &f{id} &a已重新定位"

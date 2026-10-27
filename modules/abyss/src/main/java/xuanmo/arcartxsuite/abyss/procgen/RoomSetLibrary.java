@@ -33,7 +33,15 @@ public final class RoomSetLibrary {
     public void reload() { sets.clear(); }
 
     /** 房间集目录（capture 命令写入用；不存在时会自动建）。 */
-    public File dir(String setName) { return new File(rootDir, setName); }
+    public File dir(String setName) {
+        if (!validName(setName)) throw new IllegalArgumentException("房间集名不能包含路径分隔符或相对路径");
+        return new File(rootDir, setName);
+    }
+    public static boolean validName(String name) {
+        return name != null && !name.isBlank() && name.length() <= 64 && !name.equals(".") && !name.equals("..")
+            && name.indexOf('/') < 0 && name.indexOf('\\') < 0 && name.indexOf(':') < 0
+            && name.chars().noneMatch(Character::isISOControl);
+    }
 
     /** 全部房间集名（tab 补全/列表）。 */
     public List<String> listSets() {
@@ -69,7 +77,7 @@ public final class RoomSetLibrary {
 
     private Map<String, ProcGenRoomAsset> scan(String setName) {
         Map<String, ProcGenRoomAsset> out = new LinkedHashMap<>();
-        File dir = new File(rootDir, setName);
+        File dir = dir(setName);
         if (!dir.isDirectory()) {
             logger.warning("[abyss] 房间集不存在: " + dir.getPath());
             return out;
@@ -96,6 +104,8 @@ public final class RoomSetLibrary {
             String base = f.getName().substring(0, n.length() - 4);
             File schem = schems.get(base);
             File regionFile = regions.get(base);
+            var metadata = org.bukkit.configuration.file.YamlConfiguration.loadConfiguration(f);
+            if (regionFile != null && "region".equals(metadata.getString("geometry-source"))) schem = null;
             RegionTemplate region = null;
             if (schem != null) {
                 // schem → RegionTemplate 统一内部表示（与 region-yml 同路径铺放）

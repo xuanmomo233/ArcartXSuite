@@ -28,7 +28,7 @@ import xuanmo.arcartxsuite.api.message.MessageProvider;
  * <p>
  * 通道约定：客户端 {@code Packet.send('abyss', '<action>', ...)} →
  * {@link AbyssService#handleClientPacket} → 本类 {@link #handlePacket}。
- * 服务端→客户端：{@code packetBridge.sendPacket(player, "AXS:<ui>", "<handler>", payload)}。
+ * 服务端→客户端：{@code views.send(player, "AXS:<ui>", "<handler>", payload)}。
  * 所有回包带 action_token 校验（防伪造）。
  */
 public final class AbyssUiService implements AbyssService.UiServiceFacade,
@@ -42,6 +42,7 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
     private final @Nullable ItemBridgeAPI itemBridge;
     private final Logger logger;
     private final SecureRandom random = new SecureRandom();
+    private final AbyssUiLifecycle views;
 
     /** 玩家 → 操作令牌（每次开界面轮换）。 */
     private final Map<UUID, String> tokens = new ConcurrentHashMap<>();
@@ -49,6 +50,10 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
     private record PendingChest(AbyssInstance instance, String chestName,
                                 String title, List<ItemStack> items) { }
     private final Map<UUID, PendingChest> pendingChests = new ConcurrentHashMap<>();
+    private record UiOffer(UUID instance, String target) { }
+    private final Map<UUID, UiOffer> shopOffers = new ConcurrentHashMap<>();
+    private final Map<UUID, UiOffer> inputOffers = new ConcurrentHashMap<>();
+    private final Map<UUID, UiOffer> buffOffers = new ConcurrentHashMap<>();
     /** 空槽位 JSON（9 槽常显，未 roll 到的槽位渲染空）。 */
     private static final String AIR_ITEM_JSON = "{\"id\":\"minecraft:air\",\"Count\":1b}";
 
@@ -58,6 +63,7 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         this.packetBridge = packetBridge;
         this.itemBridge = itemBridge;
         this.logger = logger;
+        this.views = new AbyssUiLifecycle(packetBridge, service::scheduleDelayedRaw);
     }
 
     public boolean available() {
@@ -84,14 +90,34 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
     private String shopUi() { return axsUiId(service.config().ui().shopId()); }
 
     private String token(Player p) {
-        String t = Long.toHexString(random.nextLong());
-        tokens.put(p.getUniqueId(), t);
-        return t;
+        return tokens.computeIfAbsent(p.getUniqueId(), id -> Long.toHexString(random.nextLong()));
     }
 
     private boolean checkToken(Player p, List<String> data, int index) {
         String expected = tokens.get(p.getUniqueId());
         return expected != null && data.size() > index && expected.equals(data.get(index));
+    }
+
+    private void openView(Player player, String uiId, Map<String, Object> payload) {
+        if (!views.open(player, uiId, "init", payload, false))
+            player.sendMessage("§c界面打开失败，请检查 ArcartX 客户端和UI注册状态。");
+    }
+
+    private String uiForKey(String key) {
+        return switch (key) {
+            case "browser" -> browserUi(); case "confirm" -> confirmUi();
+            case "party" -> partyUi(); case "lobby" -> lobbyUi(); case "chest" -> chestUi();
+            case "stats" -> statsUi(); case "leaderboard" -> leaderboardUi(); case "input" -> inputUi();
+            case "buff" -> buffUi(); case "shop" -> shopUi(); case "design" -> designUi();
+            case "design_pick" -> designPickUi(); case "design_edit" -> designEditUi();
+            default -> null;
+        };
+    }
+
+    public void closeInstanceViews(Player player) {
+        shopOffers.remove(player.getUniqueId()); inputOffers.remove(player.getUniqueId()); buffOffers.remove(player.getUniqueId());
+        for (String key : List.of("chest", "input", "buff", "shop", "design", "design_pick", "design_edit"))
+            views.close(player, uiForKey(key));
     }
 
     // ═══ UiServiceFacade ═══
@@ -112,8 +138,8 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         for (AbyssTemplate t : service.instances().getAllTemplates()) {
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("id", t.id());
-            row.put("name", ChatColor.stripColor(MessageProvider.translateColors(t.name())));
-            row.put("difficulty", ChatColor.stripColor(MessageProvider.translateColors(t.difficulty())));
+            row.put("name", t.name());
+            row.put("difficulty", t.difficulty());
             row.put("icon", t.icon());
             // 图标 itemJson（Slot.setItemIcon 渲染；桥缺席时 itemJsonOf 兜底基础图标）
             org.bukkit.Material iconMat = org.bukkit.Material.matchMaterial(t.icon());
@@ -136,7 +162,7 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
             row.put("stamina", service.stamina().getStamina(player.getUniqueId()));
             row.put("partySize", partySize);
             row.put("running", service.instances().getInstances(t.id()).stream()
-                .filter(inst -> !inst.isFinished()).count());
+                .filter(inst -> !inst.isFinished() && !inst.designMode()).count());
             rows.put(Integer.toString(i++), row);
         }
         payload.put("dungeonRows", rows);
@@ -145,8 +171,8 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         payload.put("partyText", party != null
             ? party.size() + " 人小队" : "未组队");
 
-        packetBridge.openUiUnsafe(player, browserUi());
-        packetBridge.sendPacket(player, browserUi(), "init", payload);
+        if (views.isOpen(player, browserUi())) views.send(player, browserUi(), "init", payload);
+        else openView(player, browserUi(), payload);
     }
 
     @Override
@@ -169,8 +195,7 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         payload.put("moneyCost", req.moneyCost());
         payload.put("cooldown", req.cooldownSeconds());
         payload.put("timeLimit", template.timeLimitSeconds());
-        packetBridge.openUiUnsafe(player, confirmUi());
-        packetBridge.sendPacket(player, confirmUi(), "init", payload);
+        openView(player, confirmUi(), payload);
     }
 
     @Override
@@ -182,8 +207,7 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
             return;
         }
         Map<String, Object> payload = partyRoomPayload(player, true);
-        packetBridge.openUiUnsafe(player, partyUi());
-        packetBridge.sendPacket(player, partyUi(), "init", payload);
+        openView(player, partyUi(), payload);
     }
 
     @Override
@@ -196,8 +220,7 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         payload.put("hasParty", service.party().partyOf(player) != null);
         payload.put("allowInvite", service.party().inviteAllowed(player.getUniqueId()));
         putLobbyData(payload, player, "", "");
-        packetBridge.openUiUnsafe(player, lobbyUi());
-        packetBridge.sendPacket(player, lobbyUi(), "init", payload);
+        openView(player, lobbyUi(), payload);
     }
 
     /**
@@ -210,6 +233,7 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
                                 xuanmo.arcartxsuite.abyss.template.PuzzleConfig.Puzzle puzzle,
                                 int attemptsLeft) {
         if (!available()) return;
+        inputOffers.put(player.getUniqueId(), new UiOffer(instance.getInstanceId(), puzzle.id()));
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("packetId", CHANNEL);
         payload.put("action_token", token(player));
@@ -221,13 +245,12 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         payload.put("masked", puzzle.masked() ? "1" : "0");
         payload.put("attemptsText", attemptsLeft < 0 ? ""
             : service.msg("puzzle.attempts-left", "left", String.valueOf(attemptsLeft)));
-        packetBridge.openUiUnsafe(player, inputUi());
-        packetBridge.sendPacket(player, inputUi(), "init", payload);
+        openView(player, inputUi(), payload);
     }
 
     /**
      * 增益选择面板：buffs.yml panel 池。
-     * init 下发候选卡片（≤4 槽位）；客户端选择 →
+     * init 下发全部候选卡片（可滚动）；多选时重开剩余候选，客户端选择 →
      * {@code buff_pick <poolId> <optionId> <token>} 回包。
      */
     @Override
@@ -236,16 +259,18 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
                               List<xuanmo.arcartxsuite.abyss.template.BuffConfig.Option> candidates,
                               int timeoutSeconds) {
         if (!available() || candidates.isEmpty()) return;
+        buffOffers.put(player.getUniqueId(), new UiOffer(instance.getInstanceId(), pool.id()));
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("packetId", CHANNEL);
         payload.put("action_token", token(player));
         payload.put("poolId", pool.id());
         payload.put("poolName", pool.name());
         payload.put("timeout", Math.max(0, timeoutSeconds));
+        payload.put("picksLeft", Math.min(Math.max(1, pool.pick()), candidates.size()));
+        payload.put("timeoutText", "none".equals(pool.timeoutAuto()) ? "到时放弃未选增益" : "到时自动补选");
         Map<String, Object> rows = new LinkedHashMap<>();
         int i = 0;
         for (var opt : candidates) {
-            if (i >= 4) break; // UI 固定 4 卡槽
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("id", opt.id());
             row.put("name", opt.name());
@@ -276,8 +301,7 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         }
         payload.put("count", i);
         payload.put("cards", rows);
-        packetBridge.openUiUnsafe(player, buffUi());
-        packetBridge.sendPacket(player, buffUi(), "init", payload);
+        openView(player, buffUi(), payload);
     }
 
     /** 组装大厅列表数据（供 init / lobby_list 推送复用）。 */
@@ -310,7 +334,7 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         int di = 0;
         for (AbyssTemplate t : service.instances().getAllTemplates()) {
             dungeonRows.put(Integer.toString(di++),
-                Map.of("id", t.id(), "name", ChatColor.stripColor(MessageProvider.translateColors(t.name()))));
+                Map.of("id", t.id(), "name", t.name()));
         }
         payload.put("dungeonRows", dungeonRows);
         payload.put("dungeonCount", di);
@@ -338,8 +362,9 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         if (!available()) return;
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("packetId", CHANNEL);
+        payload.put("allowInvite", service.party().inviteAllowed(player.getUniqueId()));
         putLobbyData(payload, player, keyword, dungeonFilter);
-        packetBridge.sendPacket(player, lobbyUi(), "lobby_list", payload);
+        views.send(player, lobbyUi(), "lobby_list", payload);
     }
 
     /**
@@ -406,9 +431,13 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         Map<String, Object> feedRows = new LinkedHashMap<>();
         int fi = 0;
         for (var e : party.feedSnapshot()) {
-            feedRows.put(Integer.toString(fi++), Map.of(
-                "sender", e.sender() != null ? e.sender() : "",
-                "text", e.text()));
+            String sender = e.sender() != null ? e.sender() : "";
+            List<String> displayLines = AbyssTextLayout.wrap(sender.isEmpty()
+                ? "&7/ " + e.text() : "&6" + sender + " &7: &f" + e.text(), 40);
+            for (String line : displayLines) {
+                feedRows.put(Integer.toString(fi++), Map.of(
+                    "sender", sender, "text", e.text(), "display", line));
+            }
         }
         payload.put("feedRows", feedRows);
         payload.put("feedCount", fi);
@@ -445,7 +474,7 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         if (!available() || party == null) return;
         for (Player member : party.onlineMembers()) {
             Map<String, Object> payload = partyRoomPayload(member, false);
-            packetBridge.sendPacket(member, partyUi(), "update", payload);
+            views.send(member, partyUi(), "update", payload);
         }
     }
 
@@ -466,7 +495,7 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         payload.put("packetId", CHANNEL);
         payload.put("onlineRows", rows);
         payload.put("onlineCount", i);
-        packetBridge.sendPacket(player, partyUi(), "online_list", payload);
+        views.send(player, partyUi(), "online_list", payload);
     }
 
     @Override
@@ -481,21 +510,29 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         Map<String, Object> rows = new LinkedHashMap<>();
         int i = 0;
         if (instance != null) {
-            for (Map.Entry<UUID, Integer> e : instance.getKillCounts().entrySet()) {
-                Player p = org.bukkit.Bukkit.getPlayer(e.getKey());
-                Map<String, Double> sum = service.stats().summary(instance, e.getKey());
+            Set<UUID> players = new java.util.LinkedHashSet<>(instance.getPlayerUUIDs());
+            players.addAll(instance.getKillCounts().keySet());
+            for (UUID playerId : players) {
+                Player p = org.bukkit.Bukkit.getPlayer(playerId);
+                Map<String, Double> sum = service.stats().summary(instance, playerId);
                 Map<String, Object> r = new LinkedHashMap<>();
                 r.put("name", p != null ? p.getName() : "?");
-                r.put("kills", e.getValue());
+                r.put("kills", instance.getKillCounts().getOrDefault(playerId, 0));
                 r.put("damage", sum.get("damage"));
                 r.put("taken", sum.get("damage_taken"));
                 r.put("heal", sum.get("healing"));
+                r.put("killsText", compact(instance.getKillCounts().getOrDefault(playerId, 0)));
+                r.put("damageText", compact(sum.getOrDefault("damage", 0.0)));
+                r.put("takenText", compact(sum.getOrDefault("damage_taken", 0.0)));
+                r.put("healText", compact(sum.getOrDefault("healing", 0.0)));
                 rows.put(Integer.toString(i++), r);
             }
         }
         payload.put("statRows", rows);
-        packetBridge.openUiUnsafe(player, statsUi());
-        packetBridge.sendPacket(player, statsUi(), "init", payload);
+        payload.put("statCount", rows.size());
+        PendingChest pending = pendingChests.get(player.getUniqueId());
+        payload.put("hasChest", pending != null && pending.instance() == instance);
+        openView(player, statsUi(), payload);
     }
 
     @Override
@@ -521,11 +558,12 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
             r.put("name", op.getName() != null ? op.getName() : "?");
             r.put("time", AbyssService.formatTime(e.bestTimeSeconds()));
             r.put("completions", e.completions());
+            r.put("completionsText", compact(e.completions()));
             rows.put(Integer.toString(i++), r);
         }
         payload.put("boardRows", rows);
-        packetBridge.openUiUnsafe(player, leaderboardUi());
-        packetBridge.sendPacket(player, leaderboardUi(), "init", payload);
+        payload.put("boardCount", rows.size());
+        openView(player, leaderboardUi(), payload);
     }
 
     // ═══ ChestUiHandler ═══
@@ -578,8 +616,7 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
                 i < items.size() ? itemJsonOf(items.get(i)) : AIR_ITEM_JSON);
             payload.put("itemAmount" + i, i < items.size() ? items.get(i).getAmount() : 0);
         }
-        packetBridge.openUiUnsafe(player, chestUi());
-        packetBridge.sendPacket(player, chestUi(), "init", payload);
+        openView(player, chestUi(), payload);
     }
 
     // ═══ 副本商店 ═══
@@ -592,6 +629,7 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
                          xuanmo.arcartxsuite.abyss.template.ShopConfig.Shop shop,
                          AbyssInstance instance) {
         if (!available()) return;
+        shopOffers.put(player.getUniqueId(), new UiOffer(instance.getInstanceId(), shop.id()));
         int coins = varInt(instance, shop.currencyVar());
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("packetId", CHANNEL);
@@ -599,14 +637,15 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         payload.put("shopId", shop.id());
         payload.put("shopTitle", shop.title());
         payload.put("coins", coins);
+        payload.put("coinsText", compact(coins));
         Map<String, Object> rows = new LinkedHashMap<>();
         int i = 0;
         for (var g : shop.goods()) {
-            if (i >= 8) break; // UI 固定 8 行
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("id", g.id());
             row.put("name", g.name());
             row.put("price", g.price());
+            row.put("priceText", Integer.toString(g.price()));
             org.bukkit.Material mat = org.bukkit.Material.matchMaterial(
                 g.icon().contains(":") ? g.icon().substring(g.icon().indexOf(':') + 1) : g.icon());
             row.put("iconJson", mat != null
@@ -618,8 +657,7 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         }
         payload.put("goodsCount", i);
         payload.put("goods", rows);
-        packetBridge.openUiUnsafe(player, shopUi());
-        packetBridge.sendPacket(player, shopUi(), "init", payload);
+        openView(player, shopUi(), payload);
     }
 
     /**
@@ -629,9 +667,12 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
     private void buyShop(Player player, String shopId, int index) {
         AbyssInstance inst = service.instances().getInstance(player);
         if (inst == null || inst.isFinished()) return;
+        if (!new UiOffer(inst.getInstanceId(), shopId).equals(shopOffers.get(player.getUniqueId()))
+            || !views.isOpen(player, shopUi())) return;
         var shop = inst.getTemplate().shops().shop(shopId);
         if (shop == null || index < 0 || index >= shop.goods().size()) return;
         var g = shop.goods().get(index);
+        if (g.price() < 0) return;
         int coins = varInt(inst, shop.currencyVar());
         if (coins < g.price()) {
             player.sendMessage(color("&c金币不足（需要 &e" + g.price() + "&c，当前 &e" + coins + "&c）"));
@@ -645,7 +686,8 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         // 余额回推（UI 端 coin 文本/可购态刷新）
         Map<String, Object> upd = new LinkedHashMap<>();
         upd.put("coins", varInt(inst, shop.currencyVar()));
-        packetBridge.sendPacket(player, shopUi(), "update", upd);
+        upd.put("coinsText", compact(varInt(inst, shop.currencyVar())));
+        views.send(player, shopUi(), "update", upd);
     }
 
     private static int varInt(AbyssInstance inst, String var) {
@@ -656,6 +698,13 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
 
     private static String color(String s) {
         return org.bukkit.ChatColor.translateAlternateColorCodes('&', s);
+    }
+
+    private static String compact(double value) {
+        if (!Double.isFinite(value)) return "0";
+        if (Math.abs(value) >= 100_000_000) return String.format(java.util.Locale.ROOT, "%.1f亿", value / 100_000_000);
+        if (Math.abs(value) >= 10_000) return String.format(java.util.Locale.ROOT, "%.1f万", value / 10_000);
+        return Long.toString(Math.round(value));
     }
 
     /**
@@ -682,15 +731,14 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
                                xuanmo.arcartxsuite.abyss.design.DesignSession s) {
         if (!available()) return;
         Map<String, Object> payload = designMainPayload(player, s, true);
-        packetBridge.openUiUnsafe(player, designUi());
-        packetBridge.sendPacket(player, designUi(), "init", payload);
+        openView(player, designUi(), payload);
     }
 
     /** 主面板数据刷新（节点切换/对象变动后推 update）。 */
     public void pushDesignMain(Player player,
                                xuanmo.arcartxsuite.abyss.design.DesignSession s) {
         if (!available()) return;
-        packetBridge.sendPacket(player, designUi(), "update",
+        views.send(player, designUi(), "update",
             designMainPayload(player, s, false));
     }
 
@@ -703,6 +751,11 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         payload.put("dungeonName", s.instance().getTemplate().name());
         payload.put("dungeonId", s.instance().getTemplate().id());
         payload.put("dirty", s.dirtyCount());
+        payload.put("worldDirty", s.worldDirty());
+        payload.put("saving", s.saving());
+        payload.put("worldSaveLabel", s.instance().getTemplate().procgen() != null ? "保存当前构件" : "配置+建筑");
+        payload.put("worldSaveHint", s.instance().getTemplate().procgen() != null
+            ? "站在要保存的房间内；保存会更新同名共享构件" : "建筑保存为独立世界快照，退出前请等待完成提示");
         payload.put("selNode", s.selectedNode() != null ? s.selectedNode() : "");
         // 节点链
         Map<String, Object> nodes = new LinkedHashMap<>();
@@ -749,7 +802,10 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         for (var kind : xuanmo.arcartxsuite.abyss.design.DesignObject.Kind.values()) {
             // 房间/房内怪组不在挑选列表（房间由 floors.yml 结构决定，不在此处新建）
             if (kind == xuanmo.arcartxsuite.abyss.design.DesignObject.Kind.ROOM
-                || kind == xuanmo.arcartxsuite.abyss.design.DesignObject.Kind.ROOM_GROUP) continue;
+                || kind == xuanmo.arcartxsuite.abyss.design.DesignObject.Kind.DOCUMENT) continue;
+            boolean inRoom = nodeKey.startsWith("room:");
+            if (kind == xuanmo.arcartxsuite.abyss.design.DesignObject.Kind.ROOM_GROUP && !inRoom) continue;
+            if (kind == xuanmo.arcartxsuite.abyss.design.DesignObject.Kind.GROUP && inRoom) continue;
             String mark = kind.pointMarkable() ? "point"
                 : (kind.regionMarkable() ? "region" : "none");
             kinds.put(Integer.toString(i++), Map.of(
@@ -759,8 +815,7 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         }
         payload.put("kindRows", kinds);
         payload.put("kindCount", i);
-        packetBridge.openUiUnsafe(player, designPickUi());
-        packetBridge.sendPacket(player, designPickUi(), "init", payload);
+        openView(player, designPickUi(), payload);
     }
 
     /** 编辑面板：字段表单 + 脚本行组。 */
@@ -772,8 +827,7 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         var obj = s.get(objKey);
         if (dm == null || obj == null) return;
         Map<String, Object> payload = designEditPayload(dm, s, obj, true, player);
-        packetBridge.openUiUnsafe(player, designEditUi());
-        packetBridge.sendPacket(player, designEditUi(), "init", payload);
+        openView(player, designEditUi(), payload);
     }
 
     /** 编辑面板数据刷新。 */
@@ -784,7 +838,7 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         var dm = service.designManager();
         var obj = s.get(objKey);
         if (dm == null || obj == null) return;
-        packetBridge.sendPacket(player, designEditUi(), "update",
+        views.send(player, designEditUi(), "update",
             designEditPayload(dm, s, obj, false, player));
     }
 
@@ -823,14 +877,19 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
             String[] v = g.split("\\|", -1);
             if (v.length < 2) continue;
             String field = v[0];
-            List<String> lines = obj.strList(field);
+            List<String> lines = dm.lines(obj, field);
+            int pages = Math.max(1, (lines.size() + 11) / 12);
+            int page = Math.min(s.linePage(obj.key(), field), pages - 1);
+            s.linePage(obj.key(), field, page);
+            int offset = page * 12;
             Map<String, Object> lineMap = new LinkedHashMap<>();
-            for (int li = 0; li < lines.size(); li++) {
-                lineMap.put(Integer.toString(li), lines.get(li));
+            for (int li = offset; li < Math.min(lines.size(), offset + 12); li++) {
+                lineMap.put(Integer.toString(li - offset), lines.get(li));
             }
             groups.put(Integer.toString(gi++), Map.of(
                 "field", field, "label", v[1],
-                "lines", lineMap, "lineCount", lines.size()));
+                "lines", lineMap, "lineCount", lineMap.size(), "lineTotal", lines.size(),
+                "lineOffset", offset, "linePage", page, "linePages", pages));
         }
         payload.put("groupRows", groups);
         payload.put("groupCount", gi);
@@ -840,9 +899,9 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
     /** 关全部设计面板（退出设计/实例销毁时）。 */
     public void closeDesignUis(Player player) {
         if (!available()) return;
-        packetBridge.closeUiUnsafe(player, designUi());
-        packetBridge.closeUiUnsafe(player, designPickUi());
-        packetBridge.closeUiUnsafe(player, designEditUi());
+        views.close(player, designUi());
+        views.close(player, designPickUi());
+        views.close(player, designEditUi());
     }
 
     // ── DesignManager.Ui 桥接（设计面板打开/刷新回调）──
@@ -881,28 +940,41 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
     /** 进入副本：开 HUD + 首帧数据。 */
     public void openHud(Player player, AbyssInstance instance) {
         if (!available()) return;
-        if (packetBridge.openUiUnsafe(player, hudUi())) {
+        if (views.open(player, hudUi(), "update", hudPayload(instance), true))
             hudOpen.add(player.getUniqueId());
-            pushHudUpdate(player, instance);
-        }
     }
 
     /** 离开副本：关 HUD。 */
     public void closeHud(Player player) {
         hudOpen.remove(player.getUniqueId());
-        if (available()) packetBridge.closeUiUnsafe(player, hudUi());
+        if (available()) views.close(player, hudUi());
     }
 
     /** HUD 周期数据推送（service proximityTick 调用）。仅在 HUD 已打开时推送。 */
     public void pushHudUpdate(Player player, AbyssInstance instance) {
         if (!available() || !hudOpen.contains(player.getUniqueId())) return;
+        views.send(player, hudUi(), "update", hudPayload(instance));
+    }
+
+    private Map<String, Object> hudPayload(AbyssInstance instance) {
         var mgr = service.mobGroups();
         int[] gp = mgr.groupProgress(instance);
+        String progressLabel = "波次";
+        if (instance.getTemplate().procgen() != null && service.procgen() != null) {
+            gp = service.procgen().progress(instance); progressLabel = "房间";
+        } else if (instance.getTemplate().mode() == AbyssTemplate.Mode.FLOORS && service.roomManager() != null) {
+            gp = service.roomManager().progress(instance); progressLabel = "房间";
+        }
         long limit = instance.getTemplate().timeLimitSeconds();
         long remain = limit > 0 ? Math.max(0, limit - instance.getRunningTime()) : 0;
         Map<String, Object> p = new LinkedHashMap<>();
         p.put("dungeonName", instance.getTemplate().name());
         p.put("status", instance.getStatus().name());
+        p.put("statusLabel", switch (instance.getStatus()) {
+            case PREPARING -> "准备中"; case ACTIVE -> "进行中"; case COMPLETED -> "已通关";
+            case FAILED -> "挑战失败"; case CANCELLED -> "已取消";
+        });
+        p.put("progressLabel", progressLabel);
         p.put("groupTotal", gp[0]);
         p.put("groupDone", gp[1]);
         p.put("activeGroup", mgr.activeGroupName(instance) != null
@@ -917,18 +989,41 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         // 任务进度不下发：由 QuestGPS guide HUD / Chemdah scoreboard 呈现
         var gs = service.guide();
         p.put("guideText", gs != null ? gs.guideText(instance) : "");
-        packetBridge.sendPacket(player, hudUi(), "update", p);
+        return p;
     }
 
     // ═══ 客户端包路由 ═══
 
     @Override
     public boolean handlePacket(Player player, String packetId, List<String> data) {
+        try {
+            if (CHANNEL.equalsIgnoreCase(packetId) && data != null && !data.isEmpty()
+                && data.get(0).startsWith("design_")) {
+                var s = designSession(player);
+                if (s == null || !player.hasPermission("arcartxsuite.abyss.admin")) return true;
+                if (s.saving()) { player.sendMessage("§e正在保存，请等待完成。"); return true; }
+                if (data.stream().anyMatch(v -> v == null || v.length() > 65536)) return true;
+            }
+            return handlePacketChecked(player, packetId, data);
+        } catch (IllegalArgumentException ex) {
+            player.sendMessage("§c操作未应用: " + ex.getMessage());
+            return true;
+        }
+    }
+
+    private boolean handlePacketChecked(Player player, String packetId, List<String> data) {
         if (!CHANNEL.equalsIgnoreCase(packetId) || data == null || data.isEmpty()) {
             return false;
         }
         String action = data.get(0).toLowerCase();
         switch (action) {
+            case "close_view" -> {
+                if (checkToken(player, data, 2)) {
+                    String ui = uiForKey(data.get(1));
+                    if (ui != null && data.size() > 3) views.closed(player, ui, data.get(3));
+                }
+                return true;
+            }
             case "open_confirm" -> {
                 if (!checkToken(player, data, 2)) return true;
                 String dungeonId = data.size() > 1 ? data.get(1) : null;
@@ -942,10 +1037,7 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
                 String dungeonId = data.size() > 1 ? data.get(1) : null;
                 if (dungeonId == null) return true;
                 // 组队时整队进本；单人直接进
-                Party party = service.party().partyOf(player);
-                List<Player> entrants = party != null && party.size() > 1
-                    ? party.onlineMembers() : List.of(player);
-                AbyssService.EnterResult r = service.enterDungeon(entrants, dungeonId);
+                AbyssService.EnterResult r = service.enterFromPlayer(player, dungeonId, null);
                 if (!r.ok() && r.reason() != null) {
                     player.sendMessage(r.reason());
                 }
@@ -1010,6 +1102,7 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
                         party.appendFeed(null, player.getName() + " 离开了队伍");
                         service.party().leave(player);
                         pushPartyUpdate(party);
+                        openLobby(player);
                     }
                 }
                 return true;
@@ -1018,7 +1111,9 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
                 if (checkToken(player, data, 1)) {
                     Party party = service.party().partyOf(player);
                     if (party != null && party.isLeader(player.getUniqueId())) {
+                        List<Player> members = party.onlineMembers();
                         service.party().disband(party);
+                        for (Player member : members) openLobby(member);
                     }
                 }
                 return true;
@@ -1049,8 +1144,7 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
                         player.sendMessage(service.msg("party.no-dungeon"));
                         return true;
                     }
-                    AbyssService.EnterResult r = service.enterDungeon(
-                        party.onlineMembers(), dungeonId);
+                    AbyssService.EnterResult r = service.enterFromPlayer(player, dungeonId, null);
                     if (!r.ok() && r.reason() != null) {
                         player.sendMessage(r.reason());
                     }
@@ -1209,6 +1303,10 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
                         if (target != null) service.party().kick(player, target);
                     }
                     if (party != null) pushPartyUpdate(party);
+                    if (targetUuid != null) {
+                        Player removed = org.bukkit.Bukkit.getPlayer(targetUuid);
+                        if (removed != null && service.party().partyOf(removed) == null) openLobby(removed);
+                    }
                 }
                 return true;
             }
@@ -1241,7 +1339,8 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
             }
             case "chest_claim_one" -> {
                 if (checkToken(player, data, 2)) {
-                    claimChest(player, parseInt(data.get(1), -1));
+                    int index = parseInt(data.get(1), -1);
+                    if (index >= 0) claimChest(player, index);
                 }
                 return true;
             }
@@ -1250,6 +1349,16 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
                 if (checkToken(player, data, 3)) {
                     buyShop(player, data.size() > 1 ? data.get(1) : "",
                         parseInt(data.size() > 2 ? data.get(2) : "-1", -1));
+                }
+                return true;
+            }
+            case "reopen_chest" -> {
+                if (checkToken(player, data, 1)) {
+                    PendingChest pending = pendingChests.get(player.getUniqueId());
+                    if (pending != null) {
+                        var definition = pending.instance().getTemplate().rewards().chestRewards().get(pending.chestName());
+                        if (definition != null) open(player, definition, pending.instance());
+                    }
                 }
                 return true;
             }
@@ -1267,8 +1376,16 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
                     if (puzzleId != null && service.puzzles() != null) {
                         // 校验玩家确实在副本实例内（防伪造/跨实例提交）
                         AbyssInstance inst = service.instances().getInstance(player);
-                        if (inst != null && !inst.isFinished()) {
-                            service.puzzles().submitInput(inst, player, puzzleId, answer);
+                        UiOffer offer = inputOffers.get(player.getUniqueId());
+                        if (inst != null && !inst.isFinished() && answer.length() <= 4096
+                            && new UiOffer(inst.getInstanceId(), puzzleId).equals(offer)
+                            && views.isOpen(player, inputUi())) {
+                            boolean handled = service.puzzles().submitInput(inst, player, puzzleId, answer);
+                            if (handled && views.isOpen(player, inputUi()) && inputOffers.get(player.getUniqueId()) == offer
+                                && !service.puzzles().openInput(inst, player, puzzleId)) {
+                                inputOffers.remove(player.getUniqueId());
+                                views.close(player, inputUi());
+                            }
                         }
                     }
                 }
@@ -1281,7 +1398,9 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
                     String optionId = data.size() > 2 ? data.get(2) : "";
                     if (poolId != null && service.buffs() != null) {
                         AbyssInstance inst = service.instances().getInstance(player);
-                        if (inst != null && !inst.isFinished()) {
+                        if (inst != null && !inst.isFinished()
+                            && new UiOffer(inst.getInstanceId(), poolId).equals(buffOffers.get(player.getUniqueId()))
+                            && views.isOpen(player, buffUi())) {
                             service.buffs().pick(inst, player, poolId, optionId);
                         }
                     }
@@ -1373,9 +1492,9 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
                 var dm = service.designManager();
                 if (s != null && dm != null && checkToken(player, data, 3)) {
                     var obj = s.get(data.get(1));
-                    String field = data.get(2);
+                    String field = "spawn-point".equals(data.get(2)) ? "monsters" : data.get(2);
                     if (obj != null) {
-                        var kind = "region".equals(field)
+                        var kind = ("region".equals(field) || "exit".equals(field))
                             ? xuanmo.arcartxsuite.abyss.design.DesignSession.PendingMark.Kind.REGION
                             : xuanmo.arcartxsuite.abyss.design.DesignSession.PendingMark.Kind.POINT;
                         s.pending(new xuanmo.arcartxsuite.abyss.design.DesignSession.PendingMark(
@@ -1393,6 +1512,10 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
                 var s = designSession(player);
                 var dm = service.designManager();
                 if (s != null && dm != null && checkToken(player, data, 2)) {
+                    if (!s.confirmDeletion(data.get(1))) {
+                        player.sendMessage("§e请在10秒内再次点击该对象的删除按钮以确认。");
+                        return true;
+                    }
                     dm.delete(s, data.get(1));
                     closeUi(player, designEditUi());
                     player.sendMessage(service.msg("design.deleted"));
@@ -1413,12 +1536,23 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
                 }
                 return true;
             }
+            case "design_line_page" -> {
+                var s = designSession(player);
+                if (s != null && checkToken(player, data, 4)) {
+                    s.linePage(data.get(1), data.get(2), parseInt(data.get(3), 0));
+                    pushDesignEdit(player, s, data.get(1));
+                }
+                return true;
+            }
             case "design_line_add" -> {
                 // design_line_add <objKey> <field> <line> <token>
                 var s = designSession(player);
                 var dm = service.designManager();
                 if (s != null && dm != null && checkToken(player, data, 4)) {
                     dm.lineAdd(s, data.get(1), data.get(2), data.get(3));
+                    var object = s.get(data.get(1));
+                    if (object != null) s.linePage(object.key(), data.get(2),
+                        Math.max(0, (dm.lines(object, data.get(2)).size() - 1) / 12));
                     pushDesignEdit(player, s, data.get(1));
                 }
                 return true;
@@ -1534,7 +1668,7 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
             if (!items.isEmpty()) {
                 service.dispatchItems(player, items, "chest");
             }
-            if (available()) packetBridge.closeUiUnsafe(player, chestUi());
+            if (available()) views.close(player, chestUi());
             return;
         }
         if (index >= 0 && index < items.size()) {
@@ -1546,7 +1680,7 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
                 pendingChests.remove(player.getUniqueId());
                 pc.instance().markTriggeredOnce(
                     AbyssService.chestClaimKey(pc.chestName(), player.getUniqueId()));
-                if (available()) packetBridge.closeUiUnsafe(player, chestUi());
+                if (available()) views.close(player, chestUi());
             } else if (available()) {
                 // 回推剩余物品：已领槽位从 UI 上清掉
                 pushChestUpdate(player, pc);
@@ -1566,7 +1700,7 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
                 i < pc.items().size() ? itemJsonOf(pc.items().get(i)) : AIR_ITEM_JSON);
             payload.put("itemAmount" + i, i < pc.items().size() ? pc.items().get(i).getAmount() : 0);
         }
-        packetBridge.sendPacket(player, chestUi(), "init", payload);
+        views.send(player, chestUi(), "init", payload);
     }
 
     /** 玩家掉线/关 UI 未领取：全部发放（不丢奖励）并标记已领。 */
@@ -1583,6 +1717,8 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
     public void onPlayerGone(Player player) {
         UUID uid = player.getUniqueId();
         tokens.remove(uid);
+        views.clear(player);
+        shopOffers.remove(uid); inputOffers.remove(uid); buffOffers.remove(uid);
         hudOpen.remove(uid);
         flushPendingChest(player);
     }
@@ -1612,7 +1748,7 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
     }
 
     private void closeUi(Player p, String uiId) {
-        if (available()) packetBridge.closeUiUnsafe(p, uiId);
+        if (available()) views.close(p, uiId);
     }
 
     /**
@@ -1644,7 +1780,7 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
             return;
         }
         // 无定位对象：直接建
-        String id = kind.name().toLowerCase() + "_" + (s.objects().size() + 1);
+        String id = s.nextId(kind, kind.name().toLowerCase());
         Map<String, Object> vals = new LinkedHashMap<>();
         xuanmo.arcartxsuite.abyss.design.DesignManager.seedDefaults(kind, vals);
         String key = s.uniqueKey(kind, id);

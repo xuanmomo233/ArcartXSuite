@@ -15,10 +15,13 @@ public final class DesignCoords {
         String[] v = s.trim().split(",");
         if (v.length < 3) return null;
         try {
-            return new int[]{
-                (int) Double.parseDouble(v[0].trim()),
-                (int) Double.parseDouble(v[1].trim()),
-                (int) Double.parseDouble(v[2].trim())};
+            int[] result = new int[3];
+            for (int i = 0; i < 3; i++) {
+                double value = Double.parseDouble(v[i].trim());
+                if (!Double.isFinite(value) || value < Integer.MIN_VALUE || value >= Integer.MAX_VALUE) return null;
+                result[i] = (int) Math.floor(value);
+            }
+            return result;
         } catch (NumberFormatException e) {
             return null;
         }

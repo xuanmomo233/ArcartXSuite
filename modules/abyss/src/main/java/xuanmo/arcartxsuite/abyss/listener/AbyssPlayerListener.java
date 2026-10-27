@@ -63,6 +63,10 @@ public final class AbyssPlayerListener implements Listener {
         if (!(event.getEntity() instanceof Player player)) return;
         AbyssInstance instance = service.instances().getInstance(player);
         if (instance == null) return;
+        if (service.isDesignInstance(instance)) {
+            event.setCancelled(true);
+            return;
+        }
         if (service.handleFatalDamage(instance, player, event)) {
             event.setCancelled(true);
         }
@@ -80,6 +84,7 @@ public final class AbyssPlayerListener implements Listener {
             event.setKeepLevel(true);
             event.setDroppedExp(0);
         }
+        if (service.isDesignInstance(instance)) return;
         if (!instance.isPlayerCurrentlyDead(player)) {
             int deaths = instance.recordDeath(player);
             service.runLifecycleScript(instance, "player_death", player);
@@ -97,6 +102,11 @@ public final class AbyssPlayerListener implements Listener {
     public void onRespawn(org.bukkit.event.player.PlayerRespawnEvent event) {
         Player player = event.getPlayer();
         AbyssInstance instance = service.instances().getInstance(player);
+        if (instance != null && service.isDesignInstance(instance)) {
+            var spawn = service.spawnLocation(instance);
+            if (spawn != null) event.setRespawnLocation(spawn);
+            return;
+        }
         if (instance == null || !instance.isPlayerCurrentlyDead(player)) return;
         var spawn = service.spawnLocation(instance);
         if (spawn != null) event.setRespawnLocation(spawn);
@@ -128,6 +138,15 @@ public final class AbyssPlayerListener implements Listener {
         Player player = event.getPlayer();
         AbyssInstance instance = service.instances().getInstance(player);
         if (instance == null || instance.isFinished()) return;
+        if (service.isDesignInstance(instance)) {
+            var session = service.designManager() != null ? service.designManager().session(player) : null;
+            if (event.getTo() != null && event.getTo().getWorld() != instance.getWorld()
+                && (session == null || !session.saving())) {
+                event.setCancelled(true);
+                player.sendMessage("§e请先退出设计模式，再离开设计世界。");
+            }
+            return;
+        }
 
         PlayerTeleportEvent.TeleportCause cause = event.getCause();
         boolean blocked = switch (cause) {
@@ -170,6 +189,7 @@ public final class AbyssPlayerListener implements Listener {
         Player player = event.getPlayer();
         AbyssInstance instance = service.instances().getInstance(player);
         if (instance == null || instance.isFinished()) return;
+        if (service.isDesignInstance(instance)) return;
         if (player.hasPermission("arcartxsuite.abyss.bypass")) return;
         String raw = event.getMessage().substring(1); // 去 '/'
         String cmd = raw.split(" ")[0].toLowerCase();
