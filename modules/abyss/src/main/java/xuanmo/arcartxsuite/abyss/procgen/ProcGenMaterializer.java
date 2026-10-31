@@ -128,8 +128,8 @@ public final class ProcGenMaterializer {
             int bnz = b.worldZ;            // b 北墙面
             int[] da = resolveDoor(a, 's', cz, dw, dh);
             int[] db = resolveDoor(b, 'n', cz, dw, dh);
-            cutHole(world, da[1], floorY + 1, anz, da[0], da[2], 'z');
-            cutHole(world, db[1], floorY + 1, bnz, db[0], db[2], 'z');
+            cutHole(world, anz, floorY + 1, da[1], da[0], da[2], 'z');
+            cutHole(world, bnz, floorY + 1, db[1], db[0], db[2], 'z');
             a.doors.add(doorBox(anz, floorY + 1, da[1], da[0], da[2], 'z'));
             b.doors.add(doorBox(bnz, floorY + 1, db[1], db[0], db[2], 'z'));
             connectCorridor(world, anz + 1, bnz - 1, floorY, da, db, 'z', cfg);
@@ -170,9 +170,9 @@ public final class ProcGenMaterializer {
             int along = rotateDoorAlong(pr, spec, worldWall);
             int worldAlong = worldWall == 'n' || worldWall == 's'
                 ? pr.worldX + along : pr.worldZ + along;
-            return new int[]{spec.w(), worldAlong, spec.h()};
+            return new int[]{spec.w(), worldAlong, Math.min(spec.h(), pr.h - 2)};
         }
-        return new int[]{dw, axisCenter, dh};
+        return new int[]{dw, axisCenter, Math.min(dh, pr.h - 2)};
     }
 
     /** 局部墙名经旋转映射到世界朝向（n/s/e/w）。 */
