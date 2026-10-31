@@ -1,7 +1,7 @@
 """Run the bundled Abyss UI contract scripts against a deferred control-tree harness.
 Requires Python/PyYAML and Node.js. Does not claim to render the ArcartX client.
 """
-import json, pathlib, subprocess, sys, re, yaml
+import json, pathlib, subprocess, sys, re, shutil, yaml
 root = pathlib.Path(__file__).resolve().parents[3]
 ui = root / "src/main/resources/arcartx/ui"
 class UniqueKeysLoader(yaml.SafeLoader): pass
@@ -64,6 +64,9 @@ routes = {}
 for match in re.finditer(r'case "([a-z_]+)" -> \{(.*?)(?=\n            case|\n            default)', server, re.S):
     token = re.search(r'checkToken\(player, data, (\d+)\)', match.group(2))
     routes[match.group(1)] = int(token.group(1)) if token else None
-result = subprocess.run(["node.exe", str(pathlib.Path(__file__).with_name("verify_abyss_ui.mjs"))],
+node = shutil.which("node") or shutil.which("node.exe")
+if node is None:
+    raise SystemExit("Node.js is required to verify the Abyss UI scripts")
+result = subprocess.run([node, str(pathlib.Path(__file__).with_name("verify_abyss_ui.mjs"))],
     input=json.dumps({'documents': documents, 'routes': routes}, ensure_ascii=False), text=True, encoding="utf-8")
 sys.exit(result.returncode)
