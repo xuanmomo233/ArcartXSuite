@@ -110,6 +110,12 @@ class AbyssPacketPayloadTest {
         String visible=ChatColor.stripColor(ChatColor.translateAlternateColorCodes('&',String.join("",lines)));
         assertTrue(visible.endsWith(message));
     }
+    @Test void integralAriaPacketNumbersAreAcceptedWithoutTruncatingFractions()throws Exception {
+        var parser=AbyssUiService.class.getDeclaredMethod("parseInt",String.class,int.class);parser.setAccessible(true);
+        assertEquals(1,parser.invoke(null,"1.0",-9));assertEquals(-1,parser.invoke(null,"-1.0",-9));
+        assertEquals(-9,parser.invoke(null,"1.5",-9));assertEquals(-9,parser.invoke(null,"NaN",-9));
+        assertEquals(-9,parser.invoke(null,"2147483648",-9));
+    }
     @Test void buffCandidatesAreNotTruncatedAndMultiPickMetadataIsSent()throws Exception {
         List<BuffConfig.Option> options=new ArrayList<>();
         for(int i=0;i<7;i++)options.add(new BuffConfig.Option("b"+i,"buff"+i,"","common",1,List.of(),List.of()));

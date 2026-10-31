@@ -60,6 +60,7 @@ ui:
       var.商品引用 = {}
       var.商品轮次 = 0
     open: |-
+      Packet.send('abyss', 'view_ready', 'shop')
       Sound.self('minecraft:entity.villager.trade', 0.9, 10)
     tick: |-
       if(var.iconsPending && !var.dirty){
@@ -142,7 +143,7 @@ controls:
               x: 56
               y: 34
               texts: ~&6ABYSS   /   FIELD QUARTERMASTER   05
-              fontSize: 24
+              fontSize: 32
               through: true
           标题:
             type: Text
@@ -150,7 +151,7 @@ controls:
               x: 54
               y: 86
               texts: "'&f' + var.shopTitle"
-              fontSize: 44
+              fontSize: 56
               limit: 16
               through: true
           金币底:
@@ -169,7 +170,7 @@ controls:
               x: 765
               y: 102
               texts: "'&6' + var.coinsText + ' 金币'"
-              fontSize: 32
+              fontSize: 42
               through: true
           栏名:
             type: Text
@@ -177,7 +178,7 @@ controls:
               x: 56
               y: 182
               texts: ~&6补给清单    /    点击物资行申请购买
-              fontSize: 24
+              fontSize: 32
               through: true
           栏目提示:
             type: Text
@@ -186,7 +187,7 @@ controls:
               x: -78
               y: 182
               texts: ~&7可用资金不足的物资会显示为灰色
-              fontSize: 24
+              fontSize: 32
               through: true
           商品列表底:
             type: Texture
@@ -276,7 +277,7 @@ controls:
                           x: 18
                           y: 32
                           texts: "'&6' + (self.parent.entryKey + 1).round()"
-                          fontSize: 24
+                          fontSize: 32
                           through: true
                       商品图标:
                         type: Slot
@@ -303,7 +304,7 @@ controls:
                             type: Text
                             attribute:
                               texts: '''&f'' + self.parent.parent.entry[''name'']'
-                              fontSize: 32
+                              fontSize: 42
                               limit: 16
                               point: ~top_left
                               width: self.parent.width
@@ -323,7 +324,7 @@ controls:
                             type: Text
                             attribute:
                               texts: '''&7'' + self.parent.parent.entry[''desc0''] + (self.parent.parent.entry[''desc1''] != '''' ? ''  '' + self.parent.parent.entry[''desc1''] : '''')'
-                              fontSize: 24
+                              fontSize: 32
                               limit: 22
                               point: ~top_left
                               width: self.parent.width
@@ -337,7 +338,7 @@ controls:
                           x: -24
                           y: 12
                           texts: "self.parent.afford ? '&6' + self.parent.entry['priceText'] + ' 金' : '&c' + self.parent.entry['priceText'] + ' 金'"
-                          fontSize: 32
+                          fontSize: 42
                           through: true
                       购买状态:
                         type: Text
@@ -346,7 +347,7 @@ controls:
                           x: -24
                           y: 64
                           texts: "self.parent.afford ? '&6可购买' : '&7金币不足'"
-                          fontSize: 24
+                          fontSize: 32
                           through: true
           空清单:
             type: Text
@@ -354,7 +355,7 @@ controls:
               point: ~middle_center
               y: 45
               texts: ~&7补给库存为空 · 继续探索以寻找物资
-              fontSize: 32
+              fontSize: 42
               visible: var.goodsCount <= 0
               through: true
           提示:
@@ -363,7 +364,7 @@ controls:
               x: 54
               y: 785
               texts: ~&7补给来源  /  副本魔物掉落金币 · 鼠标滚轮浏览完整清单
-              fontSize: 24
+              fontSize: 32
               through: true
           关闭按钮:
             type: Canvas
@@ -388,5 +389,5 @@ controls:
                 attribute:
                   point: ~middle_center
                   texts: ~&fX
-                  fontSize: 24
+                  fontSize: 32
                   through: true

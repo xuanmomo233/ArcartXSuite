@@ -167,6 +167,7 @@ ui:
       var.offX = (var.viewW - 1920) / 2
       var.contentW = var.viewW - 392
     open: |-
+      Packet.send('abyss', 'view_ready', 'design')
       Sound.self('minecraft:block.note_block.pling', 0.8, 8)
 controls:
   全屏磨砂:
@@ -219,7 +220,7 @@ controls:
             type: Text
             attribute:
               texts: '''&6远征制图  &7/  &f'' + var.dungeonName'
-              fontSize: 36
+              fontSize: 48
               point: ~top_left
               width: self.parent.width
               height: self.parent.height
@@ -232,7 +233,7 @@ controls:
           x: "74 - var.offX"
           y: 70
           texts: "'&7档案 ' + var.dungeonId + '   &7/   Esc 仅关闭制图台 · 未归档改动仅存于内存'"
-          fontSize: 24
+          fontSize: 32
           through: true
       未保存角标:
         type: Canvas
@@ -257,7 +258,7 @@ controls:
             attribute:
               point: ~middle_center
               texts: "'&c待归档  /  ' + var.dirty + ' 处'"
-              fontSize: 24
+              fontSize: 32
               through: true
       已归档状态:
         type: Text
@@ -266,7 +267,7 @@ controls:
           x: "-48 + var.offX"
           y: 35
           texts: ~&7档案状态  /  &6全部已保存
-          fontSize: 24
+          fontSize: 32
           visible: "var.dirty == 0"
           through: true
       # ═══ 左栏：分层路线图 ═══
@@ -293,7 +294,7 @@ controls:
           x: "72 - var.offX"
           y: 142
           texts: ~&6I  /  层级路线
-          fontSize: 32
+          fontSize: 42
           through: true
       节点栏说明:
         type: Text
@@ -302,7 +303,7 @@ controls:
           x: "74 - var.offX"
           y: 194
           texts: "'&7选择区域 · ' + var.nodeCount + ' 个路线节点'"
-          fontSize: 24
+          fontSize: 32
           through: true
       节点滑轨:
         type: Texture
@@ -417,7 +418,7 @@ controls:
                         type: Text
                         attribute:
                           texts: 'self.parent.parent.entry[''depth''] == 0 ? ''&6'' + self.parent.parent.entry[''label''] : ''&7└ '' + self.parent.parent.entry[''label'']'
-                          fontSize: 24
+                          fontSize: 32
                           limit: 12
                           point: ~top_left
                           width: self.parent.width
@@ -431,21 +432,42 @@ controls:
                       x: -14
                       y: 15
                       texts: "'&7' + self.parent.entry['count'] + ' 件对象'"
-                      fontSize: 24
+                      fontSize: 32
                       through: true
       路线操作注:
-        type: Text
+        type: Canvas
         attribute:
-          lineSpace: 8
           point: ~top_left
-          x: "74 - var.offX"
-          y: "var.viewH - 82"
-          texts:
-            - ~&7Esc 仅关闭当前制图台
-            - ~&7杖左键空气可重新打开
-          fontSize: 24
+          x: 74 - var.offX
+          y: var.viewH - 82
           through: true
-      # ═══ 右侧节点对象台账 ═══
+          width: Math.max(1, self.parent.width - self.x - 24)
+          height: 44.0
+        children:
+          行0:
+            type: Text
+            attribute:
+              fontSize: 32
+              point: ~top_left
+              x: 0
+              y: 0.0
+              width: self.parent.width
+              height: 20.0
+              limitControl: self.parent
+              texts: ~&7Esc 仅关闭当前制图台
+              through: true
+          行1:
+            type: Text
+            attribute:
+              fontSize: 32
+              point: ~top_left
+              x: 0
+              y: 24.0
+              width: self.parent.width
+              height: 20.0
+              limitControl: self.parent
+              texts: ~&7杖左键空气可重新打开
+              through: true
       内容底:
         type: Texture
         attribute:
@@ -469,7 +491,7 @@ controls:
           x: "406 - var.offX"
           y: 142
           texts: "'&6II  /  节点台账  &7—  &f' + var.objCount + ' 件对象'"
-          fontSize: 32
+          fontSize: 42
           through: true
       内容说明:
         type: Text
@@ -478,7 +500,7 @@ controls:
           x: "408 - var.offX"
           y: 196
           texts: ~&7逐件核对位置、参数与触发条件；未保存对象显示锈红底色
-          fontSize: 24
+          fontSize: 32
           through: true
       台账分割:
         type: Texture
@@ -518,7 +540,7 @@ controls:
             attribute:
               point: ~middle_center
               texts: ~&0+  录入对象
-              fontSize: 24
+              fontSize: 32
               through: true
       内容滑轨:
         type: Texture
@@ -612,7 +634,7 @@ controls:
                       point: ~middle_left
                       x: 22
                       texts: "self.parent.entry['icon']"
-                      fontSize: 32
+                      fontSize: 42
                       through: true
                   名:
                     type: Text
@@ -621,7 +643,7 @@ controls:
                       x: 78
                       y: -18
                       texts: "'&f' + self.parent.entry['id']"
-                      fontSize: 32
+                      fontSize: 42
                       limit: 16
                       through: true
                   徽标底:
@@ -643,7 +665,7 @@ controls:
                       x: 88
                       y: 26
                       texts: "self.parent.entry['kindLabel']"
-                      fontSize: 24
+                      fontSize: 32
                       limit: 4
                       through: true
                   摘要:
@@ -653,7 +675,7 @@ controls:
                       x: 242
                       y: 26
                       texts: "'&7' + self.parent.entry['summary']"
-                      fontSize: 24
+                      fontSize: 32
                       limit: 27
                       through: true
                   传送钮:
@@ -683,7 +705,7 @@ controls:
                         attribute:
                           point: ~middle_center
                           texts: ~传送
-                          fontSize: 24
+                          fontSize: 32
                           through: true
                   编辑钮:
                     type: Canvas
@@ -712,7 +734,7 @@ controls:
                         attribute:
                           point: ~middle_center
                           texts: ~&0编辑
-                          fontSize: 24
+                          fontSize: 32
                           through: true
                   删除钮:
                     type: Canvas
@@ -742,7 +764,7 @@ controls:
                         attribute:
                           point: ~middle_center
                           texts: ~删除
-                          fontSize: 24
+                          fontSize: 32
                           through: true
       空提示:
         type: Text
@@ -751,7 +773,7 @@ controls:
           x: "430 - var.offX"
           y: 310
           texts: ~&7该节点尚无记录 · 使用右上角「录入对象」布设机关
-          fontSize: 24
+          fontSize: 32
           visible: "var.objCount == 0"
           through: true
       # ═══ 底栏 ═══
@@ -789,7 +811,7 @@ controls:
                 attribute:
                   texts: 'var.saving ? ''&e正在保存，请等待完成提示'' : ''&7'' + var.worldSaveHint'
                   limit: 22
-                  fontSize: 26
+                  fontSize: 34
                   point: ~top_left
                   width: self.parent.width
                   height: self.parent.height
@@ -802,7 +824,7 @@ controls:
               x: 28
               y: 68
               texts: ~&7标记杖右键落点 · Shift+右键取消选区
-              fontSize: 24
+              fontSize: 32
               through: true
           保存钮:
             type: Canvas
@@ -832,7 +854,7 @@ controls:
                 attribute:
                   point: ~middle_center
                   texts: ~&f保存配置
-                  fontSize: 24
+                  fontSize: 32
                   through: true
           存世界钮:
             type: Canvas
@@ -862,7 +884,7 @@ controls:
                 attribute:
                   point: ~middle_center
                   texts: "'&f' + var.worldSaveLabel"
-                  fontSize: 30
+                  fontSize: 38
                   through: true
           退出钮:
             type: Canvas
@@ -891,5 +913,5 @@ controls:
                 attribute:
                   point: ~middle_center
                   texts: ~&f退出
-                  fontSize: 24
+                  fontSize: 32
                   through: true

@@ -33,6 +33,7 @@ ui:
       var.objKey = packet['objKey']
       var.objId = packet['objId']
       var.kindLabel = packet['kindLabel']
+      self.actions['resize']()
       var.icon = packet['kindIcon']
       var.summary = packet['summary']
       var.dirty = packet['dirty']
@@ -81,7 +82,8 @@ ui:
       var.viewH = Screen.getHeight() / s
       var.viewW = Screen.getWidth() / s
       var.offX = (var.viewW - 1920) / 2
-      var.colW = (var.viewW - 160) / 2
+      var.colW = var.kindLabel == '配置文件' ? var.viewW - 96 : (var.viewW - 160) / 2
+      var.rightBase = var.kindLabel == '配置文件' ? 48 : 108 + var.colW
       var.packetId = 'abyss'
       var.editI = -1
       var.editField = ''
@@ -96,8 +98,10 @@ ui:
       var.viewH = Screen.getHeight() / s
       var.viewW = Screen.getWidth() / s
       var.offX = (var.viewW - 1920) / 2
-      var.colW = (var.viewW - 160) / 2
+      var.colW = var.kindLabel == '配置文件' ? var.viewW - 96 : (var.viewW - 160) / 2
+      var.rightBase = var.kindLabel == '配置文件' ? 48 : 108 + var.colW
     open: |-
+      Packet.send('abyss', 'view_ready', 'design_edit')
       Sound.self('minecraft:block.note_block.pling', 0.8, 8)
     # Three frames: remove generated descendants, mount groups, then expand each group's own line template.
     # Never clone a parent while its template still contains generated child rows.
@@ -117,7 +121,7 @@ ui:
       val.rename_input.setContent(var.objId)
       if(var.fieldCount > 0){
         for(fi in range(0, var.fieldCount - 1)){
-          field = var.fieldRows['' + fi]
+          field = var.fieldRows['' + fi.round()]
           if(field['editor'] == 'TEXT' || field['editor'] == 'NUMBER'){
             row = fi == 0 ? val.字段容器.get(0) : var.字段引用[fi.round()]
             row['输入壳']['输入框'].setContent(field['value'])
@@ -158,18 +162,18 @@ ui:
     copyLines: |-
       if(var.groupCount > 0){
         for(gi in range(0, var.groupCount - 1)){
-          gObj = var.groupRows['' + gi]
+          gObj = var.groupRows['' + gi.round()]
           gCtl = gi == 0 ? val.组容器.get(0) : var.组引用[gi.round()]
           if(gCtl != none){
             行容器 = gCtl['行容器']
             行模板 = 行容器.get(0)
             行模板.entryKey = 0.round()
-            var.行引用['' + gi] = {}
+            var.行引用['' + gi.round()] = {}
             if(gObj['lineCount'] > 1){
               for(li in range(1, gObj['lineCount'] - 1)){
                 行 = 行模板.copy('行_' + var.轮次 + '_' + gi.round() + '_' + li.round())
                 行.entryKey = li.round()
-                var.行引用['' + gi][li.round()] = 行
+                var.行引用['' + gi.round()][li.round()] = 行
               }
             }
           }
@@ -229,7 +233,7 @@ controls:
             attribute:
               point: ~middle_center
               texts: ~&f‹  路线图
-              fontSize: 24
+              fontSize: 32
               through: true
       标题:
         type: Text
@@ -238,7 +242,7 @@ controls:
           x: "224 - var.offX"
           y: 14
           texts: "'&6对象校准  &7/  ' + var.icon + ' &f' + var.objId"
-          fontSize: 36
+          fontSize: 48
           limit: 30
           through: true
       摘要:
@@ -248,7 +252,7 @@ controls:
           x: "226 - var.offX"
           y: 72
           texts: "'&7' + var.kindLabel + '  &7/  &7' + var.summary"
-          fontSize: 24
+          fontSize: 32
           limit: 70
           through: true
       未保存标:
@@ -258,13 +262,14 @@ controls:
           x: "-60 + var.offX"
           y: 30
           texts: ~&c● 未归档
-          fontSize: 24
+          fontSize: 32
           visible: var.dirty
           through: true
       # ═══ 左栏：参数校准台 ═══
       左栏底:
         type: Texture
         attribute:
+          visible: "var.kindLabel != '配置文件'"
           point: ~top_left
           x: "48 - var.offX"
           y: 130
@@ -281,20 +286,22 @@ controls:
       左栏题:
         type: Text
         attribute:
+          visible: "var.kindLabel != '配置文件'"
           point: ~top_left
           x: "72 - var.offX"
           y: 150
           texts: ~&6I  /  参数与标定
-          fontSize: 32
+          fontSize: 42
           through: true
       左栏说明:
         type: Text
         attribute:
+          visible: "var.kindLabel != '配置文件'"
           point: ~top_left
           x: "74 - var.offX"
           y: 204
           texts: ~&7编辑基础数值 · 坐标 / 区域需在世界中重新标记
-          fontSize: 24
+          fontSize: 32
           through: true
       改名壳:
         type: Canvas
@@ -311,7 +318,7 @@ controls:
             attribute:
               point: ~middle_left
               texts: ~&6ID
-              fontSize: 24
+              fontSize: 32
               through: true
           框:
             type: Canvas
@@ -338,13 +345,14 @@ controls:
                   width: "var.colW - 128"
                   height: 34
                   length: 256
-                  fontSize: 24
+                  fontSize: 32
                   emptyText: ~&7输入新标识并回车应用
                 action:
-                  enter: "Packet.send(var.packetId, 'design_rename', var.objKey, self.getContent(), var.actionToken); self.setContent('')"
+                  enter: "Packet.send(var.packetId, 'design_rename', var.objKey, self.getContent(), var.actionToken)"
       左滑轨:
         type: Texture
         attribute:
+          visible: "var.kindLabel != '配置文件'"
           point: ~top_left
           x: "24 - var.offX + var.colW"
           y: 322
@@ -356,6 +364,7 @@ controls:
         type: Texture
         val: 左滑块
         attribute:
+          visible: "var.kindLabel != '配置文件'"
           point: ~top_left
           x: "24 - var.offX + var.colW"
           y: 322
@@ -368,6 +377,7 @@ controls:
       左滚动:
         type: Scroll
         attribute:
+          visible: "var.kindLabel != '配置文件'"
           point: ~top_left
           x: "72 - var.offX"
           y: 316
@@ -428,7 +438,7 @@ controls:
                         type: Text
                         attribute:
                           texts: '''&f'' + self.parent.parent.entry[''label'']'
-                          fontSize: 24
+                          fontSize: 32
                           limit: 9
                           point: ~top_left
                           width: self.parent.width
@@ -460,10 +470,10 @@ controls:
                           width: "var.colW - 344"
                           height: 34
                           length: 8192
-                          fontSize: 24
+                          fontSize: 32
                           emptyText: ~&7输入值后回车提交
                         action:
-                          enter: "Packet.send(var.packetId, 'design_set', var.objKey, self.parent.parent.entry['name'], self.getContent(), var.actionToken); self.setContent('')"
+                          enter: "Packet.send(var.packetId, 'design_set', var.objKey, self.parent.parent.entry['name'], self.getContent(), var.actionToken)"
                   # ── TOGGLE：开关钮 ──
                   开关钮:
                     type: Canvas
@@ -492,8 +502,8 @@ controls:
                         type: Text
                         attribute:
                           point: ~middle_center
-                          texts: "self.parent.parent.entry['valueZh']"
-                          fontSize: 24
+                          texts: "self.parent.parent.entry['valueZh'] != '' ? self.parent.parent.entry['valueZh'] : '&7默认'"
+                          fontSize: 32
                           through: true
                   # ── CYCLE：循环钮 ──
                   循环钮:
@@ -525,7 +535,7 @@ controls:
                           point: ~middle_left
                           x: 12
                           texts: "'&e' + self.parent.parent.entry['valueZh'] + '  &7▸'"
-                          fontSize: 24
+                          fontSize: 32
                           limit: 24
                           through: true
                   # ── COORD/REGION：值 + 重标 ──
@@ -558,7 +568,7 @@ controls:
                           point: ~middle_left
                           x: 12
                           texts: "'&6' + self.parent.parent.entry['value'] + '  &7[重新标记]'"
-                          fontSize: 24
+                          fontSize: 32
                           limit: 22
                           through: true
       # ═══ 右栏：事件脚本序列 ═══
@@ -566,7 +576,7 @@ controls:
         type: Texture
         attribute:
           point: ~top_left
-          x: "108 - var.offX + var.colW"
+          x: "var.rightBase + 0 - var.offX"
           y: 130
           width: "var.colW"
           height: "var.viewH - 154"
@@ -582,19 +592,19 @@ controls:
         type: Text
         attribute:
           point: ~top_left
-          x: "132 - var.offX + var.colW"
+          x: "var.rightBase + 24 - var.offX"
           y: 150
           texts: ~&6II  /  事件序列
-          fontSize: 32
+          fontSize: 42
           through: true
       右栏说明:
         type: Text
         attribute:
           point: ~top_left
-          x: "134 - var.offX + var.colW"
+          x: "var.rightBase + 26 - var.offX"
           y: 204
           texts: ~&7按顺序编排脚本行 · 点击「改」载入原行
-          fontSize: 24
+          fontSize: 32
           through: true
       右滑轨:
         type: Texture
@@ -623,7 +633,7 @@ controls:
         type: Scroll
         attribute:
           point: ~top_left
-          x: "132 - var.offX + var.colW"
+          x: "var.rightBase + 24 - var.offX"
           y: 252
           width: "var.colW - 56"
           height: "var.viewH - 298"
@@ -676,7 +686,7 @@ controls:
                         type: Text
                         attribute:
                           texts: '''&6'' + self.parent.parent.entry[''label''] + ''  &7/  共 '' + self.parent.parent.entry[''lineTotal''] + '' 行'''
-                          fontSize: 32
+                          fontSize: 42
                           point: ~top_left
                           width: self.parent.width
                           height: self.parent.height
@@ -721,7 +731,7 @@ controls:
                               point: ~middle_left
                               x: 12
                               texts: "'&6' + (self.parent.entryKey + self.parent.parent.parent.entry['lineOffset'] + 1).round()"
-                              fontSize: 24
+                              fontSize: 32
                               through: true
                           文:
                             type: Text
@@ -729,8 +739,8 @@ controls:
                               point: ~middle_left
                               x: 64
                               texts: "'&f' + self.parent.entry"
-                              fontSize: 24
-                              limit: 20
+                              fontSize: 32
+                              limit: "Math.max(20, Math.floor((var.colW - 340) / 16))"
                               through: true
                           上移钮:
                             type: Canvas
@@ -741,14 +751,14 @@ controls:
                               height: 36
                               visible: "self.parent.entryKey + self.parent.parent.parent.entry['lineOffset'] > 0"
                             action:
-                              clickLeft: "Packet.send(var.packetId, 'design_line_move', var.objKey, self.parent.parent.parent.entry['field'], self.parent.entryKey + self.parent.parent.parent.entry['lineOffset'], -1, var.actionToken)"
+                              clickLeft: "Packet.send(var.packetId, 'design_line_move', var.objKey, self.parent.parent.parent.entry['field'], (self.parent.entryKey + self.parent.parent.parent.entry['lineOffset']).round(), (-1).round(), var.actionToken)"
                             children:
                               字:
                                 type: Text
                                 attribute:
                                   point: ~middle_center
                                   texts: ~&e↑
-                                  fontSize: 24
+                                  fontSize: 32
                                   through: true
                           下移钮:
                             type: Canvas
@@ -759,14 +769,14 @@ controls:
                               height: 36
                               visible: "self.parent.entryKey + self.parent.parent.parent.entry['lineOffset'] + 1 < self.parent.parent.parent.entry['lineTotal']"
                             action:
-                              clickLeft: "Packet.send(var.packetId, 'design_line_move', var.objKey, self.parent.parent.parent.entry['field'], self.parent.entryKey + self.parent.parent.parent.entry['lineOffset'], 1, var.actionToken)"
+                              clickLeft: "Packet.send(var.packetId, 'design_line_move', var.objKey, self.parent.parent.parent.entry['field'], (self.parent.entryKey + self.parent.parent.parent.entry['lineOffset']).round(), 1.round(), var.actionToken)"
                             children:
                               字:
                                 type: Text
                                 attribute:
                                   point: ~middle_center
                                   texts: ~&e↓
-                                  fontSize: 24
+                                  fontSize: 32
                                   through: true
                           改钮:
                             type: Canvas
@@ -784,7 +794,7 @@ controls:
                                   }
                                 }
                                 var.editField = self.parent.parent.parent.entry['field']
-                                var.editI = self.parent.entryKey + self.parent.parent.parent.entry['lineOffset']
+                                var.editI = (self.parent.entryKey + self.parent.parent.parent.entry['lineOffset']).round()
                                 self.parent.parent.parent['追加框']['框']['输入框'].setContent(self.parent.entry)
                                 self.parent.parent.parent['追加框']['框']['输入框'].setFocus(true)
                             children:
@@ -801,7 +811,7 @@ controls:
                                 attribute:
                                   point: ~middle_center
                                   texts: ~改
-                                  fontSize: 24
+                                  fontSize: 32
                                   through: true
                           删钮:
                             type: Canvas
@@ -811,7 +821,7 @@ controls:
                               width: 44
                               height: 36
                             action:
-                              clickLeft: "Packet.send(var.packetId, 'design_line_del', var.objKey, self.parent.parent.parent.entry['field'], self.parent.entryKey + self.parent.parent.parent.entry['lineOffset'], var.actionToken)"
+                              clickLeft: "Packet.send(var.packetId, 'design_line_del', var.objKey, self.parent.parent.parent.entry['field'], (self.parent.entryKey + self.parent.parent.parent.entry['lineOffset']).round(), var.actionToken)"
                             children:
                               底:
                                 type: Texture
@@ -826,7 +836,7 @@ controls:
                                 attribute:
                                   point: ~middle_center
                                   texts: ~删
-                                  fontSize: 24
+                                  fontSize: 32
                                   through: true
                   分页:
                     type: Canvas
@@ -844,20 +854,20 @@ controls:
                           height: 40
                           visible: "self.parent.parent.entry['linePage'] > 0"
                         action:
-                          clickLeft: "Packet.send(var.packetId, 'design_line_page', var.objKey, self.parent.parent.entry['field'], self.parent.parent.entry['linePage'] - 1, var.actionToken)"
+                          clickLeft: "Packet.send(var.packetId, 'design_line_page', var.objKey, self.parent.parent.entry['field'], (self.parent.parent.entry['linePage'] - 1).round(), var.actionToken)"
                         children:
                           字:
                             type: Text
                             attribute:
                               texts: ~&e‹ 上一页
-                              fontSize: 28
+                              fontSize: 36
                               through: true
                       页码:
                         type: Text
                         attribute:
                           point: ~top_center
                           texts: "'&7第 ' + (self.parent.parent.entry['linePage'] + 1).round() + ' / ' + self.parent.parent.entry['linePages'].round() + ' 页'"
-                          fontSize: 28
+                          fontSize: 36
                           through: true
                       下一页:
                         type: Canvas
@@ -867,13 +877,13 @@ controls:
                           height: 40
                           visible: "self.parent.parent.entry['linePage'] + 1 < self.parent.parent.entry['linePages']"
                         action:
-                          clickLeft: "Packet.send(var.packetId, 'design_line_page', var.objKey, self.parent.parent.entry['field'], self.parent.parent.entry['linePage'] + 1, var.actionToken)"
+                          clickLeft: "Packet.send(var.packetId, 'design_line_page', var.objKey, self.parent.parent.entry['field'], (self.parent.parent.entry['linePage'] + 1).round(), var.actionToken)"
                         children:
                           字:
                             type: Text
                             attribute:
                               texts: ~&e下一页 ›
-                              fontSize: 28
+                              fontSize: 36
                               through: true
                   追加框:
                     type: Canvas
@@ -907,7 +917,7 @@ controls:
                               width: "var.colW - 334"
                               height: 34
                               length: 8192
-                              fontSize: 24
+                              fontSize: 32
                               emptyText: "var.editField == self.parent.parent.parent.entry['field'] && var.editI >= 0 ? '&6编辑已载入行 · 回车替换' : '&7新行 · 回车追加'"
                             action:
                               enter: "var.editField == self.parent.parent.parent.entry['field'] && var.editI >= 0 ? Packet.send(var.packetId, 'design_line_set', var.objKey, self.parent.parent.parent.entry['field'], var.editI, self.getContent(), var.actionToken) : Packet.send(var.packetId, 'design_line_add', var.objKey, self.parent.parent.parent.entry['field'], self.getContent(), var.actionToken); var.editI = -1; var.editField = ''; self.setContent('')"
@@ -927,7 +937,7 @@ controls:
                             attribute:
                               point: ~middle_center
                               texts: ~&7取消
-                              fontSize: 24
+                              fontSize: 32
                               through: true
                       加钮:
                         type: Canvas
@@ -951,15 +961,15 @@ controls:
                             attribute:
                               point: ~middle_center
                               texts: "var.editField == self.parent.parent.parent.entry['field'] && var.editI >= 0 ? '&0改' : '&0加'"
-                              fontSize: 24
+                              fontSize: 32
                               through: true
       空组提示:
         type: Text
         attribute:
           point: ~top_left
-          x: "156 - var.offX + var.colW"
+          x: "var.rightBase + 48 - var.offX"
           y: 298
           texts: ~&7此对象无需事件序列 · 在左侧完成参数校准
-          fontSize: 24
+          fontSize: 32
           visible: "var.groupCount == 0"
           through: true

@@ -58,6 +58,8 @@ ui:
       s = sx < sy ? sx : sy
       var.viewW = Screen.getWidth() / s
       var.offX = (var.viewW - 1920) / 2
+    open: |-
+      Packet.send('abyss', 'view_ready', 'hud')
 controls:
   自适应全局布局:
     type: Adaptive
@@ -70,8 +72,8 @@ controls:
       副本面板:
         type: Canvas
         attribute:
-          point: ~top_right
-          x: "-28 + var.offX"
+          point: ~top_left
+          x: "28 - var.offX"
           y: 140
           width: 430
           height: 252
@@ -98,7 +100,7 @@ controls:
                 type: Text
                 attribute:
                   texts: '''&f'' + var.dungeonName'
-                  fontSize: 28
+                  fontSize: 36
                   limit: 13
                   point: ~top_left
                   width: self.parent.width
@@ -118,7 +120,7 @@ controls:
                 type: Text
                 attribute:
                   texts: '''&7状态  &f'' + var.statusLabel'
-                  fontSize: 24
+                  fontSize: 32
                   limit: 16
                   point: ~top_left
                   width: self.parent.width
@@ -138,7 +140,7 @@ controls:
                 type: Text
                 attribute:
                   texts: '''&7'' + var.progressLabel + ''  &e'' + var.groupDone.round() + ''/'' + var.groupTotal.round() + ''   &7队员 &a'' + var.alivePlayers.round() + ''/'' + var.totalPlayers.round()'
-                  fontSize: 24
+                  fontSize: 32
                   limit: 27
                   point: ~top_left
                   width: self.parent.width
@@ -158,7 +160,7 @@ controls:
                 type: Text
                 attribute:
                   texts: '''&7存活怪物  &c'' + var.aliveMobs.round()'
-                  fontSize: 24
+                  fontSize: 32
                   limit: 20
                   point: ~top_left
                   width: self.parent.width
@@ -178,7 +180,7 @@ controls:
                 type: Text
                 attribute:
                   texts: 'var.activeGroup != '''' ? ''&7当前  &f'' + var.activeGroup : ''&7等待下一目标'''
-                  fontSize: 24
+                  fontSize: 32
                   limit: 16
                   point: ~top_left
                   width: self.parent.width
@@ -198,7 +200,7 @@ controls:
                 type: Text
                 attribute:
                   texts: '''&7剩余时间  &f'' + var.timeText'
-                  fontSize: 24
+                  fontSize: 32
                   limit: 20
                   point: ~top_left
                   width: self.parent.width
@@ -254,7 +256,7 @@ controls:
                 type: Text
                 attribute:
                   texts: '''&e➤ &f'' + var.guideText'
-                  fontSize: 28
+                  fontSize: 36
                   limit: 22
                   point: ~top_left
                   width: self.parent.width

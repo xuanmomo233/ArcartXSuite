@@ -32,6 +32,7 @@ ui:
       var.rowRefs = {}
       var.revision = 0
     open: |-
+      Packet.send('abyss', 'view_ready', 'stats')
       Sound.self('minecraft:item.book.page_turn', 0.9, 14)
     close: |-
       if(var.actionToken != '' && var.viewNonce != ''){
@@ -97,7 +98,7 @@ controls:
                 attribute:
                   texts: '''&f战斗统计  &7· '' + var.dungeonName'
                   limit: 28
-                  fontSize: 44
+                  fontSize: 56
                   point: ~top_left
                   width: self.parent.width
                   height: self.parent.height
@@ -127,7 +128,7 @@ controls:
                 type: Text
                 attribute:
                   texts: ~&f玩家
-                  fontSize: 28
+                  fontSize: 36
                   point: ~top_left
                   width: self.parent.width
                   height: self.parent.height
@@ -146,7 +147,7 @@ controls:
                 type: Text
                 attribute:
                   texts: ~&f击杀
-                  fontSize: 28
+                  fontSize: 36
                   point: ~top_left
                   width: self.parent.width
                   height: self.parent.height
@@ -165,7 +166,7 @@ controls:
                 type: Text
                 attribute:
                   texts: ~&f伤害
-                  fontSize: 28
+                  fontSize: 36
                   point: ~top_left
                   width: self.parent.width
                   height: self.parent.height
@@ -184,7 +185,7 @@ controls:
                 type: Text
                 attribute:
                   texts: ~&f承伤
-                  fontSize: 28
+                  fontSize: 36
                   point: ~top_left
                   width: self.parent.width
                   height: self.parent.height
@@ -203,7 +204,7 @@ controls:
                 type: Text
                 attribute:
                   texts: ~&f治疗
-                  fontSize: 28
+                  fontSize: 36
                   point: ~top_left
                   width: self.parent.width
                   height: self.parent.height
@@ -271,7 +272,7 @@ controls:
                             type: Text
                             attribute:
                               texts: '''&f'' + self.parent.parent.entry[''name'']'
-                              fontSize: 28
+                              fontSize: 36
                               limit: 16
                               point: ~top_left
                               width: self.parent.width
@@ -291,7 +292,7 @@ controls:
                             type: Text
                             attribute:
                               texts: '''&c'' + self.parent.parent.entry[''killsText'']'
-                              fontSize: 28
+                              fontSize: 36
                               limit: 7
                               point: ~top_left
                               width: self.parent.width
@@ -311,7 +312,7 @@ controls:
                             type: Text
                             attribute:
                               texts: '''&e'' + self.parent.parent.entry[''damageText'']'
-                              fontSize: 28
+                              fontSize: 36
                               limit: 12
                               point: ~top_left
                               width: self.parent.width
@@ -331,7 +332,7 @@ controls:
                             type: Text
                             attribute:
                               texts: '''&7'' + self.parent.parent.entry[''takenText'']'
-                              fontSize: 28
+                              fontSize: 36
                               limit: 12
                               point: ~top_left
                               width: self.parent.width
@@ -351,7 +352,7 @@ controls:
                             type: Text
                             attribute:
                               texts: '''&a'' + self.parent.parent.entry[''healText'']'
-                              fontSize: 28
+                              fontSize: 36
                               limit: 12
                               point: ~top_left
                               width: self.parent.width
@@ -364,7 +365,7 @@ controls:
               point: ~middle_center
               texts: ~&7暂无战斗统计记录
               visible: "var.count == 0"
-              fontSize: 32
+              fontSize: 42
               through: true
           关闭:
             type: Canvas
@@ -390,7 +391,7 @@ controls:
                 attribute:
                   point: ~middle_center
                   texts: ~&f关闭
-                  fontSize: 30
+                  fontSize: 38
                   through: true
           待领奖励:
             type: Canvas
@@ -417,5 +418,5 @@ controls:
                 attribute:
                   point: ~middle_center
                   texts: ~&f领取奖励
-                  fontSize: 30
+                  fontSize: 38
                   through: true

@@ -1024,6 +1024,12 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
                 }
                 return true;
             }
+            case "view_ready" -> {
+                // Read-only handshake: only an already authorised open view can be initialised.
+                String uiId = data.size() > 1 ? uiForKey(data.get(1)) : null;
+                if (uiId != null) views.clientReady(player, uiId);
+                return true;
+            }
             case "open_confirm" -> {
                 if (!checkToken(player, data, 2)) return true;
                 String dungeonId = data.size() > 1 ? data.get(1) : null;
@@ -1038,6 +1044,7 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
                 if (dungeonId == null) return true;
                 // 组队时整队进本；单人直接进
                 AbyssService.EnterResult r = service.enterFromPlayer(player, dungeonId, null);
+                if (r.ok()) views.closeForeground(player);
                 if (!r.ok() && r.reason() != null) {
                     player.sendMessage(r.reason());
                 }
@@ -1145,6 +1152,7 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
                         return true;
                     }
                     AbyssService.EnterResult r = service.enterFromPlayer(player, dungeonId, null);
+                    if (r.ok()) for (Player member : party.onlineMembers()) views.closeForeground(member);
                     if (!r.ok() && r.reason() != null) {
                         player.sendMessage(r.reason());
                     }
@@ -1401,7 +1409,13 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
                         if (inst != null && !inst.isFinished()
                             && new UiOffer(inst.getInstanceId(), poolId).equals(buffOffers.get(player.getUniqueId()))
                             && views.isOpen(player, buffUi())) {
-                            service.buffs().pick(inst, player, poolId, optionId);
+                            UiOffer previousOffer = buffOffers.get(player.getUniqueId());
+                            boolean accepted = service.buffs().pick(inst, player, poolId, optionId);
+                            // A continuation replaces the offer and opens the next selection itself.
+                            if (accepted && buffOffers.get(player.getUniqueId()) == previousOffer) {
+                                buffOffers.remove(player.getUniqueId());
+                                views.close(player, buffUi());
+                            }
                         }
                     }
                 }
@@ -1724,7 +1738,13 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
     }
 
     private static int parseInt(String s, int def) {
-        try { return Integer.parseInt(s); } catch (Exception e) { return def; }
+        if (s == null || s.length() > 64) return def;
+        try { return Integer.parseInt(s); }
+        catch (NumberFormatException ignored) {
+            // Aria arithmetic serialises integral values as e.g. "1.0".
+            try { return new java.math.BigDecimal(s.trim()).intValueExact(); }
+            catch (NumberFormatException | ArithmeticException invalid) { return def; }
+        }
     }
 
     private static @Nullable UUID parseUuid(@Nullable String s) {

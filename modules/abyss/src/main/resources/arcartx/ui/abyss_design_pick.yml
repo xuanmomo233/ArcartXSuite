@@ -78,6 +78,7 @@ ui:
       var.catalogW = var.viewW - 480
       var.kindCardW = (var.catalogW - 120) / 3
     open: |-
+      Packet.send('abyss', 'view_ready', 'design_pick')
       Sound.self('minecraft:ui.button.click', 0.8, 8)
 controls:
   全屏磨砂:
@@ -120,7 +121,7 @@ controls:
           x: "72 - var.offX"
           y: 14
           texts: ~&6对象布设  &7/  &f选择构件类型
-          fontSize: 36
+          fontSize: 48
           through: true
       副标题:
         type: Text
@@ -129,7 +130,7 @@ controls:
           x: "74 - var.offX"
           y: 72
           texts: "'&7目标节点  &f' + var.nodeKey + '   &7/   &7' + var.kindCount + ' 种可用构件'"
-          fontSize: 24
+          fontSize: 32
           limit: 60
           through: true
       取消钮:
@@ -160,7 +161,7 @@ controls:
             attribute:
               point: ~middle_center
               texts: ~&f‹  返回路线图
-              fontSize: 24
+              fontSize: 32
               through: true
       布设须知:
         type: Canvas
@@ -190,20 +191,42 @@ controls:
               x: 24
               y: 22
               texts: ~&6布设规程
-              fontSize: 32
+              fontSize: 42
               through: true
           说明:
-            type: Text
+            type: Canvas
             attribute:
-              lineSpace: 8
               point: ~top_left
               x: 26
               y: 82
-              texts:
-                - ~&7选择构件后按其标记方式
-                - ~&7在世界内完成位置布设。
-              fontSize: 24
               through: true
+              width: Math.max(1, self.parent.width - self.x - 24)
+              height: 44.0
+            children:
+              行0:
+                type: Text
+                attribute:
+                  fontSize: 32
+                  point: ~top_left
+                  x: 0
+                  y: 0.0
+                  width: self.parent.width
+                  height: 20.0
+                  limitControl: self.parent
+                  texts: ~&7选择构件后按其标记方式
+                  through: true
+              行1:
+                type: Text
+                attribute:
+                  fontSize: 32
+                  point: ~top_left
+                  x: 0
+                  y: 24.0
+                  width: self.parent.width
+                  height: 20.0
+                  limitControl: self.parent
+                  texts: ~&7在世界内完成位置布设。
+                  through: true
           点位底:
             type: Texture
             attribute:
@@ -215,18 +238,51 @@ controls:
               normal: ~48,39,26,245
               through: true
           点位:
-            type: Text
+            type: Canvas
             attribute:
-              lineSpace: 8
               point: ~top_left
               x: 42
               y: 212
-              texts:
-                - ~&6A  /  单点标定
-                - ~&f标记杖右键目标方块
-                - ~&7落点后进入参数编辑
-              fontSize: 24
               through: true
+              width: Math.max(1, self.parent.width - self.x - 24)
+              height: 68.0
+            children:
+              行0:
+                type: Text
+                attribute:
+                  fontSize: 32
+                  point: ~top_left
+                  x: 0
+                  y: 0.0
+                  width: self.parent.width
+                  height: 20.0
+                  limitControl: self.parent
+                  texts: ~&6A  /  单点标定
+                  through: true
+              行1:
+                type: Text
+                attribute:
+                  fontSize: 32
+                  point: ~top_left
+                  x: 0
+                  y: 24.0
+                  width: self.parent.width
+                  height: 20.0
+                  limitControl: self.parent
+                  texts: ~&f标记杖右键目标方块
+                  through: true
+              行2:
+                type: Text
+                attribute:
+                  fontSize: 32
+                  point: ~top_left
+                  x: 0
+                  y: 48.0
+                  width: self.parent.width
+                  height: 20.0
+                  limitControl: self.parent
+                  texts: ~&7落点后进入参数编辑
+                  through: true
           区域底:
             type: Texture
             attribute:
@@ -238,18 +294,51 @@ controls:
               normal: ~48,28,25,245
               through: true
           区域:
-            type: Text
+            type: Canvas
             attribute:
-              lineSpace: 8
               point: ~top_left
               x: 42
               y: 388
-              texts:
-                - ~&cB  /  区域圈定
-                - ~&f标记杖左键 A / 右键 B
-                - ~&7两个角点定义作用范围
-              fontSize: 24
               through: true
+              width: Math.max(1, self.parent.width - self.x - 24)
+              height: 68.0
+            children:
+              行0:
+                type: Text
+                attribute:
+                  fontSize: 32
+                  point: ~top_left
+                  x: 0
+                  y: 0.0
+                  width: self.parent.width
+                  height: 20.0
+                  limitControl: self.parent
+                  texts: ~&cB  /  区域圈定
+                  through: true
+              行1:
+                type: Text
+                attribute:
+                  fontSize: 32
+                  point: ~top_left
+                  x: 0
+                  y: 24.0
+                  width: self.parent.width
+                  height: 20.0
+                  limitControl: self.parent
+                  texts: ~&f标记杖左键 A / 右键 B
+                  through: true
+              行2:
+                type: Text
+                attribute:
+                  fontSize: 32
+                  point: ~top_left
+                  x: 0
+                  y: 48.0
+                  width: self.parent.width
+                  height: 20.0
+                  limitControl: self.parent
+                  texts: ~&7两个角点定义作用范围
+                  through: true
           直接底:
             type: Texture
             attribute:
@@ -261,18 +350,51 @@ controls:
               normal: ~32,39,35,245
               through: true
           直接:
-            type: Text
+            type: Canvas
             attribute:
-              lineSpace: 8
               point: ~top_left
               x: 42
               y: 564
-              texts:
-                - ~&7C  /  无需标记
-                - ~&f直接创建并打开编辑
-                - ~&7随后配置对象参数
-              fontSize: 24
               through: true
+              width: Math.max(1, self.parent.width - self.x - 24)
+              height: 68.0
+            children:
+              行0:
+                type: Text
+                attribute:
+                  fontSize: 32
+                  point: ~top_left
+                  x: 0
+                  y: 0.0
+                  width: self.parent.width
+                  height: 20.0
+                  limitControl: self.parent
+                  texts: ~&7C  /  无需标记
+                  through: true
+              行1:
+                type: Text
+                attribute:
+                  fontSize: 32
+                  point: ~top_left
+                  x: 0
+                  y: 24.0
+                  width: self.parent.width
+                  height: 20.0
+                  limitControl: self.parent
+                  texts: ~&f直接创建并打开编辑
+                  through: true
+              行2:
+                type: Text
+                attribute:
+                  fontSize: 32
+                  point: ~top_left
+                  x: 0
+                  y: 48.0
+                  width: self.parent.width
+                  height: 20.0
+                  limitControl: self.parent
+                  texts: ~&7随后配置对象参数
+                  through: true
           安全注:
             type: Text
             attribute:
@@ -280,7 +402,7 @@ controls:
               x: 26
               y: -34
               texts: ~&7Shift+右键取消选区
-              fontSize: 24
+              fontSize: 32
               through: true
       目录底:
         type: Texture
@@ -305,7 +427,7 @@ controls:
           x: "460 - var.offX"
           y: 152
           texts: ~&6III  /  构件目录
-          fontSize: 32
+          fontSize: 42
           through: true
       目录说明:
         type: Text
@@ -314,7 +436,7 @@ controls:
           x: "462 - var.offX"
           y: 210
           texts: ~&7卡片下缘标明部署流程 · 点击即选择 · 滚轮浏览全部类型
-          fontSize: 24
+          fontSize: 32
           through: true
       目录滑轨:
         type: Texture
@@ -407,7 +529,7 @@ controls:
                       x: 42
                       y: 24
                       texts: "self.parent.entry['icon']"
-                      fontSize: 36
+                      fontSize: 48
                       through: true
                   名:
                     type: Canvas
@@ -423,7 +545,7 @@ controls:
                         type: Text
                         attribute:
                           texts: '''&f'' + self.parent.parent.entry[''label'']'
-                          fontSize: 32
+                          fontSize: 42
                           limit: 11
                           point: ~top_left
                           width: self.parent.width
@@ -447,7 +569,7 @@ controls:
                       x: 34
                       y: -29
                       texts: ~&6A  /  标记杖右键落点
-                      fontSize: 24
+                      fontSize: 32
                       visible: "self.parent.entry['mark'] == 'point'"
                       through: true
                   区域标记:
@@ -457,7 +579,7 @@ controls:
                       x: 34
                       y: -29
                       texts: ~&cB  /  左键 A · 右键 B
-                      fontSize: 24
+                      fontSize: 32
                       visible: "self.parent.entry['mark'] == 'region'"
                       through: true
                   直接标记:
@@ -467,7 +589,7 @@ controls:
                       x: 34
                       y: -29
                       texts: ~&7C  /  直接创建并配置
-                      fontSize: 24
+                      fontSize: 32
                       visible: "self.parent.entry['mark'] != 'point' && self.parent.entry['mark'] != 'region'"
                       through: true
       目录空态:
@@ -477,6 +599,6 @@ controls:
           x: "488 - var.offX"
           y: 320
           texts: ~&7当前节点没有可布设的构件类型
-          fontSize: 24
+          fontSize: 32
           visible: "var.kindCount == 0"
           through: true

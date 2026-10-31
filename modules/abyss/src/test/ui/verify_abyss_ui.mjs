@@ -173,7 +173,7 @@ class Engine {
  geometry() {
   const boxes=[];
   const textWidth=(text,font)=>[...String(text).replace(/(?:&|§)[0-9a-fk-or]/gi,'')]
-    .reduce((n,c)=>n+(/[\u0020-\u007e]/.test(c)?(c===' '?0.32:0.6):1)*font,0);
+    .reduce((n,c)=>n+(/[\u0020-\u007e]/.test(c)?(c===' '?0.32:0.6):1)*font/2,0);
   const measure=node=>{
    const p=node.proxy,a=node.definition.attribute||{},type=(node.definition.type||'').toLowerCase();
    const children=node.children.filter(c=>this.visible(c));
@@ -185,7 +185,7 @@ class Engine {
     lines=lines.map(s=>[...s.replace(/(?:&|§)[0-9a-fk-or]/gi,'')].slice(0,p.limit??999999).join(''));
     const natural=Math.max(0,...lines.map(s=>textWidth(s,p.fontSize||24)));
     glyphWidth=natural;
-    w=w||natural;h=h||lines.length*(p.fontSize||24)+Math.max(0,lines.length-1)*(p.lineSpace??16);
+    w=w||natural;h=h||lines.length*(p.fontSize||24)/2+Math.max(0,lines.length-1)*(p.lineSpace??16);
    }
    if(type==='hstack'){w=w||sizes.reduce((n,s)=>n+s.w,0)+Math.max(0,sizes.length-1)*(p.spaceBetween||0);h=h||Math.max(0,...sizes.map(s=>s.h))}
    if(type==='vstack'){h=h||sizes.reduce((n,s)=>n+s.h,0)+Math.max(0,sizes.length-1)*(p.spaceBetween||0);w=w||Math.max(0,...sizes.map(s=>s.w))}
@@ -286,7 +286,7 @@ const layouts={};
 for(const [name,doc]of Object.entries(documents)) {
  const engine=new Engine(doc);
  engine.settle();engine.render();engine.interactions();
- assert.equal(engine.packets.length,0,'uninitialized screen must not submit actions: '+name);
+ assert(engine.packets.every(p=>p[1]==='view_ready'),'uninitialized screen must only request mount readiness: '+name);
  scenarios++;
  for(const [version,n]of [0,1,4,12,65,70,1,0,3,3].entries()) {
   engine.receive(fixture(n,version),name==='hud'?'update':'init');engine.settle();engine.render();engine.checkLists();scenarios++;

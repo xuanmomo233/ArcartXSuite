@@ -472,7 +472,6 @@ public final class AbyssService {
             // 外部系统配套（Chemdah 会话/任务 + questgps 呈现层；由 installer 部署）
             "external/README.md",
             "external/chemdah/conversation/sk_guide.yml",
-            "external/chemdah/conversation/sk_merchant.yml",
             "external/chemdah/quest/sk_slayer.yml",
             "external/questgps/sk_slayer.yml"
         };

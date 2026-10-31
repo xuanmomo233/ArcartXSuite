@@ -66,6 +66,7 @@ ui:
       var.accent = '186,140,232,255'
       var.dirty = false
     open: |-
+      Packet.send('abyss', 'view_ready', 'buff')
       Sound.self('minecraft:block.note_block.pling', 0.8, 10)
     tick: |-
       if(var.iconsPending && !var.dirty){
@@ -143,7 +144,7 @@ controls:
           point: ~top_center
           y: 220
           texts: "'&f' + var.poolName"
-          fontSize: 44
+          fontSize: 56
           limit: 16
           through: true
       副标题:
@@ -152,7 +153,7 @@ controls:
           point: ~top_center
           y: 296
           texts: "'&7还可选择 ' + var.picksLeft.round() + ' 项增益，伴随本次副本生效'"
-          fontSize: 24
+          fontSize: 32
           through: true
       倒计时文字:
         type: Text
@@ -160,7 +161,7 @@ controls:
           point: ~top_center
           y: 344
           texts: "var.timeout > 0 ? '&7' + var.remain.round() + 's · ' + var.timeoutText : ''"
-          fontSize: 24
+          fontSize: 32
           through: true
       倒计时条背景:
         type: Texture
@@ -259,7 +260,7 @@ controls:
                       point: ~top_center
                       y: 132
                       texts: "self.parent.entry['name']"
-                      fontSize: 28
+                      fontSize: 36
                       limit: 9
                       through: true
                   稀有度文字:
@@ -268,7 +269,7 @@ controls:
                       point: ~top_center
                       y: 190
                       texts: "'&7◆ ' + self.parent.entry['rarity']"
-                      fontSize: 24
+                      fontSize: 32
                       through: true
                   描述0:
                     type: Text
@@ -276,7 +277,7 @@ controls:
                       point: ~top_center
                       y: 240
                       texts: "'&7' + self.parent.entry['desc0']"
-                      fontSize: 24
+                      fontSize: 32
                       limit: 12
                       through: true
                   描述1:
@@ -285,7 +286,7 @@ controls:
                       point: ~top_center
                       y: 278
                       texts: "'&7' + self.parent.entry['desc1']"
-                      fontSize: 24
+                      fontSize: 32
                       limit: 12
                       through: true
                   描述2:
@@ -294,7 +295,7 @@ controls:
                       point: ~top_center
                       y: 316
                       texts: "'&7' + self.parent.entry['desc2']"
-                      fontSize: 24
+                      fontSize: 32
                       limit: 12
                       through: true
                   选择按钮:
@@ -307,7 +308,6 @@ controls:
                     action:
                       clickLeft: |-
                         Packet.send(var.packetId, 'buff_pick', var.poolId, self.parent.entry['id'], var.actionToken)
-                        Screen.close()
                     children:
                       按钮底:
                         type: Texture
@@ -326,5 +326,5 @@ controls:
                         attribute:
                           point: ~middle_center
                           texts: ~&0选 择
-                          fontSize: 24
+                          fontSize: 32
                           through: true

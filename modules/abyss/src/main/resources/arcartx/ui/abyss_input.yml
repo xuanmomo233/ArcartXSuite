@@ -59,6 +59,7 @@ ui:
       s = sx < sy ? sx : sy
       var.viewH = Screen.getHeight() / s
     open: |-
+      Packet.send('abyss', 'view_ready', 'input')
       Sound.self('minecraft:block.note_block.pling', 0.8, 12)
 controls:
   全屏磨砂:
@@ -110,7 +111,7 @@ controls:
               x: 36
               y: 30
               texts: ~&6机关校验  /  远征终端
-              fontSize: 24
+              fontSize: 32
               through: true
           机关档案:
             type: Text
@@ -119,7 +120,7 @@ controls:
               x: -36
               y: 30
               texts: "'&7' + var.puzzleId"
-              fontSize: 24
+              fontSize: 32
               limit: 22
               through: true
           标题:
@@ -136,7 +137,7 @@ controls:
                 type: Text
                 attribute:
                   texts: '''&f'' + var.title'
-                  fontSize: 36
+                  fontSize: 48
                   limit: 21
                   point: ~top_left
                   width: self.parent.width
@@ -150,7 +151,7 @@ controls:
               x: 38
               y: 168
               texts: ~&6现场线索
-              fontSize: 24
+              fontSize: 32
               through: true
           线索阅读注:
             type: Text
@@ -159,7 +160,7 @@ controls:
               x: -36
               y: 168
               texts: ~&7悬停阅读完整线索
-              fontSize: 24
+              fontSize: 32
               through: true
           提示:
             type: Scroll
@@ -184,7 +185,7 @@ controls:
                     type: Text
                     attribute:
                       texts: "'&7' + var.hint"
-                      fontSize: 24
+                      fontSize: 32
                       through: true
           风险底:
             type: Texture
@@ -213,7 +214,7 @@ controls:
               x: 54
               y: 274
               texts: "var.attemptsText != '' ? '&c校验余量  &7/  &f' + var.attemptsText : '&7此机关不限制尝试次数'"
-              fontSize: 24
+              fontSize: 32
               through: true
           输入题:
             type: Text
@@ -222,7 +223,7 @@ controls:
               x: 38
               y: 334
               texts: ~&6提交口令
-              fontSize: 24
+              fontSize: 32
               through: true
           长度提示:
             type: Text
@@ -231,7 +232,7 @@ controls:
               x: -36
               y: 334
               texts: "'&7上限 ' + var.length.round() + ' 字符 · 回车提交'"
-              fontSize: 24
+              fontSize: 32
               through: true
           # 输入框留出内边距，独立于按钮和说明区域。
           输入框容器:
@@ -265,7 +266,7 @@ controls:
                   width: 756
                   height: 40
                   length: 16
-                  fontSize: 24
+                  fontSize: 32
                   cursorColor: ~194,139,65
                   emptyText: ~&7输入口令以校验
                   canLoseFocus: true
@@ -274,7 +275,6 @@ controls:
                     // 回车提交（等价点确认）
                     if(self.getContent() != '') {
                       Packet.send(var.packetId, 'input_submit', var.puzzleId, self.getContent(), var.actionToken)
-                      Screen.close()
                     }
           操作区:
             type: HStack
@@ -294,7 +294,6 @@ controls:
                   clickLeft: |-
                     if(val.输入框.getContent() != '') {
                       Packet.send(var.packetId, 'input_submit', var.puzzleId, val.输入框.getContent(), var.actionToken)
-                      Screen.close()
                     }
                 children:
                   确认底:
@@ -311,7 +310,7 @@ controls:
                     attribute:
                       point: ~middle_center
                       texts: ~&0校验并提交
-                      fontSize: 24
+                      fontSize: 32
                       through: true
               取消按钮:
                 type: Canvas
@@ -339,5 +338,5 @@ controls:
                     attribute:
                       point: ~middle_center
                       texts: ~&f暂不尝试
-                      fontSize: 24
+                      fontSize: 32
                       through: true

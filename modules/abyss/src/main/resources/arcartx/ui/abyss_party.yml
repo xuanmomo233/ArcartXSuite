@@ -107,6 +107,7 @@ ui:
       var.rightX = var.leftW + 24
       var.rightW = var.viewW - var.rightX - 72
     open: |-
+      Packet.send('abyss', 'view_ready', 'party')
       Sound.self('minecraft:item.book.page_turn', 0.9, 14)
     # 统一读取房间数据（init/update 共用）
     apply: |-
@@ -284,7 +285,7 @@ controls:
               x: 120
               y: 46
               texts: ~&6ABYSS  /  OPERATIONS TABLE   •   02
-              fontSize: 24
+              fontSize: 32
               alpha: 0.78
               through: true
           标题:
@@ -293,7 +294,7 @@ controls:
               x: 72
               y: 104
               texts: ~&f远征整备室
-              fontSize: 56
+              fontSize: 72
               through: true
           副标题:
             type: Text
@@ -301,7 +302,7 @@ controls:
               x: 76
               y: 176
               texts: "'&7' + var.partyName + '  ·  ' + var.memberCount.round() + '/' + var.maxMembers.round() + ' 人' + (var.allReady ? '  ·  &a全员就绪' : '')"
-              fontSize: 24
+              fontSize: 32
               through: true
           关闭按钮:
             type: Canvas
@@ -327,7 +328,7 @@ controls:
                 attribute:
                   point: ~middle_center
                   texts: ~&f✕
-                  fontSize: 24
+                  fontSize: 32
                   through: true
           # ── 左中：成员模型舞台 ──
           舞台底:
@@ -363,7 +364,7 @@ controls:
               x: 88
               y: 274
               texts: ~&601  /  编队点名
-              fontSize: 24
+              fontSize: 32
               through: true
           成员滑轨:
             type: Texture
@@ -432,7 +433,7 @@ controls:
                           x: 14
                           y: 10
                           texts: "'&6' + (self.parent.entryKey + 1).round() + ' / CREW'"
-                          fontSize: 24
+                          fontSize: 32
                           through: true
                       成员模型:
                         type: Entity
@@ -457,7 +458,7 @@ controls:
                           point: ~top_center
                           y: 274
                           texts: ~&6队长
-                          fontSize: 24
+                          fontSize: 32
                           visible: self.parent.entry['leader']
                           through: true
                       成员名:
@@ -473,7 +474,7 @@ controls:
                             type: Text
                             attribute:
                               texts: '''&f'' + self.parent.parent.entry[''name'']'
-                              fontSize: 20
+                              fontSize: 28
                               limit: 16
                               point: ~top_left
                               width: self.parent.width
@@ -486,7 +487,7 @@ controls:
                           point: ~bottom_center
                           y: -18
                           texts: "self.parent.entry['ready'] ? '&a已准备' : '&7待准备'"
-                          fontSize: 24
+                          fontSize: 32
                           visible: "self.parent.entry['online'] && !self.parent.entry['leader']"
                           through: true
                       离线状态:
@@ -495,7 +496,7 @@ controls:
                           point: ~bottom_center
                           y: -18
                           texts: ~&c离线 / 无信号
-                          fontSize: 24
+                          fontSize: 32
                           visible: "!self.parent.entry['online']"
                           through: true
                       踢出按钮:
@@ -523,15 +524,15 @@ controls:
                             attribute:
                               point: ~middle_center
                               texts: ~&f踢
-                              fontSize: 24
+                              fontSize: 32
                               through: true
           编队提示:
             type: Text
             attribute:
               x: 88
-              y: 802
+              y: 826
               texts: ~&7编队席位  /  滚轮或拖动琥珀刻度浏览人员
-              fontSize: 24
+              fontSize: 32
               through: true
           舞台提示:
             type: Text
@@ -539,7 +540,7 @@ controls:
               x: 88
               y: "var.viewH - 230"
               texts: ~&7编队未满：点击下方「邀请玩家」补充队员
-              fontSize: 24
+              fontSize: 32
               visible: "var.memberCount.round() <= 1"
               through: true
           # 示意路线是整备流程，不冒充服务端地牢坐标。
@@ -599,7 +600,7 @@ controls:
                   x: 8
                   y: 32
                   texts: ~&6编队已集结
-                  fontSize: 24
+                  fontSize: 32
                   through: true
               目标标签:
                 type: Text
@@ -607,7 +608,7 @@ controls:
                   point: ~top_center
                   y: 32
                   texts: "var.hasDungeon ? '&6路线已确定' : '&7等待目标'"
-                  fontSize: 24
+                  fontSize: 32
                   through: true
               执行标签:
                 type: Text
@@ -616,7 +617,7 @@ controls:
                   x: -10
                   y: 32
                   texts: "var.allReady ? '&6全员就绪' : '&c等待准备'"
-                  fontSize: 24
+                  fontSize: 32
                   through: true
           # ── 右栏 ──
           副本卡底:
@@ -649,7 +650,7 @@ controls:
               x: "var.rightX + 26"
               y: 270
               texts: ~&f02  /  目标情报
-              fontSize: 24
+              fontSize: 32
               through: true
           副本图标:
             type: Slot
@@ -673,21 +674,43 @@ controls:
               x: "var.rightX + 116"
               y: 312
               texts: "var.hasDungeon ? '&f' + var.dungeon['name'] : '&7尚未选择'"
-              fontSize: 32
+              fontSize: 42
               limit: 12
               through: true
           副本信息行:
-            type: Text
+            type: Canvas
             attribute:
-              lineSpace: 8
-              x: "var.rightX + 116"
+              x: var.rightX + 116
               y: 366
-              texts:
-                - "var.hasDungeon ? '&7危险等级 &6' + var.dungeon['difficulty'] + '  &7编队 &f' + var.dungeon['minPlayers'].round() + '-' + var.dungeon['maxPlayers'].round() : '&7队长点击「更换副本」'"
-                - "var.hasDungeon ? '&7体力消耗 &f' + var.dungeon['staminaCost'].round() + '   &7时限 &6' + var.dungeon['timeLimit'].round() + 's' : '&7选择目标后检查编队条件'"
-              fontSize: 24
-              visible: "var.hasDungeon || var.isLeader"
+              visible: var.hasDungeon || var.isLeader
               through: true
+              width: Math.max(1, self.parent.width - self.x - 24)
+              height: 44.0
+            children:
+              行0:
+                type: Text
+                attribute:
+                  fontSize: 32
+                  point: ~top_left
+                  x: 0
+                  y: 0.0
+                  width: self.parent.width
+                  height: 20.0
+                  limitControl: self.parent
+                  texts: 'var.hasDungeon ? ''&7危险等级 &6'' + var.dungeon[''difficulty''] + ''  &7编队 &f'' + var.dungeon[''minPlayers''].round() + ''-'' + var.dungeon[''maxPlayers''].round() : ''&7队长点击「更换副本」'''
+                  through: true
+              行1:
+                type: Text
+                attribute:
+                  fontSize: 32
+                  point: ~top_left
+                  x: 0
+                  y: 24.0
+                  width: self.parent.width
+                  height: 20.0
+                  limitControl: self.parent
+                  texts: 'var.hasDungeon ? ''&7体力消耗 &f'' + var.dungeon[''staminaCost''].round() + ''   &7时限 &6'' + var.dungeon[''timeLimit''].round() + ''s'' : ''&7选择目标后检查编队条件'''
+                  through: true
           副本信息行2:
             type: Canvas
             attribute:
@@ -702,7 +725,7 @@ controls:
                 type: Text
                 attribute:
                   texts: 'var.hasDungeon ? ''&7'' + var.dungeon[''desc0''] : ''&7等待队长选择目标副本'''
-                  fontSize: 24
+                  fontSize: 32
                   limit: 23
                   point: ~top_left
                   width: self.parent.width
@@ -740,7 +763,7 @@ controls:
                 attribute:
                   point: ~middle_center
                   texts: ~&f更换副本
-                  fontSize: 24
+                  fontSize: 32
                   through: true
           # ── 右下：消息流 + 队聊 ──
           消息底:
@@ -773,7 +796,7 @@ controls:
               x: "var.rightX + 26"
               y: 586
               texts: ~&f03  /  无线电频道
-              fontSize: 24
+              fontSize: 32
               through: true
           消息滑轨:
             type: Texture
@@ -830,7 +853,7 @@ controls:
                       texts: "self.entry['display']"
                       width: "var.rightW - 72"
                       height: 28
-                      fontSize: 22
+                      fontSize: 30
                       through: true
           队聊框底:
             type: Texture
@@ -856,7 +879,7 @@ controls:
               height: 34
               length: 48
               emptyText: ~&7说点什么…
-              fontSize: 24
+              fontSize: 32
             action:
               textChange: |-
                 var.chatMsg = self.getContent()
@@ -889,7 +912,7 @@ controls:
                 attribute:
                   point: ~middle_center
                   texts: ~&0发送
-                  fontSize: 24
+                  fontSize: 32
                   through: true
           # 申请占独立滚动带，不再覆盖目标情报；频道随其显隐让出空间。
           申请标题:
@@ -898,7 +921,7 @@ controls:
               x: "var.rightX + 22"
               y: 616
               texts: "'&6入队申请 / ' + var.applicantCount.round()"
-              fontSize: 24
+              fontSize: 32
               visible: "var.isLeader && var.applicantCount.round() > 0"
               through: true
           申请滑轨:
@@ -978,7 +1001,7 @@ controls:
                             type: Text
                             attribute:
                               texts: '''&e'' + self.parent.parent.entry[''name'']'
-                              fontSize: 24
+                              fontSize: 32
                               limit: 16
                               point: ~top_left
                               width: self.parent.width
@@ -1008,7 +1031,7 @@ controls:
                             attribute:
                               point: ~middle_center
                               texts: ~&f拒
-                              fontSize: 24
+                              fontSize: 32
                               through: true
                       准按钮:
                         type: Canvas
@@ -1033,7 +1056,7 @@ controls:
                             attribute:
                               point: ~middle_center
                               texts: ~&0准
-                              fontSize: 24
+                              fontSize: 32
                               through: true
           # ── 底部操作栏 ──
           底栏:
@@ -1070,7 +1093,7 @@ controls:
                     attribute:
                       point: ~middle_center
                       texts: ~&0邀请玩家
-                      fontSize: 24
+                      fontSize: 32
                       through: true
               准备按钮:
                 type: Canvas
@@ -1096,7 +1119,7 @@ controls:
                     attribute:
                       point: ~middle_center
                       texts: "var.myReady ? '&f取消准备' : '&f准 备'"
-                      fontSize: 24
+                      fontSize: 32
                       through: true
               开始按钮:
                 type: Canvas
@@ -1122,7 +1145,7 @@ controls:
                     attribute:
                       point: ~middle_center
                       texts: ~&f执行远征
-                      fontSize: 24
+                      fontSize: 32
                       through: true
               公开开关:
                 type: Canvas
@@ -1152,7 +1175,7 @@ controls:
                     attribute:
                       point: ~middle_center
                       texts: "var.listed ? '&a已公开' : '&f公开到大厅'"
-                      fontSize: 24
+                      fontSize: 32
                       through: true
               审批开关:
                 type: Canvas
@@ -1182,7 +1205,7 @@ controls:
                     attribute:
                       point: ~middle_center
                       texts: "var.joinMode == 'OPEN' ? '&f直接加入' : '&f需要审批'"
-                      fontSize: 24
+                      fontSize: 32
                       through: true
               离开按钮:
                 type: Canvas
@@ -1192,7 +1215,6 @@ controls:
                 action:
                   clickLeft: |-
                     Packet.send(var.packetId, 'party_leave', var.actionToken)
-                    Screen.close()
                 children:
                   离开底:
                     type: Texture
@@ -1212,7 +1234,7 @@ controls:
                     attribute:
                       point: ~middle_center
                       texts: ~&f离队
-                      fontSize: 24
+                      fontSize: 32
                       through: true
               解散按钮:
                 type: Canvas
@@ -1223,7 +1245,6 @@ controls:
                 action:
                   clickLeft: |-
                     Packet.send(var.packetId, 'party_disband', var.actionToken)
-                    Screen.close()
                 children:
                   解散底:
                     type: Texture
@@ -1239,7 +1260,7 @@ controls:
                     attribute:
                       point: ~middle_center
                       texts: ~&f解散
-                      fontSize: 24
+                      fontSize: 32
                       through: true
           # ═══════ 邀请副面板（居中模态）═══════
           邀请遮罩:
@@ -1283,7 +1304,7 @@ controls:
                   x: 30
                   y: 44
                   texts: ~&f人员征召 / 邀请
-                  fontSize: 36
+                  fontSize: 48
                   through: true
               面板提示:
                 type: Text
@@ -1291,7 +1312,7 @@ controls:
                   x: 30
                   y: 104
                   texts: ~&7同一玩家 60 秒内只能邀请一次；已关闭邀请的玩家不会出现在列表中
-                  fontSize: 24
+                  fontSize: 32
                   limit: 30
                   through: true
               关闭按钮:
@@ -1319,7 +1340,7 @@ controls:
                     attribute:
                       point: ~middle_center
                       texts: ~&f✕
-                      fontSize: 24
+                      fontSize: 32
                       through: true
               在线滑轨:
                 type: Texture
@@ -1387,7 +1408,7 @@ controls:
                               point: ~middle_left
                               x: 16
                               texts: "'&f' + self.parent.entry['name']"
-                              fontSize: 24
+                              fontSize: 32
                               limit: 18
                               through: true
                           邀请小按钮:
@@ -1415,7 +1436,7 @@ controls:
                                 attribute:
                                   point: ~middle_center
                                   texts: ~&0邀请
-                                  fontSize: 24
+                                  fontSize: 32
                                   through: true
               无在线提示:
                 type: Text
@@ -1423,7 +1444,7 @@ controls:
                   x: 30
                   y: 300
                   texts: ~&7暂无可邀请的在线玩家
-                  fontSize: 24
+                  fontSize: 32
                   visible: "var.onlineCount.round() == 0"
                   through: true
               邀请输入底:
@@ -1449,7 +1470,7 @@ controls:
                   height: 36
                   length: 16
                   emptyText: ~&7输入玩家名邀请…
-                  fontSize: 24
+                  fontSize: 32
                 action:
                   textChange: |-
                     var.inviteName = self.getContent()
@@ -1480,7 +1501,7 @@ controls:
                     attribute:
                       point: ~middle_center
                       texts: ~&0邀 请
-                      fontSize: 24
+                      fontSize: 32
                       through: true
               刷新列表按钮:
                 type: Canvas
@@ -1511,7 +1532,7 @@ controls:
                     attribute:
                       point: ~middle_center
                       texts: ~&f刷新列表
-                      fontSize: 24
+                      fontSize: 32
                       through: true
           # ═══════ 副本选择副面板（居中模态）═══════
           副本遮罩:
@@ -1546,7 +1567,7 @@ controls:
                   x: 30
                   y: 30
                   texts: ~&f路线档案 / 选择目标
-                  fontSize: 36
+                  fontSize: 48
                   through: true
               副本关闭:
                 type: Canvas
@@ -1573,7 +1594,7 @@ controls:
                     attribute:
                       point: ~middle_center
                       texts: ~&f✕
-                      fontSize: 24
+                      fontSize: 32
                       through: true
               副本刻度说明:
                 type: Text
@@ -1581,7 +1602,7 @@ controls:
                   x: 30
                   y: 76
                   texts: ~&7点击路线确认  /  滚轮浏览危险等级
-                  fontSize: 24
+                  fontSize: 32
                   through: true
               副本滑轨:
                 type: Texture
@@ -1658,7 +1679,7 @@ controls:
                               y: 10
                               texts: "'&f' + self.parent.entry['name']"
                               limit: 20
-                              fontSize: 24
+                              fontSize: 32
                               through: true
                           副本难度:
                             type: Text
@@ -1666,5 +1687,5 @@ controls:
                               x: 16
                               y: 44
                               texts: "'&6难度 / ' + self.parent.entry['difficulty']"
-                              fontSize: 24
+                              fontSize: 32
                               through: true

@@ -46,4 +46,11 @@ class AbyssUiContractTest {
             }
         }
     }
+    @Test void editorUsesIntegerDictionaryKeysAndChestShowsEveryStackAmount()throws Exception {
+        String editor=Files.readString(resources.resolve("arcartx/ui/abyss_design_edit.yml"));
+        assertTrue(editor.contains("var.fieldRows['' + fi.round()]"));
+        assertTrue(editor.contains("var.groupRows['' + gi.round()]"));
+        String chest=Files.readString(resources.resolve("arcartx/ui/abyss_chest.yml"));
+        for(int i=0;i<9;i++)assertTrue(chest.contains("var.itemAmount"+i+".round()"));
+    }
 }

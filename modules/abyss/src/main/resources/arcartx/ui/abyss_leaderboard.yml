@@ -30,6 +30,7 @@ ui:
       var.rowRefs = {}
       var.revision = 0
     open: |-
+      Packet.send('abyss', 'view_ready', 'leaderboard')
       Sound.self('minecraft:item.book.page_turn', 0.9, 14)
     close: |-
       if(var.actionToken != '' && var.viewNonce != ''){
@@ -95,7 +96,7 @@ controls:
                 attribute:
                   texts: '''&f通关排行  &7· '' + var.dungeonName'
                   limit: 28
-                  fontSize: 44
+                  fontSize: 56
                   point: ~top_left
                   width: self.parent.width
                   height: self.parent.height
@@ -125,7 +126,7 @@ controls:
                 type: Text
                 attribute:
                   texts: ~&f名次
-                  fontSize: 28
+                  fontSize: 36
                   point: ~top_left
                   width: self.parent.width
                   height: self.parent.height
@@ -144,7 +145,7 @@ controls:
                 type: Text
                 attribute:
                   texts: ~&f玩家
-                  fontSize: 28
+                  fontSize: 36
                   point: ~top_left
                   width: self.parent.width
                   height: self.parent.height
@@ -163,7 +164,7 @@ controls:
                 type: Text
                 attribute:
                   texts: ~&f最佳时间
-                  fontSize: 28
+                  fontSize: 36
                   point: ~top_left
                   width: self.parent.width
                   height: self.parent.height
@@ -182,7 +183,7 @@ controls:
                 type: Text
                 attribute:
                   texts: ~&f通关次数
-                  fontSize: 28
+                  fontSize: 36
                   point: ~top_left
                   width: self.parent.width
                   height: self.parent.height
@@ -250,7 +251,7 @@ controls:
                             type: Text
                             attribute:
                               texts: '''&e#'' + self.parent.parent.entry[''rank''].round()'
-                              fontSize: 28
+                              fontSize: 36
                               limit: 5
                               point: ~top_left
                               width: self.parent.width
@@ -270,7 +271,7 @@ controls:
                             type: Text
                             attribute:
                               texts: '''&f'' + self.parent.parent.entry[''name'']'
-                              fontSize: 28
+                              fontSize: 36
                               limit: 16
                               point: ~top_left
                               width: self.parent.width
@@ -290,7 +291,7 @@ controls:
                             type: Text
                             attribute:
                               texts: '''&e'' + self.parent.parent.entry[''time'']'
-                              fontSize: 28
+                              fontSize: 36
                               limit: 12
                               point: ~top_left
                               width: self.parent.width
@@ -310,7 +311,7 @@ controls:
                             type: Text
                             attribute:
                               texts: '''&7'' + self.parent.parent.entry[''completionsText'']'
-                              fontSize: 28
+                              fontSize: 36
                               limit: 12
                               point: ~top_left
                               width: self.parent.width
@@ -323,7 +324,7 @@ controls:
               point: ~middle_center
               texts: ~&7暂无通关排行记录
               visible: "var.count == 0"
-              fontSize: 32
+              fontSize: 42
               through: true
           关闭:
             type: Canvas
@@ -348,5 +349,5 @@ controls:
                 attribute:
                   point: ~middle_center
                   texts: ~&f关闭
-                  fontSize: 30
+                  fontSize: 38
                   through: true

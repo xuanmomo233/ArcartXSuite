@@ -97,6 +97,7 @@ ui:
       var.rightX = var.leftW + 28
       var.rightW = var.viewW - var.rightX - 72
     open: |-
+      Packet.send('abyss', 'view_ready', 'lobby')
       Sound.self('minecraft:item.book.page_turn', 0.9, 14)
     # 重建动态列表（队伍卡片 + 邀请行 + 筛选行）
     refresh: |-
@@ -221,7 +222,7 @@ controls:
               x: 120
               y: 46
               texts: ~&6ABYSS  /  EXPEDITION DISPATCH   •   01
-              fontSize: 24
+              fontSize: 32
               alpha: 0.78
               through: true
           标题:
@@ -230,7 +231,7 @@ controls:
               x: 72
               y: 104
               texts: ~&f远征集结处
-              fontSize: 56
+              fontSize: 72
               through: true
           引导语:
             type: Text
@@ -238,7 +239,7 @@ controls:
               x: 76
               y: 176
               texts: ~&7公开队伍档案   /   搜索目标路线   /   整备出发
-              fontSize: 24
+              fontSize: 32
               through: true
           关闭按钮:
             type: Canvas
@@ -263,7 +264,7 @@ controls:
                 attribute:
                   point: ~middle_center
                   texts: ~&f✕
-                  fontSize: 24
+                  fontSize: 32
                   through: true
           # ── 左列：公开队伍列表 ──
           列表标题:
@@ -272,7 +273,7 @@ controls:
               x: 76
               y: 240
               texts: "'&601  /  公开队伍  &f' + var.partyCount.round() + ' 支'"
-              fontSize: 24
+              fontSize: 32
               through: true
           列表分隔线:
             type: Texture
@@ -370,7 +371,7 @@ controls:
                           x: 22
                           y: 12
                           texts: "'&f' + self.parent.entry['name']"
-                          fontSize: 32
+                          fontSize: 42
                           limit: 18
                           through: true
                       队伍信息:
@@ -379,7 +380,7 @@ controls:
                           x: 22
                           y: 70
                           texts: "'&7领队 &f' + self.parent.entry['leader'] + '   &7队员 &f' + self.parent.entry['size'].round() + '/' + self.parent.entry['max'].round() + '   &7目标 &6' + self.parent.entry['dungeonName']"
-                          fontSize: 24
+                          fontSize: 32
                           limit: 45
                           through: true
                       加入方式:
@@ -389,7 +390,7 @@ controls:
                           x: -156
                           y: 14
                           texts: "self.parent.entry['joinMode'] == 'OPEN' ? '&6直接加入' : '&c审批加入'"
-                          fontSize: 24
+                          fontSize: 32
                           through: true
                       加入按钮:
                         type: Canvas
@@ -416,7 +417,7 @@ controls:
                             attribute:
                               point: ~middle_center
                               texts: "self.parent.parent.entry['joinMode'] == 'OPEN' ? '&f加入' : '&f申请'"
-                              fontSize: 24
+                              fontSize: 32
                               through: true
                       已满标签:
                         type: Text
@@ -424,7 +425,7 @@ controls:
                           point: ~middle_right
                           x: -40
                           texts: ~&7已满
-                          fontSize: 24
+                          fontSize: 32
                           visible: self.parent.entry['full']
                           through: true
           空列表提示:
@@ -433,7 +434,7 @@ controls:
               x: 76
               y: 420
               texts: ~&7暂无队伍情报。可在右侧建立远征队，等待同行者。
-              fontSize: 24
+              fontSize: 32
               visible: "var.partyCount.round() == 0"
               through: true
           # ── 右栏 ──
@@ -466,7 +467,7 @@ controls:
               x: "var.rightX + 28"
               y: 280
               texts: ~&f02  /  查找远征队
-              fontSize: 24
+              fontSize: 32
               through: true
           搜索框底:
             type: Texture
@@ -491,7 +492,7 @@ controls:
               height: 36
               length: 20
               emptyText: ~&7队伍名 / 队长名
-              fontSize: 24
+              fontSize: 32
             action:
               textChange: |-
                 var.searchText = self.getContent()
@@ -519,7 +520,7 @@ controls:
                 attribute:
                   point: ~middle_center
                   texts: ~&0搜 索
-                  fontSize: 24
+                  fontSize: 32
                   through: true
           # 副本筛选
           筛选标题:
@@ -528,7 +529,7 @@ controls:
               x: "var.rightX + 28"
               y: 404
               texts: ~&6路线筛选  /  滚轮浏览目标
-              fontSize: 24
+              fontSize: 32
               through: true
           全部标签:
             type: Canvas
@@ -556,7 +557,7 @@ controls:
                 attribute:
                   point: ~middle_center
                   texts: "var.dungeonFilter == '' ? '&0全部' : '&f全部'"
-                  fontSize: 24
+                  fontSize: 32
                   through: true
           筛选滑轨:
             type: Texture
@@ -627,7 +628,7 @@ controls:
                         attribute:
                           point: ~middle_center
                           texts: "var.dungeonFilter == self.parent.entry['id'] ? '&0' + self.parent.entry['name'] : '&f' + self.parent.entry['name']"
-                          fontSize: 24
+                          fontSize: 32
                           limit: 5
                           through: true
           # 收到的邀请
@@ -646,7 +647,7 @@ controls:
               x: "var.rightX + 28"
               y: 528
               texts: "'&f03  /  待处理邀请  &6' + var.inviteCount.round()"
-              fontSize: 24
+              fontSize: 32
               through: true
           邀请滑轨:
             type: Texture
@@ -719,19 +720,37 @@ controls:
                           through: true
                         children:
                           文字:
-                            type: Text
+                            type: Canvas
                             attribute:
-                              lineSpace: 8
-                              texts:
-                              - '''&f'' + self.parent.parent.entry[''from''] + '' &7邀请你加入'''
-                              - '''&6'' + self.parent.parent.entry[''partyName'']'
-                              fontSize: 22
-                              limit: 16
                               point: ~top_left
                               width: self.parent.width
                               height: self.parent.height
-                              limitControl: self.parent
                               through: true
+                            children:
+                              行0:
+                                type: Text
+                                attribute:
+                                  fontSize: 30
+                                  point: ~top_left
+                                  x: 0
+                                  y: 0.0
+                                  width: self.parent.width
+                                  height: 19.0
+                                  limitControl: self.parent
+                                  texts: '''&f'' + self.parent.parent.parent.entry[''from''] + '' &7邀请你加入'''
+                                  through: true
+                              行1:
+                                type: Text
+                                attribute:
+                                  fontSize: 30
+                                  point: ~top_left
+                                  x: 0
+                                  y: 23.0
+                                  width: self.parent.width
+                                  height: 19.0
+                                  limitControl: self.parent
+                                  texts: '''&6'' + self.parent.parent.parent.entry[''partyName'']'
+                                  through: true
                       拒绝按钮:
                         type: Canvas
                         attribute:
@@ -755,7 +774,7 @@ controls:
                             attribute:
                               point: ~middle_center
                               texts: ~&f拒绝
-                              fontSize: 24
+                              fontSize: 32
                               through: true
                       接受按钮:
                         type: Canvas
@@ -780,7 +799,7 @@ controls:
                             attribute:
                               point: ~middle_center
                               texts: ~&0接受
-                              fontSize: 24
+                              fontSize: 32
                               through: true
           无邀请提示:
             type: Text
@@ -788,7 +807,7 @@ controls:
               x: "var.rightX + 44"
               y: 620
               texts: ~&7暂无邀请；可自行创建队伍。
-              fontSize: 24
+              fontSize: 32
               visible: var.inviteCount.round() == 0
               through: true
           # 我的操作区
@@ -832,7 +851,7 @@ controls:
                   point: ~middle_left
                   x: 18
                   texts: "var.allowInvite ? '&f接收组队邀请  &a已开启' : '&f接收组队邀请  &7已关闭'"
-                  fontSize: 24
+                  fontSize: 32
                   through: true
               开关圆点:
                 type: Texture
@@ -867,5 +886,5 @@ controls:
                 attribute:
                   point: ~middle_center
                   texts: "var.hasParty ? '&0进入我的队伍房间' : '&0创建我的队伍'"
-                  fontSize: 24
+                  fontSize: 32
                   through: true

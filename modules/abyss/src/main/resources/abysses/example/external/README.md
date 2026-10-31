@@ -11,7 +11,6 @@ abyss 在每次加载地牢模板（`/axs abyss reload`、模块启动）时自�
 | 本目录文件 | 部署目标 |
 |---|---|
 | `chemdah/conversation/sk_guide.yml` | `plugins/Chemdah/core/conversation/` |
-| `chemdah/conversation/sk_merchant.yml` | `plugins/Chemdah/core/conversation/` |
 | `chemdah/quest/sk_slayer.yml` | `plugins/Chemdah/core/quest/` |
 | `questgps/sk_slayer.yml` | `plugins/ArcartXSuite/data/questgps/quests/` |
 

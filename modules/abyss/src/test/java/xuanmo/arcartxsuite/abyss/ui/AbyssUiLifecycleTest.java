@@ -13,7 +13,7 @@ class AbyssUiLifecycleTest {
         player=mock(Player.class);when(player.getUniqueId()).thenReturn(UUID.randomUUID());when(player.isOnline()).thenReturn(true);
         bridge=mock(PacketBridgeAPI.class);when(bridge.openUiUnsafe(any(),anyString())).thenReturn(true);
         when(bridge.sendPacket(any(),anyString(),anyString(),any())).thenReturn(true);
-        deferred=new ArrayList<>();lifecycle=new AbyssUiLifecycle(bridge,(r,delay)->{assertEquals(2L,delay);deferred.add(r);});
+        deferred=new ArrayList<>();lifecycle=new AbyssUiLifecycle(bridge,(r,delay)->{assertTrue(delay==2L||delay==10L);deferred.add(r);});
     }
     @Test void firstPacketWaitsForMountAndUpdateIsDeliveredAfterInit() {
         lifecycle.open(player,"ui","init",Map.of("count",0),false);
@@ -76,5 +76,19 @@ class AbyssUiLifecycleTest {
         assertEquals(3,deferred.size());assertFalse(lifecycle.isOpen(player,"ui"));
         verify(bridge).closeUiUnsafe(player,"ui");
         verify(player).sendMessage(contains("加载失败"));
+    }
+    @Test void nativeMountHandshakeInitialisesOnceAndCancelsTheLegacyFallback() {
+        lifecycle.open(player,"ui","init",Map.of("count",1),false);
+        assertTrue(lifecycle.clientReady(player,"ui"));assertFalse(lifecycle.clientReady(player,"ui"));
+        lifecycle.send(player,"ui","update",Map.of("count",2));
+        deferred.get(0).run();verify(bridge,never()).sendPacket(any(),anyString(),anyString(),any());
+        deferred.get(1).run();
+        var order=inOrder(bridge);order.verify(bridge).openUiUnsafe(player,"ui");
+        order.verify(bridge).sendPacket(eq(player),eq("ui"),eq("init"),any());
+        order.verify(bridge).sendPacket(player,"ui","update",Map.of("count",2));
+    }
+    @Test void readyCannotOpenAnUnauthorisedViewAndClosedViewsDoNotEmitClosePackets() {
+        assertFalse(lifecycle.clientReady(player,"ui"));lifecycle.close(player,"ui");
+        verifyNoInteractions(bridge);
     }
 }

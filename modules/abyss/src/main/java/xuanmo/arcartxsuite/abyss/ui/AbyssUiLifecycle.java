@@ -11,6 +11,9 @@ final class AbyssUiLifecycle {
     private static final class View {
         final String nonce = UUID.randomUUID().toString();
         boolean ready;
+        boolean mountConfirmed;
+        String initialHandler;
+        Object initialPayload;
         final Map<String, Update> queued = new LinkedHashMap<>();
     }
     private final PacketBridgeAPI bridge;
@@ -37,12 +40,31 @@ final class AbyssUiLifecycle {
             payload = initial;
         }
         Object initialPayload = payload;
+        view.initialHandler = handler;
+        view.initialPayload = initialPayload;
         views.computeIfAbsent(id, key -> new HashMap<>()).put(ui, view);
         if (bridge == null || !bridge.openUiUnsafe(player, ui)) {
             closed(player, ui); return false;
         }
-        defer.accept(() -> initialize(player, ui, handler, initialPayload, view, 1), 2L);
+        // Older customised UIs may not send the mount handshake.
+        defer.accept(() -> {
+            if (!view.mountConfirmed) initialize(player, ui, handler, initialPayload, view, 1);
+        }, 10L);
         return true;
+    }
+
+    boolean clientReady(Player player, String ui) {
+        View view = current(player, ui);
+        if (view == null || view.mountConfirmed || !player.isOnline()) return false;
+        view.mountConfirmed = true;
+        view.ready = false;
+        defer.accept(() -> initialize(player, ui, view.initialHandler, view.initialPayload, view, 1), 2L);
+        return true;
+    }
+
+    void closeForeground(Player player) {
+        String ui = foreground.get(player.getUniqueId());
+        if (ui != null) close(player, ui);
     }
 
     private void initialize(Player player, String ui, String handler, Object payload, View view, int attempt) {
@@ -73,6 +95,7 @@ final class AbyssUiLifecycle {
     }
 
     void close(Player player, String ui) {
+        if (current(player, ui) == null) return;
         closed(player, ui);
         if (bridge != null) bridge.closeUiUnsafe(player, ui);
     }

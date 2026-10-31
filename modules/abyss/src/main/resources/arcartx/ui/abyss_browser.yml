@@ -112,6 +112,7 @@ ui:
       var.leftW = var.viewW * 0.6
       var.rightW = var.viewW - var.leftW
     open: |-
+      Packet.send('abyss', 'view_ready', 'browser')
       Sound.self('minecraft:item.book.page_turn', 0.9, 14)
     tick: |-
       if(var.iconsPending){
@@ -177,7 +178,7 @@ controls:
               x: 120
               y: 46
               texts: ~&6A B Y S S   /   E X P E D I T I O N
-              fontSize: 24
+              fontSize: 32
               alpha: 0.78
               through: true
           标题:
@@ -195,7 +196,7 @@ controls:
               x: 76
               y: 176
               texts: ~&7远征地图   /   标记裂隙，核查危险与补给后出发
-              fontSize: 24
+              fontSize: 32
               through: true
           队伍状态底色:
             type: Texture
@@ -218,7 +219,7 @@ controls:
               x: -166
               y: 72
               texts: "'&6队伍 / &f' + var.partyText"
-              fontSize: 24
+              fontSize: 32
               through: true
           关闭按钮:
             type: Canvas
@@ -243,7 +244,7 @@ controls:
                 attribute:
                   point: ~middle_center
                   texts: ~&fX
-                  fontSize: 24
+                  fontSize: 32
                   through: true
           分隔线:
             type: Texture
@@ -260,7 +261,7 @@ controls:
               x: 76
               y: 260
               texts: ~&601   /   裂隙坐标
-              fontSize: 32
+              fontSize: 42
               through: true
           地图注释:
             type: Text
@@ -268,7 +269,7 @@ controls:
               x: 78
               y: 320
               texts: ~&7按危险等级核查每处入口 · 点击标记查看行动简报
-              fontSize: 24
+              fontSize: 32
               through: true
           地图纵轴:
             type: Texture
@@ -300,7 +301,7 @@ controls:
                     attribute:
                       point: ~top_center
                       texts: ~&f当前没有可用的裂隙
-                      fontSize: 36
+                      fontSize: 48
                       through: true
                   空说明:
                     type: Text
@@ -308,7 +309,7 @@ controls:
                       point: ~top_center
                       y: 56
                       texts: ~&7行动档案尚未解锁 · 请稍后重试
-                      fontSize: 24
+                      fontSize: 32
                       through: true
               卡片滑轨:
                 type: Texture
@@ -434,7 +435,7 @@ controls:
                               x: 164
                               y: 20
                               texts: "'&f' + self.parent.entry['name']"
-                              fontSize: 32
+                              fontSize: 42
                               limit: 14
                               through: true
                           难度人数:
@@ -443,7 +444,7 @@ controls:
                               x: 164
                               y: 72
                               texts: "'&7' + self.parent.entry['difficulty'] + '   &7' + self.parent.entry['minPlayers'].round() + '-' + self.parent.entry['maxPlayers'].round() + '人' + (self.parent.entry['partyRequired'] ? '   &c需组队' : '')"
-                              fontSize: 24
+                              fontSize: 32
                               through: true
                           冷却标记:
                             type: Text
@@ -452,7 +453,7 @@ controls:
                               x: -20
                               y: 38
                               texts: "self.parent.entry['cooldownLeft'] > 0 ? '&c封锁 ' + self.parent.entry['cooldownLeft'].round() + 's' : (self.parent.entry['running'] > 0 ? '&6进行中' : '&7可部署')"
-                              fontSize: 24
+                              fontSize: 32
                               through: true
           # ── 右列：目的地行动简报 ──
           详情底:
@@ -483,7 +484,7 @@ controls:
               x: "var.leftW + 66"
               y: 280
               texts: ~&602   /   目的地简报
-              fontSize: 24
+              fontSize: 32
               through: true
           详情标题:
             type: Text
@@ -491,7 +492,7 @@ controls:
               x: "var.leftW + 66"
               y: 350
               texts: "var.selEntry != none ? '&f' + var.selEntry['name'] : '&7待标记裂隙'"
-              fontSize: 44
+              fontSize: 56
               limit: 12
               through: true
           详情难度:
@@ -500,21 +501,65 @@ controls:
               x: "var.leftW + 68"
               y: 438
               texts: "var.selEntry != none ? '&c危险等级   &f' + var.selEntry['difficulty'] : ''"
-              fontSize: 24
+              fontSize: 32
               through: true
           详情条件行:
-            type: Text
+            type: Canvas
             attribute:
-              lineSpace: 8
-              x: "var.leftW + 68"
+              x: var.leftW + 68
               y: 494
-              fontSize: 24
               through: true
-              texts:
-                - "var.selEntry != none ? '&7人数  &f' + var.selEntry['minPlayers'].round() + '-' + var.selEntry['maxPlayers'].round() + '人   &7体力  &b' + var.selEntry['staminaCost'].round() : ''"
-                - "var.selEntry != none ? '&7门票  &e' + var.selEntry['moneyCost'].round() + '   &7冷却  &f' + var.selEntry['cooldown'].round() + 's   &7运行中  &f' + var.selEntry['running'].round() : ''"
-                - "var.selEntry != none && var.selEntry['partyRequired'] ? '&c该地牢需要组队进入' : ''"
-                - "var.selEntry != none && var.selEntry['cooldownLeft'] > 0 ? '&c冷却剩余: ' + var.selEntry['cooldownLeft'].round() + 's' : ''"
+              width: Math.max(1, self.parent.width - self.x - 24)
+              height: 92.0
+            children:
+              行0:
+                type: Text
+                attribute:
+                  fontSize: 32
+                  point: ~top_left
+                  x: 0
+                  y: 0.0
+                  width: self.parent.width
+                  height: 20.0
+                  limitControl: self.parent
+                  texts: 'var.selEntry != none ? ''&7人数  &f'' + var.selEntry[''minPlayers''].round() + ''-'' + var.selEntry[''maxPlayers''].round() + ''人   &7体力  &b'' + var.selEntry[''staminaCost''].round() : '''''
+                  through: true
+              行1:
+                type: Text
+                attribute:
+                  fontSize: 32
+                  point: ~top_left
+                  x: 0
+                  y: 24.0
+                  width: self.parent.width
+                  height: 20.0
+                  limitControl: self.parent
+                  texts: 'var.selEntry != none ? ''&7门票  &e'' + var.selEntry[''moneyCost''].round() + ''   &7冷却  &f'' + var.selEntry[''cooldown''].round() + ''s   &7运行中  &f'' + var.selEntry[''running''].round() : '''''
+                  through: true
+              行2:
+                type: Text
+                attribute:
+                  fontSize: 32
+                  point: ~top_left
+                  x: 0
+                  y: 48.0
+                  width: self.parent.width
+                  height: 20.0
+                  limitControl: self.parent
+                  texts: 'var.selEntry != none && var.selEntry[''partyRequired''] ? ''&c该地牢需要组队进入'' : '''''
+                  through: true
+              行3:
+                type: Text
+                attribute:
+                  fontSize: 32
+                  point: ~top_left
+                  x: 0
+                  y: 72.0
+                  width: self.parent.width
+                  height: 20.0
+                  limitControl: self.parent
+                  texts: 'var.selEntry != none && var.selEntry[''cooldownLeft''] > 0 ? ''&c冷却剩余: '' + var.selEntry[''cooldownLeft''].round() + ''s'' : '''''
+                  through: true
           详情描述标线:
             type: Texture
             attribute:
@@ -535,19 +580,49 @@ controls:
               through: true
             children:
               文字:
-                type: Text
+                type: Canvas
                 attribute:
-                  lineSpace: 8
-                  fontSize: 24
-                  texts:
-                  - 'var.selEntry != none ? ''&7'' + var.selEntry[''desc0''] : '''''
-                  - 'var.selEntry != none ? ''&7'' + var.selEntry[''desc1''] : '''''
-                  - 'var.selEntry != none ? ''&7'' + var.selEntry[''desc2''] : '''''
                   point: ~top_left
                   width: self.parent.width
                   height: self.parent.height
-                  limitControl: self.parent
                   through: true
+                children:
+                  行0:
+                    type: Text
+                    attribute:
+                      fontSize: 32
+                      point: ~top_left
+                      x: 0
+                      y: 0.0
+                      width: self.parent.width
+                      height: 20.0
+                      limitControl: self.parent
+                      texts: 'var.selEntry != none ? ''&7'' + var.selEntry[''desc0''] : '''''
+                      through: true
+                  行1:
+                    type: Text
+                    attribute:
+                      fontSize: 32
+                      point: ~top_left
+                      x: 0
+                      y: 24.0
+                      width: self.parent.width
+                      height: 20.0
+                      limitControl: self.parent
+                      texts: 'var.selEntry != none ? ''&7'' + var.selEntry[''desc1''] : '''''
+                      through: true
+                  行2:
+                    type: Text
+                    attribute:
+                      fontSize: 32
+                      point: ~top_left
+                      x: 0
+                      y: 48.0
+                      width: self.parent.width
+                      height: 20.0
+                      limitControl: self.parent
+                      texts: 'var.selEntry != none ? ''&7'' + var.selEntry[''desc2''] : '''''
+                      through: true
           操作区:
             type: HStack
             attribute:
@@ -566,7 +641,6 @@ controls:
                   clickLeft: |-
                     if(var.selectedId != '' && var.selectedId != none){
                       Packet.send(var.packetId, 'open_confirm', var.selectedId, var.actionToken)
-                      Screen.close()
                     }
                 children:
                   进入底:
@@ -581,7 +655,7 @@ controls:
                     attribute:
                       point: ~middle_center
                       texts: ~&0部署远征
-                      fontSize: 24
+                      fontSize: 32
                       through: true
               队伍按钮:
                 type: Canvas
@@ -604,7 +678,7 @@ controls:
                     attribute:
                       point: ~middle_center
                       texts: ~&f编 队
-                      fontSize: 24
+                      fontSize: 32
                       through: true
               刷新按钮:
                 type: Canvas
@@ -631,7 +705,7 @@ controls:
                     attribute:
                       point: ~middle_center
                       texts: ~&f刷 新
-                      fontSize: 24
+                      fontSize: 32
                       through: true
           底部提示:
             type: Text
@@ -639,6 +713,6 @@ controls:
               x: 76
               y: "var.viewH - 60"
               texts: ~&7行动提示  /  单击地图标记选择目的地 · 出发前核查体力、门票与队伍限制
-              fontSize: 24
+              fontSize: 32
               alpha: 0.6
               through: true
