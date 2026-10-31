@@ -34,7 +34,7 @@ class AbyssValidationTest {
         var meta=new YamlConfiguration();meta.loadFromString("type: combat\ndoors: ['east,8,3,5']\n");
         var volume=RegionTemplate.of(9,7,9,List.of("minecraft:air"),new byte[7][9*9*2]);
         assertThrows(java.io.IOException.class,()->AbyssValidation.validateAsset(meta,volume,"room"));
-        var files=files();files.get("puzzles.yml").loadFromString("puzzles:\n  test:\n    type: input\n    answer: abcd\n    input-pattern: '[0-9]*'\n");
+        var files=files();files.get("puzzles.yml").loadFromString("test:\n  type: input\n  answer: abcd\n  input-pattern: '[0-9]*'\n");
         assertThrows(java.io.IOException.class,()->AbyssValidation.validate(files));
     }
 }

@@ -19,15 +19,15 @@ class AdmissionChargeTest {
     StaminaManager stamina;CooldownManager cooldown;RewardResolver rewards;
     CurrencyBridgeAPI currency;CurrencyBridgeAPI.CurrencyBridge money;RequirementChecker checker;AbyssTemplate template;
     @BeforeEach void setup() {
-        stamina=mock(StaminaManager.class);when(stamina.ready(any())).thenReturn(true);when(stamina.getStamina(any())).thenReturn(100);
+        stamina=mock(StaminaManager.class,withSettings().mockMaker(org.mockito.MockMakers.INLINE));when(stamina.ready(any())).thenReturn(true);when(stamina.getStamina(any())).thenReturn(100);
         when(stamina.consume(any(),anyInt())).thenReturn(true);
-        cooldown=mock(CooldownManager.class);rewards=mock(RewardResolver.class);
+        cooldown=mock(CooldownManager.class,withSettings().mockMaker(org.mockito.MockMakers.INLINE));rewards=mock(RewardResolver.class,withSettings().mockMaker(org.mockito.MockMakers.INLINE));
         when(rewards.refundMoney(any(),anyDouble(),anyString(),anyString())).thenReturn(true);
         currency=mock(CurrencyBridgeAPI.class);money=mock(CurrencyBridgeAPI.CurrencyBridge.class);
         when(currency.bridge("money")).thenReturn(money);when(money.available()).thenReturn(true);
         when(money.withdraw(any(),any())).thenReturn(CurrencyTransactionResult.ok());
         checker=new RequirementChecker(mock(ScriptConditionEvaluator.class),currency,stamina,cooldown,rewards);
-        template=mock(AbyssTemplate.class);when(template.id()).thenReturn("test");
+        template=mock(AbyssTemplate.class,withSettings().mockMaker(org.mockito.MockMakers.INLINE));when(template.id()).thenReturn("test");
         var yaml=new org.bukkit.configuration.file.YamlConfiguration();yaml.set("money-cost",5);yaml.set("stamina-cost",10);yaml.set("cooldown",30);
         when(template.requirements()).thenReturn(EntryRequirements.load(yaml));
     }

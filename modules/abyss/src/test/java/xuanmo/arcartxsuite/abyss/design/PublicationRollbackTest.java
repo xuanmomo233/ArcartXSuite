@@ -26,4 +26,26 @@ class PublicationRollbackTest {
         assertEquals("old-config",Files.readString(first));assertEquals("old-rooms",Files.readString(second));
         assertEquals("new building",Files.readString(source.resolve("level.dat")));
     }
+    @Test void concurrentWritersCannotBothPublishAgainstTheSameOldBaseline()throws Exception {
+        Path target=dir.resolve("shared.yml");Files.writeString(target,"old");
+        Map<String,String> baseline=Map.of("shared.yml",DesignWriter.hash(target));
+        var secondAttempt=new java.util.concurrent.CountDownLatch(1);
+        var writerEntered=new java.util.concurrent.CountDownLatch(1);
+        var executor=java.util.concurrent.Executors.newFixedThreadPool(2);
+        try {
+            var first=executor.submit(()->{
+                DesignWriter.commit(Map.of(target,"first".getBytes()),baseline,dir,(from,to)->{
+                    writerEntered.countDown();
+                    try {if(!secondAttempt.await(5,java.util.concurrent.TimeUnit.SECONDS))throw new java.io.IOException("second writer did not start");}
+                    catch(InterruptedException interrupted){Thread.currentThread().interrupt();throw new java.io.IOException(interrupted);}
+                    Files.move(from,to,StandardCopyOption.REPLACE_EXISTING);
+                });return null;
+            });
+            assertTrue(writerEntered.await(5,java.util.concurrent.TimeUnit.SECONDS));
+            var second=executor.submit(()->{secondAttempt.countDown();DesignWriter.commit(Map.of(target,"second".getBytes()),baseline,dir);return null;});
+            first.get(5,java.util.concurrent.TimeUnit.SECONDS);
+            assertThrows(java.util.concurrent.ExecutionException.class,()->second.get(5,java.util.concurrent.TimeUnit.SECONDS));
+            assertEquals("first",Files.readString(target));
+        } finally {secondAttempt.countDown();executor.shutdownNow();}
+    }
 }

@@ -9,7 +9,7 @@ import static org.mockito.Mockito.*;
 
 class PlayerReadinessTest {
     @Test void coldDataNeverPretendsToHaveMaximumStaminaAndDoesNotOverwriteWrites()throws Exception {
-        var repository=mock(JdbcAbyssRepository.class);var entered=new CountDownLatch(1);var release=new CountDownLatch(1);
+        var repository=mock(JdbcAbyssRepository.class,withSettings().mockMaker(org.mockito.MockMakers.INLINE));var entered=new CountDownLatch(1);var release=new CountDownLatch(1);
         UUID player=UUID.randomUUID();when(repository.loadStamina(player)).thenAnswer(call->{entered.countDown();assertTrue(release.await(5,TimeUnit.SECONDS));return new long[]{7,123};});
         when(repository.loadAllCooldowns(player)).thenReturn(Map.of("test",9000L));
         var data=new PlayerDataManager(repository,Logger.getAnonymousLogger());
@@ -23,7 +23,7 @@ class PlayerReadinessTest {
         } finally {release.countDown();data.shutdown();}
     }
     @Test void failedLoadLeavesAdmissionClosedAndCanBeRetried()throws Exception {
-        var repository=mock(JdbcAbyssRepository.class);UUID player=UUID.randomUUID();
+        var repository=mock(JdbcAbyssRepository.class,withSettings().mockMaker(org.mockito.MockMakers.INLINE));UUID player=UUID.randomUUID();
         when(repository.loadStamina(player)).thenThrow(new java.sql.SQLException("unavailable")).thenReturn(new long[]{3,1});
         when(repository.loadAllCooldowns(player)).thenReturn(Map.of());
         var data=new PlayerDataManager(repository,Logger.getAnonymousLogger());

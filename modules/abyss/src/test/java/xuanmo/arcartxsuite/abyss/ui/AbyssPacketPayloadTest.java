@@ -91,7 +91,7 @@ class AbyssPacketPayloadTest {
         ui.handlePacket(player,"abyss",List.of("lobby_create",fresh));assertNotNull(service.party().partyOf(player));
     }
     @Test void chestOnlyConsumesAnItemAfterHostPersistenceConfirmation()throws Exception {
-        var rewards=mock(xuanmo.arcartxsuite.abyss.reward.RewardResolver.class);set("rewards",rewards);
+        var rewards=mock(xuanmo.arcartxsuite.abyss.reward.RewardResolver.class,withSettings().mockMaker(org.mockito.MockMakers.INLINE));set("rewards",rewards);
         when(rewards.rollChestOptions(any(),anyInt())).thenReturn(List.of(new org.bukkit.inventory.ItemStack(Material.STONE,2),new org.bukkit.inventory.ItemStack(Material.STONE,3)));
         when(rewards.queueItems(any(),anyList(),anyString())).thenReturn(false,true);
         ui.open(player,new RewardConfig.ChestReward("test","test",1,List.of()),instance);

@@ -15,6 +15,7 @@ public final class DesignWriter {
     public record Result(boolean ok, int objects, int deletions, List<String> errors) { }
     public static final List<String> FILES = AbyssValidation.FILES;
     private DesignWriter() { }
+    private static final Object PUBLICATION_LOCK=new Object();
 
     public static String hash(Path path) throws Exception {
         if (!Files.exists(path)) return "-";
@@ -182,6 +183,9 @@ public final class DesignWriter {
     }
     @FunctionalInterface interface Mover { void move(Path from, Path to) throws IOException; }
     static void commit(Map<Path, byte[]> writes, Map<String, String> baseline, Path root, Mover mover) throws Exception {
+        synchronized(PUBLICATION_LOCK) { commitLocked(writes,baseline,root,mover); }
+    }
+    private static void commitLocked(Map<Path,byte[]> writes,Map<String,String> baseline,Path root,Mover mover) throws Exception {
         for (var entry : baseline.entrySet()) {
             if (!entry.getValue().equals(hash(root.resolve(entry.getKey()))))
                 throw new IOException(entry.getKey() + " 已被外部修改，请保留编辑内容并重新进入设计");

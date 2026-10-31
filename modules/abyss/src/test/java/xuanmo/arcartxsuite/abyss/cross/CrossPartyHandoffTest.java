@@ -22,9 +22,9 @@ class CrossPartyHandoffTest {
     @BeforeEach void setup()throws Exception {
         server=mock(Server.class);serverField=Bukkit.class.getDeclaredField("server");serverField.setAccessible(true);previous=serverField.get(null);serverField.set(null,server);
         leader=player("Leader");member=player("Member");
-        service=mock(AbyssService.class);parties=new PartyManager(new AbyssModuleConfiguration.PartySection(4,60,true),s->{},null);
+        service=mock(AbyssService.class,withSettings().mockMaker(org.mockito.MockMakers.INLINE));parties=new PartyManager(new AbyssModuleConfiguration.PartySection(4,60,true),s->{},null);
         when(service.party()).thenReturn(parties);var instances=new AbyssInstanceManager();when(service.instances()).thenReturn(instances);
-        template=mock(AbyssTemplate.class);when(template.id()).thenReturn("test");when(template.crossServer()).thenReturn("host");
+        template=mock(AbyssTemplate.class,withSettings().mockMaker(org.mockito.MockMakers.INLINE));when(template.id()).thenReturn("test");when(template.crossServer()).thenReturn("host");
         when(template.plans()).thenReturn(Map.of("route_a",new AbyssTemplate.PlanEntry("route_a","route",List.of())));
         instances.registerTemplate(template);
         when(service.enterDungeon(anyList(),eq("test"),eq("route_a"))).thenReturn(AbyssService.EnterResult.success());

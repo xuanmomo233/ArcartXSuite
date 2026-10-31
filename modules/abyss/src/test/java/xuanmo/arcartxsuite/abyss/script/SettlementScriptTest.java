@@ -85,9 +85,9 @@ class SettlementScriptTest {
         var player=mock(org.bukkit.entity.Player.class);UUID uuid=UUID.randomUUID();
         when(player.getUniqueId()).thenReturn(uuid);when(player.isOnline()).thenReturn(true);
         when(((Server)serverField.get(null)).getPlayer(uuid)).thenReturn(player);instance.addPlayer(player);
-        var data=mock(xuanmo.arcartxsuite.abyss.data.PlayerDataManager.class);
-        var leaderboard=mock(xuanmo.arcartxsuite.abyss.leaderboard.LeaderboardService.class);
-        var stats=mock(xuanmo.arcartxsuite.abyss.stats.CombatStatisticsService.class);
+        var data=mock(xuanmo.arcartxsuite.abyss.data.PlayerDataManager.class,withSettings().mockMaker(org.mockito.MockMakers.INLINE));
+        var leaderboard=mock(xuanmo.arcartxsuite.abyss.leaderboard.LeaderboardService.class,withSettings().mockMaker(org.mockito.MockMakers.INLINE));
+        var stats=mock(xuanmo.arcartxsuite.abyss.stats.CombatStatisticsService.class,withSettings().mockMaker(org.mockito.MockMakers.INLINE));
         for(var entry:Map.<String,Object>of("playerData",data,"leaderboard",leaderboard,"stats",stats).entrySet()) {
             var field=AbyssService.class.getDeclaredField(entry.getKey());field.setAccessible(true);field.set(service,entry.getValue());
         }

@@ -24,7 +24,7 @@ class RewardContractTest {
         Player player=mock(Player.class);when(player.getUniqueId()).thenReturn(UUID.randomUUID());
         rewards.buildItem("mmoitems:SWORD;BLADE:2",player);
         verify(source).generateItem("mmoitems","SWORD;BLADE",2,null,player);
-        try(var serializer=mockStatic(ItemSerializer.class)) {
+        try(var serializer=mockStatic(ItemSerializer.class,withSettings().mockMaker(org.mockito.MockMakers.INLINE))) {
             serializer.when(()->ItemSerializer.serialize(any())).thenReturn(new byte[]{1,2,3});
             when(pending.savePendingBatchConfirmed(anyString(),anyList())).thenReturn(false,true);
             assertFalse(rewards.queueItems(player,List.of(new ItemStack(Material.STONE,2)),"receipt"));

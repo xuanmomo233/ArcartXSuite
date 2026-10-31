@@ -36,14 +36,14 @@ class SharedAssetSaveTest {
             var room=new ProcGenMaterializer.RoomRuntime();room.minX=x;room.maxX=x+2;room.minY=64;room.maxY=67;room.minZ=0;room.maxZ=2;
             room.placed=new LayoutGenerator.PlacedRoom(asset,0,0,0,x,64,0,3,4,3,true);rooms.add(room);
         }
-        var manager=new ProcGenManager(mock(AbyssService.class),library,Logger.getAnonymousLogger());
+        var manager=new ProcGenManager(mock(AbyssService.class,withSettings().mockMaker(org.mockito.MockMakers.INLINE)),library,Logger.getAnonymousLogger());
         Class<?> type=Arrays.stream(ProcGenManager.class.getDeclaredClasses()).filter(c->c.getSimpleName().equals("InstState")).findFirst().orElseThrow();
         var constructor=type.getDeclaredConstructor();constructor.setAccessible(true);Object state=constructor.newInstance();
         var cfg=new YamlConfiguration();cfg.set("room-set","example");set(state,"cfg",ProcGenConfig.load(cfg,"test"));set(state,"rooms",rooms);
         Map<String,String> baseline=Map.of("room.yml",DesignWriter.hash(root.resolve("room.yml")),"room.region.yml",DesignWriter.hash(root.resolve("room.region.yml")));
         var baselines=(Map<ProcGenMaterializer.RoomRuntime,Map<String,String>>)field(state,"roomBaselines");
         rooms.forEach(room->baselines.put(room,baseline));
-        var instance=mock(AbyssInstance.class);when(instance.getInstanceId()).thenReturn(UUID.randomUUID());
+        var instance=mock(AbyssInstance.class,withSettings().mockMaker(org.mockito.MockMakers.INLINE));when(instance.getInstanceId()).thenReturn(UUID.randomUUID());
         ((Map<UUID,Object>)field(manager,"states")).put(instance.getInstanceId(),state);
         World world=mock(World.class);Block block=mock(Block.class);BlockData data=mock(BlockData.class);when(data.getAsString()).thenReturn("minecraft:stone");
         when(block.getBlockData()).thenReturn(data);when(world.getBlockAt(anyInt(),anyInt(),anyInt())).thenReturn(block);when(instance.getWorld()).thenReturn(world);
@@ -60,10 +60,10 @@ class SharedAssetSaveTest {
         } finally {serverField.set(null,previous);}
     }
     @Test void missingGeometryCannotFallBackToAnEmptyPlayableDungeon() {
-        var library=mock(RoomSetLibrary.class);when(library.byKind(anyString())).thenReturn(Map.of());
-        var instance=mock(AbyssInstance.class);var template=mock(AbyssTemplate.class);when(instance.getTemplate()).thenReturn(template);
+        var library=mock(RoomSetLibrary.class,withSettings().mockMaker(org.mockito.MockMakers.INLINE));when(library.byKind(anyString())).thenReturn(Map.of());
+        var instance=mock(AbyssInstance.class,withSettings().mockMaker(org.mockito.MockMakers.INLINE));var template=mock(AbyssTemplate.class,withSettings().mockMaker(org.mockito.MockMakers.INLINE));when(instance.getTemplate()).thenReturn(template);
         var yaml=new YamlConfiguration();yaml.set("room-set","missing");when(template.procgen()).thenReturn(ProcGenConfig.load(yaml,"test"));
-        var manager=new ProcGenManager(mock(AbyssService.class),library,Logger.getAnonymousLogger());
+        var manager=new ProcGenManager(mock(AbyssService.class,withSettings().mockMaker(org.mockito.MockMakers.INLINE)),library,Logger.getAnonymousLogger());
         assertThrows(IllegalStateException.class,()->manager.materialize(instance,mock(World.class)));
     }
 }

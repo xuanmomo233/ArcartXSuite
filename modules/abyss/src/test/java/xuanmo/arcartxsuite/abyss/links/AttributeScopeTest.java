@@ -30,7 +30,7 @@ class AttributeScopeTest {
     }
     @Test void listenersAreUnregisteredExactlyOnceOnClose() {
         var registry=mock(AttributeBridgeRegistry.class);when(registry.hasDamageSource()).thenReturn(true);when(registry.hasHealSource()).thenReturn(true);
-        var stats=mock(CombatStatisticsService.class);when(stats.enabled()).thenReturn(true);
+        var stats=mock(CombatStatisticsService.class,withSettings().mockMaker(org.mockito.MockMakers.INLINE));when(stats.enabled()).thenReturn(true);
         var links=links(registry);links.wireAttributeStats(stats,player->null);
         var damage=ArgumentCaptor.forClass(AttributeDamageListener.class);var heal=ArgumentCaptor.forClass(AttributeHealListener.class);
         verify(registry).registerDamageListener(damage.capture());verify(registry).registerHealListener(heal.capture());
