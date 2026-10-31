@@ -92,6 +92,20 @@ class SettlementLifecycleTest {
         currentWorld.set(home);listener.onChangedWorld(new org.bukkit.event.player.PlayerChangedWorldEvent(player,world));
         assertNull(instances.getInstance(player));verify(player,never()).teleport(any(Location.class));
     }
+    @Test void rejectedReconnectTeleportPreservesRecoveryAndOldLoginCannotConsumeIt()throws Exception {
+        var data=fake(xuanmo.arcartxsuite.abyss.data.PlayerDataManager.class);set(service,"playerData",data);
+        var field=AbyssService.class.getDeclaredField("recoveringPlayers");field.setAccessible(true);
+        @SuppressWarnings("unchecked") var recovering=(Map<UUID,Player>)field.get(service);recovering.put(player.getUniqueId(),player);
+        var location=new xuanmo.arcartxsuite.abyss.data.JdbcAbyssRepository.PendingLocation("home",1,64,1,0,0,123);
+        when(server.getWorld("home")).thenReturn(home);doReturn(false).when(player).teleport(any(Location.class));
+        var restore=AbyssService.class.getDeclaredMethod("restoreJoinedPlayer",Player.class,location.getClass(),int.class);restore.setAccessible(true);
+        restore.invoke(service,player,location,2);verify(data,never()).confirmPendingLocation(any(),any());assertTrue(recovering.containsKey(player.getUniqueId()));
+        var replacement=mock(Player.class);recovering.put(player.getUniqueId(),replacement);clearInvocations(player);
+        restore.invoke(service,player,location,0);verify(player,never()).teleport(any(Location.class));
+        recovering.put(player.getUniqueId(),player);doReturn(true).when(player).teleport(any(Location.class));
+        when(data.confirmPendingLocation(player.getUniqueId(),location)).thenReturn(java.util.concurrent.CompletableFuture.completedFuture(true));
+        restore.invoke(service,player,location,0);verify(data).confirmPendingLocation(player.getUniqueId(),location);assertFalse(recovering.containsKey(player.getUniqueId()));
+    }
     @Test void failedPreparationDoesNotRunFailureRewardsOrTeleportAPlayerWhoNeverEntered()throws Exception {
         instances.playerLeaveInstance(player);instances.destroyInstance(instance);
         instance=instances.createInstance(template,null);instances.playerEnterInstance(player,instance);instance.setWorld(world);currentWorld.set(home);

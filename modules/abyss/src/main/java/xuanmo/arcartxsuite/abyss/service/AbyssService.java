@@ -162,6 +162,7 @@ public final class AbyssService {
     private GlobalCounterService globalCounters;
     private JdbcAbyssRepository repository;
     private PlayerDataManager playerData;
+    private final Map<UUID,Player> recoveringPlayers=new ConcurrentHashMap<>();
     private AbyssAdminCommand adminCommand;
 
     /** worldName → instanceId（事件反向定位实例）。 */
@@ -792,6 +793,7 @@ public final class AbyssService {
         // 逐人查重：任一成员已在其它实例则整队拒绝
         // （只查首人会漏掉队员→其旧实例成员关系残留、被映射进新实例双重记账）
         for (Player member : players) {
+            if(recoveringPlayers.containsKey(member.getUniqueId()))return EnterResult.fail("玩家断线恢复尚未完成，请稍后重试或重新连接服务器");
             if (instances.getInstance(member) != null) {
                 return EnterResult.fail(msg("error.already-in-dungeon-member",
                     "player", member.getName()));
@@ -1875,6 +1877,7 @@ public final class AbyssService {
 
     /** 玩家断线（监听器调用）：存待恢复位置+从实例移除。 */
     public void handleQuit(Player player) {
+        recoveringPlayers.remove(player.getUniqueId(),player);
         // 无论是否在副本内，先清理 UI 会话态（token/HUD 标记）
         if (uiFacade instanceof AbyssUiService ui0) {
             ui0.closeHud(player);
@@ -1914,27 +1917,14 @@ public final class AbyssService {
 
     /** 玩家进服（监听器调用）：恢复位置 + 预载数据 + 异常退出恢复动作。 */
     public void handleJoin(Player player) {
-        // 跨服抵达的玩家优先收编（远端副本预订在等待中；非预订玩家立即返回）
-        playerData.preload(player.getUniqueId()).whenComplete((loaded,error)->runOnMain(()->{
-            if(error==null && player.isOnline())scheduleDelayedRaw(()->{
-                if(crossDungeon!=null && player.isOnline())crossDungeon.onPlayerJoin(player);
-            },60L);
+        recoveringPlayers.put(player.getUniqueId(),player);
+        playerData.preload(player.getUniqueId()).thenCompose(v->playerData.loadPendingLocation(player.getUniqueId()))
+            .whenComplete((location,error)->runOnMain(()->{
+            if(!currentRecovery(player))return;
+            if(error!=null){player.sendMessage("§c副本恢复数据读取失败，请重新连接；恢复完成前暂不能进入副本。");return;}
+            restoreJoinedPlayer(player,location,0);
         }));
         playerData.preloadCooldowns(player.getUniqueId());
-        scheduler.scheduleOnce(plugin, () -> {
-            Location loc = playerData.takePendingLocation(player.getUniqueId());
-            if (loc != null && player.isOnline()) {
-                runOnMain(() -> player.teleport(loc));
-            }
-        }, 0L);
-        // 异常退出恢复（在传送恢复后一拍执行）
-        if (recoveryManager != null) {
-            scheduler.scheduleOnce(plugin, () -> {
-                if (player.isOnline()) {
-                    runOnMain(() -> recoveryManager.runIfMarked(player));
-                }
-            }, 1L);
-        }
         // 地图入口标记（延迟 2s 等客户端地图就绪）
         if (entranceMarkers != null) {
             scheduler.scheduleOnceSeconds(plugin, () -> {
@@ -1943,6 +1933,40 @@ public final class AbyssService {
                 }
             }, 2L);
         }
+    }
+
+    private boolean currentRecovery(Player player) {
+        return started && !stopping && player.isOnline() && recoveringPlayers.get(player.getUniqueId())==player;
+    }
+    private void restoreJoinedPlayer(Player player,JdbcAbyssRepository.PendingLocation location,int attempt) {
+        if(!currentRecovery(player))return;
+        if(location==null){finishJoinRecovery(player);return;}
+        World world=org.bukkit.Bukkit.getWorld(location.world());
+        Location destination=world!=null && !world.getName().startsWith(config.abyss().worldPrefix())
+            ?new Location(world,location.x(),location.y(),location.z(),location.yaw(),location.pitch())
+            :org.bukkit.Bukkit.getWorlds().stream().filter(w->!w.getName().startsWith(config.abyss().worldPrefix()))
+                .findFirst().map(World::getSpawnLocation).orElse(null);
+        if(destination==null || !teleportWithRetry(player,destination,3)) {
+            if(attempt<2)scheduleDelayedRaw(()->restoreJoinedPlayer(player,location,attempt+1),20L);
+            else player.sendMessage("§c返回传送被拒绝，恢复位置已保留，请重新连接或联系管理员。");
+            return;
+        }
+        playerData.confirmPendingLocation(player.getUniqueId(),location).whenComplete((confirmed,error)->runOnMain(()->{
+            if(!currentRecovery(player))return;
+            if(error!=null || !Boolean.TRUE.equals(confirmed)) {
+                player.sendMessage("§c恢复确认未完成，数据已保留，请重新连接后重试。");return;
+            }
+            finishJoinRecovery(player);
+        }));
+    }
+    private void finishJoinRecovery(Player player) {
+        if(!currentRecovery(player))return;
+        if(recoveryManager!=null)recoveryManager.runIfMarked(player);
+        recoveringPlayers.remove(player.getUniqueId(),player);
+        scheduleDelayedRaw(()->{
+            if(crossDungeon!=null && player.isOnline() && org.bukkit.Bukkit.getPlayer(player.getUniqueId())==player)
+                crossDungeon.onPlayerJoin(player);
+        },60L);
     }
 
     // ═══ 死亡处理 ═══

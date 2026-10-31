@@ -17,6 +17,7 @@ dependencies {
     testImplementation("org.mockito:mockito-core:5.12.0")
     testImplementation("org.spigotmc:spigot-api:1.20.1-R0.1-SNAPSHOT")
     testImplementation(project(":axs-api"))
+    testRuntimeOnly("org.xerial:sqlite-jdbc:3.46.0.0")
     testRuntimeOnly(files(rootProject.project(":axs-core").layout.buildDirectory.dir("classes/java/main"))
         .builtBy(":axs-core:compileJava"))
 }

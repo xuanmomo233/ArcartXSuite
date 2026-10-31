@@ -216,18 +216,17 @@ public final class PlayerDataManager {
         });
     }
 
-    /** 取待恢复位置（同步读+删，join 时异步调用）。 */
-    public @Nullable Location takePendingLocation(UUID player) {
-        try {
-            JdbcAbyssRepository.PendingLocation p = repository.takePendingLocation(player);
-            if (p == null) return null;
-            org.bukkit.World w = Bukkit.getWorld(p.world());
-            if (w == null) w = Bukkit.getWorlds().get(0);
-            return new Location(w, p.x(), p.y(), p.z(), p.yaw(), p.pitch());
-        } catch (Exception e) {
-            logger.warning("[abyss] 待恢复位置读取失败 " + player + ": " + e.getMessage());
-            return null;
-        }
+    public java.util.concurrent.CompletableFuture<JdbcAbyssRepository.PendingLocation> loadPendingLocation(UUID player) {
+        return java.util.concurrent.CompletableFuture.supplyAsync(()->{
+            try{return repository.loadPendingLocation(player);}
+            catch(Exception error){throw new java.util.concurrent.CompletionException(error);}
+        },dbExecutor);
+    }
+    public java.util.concurrent.CompletableFuture<Boolean> confirmPendingLocation(UUID player,JdbcAbyssRepository.PendingLocation expected) {
+        return java.util.concurrent.CompletableFuture.supplyAsync(()->{
+            try{return repository.confirmPendingLocation(player,expected);}
+            catch(Exception error){throw new java.util.concurrent.CompletionException(error);}
+        },dbExecutor);
     }
 
     // ═══ 全服共享计数器（跨副本的全局进度，如全服收集/归档） ═══

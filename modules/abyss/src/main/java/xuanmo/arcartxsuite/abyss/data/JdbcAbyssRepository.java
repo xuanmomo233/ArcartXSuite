@@ -287,9 +287,9 @@ public final class JdbcAbyssRepository extends AbstractModuleRepository {
         }
     }
 
-    /** 读取并删除待恢复位置。无记录 null。 */
-    public @Nullable PendingLocation takePendingLocation(UUID player) throws SQLException {
-        String sql = "SELECT world, x, y, z, yaw, pitch FROM " + tPending + " WHERE player_uuid = ?";
+    /** 只读恢复位置，传送成功后才确认删除。 */
+    public @Nullable PendingLocation loadPendingLocation(UUID player) throws SQLException {
+        String sql = "SELECT world, x, y, z, yaw, pitch, saved_at FROM " + tPending + " WHERE player_uuid = ?";
         PendingLocation loc = null;
         try (Connection c = getConnection(); PreparedStatement ps = c.prepareStatement(sql)) {
             ps.setString(1, player.toString());
@@ -297,22 +297,24 @@ public final class JdbcAbyssRepository extends AbstractModuleRepository {
                 if (rs.next()) {
                     loc = new PendingLocation(rs.getString(1),
                         rs.getDouble(2), rs.getDouble(3), rs.getDouble(4),
-                        rs.getFloat(5), rs.getFloat(6));
+                        rs.getFloat(5), rs.getFloat(6),rs.getLong(7));
                 }
-            }
-        }
-        if (loc != null) {
-            try (Connection c = getConnection(); PreparedStatement ps = c.prepareStatement(
-                "DELETE FROM " + tPending + " WHERE player_uuid = ?")) {
-                ps.setString(1, player.toString());
-                ps.executeUpdate();
             }
         }
         return loc;
     }
 
+    public boolean confirmPendingLocation(UUID player,PendingLocation expected)throws SQLException {
+        try(Connection c=getConnection();PreparedStatement ps=c.prepareStatement("DELETE FROM "+tPending
+            +" WHERE player_uuid=? AND saved_at=? AND world=? AND x=? AND y=? AND z=? AND yaw=? AND pitch=?")) {
+            ps.setString(1,player.toString());ps.setLong(2,expected.savedAt());ps.setString(3,expected.world());
+            ps.setDouble(4,expected.x());ps.setDouble(5,expected.y());ps.setDouble(6,expected.z());
+            ps.setFloat(7,expected.yaw());ps.setFloat(8,expected.pitch());return ps.executeUpdate()==1;
+        }
+    }
+
     public record PendingLocation(String world, double x, double y, double z,
-                                  float yaw, float pitch) { }
+                                  float yaw, float pitch,long savedAt) { }
 
     // ═══ 全服共享计数器 ═══
 

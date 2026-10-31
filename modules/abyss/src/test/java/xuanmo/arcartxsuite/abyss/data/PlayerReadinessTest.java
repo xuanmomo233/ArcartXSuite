@@ -8,6 +8,18 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class PlayerReadinessTest {
+    @Test void recoveryReadsAreAsyncAndDoNotConsumeUntilExplicitConfirmation()throws Exception {
+        var repository=mock(JdbcAbyssRepository.class,withSettings().mockMaker(org.mockito.MockMakers.INLINE));
+        UUID player=UUID.randomUUID();var location=new JdbcAbyssRepository.PendingLocation("home",1,64,1,0,0,123);
+        when(repository.loadPendingLocation(player)).thenAnswer(call->{assertEquals("Abyss-DB",Thread.currentThread().getName());return location;});
+        when(repository.confirmPendingLocation(player,location)).thenReturn(true);
+        var data=new PlayerDataManager(repository,Logger.getAnonymousLogger());
+        try {
+            assertEquals(location,data.loadPendingLocation(player).get(5,TimeUnit.SECONDS));
+            verify(repository,never()).confirmPendingLocation(any(),any());
+            assertTrue(data.confirmPendingLocation(player,location).get(5,TimeUnit.SECONDS));
+        } finally {data.shutdown();}
+    }
     @Test void coldDataNeverPretendsToHaveMaximumStaminaAndDoesNotOverwriteWrites()throws Exception {
         var repository=mock(JdbcAbyssRepository.class,withSettings().mockMaker(org.mockito.MockMakers.INLINE));var entered=new CountDownLatch(1);var release=new CountDownLatch(1);
         UUID player=UUID.randomUUID();when(repository.loadStamina(player)).thenAnswer(call->{entered.countDown();assertTrue(release.await(5,TimeUnit.SECONDS));return new long[]{7,123};});
