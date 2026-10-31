@@ -38,6 +38,7 @@ public final class AbyssWorldPool {
     private final Map<UUID,Integer> removalAttempts=new ConcurrentHashMap<>();
     private final java.util.Set<xuanmo.arcartxsuite.api.scheduler.ScheduledTask> cleanupTasks=ConcurrentHashMap.newKeySet();
     private volatile boolean closing;
+    private final java.util.concurrent.atomic.AtomicLong preloadGeneration=new java.util.concurrent.atomic.AtomicLong();
     private final Map<UUID, CompletableFuture<Void>> worldWrites = new ConcurrentHashMap<>();
     private volatile NmsWorldLoader nmsLoader;
     private volatile SchematicWorldService schematicService;
@@ -264,40 +265,44 @@ public final class AbyssWorldPool {
 
     /** 预热一个实例世界（预热名 axs_abyss_pre_<地牢>_<seq>，worldPrefix 前缀命中残留清理）。 */
     private void warmOne(AbyssTemplate template) {
+        long generation=preloadGeneration.get();
         String name = cfg.worldPrefix() + "pre_" + template.id() + "_" + UUID.randomUUID().toString().substring(0,8);
         materialize(template, name).whenComplete((pre, err) -> {
             if (err != null) {
                 logger.warning("[abyss] 预热失败 " + template.id() + ": " + err.getMessage());
                 return;
             }
-            var q = preloadPool.computeIfAbsent(template.id(),
-                k -> new java.util.concurrent.ConcurrentLinkedDeque<>());
-            synchronized (q) {
-                q.addLast(pre);
-            }
+            acceptPrepared(template,pre,generation);
             logger.info("[abyss] 预热就绪: " + name);
+        });
+    }
+
+    void acceptPrepared(AbyssTemplate template,Prepared prepared,long generation) {
+        if(closing || generation!=preloadGeneration.get()){disposePrepared(prepared);return;}
+        var queue=preloadPool.computeIfAbsent(template.id(),k->new java.util.concurrent.ConcurrentLinkedDeque<>());
+        synchronized(queue){queue.addLast(prepared);}
+    }
+
+    private void disposePrepared(Prepared prepared) {
+        runSync(()->{
+            try {
+                if(prepared.schematicSession()!=null)prepared.schematicSession().close();
+                World world=Bukkit.getWorld(prepared.worldName());
+                if(world!=null && !unloadForDeletion(world)) {
+                    logger.warning("[abyss] 过期预热世界仍在使用，保留目录: "+prepared.worldName());return;
+                }
+                deleteLater(prepared.dir());
+            }catch(Exception failure){logger.warning("[abyss] 过期预热世界回收失败，保留目录: "+prepared.worldName()+": "+failure.getMessage());}
         });
     }
 
     /** 关闭时卸载全部预热世界。 */
     public void releasePreload() {
+        preloadGeneration.incrementAndGet();
         for (var q : preloadPool.values()) {
             Prepared p;
             while ((p = q.pollFirst()) != null) {
-                Prepared fp = p;
-                runSync(() -> {
-                    World w = Bukkit.getWorld(fp.worldName());
-                    if (w != null) {
-                        w.getEntities().forEach(e -> {
-                            if (!(e instanceof org.bukkit.entity.Player)) e.remove();
-                        });
-                        if (!unloadForDeletion(w)) {
-                            logger.warning("[abyss] 预热世界仍在使用，保留目录: " + fp.worldName());
-                            return;
-                        }
-                    }
-                    ioExecutor.submit(() -> WorldCopyUtil.deleteRecursively(fp.dir()));
-                });
+                disposePrepared(p);
             }
         }
         preloadPool.clear();
@@ -375,6 +380,12 @@ public final class AbyssWorldPool {
         String name = instanceWorldNames.get(instanceId);
         if (name == null) name = worldName(instanceId);
         World world = Bukkit.getWorld(name);
+        if(world!=null && !world.getPlayers().isEmpty()) {
+            logger.warning("[abyss] 世界仍有玩家，保留登记与目录: "+name);retryRemoval(instanceId);return;
+        }
+        SchematicWorldService.Session editing=schematicSessions.get(instanceId);
+        if(editing!=null)try{editing.close();schematicSessions.remove(instanceId,editing);}
+        catch(Exception failure){logger.warning("[abyss] 世界编辑会话未关闭，保留目录: "+name);retryRemoval(instanceId);return;}
         if (world != null) {
             try {
                 // 先清空实体再卸载（避免残留）
@@ -403,8 +414,8 @@ public final class AbyssWorldPool {
         final File toDelete = dir;
         // 删除目录异步化（大目录删除也耗时）
         CompletableFuture<Void> pending = worldWrites.remove(instanceId);
-        if (pending == null) ioExecutor.submit(() -> WorldCopyUtil.deleteRecursively(toDelete));
-        else pending.whenComplete((v, error) -> WorldCopyUtil.deleteRecursively(toDelete));
+        if (pending == null) deleteLater(toDelete);
+        else pending.whenComplete((v, error) -> deleteLater(toDelete));
     }
 
     /** 启动时扫描并回收残留世界（上次非正常关服的副本世界）。 */
@@ -434,7 +445,7 @@ public final class AbyssWorldPool {
                     continue;
                 }
             }
-            ioExecutor.submit(() -> WorldCopyUtil.deleteRecursively(dir));
+            deleteLater(dir);
             n++;
         }
         return n;
@@ -443,9 +454,16 @@ public final class AbyssWorldPool {
     private void runSync(Runnable r) {
         if (Bukkit.isPrimaryThread()) {
             r.run();
+        } else if(scheduler!=null) {
+            scheduler.scheduleOnce(plugin,r,0L);
         } else {
             Bukkit.getScheduler().runTask(plugin, r);
         }
+    }
+
+    private void deleteLater(File directory) {
+        try{ioExecutor.submit(()->WorldCopyUtil.deleteRecursively(directory));}
+        catch(java.util.concurrent.RejectedExecutionException stopped){logger.warning("[abyss] IO已停止，目录留待后续安全回收: "+directory.getName());}
     }
 
     static boolean unloadForDeletion(World world) {

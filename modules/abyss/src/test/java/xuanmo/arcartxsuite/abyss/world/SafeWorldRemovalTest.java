@@ -19,6 +19,7 @@ class SafeWorldRemovalTest {
     final UUID id=UUID.randomUUID();
     @BeforeEach void setup()throws Exception {
         server=mock(Server.class);world=mock(World.class);when(world.getName()).thenReturn("axs_abyss_test");
+        when(server.isPrimaryThread()).thenReturn(true);
         when(server.getWorld("axs_abyss_test")).thenReturn(world);
         serverField=Bukkit.class.getDeclaredField("server");serverField.setAccessible(true);old=serverField.get(null);serverField.set(null,server);
         var yaml=new YamlConfiguration();yaml.set("abyss.nms-fast-load",false);
@@ -39,5 +40,12 @@ class SafeWorldRemovalTest {
     @Test void rejectedUnloadPreservesDirectoryAndOwnership()throws Exception {
         when(server.unloadWorld(world,false)).thenReturn(false);pool.releaseWorld(id);
         assertTrue(Files.exists(dir.resolve("level.dat")));assertTrue(map("instanceWorldNames").containsKey(id));
+    }
+    @Test void oldPreloadCallbackCannotRepopulateThePoolAfterTemplateReload()throws Exception {
+        map("instanceWorldDirs").clear();map("instanceWorldNames").clear();
+        when(server.unloadWorld(world,false)).thenReturn(true);pool.releasePreload();
+        var template=mock(xuanmo.arcartxsuite.abyss.template.AbyssTemplate.class,withSettings().mockMaker(org.mockito.MockMakers.INLINE));when(template.id()).thenReturn("test");
+        pool.acceptPrepared(template,new AbyssWorldPool.Prepared("axs_abyss_test",dir.toFile(),world,null),0L);
+        pool.shutdown();assertEquals(0,pool.preparedCount("test"));assertFalse(Files.exists(dir.resolve("level.dat")));
     }
 }
