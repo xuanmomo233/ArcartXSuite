@@ -45,6 +45,24 @@ jobs:
         run: python modules/abyss/src/test/ui/verify_abyss_ui.py
       - name: Test and build protected Abyss Jar
         run: gradle :modules:abyss:build -PskipNativeCheck=true --no-daemon --no-configuration-cache
+      - name: Summarize test results
+        if: always()
+        run: |
+          python - <<'PY'
+          import glob, os, xml.etree.ElementTree as ET
+          tests = failures = errors = 0
+          for file in glob.glob('modules/abyss/build/test-results/test/TEST-*.xml'):
+              suite = ET.parse(file).getroot()
+              tests += int(suite.get('tests', 0))
+              failures += int(suite.get('failures', 0))
+              errors += int(suite.get('errors', 0))
+              for issue in suite.findall('.//failure') + suite.findall('.//error'):
+                  print((issue.text or '')[:12000])
+          summary = f'JUnit: {tests} tests, {failures} failures, {errors} errors'
+          print(summary)
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as out:
+              out.write(summary + '\n')
+          PY
       - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@v5

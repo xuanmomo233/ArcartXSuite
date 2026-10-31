@@ -1,7 +1,6 @@
 package xuanmo.arcartxsuite.abyss.procgen;
 
 import java.lang.reflect.Field;
-import java.lang.reflect.Proxy;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
@@ -13,6 +12,7 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import org.junit.jupiter.api.Test;
 import xuanmo.arcartxsuite.abyss.template.*;
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
 /** Run the real paste/rotate/carve pipeline against the bundled block volumes. */
 class BuiltinRoomGeometryTest {
@@ -31,13 +31,13 @@ class BuiltinRoomGeometryTest {
         Field field = Bukkit.class.getDeclaredField("server");
         field.setAccessible(true);
         Object before = field.get(null);
-        Server server = proxy(Server.class, (method, args) -> {
-            if (method.equals("createBlockData")) {
-                Material material = Material.matchMaterial(((String) args[0]).split("\\[")[0]);
-                return proxy(BlockData.class, (name, values) -> name.equals("getMaterial") ? material : null);
-            }
-            return null;
-        });
+        Server server = mock(Server.class, withSettings().stubOnly());
+        Map<String, BlockData> palette = new HashMap<>();
+        when(server.createBlockData(anyString())).thenAnswer(call -> palette.computeIfAbsent(call.getArgument(0), data -> {
+            BlockData block = mock(BlockData.class, withSettings().stubOnly());
+            when(block.getMaterial()).thenReturn(Material.matchMaterial(data.split("\\[")[0]));
+            return block;
+        }));
         try {
             field.set(null, server);
             var assets = assets();
@@ -52,15 +52,17 @@ class BuiltinRoomGeometryTest {
                     layout.rooms.add(a); layout.rooms.add(b); layout.start = a;
                     layout.edges.add(new LayoutGenerator.DoorEdge(a, b, axis));
                     Map<Pos, Material> blocks = new HashMap<>();
-                    World world = proxy(World.class, (method, args) -> {
-                        if (!method.equals("getBlockAt")) return null;
-                        Pos pos = new Pos((int) args[0], (int) args[1], (int) args[2]);
-                        return proxy(Block.class, (name, values) -> {
-                            if (name.equals("setType")) blocks.put(pos, (Material) values[0]);
-                            if (name.equals("setBlockData")) blocks.put(pos, ((BlockData) values[0]).getMaterial());
-                            return null;
-                        });
+                    World world = mock(World.class, withSettings().stubOnly());
+                    Block cursor = mock(Block.class, withSettings().stubOnly());
+                    Pos[] position = new Pos[1];
+                    when(world.getBlockAt(anyInt(), anyInt(), anyInt())).thenAnswer(call -> {
+                        position[0] = new Pos(call.getArgument(0), call.getArgument(1), call.getArgument(2));
+                        return cursor;
                     });
+                    doAnswer(call -> { blocks.put(position[0], call.getArgument(0)); return null; })
+                        .when(cursor).setType(any(Material.class), anyBoolean());
+                    doAnswer(call -> { blocks.put(position[0], ((BlockData) call.getArgument(0)).getMaterial()); return null; })
+                        .when(cursor).setBlockData(any(BlockData.class), anyBoolean());
                     assertNotNull(new ProcGenMaterializer(Logger.getAnonymousLogger()).materialize(world, layout, cfg));
                     assertTrue(reachable(blocks, a, b), a.asset.name() + "/" + b.asset.name()
                         + " axis=" + axis + " rotations=" + ra + "," + rb);
@@ -116,9 +118,4 @@ class BuiltinRoomGeometryTest {
         return assets;
     }
 
-    interface Handler { Object call(String method, Object[] args); }
-    private static <T> T proxy(Class<T> type, Handler handler) {
-        return type.cast(Proxy.newProxyInstance(type.getClassLoader(), new Class<?>[]{type},
-            (object, method, args) -> handler.call(method.getName(), args)));
-    }
 }
