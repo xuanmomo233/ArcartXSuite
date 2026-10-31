@@ -51,6 +51,8 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
     private record StatsSnapshot(UUID instance,Map<String,Object> payload,long expires) { }
     private final Map<UUID,StatsSnapshot> recentStats=new ConcurrentHashMap<>();
     private final Map<UUID,UUID> statsViews=new ConcurrentHashMap<>();
+    private final Map<UUID,UUID> boardRequests=new ConcurrentHashMap<>();
+    private final Map<UUID,java.util.concurrent.CompletableFuture<?>> boardQueries=new ConcurrentHashMap<>();
     /** 玩家 → 待领取宝箱（roll 结果 + 所属实例/箱名；ESC 重开返回同批防刷奖）。 */
     private record PendingChest(AbyssInstance instance, String chestName,
                                 String title, List<ItemStack> items, Map<ItemStack, String> itemKeys) {
@@ -122,6 +124,8 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
     }
 
     private void openView(Player player, String uiId, Map<String, Object> payload) {
+        boardRequests.remove(player.getUniqueId());
+        var previousQuery=boardQueries.remove(player.getUniqueId());if(previousQuery!=null)previousQuery.cancel(false);
         if(uiId.equals(statsUi())) {
             Object id=payload.get("instance_id");
             if(id!=null)statsViews.put(player.getUniqueId(),UUID.fromString(String.valueOf(id)));else statsViews.remove(player.getUniqueId());
@@ -645,8 +649,34 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
     }
 
     @Override
-    public void openLeaderboard(Player player, String dungeonId) {
-        if (!available()) return;
+    public void openLeaderboard(Player player,String dungeonId) {
+        if(!available() || !service.running())return;
+        boolean enabled=service.leaderboard().enabled();
+        boolean exists=service.instances().getTemplate(dungeonId)!=null;
+        openView(player,leaderboardUi(),leaderboardPayload(player,dungeonId,List.of(),!exists?"副本不存在":enabled?"正在读取排行榜…":"排行榜未启用"));
+        if(!enabled || !exists)return;
+        UUID request=UUID.randomUUID();boardRequests.put(player.getUniqueId(),request);
+        java.util.concurrent.CompletableFuture<List<xuanmo.arcartxsuite.abyss.data.JdbcAbyssRepository.LeaderboardEntry>> query;
+        try{query=service.leaderboard().topAsync(dungeonId);}
+        catch(RuntimeException failure){boardRequests.remove(player.getUniqueId(),request);views.send(player,leaderboardUi(),"init",leaderboardPayload(player,dungeonId,List.of(),"排行榜暂不可用，请稍后重试"));return;}
+        boardQueries.put(player.getUniqueId(),query);
+        query.whenComplete((rows,error)->service.runOnMain(()->{
+            boardQueries.remove(player.getUniqueId(),query);
+            if(!service.running() || !player.isOnline() || !request.equals(boardRequests.get(player.getUniqueId()))
+                || !views.isOpen(player,leaderboardUi()))return;
+            boardRequests.remove(player.getUniqueId(),request);
+            if(error!=null)logger.warning("[abyss] 排行榜异步查询失败: "+error.getMessage());
+            var payload=leaderboardPayload(player,dungeonId,error==null?rows:List.of(),error==null?"暂无通关排行记录":"排行榜暂不可用，请稍后重试");
+            views.send(player,leaderboardUi(),"init",payload);
+        }));
+    }
+
+    public void stopQueries() {
+        boardRequests.clear();boardQueries.values().forEach(f->f.cancel(false));boardQueries.clear();
+    }
+
+    private Map<String,Object> leaderboardPayload(Player player,String dungeonId,
+            List<xuanmo.arcartxsuite.abyss.data.JdbcAbyssRepository.LeaderboardEntry> top,String emptyMessage) {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("packetId", CHANNEL);
         payload.put("action_token", token(player));
@@ -656,7 +686,6 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         payload.put("dungeonName", t != null ? t.name() : dungeonId);
 
         Map<String, Object> rows = new LinkedHashMap<>();
-        var top = service.leaderboard().top(dungeonId);
         int i = 0;
         for (var e : top) {
             Map<String, Object> r = new LinkedHashMap<>();
@@ -672,7 +701,8 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         }
         payload.put("boardRows", rows);
         payload.put("boardCount", rows.size());
-        openView(player, leaderboardUi(), payload);
+        payload.put("emptyMessage",emptyMessage);
+        return payload;
     }
 
     // ═══ ChestUiHandler ═══
@@ -1896,6 +1926,8 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         partyStates.remove(uid);
         recentStats.remove(uid);
         statsViews.remove(uid);
+        boardRequests.remove(uid);
+        var query=boardQueries.remove(uid);if(query!=null)query.cancel(false);
         views.clear(player);
         shopOffers.remove(uid); inputOffers.remove(uid); buffOffers.remove(uid);
         hudOpen.remove(uid);

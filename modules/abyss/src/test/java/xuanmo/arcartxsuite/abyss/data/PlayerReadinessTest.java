@@ -32,4 +32,12 @@ class PlayerReadinessTest {
             data.preload(player).get(5,TimeUnit.SECONDS);assertEquals(3,data.getStamina(player,100));
         } finally {data.shutdown();}
     }
+    @Test void leaderboardDatabaseWorkRunsOnTheOwnedDbExecutor()throws Exception {
+        var repository=mock(JdbcAbyssRepository.class,withSettings().mockMaker(org.mockito.MockMakers.INLINE));
+        var thread=new java.util.concurrent.atomic.AtomicReference<String>();
+        when(repository.loadLeaderboard(anyString(),anyInt())).thenAnswer(call->{thread.set(Thread.currentThread().getName());return List.of();});
+        var data=new PlayerDataManager(repository,Logger.getAnonymousLogger());
+        try {data.loadLeaderboardAsync("test",1000).get(5,TimeUnit.SECONDS);assertEquals("Abyss-DB",thread.get());verify(repository).loadLeaderboard("test",200);}
+        finally {data.shutdown();}
+    }
 }

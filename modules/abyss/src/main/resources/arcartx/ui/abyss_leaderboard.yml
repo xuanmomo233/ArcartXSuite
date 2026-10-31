@@ -17,6 +17,7 @@ ui:
       var.dungeonName = packet['dungeonName']
       var.rows = packet['boardRows']
       var.count = packet['boardCount']
+      var.emptyMessage = packet['emptyMessage'] != none ? packet['emptyMessage'] : '暂无通关排行记录'
       self.actions['rebuild']()
   action:
     load: |-
@@ -26,6 +27,7 @@ ui:
       var.dungeonName = ''
       var.rows = {}
       var.count = 0
+      var.emptyMessage = '正在读取排行榜…'
       var.builtCount = -1
       var.rowRefs = {}
       var.revision = 0
@@ -322,7 +324,7 @@ controls:
             type: Text
             attribute:
               point: ~middle_center
-              texts: ~&7暂无通关排行记录
+              texts: "'&7' + var.emptyMessage"
               visible: "var.count == 0"
               fontSize: 42
               through: true

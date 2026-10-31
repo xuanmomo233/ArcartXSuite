@@ -195,6 +195,12 @@ public final class PlayerDataManager {
             return java.util.List.of();
         }
     }
+    public java.util.concurrent.CompletableFuture<java.util.List<JdbcAbyssRepository.LeaderboardEntry>> loadLeaderboardAsync(String dungeonId,int limit) {
+        return java.util.concurrent.CompletableFuture.supplyAsync(()->{
+            try{return repository.loadLeaderboard(dungeonId,Math.max(1,Math.min(200,limit)));}
+            catch(Exception error){throw new java.util.concurrent.CompletionException(error);}
+        },dbExecutor);
+    }
 
     // ═══ 断线待恢复位置 ═══
 

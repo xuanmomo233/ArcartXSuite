@@ -24,6 +24,9 @@ public final class LeaderboardService {
     public List<LeaderboardEntry> top(String dungeonId) {
         return data.loadLeaderboard(dungeonId, cfg.size());
     }
+    public java.util.concurrent.CompletableFuture<List<LeaderboardEntry>> topAsync(String dungeonId) {
+        return cfg.enabled()?data.loadLeaderboardAsync(dungeonId,cfg.size()):java.util.concurrent.CompletableFuture.completedFuture(List.of());
+    }
 
     /** 通关后记录成绩（异步落盘）。 */
     public void recordCompletion(java.util.UUID player, String dungeonId, long timeSeconds) {

@@ -5,6 +5,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
+import java.util.LinkedHashMap;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
@@ -438,6 +440,7 @@ public final class AbyssService {
 
     public void shutdown() {
         stopping=true;
+        if(uiFacade instanceof AbyssUiService ui)ui.stopQueries();
         for(ScheduledTask task:serviceTasks)task.cancel();
         serviceTasks.clear();partyRefreshQueued.clear();
         started = false;

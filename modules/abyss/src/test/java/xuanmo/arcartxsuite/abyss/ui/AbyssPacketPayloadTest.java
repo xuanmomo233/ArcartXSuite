@@ -90,6 +90,41 @@ class AbyssPacketPayloadTest {
         ui.handlePacket(player,"abyss",List.of("lobby_create",oldToken));assertNull(service.party().partyOf(player));
         ui.handlePacket(player,"abyss",List.of("lobby_create",fresh));assertNotNull(service.party().partyOf(player));
     }
+    @Test void asynchronousLeaderboardCannotOverwriteTheNextWindow()throws Exception {
+        set("started",true);when(((Server)serverField.get(null)).isPrimaryThread()).thenReturn(true);service.instances().registerTemplate(template);
+        var leaderboard=mock(xuanmo.arcartxsuite.abyss.leaderboard.LeaderboardService.class,withSettings().mockMaker(org.mockito.MockMakers.INLINE));
+        when(leaderboard.enabled()).thenReturn(true);
+        var query=new java.util.concurrent.CompletableFuture<List<xuanmo.arcartxsuite.abyss.data.JdbcAbyssRepository.LeaderboardEntry>>();
+        when(leaderboard.topAsync("test")).thenReturn(query);set("leaderboard",leaderboard);
+        ui.openLeaderboard(player,"test");assertTrue(String.valueOf(flush().get("emptyMessage")).contains("读取"));
+        ui.openLobby(player);flush();assertTrue(query.isCancelled());query.complete(List.of());
+        verify(bridge,times(1)).sendPacket(eq(player),eq("AXS:abyss_leaderboard"),eq("init"),any());
+        verify(leaderboard,never()).top(anyString());
+    }
+    @Test void failedLeaderboardQueryShowsAnErrorInsteadOfAFalseEmptyResult()throws Exception {
+        set("started",true);when(((Server)serverField.get(null)).isPrimaryThread()).thenReturn(true);service.instances().registerTemplate(template);
+        var leaderboard=mock(xuanmo.arcartxsuite.abyss.leaderboard.LeaderboardService.class,withSettings().mockMaker(org.mockito.MockMakers.INLINE));when(leaderboard.enabled()).thenReturn(true);
+        var query=new java.util.concurrent.CompletableFuture<List<xuanmo.arcartxsuite.abyss.data.JdbcAbyssRepository.LeaderboardEntry>>();
+        when(leaderboard.topAsync("test")).thenReturn(query);set("leaderboard",leaderboard);
+        ui.openLeaderboard(player,"test");flush();query.completeExceptionally(new IllegalStateException("offline"));
+        assertTrue(String.valueOf(packets.get(packets.size()-1).get("emptyMessage")).contains("暂不可用"));
+    }
+    @Test void failedShopBeforeAnyEffectRefundsCoins()throws Exception {assertEquals(5,shopAttempt(false));}
+    @Test void partiallyExecutedShopDoesNotDuplicateEffectsByRefundingTheWholePurchase()throws Exception {assertEquals(0,shopAttempt(true));}
+    private int shopAttempt(boolean partial)throws Exception {
+        set("started",true);when(((Server)serverField.get(null)).isPrimaryThread()).thenReturn(true);
+        var goods=new ShopConfig.Goods("goods","STONE","test",List.of(),5,partial?List.of("purchase_effect","purchase_failure"):List.of("purchase_failure"));
+        var shop=new ShopConfig.Shop("test","test","coins",List.of(goods));
+        var target=mock(AbyssTemplate.class,withSettings().mockMaker(org.mockito.MockMakers.INLINE));when(target.shops()).thenReturn(new ShopConfig(Map.of("test",shop)));
+        instance=service.instances().createInstance(target,null);service.instances().playerEnterInstance(player,instance);instance.getVariables().put("coins",5);
+        instance.transitionTo(AbyssStatus.PREPARING,AbyssStatus.ACTIVE);
+        var runner=new xuanmo.arcartxsuite.abyss.script.ScriptRunner(null,mock(SchedulerAPI.class),()->service,java.util.logging.Logger.getAnonymousLogger());
+        runner.actions().register("purchase_failure",(ctx,args,s)->{throw new IllegalStateException("unavailable");});
+        runner.actions().register("purchase_effect",(ctx,args,s)->{});set("scriptRunner",runner);
+        ui.openShop(player,shop,instance);String token=(String)flush().get("action_token");
+        ui.handlePacket(player,"abyss",List.of("shop_buy","test","0",token));
+        return ((Number)instance.getVariables().get("coins")).intValue();
+    }
     @Test void changedPartyStateInvalidatesOldActionsButOriginalNonceCanStillCloseTheWindow() {
         var party=service.party().create(player);ui.openParty(player);var initial=flush();
         String old=(String)initial.get("action_token"),nonce=(String)initial.get("view_nonce");
