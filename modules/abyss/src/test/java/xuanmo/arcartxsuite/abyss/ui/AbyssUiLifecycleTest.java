@@ -91,4 +91,19 @@ class AbyssUiLifecycleTest {
         assertFalse(lifecycle.clientReady(player,"ui"));lifecycle.close(player,"ui");
         verifyNoInteractions(bridge);
     }
+    @Test void failedUpdateKeepsLatestStateAndRetriesAfterMount() {
+        when(bridge.sendPacket(eq(player),eq("ui"),eq("update"),any())).thenReturn(false,true);
+        lifecycle.open(player,"ui","init",Map.of("count",0),false);
+        lifecycle.send(player,"ui","update",Map.of("count",1));deferred.get(0).run();
+        lifecycle.send(player,"ui","update",Map.of("count",2));deferred.get(1).run();
+        verify(bridge).sendPacket(player,"ui","update",Map.of("count",1));
+        verify(bridge).sendPacket(player,"ui","update",Map.of("count",2));
+        assertTrue(lifecycle.isOpen(player,"ui"));
+    }
+    @Test void repeatedUpdateFailureClosesOnlyItsOwnGeneration() {
+        when(bridge.sendPacket(eq(player),eq("ui"),eq("update"),any())).thenReturn(false);
+        lifecycle.open(player,"ui","init",Map.of(),false);deferred.get(0).run();
+        lifecycle.send(player,"ui","update",Map.of("count",1));deferred.get(1).run();deferred.get(2).run();
+        assertFalse(lifecycle.isOpen(player,"ui"));verify(bridge).closeUiUnsafe(player,"ui");
+    }
 }

@@ -19,6 +19,7 @@ public final class StaminaManager {
 
     public boolean enabled() { return cfg.enabled(); }
     public int max() { return cfg.max(); }
+    public boolean ready(UUID player) { return data.ready(player); }
 
     /** 结算离线回复后取当前体力。 */
     public int getStamina(UUID player) {
@@ -40,6 +41,7 @@ public final class StaminaManager {
 
     /** 消耗体力。 */
     public boolean consume(UUID player, int cost) {
+        if (!ready(player)) return false;
         if (!cfg.enabled() || cost <= 0) return true;
         int cur = getStamina(player);
         if (cur < cost) return false;

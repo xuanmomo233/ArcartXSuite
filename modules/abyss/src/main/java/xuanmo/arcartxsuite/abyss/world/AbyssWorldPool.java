@@ -281,10 +281,13 @@ public final class AbyssWorldPool {
                         w.getEntities().forEach(e -> {
                             if (!(e instanceof org.bukkit.entity.Player)) e.remove();
                         });
-                        try { Bukkit.unloadWorld(w, false); } catch (Throwable ignored) { }
+                        if (!unloadForDeletion(w)) {
+                            logger.warning("[abyss] 预热世界仍在使用，保留目录: " + fp.worldName());
+                            return;
+                        }
                     }
+                    ioExecutor.submit(() -> WorldCopyUtil.deleteRecursively(fp.dir()));
                 });
-                ioExecutor.submit(() -> WorldCopyUtil.deleteRecursively(fp.dir()));
             }
         }
         preloadPool.clear();
@@ -359,7 +362,7 @@ public final class AbyssWorldPool {
      * 回收世界：卸载 + 删目录 + 清 schematic 会话。必须在主线程调用。
      */
     public void releaseWorld(UUID instanceId) {
-        String name = instanceWorldNames.remove(instanceId);
+        String name = instanceWorldNames.get(instanceId);
         if (name == null) name = worldName(instanceId);
         World world = Bukkit.getWorld(name);
         if (world != null) {
@@ -368,11 +371,16 @@ public final class AbyssWorldPool {
                 world.getEntities().forEach(e -> {
                     if (!(e instanceof org.bukkit.entity.Player)) e.remove();
                 });
-                Bukkit.unloadWorld(world, false);
+                if (!unloadForDeletion(world)) {
+                    logger.warning("[abyss] 世界卸载被拒绝，保留登记与目录: " + name);
+                    return;
+                }
             } catch (Throwable t) {
                 logger.warning("[abyss] 卸载世界失败 " + name + ": " + t.getMessage());
+                return;
             }
         }
+        instanceWorldNames.remove(instanceId);
         SchematicWorldService.Session s = schematicSessions.remove(instanceId);
         if (s != null) {
             try { s.close(); } catch (Throwable ignored) { }
@@ -403,7 +411,15 @@ public final class AbyssWorldPool {
         for (File dir : orphans) {
             World w = Bukkit.getWorld(dir.getName());
             if (w != null) {
-                try { Bukkit.unloadWorld(w, false); } catch (Throwable ignored) { }
+                try {
+                    if (!unloadForDeletion(w)) {
+                        logger.warning("[abyss] 残留世界仍在使用，保留目录: " + dir.getName());
+                        continue;
+                    }
+                } catch (Throwable error) {
+                    logger.warning("[abyss] 残留世界卸载失败，保留目录: " + dir.getName());
+                    continue;
+                }
             }
             ioExecutor.submit(() -> WorldCopyUtil.deleteRecursively(dir));
             n++;
@@ -417,6 +433,10 @@ public final class AbyssWorldPool {
         } else {
             Bukkit.getScheduler().runTask(plugin, r);
         }
+    }
+
+    static boolean unloadForDeletion(World world) {
+        return world.getPlayers().isEmpty() && Bukkit.unloadWorld(world, false);
     }
 
     public void shutdown() {

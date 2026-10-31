@@ -41,6 +41,7 @@ dependencies {
     testImplementation(platform("org.junit:junit-bom:5.10.2"))
     testImplementation("org.spigotmc:spigot-api:1.20.1-R0.1-SNAPSHOT")
     testImplementation("org.junit.jupiter:junit-jupiter")
+    testImplementation("org.mockito:mockito-core:5.12.0")
     testImplementation(files("../libs/MythicLib-dist-1.7.1-49.jar"))
     testImplementation("me.clip:placeholderapi:2.11.7")
 }

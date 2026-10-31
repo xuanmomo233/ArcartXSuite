@@ -264,14 +264,23 @@ public final class DesignManager {
             fixed.add(o);
         }
         List<DesignObject> result = crossLink(fixed);
-        for (String file : DesignWriter.FILES) {
+        List<String> editableFiles=new ArrayList<>(DesignWriter.FILES);
+        if(t.procgen()!=null) {
+            String set=t.procgen().roomSet();
+            if(!xuanmo.arcartxsuite.abyss.procgen.RoomSetLibrary.validName(set))throw new IllegalArgumentException("房间集名称无效");
+            File assets=new File(dir.getParentFile().getParentFile(),"room-sets/"+set);
+            File[] metas=assets.listFiles(f->f.isFile() && f.getName().endsWith(".yml") && !f.getName().endsWith(".region.yml"));
+            if(metas!=null) for(File meta:metas) editableFiles.add("../../room-sets/"+set+"/"+meta.getName());
+        }
+        for (String file : editableFiles) {
             try {
                 File source = new File(dir, file);
                 List<String> content = source.isFile()
                     ? java.nio.file.Files.readAllLines(source.toPath(), java.nio.charset.StandardCharsets.UTF_8)
                     : new ArrayList<>();
                 result.add(new DesignObject("document:" + file, DesignObject.Kind.DOCUMENT, file,
-                    file, "", "完整YAML配置 · 保存时校验", null, null, "misc:files",
+                    file, "", file.startsWith("../../")?"共享构件元数据 · 使用房内相对坐标":"完整YAML配置 · 保存时校验", null, null,
+                    file.startsWith("../../")?"misc:assets":"misc:files",
                     new LinkedHashMap<>(Map.of("content", new ArrayList<>(content))), false));
             } catch (java.io.IOException ex) {
                 throw new IllegalStateException("读取配置文件失败: " + file, ex);
@@ -436,6 +445,7 @@ public final class DesignManager {
                 s.nodeObjects("misc:reward").size()));
         }
         out.add(new Node("misc:files", "完整配置文件", 0, s.nodeObjects("misc:files").size()));
+        if(t.procgen()!=null)out.add(new Node("misc:assets","共享构件元数据",0,s.nodeObjects("misc:assets").size()));
         return out;
     }
 

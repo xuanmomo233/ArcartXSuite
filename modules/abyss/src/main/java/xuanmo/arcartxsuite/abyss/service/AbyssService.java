@@ -174,6 +174,9 @@ public final class AbyssService {
     private volatile UiServiceFacade uiFacade;
 
     private ScheduledTask watchdogTask;
+    private final java.util.Set<ScheduledTask> serviceTasks=ConcurrentHashMap.newKeySet();
+    private final java.util.Set<UUID> partyRefreshQueued=ConcurrentHashMap.newKeySet();
+    private volatile boolean stopping;
     private boolean started;
 
     public AbyssService(AbyssModule module, Plugin plugin, AbyssModuleConfiguration config,
@@ -229,7 +232,7 @@ public final class AbyssService {
             storage.hasOverride() ? storage.toDescriptor() : null);
         repository = new JdbcAbyssRepository(ds, desc, dataFolder, logger);
         repository.initialize();
-        playerData = new PlayerDataManager(repository, logger);
+        playerData = new PlayerDataManager(repository, logger, config.stamina().max());
 
         // 2) 模板加载（首次启动导出示例地牢）
         templateLoader = new AbyssTemplateLoader(dataFolder, logger);
@@ -311,7 +314,7 @@ public final class AbyssService {
 
         // 7) 奖励/体力/统计/排行/冷却/条件
         rewards = new RewardResolver(itemSourceRegistry, itemRewardDispatcher,
-            pendingRewardService, currencyManager, logger);
+            pendingRewardService, currencyManager, logger, itemMatcher);
         quests = new QuestManager(this::links, plugin, scheduler);
         stamina = new StaminaManager(config.stamina(), playerData);
         stats = new CombatStatisticsService(config.statistics());
@@ -325,6 +328,11 @@ public final class AbyssService {
 
         // 8.5) ArcartX UI 服务（浏览器/队伍/宝箱/HUD/排行统计 + 客户端包路由）
         AbyssUiService ui = new AbyssUiService(this, packetBridge, itemStackBridge, logger);
+        partyManager.setChangeListener(party -> {
+            if(partyRefreshQueued.add(party.id()))scheduleDelayedRaw(()->{
+                partyRefreshQueued.remove(party.id());ui.refreshPartyState(party);
+            },1L);
+        });
         uiFacade = ui;
         chestUiHandler = ui;
         if (ui.available()) {
@@ -413,6 +421,9 @@ public final class AbyssService {
     private ScheduledTask proximityTask;
 
     public void shutdown() {
+        stopping=true;
+        for(ScheduledTask task:serviceTasks)task.cancel();
+        serviceTasks.clear();partyRefreshQueued.clear();
         started = false;
         if (watchdogTask != null) {
             try { watchdogTask.cancel(); } catch (Throwable ignored) { }
@@ -448,6 +459,7 @@ public final class AbyssService {
         }
         if (entranceMarkers != null) entranceMarkers.shutdown();
         if (partyManager != null) partyManager.shutdown();
+        if (links != null) links.close();
         if (worldPool != null) {
             worldPool.releasePreload();
             worldPool.shutdown();
@@ -776,7 +788,7 @@ public final class AbyssService {
             boolean isHost = crossDungeon != null && cs.equals(crossDungeon.nodeId());
             if (!isHost) {
                 if (crossDungeon != null && crossDungeon.active()) {
-                    crossDungeon.requestRemoteEnter(players, template);
+                    crossDungeon.requestRemoteEnter(players, template,plan);
                     return EnterResult.success();
                 }
                 return EnterResult.fail(msg("cross.forward-failed", "node", cs));
@@ -830,6 +842,7 @@ public final class AbyssService {
         }
 
         AbyssInstance instance = instances.createInstance(template, party);
+        if(party!=null)instance.getVariables().put("admission_party_revision",party.revision());
         // 方案写入实例变量：{plan}=id、{plan_name}=显示名；怪组 plans 过滤也读这里
         if (resolvedPlan != null) {
             instance.getVariables().put("plan", resolvedPlan);
@@ -1017,15 +1030,28 @@ public final class AbyssService {
         if (template.procgen() != null) {
             try {
                 var capture = procgenManager.captureDesignRoom(instance, player.getLocation());
+                var writes=xuanmo.arcartxsuite.abyss.design.DesignWriter.prepareWrites(template,session);
+                var captured=capture.writes();
+                var meta=new File(capture.root(),capture.name()+".yml").toPath().toAbsolutePath().normalize();
+                if(writes.containsKey(meta)) {
+                    var edited=new org.bukkit.configuration.file.YamlConfiguration();
+                    edited.loadFromString(new String(writes.get(meta),java.nio.charset.StandardCharsets.UTF_8));
+                    edited.set("geometry-source","region");
+                    captured.put(meta,edited.saveToString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                }
+                writes.putAll(captured);
+                var baseline=new java.util.LinkedHashMap<>(session.fileHashes());
+                capture.baseline().forEach((name,hash)->baseline.put(template.dir().toPath().toAbsolutePath().normalize()
+                    .relativize(new File(capture.root(),name).toPath().toAbsolutePath().normalize()).toString(),hash));
                 worldPool.runIo(instance.getInstanceId(), () -> {
-                    try { capture.save(); }
+                    try { xuanmo.arcartxsuite.abyss.design.DesignWriter.commit(writes,baseline,template.dir().toPath()); }
                     catch (Exception ex) { throw new java.util.concurrent.CompletionException(ex); }
                 }).whenComplete((v, error) -> runOnMain(() -> {
                     if (error != null) designSaveFailed(player, session, error);
                     else {
                         session.acknowledgeRegion(capture.bounds());
                         procgenManager.acknowledgeDesignRoom(instance, capture);
-                        roomSetLibrary.reload(); finishDesignSave(player, session, true);
+                        roomSetLibrary.reload(); finishPublishedDesign(player, session, true);
                     }
                 }));
             } catch (Exception ex) { designSaveFailed(player, session, ex); }
@@ -1037,6 +1063,12 @@ public final class AbyssService {
             designSaveFailed(player, session, new IllegalStateException("设计世界尚未就绪"));
             return;
         }
+        final Map<java.nio.file.Path,byte[]> configWrites;
+        final Map<String,String> configBaseline=new java.util.LinkedHashMap<>(session.fileHashes());
+        try {
+            session.worldSnapshot(true);
+            configWrites=xuanmo.arcartxsuite.abyss.design.DesignWriter.prepareWrites(template,session);
+        } catch(Exception invalid) { session.worldSnapshot(false); designSaveFailed(player,session,invalid); return; }
         Location designLocation = player.getLocation().clone();
         Location waiting = instance.getOriginalLocation(player.getUniqueId());
         if (waiting == null || !teleportWithRetry(player, waiting, 3)) {
@@ -1051,7 +1083,8 @@ public final class AbyssService {
         } catch (Throwable error) { designSaveFailed(player, session, error); return; }
         File target = new File(template.dir(), "world");
         worldPool.runIo(instance.getInstanceId(), () -> {
-            try { xuanmo.arcartxsuite.abyss.world.WorldCopyUtil.replaceWorldFolder(source, target); }
+            try { xuanmo.arcartxsuite.abyss.world.WorldCopyUtil.publishWorldFolder(source,target,
+                ()->xuanmo.arcartxsuite.abyss.design.DesignWriter.commit(configWrites,configBaseline,template.dir().toPath())); }
             catch (Exception ex) { throw new java.util.concurrent.CompletionException(ex); }
         }).whenComplete((v, error) -> runOnMain(() -> {
             if (instances.getInstance(instance.getInstanceId()) == instance) {
@@ -1064,6 +1097,11 @@ public final class AbyssService {
                         if (!teleportWithRetry(player, back, 3)) throw new IllegalStateException("无法返回设计世界");
                     }
                 } catch (Throwable resumeError) {
+                    if(error==null) {
+                        finishPublishedDesign(player,session,true);
+                        player.sendMessage("§e文件已保存，但设计世界恢复失败，请退出后重新进入。");
+                        return;
+                    }
                     designSaveFailed(player, session, resumeError);
                     // Keep configuration drafts and the original return location available for recovery.
                     return;
@@ -1071,8 +1109,7 @@ public final class AbyssService {
             }
             if (error != null) designSaveFailed(player, session, error);
             else {
-                session.worldSnapshot(true);
-                finishDesignSave(player, session, true);
+                finishPublishedDesign(player, session, true);
             }
         }));
     }
@@ -1080,6 +1117,7 @@ public final class AbyssService {
     private void designSaveFailed(Player player,
             xuanmo.arcartxsuite.abyss.design.DesignSession session, Throwable error) {
         session.saving(false);
+        session.worldSnapshot(false);
         logger.warning("[abyss] 设计保存失败，保留编辑内容: " + error);
         player.sendMessage("§c建筑未保存，配置编辑仍保留: " +
             (error.getCause() != null ? error.getCause().getMessage() : error.getMessage()));
@@ -1096,6 +1134,12 @@ public final class AbyssService {
                 + (savedWorld ? " §e建筑已单独保存，可修正配置后重试。" : ""));
             return;
         }
+        finishPublishedDesign(player,session,savedWorld);
+    }
+
+    private void finishPublishedDesign(Player player,
+            xuanmo.arcartxsuite.abyss.design.DesignSession session, boolean savedWorld) {
+        session.saving(false);
         reloadTemplates();
         AbyssTemplate updated = instances.getTemplate(session.instance().getTemplate().id());
         if (updated == null) {
@@ -1249,46 +1293,38 @@ public final class AbyssService {
         // 落点兜底：spawn 下方 4 格无支撑时垫一块，防虚空模板直接坠亡
         ensureFooting(world, spawn);
 
-        // 逐人存档+传送；扣费只算传送成功的玩家（传送失败不花门票）
+        // Revalidate the complete admission after asynchronous world preparation.
+        boolean changed = players.stream().anyMatch(p -> !p.isOnline() || !instance.hasPlayer(p.getUniqueId())
+            || partyManager.partyOf(p) != instance.getParty());
+        if(instance.getParty()!=null)changed |= !instance.getParty().allReady()
+            || !java.util.Objects.equals(instance.getVariables().get("admission_party_revision"),instance.getParty().revision());
+        var fresh = changed ? RequirementChecker.CheckResult.fail("队伍或成员状态已变化")
+            : requirementChecker.check(tpl, players, instance.getParty());
+        if (!fresh.ok()) {
+            broadcast(instance, msg("error.enter-failed", "reason", fresh.reason()));
+            destroyInstance(instance, true); return;
+        }
+        var charge = requirementChecker.charge(tpl, players);
+        if (!charge.ok()) {
+            broadcast(instance, msg("error.enter-failed", "reason", charge.reason()));
+            destroyInstance(instance, true); return;
+        }
+        // All players and resources form one admission operation. A failed teleport refunds all.
         for (Player p : players) {
-            if (!p.isOnline() || instance.isFinished() || !instance.hasPlayer(p.getUniqueId())) continue;
             instance.saveOriginalLocation(p, p.getLocation());
             instance.savePlayerGameMode(p);
             boolean ok = teleportWithRetry(p, spawn, 3);
             if (ok) {
-                requirementChecker.charge(instance.getTemplate(), List.of(p));
                 instance.markEntered(p.getUniqueId());
             } else {
-                // 传送失败：移出实例并送回
-                instance.removePlayer(p.getUniqueId());
-                p.sendMessage(msg("error.enter-failed", "reason", "传送失败"));
+                try { charge.rollback(); }
+                finally { broadcast(instance,msg("error.enter-failed","reason","传送失败，已取消整队进入")); destroyInstance(instance,true); }
+                return;
             }
         }
-        if (instance.getPlayerUUIDs().isEmpty()) {
-            destroyInstance(instance, true);
-            return;
-        }
-
-        // 全员进图判定：等不到的走 5s 兜底（掉线玩家直接剔除）
-        scheduleOnce(instance, () -> {
-            for (UUID u : new ArrayList<>(instance.getPlayerUUIDs())) {
-                if (!instance.allEntered()) {
-                    Player p = Bukkit.getPlayer(u);
-                    if (p == null || !p.isOnline()) {
-                        instance.removePlayer(u);
-                    }
-                }
-            }
-            if (!instance.getPlayerUUIDs().isEmpty()) {
-                prepare(instance);
-            } else {
-                destroyInstance(instance, true);
-            }
-        }, 100L);
-        // 若已全员进图直接 prepare
-        if (instance.allEntered()) {
-            prepare(instance);
-        }
+        charge.commit();
+        if(instance.getParty()!=null)instance.getParty().resetReadiness();
+        prepare(instance);
     }
 
     /**
@@ -1551,7 +1587,6 @@ public final class AbyssService {
         long time = instance.getRunningTime();
         for (UUID u : completedPlayers) {
             playerData.saveRecord(u, t.id(), time);
-            leaderboard.recordCompletion(u, t.id(), time);
         }
         publishEvent("axs.abyss.complete", null, Map.of(
             "dungeon", t.id(), "instance", instance.getInstanceId().toString(),
@@ -1723,7 +1758,11 @@ public final class AbyssService {
     /** 玩家进服（监听器调用）：恢复位置 + 预载数据 + 异常退出恢复动作。 */
     public void handleJoin(Player player) {
         // 跨服抵达的玩家优先收编（远端副本预订在等待中；非预订玩家立即返回）
-        if (crossDungeon != null) crossDungeon.onPlayerJoin(player);
+        playerData.preload(player.getUniqueId()).whenComplete((loaded,error)->runOnMain(()->{
+            if(error==null && player.isOnline())scheduleDelayedRaw(()->{
+                if(crossDungeon!=null && player.isOnline())crossDungeon.onPlayerJoin(player);
+            },60L);
+        }));
         playerData.preloadCooldowns(player.getUniqueId());
         scheduler.scheduleOnce(plugin, () -> {
             Location loc = playerData.takePendingLocation(player.getUniqueId());
@@ -1911,9 +1950,7 @@ public final class AbyssService {
             logger.warning("[abyss] give_item 构建失败: " + def);
             return;
         }
-        itemRewardDispatcher.dispatchItem(player, item,
-            ItemRewardDispatcher.DispatchOptions.builder("abyss")
-                .sourceDetail("give_item:" + def).build());
+        if(!dispatchItems(player,List.of(item),"give_item:"+def))throw new IllegalStateException("物品奖励尚未确认保存");
     }
 
     public void takeDefinedItem(Player player, String def) {
@@ -2045,22 +2082,22 @@ public final class AbyssService {
     }
 
     /** 统一物品发放（宝箱 UI/脚本/奖励链共用入口）。 */
-    public void dispatchItems(Player player, List<ItemStack> items, String sourceDetail) {
-        if (items == null || items.isEmpty()) return;
-        itemRewardDispatcher.dispatchItems(player, items,
-            ItemRewardDispatcher.DispatchOptions.builder("abyss")
-                .sourceDetail(sourceDetail).build());
+    public boolean dispatchItems(Player player, List<ItemStack> items, String sourceDetail) {
+        return dispatchItemsConfirmed(player, items, sourceDetail + ":" + UUID.randomUUID());
+    }
+
+    public boolean dispatchItemsConfirmed(Player player, List<ItemStack> items, String requestKey) {
+        if (items == null || items.isEmpty()) return true;
+        return rewards.queueItems(player, items, requestKey);
     }
 
     /** 默认宝箱：直接 roll 发放（UI 未接入时兜底）。 */
     private void defaultChestHandler(Player player,
                                      xuanmo.arcartxsuite.abyss.template.RewardConfig.ChestReward chest,
                                      AbyssInstance instance) {
-        List<ItemStack> items = rewards.rollChestOptions(chest, Math.min(9, chest.rows() * 9 / 2));
-        if (!items.isEmpty()) {
-            itemRewardDispatcher.dispatchItems(player, items,
-                ItemRewardDispatcher.DispatchOptions.builder("abyss")
-                    .sourceDetail("chest:" + chest.name()).build());
+        List<ItemStack> items = rewards.rollChestOptions(chest, Math.min(9, chest.rows() * 9));
+        if (!items.isEmpty() && dispatchItemsConfirmed(player, items,
+                "chest:" + instance.getInstanceId() + ":" + player.getUniqueId() + ":" + chest.name())) {
             instance.markTriggeredOnce(chestClaimKey(chest.name(), player.getUniqueId()));
         }
     }
@@ -2131,7 +2168,13 @@ public final class AbyssService {
 
     /** 非实例绑定的裸延迟调度（跨服握手超时等用）。 */
     public void scheduleDelayedRaw(Runnable r, long delayTicks) {
-        scheduler.scheduleOnce(plugin, r, delayTicks);
+        if(stopping)return;
+        ScheduledTask[] task=new ScheduledTask[1];
+        task[0]=scheduler.scheduleOnce(plugin,()->{
+            if(task[0]!=null)serviceTasks.remove(task[0]);
+            if(!stopping)r.run();
+        },delayTicks);
+        if(task[0]!=null)serviceTasks.add(task[0]);
     }
 
     /** 主线程执行。 */

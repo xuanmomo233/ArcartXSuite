@@ -23,6 +23,13 @@ public final class WorldCopyUtil {
 
     /** Copy to a sibling staging directory, then swap. Keep the previous world for recovery. */
     public static void replaceWorldFolder(File source, File target) throws IOException {
+        publishWorldFolder(source,target,()->{});
+    }
+
+    @FunctionalInterface public interface Publisher { void publish() throws Exception; }
+
+    /** Publish a world and its validated configuration together; restore the old world on any failure. */
+    public static void publishWorldFolder(File source, File target, Publisher configuration) throws IOException {
         Path src = source.toPath().toRealPath();
         Path dst = target.toPath().toAbsolutePath().normalize();
         if (src.equals(dst) || src.startsWith(dst) || dst.startsWith(src))
@@ -35,10 +42,16 @@ public final class WorldCopyUtil {
         try {
             copyWorldFolder(source, stage.toFile());
             if (Files.exists(dst)) { Files.move(dst, backup); moved = true; }
-            try { Files.move(stage, dst); }
-            catch (IOException failure) {
-                if (moved) Files.move(backup, dst);
-                throw failure;
+            try {
+                Files.move(stage, dst);
+                configuration.publish();
+            } catch (Exception failure) {
+                if (Files.exists(dst)) {
+                    Path failed=dst.resolveSibling(dst.getFileName()+".failed-"+suffix);
+                    Files.move(dst,failed);
+                }
+                if (moved) Files.move(backup,dst);
+                throw new IOException("建筑与配置发布失败，已恢复原建筑",failure);
             }
         } finally { deleteRecursively(stage.toFile()); }
     }

@@ -35,6 +35,20 @@ public interface PendingRewardService {
     void savePending(@NotNull PendingReward reward);
 
     /**
+     * Atomically persist a complete reward operation and its permanent idempotency receipt.
+     * Returns true only after durable host acceptance (database or replayable host outbox),
+     * or an identical previously accepted operation.
+     * A false result leaves ownership with the caller; implementations must not partially enqueue.
+     * Older hosts fail closed. This synchronous method may perform storage IO.
+     */
+    default boolean savePendingBatchConfirmed(@NotNull String requestKey, @NotNull List<PendingReward> rewards) {
+        return false;
+    }
+
+    /** Ask the host to claim and deliver persisted rewards for an online player. */
+    default void flushPlayer(@NotNull org.bukkit.entity.Player player) { }
+
+    /**
      * 加载指定玩家的所有待发放奖励（按创建时间升序）。
      * <p>
      * 主要供宿主补发逻辑调用；模块一般无需直接调用。
@@ -61,7 +75,7 @@ public interface PendingRewardService {
     void markDelivered(long id);
 
     /**
-     * 递增补发尝试次数（补发失败时调用，达到阈值后自动丢弃避免无限重试）。
+     * 递增补发尝试次数（补发失败时调用，记录保留供后续重试）。
      *
      * @param id 记录 ID
      */

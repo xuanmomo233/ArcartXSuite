@@ -3,6 +3,7 @@ package xuanmo.arcartxsuite.abyss.template;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HashMap;
@@ -264,6 +265,12 @@ public final class RegionTemplate {
 
     /** 写到 YAML 文件（父目录自动建）。 */
     public void save(File file) throws IOException {
+        File parent = file.getParentFile();
+        if (parent != null) Files.createDirectories(parent.toPath());
+        Files.writeString(file.toPath(),toYaml(),StandardCharsets.UTF_8);
+    }
+
+    public String toYaml() {
         YamlConfiguration yml = new YamlConfiguration();
         yml.set("size", width + "," + height + "," + depth);
         yml.set("palette", palette);
@@ -272,9 +279,7 @@ public final class RegionTemplate {
             enc.add(Base64.getEncoder().encodeToString(layer));
         }
         yml.set("layers", enc);
-        File parent = file.getParentFile();
-        if (parent != null && !parent.exists()) parent.mkdirs();
-        yml.save(file);
+        return yml.saveToString();
     }
 
     /** 从 YAML 读入；文件缺失/损坏返回 null。 */

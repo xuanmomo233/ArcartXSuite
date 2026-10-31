@@ -36,6 +36,8 @@ public final class PartyManager {
     private final Consumer<String> messageFormatter; // 前缀格式化（messages().get）
     /** 队伍事件发布（AbyssService.publishEvent 注入；null 时跳过）。 */
     private final @Nullable PartyEventSink events;
+    private java.util.function.Consumer<Party> changeListener=p->{};
+    public void setChangeListener(java.util.function.Consumer<Party> listener) { changeListener=listener; }
 
     /** 邀请冷却时长（毫秒）。 */
     public static final long INVITE_COOLDOWN_MS = 60_000L;
@@ -83,6 +85,7 @@ public final class PartyManager {
         party.mode(mode);
         parties.put(party.id(), party);
         playerParty.put(leader.getUniqueId(), party);
+        party.onChange(()->changeListener.accept(party));
         fire("axs.abyss.party_created", leader, Map.of(
             "party", party.id().toString(),
             "mode", party.mode(),
@@ -482,6 +485,7 @@ public final class PartyManager {
     public void disband(Party party) {
         for (UUID u : party.members()) playerParty.remove(u);
         parties.remove(party.id());
+        party.changed();
         fire("axs.abyss.party_disbanded", null, Map.of(
             "party", party.id().toString(),
             "mode", party.mode()));
@@ -489,6 +493,8 @@ public final class PartyManager {
 
     /** 队伍聊天消息分发（监听器转发聊天事件），同时记入房间消息流。 */
     public void sendChat(Player sender, String message) {
+        if(message==null || message.isBlank())return;
+        if(message.length()>256)throw new IllegalArgumentException("队聊内容最多256字符");
         Party p = partyOf(sender);
         if (p == null) return;
         String formatted = "§d[队伍] §f" + sender.getName() + "§7: §f" + message;

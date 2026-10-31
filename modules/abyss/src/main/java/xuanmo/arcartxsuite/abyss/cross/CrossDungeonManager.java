@@ -47,7 +47,7 @@ public final class CrossDungeonManager {
     /** 源节点：一次远端进本请求。 */
     private record PendingForward(String dungeon,
                                   List<UUID> players,
-                                  long deadline) { }
+                                  long deadline, String host) { }
 
     /** 宿主节点：一次远端队伍预订。 */
     private static final class PendingEnter {
@@ -56,10 +56,15 @@ public final class CrossDungeonManager {
         final List<UUID> arrived = new ArrayList<>();
         final long created = System.currentTimeMillis();
         boolean triggered;
+        final UUID leader;
+        final String mode,plan;
+        final boolean party;
+        final int capacity;
 
-        PendingEnter(String dungeon, List<UUID> expected) {
+        PendingEnter(String dungeon,List<UUID> expected,UUID leader,String mode,String plan,boolean party,int capacity) {
             this.dungeon = dungeon;
             this.expected = expected;
+            this.leader=leader;this.mode=mode;this.plan=plan;this.party=party;this.capacity=capacity;
         }
     }
 
@@ -118,16 +123,29 @@ public final class CrossDungeonManager {
 
     /** 广播 req_enter，accept 后前送玩家。立即返回（异步握手）。 */
     public void requestRemoteEnter(List<Player> players, AbyssTemplate template) {
+        requestRemoteEnter(players,template,null);
+    }
+
+    public void requestRemoteEnter(List<Player> players, AbyssTemplate template,String plan) {
+        if(!active())return;
+        for(PendingForward existing:pendingOut.values())if(players.stream().anyMatch(p->existing.players().contains(p.getUniqueId()))) {
+            players.forEach(p->p.sendMessage("§e跨服进入正在处理中，请勿重复提交。"));return;
+        }
         String reqId = UUID.randomUUID().toString();
         List<UUID> uuids = players.stream().map(Player::getUniqueId).toList();
         pendingOut.put(reqId, new PendingForward(template.id(), uuids,
-            System.currentTimeMillis() + OUT_TIMEOUT_MS));
+            System.currentTimeMillis() + OUT_TIMEOUT_MS,template.crossServer()));
+        var party=service.party().partyOf(players.get(0));
+        UUID leader=party!=null?party.leader():players.get(0).getUniqueId();
         for (Player p : players) {
             p.sendMessage(service.msg("cross.requesting",
                 "node", template.crossServer()));
         }
         publish("op=req_enter;req=" + reqId + ";dungeon=" + template.id()
-            + ";from=" + nodeId() + ";players=" + joinUuids(uuids));
+            + ";from=" + nodeId() + ";players=" + joinUuids(uuids)
+            + ";version=2;leader="+leader+";party="+(party!=null)
+            + ";mode="+encode(party!=null?party.mode():"free")+";capacity="+(party!=null?party.maxSize():players.size())
+            + ";plan="+encode(plan==null?"":plan));
         // 超时兜底
         service.scheduleDelayedRaw(() -> {
             PendingForward pf = pendingOut.remove(reqId);
@@ -141,7 +159,12 @@ public final class CrossDungeonManager {
     // ── 消息路由 ──────────────────────────────────────────
 
     private void onDelivery(CrossServerDelivery d) {
+        service.runOnMain(()->routeDelivery(d));
+    }
+
+    private void routeDelivery(CrossServerDelivery d) {
         Map<String, String> kv = parsePayload(d.payload());
+        kv.put("_sender",d.nodeId());
         String op = kv.get("op");
         if (op == null) return;
         switch (op) {
@@ -158,17 +181,30 @@ public final class CrossDungeonManager {
         String dungeon = kv.get("dungeon");
         String from = kv.get("from");
         if (reqId == null || dungeon == null || from == null) return;
+        if(!from.equals(kv.get("_sender")))return;
         if (from.equals(nodeId())) return; // 自己的回声
         AbyssTemplate tpl = service.instances().getTemplate(dungeon);
         String cs = tpl != null ? tpl.crossServer() : null;
         if (cs == null || !cs.equals(nodeId())) return;   // 非本节点宿主
         List<UUID> players = parseUuids(kv.get("players"));
+        UUID leader; int capacity;
+        try { leader=UUID.fromString(kv.get("leader"));capacity=Integer.parseInt(kv.get("capacity")); }
+        catch(RuntimeException invalid){publish("op=decline;req="+reqId+";reason=incompatible-context");return;}
+        String plan,mode;
+        try { plan=decode(kv.getOrDefault("plan",""));mode=decode(kv.getOrDefault("mode","free")); }
+        catch(RuntimeException invalid){return;}
+        if(!"2".equals(kv.get("version")) || !players.contains(leader) || new java.util.HashSet<>(players).size()!=players.size()
+            || capacity<players.size() || capacity>256 || mode.length()>64 || plan.length()>128
+            || players.stream().anyMatch(expectedArrivals::containsKey)
+            || (!plan.isBlank() && !tpl.plans().containsKey(plan))) {
+            publish("op=decline;req="+reqId+";reason=invalid-context");return;
+        }
         if (players.isEmpty() || !service.instances().hasAvailableSlot(tpl)) {
             publish("op=decline;req=" + reqId + ";dungeon=" + dungeon
                 + ";reason=full");
             return;
         }
-        PendingEnter pe = new PendingEnter(dungeon, players);
+        PendingEnter pe = new PendingEnter(dungeon,players,leader,mode,plan,"true".equals(kv.get("party")),capacity);
         pendingIn.put(reqId, pe);
         for (UUID u : players) expectedArrivals.put(u, reqId);
         publish("op=accept;req=" + reqId + ";dungeon=" + dungeon
@@ -184,8 +220,10 @@ public final class CrossDungeonManager {
     private void onAccept(Map<String, String> kv) {
         String reqId = kv.get("req");
         String host = kv.get("host");
-        PendingForward pf = reqId != null ? pendingOut.remove(reqId) : null;
+        PendingForward pf = reqId != null ? pendingOut.get(reqId) : null;
         if (pf == null || host == null) return;
+        if(!pf.host().equals(host) || !host.equals(kv.get("_sender")))return;
+        pendingOut.remove(reqId,pf);
         List<Player> online = new ArrayList<>();
         for (UUID u : pf.players) {
             Player p = Bukkit.getPlayer(u);
@@ -200,8 +238,10 @@ public final class CrossDungeonManager {
 
     private void onDecline(Map<String, String> kv) {
         String reqId = kv.get("req");
-        PendingForward pf = reqId != null ? pendingOut.remove(reqId) : null;
+        PendingForward pf = reqId != null ? pendingOut.get(reqId) : null;
         if (pf == null) return;
+        if(!pf.host().equals(kv.get("_sender")))return;
+        pendingOut.remove(reqId,pf);
         notifyPlayers(pf.players, service.msg("cross.declined",
             "reason", kv.getOrDefault("reason", "?")));
     }
@@ -231,7 +271,9 @@ public final class CrossDungeonManager {
             for (UUID u : pe.expected) expectedArrivals.remove(u);
             return;
         }
-        triggerPendingIn(reqId);
+        pendingIn.remove(reqId);
+        for(UUID u:pe.expected)expectedArrivals.remove(u,reqId);
+        notifyPlayers(pe.arrived,"§c跨服队伍未全部抵达，已取消进入；未扣除门票。");
     }
 
     private void triggerPendingIn(String reqId) {
@@ -240,14 +282,38 @@ public final class CrossDungeonManager {
         pe.triggered = true;
         for (UUID u : pe.expected) expectedArrivals.remove(u);
         List<Player> online = new ArrayList<>();
-        for (UUID u : pe.arrived) {
+        List<UUID> ordered=new ArrayList<>(pe.expected);ordered.remove(pe.leader);ordered.add(0,pe.leader);
+        for (UUID u : ordered) {
             Player p = Bukkit.getPlayer(u);
             if (p != null && p.isOnline()) online.add(p);
         }
-        if (online.isEmpty()) return;
+        if(online.size()!=pe.expected.size()) {
+            notifyPlayers(pe.expected,"§c队伍成员未全部在线，跨服进入已取消。");return;
+        }
+        xuanmo.arcartxsuite.abyss.party.Party hostParty=null;
+        boolean created=false;
+        if(pe.party) {
+            hostParty=service.party().partyOf(online.get(0));
+            if(hostParty==null) {
+                if(online.stream().anyMatch(p->service.party().inParty(p.getUniqueId()))) {
+                    notifyPlayers(pe.expected,"§c目标服已有其他队伍，无法覆盖现有队伍。");return;
+                }
+                hostParty=service.party().create(online.get(0),pe.mode,pe.capacity);created=true;
+                for(int i=1;i<online.size();i++) {
+                    String denied=service.party().addMemberDirect(hostParty.id(),online.get(i).getUniqueId());
+                    if(denied!=null){service.party().disband(hostParty);notifyPlayers(pe.expected,"§c目标服入队校验失败: "+denied);return;}
+                }
+            } else if(!new java.util.HashSet<>(hostParty.members()).equals(new java.util.HashSet<>(pe.expected))
+                || !hostParty.leader().equals(pe.leader) || !hostParty.mode().equals(pe.mode)) {
+                notifyPlayers(pe.expected,"§c目标服队伍与来源服不一致，已取消进入。");return;
+            }
+            hostParty.dungeonId(pe.dungeon);
+            for(UUID u:hostParty.members())if(!hostParty.isReady(u))hostParty.toggleReady(u);
+        }
         // 走标准进本路径（requirements/预热/procgen 全量生效）
-        var result = service.enterDungeon(online, pe.dungeon);
+        var result = service.enterDungeon(online,pe.dungeon,pe.plan.isBlank()?null:pe.plan);
         if (!result.ok()) {
+            if(created)service.party().disband(hostParty);
             for (Player p : online) {
                 p.sendMessage(service.msg("cross.enter-failed",
                     "reason", String.valueOf(result.reason())));
@@ -305,6 +371,9 @@ public final class CrossDungeonManager {
         }
         return kv;
     }
+
+    private static String encode(String value) { return java.net.URLEncoder.encode(value,StandardCharsets.UTF_8); }
+    private static String decode(String value) { return java.net.URLDecoder.decode(value,StandardCharsets.UTF_8); }
 
     private static String joinUuids(List<UUID> uuids) {
         StringBuilder sb = new StringBuilder();

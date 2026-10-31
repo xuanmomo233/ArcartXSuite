@@ -36,6 +36,9 @@ public final class AbyssLinks {
     private final CapabilityResolver capabilityResolver;
     private final AttributeBridgeRegistry attributeBridge;
     private final Logger logger;
+    private xuanmo.arcartxsuite.api.attribute.AttributeDamageListener damageListener;
+    private xuanmo.arcartxsuite.api.attribute.AttributeHealListener healListener;
+    private final Map<java.util.UUID, Map<String, java.util.Set<String>>> attributeSources = new java.util.concurrent.ConcurrentHashMap<>();
 
     public AbyssLinks(CapabilityResolver capabilityResolver,
                       AttributeBridgeRegistry attributeBridge, Logger logger) {
@@ -139,7 +142,10 @@ public final class AbyssLinks {
         if (attributeBridge == null) return;
         var symphony = attributeBridge.symphony();
         if (symphony != null && symphony.available()) {
-            safe(() -> symphony.setAttribute(player, attributeId, percent, value, sourceKey));
+            String effectSource = "axs:abyss_" + java.util.UUID.randomUUID().toString().replace("-", "");
+            attributeSources.computeIfAbsent(player.getUniqueId(), k -> new java.util.concurrent.ConcurrentHashMap<>())
+                .computeIfAbsent(sourceKey, k -> java.util.concurrent.ConcurrentHashMap.newKeySet()).add(effectSource);
+            safe(() -> symphony.setAttribute(player, attributeId, percent, value, effectSource));
             safe(symphony::recalculate, player);
         }
     }
@@ -149,6 +155,10 @@ public final class AbyssLinks {
         if (attributeBridge == null) return;
         var symphony = attributeBridge.symphony();
         if (symphony != null && symphony.available()) {
+            var groups = attributeSources.get(player.getUniqueId());
+            var sources = groups != null ? groups.remove(sourceKey) : null;
+            if (sources != null) for (String source : sources) safe(() -> symphony.removeAttribute(player, source));
+            if (groups != null && groups.isEmpty()) attributeSources.remove(player.getUniqueId(), groups);
             safe(() -> symphony.removeAttribute(player, sourceKey));
             safe(symphony::recalculate, player);
         }
@@ -164,11 +174,12 @@ public final class AbyssLinks {
      */
     public void wireAttributeStats(xuanmo.arcartxsuite.abyss.stats.CombatStatisticsService stats,
                                    java.util.function.Function<Player, AbyssInstance> instanceLookup) {
+        unregisterAttributeStats();
         if (attributeBridge == null || stats == null || !stats.enabled()) {
             return;
         }
         if (attributeBridge.hasDamageSource()) {
-            attributeBridge.registerDamageListener(e -> {
+            damageListener = e -> {
                 if (e.source() == xuanmo.arcartxsuite.api.attribute.AttributeDamageEvent.Source.BUKKIT
                     || e.dodged() || e.damage() <= 0) {
                     return;
@@ -180,10 +191,11 @@ public final class AbyssLinks {
                 if (inst != null) {
                     stats.recordDamageDealt(inst, attacker.getUniqueId(), e.damage());
                 }
-            });
+            };
+            attributeBridge.registerDamageListener(damageListener);
         }
         if (attributeBridge.hasHealSource()) {
-            attributeBridge.registerHealListener(e -> {
+            healListener = e -> {
                 if (e.sourceType() == xuanmo.arcartxsuite.api.attribute.AttributeHealEvent.SourceType.BUKKIT
                     || e.amount() <= 0) {
                     return;
@@ -195,8 +207,27 @@ public final class AbyssLinks {
                 if (inst != null) {
                     stats.recordHealing(inst, healer.getUniqueId(), e.amount());
                 }
-            });
+            };
+            attributeBridge.registerHealListener(healListener);
         }
+    }
+
+    private void unregisterAttributeStats() {
+        if (attributeBridge != null) {
+            if (damageListener != null) attributeBridge.unregisterDamageListener(damageListener);
+            if (healListener != null) attributeBridge.unregisterHealListener(healListener);
+        }
+        damageListener = null; healListener = null;
+    }
+
+    public void close() {
+        unregisterAttributeStats();
+        for (var entry : Map.copyOf(attributeSources).entrySet()) {
+            Player player = org.bukkit.Bukkit.getPlayer(entry.getKey());
+            if (player != null) for (String group : java.util.List.copyOf(entry.getValue().keySet()))
+                removeAttribute(player, group);
+        }
+        attributeSources.clear();
     }
 
     // ═══ Essentials ═══

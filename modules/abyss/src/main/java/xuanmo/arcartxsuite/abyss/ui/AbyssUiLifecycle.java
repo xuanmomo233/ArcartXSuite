@@ -15,6 +15,9 @@ final class AbyssUiLifecycle {
         String initialHandler;
         Object initialPayload;
         final Map<String, Update> queued = new LinkedHashMap<>();
+        final Map<String, Update> latest = new LinkedHashMap<>();
+        boolean retryScheduled;
+        int updateFailures;
     }
     private final PacketBridgeAPI bridge;
     private final BiConsumer<Runnable, Long> defer;
@@ -58,6 +61,7 @@ final class AbyssUiLifecycle {
         if (view == null || view.mountConfirmed || !player.isOnline()) return false;
         view.mountConfirmed = true;
         view.ready = false;
+        view.queued.putAll(view.latest);
         defer.accept(() -> initialize(player, ui, view.initialHandler, view.initialPayload, view, 1), 2L);
         return true;
     }
@@ -79,19 +83,34 @@ final class AbyssUiLifecycle {
             return;
         }
         view.ready = true;
-        for (Update update : List.copyOf(view.queued.values()))
-            bridge.sendPacket(player, ui, update.handler(), update.payload());
-        view.queued.clear();
+        flush(player,ui,view);
     }
 
     boolean send(Player player, String ui, String handler, Object payload) {
         View view = current(player, ui);
         if (view == null || bridge == null || !player.isOnline()) return false;
-        if (!view.ready) {
-            view.queued.put(handler, new Update(handler, payload));
-            return true;
+        Update update=new Update(handler,payload);
+        view.latest.put(handler,update);view.queued.put(handler,update);
+        return !view.ready || flush(player,ui,view);
+    }
+
+    private boolean flush(Player player,String ui,View view) {
+        if(view.retryScheduled)return true;
+        boolean failed=false;
+        for(Update update:List.copyOf(view.queued.values())) {
+            if(bridge.sendPacket(player,ui,update.handler(),update.payload()))view.queued.remove(update.handler(),update);
+            else failed=true;
         }
-        return bridge.sendPacket(player, ui, handler, payload);
+        if(!failed){view.updateFailures=0;return true;}
+        if(++view.updateFailures>=3) {
+            close(player,ui);player.sendMessage("§c界面更新失败，请重新打开。");return false;
+        }
+        view.retryScheduled=true;
+        defer.accept(()->{
+            view.retryScheduled=false;
+            if(player.isOnline() && current(player,ui)==view)flush(player,ui,view);
+        },2L);
+        return false;
     }
 
     void close(Player player, String ui) {

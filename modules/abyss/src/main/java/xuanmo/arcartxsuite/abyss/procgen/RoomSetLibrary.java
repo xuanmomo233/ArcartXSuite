@@ -136,6 +136,7 @@ public final class RoomSetLibrary {
             }
             ProcGenRoomAsset asset;
             try {
+                xuanmo.arcartxsuite.abyss.template.AbyssValidation.validateAsset(metadata,region,base);
                 asset = ProcGenRoomAsset.load(base, f, null, region);
             } catch (Throwable t) {
                 logger.warning("[abyss] 房间元数据解析失败 " + base

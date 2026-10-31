@@ -46,9 +46,16 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
 
     /** 玩家 → 操作令牌（每次开界面轮换）。 */
     private final Map<UUID, String> tokens = new ConcurrentHashMap<>();
+    private final Map<UUID,String> foregroundUis=new ConcurrentHashMap<>();
     /** 玩家 → 待领取宝箱（roll 结果 + 所属实例/箱名；ESC 重开返回同批防刷奖）。 */
     private record PendingChest(AbyssInstance instance, String chestName,
-                                String title, List<ItemStack> items) { }
+                                String title, List<ItemStack> items, Map<ItemStack, String> itemKeys) {
+        PendingChest(AbyssInstance instance, String chestName, String title, List<ItemStack> items) {
+            this(instance, chestName, title, items, new java.util.IdentityHashMap<>());
+            for (ItemStack item : items) itemKeys.put(item, UUID.randomUUID().toString());
+        }
+        String key(ItemStack item) { return "chest:" + instance.getInstanceId() + ":" + chestName + ":" + itemKeys.get(item); }
+    }
     private final Map<UUID, PendingChest> pendingChests = new ConcurrentHashMap<>();
     private record UiOffer(UUID instance, String target) { }
     private final Map<UUID, UiOffer> shopOffers = new ConcurrentHashMap<>();
@@ -95,10 +102,24 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
 
     private boolean checkToken(Player p, List<String> data, int index) {
         String expected = tokens.get(p.getUniqueId());
-        return expected != null && data.size() > index && expected.equals(data.get(index));
+        String ui=foregroundUis.get(p.getUniqueId());
+        if(expected==null || data.size()<=index || !expected.equals(data.get(index)) || ui==null || !views.isOpen(p,ui))return false;
+        String action=data.get(0);
+        if(action.startsWith("design_"))return Set.of(designUi(),designPickUi(),designEditUi()).contains(ui);
+        if(action.startsWith("party_"))return ui.equals(partyUi()) || ui.equals(lobbyUi());
+        if(action.startsWith("lobby_"))return ui.equals(lobbyUi());
+        if(action.startsWith("shop_"))return ui.equals(shopUi());
+        if(action.startsWith("input_"))return ui.equals(inputUi());
+        if(action.startsWith("buff_"))return ui.equals(buffUi());
+        if(action.startsWith("chest_"))return ui.equals(chestUi());
+        if(action.equals("reopen_chest"))return ui.equals(statsUi());
+        return true;
     }
 
     private void openView(Player player, String uiId, Map<String, Object> payload) {
+        String fresh=UUID.randomUUID().toString();
+        tokens.put(player.getUniqueId(),fresh);foregroundUis.put(player.getUniqueId(),uiId);
+        payload.put("action_token",fresh);
         if (!views.open(player, uiId, "init", payload, false))
             player.sendMessage("§c界面打开失败，请检查 ArcartX 客户端和UI注册状态。");
     }
@@ -107,7 +128,7 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         return switch (key) {
             case "browser" -> browserUi(); case "confirm" -> confirmUi();
             case "party" -> partyUi(); case "lobby" -> lobbyUi(); case "chest" -> chestUi();
-            case "stats" -> statsUi(); case "leaderboard" -> leaderboardUi(); case "input" -> inputUi();
+            case "stats" -> statsUi(); case "leaderboard" -> leaderboardUi(); case "input" -> inputUi(); case "hud" -> hudUi();
             case "buff" -> buffUi(); case "shop" -> shopUi(); case "design" -> designUi();
             case "design_pick" -> designPickUi(); case "design_edit" -> designEditUi();
             default -> null;
@@ -240,7 +261,7 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         payload.put("puzzleId", puzzle.id());
         payload.put("title", puzzle.title() != null ? puzzle.title() : puzzle.name());
         payload.put("hint", puzzle.hint() != null ? puzzle.hint() : "");
-        payload.put("length", puzzle.length() > 0 ? puzzle.length() : 16);
+        payload.put("length", puzzle.length() > 0 ? puzzle.length() : 4096);
         payload.put("pattern", puzzle.inputPattern() != null ? puzzle.inputPattern() : "");
         payload.put("masked", puzzle.masked() ? "1" : "0");
         payload.put("attemptsText", attemptsLeft < 0 ? ""
@@ -478,6 +499,19 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         }
     }
 
+    public void refreshPartyState(Party party) {
+        for(UUID uuid:party.observers()) {
+            Player player=org.bukkit.Bukkit.getPlayer(uuid);
+            if(player==null || !player.isOnline())continue;
+            boolean member=service.party().partyOf(player)==party;
+            if(views.isOpen(player,partyUi()) && !member)openLobby(player);
+            else if(views.isOpen(player,lobbyUi())) {
+                if(member)openParty(player); else pushLobbyList(player,"","");
+            }
+        }
+        pushPartyUpdate(party);
+    }
+
     /** 向房间 UI 推送在线玩家列表（邀请副面板）。 */
     private void pushOnlinePlayers(Player player) {
         if (!available()) return;
@@ -573,9 +607,9 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         if (!available()) {
             // UI 不可用时回退直接发放
             List<ItemStack> items = service.rewards().rollChestOptions(chest,
-                Math.min(9, chest.rows() * 9 / 2));
-            if (!items.isEmpty()) {
-                service.dispatchItems(player, items, "chest:" + chest.name());
+                Math.min(9, chest.rows() * 9));
+            if (!items.isEmpty() && service.dispatchItemsConfirmed(player, items,
+                    "chest:" + instance.getInstanceId() + ":" + player.getUniqueId() + ":" + chest.name())) {
                 instance.markTriggeredOnce(
                     AbyssService.chestClaimKey(chest.name(), player.getUniqueId()));
             }
@@ -592,6 +626,10 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
             if (pending != null) {
                 // 换箱：先把上个未领箱直接发放并标记，不吞奖励
                 flushPendingChest(player);
+                if (pendingChests.containsKey(uid)) {
+                    player.sendMessage("§c上一份宝箱奖励尚未确认保存，请稍后重试。");
+                    return;
+                }
             }
             items = new ArrayList<>(service.rewards().rollChestOptions(chest,
                 Math.min(9, chest.rows() * 9))); // UI 固定 9 槽
@@ -599,10 +637,9 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
                 chest.title(), items));
         }
         if (items.isEmpty()) {
-            // 空 roll：标记已领，不弹空 UI
+            // Generation failure must not consume the player's claim.
             pendingChests.remove(uid);
-            instance.markTriggeredOnce(
-                AbyssService.chestClaimKey(chest.name(), uid));
+            player.sendMessage("§c宝箱未生成有效奖励，请联系管理员检查物品源。");
             return;
         }
 
@@ -1681,20 +1718,25 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         if (pc == null) return;
         List<ItemStack> items = pc.items();
         if (index < 0) {
+            String request = "chest:" + pc.instance().getInstanceId() + ":" + player.getUniqueId() + ":"
+                + pc.items().stream().map(pc::key).sorted().collect(java.util.stream.Collectors.joining(","));
+            if (!service.dispatchItemsConfirmed(player, List.copyOf(items), request)) {
+                player.sendMessage("§c奖励尚未确认保存，领取资格已保留，请稍后重试。");
+                return;
+            }
             pendingChests.remove(player.getUniqueId());
             pc.instance().markTriggeredOnce(
                 AbyssService.chestClaimKey(pc.chestName(), player.getUniqueId()));
-            if (!items.isEmpty()) {
-                service.dispatchItems(player, items, "chest");
-            }
             if (available()) views.close(player, chestUi());
             return;
         }
         if (index >= 0 && index < items.size()) {
-            ItemStack it = items.remove(index);
-            if (it != null) {
-                service.dispatchItems(player, List.of(it), "chest");
+            ItemStack it = items.get(index);
+            if (it != null && !service.dispatchItemsConfirmed(player, List.of(it), pc.key(it))) {
+                player.sendMessage("§c奖励尚未确认保存，领取资格已保留，请稍后重试。");
+                return;
             }
+            items.remove(index);
             if (items.isEmpty()) {
                 pendingChests.remove(player.getUniqueId());
                 pc.instance().markTriggeredOnce(
@@ -1724,18 +1766,14 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
 
     /** 玩家掉线/关 UI 未领取：全部发放（不丢奖励）并标记已领。 */
     public void flushPendingChest(Player player) {
-        PendingChest pc = pendingChests.remove(player.getUniqueId());
-        if (pc != null && !pc.items().isEmpty()) {
-            service.dispatchItems(player, pc.items(), "chest:auto");
-            pc.instance().markTriggeredOnce(
-                AbyssService.chestClaimKey(pc.chestName(), player.getUniqueId()));
-        }
+        if (pendingChests.containsKey(player.getUniqueId())) claimChest(player, -1);
     }
 
     /** 玩家完全离开服务时清理会话态（token/HUD 标记/待领宝箱已先发放）。 */
     public void onPlayerGone(Player player) {
         UUID uid = player.getUniqueId();
         tokens.remove(uid);
+        foregroundUis.remove(uid);
         views.clear(player);
         shopOffers.remove(uid); inputOffers.remove(uid); buffOffers.remove(uid);
         hudOpen.remove(uid);

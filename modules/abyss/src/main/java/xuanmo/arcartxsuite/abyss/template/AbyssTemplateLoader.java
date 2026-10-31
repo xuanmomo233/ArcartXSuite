@@ -62,7 +62,10 @@ public final class AbyssTemplateLoader {
             logger.warning("[abyss] 地牢 " + id + " 缺少 config.yml，跳过");
             return null;
         }
-        YamlConfiguration cfg = YamlConfiguration.loadConfiguration(configFile);
+        Map<String,YamlConfiguration> validated;
+        try { validated=AbyssValidation.read(dir); AbyssValidation.validateFiles(validated,dir); }
+        catch(Exception invalid){logger.warning("[abyss] 地牢配置校验失败 "+id+": "+invalid.getMessage());return null;}
+        YamlConfiguration cfg = validated.get("config.yml");
 
         // ── 世界模板来源解析 ──
         AbyssTemplate.WorldSource worldSource = resolveWorldSource(id, dir, cfg);
@@ -71,25 +74,25 @@ public final class AbyssTemplateLoader {
             return null;
         }
 
-        MonsterConfig monsters = MonsterConfig.load(loadYaml(dir, "monsters.yml"));
-        ObstacleConfig obstacles = ObstacleConfig.load(loadYaml(dir, "obstacles.yml"));
-        InteractConfig interacts = InteractConfig.load(loadYaml(dir, "interacts.yml"));
-        TaskConfig tasks = TaskConfig.load(loadYaml(dir, "tasks.yml"));
-        ScriptConfig scripts = ScriptConfig.load(loadYaml(dir, "scripts.yml"));
-        NpcConfig npcs = NpcConfig.load(loadYaml(dir, "npcs.yml"));
-        QuestConfig quests = QuestConfig.load(loadYaml(dir, "quests.yml"));
-        PuzzleConfig puzzles = PuzzleConfig.load(loadYaml(dir, "puzzles.yml"));
-        BuffConfig buffs = BuffConfig.load(loadYaml(dir, "buffs.yml"));
-        ShopConfig shops = ShopConfig.load(loadYaml(dir, "shops.yml"));
+        MonsterConfig monsters = MonsterConfig.load(validated.get("monsters.yml"));
+        ObstacleConfig obstacles = ObstacleConfig.load(validated.get("obstacles.yml"));
+        InteractConfig interacts = InteractConfig.load(validated.get("interacts.yml"));
+        TaskConfig tasks = TaskConfig.load(validated.get("tasks.yml"));
+        ScriptConfig scripts = ScriptConfig.load(validated.get("scripts.yml"));
+        NpcConfig npcs = NpcConfig.load(validated.get("npcs.yml"));
+        QuestConfig quests = QuestConfig.load(validated.get("quests.yml"));
+        PuzzleConfig puzzles = PuzzleConfig.load(validated.get("puzzles.yml"));
+        BuffConfig buffs = BuffConfig.load(validated.get("buffs.yml"));
+        ShopConfig shops = ShopConfig.load(validated.get("shops.yml"));
         // 阶段机：stages.yml 独立文件 + scripts.yml 内联 stages:/阶段: 段并入
-        ConfigurationSection stagesFile = loadYaml(dir, "stages.yml");
-        ConfigurationSection scriptsYaml = loadYaml(dir, "scripts.yml");
+        ConfigurationSection stagesFile = validated.get("stages.yml");
+        ConfigurationSection scriptsYaml = validated.get("scripts.yml");
         ConfigurationSection inlineStages = scriptsYaml == null ? null
             : firstSection(scriptsYaml.getConfigurationSection("stages"),
                 scriptsYaml.getConfigurationSection("阶段"));
         StageConfig stages = StageConfig.load(stagesFile, inlineStages);
         // procgen.yml 存在即启用随机拼装地牢
-        ProcGenConfig procgen = ProcGenConfig.load(loadYaml(dir, "procgen.yml"), id);
+        ProcGenConfig procgen = ProcGenConfig.load(validated.get("procgen.yml").getKeys(false).isEmpty()?null:validated.get("procgen.yml"), id);
 
         // floors 模式：floors.yml（层链+defaults）+ rooms.yml（房间模板池）
         AbyssTemplate.Mode mode;
@@ -100,7 +103,7 @@ public final class AbyssTemplateLoader {
             mode = AbyssTemplate.Mode.CLASSIC;
         }
         FloorConfig floors = mode == AbyssTemplate.Mode.FLOORS
-            ? FloorConfig.load(loadYaml(dir, "floors.yml"), loadYaml(dir, "rooms.yml"))
+            ? FloorConfig.load(validated.get("floors.yml"), validated.get("rooms.yml"))
             : FloorConfig.EMPTY;
         if (mode == AbyssTemplate.Mode.FLOORS && floors.floors().isEmpty()) {
             logger.warning("[abyss] 地牢 " + id + " mode=floors 但 floors.yml 无楼层定义，回退 classic");
@@ -108,10 +111,10 @@ public final class AbyssTemplateLoader {
         }
 
         // rewards.yml + chest_rewards.yml 合并
-        RewardConfig rewards = RewardConfig.load(loadYaml(dir, "rewards.yml"));
+        RewardConfig rewards = RewardConfig.load(validated.get("rewards.yml"));
         Map<String, RewardConfig.ChestReward> chests =
             new LinkedHashMap<>(rewards.chestRewards());
-        chests.putAll(RewardConfig.loadChestOnly(loadYaml(dir, "chest_rewards.yml")));
+        chests.putAll(RewardConfig.loadChestOnly(validated.get("chest_rewards.yml")));
         rewards = new RewardConfig(rewards.rewards(), chests);
 
         String functions = readText(new File(dir, "functions.js"));

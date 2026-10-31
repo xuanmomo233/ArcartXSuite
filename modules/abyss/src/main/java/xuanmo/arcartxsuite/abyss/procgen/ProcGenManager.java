@@ -57,6 +57,7 @@ public final class ProcGenManager {
         List<RoomRuntime> rooms;
         ProcGenConfig cfg;
         final Map<String, Map<String, String>> assetBaselines = new HashMap<>();
+        final Map<RoomRuntime, Map<String, String>> roomBaselines = new java.util.IdentityHashMap<>();
         /** 房间运行态：roomIndex → state。 */
         final Map<Integer, RoomState> roomState = new HashMap<>();
         final Map<Integer, Long> clearedAt = new HashMap<>();
@@ -116,8 +117,7 @@ public final class ProcGenManager {
         if (cfg == null) return null;
         Map<RoomKind, List<ProcGenRoomAsset>> byKind = library.byKind(cfg.roomSet());
         if (byKind.isEmpty()) {
-            logger.warning("[abyss] procgen 房间集为空: " + cfg.roomSet());
-            return null;
+            throw new IllegalStateException("procgen 房间集为空: " + cfg.roomSet());
         }
         // 种子
         long seed = switch (cfg.seedMode()) {
@@ -129,11 +129,10 @@ public final class ProcGenManager {
         // 布局原点：以 (0, baseY, 0) 为中心向四周铺，负坐标从 -pitch*N 起
         Layout layout = LayoutGenerator.generate(byKind, cfg, seed, 64, 0, 0);
         if (layout == null) {
-            logger.warning("[abyss] procgen 布局生成失败: " + t.id());
-            return null;
+            throw new IllegalStateException("procgen 布局生成失败: " + t.id() + " seed=" + seed);
         }
         Result res = new ProcGenMaterializer(logger).materialize(world, layout, cfg);
-        if (res == null) return null;
+        if (res == null || res.spawn == null) throw new IllegalStateException("procgen 物化不完整: " + t.id());
 
         InstState st = new InstState();
         st.layout = layout;
@@ -141,6 +140,8 @@ public final class ProcGenManager {
         st.cfg = cfg;
         for (var room : res.rooms) st.assetBaselines.putIfAbsent(room.placed.asset.name(),
             assetHashes(library.dir(cfg.roomSet()), room.placed.asset.name()));
+        for (var room : res.rooms) st.roomBaselines.put(room,
+            Map.copyOf(st.assetBaselines.get(room.placed.asset.name())));
         for (int i = 0; i < res.rooms.size(); i++) {
             st.roomState.put(i, RoomState.WAITING);
         }
@@ -382,17 +383,16 @@ public final class ProcGenManager {
             String name, org.bukkit.configuration.file.YamlConfiguration metadata,
             Map<String, String> baseline, int[] bounds) {
         public void save() throws Exception {
-            java.nio.file.Path geometry = new java.io.File(root, name + ".region.yml").toPath();
-            java.nio.file.Path meta = new java.io.File(root, name + ".yml").toPath();
-            java.nio.file.Path temp = java.nio.file.Files.createTempFile(root.toPath(), ".capture-", ".yml");
-            try {
-                volume.save(temp.toFile());
+            xuanmo.arcartxsuite.abyss.design.DesignWriter.commit(writes(),baseline,root.toPath());
+        }
+        public Map<java.nio.file.Path,byte[]> writes() throws Exception {
+            java.nio.file.Path geometry = new java.io.File(root, name + ".region.yml").toPath().toAbsolutePath().normalize();
+            java.nio.file.Path meta = new java.io.File(root, name + ".yml").toPath().toAbsolutePath().normalize();
                 var writes = new java.util.LinkedHashMap<java.nio.file.Path, byte[]>();
-                writes.put(geometry, java.nio.file.Files.readAllBytes(temp));
+                writes.put(geometry,volume.toYaml().getBytes(java.nio.charset.StandardCharsets.UTF_8));
                 metadata.set("geometry-source", "region");
                 writes.put(meta, metadata.saveToString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
-                xuanmo.arcartxsuite.abyss.design.DesignWriter.commit(writes, baseline, root.toPath());
-            } finally { java.nio.file.Files.deleteIfExists(temp); }
+                return writes;
         }
     }
 
@@ -426,7 +426,7 @@ public final class ProcGenManager {
             java.io.File meta = new java.io.File(root, placed.asset.name() + ".yml");
             var yaml = xuanmo.arcartxsuite.abyss.design.DesignWriter.load(meta.toPath());
             return new DesignRoomCapture(root, volume, placed.asset.name(), yaml,
-                state.assetBaselines.get(placed.asset.name()),
+                state.roomBaselines.get(room),
                 new int[]{room.minX, room.minY, room.minZ, room.maxX, room.maxY, room.maxZ});
         }
         throw new IllegalArgumentException("请站在要保存的房间内部；走廊不属于房间构件");
@@ -443,8 +443,14 @@ public final class ProcGenManager {
     }
 
     public void acknowledgeDesignRoom(AbyssInstance instance, DesignRoomCapture capture) {
+        // Each placed copy keeps its own generation baseline. Saving one copy must not
+        // authorise an older sibling copy to overwrite the newly published shared asset.
         InstState state = states.get(instance.getInstanceId());
-        if (state != null) state.assetBaselines.put(capture.name(), assetHashes(capture.root(), capture.name()));
+        if (state != null) for (RoomRuntime room : state.rooms) {
+            int[] bounds = {room.minX, room.minY, room.minZ, room.maxX, room.maxY, room.maxZ};
+            if (java.util.Arrays.equals(bounds, capture.bounds()))
+                state.roomBaselines.put(room, assetHashes(capture.root(), capture.name()));
+        }
     }
 
 

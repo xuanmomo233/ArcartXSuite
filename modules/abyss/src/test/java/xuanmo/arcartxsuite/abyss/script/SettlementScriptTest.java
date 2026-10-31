@@ -75,4 +75,19 @@ class SettlementScriptTest {
         instance.designMode(true);service.completeDungeon(instance);
         assertEquals(AbyssStatus.PREPARING,instance.getStatus());assertEquals(0,marks.get());
     }
+    @Test void completionWritesOneRecordEvenWithLeaderboardEnabledAndRepeatedCallbacks()throws Exception {
+        var player=mock(org.bukkit.entity.Player.class);UUID uuid=UUID.randomUUID();
+        when(player.getUniqueId()).thenReturn(uuid);when(player.isOnline()).thenReturn(true);
+        when(((Server)serverField.get(null)).getPlayer(uuid)).thenReturn(player);instance.addPlayer(player);
+        var data=mock(xuanmo.arcartxsuite.abyss.data.PlayerDataManager.class);
+        var leaderboard=mock(xuanmo.arcartxsuite.abyss.leaderboard.LeaderboardService.class);
+        var stats=mock(xuanmo.arcartxsuite.abyss.stats.CombatStatisticsService.class);
+        for(var entry:Map.<String,Object>of("playerData",data,"leaderboard",leaderboard,"stats",stats).entrySet()) {
+            var field=AbyssService.class.getDeclaredField(entry.getKey());field.setAccessible(true);field.set(service,entry.getValue());
+        }
+        instance.transitionTo(AbyssStatus.PREPARING,AbyssStatus.ACTIVE);
+        service.completeDungeon(instance);service.completeDungeon(instance);
+        verify(data,times(1)).saveRecord(eq(uuid),eq("test"),anyLong());
+        verify(leaderboard,never()).recordCompletion(any(),anyString(),anyLong());
+    }
 }

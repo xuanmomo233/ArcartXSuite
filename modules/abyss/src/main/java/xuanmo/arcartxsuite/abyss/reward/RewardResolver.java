@@ -35,17 +35,25 @@ public final class RewardResolver {
     private final PendingRewardService pendingRewardService;
     private final CurrencyBridgeAPI currencyManager;
     private final Logger logger;
+    private final xuanmo.arcartxsuite.api.item.ItemMatcherAPI matcher;
 
     public RewardResolver(ItemSourceRegistry itemSourceRegistry,
                           ItemRewardDispatcher dispatcher,
                           PendingRewardService pendingRewardService,
                           CurrencyBridgeAPI currencyManager,
                           Logger logger) {
+        this(itemSourceRegistry,dispatcher,pendingRewardService,currencyManager,logger,null);
+    }
+
+    public RewardResolver(ItemSourceRegistry itemSourceRegistry,ItemRewardDispatcher dispatcher,
+            PendingRewardService pendingRewardService,CurrencyBridgeAPI currencyManager,Logger logger,
+            xuanmo.arcartxsuite.api.item.ItemMatcherAPI matcher) {
         this.itemSourceRegistry = itemSourceRegistry;
         this.dispatcher = dispatcher;
         this.pendingRewardService = pendingRewardService;
         this.currencyManager = currencyManager;
         this.logger = logger;
+        this.matcher=matcher;
     }
 
     /** 按名字发放奖励集（支持 random 型递归）。 */
@@ -55,17 +63,22 @@ public final class RewardResolver {
             logger.warning("[abyss] 奖励集不存在: " + rewardName);
             return;
         }
-        grantSet(player, set, instance, 0);
+        List<PendingReward> batch = new ArrayList<>();
+        collectSet(player, set, instance, 0, batch);
+        if (!queue(player, "reward:" + instance.getInstanceId() + ":" + java.util.UUID.randomUUID(), batch))
+            throw new IllegalStateException("奖励未确认保存，请保留结算记录并重试: " + rewardName);
     }
 
-    private void grantSet(Player player, RewardSet set, AbyssInstance instance, int depth) {
-        if (depth > 8) return; // 防循环 random 引用
+    private void collectSet(Player player, RewardSet set, AbyssInstance instance, int depth, List<PendingReward> batch) {
+        if(batch.size()>4096)throw new IllegalArgumentException("单次奖励条目超过4096");
+        if (depth > 8) throw new IllegalArgumentException("奖励池循环或嵌套过深");
         if (set.random()) {
             for (int i = 0; i < Math.max(1, set.picks()); i++) {
                 String picked = pickWeighted(set.pool());
                 if (picked != null) {
                     RewardSet sub = instance.getTemplate().rewards().rewards().get(picked);
-                    if (sub != null) grantSet(player, sub, instance, depth + 1);
+                    if (sub == null) throw new IllegalArgumentException("奖励引用不存在: " + picked);
+                    collectSet(player, sub, instance, depth + 1, batch);
                 }
             }
             return;
@@ -74,43 +87,69 @@ public final class RewardResolver {
         List<ItemStack> items = new ArrayList<>();
         for (String def : set.items()) {
             ItemStack it = buildItem(def, player);
-            if (it != null) items.add(it);
+            items.add(requireItem(it, def));
         }
         for (String def : set.mythicItems()) {
             ItemStack it = buildItem("mythic:" + def, player);
-            if (it != null) items.add(it);
+            items.add(requireItem(it, def));
         }
         for (String def : set.neigeItems()) {
             ItemStack it = buildItem("neige:" + def, player);
-            if (it != null) items.add(it);
+            items.add(requireItem(it, def));
         }
         for (String def : set.overtureItems()) {
             ItemStack it = buildItem("overture:" + def, player);
-            if (it != null) items.add(it);
+            items.add(requireItem(it, def));
         }
         for (String def : set.mmoItems()) {
             ItemStack it = buildItem("mmoitems:" + def, player);
-            if (it != null) items.add(it);
+            items.add(requireItem(it, def));
         }
         if (!items.isEmpty()) {
-            dispatcher.dispatchItems(player, items,
-                ItemRewardDispatcher.DispatchOptions.builder("abyss")
-                    .sourceDetail("reward:" + set.name())
-                    .build());
+            for (ItemStack item : items) batch.add(serialized(player, item, "reward:" + set.name()));
         }
         // 货币
         if (set.money() != 0) {
-            giveMoney(player, set.money(), set.currency());
+            batch.add(PendingReward.currency(player.getUniqueId(), "abyss", set.currency(), set.money(), set.name()));
         }
         // 经验
         if (set.exp() != 0) {
-            player.giveExp(set.exp());
+            batch.add(PendingReward.command(player.getUniqueId(), "abyss",
+                List.of("minecraft:experience add {player} " + set.exp() + " points"), set.name()));
         }
         // 命令（{player} 占位）
-        for (String cmd : set.commands()) {
-            String c = cmd.replace("{player}", player.getName());
-            Bukkit.dispatchCommand(Bukkit.getConsoleSender(), c);
+        for(String command:set.commands())batch.add(PendingReward.command(player.getUniqueId(),"abyss",List.of(command),set.name()));
+    }
+
+    private static ItemStack requireItem(ItemStack item, String definition) {
+        if (item == null || item.getType().isAir() || item.getAmount() < 1)
+            throw new IllegalArgumentException("奖励物品无法生成: " + definition);
+        return item;
+    }
+
+    private static PendingReward serialized(Player player, ItemStack item, String detail) {
+        String bytes = java.util.Base64.getEncoder().encodeToString(xuanmo.arcartxsuite.api.util.ItemSerializer.serialize(item));
+        return PendingReward.itemSerialized(player.getUniqueId(), "abyss", bytes, detail);
+    }
+
+    public boolean queueItems(Player player, List<ItemStack> items, String requestKey) {
+        List<PendingReward> batch = new ArrayList<>();
+        for (ItemStack item : items) batch.add(serialized(player, requireItem(item, requestKey), requestKey));
+        return queue(player, requestKey, batch);
+    }
+
+    private boolean queue(Player player, String requestKey, List<PendingReward> batch) {
+        if (batch.isEmpty()) return true;
+        boolean confirmed=false;
+        try { confirmed=pendingRewardService!=null && pendingRewardService.savePendingBatchConfirmed(requestKey,batch); }
+        catch(RuntimeException | LinkageError error){logger.warning("[abyss] 宿主奖励确认API不可用: "+error.getMessage());}
+        if (!confirmed) {
+            player.sendMessage("§c奖励暂存未完成，尚未确认领取，请稍后重试或联系管理员。");
+            return false;
         }
+        try { pendingRewardService.flushPlayer(player); }
+        catch (RuntimeException error) { logger.warning("[abyss] 奖励已暂存，等待上线补发: " + error.getMessage()); }
+        return true;
     }
 
     /** 货币发放（CurrencyBridge.deposit）。 */
@@ -121,6 +160,14 @@ public final class RewardResolver {
             return false;
         }
         return bridge.deposit(player, BigDecimal.valueOf(amount)).success();
+    }
+
+    public boolean refundMoney(Player player, double amount, String currencyId, String requestKey) {
+        try {
+            var bridge=currencyManager.bridge(currencyId);
+            if(bridge!=null && bridge.available() && bridge.deposit(player,BigDecimal.valueOf(amount)).success()) return true;
+        } catch (RuntimeException error) { logger.warning("[abyss] 即时退款失败，转宿主待发: "+error.getMessage()); }
+        return queue(player,requestKey,List.of(PendingReward.currency(player.getUniqueId(),"abyss",currencyId,amount,"entry-refund")));
     }
 
     /** 货币扣除（CurrencyBridge.withdraw）。 */
@@ -143,90 +190,56 @@ public final class RewardResolver {
      * overture:id:n / mmo:TYPE:ID:n（或 mmoitems:TYPE;ID:n）/ 裸 MATERIAL[:n]
      */
     public @Nullable ItemStack buildItem(String def, @Nullable Player player) {
-        if (def == null || def.isBlank()) return null;
-        String[] v = def.trim().split(":");
-        String source = v[0].toLowerCase();
         try {
-            return switch (source) {
-                case "material", "item", "minecraft" -> {
-                    Material m = Material.matchMaterial(v[1].toUpperCase());
-                    if (m == null) yield null;
-                    int amount = v.length > 2 ? Integer.parseInt(v[2]) : 1;
-                    yield new ItemStack(m, amount);
-                }
-                case "mythic" -> itemSourceRegistry.generateItem("mythic", v[1],
-                    v.length > 2 ? Integer.parseInt(v[2]) : 1, null, player);
-                case "neige" -> itemSourceRegistry.generateItem("neige", v[1],
-                    v.length > 2 ? Integer.parseInt(v[2]) : 1, null, player);
-                case "overture" -> itemSourceRegistry.generateItem("overture", v[1],
-                    v.length > 2 ? Integer.parseInt(v[2]) : 1, null, player);
-                case "mmo", "mmoitems" -> {
-                    // mmo:TYPE:ID:n → "TYPE;ID"
-                    String id = v.length > 3 ? v[1] + ";" + v[2]
-                        : v.length > 2 ? v[1] + ";" + v[2] : v[1];
-                    int amount = v.length > 3 ? Integer.parseInt(v[3]) : 1;
-                    yield itemSourceRegistry.generateItem("mmoitems", id, amount, null, player);
-                }
-                default -> {
-                    Material m = Material.matchMaterial(v[0].toUpperCase());
-                    if (m == null) yield null;
-                    yield new ItemStack(m, v.length > 1 ? Integer.parseInt(v[1]) : 1);
-                }
-            };
-        } catch (Throwable t) {
-            logger.warning("[abyss] 物品构建失败 " + def + ": " + t.getMessage());
+            ItemDefinition item=ItemDefinition.parse(def);
+            return itemSourceRegistry.generateItem(item.source(),item.id(),item.amount(),null,player);
+        } catch(RuntimeException error) {
+            logger.warning("[abyss] 物品构建失败 "+def+": "+error.getMessage());
             return null;
         }
     }
 
     /** 判断背包物品是否匹配定义串（交互点 required_item / take_item 用）。 */
     public boolean matches(String def, ItemStack hand) {
-        if (hand == null || def == null) return false;
-        String[] v = def.trim().split(":");
-        String source = v[0].toLowerCase();
+        if(hand==null || def==null)return false;
         try {
-            return switch (source) {
-                case "material", "item", "minecraft" -> {
-                    Material m = Material.matchMaterial(v[1].toUpperCase());
-                    yield m != null && hand.getType() == m;
-                }
-                case "mythic" -> v[1].equalsIgnoreCase(itemSourceRegistry.mythicItemId(hand));
-                case "neige" -> v[1].equalsIgnoreCase(itemSourceRegistry.neigeItemId(hand));
-                case "overture" -> v[1].equalsIgnoreCase(itemSourceRegistry.overtureItemId(hand));
-                case "mmo", "mmoitems" -> {
-                    String id = v.length > 2 ? v[1] + ";" + v[2] : v[1];
-                    yield id.equalsIgnoreCase(itemSourceRegistry.mmoItemId(hand));
-                }
-                default -> {
-                    Material m = Material.matchMaterial(v[0].toUpperCase());
-                    yield m != null && hand.getType() == m;
-                }
+            ItemDefinition item=ItemDefinition.parse(def);
+            if(item.source().equals("mmoitems"))
+                return item.id().equalsIgnoreCase(itemSourceRegistry.mmoItemId(hand));
+            if(matcher!=null) {
+                String id=item.id().toLowerCase(java.util.Locale.ROOT);
+                var material=item.source().equals("minecraft")?List.of(id):List.<String>of();
+                var mythic=item.source().equals("mythic")?List.of(id):List.<String>of();
+                var neige=item.source().equals("neige")?List.of(id):List.<String>of();
+                var overture=item.source().equals("overture")?List.of(id):List.<String>of();
+                return matcher.matches(new xuanmo.arcartxsuite.api.item.ItemMatcher(material,mythic,neige,overture,
+                    List.of(),List.of(),List.of(),List.of(),Map.of(),List.of(),List.of()),hand);
+            }
+            return switch(item.source()) {
+                case "minecraft" -> hand.getType()==Material.matchMaterial(item.id());
+                case "mythic" -> item.id().equalsIgnoreCase(itemSourceRegistry.mythicItemId(hand));
+                case "neige" -> item.id().equalsIgnoreCase(itemSourceRegistry.neigeItemId(hand));
+                case "overture" -> item.id().equalsIgnoreCase(itemSourceRegistry.overtureItemId(hand));
+                default -> false;
             };
-        } catch (Throwable t) {
-            return false;
-        }
+        } catch(RuntimeException error) { return false; }
     }
 
     /** 从背包移除匹配物品（take_item）。 */
     public boolean takeItem(Player player, String def) {
-        String[] v = def.trim().split(":");
-        int need = 1;
-        if (v.length >= 2 && v[v.length - 1].matches("\\d+")) {
-            try { need = Integer.parseInt(v[v.length - 1]); } catch (NumberFormatException ignored) { }
-            def = def.substring(0, def.lastIndexOf(':'));
+        ItemDefinition item=ItemDefinition.parse(def);
+        ItemStack[] copy=java.util.Arrays.stream(player.getInventory().getContents())
+            .map(it->it==null?null:it.clone()).toArray(ItemStack[]::new);
+        int remaining=item.amount();
+        for(int i=0;i<copy.length && remaining>0;i++) {
+            ItemStack stack=copy[i];
+            if(stack==null || !matches(item.source()+":"+item.id(),stack))continue;
+            int take=Math.min(remaining,stack.getAmount()); remaining-=take;
+            stack.setAmount(stack.getAmount()-take); if(stack.getAmount()==0)copy[i]=null;
         }
-        int remaining = need;
-        ItemStack[] contents = player.getInventory().getContents();
-        for (int i = 0; i < contents.length && remaining > 0; i++) {
-            ItemStack it = contents[i];
-            if (it == null || !matches(def, it)) continue;
-            int take = Math.min(remaining, it.getAmount());
-            it.setAmount(it.getAmount() - take);
-            if (it.getAmount() <= 0) contents[i] = null;
-            remaining -= take;
-        }
-        player.getInventory().setContents(contents);
-        return remaining <= 0;
+        if(remaining>0)return false;
+        player.getInventory().setContents(copy);
+        return true;
     }
 
     /** 加权随机抽取奖励 id。 */

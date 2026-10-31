@@ -84,6 +84,27 @@ class AbyssPacketPayloadTest {
         ui.openBrowser(player);assertClientFields("browser",flush());
         ui.openLobby(player);assertClientFields("lobby",flush());
     }
+    @Test void oldWindowTokenCannotCreatePartyAfterNavigation() {
+        ui.openBrowser(player);String oldToken=(String)flush().get("action_token");
+        ui.openLobby(player);String fresh=(String)flush().get("action_token");assertNotEquals(oldToken,fresh);
+        ui.handlePacket(player,"abyss",List.of("lobby_create",oldToken));assertNull(service.party().partyOf(player));
+        ui.handlePacket(player,"abyss",List.of("lobby_create",fresh));assertNotNull(service.party().partyOf(player));
+    }
+    @Test void chestOnlyConsumesAnItemAfterHostPersistenceConfirmation()throws Exception {
+        var rewards=mock(xuanmo.arcartxsuite.abyss.reward.RewardResolver.class);set("rewards",rewards);
+        when(rewards.rollChestOptions(any(),anyInt())).thenReturn(List.of(new org.bukkit.inventory.ItemStack(Material.STONE,2),new org.bukkit.inventory.ItemStack(Material.STONE,3)));
+        when(rewards.queueItems(any(),anyList(),anyString())).thenReturn(false,true);
+        ui.open(player,new RewardConfig.ChestReward("test","test",1,List.of()),instance);
+        String token=(String)flush().get("action_token");
+        var field=AbyssUiService.class.getDeclaredField("pendingChests");field.setAccessible(true);
+        var pending=(Map<?,?>)field.get(ui);Object chest=pending.get(player.getUniqueId());
+        var items=chest.getClass().getDeclaredMethod("items");items.setAccessible(true);
+        ui.handlePacket(player,"abyss",List.of("chest_claim_one","0",token));
+        assertEquals(2,((List<?>)items.invoke(chest)).size());
+        ui.handlePacket(player,"abyss",List.of("chest_claim_one","0",token));
+        assertEquals(1,((List<?>)items.invoke(chest)).size());
+        verify(rewards,times(2)).queueItems(eq(player),anyList(),anyString());
+    }
     Player peer()throws Exception {
         Player peer=mock(Player.class);when(peer.getUniqueId()).thenReturn(UUID.randomUUID());
         when(peer.getName()).thenReturn("Applicant");when(peer.isOnline()).thenReturn(true);

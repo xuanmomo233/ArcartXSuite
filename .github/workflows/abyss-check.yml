@@ -6,10 +6,16 @@ on:
     branches: [main, 'codex/**']
     paths:
       - 'modules/abyss/**'
+      - 'axs-api/**'
+      - 'axs-core/**'
+      - 'src/main/java/xuanmo/arcartxsuite/bridge/DefaultPendingRewardService.java'
       - '.github/workflows/abyss-check.yml'
   pull_request:
     paths:
       - 'modules/abyss/**'
+      - 'axs-api/**'
+      - 'axs-core/**'
+      - 'src/main/java/xuanmo/arcartxsuite/bridge/DefaultPendingRewardService.java'
       - '.github/workflows/abyss-check.yml'
 
 permissions:
@@ -44,14 +50,14 @@ jobs:
       - name: Check all bundled UI contracts
         run: python modules/abyss/src/test/ui/verify_abyss_ui.py
       - name: Test and build protected Abyss Jar
-        run: gradle :modules:abyss:build -PskipNativeCheck=true --no-daemon --no-configuration-cache
+        run: gradle :axs-core:test :modules:abyss:build -PskipNativeCheck=true --no-daemon --no-configuration-cache
       - name: Summarize test results
         if: always()
         run: |
           python - <<'PY'
           import glob, os, xml.etree.ElementTree as ET
           tests = failures = errors = 0
-          for file in glob.glob('modules/abyss/build/test-results/test/TEST-*.xml'):
+          for file in glob.glob('modules/abyss/build/test-results/test/TEST-*.xml') + glob.glob('axs-core/build/test-results/test/TEST-*.xml'):
               suite = ET.parse(file).getroot()
               tests += int(suite.get('tests', 0))
               failures += int(suite.get('failures', 0))
@@ -71,6 +77,8 @@ jobs:
           path: |
             modules/abyss/build/reports/tests/test/
             modules/abyss/build/test-results/test/
+            axs-core/build/reports/tests/test/
+            axs-core/build/test-results/test/
           if-no-files-found: warn
       - name: Upload protected Jar and changed map resources
         uses: actions/upload-artifact@v5

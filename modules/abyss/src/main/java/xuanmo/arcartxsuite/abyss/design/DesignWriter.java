@@ -8,14 +8,12 @@ import java.util.*;
 import java.util.logging.Logger;
 import org.bukkit.configuration.file.YamlConfiguration;
 import xuanmo.arcartxsuite.abyss.template.AbyssTemplate;
+import xuanmo.arcartxsuite.abyss.template.AbyssValidation;
 
 /** Strict YAML parsing, conflict detection, staging, durable backups and rollback. */
 public final class DesignWriter {
     public record Result(boolean ok, int objects, int deletions, List<String> errors) { }
-    public static final List<String> FILES = List.of("config.yml", "floors.yml", "rooms.yml",
-        "monsters.yml", "interacts.yml", "obstacles.yml", "npcs.yml", "puzzles.yml", "tasks.yml",
-        "rewards.yml", "chest_rewards.yml", "buffs.yml", "shops.yml", "scripts.yml",
-        "stages.yml", "quests.yml", "procgen.yml");
+    public static final List<String> FILES = AbyssValidation.FILES;
     private DesignWriter() { }
 
     public static String hash(Path path) throws Exception {
@@ -24,7 +22,9 @@ public final class DesignWriter {
     }
     public static void captureBaseline(AbyssTemplate template, DesignSession session) {
         session.fileHashes().clear();
-        for (String file : FILES) {
+        Set<String> baselineFiles=new LinkedHashSet<>(FILES);
+        for(DesignObject object:session.objects().values()) if(object.kind()==DesignObject.Kind.DOCUMENT) baselineFiles.add(object.file());
+        for (String file : baselineFiles) {
             try { session.fileHashes().put(file, hash(template.dir().toPath().resolve(file))); }
             catch (Exception ex) { throw new IllegalStateException("无法读取设计基线: " + file, ex); }
         }
@@ -37,10 +37,22 @@ public final class DesignWriter {
     }
     public static Result save(AbyssTemplate template, DesignSession session, Logger logger) {
         try {
-            Map<String, YamlConfiguration> files = prepare(template, session);
-            Map<Path, byte[]> writes = new LinkedHashMap<>();
+            Map<Path, byte[]> writes = prepareWrites(template,session);
+            commit(writes, session.fileHashes(), template.dir().toPath());
+            return new Result(true, (int) session.objects().values().stream().filter(DesignObject::dirty).count(),
+                session.deletions().size(), List.of());
+        } catch (Exception ex) {
+            saveDraft(template, session, logger);
+            logger.warning("[abyss] 设计未保存，编辑内容已保留: " + ex.getMessage());
+            return new Result(false, 0, 0, List.of(String.valueOf(ex.getMessage())));
+        }
+    }
+
+    public static Map<Path,byte[]> prepareWrites(AbyssTemplate template,DesignSession session) throws Exception {
+            Map<String,YamlConfiguration> files=prepare(template,session);
+            Map<Path,byte[]> writes=new LinkedHashMap<>();
             for (var entry : files.entrySet()) {
-                Path path = template.dir().toPath().resolve(entry.getKey());
+                Path path = template.dir().toPath().resolve(entry.getKey()).toAbsolutePath().normalize();
                 DesignObject document = session.get("document:" + entry.getKey());
                 if (document != null && document.dirty() && document.strList("content").isEmpty()
                     && !entry.getKey().equals("config.yml")) {
@@ -51,14 +63,7 @@ public final class DesignWriter {
                 if (!Files.exists(path) && entry.getValue().getKeys(false).isEmpty()) continue;
                 if (!Files.exists(path) || !load(path).saveToString().equals(entry.getValue().saveToString())) writes.put(path, bytes);
             }
-            commit(writes, session.fileHashes(), template.dir().toPath());
-            return new Result(true, (int) session.objects().values().stream().filter(DesignObject::dirty).count(),
-                session.deletions().size(), List.of());
-        } catch (Exception ex) {
-            saveDraft(template, session, logger);
-            logger.warning("[abyss] 设计未保存，编辑内容已保留: " + ex.getMessage());
-            return new Result(false, 0, 0, List.of(String.valueOf(ex.getMessage())));
-        }
+            return writes;
     }
     /** A readable recovery copy, separate from published definitions and their conflict baselines. */
     public static void saveDraft(AbyssTemplate template, DesignSession session, Logger logger) {
@@ -84,8 +89,7 @@ public final class DesignWriter {
         } catch (Exception failure) { logger.warning("[abyss] 草稿恢复副本写入失败: " + failure.getMessage()); }
     }
     public static Map<String, YamlConfiguration> prepare(AbyssTemplate template, DesignSession session) throws Exception {
-        Map<String, YamlConfiguration> files = new LinkedHashMap<>();
-        for (String file : FILES) files.put(file, load(template.dir().toPath().resolve(file)));
+        Map<String, YamlConfiguration> files = AbyssValidation.read(template.dir());
         Set<String> documents = new HashSet<>();
         for (DesignObject o : session.objects().values()) {
             if (!o.dirty() || o.kind() != DesignObject.Kind.DOCUMENT) continue;
@@ -161,7 +165,7 @@ public final class DesignWriter {
             config.set("world.template", "world"); config.set("world-source", null);
             config.set("world_source", null); config.set("world.design-snapshot", true);
         }
-        DesignValidation.validate(files);
+        AbyssValidation.validateFiles(files,template.dir());
         return files;
     }
     private static void materialize(Map<String, YamlConfiguration> files) throws Exception {
@@ -194,7 +198,12 @@ public final class DesignWriter {
                 Path target = entry.getKey();
                 byte[] original = Files.exists(target) ? Files.readAllBytes(target) : null;
                 originals.put(target, original);
-                if (original != null) Files.write(backup.resolve(target.getFileName()), original);
+                if (original != null) {
+                    String name=target.toAbsolutePath().normalize().getParent().equals(root.toAbsolutePath().normalize())
+                        ? target.getFileName().toString()
+                        : UUID.nameUUIDFromBytes(target.toAbsolutePath().normalize().toString().getBytes(StandardCharsets.UTF_8))+"-"+target.getFileName();
+                    Files.write(backup.resolve(name),original);
+                }
                 if (entry.getValue() == null) staged.put(target, null);
                 else {
                     Path temp = Files.createTempFile(root, ".design-", ".tmp");

@@ -23,6 +23,9 @@ public final class PlayerDataManager {
     private final JdbcAbyssRepository repository;
     private final Logger logger;
     private final ExecutorService dbExecutor;
+    private final int defaultStamina;
+    private final Map<UUID, java.util.concurrent.CompletableFuture<Void>> loading = new ConcurrentHashMap<>();
+    private final java.util.Set<UUID> ready = ConcurrentHashMap.newKeySet();
 
     private final Map<UUID, int[]> staminaCache = new ConcurrentHashMap<>();      // [stamina]
     private final Map<UUID, Long> staminaRegenCache = new ConcurrentHashMap<>();  // lastRegenMillis
@@ -36,8 +39,13 @@ public final class PlayerDataManager {
     private record RecordEntry(long completions, long bestTime, long expiry) { }
 
     public PlayerDataManager(JdbcAbyssRepository repository, Logger logger) {
+        this(repository, logger, 100);
+    }
+
+    public PlayerDataManager(JdbcAbyssRepository repository, Logger logger, int defaultStamina) {
         this.repository = repository;
         this.logger = logger;
+        this.defaultStamina = defaultStamina;
         this.dbExecutor = Executors.newSingleThreadExecutor(r -> {
             Thread t = new Thread(r, "Abyss-DB");
             t.setDaemon(true);
@@ -48,25 +56,43 @@ public final class PlayerDataManager {
     // ═══ 体力 ═══
 
     public int getStamina(UUID player, int maxIfAbsent) {
+        preload(player);
         int[] c = staminaCache.get(player);
-        if (c != null) return c[0];
-        // 异步加载并暂用最大值（避免阻塞主线程）
-        staminaCache.put(player, new int[]{maxIfAbsent});
+        return ready.contains(player) && c != null ? c[0] : 0;
+    }
+
+    public boolean ready(UUID player) { preload(player); return ready.contains(player); }
+
+    public java.util.concurrent.CompletableFuture<Void> preload(UUID player) {
+        var existing = loading.get(player);
+        if (existing != null) return existing;
+        var future = new java.util.concurrent.CompletableFuture<Void>();
+        existing = loading.putIfAbsent(player, future);
+        if (existing != null) return existing;
         dbExecutor.submit(() -> {
             try {
-                long[] r = repository.loadStamina(player);
-                if (r != null) {
-                    staminaCache.put(player, new int[]{(int) r[0]});
-                    staminaRegenCache.put(player, r[1]);
+                long[] row = repository.loadStamina(player);
+                Map<String, Long> cooldowns = repository.loadAllCooldowns(player);
+                synchronized (this) {
+                    if (loading.get(player) == future) {
+                        staminaCache.put(player, new int[]{row != null ? (int) row[0] : defaultStamina});
+                        staminaRegenCache.put(player, row != null ? row[1] : System.currentTimeMillis());
+                        cooldownCache.put(player, new ConcurrentHashMap<>(cooldowns));
+                        ready.add(player);
+                    }
                 }
-            } catch (Exception e) {
-                logger.warning("[abyss] 体力加载失败 " + player + ": " + e.getMessage());
+                future.complete(null);
+            } catch (Exception error) {
+                loading.remove(player, future);
+                future.completeExceptionally(error);
+                logger.warning("[abyss] 玩家数据加载失败，进本保持关闭: " + player + ": " + error.getMessage());
             }
         });
-        return maxIfAbsent;
+        return future;
     }
 
     public void setStamina(UUID player, int stamina, long lastRegen) {
+        if (!ready.contains(player)) throw new IllegalStateException("玩家数据尚未加载完成");
         staminaCache.put(player, new int[]{stamina});
         staminaRegenCache.put(player, lastRegen);
         dbExecutor.submit(() -> {
@@ -114,14 +140,7 @@ public final class PlayerDataManager {
     }
 
     public void preloadCooldowns(UUID player) {
-        dbExecutor.submit(() -> {
-            try {
-                Map<String, Long> m = repository.loadAllCooldowns(player);
-                cooldownCache.put(player, new ConcurrentHashMap<>(m));
-            } catch (Exception e) {
-                logger.warning("[abyss] 冷却预载失败 " + player + ": " + e.getMessage());
-            }
-        });
+        preload(player);
     }
 
     // ═══ 通关记录 ═══
@@ -245,7 +264,8 @@ public final class PlayerDataManager {
     }
 
     /** 玩家下线清理缓存（数据已异步落盘）。 */
-    public void unload(UUID player) {
+    public synchronized void unload(UUID player) {
+        ready.remove(player); loading.remove(player);
         staminaCache.remove(player);
         staminaRegenCache.remove(player);
         cooldownCache.remove(player);

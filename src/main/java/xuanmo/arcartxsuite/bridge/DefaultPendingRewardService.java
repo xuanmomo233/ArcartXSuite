@@ -61,6 +61,9 @@ public final class DefaultPendingRewardService implements PendingRewardService, 
      * 默认为启动随机 UUID；宿主在跨服服务就绪后经 {@link #setClaimOwner} 注入 nodeId。
      */
     private volatile String claimOwner = UUID.randomUUID().toString();
+    private final java.nio.file.Path outbox;
+    private final Object outboxLock=new Object();
+    private record RewardBatch(String key,String fingerprint,List<PendingReward> rewards) { }
 
     public DefaultPendingRewardService(JavaPlugin plugin, Logger logger,
                                        StorageManager storageManager, ModuleRegistry registry) {
@@ -68,6 +71,7 @@ public final class DefaultPendingRewardService implements PendingRewardService, 
         this.logger = logger;
         this.storageManager = storageManager;
         this.registry = registry;
+        this.outbox=plugin!=null?plugin.getDataFolder().toPath().resolve("pending-reward-outbox"):null;
     }
 
     /** 设置认领标识（通常为跨服 nodeId；截断至 64 字符）。 */
@@ -121,6 +125,8 @@ public final class DefaultPendingRewardService implements PendingRewardService, 
                 tryExecute(stmt, "CREATE INDEX IF NOT EXISTS idx_pending_module_player ON axs_pending_rewards(source_module, player_uuid)");
             }
             // 认领列：老表无此列则 ALTER 补齐（重复执行被 tryExecute 吞掉）
+            stmt.executeUpdate("CREATE TABLE IF NOT EXISTS axs_reward_receipts ("
+                + "request_key VARCHAR(128) PRIMARY KEY, fingerprint VARCHAR(64) NOT NULL, created_at BIGINT NOT NULL)");
             tryExecute(stmt, "ALTER TABLE axs_pending_rewards ADD COLUMN claimed_at " + (isMysql ? "BIGINT" : "INTEGER"));
             tryExecute(stmt, "ALTER TABLE axs_pending_rewards ADD COLUMN claimed_by " + (isMysql ? "VARCHAR(64)" : "TEXT"));
         } catch (SQLException e) {
@@ -199,7 +205,11 @@ public final class DefaultPendingRewardService implements PendingRewardService, 
 
     @EventHandler(priority = EventPriority.NORMAL)
     public void onPlayerJoin(PlayerJoinEvent event) {
-        Player player = event.getPlayer();
+        flushPlayer(event.getPlayer());
+    }
+
+    @Override
+    public void flushPlayer(Player player) {
         UUID uuid = player.getUniqueId();
         // 延迟 40 tick 补发，确保玩家数据加载完成
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
@@ -207,6 +217,7 @@ public final class DefaultPendingRewardService implements PendingRewardService, 
             // 异步认领+加载 pending 数据，避免主线程 DB 查询；
             // 原子认领保证多节点部署下同一条目只被一个节点补发
             Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+                importOutbox(uuid);
                 List<PendingReward> pendingList = claimAndLoadPending(uuid);
                 if (pendingList.isEmpty()) return;
                 // 物品发放等操作需在主线程执行
@@ -222,6 +233,112 @@ public final class DefaultPendingRewardService implements PendingRewardService, 
         }, 40L);
     }
 
+    @Override
+    public boolean savePendingBatchConfirmed(String requestKey, List<PendingReward> rewards) {
+        synchronized(outboxLock) { return saveConfirmed(requestKey,rewards,true); }
+    }
+
+    private boolean saveConfirmed(String requestKey,List<PendingReward> rewards,boolean allowOutbox) {
+        if (requestKey == null || requestKey.isBlank() || rewards == null) return false;
+        if (rewards.isEmpty()) return true;
+        String scope = rewards.get(0).sourceModule();
+        UUID player = rewards.get(0).playerUuid();
+        if (rewards.stream().anyMatch(r -> !scope.equals(r.sourceModule()) || !player.equals(r.playerUuid())))
+            throw new IllegalArgumentException("A reward batch must have one source and recipient");
+        String key = digest(scope + ":" + requestKey);
+        String fingerprint = digest(rewards.stream().map(r -> r.playerUuid() + ":" + r.type() + ":" + r.payload())
+            .collect(java.util.stream.Collectors.joining("\n")));
+        if(allowOutbox && outbox!=null) {
+            var existing=outbox.resolve(player.toString()).resolve(key+".json");
+            if(java.nio.file.Files.exists(existing))try {
+                RewardBatch accepted=new com.google.gson.Gson().fromJson(java.nio.file.Files.readString(existing,java.nio.charset.StandardCharsets.UTF_8),RewardBatch.class);
+                if(!fingerprint.equals(accepted.fingerprint()))return false;
+            } catch(Exception invalid){logger.log(Level.SEVERE,"奖励恢复日志无法核对，拒绝覆盖",invalid);return false;}
+        }
+        boolean mysql = storageManager.getDescriptor() != null && storageManager.getDescriptor().isMysql();
+        try (Connection conn = storageManager.getHostConnection()) {
+            boolean previous = conn.getAutoCommit(); conn.setAutoCommit(false);
+            try {
+                int inserted;
+                String sql = mysql
+                    ? "INSERT IGNORE INTO axs_reward_receipts (request_key,fingerprint,created_at) VALUES (?,?,?)"
+                    : "INSERT INTO axs_reward_receipts (request_key,fingerprint,created_at) VALUES (?,?,?) ON CONFLICT(request_key) DO NOTHING";
+                try (PreparedStatement receipt = conn.prepareStatement(sql)) {
+                    receipt.setString(1, key); receipt.setString(2, fingerprint); receipt.setLong(3, System.currentTimeMillis());
+                    inserted = receipt.executeUpdate();
+                }
+                if (inserted == 0) {
+                    try (PreparedStatement find = conn.prepareStatement("SELECT fingerprint FROM axs_reward_receipts WHERE request_key=?")) {
+                        find.setString(1, key);
+                        try (ResultSet rs = find.executeQuery()) {
+                            boolean same = rs.next() && fingerprint.equals(rs.getString(1));
+                            conn.rollback(); return same;
+                        }
+                    }
+                }
+                try (PreparedStatement ps = conn.prepareStatement("INSERT INTO axs_pending_rewards "
+                    + "(player_uuid,source_module,reward_type,payload,description,created_at,attempts) VALUES (?,?,?,?,?,?,?)")) {
+                    for (PendingReward r : rewards) {
+                        ps.setString(1, r.playerUuid().toString()); ps.setString(2, r.sourceModule());
+                        ps.setString(3, r.type().name()); ps.setString(4, r.payload()); ps.setString(5, r.description());
+                        ps.setLong(6, r.createdAt()); ps.setInt(7, r.attempts()); ps.addBatch();
+                    }
+                    ps.executeBatch();
+                }
+                conn.commit(); return true;
+            } catch (Exception error) { conn.rollback(); throw error; }
+            finally { conn.setAutoCommit(previous); }
+        } catch (Exception error) {
+            logger.log(Level.WARNING, "确认奖励批次持久化失败: module=" + scope + " player=" + player, error);
+            return allowOutbox && writeOutbox(new RewardBatch(requestKey,fingerprint,List.copyOf(rewards)),key);
+        }
+    }
+
+    private boolean writeOutbox(RewardBatch batch,String key) {
+        if(outbox==null)return false;
+        synchronized(outboxLock) {
+            java.nio.file.Path temp=null;
+            try {
+                var folder=outbox.resolve(batch.rewards().get(0).playerUuid().toString());
+                java.nio.file.Files.createDirectories(folder);
+                var target=folder.resolve(key+".json");
+                var gson=new com.google.gson.Gson();
+                if(java.nio.file.Files.exists(target))return batch.fingerprint().equals(gson.fromJson(
+                    java.nio.file.Files.readString(target,java.nio.charset.StandardCharsets.UTF_8),RewardBatch.class).fingerprint());
+                temp=java.nio.file.Files.createTempFile(folder,".pending-",".tmp");
+                java.nio.file.Files.writeString(temp,gson.toJson(batch),java.nio.charset.StandardCharsets.UTF_8);
+                try(var channel=java.nio.channels.FileChannel.open(temp,java.nio.file.StandardOpenOption.WRITE)){channel.force(true);}
+                try {java.nio.file.Files.move(temp,target,java.nio.file.StandardCopyOption.ATOMIC_MOVE);}
+                catch(java.nio.file.AtomicMoveNotSupportedException unsupported){java.nio.file.Files.move(temp,target);}
+                logger.warning("奖励已保存到宿主恢复日志，等待数据库恢复: "+key);
+                return true;
+            } catch(Exception error) {
+                logger.log(Level.SEVERE,"宿主奖励恢复日志写入失败，调用方保留领取资格",error);return false;
+            } finally {if(temp!=null)try{java.nio.file.Files.deleteIfExists(temp);}catch(java.io.IOException ignored){}}
+        }
+    }
+
+    private void importOutbox(UUID player) {
+        if(outbox==null)return;
+        synchronized(outboxLock) {
+            var folder=outbox.resolve(player.toString());
+            if(!java.nio.file.Files.isDirectory(folder))return;
+            try(var files=java.nio.file.Files.list(folder)) {
+                for(var file:files.filter(p->p.getFileName().toString().endsWith(".json")).toList())try {
+                    RewardBatch batch=new com.google.gson.Gson().fromJson(java.nio.file.Files.readString(file,java.nio.charset.StandardCharsets.UTF_8),RewardBatch.class);
+                    if(batch.rewards().isEmpty() || !batch.rewards().get(0).playerUuid().equals(player))continue;
+                    if(saveConfirmed(batch.key(),batch.rewards(),false))java.nio.file.Files.delete(file);
+                } catch(Exception invalid){logger.log(Level.WARNING,"宿主奖励恢复日志尚未导入: "+file.getFileName(),invalid);}
+            } catch(java.io.IOException failure){logger.log(Level.WARNING,"读取宿主奖励恢复日志失败",failure);}
+        }
+    }
+
+    private static String digest(String text) {
+        try { return java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256")
+            .digest(text.getBytes(java.nio.charset.StandardCharsets.UTF_8))); }
+        catch (java.security.NoSuchAlgorithmException impossible) { throw new IllegalStateException(impossible); }
+    }
+
     /**
      * 原子认领并加载玩家的待发放奖励。
      * <p>
@@ -233,7 +350,7 @@ public final class DefaultPendingRewardService implements PendingRewardService, 
     private @NotNull List<PendingReward> claimAndLoadPending(@NotNull UUID playerUuid) {
         long claimStamp = System.currentTimeMillis();
         long expiredBefore = claimStamp - CLAIM_TTL_MS;
-        String owner = claimOwner;
+        String owner = UUID.randomUUID().toString();
         try (Connection conn = storageManager.getHostConnection()) {
             try (PreparedStatement ps = conn.prepareStatement(
                 "UPDATE axs_pending_rewards SET claimed_at = ?, claimed_by = ? "
@@ -309,10 +426,8 @@ public final class DefaultPendingRewardService implements PendingRewardService, 
         int failCount = 0;
         for (PendingReward pending : pendingList) {
             if (pending.attempts() >= MAX_ATTEMPTS) {
-                logger.warning("待发放奖励超过最大尝试次数，自动丢弃: id=" + pending.id()
+                logger.warning("待发放奖励多次补发失败，继续保留并重试: id=" + pending.id()
                     + " module=" + pending.sourceModule() + " player=" + player.getName());
-                toDelete.add(pending.id());
-                continue;
             }
             try {
                 boolean success = dispatchPending(player, pending);
