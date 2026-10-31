@@ -1205,6 +1205,7 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
                             ok.party().appendFeed(null,
                                 (ap != null ? ap.getName() : "?") + " 加入了队伍");
                             pushPartyUpdate(ok.party());
+                            if (ap != null && ap.isOnline()) openParty(ap);
                         }
                     }
                 }
@@ -1637,6 +1638,7 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
             target.sendMessage(service.msg("party.invite-received",
                 "leader", inviter.getName()));
             pushPartyUpdate(ok.party());
+            pushLobbyList(target, "", "");
         } else if (r instanceof PartyManager.InviteResult.Cooldown cd) {
             inviter.sendMessage(service.msg("party.invite-cooldown",
                 "seconds", String.valueOf(cd.remainingSeconds())));
@@ -1659,6 +1661,9 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         } else if (r instanceof PartyManager.JoinLobbyResult.Applied) {
             player.sendMessage(service.msg("party.apply-sent"));
             pushLobbyList(player, "", "");
+            for (Party pending : service.party().allParties()) {
+                if (pending.applications().contains(player.getUniqueId())) pushPartyUpdate(pending);
+            }
         } else if (r instanceof PartyManager.JoinLobbyResult.Full) {
             player.sendMessage(service.msg("error.party-full"));
         } else if (r instanceof PartyManager.JoinLobbyResult.AlreadyMember) {

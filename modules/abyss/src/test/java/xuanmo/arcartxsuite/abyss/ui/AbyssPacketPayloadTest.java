@@ -24,7 +24,7 @@ import xuanmo.arcartxsuite.api.scheduler.*;
 class AbyssPacketPayloadTest {
     @TempDir Path dir;
     AbyssService service;AbyssUiService ui;Player player;AbyssTemplate template;AbyssInstance instance;
-    List<Runnable> deferred;List<Map<String,Object>> packets;
+    List<Runnable> deferred;List<Map<String,Object>> packets;PacketBridgeAPI bridge;
     Field serverField;Object previousServer;
     @BeforeEach void setup()throws Exception {
         var cfg=AbyssModuleConfiguration.load(new YamlConfiguration());
@@ -32,7 +32,7 @@ class AbyssPacketPayloadTest {
         when(player.isOnline()).thenReturn(true);when(player.getName()).thenReturn("Member1234567890");
         Server server=mock(Server.class);when(server.getPlayer(player.getUniqueId())).thenReturn(player);
         serverField=Bukkit.class.getDeclaredField("server");serverField.setAccessible(true);previousServer=serverField.get(null);serverField.set(null,server);
-        PacketBridgeAPI bridge=mock(PacketBridgeAPI.class);when(bridge.isAvailable()).thenReturn(true);
+        bridge=mock(PacketBridgeAPI.class);when(bridge.isAvailable()).thenReturn(true);
         when(bridge.openUiUnsafe(any(),anyString())).thenReturn(true);
         deferred=new ArrayList<>();packets=new ArrayList<>();
         when(bridge.sendPacket(any(),anyString(),anyString(),any())).thenAnswer(call->{
@@ -83,6 +83,32 @@ class AbyssPacketPayloadTest {
     @Test void emptyBrowserAndLobbySupplyAllClientFields()throws Exception {
         ui.openBrowser(player);assertClientFields("browser",flush());
         ui.openLobby(player);assertClientFields("lobby",flush());
+    }
+    Player peer()throws Exception {
+        Player peer=mock(Player.class);when(peer.getUniqueId()).thenReturn(UUID.randomUUID());
+        when(peer.getName()).thenReturn("Applicant");when(peer.isOnline()).thenReturn(true);
+        Server server=(Server)serverField.get(null);when(server.getPlayer(peer.getUniqueId())).thenReturn(peer);
+        return peer;
+    }
+    @Test void invitationRefreshesAnAlreadyOpenLobby()throws Exception {
+        Player peer=peer();service.party().create(player);
+        ui.openParty(player);String leaderToken=(String)flush().get("action_token");
+        ui.openLobby(peer);flush();
+        ui.handlePacket(player,"abyss",List.of("party_invite_uuid",peer.getUniqueId().toString(),leaderToken));
+        verify(bridge).sendPacket(eq(peer),eq("AXS:abyss_lobby"),eq("lobby_list"),any());
+        assertEquals(1,service.party().inviteEntries(peer.getUniqueId()).size());
+    }
+    @Test void applicationRefreshesLeaderAndApprovalOpensApplicantRoom()throws Exception {
+        Player peer=peer();var party=service.party().create(player);party.listed(true);
+        ui.openParty(player);String leaderToken=(String)flush().get("action_token");
+        ui.openLobby(peer);String peerToken=(String)flush().get("action_token");
+        ui.handlePacket(peer,"abyss",List.of("lobby_join",party.id().toString(),peerToken));
+        verify(bridge).sendPacket(eq(player),eq("AXS:abyss_party"),eq("update"),
+            argThat(value->value instanceof Map<?,?> map && Integer.valueOf(1).equals(map.get("applicantCount"))));
+        ui.handlePacket(player,"abyss",List.of("party_apply_ok",peer.getUniqueId().toString(),leaderToken));
+        assertSame(party,service.party().partyOf(peer));
+        verify(bridge).openUiUnsafe(peer,"AXS:abyss_party");
+        assertEquals(0,party.applications().size());
     }
     @Test void zeroKillPlayersAreIncludedInStatistics()throws Exception {
         ui.openStats(player,instance);var payload=flush();assertClientFields("stats",payload);

@@ -31,6 +31,19 @@ class PartyEntryTest {
         var result=service.enterFromPlayer(member,"dungeon",null);
         assertFalse(result.ok());assertEquals("error.not-party-leader",result.reason());
     }
+    @Test void staleInvitationCannotMoveMemberOutOfExistingParty() {
+        Player other=mock(Player.class);when(other.getUniqueId()).thenReturn(UUID.randomUUID());
+        Party target=parties.create(other);target.invite(member.getUniqueId(),60);
+        assertInstanceOf(PartyManager.JoinResult.Denied.class,parties.accept(member,target.id()));
+        assertSame(party,parties.partyOf(member));assertFalse(target.isMember(member.getUniqueId()));
+        assertTrue(party.isMember(member.getUniqueId()));
+    }
+    @Test void staleApplicationCannotCreateTwoPartyMemberships() {
+        Player other=mock(Player.class);when(other.getUniqueId()).thenReturn(UUID.randomUUID());
+        Party target=parties.create(other);target.apply(member.getUniqueId());
+        assertInstanceOf(PartyManager.JoinResult.Denied.class,parties.approveApplication(other,member.getUniqueId()));
+        assertSame(party,parties.partyOf(member));assertFalse(target.isMember(member.getUniqueId()));
+    }
     @Test void leaderMustWaitForReadiness() {
         var result=service.enterFromPlayer(leader,"dungeon",null);
         assertFalse(result.ok());assertEquals("party.not-all-ready",result.reason());

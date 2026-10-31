@@ -105,6 +105,7 @@ public final class PartyManager {
      * 加入校验：命中该 mode 的 validator 时执行。返回 null=允许。
      */
     private @Nullable String checkJoin(Party party, UUID applicant) {
+        if (inParty(applicant)) return "already in party";
         AbyssPartyAccess.JoinValidator v = joinValidators.get(party.mode());
         if (v == null) return null;
         try {
