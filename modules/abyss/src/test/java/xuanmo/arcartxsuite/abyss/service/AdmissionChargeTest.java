@@ -64,4 +64,13 @@ class AdmissionChargeTest {
         Player player=player();when(stamina.ready(player.getUniqueId())).thenReturn(false);
         assertFalse(checker.charge(template,List.of(player)).ok());verify(money,never()).withdraw(any(),any());
     }
+    @Test void leaderOnlyRequirementsUseTheActualLeaderEvenAfterLeadershipTransfer() {
+        var yaml=new org.bukkit.configuration.file.YamlConfiguration();yaml.set("require-all-players",false);
+        yaml.set("required-permissions",List.of("entry.gate"));when(template.requirements()).thenReturn(EntryRequirements.load(yaml));
+        Player member=player(),leader=player();when(member.hasPermission("entry.gate")).thenReturn(true);
+        var party=new xuanmo.arcartxsuite.abyss.party.Party(member.getUniqueId(),4);party.addMember(leader.getUniqueId());party.setLeader(leader.getUniqueId());
+        assertFalse(checker.check(template,List.of(member,leader),party).ok());
+        verify(leader).hasPermission("entry.gate");verify(member,never()).hasPermission(anyString());
+        assertFalse(checker.check(template,List.of(member),party).ok());
+    }
 }

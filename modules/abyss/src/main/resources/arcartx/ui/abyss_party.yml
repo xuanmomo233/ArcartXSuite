@@ -27,8 +27,9 @@ ui:
       var.incoming = packet
       self.actions['apply']()
       self.actions['refresh']()
-    # packetHandler: update —— 队伍数据变更全量推送（无 action_token）
+    # packetHandler: update —— 队伍状态变更时同步新操作令牌，拒绝旧界面操作
     update: |-
+      if(packet['action_token'] != none){ var.actionToken = packet['action_token'] }
       var.incoming = packet
       self.actions['apply']()
       self.actions['refresh']()

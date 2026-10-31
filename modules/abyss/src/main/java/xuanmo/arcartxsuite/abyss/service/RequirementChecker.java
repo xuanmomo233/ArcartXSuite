@@ -72,7 +72,9 @@ public final class RequirementChecker {
         // 逐人校验；require-all-players=false 时只查队长（队伍为发起者或首个玩家）
         List<Player> toCheck = members;
         if (!r.requireAllPlayers()) {
-            toCheck = List.of(members.get(0));
+            Player leader=party==null?members.get(0):members.stream().filter(p->p.getUniqueId().equals(party.leader())).findFirst().orElse(null);
+            if(leader==null)return CheckResult.fail("队长必须参与进入");
+            toCheck = List.of(leader);
         }
         for (Player p : toCheck) {
             CheckResult single = checkSingle(template, p);

@@ -47,6 +47,7 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
     /** 玩家 → 操作令牌（每次开界面轮换）。 */
     private final Map<UUID, String> tokens = new ConcurrentHashMap<>();
     private final Map<UUID,String> foregroundUis=new ConcurrentHashMap<>();
+    private final Map<UUID,Map<String,Object>> partyStates=new ConcurrentHashMap<>();
     /** 玩家 → 待领取宝箱（roll 结果 + 所属实例/箱名；ESC 重开返回同批防刷奖）。 */
     private record PendingChest(AbyssInstance instance, String chestName,
                                 String title, List<ItemStack> items, Map<ItemStack, String> itemKeys) {
@@ -117,6 +118,9 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
     }
 
     private void openView(Player player, String uiId, Map<String, Object> payload) {
+        if(uiId.equals(partyUi())) {
+            Map<String,Object> state=new LinkedHashMap<>(payload);state.remove("action_token");partyStates.put(player.getUniqueId(),state);
+        }
         String fresh=UUID.randomUUID().toString();
         tokens.put(player.getUniqueId(),fresh);foregroundUis.put(player.getUniqueId(),uiId);
         payload.put("action_token",fresh);
@@ -495,6 +499,10 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         if (!available() || party == null) return;
         for (Player member : party.onlineMembers()) {
             Map<String, Object> payload = partyRoomPayload(member, false);
+            Map<String,Object> previous=partyStates.put(member.getUniqueId(),new LinkedHashMap<>(payload));
+            if(!payload.equals(previous) && partyUi().equals(foregroundUis.get(member.getUniqueId())) && views.isOpen(member,partyUi()))
+                tokens.put(member.getUniqueId(),UUID.randomUUID().toString());
+            payload.put("action_token",token(member));
             views.send(member, partyUi(), "update", payload);
         }
     }
@@ -1055,7 +1063,8 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         String action = data.get(0).toLowerCase();
         switch (action) {
             case "close_view" -> {
-                if (checkToken(player, data, 2)) {
+                if (data.size()>3 && (checkToken(player, data, 2)
+                    || views.matchesNonce(player,uiForKey(data.get(1)),data.get(3)))) {
                     String ui = uiForKey(data.get(1));
                     if (ui != null && data.size() > 3) views.closed(player, ui, data.get(3));
                 }
@@ -1751,6 +1760,8 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
 
     /** 单格领取后重发 init：剩余物品前移，空出的尾部槽位填空气 JSON。 */
     private void pushChestUpdate(Player player, PendingChest pc) {
+        if(chestUi().equals(foregroundUis.get(player.getUniqueId())) && views.isOpen(player,chestUi()))
+            tokens.put(player.getUniqueId(),UUID.randomUUID().toString());
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("packetId", CHANNEL);
         payload.put("action_token", token(player));
@@ -1774,6 +1785,7 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         UUID uid = player.getUniqueId();
         tokens.remove(uid);
         foregroundUis.remove(uid);
+        partyStates.remove(uid);
         views.clear(player);
         shopOffers.remove(uid); inputOffers.remove(uid); buffOffers.remove(uid);
         hudOpen.remove(uid);

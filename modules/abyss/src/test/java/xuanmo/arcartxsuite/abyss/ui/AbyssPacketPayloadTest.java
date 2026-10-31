@@ -90,6 +90,15 @@ class AbyssPacketPayloadTest {
         ui.handlePacket(player,"abyss",List.of("lobby_create",oldToken));assertNull(service.party().partyOf(player));
         ui.handlePacket(player,"abyss",List.of("lobby_create",fresh));assertNotNull(service.party().partyOf(player));
     }
+    @Test void changedPartyStateInvalidatesOldActionsButOriginalNonceCanStillCloseTheWindow() {
+        var party=service.party().create(player);ui.openParty(player);var initial=flush();
+        String old=(String)initial.get("action_token"),nonce=(String)initial.get("view_nonce");
+        ui.handlePacket(player,"abyss",List.of("party_set_listed","1",old));assertTrue(party.listed());
+        String fresh=(String)packets.get(packets.size()-1).get("action_token");assertNotEquals(old,fresh);
+        ui.handlePacket(player,"abyss",List.of("party_set_listed","0",old));assertTrue(party.listed());
+        ui.handlePacket(player,"abyss",List.of("close_view","party",old,nonce));
+        ui.handlePacket(player,"abyss",List.of("party_set_listed","0",fresh));assertTrue(party.listed());
+    }
     @Test void chestOnlyConsumesAnItemAfterHostPersistenceConfirmation()throws Exception {
         var rewards=mock(xuanmo.arcartxsuite.abyss.reward.RewardResolver.class,withSettings().mockMaker(org.mockito.MockMakers.INLINE));set("rewards",rewards);
         when(rewards.rollChestOptions(any(),anyInt())).thenReturn(List.of(new org.bukkit.inventory.ItemStack(Material.STONE,2),new org.bukkit.inventory.ItemStack(Material.STONE,3)));
@@ -126,6 +135,8 @@ class AbyssPacketPayloadTest {
         ui.handlePacket(peer,"abyss",List.of("lobby_join",party.id().toString(),peerToken));
         verify(bridge).sendPacket(eq(player),eq("AXS:abyss_party"),eq("update"),
             argThat(value->value instanceof Map<?,?> map && Integer.valueOf(1).equals(map.get("applicantCount"))));
+        leaderToken=packets.stream().filter(p->Integer.valueOf(1).equals(p.get("applicantCount")))
+            .map(p->(String)p.get("action_token")).reduce((a,b)->b).orElseThrow();
         ui.handlePacket(player,"abyss",List.of("party_apply_ok",peer.getUniqueId().toString(),leaderToken));
         assertSame(party,service.party().partyOf(peer));
         verify(bridge).openUiUnsafe(peer,"AXS:abyss_party");

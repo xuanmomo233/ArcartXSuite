@@ -135,6 +135,9 @@ final class AbyssUiLifecycle {
     }
 
     boolean isOpen(Player player, String ui) { return current(player, ui) != null; }
+    boolean matchesNonce(Player player,String ui,String nonce) {
+        View view=current(player,ui);return view!=null && view.nonce.equals(nonce);
+    }
 
     void clear(Player player) { views.remove(player.getUniqueId()); foreground.remove(player.getUniqueId()); }
     private View current(Player player, String ui) {
