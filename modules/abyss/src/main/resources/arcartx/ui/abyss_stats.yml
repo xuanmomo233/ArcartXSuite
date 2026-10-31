@@ -18,7 +18,16 @@ ui:
       var.rows = packet['statRows']
       var.count = packet['statCount']
       var.hasChest = packet['hasChest']
+      var.settling = packet['settling'] == true
+      var.canLeave = packet['canLeave'] == true
+      var.settlementHint = packet['settlementHint'] != none ? packet['settlementHint'] : ''
+      var.outcomeLabel = packet['outcomeLabel'] != none ? packet['outcomeLabel'] : '副本结算'
+      var.summaryText = packet['summaryText'] != none ? packet['summaryText'] : ''
       self.actions['rebuild']()
+    settlement_update: |-
+      if(packet['settlementHint'] != none){ var.settlementHint = packet['settlementHint'] }
+      if(packet['canLeave'] != none){ var.canLeave = packet['canLeave'] }
+      if(packet['hasChest'] != none){ var.hasChest = packet['hasChest'] }
   action:
     load: |-
       var.packetId = 'abyss'
@@ -28,6 +37,11 @@ ui:
       var.rows = {}
       var.count = 0
       var.hasChest = false
+      var.settling = false
+      var.canLeave = false
+      var.settlementHint = ''
+      var.outcomeLabel = '副本结算'
+      var.summaryText = ''
       var.builtCount = -1
       var.rowRefs = {}
       var.revision = 0
@@ -96,12 +110,32 @@ controls:
               文字:
                 type: Text
                 attribute:
-                  texts: '''&f战斗统计  &7· '' + var.dungeonName'
+                  texts: "(var.settling ? '&f' + var.outcomeLabel : '&f战斗统计') + ' &7· ' + var.dungeonName"
                   limit: 28
                   fontSize: 56
                   point: ~top_left
                   width: self.parent.width
                   height: self.parent.height
+                  limitControl: self.parent
+                  through: true
+          结算摘要:
+            type: Canvas
+            attribute:
+              x: 32
+              y: 78
+              width: 976
+              height: 22
+              through: true
+            children:
+              文字:
+                type: Text
+                attribute:
+                  point: ~top_left
+                  width: self.parent.width
+                  height: self.parent.height
+                  texts: "'&7' + var.summaryText"
+                  fontSize: 28
+                  limit: 64
                   limitControl: self.parent
                   through: true
           表头底:
@@ -367,11 +401,31 @@ controls:
               visible: "var.count == 0"
               fontSize: 42
               through: true
+          结算提示:
+            type: Canvas
+            attribute:
+              x: 32
+              y: 672
+              width: 976
+              height: 24
+              through: true
+            children:
+              文字:
+                type: Text
+                attribute:
+                  point: ~top_left
+                  width: self.parent.width
+                  height: self.parent.height
+                  texts: "'&e' + var.settlementHint"
+                  fontSize: 28
+                  limit: 64
+                  limitControl: self.parent
+                  through: true
           关闭:
             type: Canvas
             attribute:
               point: ~bottom_center
-              x: 100
+              x: 0
               y: -28
               width: 160
               height: 48
@@ -390,14 +444,14 @@ controls:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  texts: ~&f关闭
+                  texts: "var.canLeave ? '&f继续拾取' : '&f关闭'"
                   fontSize: 38
                   through: true
           待领奖励:
             type: Canvas
             attribute:
               point: ~bottom_center
-              x: -100
+              x: -200
               y: -28
               width: 160
               height: 48
@@ -418,5 +472,33 @@ controls:
                 attribute:
                   point: ~middle_center
                   texts: ~&f领取奖励
+                  fontSize: 38
+                  through: true
+          离开副本:
+            type: Canvas
+            attribute:
+              point: ~bottom_center
+              x: 200
+              y: -28
+              width: 160
+              height: 48
+              visible: var.canLeave
+            action:
+              clickLeft: "Packet.send(var.packetId, 'settlement_leave', var.actionToken)"
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~130,65,65,235
+                  hover: ~170,85,85,245
+                  shape: ~round_rect
+                  radius: 8
+                  through: true
+              字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: ~&f离开副本
                   fontSize: 38
                   through: true

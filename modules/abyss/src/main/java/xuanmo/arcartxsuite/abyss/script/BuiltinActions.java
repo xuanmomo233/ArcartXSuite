@@ -243,14 +243,16 @@ final class BuiltinActions {
         reg.register("cancel_dungeon", (ctx, args, s) ->
             service.get().cancelDungeon(ctx.getInstance()));
         reg.register("exit_dungeon", (ctx, args, s) ->
-            forEach(ctx, args, p -> service.get().playerExit(ctx.getInstance(), p, LeaveReason.QUIT)));
+            forEach(ctx, args, p -> service.get().requestScriptExit(ctx.getInstance(),p)));
+        reg.register("force_exit_dungeon",(ctx,args,s)->
+            forEach(ctx,args,p->service.get().playerExit(ctx.getInstance(),p,LeaveReason.ADMIN)));
         reg.register("kick_all_players", (ctx, args, s) -> {
             for (Player p : ctx.getInstance().getPlayers()) {
                 service.get().playerExit(ctx.getInstance(), p, LeaveReason.ADMIN);
             }
         });
         reg.register("run_script", (ctx, args, s) ->
-            service.get().runCustomScript(ctx.getInstance(), ctx.replace(args), ctx.getTrigger(), ctx.allowsFinishedInstance()));
+            service.get().runCustomScript(ctx.getInstance(),ctx.replace(args),ctx));
         // 阶段机：立即完成当前阶段并推进 next（manual 阶段/事件房手动清房的出口）
         reg.register("complete_stage", (ctx, args, s) ->
             service.get().stages().completeCurrent(ctx.getInstance(), ctx.getTrigger()));

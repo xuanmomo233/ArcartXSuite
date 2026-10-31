@@ -63,6 +63,11 @@ public final class AbyssPlayerListener implements Listener {
         if (!(event.getEntity() instanceof Player player)) return;
         AbyssInstance instance = service.instances().getInstance(player);
         if (instance == null) return;
+        if(service.protectsSettlement(instance)) {
+            event.setCancelled(true);
+            if(event.getCause()==EntityDamageEvent.DamageCause.VOID)service.rescueSettlementPlayer(instance,player);
+            return;
+        }
         if (service.isDesignInstance(instance)) {
             event.setCancelled(true);
             return;
@@ -137,7 +142,7 @@ public final class AbyssPlayerListener implements Listener {
     public void onTeleport(PlayerTeleportEvent event) {
         Player player = event.getPlayer();
         AbyssInstance instance = service.instances().getInstance(player);
-        if (instance == null || instance.isFinished()) return;
+        if (instance == null || instance.isFinished() || service.isExiting(player)) return;
         if (service.isDesignInstance(instance)) {
             var session = service.designManager() != null ? service.designManager().session(player) : null;
             if (event.getTo() != null && event.getTo().getWorld() != instance.getWorld()
@@ -156,6 +161,8 @@ public final class AbyssPlayerListener implements Listener {
             case SPECTATE -> service.config().escape().blockSpectateTeleport();
             default -> false;
         };
+        if(event.getTo()!=null && event.getTo().getWorld()!=instance.getWorld()
+            && !player.hasPermission("arcartxsuite.abyss.bypass"))blocked=true;
         // 旁观者传送（旁观死亡玩家点实体跟随）也算逃逸尝试
         if (!blocked && cause == PlayerTeleportEvent.TeleportCause.SPECTATE
             && instance.isPlayerCurrentlyDead(player)) {
@@ -180,6 +187,15 @@ public final class AbyssPlayerListener implements Listener {
                 service.failDungeon(instance, xuanmo.arcartxsuite.abyss.instance.FailReason.ESCAPE);
             }
         }
+    }
+
+    @EventHandler(priority=EventPriority.MONITOR)
+    public void onChangedWorld(org.bukkit.event.player.PlayerChangedWorldEvent event) {
+        Player player=event.getPlayer();AbyssInstance instance=service.instances().getInstance(player);
+        if(instance==null || player.getWorld()==instance.getWorld() || service.isExiting(player))return;
+        var design=service.designManager()!=null?service.designManager().session(player):null;
+        if(design!=null && design.saving())return;
+        service.handleExternalDeparture(instance,player);
     }
 
     // ═══ 禁用命令 ═══

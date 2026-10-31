@@ -16,3 +16,5 @@ mobs-wave-2:
 scripts:
   on-enter:
     - "message @trigger &4&lBOSS 房！肃清全部敌人通关"
+  on-clear:
+    - "addvar coins 30"

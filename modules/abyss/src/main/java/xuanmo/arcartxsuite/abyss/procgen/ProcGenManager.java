@@ -458,6 +458,11 @@ public final class ProcGenManager {
         states.remove(instance.getInstanceId());
     }
 
+    public void beginSettlement(AbyssInstance instance) {
+        InstState state=states.get(instance.getInstanceId());
+        if(state!=null)for(RoomRuntime room:state.rooms)for(DoorBox box:room.doorBoxes)fillDoor(instance.getWorld(),box,Material.AIR);
+    }
+
     // ── 内部 ─────────────────────────────────────────────
 
     private void onRoomEnter(AbyssInstance instance, InstState st, int ri, Player p) {

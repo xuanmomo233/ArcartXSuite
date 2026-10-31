@@ -48,6 +48,9 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
     private final Map<UUID, String> tokens = new ConcurrentHashMap<>();
     private final Map<UUID,String> foregroundUis=new ConcurrentHashMap<>();
     private final Map<UUID,Map<String,Object>> partyStates=new ConcurrentHashMap<>();
+    private record StatsSnapshot(UUID instance,Map<String,Object> payload,long expires) { }
+    private final Map<UUID,StatsSnapshot> recentStats=new ConcurrentHashMap<>();
+    private final Map<UUID,UUID> statsViews=new ConcurrentHashMap<>();
     /** 玩家 → 待领取宝箱（roll 结果 + 所属实例/箱名；ESC 重开返回同批防刷奖）。 */
     private record PendingChest(AbyssInstance instance, String chestName,
                                 String title, List<ItemStack> items, Map<ItemStack, String> itemKeys) {
@@ -113,11 +116,16 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         if(action.startsWith("input_"))return ui.equals(inputUi());
         if(action.startsWith("buff_"))return ui.equals(buffUi());
         if(action.startsWith("chest_"))return ui.equals(chestUi());
+        if(action.startsWith("settlement_"))return ui.equals(statsUi());
         if(action.equals("reopen_chest"))return ui.equals(statsUi());
         return true;
     }
 
     private void openView(Player player, String uiId, Map<String, Object> payload) {
+        if(uiId.equals(statsUi())) {
+            Object id=payload.get("instance_id");
+            if(id!=null)statsViews.put(player.getUniqueId(),UUID.fromString(String.valueOf(id)));else statsViews.remove(player.getUniqueId());
+        }
         if(uiId.equals(partyUi())) {
             Map<String,Object> state=new LinkedHashMap<>(payload);state.remove("action_token");partyStates.put(player.getUniqueId(),state);
         }
@@ -543,11 +551,22 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
     @Override
     public void openStats(Player player, AbyssInstance instance) {
         if (!available()) return;
+        if(instance!=null && instance.isFinished()) {
+            StatsSnapshot cached=recentStats.get(player.getUniqueId());
+            if(cached!=null && cached.instance().equals(instance.getInstanceId()) && cached.expires()>System.currentTimeMillis())presentStats(player,cached);
+            else captureSettlementStats(player,instance).run();
+            return;
+        }
+        openView(player,statsUi(),statsPayload(player,instance));
+    }
+
+    private Map<String,Object> statsPayload(Player player,AbyssInstance instance) {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("packetId", CHANNEL);
         payload.put("action_token", token(player));
         payload.put("dungeonName", instance != null ? instance.getTemplate().name() : "");
         payload.put("mode", "stats");
+        if(instance!=null)payload.put("instance_id",instance.getInstanceId().toString());
 
         Map<String, Object> rows = new LinkedHashMap<>();
         int i = 0;
@@ -574,7 +593,55 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         payload.put("statCount", rows.size());
         PendingChest pending = pendingChests.get(player.getUniqueId());
         payload.put("hasChest", pending != null && pending.instance() == instance);
-        openView(player, statsUi(), payload);
+        payload.put("settling",instance!=null && instance.isFinished());
+        payload.put("canLeave",false);
+        payload.put("settlementHint","");
+        payload.put("outcomeLabel",instance!=null && instance.getStatus()==xuanmo.arcartxsuite.abyss.instance.AbyssStatus.COMPLETED?"通关成功":"挑战结束");
+        String grade=instance!=null?String.valueOf(instance.getVariables().getOrDefault("procgen_grade","—")):"—";
+        payload.put("summaryText","本次用时 "+AbyssService.formatTime(instance!=null?instance.getRunningTime():0)
+            +" · 评级 "+grade+" · 奖励通过宿主自动到账");
+        return payload;
+    }
+
+    public Runnable captureSettlementStats(Player player,AbyssInstance instance) {
+        if(views.isOpen(player,statsUi()))views.close(player,statsUi());
+        StatsSnapshot snapshot=new StatsSnapshot(instance.getInstanceId(),Map.copyOf(statsPayload(player,instance)),System.currentTimeMillis()+600_000L);
+        recentStats.put(player.getUniqueId(),snapshot);
+        return ()->{
+            StatsSnapshot latest=recentStats.get(player.getUniqueId());
+            if(latest!=null && latest.instance().equals(snapshot.instance()))presentStats(player,latest);
+        };
+    }
+
+    private boolean presentStats(Player player,StatsSnapshot snapshot) {
+        if(!available() || !player.isOnline())return false;
+        AbyssInstance current=service.instances().getInstance(player);
+        if(current!=null && !current.getInstanceId().equals(snapshot.instance()))return false;
+        recentStats.computeIfPresent(player.getUniqueId(),(id,last)->last.instance().equals(snapshot.instance())
+            ?new StatsSnapshot(last.instance(),last.payload(),System.currentTimeMillis()+600_000L):last);
+        Map<String,Object> payload=new LinkedHashMap<>(snapshot.payload());
+        boolean owned=current!=null && current.isFinished();
+        payload.put("canLeave",owned);
+        payload.put("settlementHint",owned?service.settlementHint(current):"已退出副本。奖励由宿主自动到账，可使用 /abyss stats 重看本次结算。");
+        PendingChest pending=pendingChests.get(player.getUniqueId());
+        payload.put("hasChest",pending!=null && pending.instance().getInstanceId().equals(snapshot.instance()));
+        openView(player,statsUi(),payload);return true;
+    }
+
+    public boolean openRecentStats(Player player) {
+        StatsSnapshot snapshot=recentStats.get(player.getUniqueId());
+        if(snapshot==null)return false;
+        if(snapshot.expires()<System.currentTimeMillis()){recentStats.remove(player.getUniqueId(),snapshot);return false;}
+        return presentStats(player,snapshot);
+    }
+
+    public void pushSettlementUpdate(Player player,AbyssInstance instance) {
+        StatsSnapshot snapshot=recentStats.get(player.getUniqueId());
+        if(snapshot==null || !snapshot.instance().equals(instance.getInstanceId()) || !instance.getInstanceId().equals(statsViews.get(player.getUniqueId()))
+            || !views.isOpen(player,statsUi()))return;
+        PendingChest pending=pendingChests.get(player.getUniqueId());
+        views.send(player,statsUi(),"settlement_update",Map.of("settlementHint",service.settlementHint(instance),"canLeave",true,
+            "hasChest",pending!=null && pending.instance()==instance));
     }
 
     @Override
@@ -612,6 +679,9 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
 
     @Override
     public void open(Player player, RewardConfig.ChestReward chest, AbyssInstance instance) {
+        openChest(player,chest,instance,false);
+    }
+    private void openChest(Player player,RewardConfig.ChestReward chest,AbyssInstance instance,boolean requested) {
         if (!available()) {
             // UI 不可用时回退直接发放
             List<ItemStack> items = service.rewards().rollChestOptions(chest,
@@ -650,6 +720,8 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
             player.sendMessage("§c宝箱未生成有效奖励，请联系管理员检查物品源。");
             return;
         }
+        // Settlement presents one summary first; its reward button opens this retained roll.
+        if(instance.isFinished() && service.isSettling(instance) && !requested)return;
 
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("packetId", CHANNEL);
@@ -725,10 +797,25 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         }
         inst.getVariables().put(shop.currencyVar(), coins - g.price());
         // 商品脚本（@trigger=购买者）：发放/治疗/buff 全走脚本行
-        service.runScript(inst, g.script(),
+        var execution=service.runScript(inst, g.script(),
             xuanmo.arcartxsuite.abyss.script.ScriptContext.of(inst, player));
-        player.sendMessage(color("&a购得 &f" + g.name() + " &8（&e-" + g.price() + " 金&8）"));
-        // 余额回推（UI 端 coin 文本/可购态刷新）
+        if(execution==null) {
+            inst.getVariables().put(shop.currencyVar(),coins);pushShopBalance(player,inst,shop);return;
+        }
+        execution.completion().whenComplete((ok,error)->service.runOnMain(()->{
+            if(!service.running())return;
+            boolean success=error==null && Boolean.TRUE.equals(ok);
+            if(!success && execution.successfulActions()==0)
+                inst.getVariables().put(shop.currencyVar(),(int)Math.min(Integer.MAX_VALUE,(long)varInt(inst,shop.currencyVar())+g.price()));
+            if(player.isOnline())player.sendMessage(color(success?"&a购买已受理 &f"+g.name()
+                :execution.successfulActions()==0?"&c购买未完成，队伍金币已退回。":"&e商品部分操作已执行，请联系管理员核对。"));
+            if(!success)logger.warning("[abyss] 商品脚本未完成: instance="+inst.getInstanceId()+" shop="+shopId+" goods="+g.id()+" actions="+execution.successfulActions());
+            pushShopBalance(player,inst,shop);
+        }));
+    }
+
+    private void pushShopBalance(Player player,AbyssInstance inst,xuanmo.arcartxsuite.abyss.template.ShopConfig.Shop shop) {
+        if(!new UiOffer(inst.getInstanceId(),shop.id()).equals(shopOffers.get(player.getUniqueId())) || !views.isOpen(player,shopUi()))return;
         Map<String, Object> upd = new LinkedHashMap<>();
         upd.put("coins", varInt(inst, shop.currencyVar()));
         upd.put("coinsText", compact(varInt(inst, shop.currencyVar())));
@@ -1034,6 +1121,17 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         // 任务进度不下发：由 QuestGPS guide HUD / Chemdah scoreboard 呈现
         var gs = service.guide();
         p.put("guideText", gs != null ? gs.guideText(instance) : "");
+        if(service.isSettling(instance)) {
+            long seconds=service.settlementRemaining(instance);
+            p.put("statusLabel",instance.getStatus()==xuanmo.arcartxsuite.abyss.instance.AbyssStatus.COMPLETED?"通关结算":"失败结算");
+            p.put("timeText",seconds<0?"主动退出":AbyssService.formatTime(seconds));
+            p.put("timeRatio",service.settlementTimeRatio(instance));
+            p.put("guideText",seconds<0?"拾取完成后 /abyss leave":seconds==0?"正在离开 · /abyss leave 可重试":"剩余 "+seconds+" 秒拾取 · /abyss leave");
+            if(progressLabel.equals("波次")) {
+                p.put("groupTotal",instance.getVariables().getOrDefault("settlement_group_total",gp[0]));
+                p.put("groupDone",instance.getVariables().getOrDefault("settlement_group_done",gp[1]));
+            }
+        }
         return p;
     }
 
@@ -1412,8 +1510,18 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
                     PendingChest pending = pendingChests.get(player.getUniqueId());
                     if (pending != null) {
                         var definition = pending.instance().getTemplate().rewards().chestRewards().get(pending.chestName());
-                        if (definition != null) open(player, definition, pending.instance());
+                        if (definition != null && pending.instance().getInstanceId().equals(statsViews.get(player.getUniqueId())))
+                            openChest(player,definition,pending.instance(),true);
                     }
+                }
+                return true;
+            }
+            case "settlement_leave" -> {
+                if(checkToken(player, data, 1)) {
+                    AbyssInstance instance=service.instances().getInstance(player);
+                    if(instance!=null && instance.isFinished() && instance.getInstanceId().equals(statsViews.get(player.getUniqueId()))
+                        && service.playerExit(instance,player,xuanmo.arcartxsuite.abyss.instance.LeaveReason.QUIT))
+                        views.close(player,statsUi());
                 }
                 return true;
             }
@@ -1786,6 +1894,8 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         tokens.remove(uid);
         foregroundUis.remove(uid);
         partyStates.remove(uid);
+        recentStats.remove(uid);
+        statsViews.remove(uid);
         views.clear(player);
         shopOffers.remove(uid); inputOffers.remove(uid); buffOffers.remove(uid);
         hudOpen.remove(uid);

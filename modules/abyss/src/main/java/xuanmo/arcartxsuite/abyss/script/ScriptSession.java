@@ -22,6 +22,11 @@ public final class ScriptSession {
     private final AtomicInteger cursor = new AtomicInteger(0);
     private final AtomicBoolean cancelled = new AtomicBoolean(false);
     private volatile ScheduledTask pendingTask;
+    private final java.util.concurrent.CompletableFuture<Boolean> completion=new java.util.concurrent.CompletableFuture<>();
+    public java.util.concurrent.CompletableFuture<Boolean> completion() {return completion;}
+    private final AtomicInteger successfulActions=new AtomicInteger();
+    public int successfulActions() {return successfulActions.get();}
+    public int nextLineIndex() {return cursor.get();}
 
     public ScriptSession(String name, List<String> lines, ScriptContext context, ScriptRunner runner) {
         this.name = name;
@@ -40,7 +45,7 @@ public final class ScriptSession {
         int idx;
         while ((idx = cursor.getAndIncrement()) < lines.size()) {
             if (cancelled.get()) return;
-            if (context.getInstance().isFinished() && !context.allowsFinishedInstance()) return;
+            if (context.getInstance().isFinished() && !context.allowsFinishedInstance()) {cancel();return;}
             String line = lines.get(idx);
             if (line == null || line.isBlank() || line.trim().startsWith("#")) {
                 continue;
@@ -49,7 +54,9 @@ public final class ScriptSession {
             if (suspended || cancelled.get()) {
                 return; // wait 挂起，等 pendingTask resume
             }
+            successfulActions.incrementAndGet();
         }
+        completion.complete(true);
     }
 
     /** wait 动作调用：登记挂起任务。 */
@@ -59,6 +66,7 @@ public final class ScriptSession {
 
     public void cancel() {
         if (cancelled.compareAndSet(false, true)) {
+            completion.complete(false);
             ScheduledTask t = pendingTask;
             if (t != null) {
                 try { t.cancel(); } catch (Throwable ignored) { }

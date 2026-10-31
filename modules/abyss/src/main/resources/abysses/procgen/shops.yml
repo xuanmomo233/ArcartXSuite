@@ -1,0 +1,24 @@
+# 使用副本内队伍共享金币，不扣除外部经济账户。
+shops:
+  caravan:
+    title: "深渊旅队补给"
+    currency-var: coins
+    goods:
+      - id: heal
+        name: "&a恢复药剂"
+        icon: POTION
+        desc: ["&7恢复12点生命", "&7消耗队伍共享金币"]
+        price: 4
+        script: ["heal @trigger 12"]
+      - id: apple
+        name: "&6金苹果"
+        icon: GOLDEN_APPLE
+        desc: ["&7提供应急保护"]
+        price: 8
+        script: ["give_item @trigger material:GOLDEN_APPLE:1"]
+      - id: arrows
+        name: "&f箭矢×16"
+        icon: ARROW
+        desc: ["&7远程战斗补给"]
+        price: 3
+        script: ["give_item @trigger material:ARROW:16"]

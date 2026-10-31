@@ -1,5 +1,8 @@
 # 命名奖励集（grant_reward <集名>）+ 宝箱奖励（open_chest_ui <名>）
 rewards:
+  通关补给:
+    items: ["material:EMERALD:3", "material:COOKED_BEEF:4"]
+    exp: 50
   # 限时挑战/连战加赏
   加赏礼包:
     items:

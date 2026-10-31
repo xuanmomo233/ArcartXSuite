@@ -102,6 +102,13 @@ public final class AbyssPlayerCommand implements TabExecutor {
             case "stamina" -> player.sendMessage(service.msg("stamina.view",
                 "current", String.valueOf(service.stamina().getStamina(player.getUniqueId())),
                 "max", String.valueOf(service.stamina().max())));
+            case "stats", "result" -> {
+                AbyssInstance instance=service.instances().getInstance(player);
+                if(service.uiFacade() instanceof xuanmo.arcartxsuite.abyss.ui.AbyssUiService ui) {
+                    if(instance!=null)ui.openStats(player,instance);
+                    else if(!ui.openRecentStats(player))player.sendMessage("§e当前没有可查看的结算，请在本次登录内完成副本后查看。");
+                }else player.sendMessage(service.msg("error.ui-disabled"));
+            }
             case "rank", "top" -> {
                 if (service.uiFacade() != null && args.length >= 2) {
                     service.uiFacade().openLeaderboard(player, args[1]);
@@ -127,6 +134,7 @@ public final class AbyssPlayerCommand implements TabExecutor {
         for (String k : List.of("open", "enter", "leave", "list", "info", "stamina", "party", "rank")) {
             p.sendMessage(service.msg("help." + k, "label", label));
         }
+        p.sendMessage("§e/"+label+" stats §7- 查看当前统计或本次登录最近的结算");
     }
 
     // ═══ /party ═══
@@ -479,7 +487,7 @@ public final class AbyssPlayerCommand implements TabExecutor {
         // /abyss ...
         if (args.length == 1) {
             return filter(List.of("enter", "leave", "list", "info", "stamina",
-                "rank", "party", "ui"), args[0]);
+                "rank", "party", "ui", "stats"), args[0]);
         }
         if (args.length == 2 && ("enter".equalsIgnoreCase(args[0])
             || "rank".equalsIgnoreCase(args[0]) || "top".equalsIgnoreCase(args[0]))) {

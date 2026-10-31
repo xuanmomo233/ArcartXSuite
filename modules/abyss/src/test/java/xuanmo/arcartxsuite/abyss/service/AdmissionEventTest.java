@@ -40,6 +40,9 @@ class AdmissionEventTest {
         var pool=mock(AbyssWorldPool.class,withSettings().mockMaker(org.mockito.MockMakers.INLINE));
         when(pool.acquireWorld(eq(template),any())).thenReturn(new CompletableFuture<World>());set(service,"worldPool",pool);
         Player player=mock(Player.class);when(player.getUniqueId()).thenReturn(UUID.randomUUID());when(player.isOnline()).thenReturn(true);
-        assertTrue(service.enterDungeon(List.of(player),"test").ok());verifyNoInteractions(bus);
+        var server=mock(org.bukkit.Server.class);when(server.getPlayer(player.getUniqueId())).thenReturn(player);
+        var field=org.bukkit.Bukkit.class.getDeclaredField("server");field.setAccessible(true);Object previous=field.get(null);
+        try {field.set(null,server);assertTrue(service.enterDungeon(List.of(player),"test").ok());verifyNoInteractions(bus);}
+        finally {field.set(null,previous);}
     }
 }

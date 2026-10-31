@@ -63,7 +63,7 @@ public final class RoomManager {
     /** 门盒运行态：锁门填充前的原始方块快照。 */
     private static final class DoorRuntime {
         final List<Block> blocks = new ArrayList<>();
-        final Map<Location, Material> snapshot = new ConcurrentHashMap<>();
+        final Map<Location, org.bukkit.block.data.BlockData> snapshot = new ConcurrentHashMap<>();
         final String material;
         DoorRuntime(String material) { this.material = material; }
     }
@@ -635,7 +635,7 @@ public final class RoomManager {
             Material mat = Material.matchMaterial(d.material.toUpperCase());
             if (mat == null) mat = Material.BARRIER;
             for (Block b : d.blocks) {
-                d.snapshot.putIfAbsent(b.getLocation(), b.getType());
+                d.snapshot.putIfAbsent(b.getLocation(), b.getBlockData().clone());
                 b.setType(mat, false);
             }
         }
@@ -644,8 +644,8 @@ public final class RoomManager {
     /** 开门：还原门盒原方块。 */
     private void unlockDoors(RoomRuntime room) {
         for (DoorRuntime d : room.doors) {
-            for (Map.Entry<Location, Material> e : d.snapshot.entrySet()) {
-                try { e.getKey().getBlock().setType(e.getValue(), false); } catch (Throwable ignored) { }
+            for (Map.Entry<Location, org.bukkit.block.data.BlockData> e : d.snapshot.entrySet()) {
+                try { e.getKey().getBlock().setBlockData(e.getValue(), false); } catch (Throwable ignored) { }
             }
         }
     }
@@ -715,6 +715,11 @@ public final class RoomManager {
                 }
             }
         }
+    }
+
+    public void beginSettlement(AbyssInstance instance) {
+        InstanceRuntime runtime=states.get(instance.getInstanceId());
+        if(runtime!=null)for(FloorRuntime floor:runtime.floors)for(RoomRuntime room:floor.rooms)unlockDoors(room);
     }
 
     public void shutdown() {

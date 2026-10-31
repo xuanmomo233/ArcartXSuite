@@ -32,4 +32,6 @@ scripts:
   on-enter:
     - "message @trigger &e战斗开始！肃清此房开启通路"
   on-clear:
+    - "addvar coins 10"
+    - "message @all &e队伍获得 10 金币，可在旅队商店补给"
     - "message @all &a该房间已肃清"

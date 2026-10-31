@@ -35,6 +35,21 @@ time-limit: 1200            # 20 分钟（三层内容量）
 timeout-action: "FAIL"      # FAIL=超时判负 / KICK=踢出
 max-instances: 0            # 0=不限
 
+# 结算由引擎统一管理。IMMEDIATE=立即退出后展示，COUNTDOWN=指定时间，MANUAL=主动退出。
+settlement:
+  exit-mode: COUNTDOWN
+  exit-delay-seconds: 90    # 三层地图预留拾取时间；可通过结算按钮或 /abyss leave 提前离开
+  show-stats: true
+  show-stats-after-exit: false
+  protect-players: true
+  revive-players: true
+  manual-timeout-seconds: 0 # MANUAL 时0=不强制退出；全部离开后才回收世界
+  script-timeout-seconds: 30 # 玩家全部离开后，保留最多30秒等待结算/退出脚本完成
+  failure:
+    exit-mode: COUNTDOWN
+    exit-delay-seconds: 15
+    show-stats: true
+
 requirements:
   min-players: 1
   max-players: 4

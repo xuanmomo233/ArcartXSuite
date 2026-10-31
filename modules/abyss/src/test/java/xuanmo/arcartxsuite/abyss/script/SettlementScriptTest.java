@@ -59,6 +59,16 @@ class SettlementScriptTest {
         assertEquals(1,marks.get());assertEquals(1,tasks.size());
         tasks.get(0).run();assertEquals(2,marks.get());
     }
+    @Test void waitedChildScriptKeepsParticipantsAfterTheyLeaveOrDisconnect() {
+        var player=mock(org.bukkit.entity.Player.class);UUID uuid=UUID.randomUUID();when(player.getUniqueId()).thenReturn(uuid);when(player.isOnline()).thenReturn(true);
+        try {when(((Server)serverField.get(null)).getPlayer(uuid)).thenReturn(player);}catch(IllegalAccessException impossible){throw new AssertionError(impossible);}
+        instance.addPlayer(player);instance.transitionTo(AbyssStatus.PREPARING,AbyssStatus.COMPLETED);
+        var recipients=new AtomicInteger();runner.actions().register("mark",(context,args,session)->{
+            if(args.equals("bonus"))recipients.set(context.resolvePlayers("@all").size());
+        });
+        service.runLifecycleScript(instance,"complete",null);instance.removePlayer(uuid);when(player.isOnline()).thenReturn(false);
+        tasks.get(0).run();assertEquals(1,recipients.get());assertTrue(instance.getScriptSessions().isEmpty());
+    }
     @Test void failureAndExitLifecycleScriptsAreNotSilentlyDropped() {
         instance.transitionTo(AbyssStatus.PREPARING,AbyssStatus.FAILED);
         service.runLifecycleScript(instance,"fail",null);service.runLifecycleScript(instance,"exit",null);
@@ -92,7 +102,7 @@ class SettlementScriptTest {
             var field=AbyssService.class.getDeclaredField(entry.getKey());field.setAccessible(true);field.set(service,entry.getValue());
         }
         instance.transitionTo(AbyssStatus.PREPARING,AbyssStatus.ACTIVE);
-        service.completeDungeon(instance);service.completeDungeon(instance);
+        instance.confirmAdmission();service.completeDungeon(instance);service.completeDungeon(instance);
         verify(data,times(1)).saveRecord(eq(uuid),eq("test"),anyLong());
         verify(leaderboard,never()).recordCompletion(any(),anyString(),anyLong());
     }

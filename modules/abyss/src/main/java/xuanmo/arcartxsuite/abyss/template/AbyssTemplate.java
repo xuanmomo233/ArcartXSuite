@@ -68,6 +68,7 @@ public record AbyssTemplate(
     @Nullable ProcGenConfig procgen,
     @Nullable String crossServer,
     @Nullable String functions,
+    SettlementConfig settlement,
     File dir
 ) {
 

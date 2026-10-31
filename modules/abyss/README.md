@@ -1,5 +1,41 @@
 # Abyss 设计、保存与 UI 修复说明
 
+## 可配置结算与示例玩法
+
+每个副本在 `config.yml` 配置结算策略，战斗时间限制在通关/失败后停止。
+
+```yaml
+settlement:
+  exit-mode: COUNTDOWN             # IMMEDIATE / COUNTDOWN / MANUAL
+  exit-delay-seconds: 60
+  show-stats: true                 # 同时遵循全局 statistics.auto-show
+  show-stats-after-exit: false     # 倒计时/主动离开后是否再打开面板
+  manual-timeout-seconds: 0        # MANUAL 的可选上限；0=等待所有玩家主动离开
+  protect-players: true
+  revive-players: true
+  script-timeout-seconds: 30       # 全部离开后，等待结算/退出脚本收尾的上限
+  failure:
+    exit-mode: COUNTDOWN
+    exit-delay-seconds: 15
+    show-stats: true
+```
+
+- `IMMEDIATE`：下一次安全调度点撤出，传送完成后显示结算；自然掉落物没有额外拾取时间。
+- `COUNTDOWN`：在副本内显示结算和独立退出倒计时；可关闭面板继续拾取，也可提前离开。
+- `MANUAL`：等待玩家点击“离开副本”或 `/abyss leave`；有人停留时不被普通实例年龄看守强制清理。
+  服主可用 `manual-timeout-seconds` 设置资源占用上限，管理员仍可取消实例。
+
+结算面板提供“继续拾取 / 领取奖励 / 离开副本”，显示耗时、评级和队员统计。
+退出后面板使用冻结数据，`/abyss stats` 可在本次登录内重看最近结果（显示后保留10分钟）。
+关闭面板不会离开副本；结算中退出传送被拒绝时保留实例关系并允许重试。
+标准 `exit_dungeon` 在完成/失败脚本中服从结算策略；明确强制退出使用 `force_exit_dungeon` 或管理命令。
+结算参与者在脚本创建时冻结，退出/掉线及 `run_script` 子脚本不丢失奖励目标。
+全部玩家离开后，世界可以短暂保留用于结算脚本收尾，已完成的脚本及时注销。
+外部指令的任意副作用无法自动回滚；商店在尚无成功动作时失败会退回金币，部分执行会明确提示并记录日志。
+
+`example` 采用90秒拾取窗口，取消原完成脚本中的固定退出；`procgen` 采用60秒，
+补齐初始化、基础通关奖励、队伍金币、可用商店和休整恢复。旅队商人使用无原版交易界面的实体。
+
 ## 2026-10-31 AXS API 与状态安全修复
 
 奖励通过公开 `PendingRewardService.savePendingBatchConfirmed` 整批确认持久化，

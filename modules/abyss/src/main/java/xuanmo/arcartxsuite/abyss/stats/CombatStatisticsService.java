@@ -21,15 +21,15 @@ public final class CombatStatisticsService {
     public boolean autoShow() { return cfg.autoShow(); }
 
     public void recordDamageDealt(AbyssInstance i, UUID player, double amount) {
-        if (cfg.enabled() && cfg.trackDamage()) i.recordDamage(player, amount);
+        if (!i.isFinished() && cfg.enabled() && cfg.trackDamage() && Double.isFinite(amount) && amount>0) i.recordDamage(player, amount);
     }
 
     public void recordDamageTaken(AbyssInstance i, UUID player, double amount) {
-        if (cfg.enabled() && cfg.trackDamageTaken()) i.recordDamageTaken(player, amount);
+        if (!i.isFinished() && cfg.enabled() && cfg.trackDamageTaken() && Double.isFinite(amount) && amount>0) i.recordDamageTaken(player, amount);
     }
 
     public void recordHealing(AbyssInstance i, UUID player, double amount) {
-        if (cfg.enabled() && cfg.trackHealing()) i.recordHealing(player, amount);
+        if (!i.isFinished() && cfg.enabled() && cfg.trackHealing() && Double.isFinite(amount) && amount>0) i.recordHealing(player, amount);
     }
 
     /** 生成个人统计文本（结算/统计 UI 用）。 */

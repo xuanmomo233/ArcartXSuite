@@ -98,6 +98,8 @@ public final class AbyssValidation {
         for(var stage:stages.stages().entrySet())for(var next:stage.getValue().next())
             require(stages.stages().containsKey(next.target()),"stages.yml: 后继阶段不存在 "+next.target());
         var entry=EntryRequirements.load(files.get("config.yml").getConfigurationSection("requirements"));
+        try{SettlementConfig.load(files.get("config.yml").getConfigurationSection("settlement"));}
+        catch(IllegalArgumentException invalid){throw new IOException("config.yml: 结算策略无效 "+invalid.getMessage(),invalid);}
         String mode=files.get("config.yml").getString("mode","classic").toLowerCase(Locale.ROOT);
         require(Set.of("classic","floors").contains(mode),"config.yml: mode 无效");
         require(!mode.equals("floors") || !floors.floors().isEmpty(),"floors.yml: floors 模式需要楼层定义");

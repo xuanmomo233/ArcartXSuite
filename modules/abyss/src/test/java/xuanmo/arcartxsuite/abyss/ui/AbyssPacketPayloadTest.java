@@ -148,6 +148,21 @@ class AbyssPacketPayloadTest {
         @SuppressWarnings("unchecked") var rows=(Map<String,Map<String,Object>>)payload.get("statRows");
         assertEquals("Member1234567890",rows.get("0").get("name"));assertEquals("0",rows.get("0").get("killsText"));
     }
+    @Test void settlementSnapshotSurvivesExitAndRuntimeCleanup() {
+        instance.recordKill(player.getUniqueId());instance.recordKill(player.getUniqueId());
+        instance.transitionTo(AbyssStatus.PREPARING,AbyssStatus.COMPLETED);
+        Runnable presentation=ui.captureSettlementStats(player,instance);instance.removePlayer(player.getUniqueId());instance.clearRuntime();
+        presentation.run();var payload=flush();
+        @SuppressWarnings("unchecked") var rows=(Map<String,Map<String,Object>>)payload.get("statRows");
+        assertEquals(2,rows.get("0").get("kills"));assertEquals(false,payload.get("canLeave"));assertTrue(ui.openRecentStats(player));
+    }
+    @Test void oldSummaryCannotExitAnotherCompletedInstance() {
+        instance.transitionTo(AbyssStatus.PREPARING,AbyssStatus.COMPLETED);ui.openStats(player,instance);
+        String token=(String)flush().get("action_token");
+        var newer=service.instances().createInstance(template,null);service.instances().playerEnterInstance(player,newer);
+        newer.transitionTo(AbyssStatus.PREPARING,AbyssStatus.COMPLETED);
+        ui.handlePacket(player,"abyss",List.of("settlement_leave",token));assertTrue(newer.hasPlayer(player.getUniqueId()));
+    }
     @Test void allShopGoodsAreVisibleAndClientMetadataIsComplete()throws Exception {
         List<ShopConfig.Goods> goods=new ArrayList<>();
         for(int i=0;i<12;i++)goods.add(new ShopConfig.Goods("g"+i,"STONE","item"+i,List.of(),i,List.of()));

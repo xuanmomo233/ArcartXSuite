@@ -8,3 +8,8 @@ mobs:
 mobs-wave-2:
   - "5,1,3: vanilla:skeleton"
   - "5,1,7: vanilla:zombie"
+
+scripts:
+  on-clear:
+    - "addvar coins 10"
+    - "message @all &e队伍获得 10 金币，可在旅队商店补给"

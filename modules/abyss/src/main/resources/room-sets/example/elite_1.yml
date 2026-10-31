@@ -18,3 +18,6 @@ mobs-wave-2:
 scripts:
   on-enter:
     - "message @trigger &6精英房！强敌出没——小心应战"
+  on-clear:
+    - "addvar coins 20"
+    - "message @all &6精英房已肃清，队伍获得 20 金币"

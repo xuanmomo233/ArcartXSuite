@@ -22,6 +22,8 @@ public final class ScriptContext {
     private final @Nullable String mobGroup;     // 怪物组回调时的组名
     private final Map<String, String> extraVars; // 运行时额外变量（如 {task_time}）
     private boolean settlement;
+    private List<Player> settlementPlayers=List.of();
+    private java.util.Set<java.util.UUID> settlementDead=java.util.Set.of();
 
     public ScriptContext(AbyssInstance instance, @Nullable Player trigger,
                          @Nullable String mobGroup, @Nullable Map<String, String> extraVars) {
@@ -37,9 +39,20 @@ public final class ScriptContext {
     public static ScriptContext settlement(AbyssInstance instance, @Nullable Player trigger) {
         ScriptContext context = of(instance, trigger);
         context.settlement = true;
+        context.settlementPlayers=List.copyOf(instance.getPlayers());
+        Object dead=instance.getVariables().get("settlement_dead_players");
+        if(dead instanceof java.util.Set<?> ids)context.settlementDead=ids.stream().filter(java.util.UUID.class::isInstance)
+            .map(java.util.UUID.class::cast).collect(java.util.stream.Collectors.toUnmodifiableSet());
+        else context.settlementDead=context.settlementPlayers.stream().filter(instance::isPlayerCurrentlyDead)
+            .map(Player::getUniqueId).collect(java.util.stream.Collectors.toUnmodifiableSet());
         return context;
     }
     public boolean allowsFinishedInstance() { return settlement; }
+    public ScriptContext child() {
+        ScriptContext child=new ScriptContext(instance,trigger,mobGroup,extraVars);
+        child.settlement=settlement;child.settlementPlayers=settlementPlayers;child.settlementDead=settlementDead;
+        return child;
+    }
 
     public static ScriptContext group(AbyssInstance instance, String group, @Nullable Player trigger) {
         return new ScriptContext(instance, trigger, group, null);
@@ -63,15 +76,15 @@ public final class ScriptContext {
             return trigger != null ? List.of(trigger) : List.of();
         }
         return switch (selector.toLowerCase()) {
-            case "@all" -> instance.getPlayers();
+            case "@all" -> settlement?settlementPlayers:instance.getPlayers();
             case "@random" -> {
-                List<Player> alive = instance.getPlayers().stream()
-                    .filter(p -> !instance.isPlayerCurrentlyDead(p)).toList();
+                List<Player> alive = (settlement?settlementPlayers:instance.getPlayers()).stream()
+                    .filter(p -> settlement?!settlementDead.contains(p.getUniqueId()):!instance.isPlayerCurrentlyDead(p)).toList();
                 yield alive.isEmpty() ? List.of()
                     : List.of(alive.get(ThreadLocalRandom.current().nextInt(alive.size())));
             }
-            case "@dead" -> instance.getPlayers().stream()
-                .filter(instance::isPlayerCurrentlyDead).toList();
+            case "@dead" -> (settlement?settlementPlayers:instance.getPlayers()).stream()
+                .filter(p->settlement?settlementDead.contains(p.getUniqueId()):instance.isPlayerCurrentlyDead(p)).toList();
             default -> {
                 Player p = Bukkit.getPlayerExact(selector);
                 yield p != null ? List.of(p) : List.of();

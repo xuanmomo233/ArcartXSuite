@@ -189,7 +189,7 @@ public final class AbyssTemplateLoader {
             stages,
             procgen,
             cfg.getString("cross-server", cfg.getString("cross_server", null)),
-            functions, dir
+            functions, SettlementConfig.load(cfg.getConfigurationSection("settlement")), dir
         );
     }
 

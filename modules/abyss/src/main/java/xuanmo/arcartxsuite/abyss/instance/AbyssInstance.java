@@ -28,6 +28,9 @@ public final class AbyssInstance {
     private final UUID instanceId;
     private volatile AbyssTemplate template;
     private boolean designMode;
+    private boolean admitted;
+    public boolean admitted() {return admitted;}
+    public void confirmAdmission() {admitted=true;}
     private final @Nullable xuanmo.arcartxsuite.abyss.party.Party party;   // 可空（单人）
     private final long createTime;
 
@@ -121,6 +124,7 @@ public final class AbyssInstance {
     }
 
     public boolean hasPlayer(UUID uuid) { return players.contains(uuid); }
+    public boolean hasEnteredPlayers() { return !enteredPlayers.isEmpty(); }
     public void addPlayer(Player p) { players.add(p.getUniqueId()); }
     public void removePlayer(UUID uuid) {
         players.remove(uuid);
@@ -232,6 +236,7 @@ public final class AbyssInstance {
 
     public void registerTask(ScheduledTask task) { tasks.add(task); }
     public void registerScriptSession(xuanmo.arcartxsuite.abyss.script.ScriptSession s) { scriptSessions.add(s); }
+    public void unregisterScriptSession(xuanmo.arcartxsuite.abyss.script.ScriptSession s) {scriptSessions.remove(s);}
     public List<ScheduledTask> getTasks() { return tasks; }
     public List<xuanmo.arcartxsuite.abyss.script.ScriptSession> getScriptSessions() { return scriptSessions; }
 

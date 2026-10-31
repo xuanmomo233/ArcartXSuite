@@ -1,0 +1,12 @@
+# 地形由 procgen 生成；这里仅控制玩法提示与奖励，不在完成脚本中强制退出。
+init:
+  - "setvar coins 10"
+start:
+  - "message @all &5深渊探索开始！&e队伍初始金币 10，清房可获得更多金币。"
+  - "message @all &7商店房可购买补给；休整房首次进入时为队伍恢复生命。"
+complete:
+  - "title @all 10 60 10 &a&l深渊通关|&e拾取掉落物后主动离开，或等待结算倒计时"
+  - "grant_reward @all 通关补给"
+  - "message @all &e奖励已登记自动到账。关闭面板可继续拾取，/abyss stats 可重看结算。"
+fail:
+  - "message @all &c挑战结束。&e结算期间可拾取已有掉落物，随后按配置退出。"

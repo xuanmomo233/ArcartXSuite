@@ -21,6 +21,20 @@ time-limit: 1200
 timeout-action: "FAIL"
 max-instances: 0
 
+settlement:
+  exit-mode: COUNTDOWN      # IMMEDIATE / COUNTDOWN / MANUAL
+  exit-delay-seconds: 60    # 保留自然掉落物的拾取窗口，倒计时期间也可主动离开
+  show-stats: true
+  show-stats-after-exit: false
+  protect-players: true
+  revive-players: true
+  manual-timeout-seconds: 0 # MANUAL 时0=仅由玩家离开，不自动回收有人的世界
+  script-timeout-seconds: 30
+  failure:
+    exit-mode: COUNTDOWN
+    exit-delay-seconds: 15
+    show-stats: true
+
 requirements:
   min-players: 1
   max-players: 4

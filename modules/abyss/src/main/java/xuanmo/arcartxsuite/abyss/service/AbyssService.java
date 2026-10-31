@@ -58,6 +58,7 @@ import xuanmo.arcartxsuite.abyss.stamina.StaminaManager;
 import xuanmo.arcartxsuite.abyss.stats.CombatStatisticsService;
 import xuanmo.arcartxsuite.abyss.task.InstanceTaskScheduler;
 import xuanmo.arcartxsuite.abyss.template.AbyssTemplate;
+import xuanmo.arcartxsuite.abyss.template.SettlementConfig;
 import xuanmo.arcartxsuite.abyss.template.AbyssTemplateLoader;
 import xuanmo.arcartxsuite.abyss.ui.AbyssUiService;
 import xuanmo.arcartxsuite.abyss.world.AbyssWorldPool;
@@ -177,6 +178,21 @@ public final class AbyssService {
     private final java.util.Set<ScheduledTask> serviceTasks=ConcurrentHashMap.newKeySet();
     private final java.util.Set<UUID> partyRefreshQueued=ConcurrentHashMap.newKeySet();
     private volatile boolean stopping;
+    private java.util.function.LongSupplier settlementClock=System::currentTimeMillis;
+    private final Map<UUID,SettlementSession> settlements=new ConcurrentHashMap<>();
+    private final Set<UUID> cleanupInProgress=ConcurrentHashMap.newKeySet();
+    private final Set<UUID> exitingPlayers=ConcurrentHashMap.newKeySet();
+    private final Set<UUID> transferringInstances=ConcurrentHashMap.newKeySet();
+    private static final class SettlementSession {
+        final SettlementConfig.Policy policy;final long deadline;final boolean immediate;
+        final Map<UUID,Runnable> presentations=new LinkedHashMap<>();
+        final Map<UUID,Location> safeLocations=new LinkedHashMap<>();
+        ScheduledTask timer;int attempts;long nextAttempt,lastAnnounced=Long.MIN_VALUE,drainingSince=-1;
+        SettlementSession(SettlementConfig.Policy policy,long now) {
+            this.policy=policy;this.deadline=policy.deadline(now);
+            immediate=policy.mode()==SettlementConfig.ExitMode.IMMEDIATE || policy.mode()==SettlementConfig.ExitMode.COUNTDOWN && policy.seconds()==0;
+        }
+    }
     private boolean started;
 
     public AbyssService(AbyssModule module, Plugin plugin, AbyssModuleConfiguration config,
@@ -499,7 +515,7 @@ public final class AbyssService {
         // procgen 示例地牢 + 房间集（缺文件才导，不覆盖服主自建）
         File pg = new File(dataFolder, "abysses/procgen");
         for (String f : new String[]{"config.yml", "procgen.yml",
-                "npcs.yml", "rewards.yml"}) {
+                "npcs.yml", "rewards.yml", "scripts.yml", "shops.yml"}) {
             File target = new File(pg, f);
             if (target.isFile()) continue;
             try {
@@ -869,6 +885,7 @@ public final class AbyssService {
     }
 
     private void publishAdmission(AbyssInstance instance,List<Player> players) {
+        instance.confirmAdmission();
         AbyssTemplate template=instance.getTemplate();
         String resolvedPlan=(String)instance.getVariables().get("plan");
         publishEvent("axs.abyss.enter", players.get(0),
@@ -1318,8 +1335,11 @@ public final class AbyssService {
         for (Player p : players) {
             instance.saveOriginalLocation(p, p.getLocation());
             instance.savePlayerGameMode(p);
-            boolean ok = teleportWithRetry(p, spawn, 3);
-            if (ok) {
+            boolean ok;
+            transferringInstances.add(instance.getInstanceId());
+            try {ok=teleportWithRetry(p,spawn,3);}
+            finally {transferringInstances.remove(instance.getInstanceId());}
+            if (ok && !instance.isFinished() && !stopping) {
                 instance.markEntered(p.getUniqueId());
             } else {
                 try { charge.rollback(); }
@@ -1579,6 +1599,10 @@ public final class AbyssService {
     /** 通关：状态→COMPLETED，跑 complete 脚本，记成绩，延时撤出+清理。 */
     public void completeDungeon(AbyssInstance instance) {
         if (isDesignInstance(instance)) return;
+        if(!instance.admitted()) {
+            logger.warning("[abyss] 尚未进图的实例不能结算通关: "+instance.getInstanceId());
+            cancelDungeon(instance);return;
+        }
         if (!instance.transitionTo(AbyssStatus.ACTIVE, AbyssStatus.COMPLETED)
             && !instance.transitionTo(AbyssStatus.PREPARING, AbyssStatus.COMPLETED)) {
             return;
@@ -1586,6 +1610,7 @@ public final class AbyssService {
         AbyssTemplate t = instance.getTemplate();
         List<UUID> completedPlayers = new ArrayList<>(instance.getPlayerUUIDs());
         List<Player> completedOnlinePlayers = instance.getPlayers();
+        beginSettlement(instance,true);
         runLifecycleScript(instance, "complete", null);
         broadcast(instance, msg("dungeon.completed",
             "dungeon", t.name(), "time", formatTime(instance.getRunningTime())));
@@ -1619,14 +1644,6 @@ public final class AbyssService {
                     "[副本] " + t.name() + " 被通关，用时 " + formatTime(time));
             }
         }
-        // 统计/宝箱 UI（auto_show）
-        if (stats.autoShow() && uiFacade != null) {
-            for (Player p : instance.getPlayers()) {
-                uiFacade.openStats(p, instance);
-            }
-        }
-        // 10 秒后统一撤出+清理（给结算/开箱时间）
-        scheduleOnce(instance, () -> finishAndCleanup(instance), 200L);
     }
 
     /** 失败：状态→FAILED，跑 fail 脚本，撤出+清理。 */
@@ -1635,8 +1652,13 @@ public final class AbyssService {
         AbyssStatus cur = instance.getStatus();
         if (cur != AbyssStatus.ACTIVE && cur != AbyssStatus.PREPARING) return;
         if (!instance.transitionTo(cur, AbyssStatus.FAILED)) return;
+        if(cur==AbyssStatus.PREPARING && !instance.hasEnteredPlayers()) {
+            broadcast(instance,msg("dungeon.failed","reason",failReasonText(reason)));
+            destroyInstance(instance,true);return;
+        }
         AbyssTemplate t = instance.getTemplate();
         List<Player> failedPlayers = instance.getPlayers();
+        beginSettlement(instance,false);
         runLifecycleScript(instance, "fail", null);
         broadcast(instance, msg("dungeon.failed", "reason", failReasonText(reason)));
         publishEvent("axs.abyss.fail", null, Map.of(
@@ -1647,7 +1669,6 @@ public final class AbyssService {
                 "dungeon", t.id(), "instance", instance.getInstanceId().toString(),
                 "reason", reason.name()));
         }
-        scheduleOnce(instance, () -> finishAndCleanup(instance), 100L);
     }
 
     /** 取消（管理/无人/卸载）：不跑脚本。 */
@@ -1661,20 +1682,140 @@ public final class AbyssService {
 
     /** 结束统一处理：玩家撤出 → 世界释放 → 实例销毁。 */
     private void finishAndCleanup(AbyssInstance instance) {
-        // 撤出全部在线玩家
-        for (Player p : instance.getPlayers()) {
-            playerExit(instance, p, LeaveReason.END);
+        if(instances.getInstance(instance.getInstanceId())!=instance)return;
+        if(transferringInstances.contains(instance.getInstanceId())) {scheduleDelayedRaw(()->finishAndCleanup(instance),1L);return;}
+        if(!cleanupInProgress.add(instance.getInstanceId()))return;
+        try {
+            for(Player p:instance.getPlayers())playerExit(instance,p,LeaveReason.END);
+            // A rejected return teleport keeps the instance owned and safe for retry.
+            if(instance.getOnlinePlayerCount()>0)return;
+            SettlementSession draining=settlements.get(instance.getInstanceId());
+            if(draining!=null) {
+                long now=settlementClock.getAsLong();
+                if(draining.drainingSince<0)draining.drainingSince=now;
+                var pending=instance.getScriptSessions().stream().filter(s->s.context().allowsFinishedInstance()).toList();
+                if(!pending.isEmpty() && now-draining.drainingSince<draining.policy.scriptTimeoutSeconds()*1000L)return;
+                if(!pending.isEmpty())logger.warning("[abyss] 结算脚本收尾超时，取消未执行部分: "+instance.getInstanceId()+" "+pending.stream().map(s->s.name()+"@"+s.nextLineIndex()).toList());
+            }
+            SettlementSession session=settlements.remove(instance.getInstanceId());
+            if(session!=null && session.timer!=null)session.timer.cancel();
+            destroyInstance(instance,false);
+        } finally {cleanupInProgress.remove(instance.getInstanceId());}
+    }
+
+    private void beginSettlement(AbyssInstance instance,boolean complete) {
+        SettlementConfig config=instance.getTemplate().settlement()!=null?instance.getTemplate().settlement():SettlementConfig.DEFAULT;
+        SettlementSession session=new SettlementSession(complete?config.complete():config.failure(),settlementClock.getAsLong());
+        if(settlements.putIfAbsent(instance.getInstanceId(),session)!=null)return;
+        if(roomManager!=null)roomManager.beginSettlement(instance);
+        if(procgenManager!=null)procgenManager.beginSettlement(instance);
+        if(mobGroups!=null) {
+            int[] progress=mobGroups.groupProgress(instance);
+            instance.getVariables().put("settlement_group_total",progress[0]);
+            instance.getVariables().put("settlement_group_done",progress[1]);
+            mobGroups.cleanup(instance);
         }
-        destroyInstance(instance, false);
+        instance.getVariables().put("settlement_dead_players",instance.getPlayers().stream().filter(instance::isPlayerCurrentlyDead)
+            .map(Player::getUniqueId).collect(java.util.stream.Collectors.toUnmodifiableSet()));
+        for(Player player:instance.getPlayers()) {
+            if(session.policy.revivePlayers() && instance.isPlayerCurrentlyDead(player))revivePlayer(instance,player);
+            Location safe=player.getLocation();
+            if(safe!=null)session.safeLocations.put(player.getUniqueId(),safe.clone());
+            if(uiFacade instanceof AbyssUiService ui) {
+                Runnable show=ui.captureSettlementStats(player,instance);
+                if(session.policy.showStats() && stats.autoShow())session.presentations.put(player.getUniqueId(),show);
+                ui.closeInstanceViews(player);ui.pushHudUpdate(player,instance);
+            } else if(uiFacade!=null && session.policy.showStats() && stats.autoShow())
+                session.presentations.put(player.getUniqueId(),()->uiFacade.openStats(player,instance));
+            player.sendMessage("§a"+settlementHint(instance));
+        }
+        if(!session.immediate)scheduleOnce(instance,()->session.presentations.values().forEach(Runnable::run),3L);
+        session.timer=scheduler.scheduleEverySeconds(plugin,()->settlementTick(instance),1,1);
+        if(session.timer!=null)instance.registerTask(session.timer);
+        if(session.immediate)scheduleOnce(instance,()->settlementTick(instance),2L);
+    }
+
+    private void settlementTick(AbyssInstance instance) {
+        SettlementSession session=settlements.get(instance.getInstanceId());
+        if(session==null)return;
+        if(instance.getOnlinePlayerCount()==0){finishAndCleanup(instance);return;}
+        long now=settlementClock.getAsLong(),remaining=session.policy.remaining(now,session.deadline);
+        for(Player player:instance.getPlayers()) {
+            if(session.policy.protectPlayers() && instance.getWorld()!=null && player.getLocation().getY()<instance.getWorld().getMinHeight()+2)
+                rescueSettlementPlayer(instance,player);
+            if(uiFacade instanceof AbyssUiService ui){ui.pushSettlementUpdate(player,instance);ui.pushHudUpdate(player,instance);}
+            if(remaining>0 && remaining!=session.lastAnnounced && (remaining==10 || remaining<=5 || remaining%30==0))
+                player.sendMessage("§e副本将在 "+remaining+" 秒后离开；可先拾取掉落物，或使用 /abyss leave。");
+        }
+        session.lastAnnounced=remaining;
+        if(now>=session.deadline && now>=session.nextAttempt && session.attempts<3) {
+            session.attempts++;session.nextAttempt=now+2000;
+            finishAndCleanup(instance);
+            if(settlements.containsKey(instance.getInstanceId()) && session.immediate && session.attempts==1)
+                session.presentations.values().forEach(Runnable::run);
+        }
+    }
+
+    public boolean isSettling(AbyssInstance instance) {return settlements.containsKey(instance.getInstanceId());}
+    public boolean protectsSettlement(AbyssInstance instance) {
+        SettlementSession session=settlements.get(instance.getInstanceId());return session!=null && session.policy.protectPlayers();
+    }
+    public void rescueSettlementPlayer(AbyssInstance instance,Player player) {
+        SettlementSession session=settlements.get(instance.getInstanceId());
+        if(session!=null){Location safe=session.safeLocations.get(player.getUniqueId());if(safe!=null)teleportWithRetry(player,safe,3);}
+    }
+    public String settlementHint(AbyssInstance instance) {
+        SettlementSession session=settlements.get(instance.getInstanceId());
+        if(session==null)return "结算已保存，可关闭面板；奖励由宿主自动到账。";
+        if(session.attempts>=3)return "自动离开未完成，请使用 /abyss leave 重试或联系管理员。";
+        long seconds=session.policy.remaining(settlementClock.getAsLong(),session.deadline);
+        if(seconds<0)return "可继续拾取掉落物；点击离开副本或使用 /abyss leave 主动退出。";
+        if(seconds==0)return "正在离开副本，结算面板将在传送完成后显示。";
+        return "请先拾取掉落物；"+seconds+" 秒后离开，可关闭面板继续拾取。";
+    }
+    public boolean isExiting(Player player) {return exitingPlayers.contains(player.getUniqueId());}
+    public long settlementRemaining(AbyssInstance instance) {
+        SettlementSession session=settlements.get(instance.getInstanceId());
+        return session==null?-2:session.policy.remaining(settlementClock.getAsLong(),session.deadline);
+    }
+    public double settlementTimeRatio(AbyssInstance instance) {
+        SettlementSession session=settlements.get(instance.getInstanceId());
+        if(session==null)return 0;
+        if(session.deadline==Long.MAX_VALUE)return 1;
+        int total=session.policy.mode()==SettlementConfig.ExitMode.MANUAL?session.policy.manualTimeoutSeconds():session.policy.seconds();
+        return total<=0?0:Math.min(1d,Math.max(0d,(double)settlementRemaining(instance)/total));
+    }
+    public void requestScriptExit(AbyssInstance instance,Player player) {
+        if(!instance.isFinished())playerExit(instance,player,LeaveReason.QUIT);
+    }
+    public void handleExternalDeparture(AbyssInstance instance,Player player) {
+        playerExit(instance,player,LeaveReason.QUIT,false);
     }
 
     /** 玩家退出副本（主动/结束/管理）：传送回原位置 + 恢复模式。 */
-    public void playerExit(AbyssInstance instance, Player player, LeaveReason reason) {
-        if (!instance.hasPlayer(player.getUniqueId())) return;
+    public boolean playerExit(AbyssInstance instance, Player player, LeaveReason reason) {
+        return playerExit(instance,player,reason,true);
+    }
+    private boolean playerExit(AbyssInstance instance,Player player,LeaveReason reason,boolean teleport) {
+        if (!instance.hasPlayer(player.getUniqueId())) return true;
+        if(isExiting(player))return false;
         boolean designing = isDesignInstance(instance);
         // 先取快照再移除：removePlayer 会清掉 originalLocations/savedGameModes
         Location back = instance.getOriginalLocation(player.getUniqueId());
         GameMode saved = instance.getSavedGameMode(player.getUniqueId());
+        if(teleport && player.isOnline() && instance.getWorld()!=null && player.getWorld()==instance.getWorld()) {
+            if(back==null || back.getWorld()==null || back.getWorld()==instance.getWorld()) {
+                back=links!=null?links.essentialsSpawn(player):null;
+                if(back==null || back.getWorld()==instance.getWorld())back=org.bukkit.Bukkit.getWorlds().stream()
+                    .filter(w->w!=instance.getWorld() && !w.getName().startsWith(config.abyss().worldPrefix()))
+                    .findFirst().map(World::getSpawnLocation).orElse(null);
+            }
+            boolean returned=false;
+            exitingPlayers.add(player.getUniqueId());
+            try {if(back!=null)returned=teleportWithRetry(player,back,3);}
+            finally {exitingPlayers.remove(player.getUniqueId());}
+            if(!returned){player.sendMessage("§c暂时无法返回安全位置，副本与物品已保留，请稍后重试退出。");return false;}
+        }
         instance.removePlayer(player.getUniqueId());
         instances.playerLeaveInstance(player);
         // 副本内属性修饰出本即清（apply_attribute 动作施加）
@@ -1682,9 +1823,6 @@ public final class AbyssService {
 
         // 先传送后恢复模式：旁观者若已坠入虚空，先回安全点再切回生存，
         // 避免恢复 SURVIVAL 的瞬间在虚空世界吃到真实致死伤害。
-        if (back != null && player.isOnline()) {
-            try { player.teleport(back); } catch (Throwable ignored) { }
-        }
         if (saved != null && player.getGameMode() != saved) {
             player.setGameMode(saved);
         } else {
@@ -1708,10 +1846,17 @@ public final class AbyssService {
         if (reason != LeaveReason.END && reason != LeaveReason.DISCONNECT) {
             player.sendMessage(msg("dungeon.exited"));
         }
-        publishEvent("axs.abyss.leave", player, Map.of(
+        if(!designing && instance.admitted())publishEvent("axs.abyss.leave", player, Map.of(
             "dungeon", instance.getTemplate().id(),
             "instance", instance.getInstanceId().toString(),
             "reason", reason.name()));
+        SettlementSession settlement=settlements.get(instance.getInstanceId());
+        if(settlement!=null) {
+            Runnable presentation=settlement.presentations.get(player.getUniqueId());
+            if(presentation!=null && (settlement.immediate||settlement.policy.showAfterExit()))scheduleDelayedRaw(presentation,3L);
+            if(instance.getOnlinePlayerCount()==0 && !cleanupInProgress.contains(instance.getInstanceId()))
+                scheduleDelayedRaw(()->finishAndCleanup(instance),1L);
+        }
         // 退出后实例无人 → 倒计时清理（宽限等人重连）
         if (instance.getOnlinePlayerCount() == 0 && !instance.isFinished()) {
             long delay = config.abyss().emptyCleanupDelaySeconds() * 20L;
@@ -1721,6 +1866,7 @@ public final class AbyssService {
                 }
             }, delay);
         }
+        return true;
     }
 
     /** 玩家断线（监听器调用）：存待恢复位置+从实例移除。 */
@@ -1759,6 +1905,7 @@ public final class AbyssService {
             }, delay);
         }
         partyManager.onQuit(player);
+        if(instance.isFinished() && instance.getOnlinePlayerCount()==0)scheduleDelayedRaw(()->finishAndCleanup(instance),1L);
     }
 
     /** 玩家进服（监听器调用）：恢复位置 + 预载数据 + 异常退出恢复动作。 */
@@ -1915,6 +2062,10 @@ public final class AbyssService {
             runScript(instance, lines, settlement ? ScriptContext.settlement(instance, trigger)
                 : ScriptContext.of(instance, trigger));
         }
+    }
+    public void runCustomScript(AbyssInstance instance,String name,ScriptContext parent) {
+        List<String> lines=instance.getTemplate().scripts().customs().get(name.toLowerCase(java.util.Locale.ROOT));
+        if(lines!=null && !lines.isEmpty())runScript(instance,lines,parent.child());
     }
 
     // ═══ 动作支持接口（BuiltinActions 调用） ═══
@@ -2117,6 +2268,9 @@ public final class AbyssService {
 
     /** 销毁实例：清理全部子系统 + 释放世界 + 从注册表移除。 */
     public void destroyInstance(AbyssInstance instance, boolean releasePlayers) {
+        if(transferringInstances.contains(instance.getInstanceId())) {scheduleDelayedRaw(()->destroyInstance(instance,releasePlayers),1L);return;}
+        SettlementSession settlement=settlements.remove(instance.getInstanceId());
+        if(settlement!=null && settlement.timer!=null)settlement.timer.cancel();
         designOwners.remove(instance.getTemplate().id(), instance.getInstanceId());
         if (releasePlayers) {
             for (Player p : instance.getPlayers()) {
@@ -2187,9 +2341,10 @@ public final class AbyssService {
         if (Bukkit.isPrimaryThread()) {
             r.run();
         } else {
-            Bukkit.getScheduler().runTask(plugin, r);
+            scheduler.scheduleOnce(plugin,r,0L);
         }
     }
+    public boolean running() {return started && !stopping;}
 
     private void broadcast(AbyssInstance instance, String message) {
         for (Player p : instance.getPlayers()) {
@@ -2258,6 +2413,11 @@ public final class AbyssService {
                 continue;
             }
             try {
+                if(i.isFinished()) {
+                    if(i.getOnlinePlayerCount()==0)finishAndCleanup(i);
+                    else if(!settlements.containsKey(i.getInstanceId()))finishAndCleanup(i);
+                    continue;
+                }
                 // 消失扫描（怪被刷掉兜底）
                 mobGroups.sweepVanished(i);
                 // 阶段机慢扫：变量条件等无回调事件的路径兜底

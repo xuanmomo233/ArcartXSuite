@@ -6,4 +6,5 @@ weight: 10
 
 scripts:
   on-enter:
-    - "message @trigger &a抵达休整点，喘口气吧"
+    - "heal @all 6"
+    - "message @all &a抵达休整点，队伍恢复了 6 点生命"

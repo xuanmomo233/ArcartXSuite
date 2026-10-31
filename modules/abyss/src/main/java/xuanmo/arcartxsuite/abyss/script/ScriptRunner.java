@@ -55,6 +55,7 @@ public final class ScriptRunner {
                              AbyssInstance instance) {
         ScriptSession session = new ScriptSession(name, lines, context, this);
         instance.registerScriptSession(session);
+        session.completion().whenComplete((done,error)->instance.unregisterScriptSession(session));
         runOnMain(session::resume);
         return session;
     }

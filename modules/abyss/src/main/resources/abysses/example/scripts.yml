@@ -711,17 +711,14 @@ guide_guide:
 
 complete:
   - "message @all &a&l通关！深渊领主已陨落！"
-  - "title @all 10 60 10 &a&l通关|&e奖励已发放"
+  - "title @all 10 60 10 &a&l通关|&e请先拾取掉落物，奖励自动到账"
   - "grant_reward @all clear_pack"
   - "open_chest_ui @all final_chest"
   - "firework @all BURST GOLD"
-  - "wait 5"
-  - "exit_dungeon @all"
+  - "message @all &e可关闭结算面板继续拾取，或点击离开副本。/abyss stats 可重新查看结算。"
 
 fail:
-  - "message @all &c试炼失败……地牢把你们吐了出来"
-  - "wait 2"
-  - "exit_dungeon @all"
+  - "message @all &c试炼结束。&e请查看结算并拾取已有掉落物，退出时间由 settlement.failure 设置。"
 
 player-death:
   - "message @all &c{player} 阵亡了！&7将在 8 秒后复活，撑住！"
