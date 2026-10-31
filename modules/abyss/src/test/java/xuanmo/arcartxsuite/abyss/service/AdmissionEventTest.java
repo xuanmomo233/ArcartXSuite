@@ -29,7 +29,7 @@ class AdmissionEventTest {
             if(constructor.getParameterTypes()[i]==Logger.class)args[i]=Logger.getAnonymousLogger();
         }
         var service=(AbyssService)constructor.newInstance(args);
-        var bus=mock(EventBusCapability.class);service.setEventBusProvider(()->bus);
+        var bus=mock(EventBusCapability.class);service.setEventBusProvider(()->bus);clearInvocations(bus);
         var instances=new AbyssInstanceManager();set(service,"instances",instances);set(service,"started",true);
         set(service,"partyManager",new PartyManager(cfg.party(),s->{},null));
         var template=mock(AbyssTemplate.class,withSettings().mockMaker(org.mockito.MockMakers.INLINE));

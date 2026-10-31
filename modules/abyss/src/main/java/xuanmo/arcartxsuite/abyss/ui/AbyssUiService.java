@@ -111,6 +111,10 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         String ui=foregroundUis.get(p.getUniqueId());
         if(expected==null || data.size()<=index || !expected.equals(data.get(index)) || ui==null || !views.isOpen(p,ui))return false;
         String action=data.get(0);
+        if(action.startsWith("shop_")||action.startsWith("input_")||action.startsWith("buff_")) {
+            AbyssInstance instance=service.instances().getInstance(p);
+            if(instance==null || !instance.admitted() || instance.isFinished() || instance.isPlayerCurrentlyDead(p))return false;
+        }
         if(action.startsWith("design_"))return Set.of(designUi(),designPickUi(),designEditUi()).contains(ui);
         if(action.startsWith("party_"))return ui.equals(partyUi()) || ui.equals(lobbyUi());
         if(action.startsWith("lobby_"))return ui.equals(lobbyUi());

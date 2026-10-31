@@ -282,11 +282,12 @@ public final class AbyssService {
             this::locParser);
         interacts = new InteractManager(scriptConditionEvaluator, logger);
         interacts.setCallbacks((inst, e) -> {
-            runScript(inst, e.script(),
-                ScriptContext.withVars(inst, e.trigger(), Map.of("interact", e.interactName())));
             // 交互触发是阶段推进事件源之一
             if (stageManager != null) stageManager.onEvent(inst);
         }, this::locParser);
+        interacts.setScriptExecutor((inst,event)->runScript(inst,event.script(),
+            ScriptContext.withVars(inst,event.trigger(),Map.of("interact",event.interactName()))),this::runOnMain,
+            inst->failDungeon(inst,FailReason.SCRIPTED));
         interacts.setExternalItemMatcher((req, hand) -> rewards.matches(req, hand));
         puzzleManager = new xuanmo.arcartxsuite.abyss.puzzle.PuzzleManager(logger);
         puzzleManager.setCallback(new PuzzleCallbackImpl());

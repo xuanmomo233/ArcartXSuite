@@ -118,6 +118,7 @@ class AbyssPacketPayloadTest {
         var target=mock(AbyssTemplate.class,withSettings().mockMaker(org.mockito.MockMakers.INLINE));when(target.shops()).thenReturn(new ShopConfig(Map.of("test",shop)));
         instance=service.instances().createInstance(target,null);service.instances().playerEnterInstance(player,instance);instance.getVariables().put("coins",5);
         instance.transitionTo(AbyssStatus.PREPARING,AbyssStatus.ACTIVE);
+        instance.confirmAdmission();
         var runner=new xuanmo.arcartxsuite.abyss.script.ScriptRunner(null,mock(SchedulerAPI.class),()->service,java.util.logging.Logger.getAnonymousLogger());
         runner.actions().register("purchase_failure",(ctx,args,s)->{throw new IllegalStateException("unavailable");});
         runner.actions().register("purchase_effect",(ctx,args,s)->{});set("scriptRunner",runner);

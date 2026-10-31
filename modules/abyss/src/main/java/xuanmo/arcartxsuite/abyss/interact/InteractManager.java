@@ -32,13 +32,27 @@ public final class InteractManager {
     private Function<AbyssInstance, Function<String, Location>> locParser;
     private final ScriptConditionEvaluator evaluator;
     private final Logger logger;
+    private final java.util.function.LongSupplier clock;
+    private java.util.function.BiFunction<AbyssInstance,FireEvent,xuanmo.arcartxsuite.abyss.script.ScriptSession> scriptExecutor;
+    private java.util.function.Consumer<Runnable> onMain=Runnable::run;
+    private java.util.function.Consumer<AbyssInstance> partialFailure=i->{};
+    private final java.util.Set<String> pending=ConcurrentHashMap.newKeySet();
 
     public record FireEvent(String interactName, java.util.List<String> script,
                             @Nullable Player trigger) { }
 
     public InteractManager(ScriptConditionEvaluator evaluator, Logger logger) {
+        this(evaluator,logger,()->System.nanoTime()/1_000_000L);
+    }
+    public InteractManager(ScriptConditionEvaluator evaluator,Logger logger,java.util.function.LongSupplier clock) {
         this.evaluator = evaluator;
         this.logger = logger;
+        this.clock=clock;
+    }
+
+    public void setScriptExecutor(java.util.function.BiFunction<AbyssInstance,FireEvent,xuanmo.arcartxsuite.abyss.script.ScriptSession> executor,
+            java.util.function.Consumer<Runnable> main,java.util.function.Consumer<AbyssInstance> failure) {
+        scriptExecutor=executor;onMain=main;partialFailure=failure;
     }
 
     public void setCallbacks(BiConsumer<AbyssInstance, FireEvent> fireCallback,
@@ -194,62 +208,72 @@ public final class InteractManager {
     }
 
     private void tryFire(AbyssInstance instance, Interact i, Player player) {
+        if(instance.isFinished() || !instance.admitted() || !instance.hasPlayer(player.getUniqueId())
+            || instance.isPlayerCurrentlyDead(player))return;
         String globalKey = "interact:" + i.name();
-        String playerKey = globalKey + ":" + player.getUniqueId();
+        String playerKey = instance.getInstanceId()+":"+globalKey+":"+player.getUniqueId();
+        String pendingKey=i.once()?instance.getInstanceId()+":"+globalKey:playerKey;
+        if(pending.contains(pendingKey))return;
+        long previous=lastFires.getOrDefault(playerKey,Long.MIN_VALUE);
+        if(previous!=Long.MIN_VALUE && clock.getAsLong()-previous<500)return;
         if (i.once()) {
             // once = 实例全局一次
             if (instance.isTriggered(globalKey)) return;
-        } else {
-            // 非 once：每玩家 500ms 防抖（防同一事件多次匹配触发）
-            long last = lastFire(player, i);
-            if (System.currentTimeMillis() - last < 500) return;
         }
         // 条件评估（失败前先记防抖，否则 failMessage 会每 500ms 刷屏）
         if (!i.conditions().isEmpty()
             && evaluator.firstFailed(player, i.conditions()) != null) {
-            lastFires.put(playerKey, System.currentTimeMillis());
+            lastFires.put(playerKey,clock.getAsLong());
             if (i.failMessage() != null) {
                 // failMessage 独立节流：5 秒内不重复提示
                 Long lastMsg = lastFailMsgs.get(playerKey);
                 if (lastMsg == null
-                    || System.currentTimeMillis() - lastMsg >= 5000) {
-                    lastFailMsgs.put(playerKey, System.currentTimeMillis());
+                    || clock.getAsLong() - lastMsg >= 5000) {
+                    lastFailMsgs.put(playerKey,clock.getAsLong());
                     player.sendMessage(org.bukkit.ChatColor.translateAlternateColorCodes('&', i.failMessage()));
                 }
             }
             return;
         }
-        if (i.once()) {
-            instance.markTriggeredOnce(globalKey);
-        }
-        lastFires.put(playerKey, System.currentTimeMillis());
-        // 机关解谜：成功触发即上报（不论是否挂脚本）
-        if (puzzleCallback != null) {
-            puzzleCallback.accept(instance, new FireEvent(i.name(), i.script(), player));
-        }
-        if (fireCallback != null && !i.script().isEmpty()) {
-            fireCallback.accept(instance, new FireEvent(i.name(), i.script(), player));
-        }
+        lastFires.put(playerKey,clock.getAsLong());
+        FireEvent event=new FireEvent(i.name(),i.script(),player);
+        if(scriptExecutor!=null && !i.script().isEmpty()) {
+            if(!pending.add(pendingKey))return;
+            xuanmo.arcartxsuite.abyss.script.ScriptSession execution;
+            try{execution=scriptExecutor.apply(instance,event);}
+            catch(RuntimeException failure){pending.remove(pendingKey);logger.warning("[abyss] 交互未启动，保留重试资格: "+i.name());return;}
+            if(execution==null){pending.remove(pendingKey);return;}
+            execution.completion().whenComplete((success,error)->onMain.accept(()->{
+                pending.remove(pendingKey);
+                if(instance.isFinished())return;
+                if(error==null && Boolean.TRUE.equals(success))completeFire(instance,i,event);
+                else if(execution.successfulActions()>0){logger.warning("[abyss] 交互部分执行失败，终止实例以避免重复发放: "+i.name());partialFailure.accept(instance);}
+            }));
+        } else completeFire(instance,i,event);
+    }
+
+    private void completeFire(AbyssInstance instance,Interact interact,FireEvent event) {
+        if(interact.once() && !instance.markTriggeredOnce("interact:"+interact.name()))return;
+        if(puzzleCallback!=null)puzzleCallback.accept(instance,event);
+        if(fireCallback!=null)fireCallback.accept(instance,event);
     }
 
     private final Map<String, Long> lastFires = new ConcurrentHashMap<>();
     private final Map<String, Long> lastFailMsgs = new ConcurrentHashMap<>();
     /** ENTER_REGION 边沿触发用的"当前在区域内"集合：key = 实例id:交互名:玩家uuid。 */
     private final java.util.Set<String> insideRegions = ConcurrentHashMap.newKeySet();
-    private long lastFire(Player p, Interact i) {
-        return lastFires.getOrDefault("interact:" + i.name() + ":" + p.getUniqueId(), 0L);
-    }
 
     public void cleanup(AbyssInstance instance) {
         Map<String, Interact> map = active.remove(instance.getInstanceId());
         if (map != null) {
             // 清掉本实例交互点的防抖/提示记录，避免残留影响同名模板的下个实例
             for (String name : map.keySet()) {
-                String prefix = "interact:" + name + ":";
+                String prefix = instance.getInstanceId()+":interact:"+name+":";
                 lastFires.keySet().removeIf(k -> k.startsWith(prefix));
                 lastFailMsgs.keySet().removeIf(k -> k.startsWith(prefix));
             }
             insideRegions.removeIf(k -> k.startsWith(instance.getInstanceId() + ":"));
+            pending.removeIf(k->k.startsWith(instance.getInstanceId()+":"));
         }
     }
 }

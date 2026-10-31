@@ -230,6 +230,7 @@ public final class DungeonNpcManager {
 
     /** 统一点击处理：once 判定 → 会话/降级对话 → click-script。 */
     private void fireClick(AbyssInstance instance, Player player, String npcName) {
+        if(instance.isFinished() || !instance.admitted() || !instance.hasPlayer(player.getUniqueId()) || instance.isPlayerCurrentlyDead(player))return;
         DungeonNpc npc = instance.getTemplate().npcs().npcs().get(npcName);
         if (npc == null) return;
         String clickKey = instance.getInstanceId() + ":" + npcName + ":" + player.getUniqueId();
