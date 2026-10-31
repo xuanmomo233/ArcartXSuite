@@ -710,20 +710,28 @@ controls:
                             width: 2
                             color: var.accentDim
                       邀请文本:
-                        type: Text
+                        type: Canvas
                         attribute:
-                          limitControl: self
-                          height: 68
-                          width: "self.parent.width - 192"
-                          lineSpace: 8
                           x: 16
                           y: 10
-                          texts:
-                            - "'&f' + self.parent.entry['from'] + ' &7邀请你加入'"
-                            - "'&6' + self.parent.entry['partyName']"
-                          fontSize: 22
-                          limit: 16
+                          width: self.parent.width - 192
+                          height: 68
                           through: true
+                        children:
+                          文字:
+                            type: Text
+                            attribute:
+                              lineSpace: 8
+                              texts:
+                              - '''&f'' + self.parent.parent.entry[''from''] + '' &7邀请你加入'''
+                              - '''&6'' + self.parent.parent.entry[''partyName'']'
+                              fontSize: 22
+                              limit: 16
+                              point: ~top_left
+                              width: self.parent.width
+                              height: self.parent.height
+                              limitControl: self.parent
+                              through: true
                       拒绝按钮:
                         type: Canvas
                         attribute:

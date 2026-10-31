@@ -37,6 +37,7 @@ def validate_controls(name, document):
         definition = node['definition']
         kind = definition.get('type', '').lower()
         attributes = definition.get('attribute', {})
+        assert attributes.get('limitControl') != 'self', f"{name}: self clipping recurses during native hit testing {node['path']}"
         if kind in ['hgrid', 'vgrid']:
             assert not {'hSpace', 'vSpace', 'spaceBetween'} & attributes.keys(), f"{name}: unsupported grid spacing {node['path']}"
         if kind == 'scroll':

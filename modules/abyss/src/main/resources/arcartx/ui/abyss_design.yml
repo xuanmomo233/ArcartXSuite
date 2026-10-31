@@ -206,17 +206,25 @@ controls:
           radius: 4
           through: true
       标题:
-        type: Text
+        type: Canvas
         attribute:
-          limitControl: self
-          height: 44
-          width: "var.viewW - 420"
           point: ~top_left
-          x: "72 - var.offX"
+          x: 72 - var.offX
           y: 14
-          texts: "'&6远征制图  &7/  &f' + var.dungeonName"
-          fontSize: 36
+          width: var.viewW - 420
+          height: 44
           through: true
+        children:
+          文字:
+            type: Text
+            attribute:
+              texts: '''&6远征制图  &7/  &f'' + var.dungeonName'
+              fontSize: 36
+              point: ~top_left
+              width: self.parent.width
+              height: self.parent.height
+              limitControl: self.parent
+              through: true
       副标题:
         type: Text
         attribute:
@@ -396,18 +404,26 @@ controls:
                       visible: "self.parent.entry['depth'] > 0"
                       through: true
                   名:
-                    type: Text
+                    type: Canvas
                     attribute:
-                      height: 24
-                      limitControl: self
-                      width: "self.parent.width - self.x - 14"
                       point: ~middle_left
-                      x: "self.parent.entry['depth'] == 0 ? 22 : 36"
+                      x: 'self.parent.entry[''depth''] == 0 ? 22 : 36'
                       y: -12
-                      texts: "self.parent.entry['depth'] == 0 ? '&6' + self.parent.entry['label'] : '&7└ ' + self.parent.entry['label']"
-                      fontSize: 24
-                      limit: 12
+                      width: self.parent.width - self.x - 14
+                      height: 24
                       through: true
+                    children:
+                      文字:
+                        type: Text
+                        attribute:
+                          texts: 'self.parent.parent.entry[''depth''] == 0 ? ''&6'' + self.parent.parent.entry[''label''] : ''&7└ '' + self.parent.parent.entry[''label'']'
+                          fontSize: 24
+                          limit: 12
+                          point: ~top_left
+                          width: self.parent.width
+                          height: self.parent.height
+                          limitControl: self.parent
+                          through: true
                   数:
                     type: Text
                     attribute:
@@ -759,18 +775,26 @@ controls:
           height: 114
         children:
           提示字:
-            type: Text
+            type: Canvas
             attribute:
-              height: 26
-              limitControl: self
               point: ~top_left
               x: 28
               y: 22
-              texts: "var.saving ? '&e正在保存，请等待完成提示' : '&7' + var.worldSaveHint"
-              width: "var.contentW - 760"
-              limit: 22
-              fontSize: 26
+              width: var.contentW - 760
+              height: 26
               through: true
+            children:
+              文字:
+                type: Text
+                attribute:
+                  texts: 'var.saving ? ''&e正在保存，请等待完成提示'' : ''&7'' + var.worldSaveHint'
+                  limit: 22
+                  fontSize: 26
+                  point: ~top_left
+                  width: self.parent.width
+                  height: self.parent.height
+                  limitControl: self.parent
+                  through: true
           底栏副注:
             type: Text
             attribute:

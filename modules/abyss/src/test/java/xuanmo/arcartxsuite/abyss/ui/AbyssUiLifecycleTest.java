@@ -12,6 +12,7 @@ class AbyssUiLifecycleTest {
     @BeforeEach void setup() {
         player=mock(Player.class);when(player.getUniqueId()).thenReturn(UUID.randomUUID());when(player.isOnline()).thenReturn(true);
         bridge=mock(PacketBridgeAPI.class);when(bridge.openUiUnsafe(any(),anyString())).thenReturn(true);
+        when(bridge.sendPacket(any(),anyString(),anyString(),any())).thenReturn(true);
         deferred=new ArrayList<>();lifecycle=new AbyssUiLifecycle(bridge,(r,delay)->{assertEquals(2L,delay);deferred.add(r);});
     }
     @Test void firstPacketWaitsForMountAndUpdateIsDeliveredAfterInit() {
@@ -59,5 +60,21 @@ class AbyssUiLifecycleTest {
         deferred.get(0).run();
         verify(bridge,times(1)).sendPacket(player,"ui","update",Map.of("count",99));
         verify(bridge,times(2)).sendPacket(any(),anyString(),anyString(),any());
+    }
+    @Test void rejectedInitRetainsQueuedUpdatesUntilSuccessfulRetry() {
+        when(bridge.sendPacket(eq(player),eq("ui"),eq("init"),any())).thenReturn(false,true);
+        lifecycle.open(player,"ui","init",Map.of(),false);
+        lifecycle.send(player,"ui","update",Map.of("count",1));deferred.get(0).run();
+        verify(bridge,never()).sendPacket(eq(player),eq("ui"),eq("update"),any());
+        lifecycle.send(player,"ui","update",Map.of("count",2));deferred.get(1).run();
+        verify(bridge).sendPacket(player,"ui","update",Map.of("count",2));
+    }
+    @Test void repeatedInitFailureClosesTheViewAndStopsRetrying() {
+        when(bridge.sendPacket(eq(player),eq("ui"),eq("init"),any())).thenReturn(false);
+        lifecycle.open(player,"ui","init",Map.of(),false);
+        for(int i=0;i<3;i++)deferred.get(i).run();
+        assertEquals(3,deferred.size());assertFalse(lifecycle.isOpen(player,"ui"));
+        verify(bridge).closeUiUnsafe(player,"ui");
+        verify(player).sendMessage(contains("加载失败"));
     }
 }

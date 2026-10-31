@@ -461,17 +461,25 @@ controls:
                           visible: self.parent.entry['leader']
                           through: true
                       成员名:
-                        type: Text
+                        type: Canvas
                         attribute:
-                          limitControl: self
-                          height: 28
-                          width: 202
                           point: ~bottom_center
                           y: -60
-                          texts: "'&f' + self.parent.entry['name']"
-                          fontSize: 20
-                          limit: 16
+                          width: 202
+                          height: 28
                           through: true
+                        children:
+                          文字:
+                            type: Text
+                            attribute:
+                              texts: '''&f'' + self.parent.parent.entry[''name'']'
+                              fontSize: 20
+                              limit: 16
+                              point: ~top_left
+                              width: self.parent.width
+                              height: self.parent.height
+                              limitControl: self.parent
+                              through: true
                       准备状态:
                         type: Text
                         attribute:
@@ -681,18 +689,26 @@ controls:
               visible: "var.hasDungeon || var.isLeader"
               through: true
           副本信息行2:
-            type: Text
+            type: Canvas
             attribute:
-              limitControl: self
-              height: 32
-              width: "var.rightW - 52"
-              x: "var.rightX + 26"
+              x: var.rightX + 26
               y: 440
-              texts: "var.hasDungeon ? '&7' + var.dungeon['desc0'] : '&7等待队长选择目标副本'"
-              fontSize: 24
-              limit: 23
-              visible: "var.hasDungeon || !var.isLeader"
+              width: var.rightW - 52
+              height: 32
+              visible: var.hasDungeon || !var.isLeader
               through: true
+            children:
+              文字:
+                type: Text
+                attribute:
+                  texts: 'var.hasDungeon ? ''&7'' + var.dungeon[''desc0''] : ''&7等待队长选择目标副本'''
+                  fontSize: 24
+                  limit: 23
+                  point: ~top_left
+                  width: self.parent.width
+                  height: self.parent.height
+                  limitControl: self.parent
+                  through: true
           更换副本按钮:
             type: Canvas
             attribute:
@@ -950,17 +966,25 @@ controls:
                             width: 2
                             color: var.accentDim
                       申请文本:
-                        type: Text
+                        type: Canvas
                         attribute:
-                          limitControl: self
-                          height: 32
-                          width: "self.parent.width - 176"
                           point: ~middle_left
                           x: 14
-                          texts: "'&e' + self.parent.entry['name']"
-                          fontSize: 24
-                          limit: 16
+                          width: self.parent.width - 176
+                          height: 32
                           through: true
+                        children:
+                          文字:
+                            type: Text
+                            attribute:
+                              texts: '''&e'' + self.parent.parent.entry[''name'']'
+                              fontSize: 24
+                              limit: 16
+                              point: ~top_left
+                              width: self.parent.width
+                              height: self.parent.height
+                              limitControl: self.parent
+                              through: true
                       拒按钮:
                         type: Canvas
                         attribute:

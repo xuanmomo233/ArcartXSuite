@@ -526,20 +526,28 @@ controls:
               visible: var.selEntry != none
               through: true
           详情描述:
-            type: Text
+            type: Canvas
             attribute:
-              limitControl: self
-              height: 120
-              width: "var.viewW - var.leftW - 136"
-              lineSpace: 8
-              x: "var.leftW + 68"
+              x: var.leftW + 68
               y: 704
-              fontSize: 24
+              width: var.viewW - var.leftW - 136
+              height: 120
               through: true
-              texts:
-                - "var.selEntry != none ? '&7' + var.selEntry['desc0'] : ''"
-                - "var.selEntry != none ? '&7' + var.selEntry['desc1'] : ''"
-                - "var.selEntry != none ? '&7' + var.selEntry['desc2'] : ''"
+            children:
+              文字:
+                type: Text
+                attribute:
+                  lineSpace: 8
+                  fontSize: 24
+                  texts:
+                  - 'var.selEntry != none ? ''&7'' + var.selEntry[''desc0''] : '''''
+                  - 'var.selEntry != none ? ''&7'' + var.selEntry[''desc1''] : '''''
+                  - 'var.selEntry != none ? ''&7'' + var.selEntry[''desc2''] : '''''
+                  point: ~top_left
+                  width: self.parent.width
+                  height: self.parent.height
+                  limitControl: self.parent
+                  through: true
           操作区:
             type: HStack
             attribute:

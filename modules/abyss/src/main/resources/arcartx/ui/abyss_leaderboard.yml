@@ -82,17 +82,25 @@ controls:
               radius: 16
               through: true
           标题:
-            type: Text
+            type: Canvas
             attribute:
-              height: 44
-              limitControl: self
               x: 32
               y: 28
               width: 920
-              texts: "'&f通关排行  &7· ' + var.dungeonName"
-              limit: 28
-              fontSize: 44
+              height: 44
               through: true
+            children:
+              文字:
+                type: Text
+                attribute:
+                  texts: '''&f通关排行  &7· '' + var.dungeonName'
+                  limit: 28
+                  fontSize: 44
+                  point: ~top_left
+                  width: self.parent.width
+                  height: self.parent.height
+                  limitControl: self.parent
+                  through: true
           表头底:
             type: Texture
             attribute:
@@ -105,49 +113,81 @@ controls:
               radius: 8
               through: true
           表头名次:
-            type: Text
+            type: Canvas
             attribute:
-              height: 28
-              limitControl: self
               x: 44
               y: 115
               width: 80
-              texts: ~&f名次
-              fontSize: 28
-              through: true
-          表头玩家:
-            type: Text
-            attribute:
               height: 28
-              limitControl: self
+              through: true
+            children:
+              文字:
+                type: Text
+                attribute:
+                  texts: ~&f名次
+                  fontSize: 28
+                  point: ~top_left
+                  width: self.parent.width
+                  height: self.parent.height
+                  limitControl: self.parent
+                  through: true
+          表头玩家:
+            type: Canvas
+            attribute:
               x: 140
               y: 115
               width: 320
-              texts: ~&f玩家
-              fontSize: 28
-              through: true
-          表头最佳时间:
-            type: Text
-            attribute:
               height: 28
-              limitControl: self
+              through: true
+            children:
+              文字:
+                type: Text
+                attribute:
+                  texts: ~&f玩家
+                  fontSize: 28
+                  point: ~top_left
+                  width: self.parent.width
+                  height: self.parent.height
+                  limitControl: self.parent
+                  through: true
+          表头最佳时间:
+            type: Canvas
+            attribute:
               x: 508
               y: 115
               width: 220
-              texts: ~&f最佳时间
-              fontSize: 28
-              through: true
-          表头通关次数:
-            type: Text
-            attribute:
               height: 28
-              limitControl: self
+              through: true
+            children:
+              文字:
+                type: Text
+                attribute:
+                  texts: ~&f最佳时间
+                  fontSize: 28
+                  point: ~top_left
+                  width: self.parent.width
+                  height: self.parent.height
+                  limitControl: self.parent
+                  through: true
+          表头通关次数:
+            type: Canvas
+            attribute:
               x: 764
               y: 115
               width: 200
-              texts: ~&f通关次数
-              fontSize: 28
+              height: 28
               through: true
+            children:
+              文字:
+                type: Text
+                attribute:
+                  texts: ~&f通关次数
+                  fontSize: 28
+                  point: ~top_left
+                  width: self.parent.width
+                  height: self.parent.height
+                  limitControl: self.parent
+                  through: true
           滑块:
             type: Texture
             val: slider
@@ -198,53 +238,85 @@ controls:
                           radius: 6
                           through: true
                       列名次:
-                        type: Text
+                        type: Canvas
                         attribute:
-                          height: 28
-                          limitControl: self
                           x: 16
                           y: 12
                           width: 80
-                          texts: "'&e#' + self.parent.entry['rank'].round()"
-                          fontSize: 28
-                          limit: 5
-                          through: true
-                      列玩家:
-                        type: Text
-                        attribute:
                           height: 28
-                          limitControl: self
+                          through: true
+                        children:
+                          文字:
+                            type: Text
+                            attribute:
+                              texts: '''&e#'' + self.parent.parent.entry[''rank''].round()'
+                              fontSize: 28
+                              limit: 5
+                              point: ~top_left
+                              width: self.parent.width
+                              height: self.parent.height
+                              limitControl: self.parent
+                              through: true
+                      列玩家:
+                        type: Canvas
+                        attribute:
                           x: 112
                           y: 12
                           width: 320
-                          texts: "'&f' + self.parent.entry['name']"
-                          fontSize: 28
-                          limit: 16
-                          through: true
-                      列最佳时间:
-                        type: Text
-                        attribute:
                           height: 28
-                          limitControl: self
+                          through: true
+                        children:
+                          文字:
+                            type: Text
+                            attribute:
+                              texts: '''&f'' + self.parent.parent.entry[''name'']'
+                              fontSize: 28
+                              limit: 16
+                              point: ~top_left
+                              width: self.parent.width
+                              height: self.parent.height
+                              limitControl: self.parent
+                              through: true
+                      列最佳时间:
+                        type: Canvas
+                        attribute:
                           x: 480
                           y: 12
                           width: 220
-                          texts: "'&e' + self.parent.entry['time']"
-                          fontSize: 28
-                          limit: 12
-                          through: true
-                      列通关次数:
-                        type: Text
-                        attribute:
                           height: 28
-                          limitControl: self
+                          through: true
+                        children:
+                          文字:
+                            type: Text
+                            attribute:
+                              texts: '''&e'' + self.parent.parent.entry[''time'']'
+                              fontSize: 28
+                              limit: 12
+                              point: ~top_left
+                              width: self.parent.width
+                              height: self.parent.height
+                              limitControl: self.parent
+                              through: true
+                      列通关次数:
+                        type: Canvas
+                        attribute:
                           x: 736
                           y: 12
                           width: 200
-                          texts: "'&7' + self.parent.entry['completionsText']"
-                          fontSize: 28
-                          limit: 12
+                          height: 28
                           through: true
+                        children:
+                          文字:
+                            type: Text
+                            attribute:
+                              texts: '''&7'' + self.parent.parent.entry[''completionsText'']'
+                              fontSize: 28
+                              limit: 12
+                              point: ~top_left
+                              width: self.parent.width
+                              height: self.parent.height
+                              limitControl: self.parent
+                              through: true
           空状态:
             type: Text
             attribute:

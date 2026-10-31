@@ -27,4 +27,23 @@ class AbyssUiContractTest {
         assertTrue(editor.contains("length: 8192"));
         assertTrue(editor.contains("'design_line_set'"));assertTrue(editor.contains("'design_line_add'"));
     }
+    @Test void textClipTargetsCannotRecurseIntoTheSameControl()throws Exception {
+        try(var paths=Files.list(resources.resolve("arcartx/ui"))){
+            for(Path file:paths.filter(p->p.toString().endsWith(".yml")).toList()){
+                var yaml=new YamlConfiguration();yaml.load(file.toFile());
+                for(String key:yaml.getKeys(true)){
+                    if(!key.endsWith(".attribute.limitControl"))continue;
+                    assertNotEquals("self",yaml.getString(key),file+":"+key);
+                    if("self.parent".equals(yaml.getString(key))){
+                        String control=key.substring(0,key.length()-".attribute.limitControl".length());
+                        int child=control.lastIndexOf(".children.");
+                        assertTrue(child>0,"Clip target must have a real parent: "+control);
+                        String parent=control.substring(0,child);
+                        assertEquals("Canvas",yaml.getString(parent+".type"));
+                        assertNull(yaml.getString(parent+".attribute.limitControl"),"Clip canvas must not point back to its child");
+                    }
+                }
+            }
+        }
+    }
 }

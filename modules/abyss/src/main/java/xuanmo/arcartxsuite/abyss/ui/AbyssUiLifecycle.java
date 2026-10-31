@@ -41,15 +41,25 @@ final class AbyssUiLifecycle {
         if (bridge == null || !bridge.openUiUnsafe(player, ui)) {
             closed(player, ui); return false;
         }
-        defer.accept(() -> {
-            if (!player.isOnline() || current(player, ui) != view) return;
-            bridge.sendPacket(player, ui, handler, initialPayload);
-            view.ready = true;
-            for (Update update : List.copyOf(view.queued.values()))
-                bridge.sendPacket(player, ui, update.handler(), update.payload());
-            view.queued.clear();
-        }, 2L);
+        defer.accept(() -> initialize(player, ui, handler, initialPayload, view, 1), 2L);
         return true;
+    }
+
+    private void initialize(Player player, String ui, String handler, Object payload, View view, int attempt) {
+        if (!player.isOnline() || current(player, ui) != view) return;
+        if (!bridge.sendPacket(player, ui, handler, payload)) {
+            if (attempt < 3) {
+                defer.accept(() -> initialize(player, ui, handler, payload, view, attempt + 1), 2L);
+            } else {
+                close(player, ui);
+                player.sendMessage("§c副本界面加载失败，请重新打开。");
+            }
+            return;
+        }
+        view.ready = true;
+        for (Update update : List.copyOf(view.queued.values()))
+            bridge.sendPacket(player, ui, update.handler(), update.payload());
+        view.queued.clear();
     }
 
     boolean send(Player player, String ui, String handler, Object payload) {

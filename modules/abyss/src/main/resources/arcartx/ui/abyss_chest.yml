@@ -135,17 +135,25 @@ controls:
               fontSize: 24
               through: true
           标题:
-            type: Text
+            type: Canvas
             attribute:
-              height: 44
-              limitControl: self
-              width: 600
               x: 76
               y: 84
-              texts: "'&f' + var.chestTitle"
-              fontSize: 44
-              limit: 18
+              width: 600
+              height: 44
               through: true
+            children:
+              文字:
+                type: Text
+                attribute:
+                  texts: '''&f'' + var.chestTitle'
+                  fontSize: 44
+                  limit: 18
+                  point: ~top_left
+                  width: self.parent.width
+                  height: self.parent.height
+                  limitControl: self.parent
+                  through: true
           战利品数量:
             type: Text
             attribute:

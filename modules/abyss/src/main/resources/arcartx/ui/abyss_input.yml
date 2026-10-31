@@ -123,18 +123,26 @@ controls:
               limit: 22
               through: true
           标题:
-            type: Text
+            type: Canvas
             attribute:
-              limitControl: self
-              height: 48
-              width: 788
               point: ~top_left
               x: 36
               y: 94
-              texts: "'&f' + var.title"
-              fontSize: 36
-              limit: 21
+              width: 788
+              height: 48
               through: true
+            children:
+              文字:
+                type: Text
+                attribute:
+                  texts: '''&f'' + var.title'
+                  fontSize: 36
+                  limit: 21
+                  point: ~top_left
+                  width: self.parent.width
+                  height: self.parent.height
+                  limitControl: self.parent
+                  through: true
           提示题:
             type: Text
             attribute:

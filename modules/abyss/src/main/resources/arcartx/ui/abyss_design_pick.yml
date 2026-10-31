@@ -410,18 +410,26 @@ controls:
                       fontSize: 36
                       through: true
                   名:
-                    type: Text
+                    type: Canvas
                     attribute:
-                      limitControl: self
-                      height: 40
-                      width: "self.parent.width - 48"
                       point: ~top_left
                       x: 24
                       y: 100
-                      texts: "'&f' + self.parent.entry['label']"
-                      fontSize: 32
-                      limit: 11
+                      width: self.parent.width - 48
+                      height: 40
                       through: true
+                    children:
+                      文字:
+                        type: Text
+                        attribute:
+                          texts: '''&f'' + self.parent.parent.entry[''label'']'
+                          fontSize: 32
+                          limit: 11
+                          point: ~top_left
+                          width: self.parent.width
+                          height: self.parent.height
+                          limitControl: self.parent
+                          through: true
                   标记底:
                     type: Texture
                     attribute:

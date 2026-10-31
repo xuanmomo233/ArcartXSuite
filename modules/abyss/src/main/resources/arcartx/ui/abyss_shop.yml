@@ -291,29 +291,45 @@ controls:
                           through: true
                           seticon: "self.setItemIcon(var.iconJsons[self.parent.entryKey])"
                       商品名:
-                        type: Text
+                        type: Canvas
                         attribute:
-                          limitControl: self
-                          height: 42
-                          width: 540
                           x: 154
                           y: 10
-                          texts: "'&f' + self.parent.entry['name']"
-                          fontSize: 32
-                          limit: 16
-                          through: true
-                      商品描述:
-                        type: Text
-                        attribute:
-                          limitControl: self
-                          height: 32
                           width: 540
+                          height: 42
+                          through: true
+                        children:
+                          文字:
+                            type: Text
+                            attribute:
+                              texts: '''&f'' + self.parent.parent.entry[''name'']'
+                              fontSize: 32
+                              limit: 16
+                              point: ~top_left
+                              width: self.parent.width
+                              height: self.parent.height
+                              limitControl: self.parent
+                              through: true
+                      商品描述:
+                        type: Canvas
+                        attribute:
                           x: 154
                           y: 62
-                          texts: "'&7' + self.parent.entry['desc0'] + (self.parent.entry['desc1'] != '' ? '  ' + self.parent.entry['desc1'] : '')"
-                          fontSize: 24
-                          limit: 22
+                          width: 540
+                          height: 32
                           through: true
+                        children:
+                          文字:
+                            type: Text
+                            attribute:
+                              texts: '''&7'' + self.parent.parent.entry[''desc0''] + (self.parent.parent.entry[''desc1''] != '''' ? ''  '' + self.parent.parent.entry[''desc1''] : '''')'
+                              fontSize: 24
+                              limit: 22
+                              point: ~top_left
+                              width: self.parent.width
+                              height: self.parent.height
+                              limitControl: self.parent
+                              through: true
                       价格:
                         type: Text
                         attribute:

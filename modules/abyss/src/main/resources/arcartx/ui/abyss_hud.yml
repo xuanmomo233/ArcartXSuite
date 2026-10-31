@@ -86,77 +86,125 @@ controls:
               radius: 12
               through: true
           副本名:
-            type: Text
+            type: Canvas
             attribute:
-              height: 28
-              limitControl: self
               x: 16
               y: 12
               width: 398
-              texts: "'&f' + var.dungeonName"
-              fontSize: 28
-              limit: 13
+              height: 28
               through: true
+            children:
+              文字:
+                type: Text
+                attribute:
+                  texts: '''&f'' + var.dungeonName'
+                  fontSize: 28
+                  limit: 13
+                  point: ~top_left
+                  width: self.parent.width
+                  height: self.parent.height
+                  limitControl: self.parent
+                  through: true
           状态:
-            type: Text
+            type: Canvas
             attribute:
-              height: 24
-              limitControl: self
               x: 16
               y: 52
               width: 398
-              texts: "'&7状态  &f' + var.statusLabel"
-              fontSize: 24
-              limit: 16
-              through: true
-          进度:
-            type: Text
-            attribute:
               height: 24
-              limitControl: self
+              through: true
+            children:
+              文字:
+                type: Text
+                attribute:
+                  texts: '''&7状态  &f'' + var.statusLabel'
+                  fontSize: 24
+                  limit: 16
+                  point: ~top_left
+                  width: self.parent.width
+                  height: self.parent.height
+                  limitControl: self.parent
+                  through: true
+          进度:
+            type: Canvas
+            attribute:
               x: 16
               y: 86
               width: 398
-              texts: "'&7' + var.progressLabel + '  &e' + var.groupDone.round() + '/' + var.groupTotal.round() + '   &7队员 &a' + var.alivePlayers.round() + '/' + var.totalPlayers.round()"
-              fontSize: 24
-              limit: 27
-              through: true
-          怪物:
-            type: Text
-            attribute:
               height: 24
-              limitControl: self
+              through: true
+            children:
+              文字:
+                type: Text
+                attribute:
+                  texts: '''&7'' + var.progressLabel + ''  &e'' + var.groupDone.round() + ''/'' + var.groupTotal.round() + ''   &7队员 &a'' + var.alivePlayers.round() + ''/'' + var.totalPlayers.round()'
+                  fontSize: 24
+                  limit: 27
+                  point: ~top_left
+                  width: self.parent.width
+                  height: self.parent.height
+                  limitControl: self.parent
+                  through: true
+          怪物:
+            type: Canvas
+            attribute:
               x: 16
               y: 120
               width: 398
-              texts: "'&7存活怪物  &c' + var.aliveMobs.round()"
-              fontSize: 24
-              limit: 20
-              through: true
-          当前波次:
-            type: Text
-            attribute:
               height: 24
-              limitControl: self
+              through: true
+            children:
+              文字:
+                type: Text
+                attribute:
+                  texts: '''&7存活怪物  &c'' + var.aliveMobs.round()'
+                  fontSize: 24
+                  limit: 20
+                  point: ~top_left
+                  width: self.parent.width
+                  height: self.parent.height
+                  limitControl: self.parent
+                  through: true
+          当前波次:
+            type: Canvas
+            attribute:
               x: 16
               y: 154
               width: 398
-              texts: "var.activeGroup != '' ? '&7当前  &f' + var.activeGroup : '&7等待下一目标'"
-              fontSize: 24
-              limit: 16
-              through: true
-          剩余时间:
-            type: Text
-            attribute:
               height: 24
-              limitControl: self
+              through: true
+            children:
+              文字:
+                type: Text
+                attribute:
+                  texts: 'var.activeGroup != '''' ? ''&7当前  &f'' + var.activeGroup : ''&7等待下一目标'''
+                  fontSize: 24
+                  limit: 16
+                  point: ~top_left
+                  width: self.parent.width
+                  height: self.parent.height
+                  limitControl: self.parent
+                  through: true
+          剩余时间:
+            type: Canvas
+            attribute:
               x: 16
               y: 190
               width: 398
-              texts: "'&7剩余时间  &f' + var.timeText"
-              fontSize: 24
-              limit: 20
+              height: 24
               through: true
+            children:
+              文字:
+                type: Text
+                attribute:
+                  texts: '''&7剩余时间  &f'' + var.timeText'
+                  fontSize: 24
+                  limit: 20
+                  point: ~top_left
+                  width: self.parent.width
+                  height: self.parent.height
+                  limitControl: self.parent
+                  through: true
           时间条底:
             type: Texture
             attribute:
@@ -194,14 +242,22 @@ controls:
               radius: 10
               through: true
           字:
-            type: Text
+            type: Canvas
             attribute:
-              height: 28
-              limitControl: self
               point: ~middle_left
               x: 24
               width: 672
-              texts: "'&e➤ &f' + var.guideText"
-              fontSize: 28
-              limit: 22
+              height: 28
               through: true
+            children:
+              文字:
+                type: Text
+                attribute:
+                  texts: '''&e➤ &f'' + var.guideText'
+                  fontSize: 28
+                  limit: 22
+                  point: ~top_left
+                  width: self.parent.width
+                  height: self.parent.height
+                  limitControl: self.parent
+                  through: true

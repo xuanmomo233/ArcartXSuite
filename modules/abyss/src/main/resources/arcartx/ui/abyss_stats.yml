@@ -84,17 +84,25 @@ controls:
               radius: 16
               through: true
           标题:
-            type: Text
+            type: Canvas
             attribute:
-              height: 44
-              limitControl: self
               x: 32
               y: 28
               width: 920
-              texts: "'&f战斗统计  &7· ' + var.dungeonName"
-              limit: 28
-              fontSize: 44
+              height: 44
               through: true
+            children:
+              文字:
+                type: Text
+                attribute:
+                  texts: '''&f战斗统计  &7· '' + var.dungeonName'
+                  limit: 28
+                  fontSize: 44
+                  point: ~top_left
+                  width: self.parent.width
+                  height: self.parent.height
+                  limitControl: self.parent
+                  through: true
           表头底:
             type: Texture
             attribute:
@@ -107,60 +115,100 @@ controls:
               radius: 8
               through: true
           表头玩家:
-            type: Text
+            type: Canvas
             attribute:
-              height: 28
-              limitControl: self
               x: 44
               y: 115
               width: 270
-              texts: ~&f玩家
-              fontSize: 28
-              through: true
-          表头击杀:
-            type: Text
-            attribute:
               height: 28
-              limitControl: self
+              through: true
+            children:
+              文字:
+                type: Text
+                attribute:
+                  texts: ~&f玩家
+                  fontSize: 28
+                  point: ~top_left
+                  width: self.parent.width
+                  height: self.parent.height
+                  limitControl: self.parent
+                  through: true
+          表头击杀:
+            type: Canvas
+            attribute:
               x: 340
               y: 115
               width: 100
-              texts: ~&f击杀
-              fontSize: 28
-              through: true
-          表头伤害:
-            type: Text
-            attribute:
               height: 28
-              limitControl: self
+              through: true
+            children:
+              文字:
+                type: Text
+                attribute:
+                  texts: ~&f击杀
+                  fontSize: 28
+                  point: ~top_left
+                  width: self.parent.width
+                  height: self.parent.height
+                  limitControl: self.parent
+                  through: true
+          表头伤害:
+            type: Canvas
+            attribute:
               x: 460
               y: 115
               width: 156
-              texts: ~&f伤害
-              fontSize: 28
-              through: true
-          表头承伤:
-            type: Text
-            attribute:
               height: 28
-              limitControl: self
+              through: true
+            children:
+              文字:
+                type: Text
+                attribute:
+                  texts: ~&f伤害
+                  fontSize: 28
+                  point: ~top_left
+                  width: self.parent.width
+                  height: self.parent.height
+                  limitControl: self.parent
+                  through: true
+          表头承伤:
+            type: Canvas
+            attribute:
               x: 636
               y: 115
               width: 156
-              texts: ~&f承伤
-              fontSize: 28
-              through: true
-          表头治疗:
-            type: Text
-            attribute:
               height: 28
-              limitControl: self
+              through: true
+            children:
+              文字:
+                type: Text
+                attribute:
+                  texts: ~&f承伤
+                  fontSize: 28
+                  point: ~top_left
+                  width: self.parent.width
+                  height: self.parent.height
+                  limitControl: self.parent
+                  through: true
+          表头治疗:
+            type: Canvas
+            attribute:
               x: 812
               y: 115
               width: 156
-              texts: ~&f治疗
-              fontSize: 28
+              height: 28
               through: true
+            children:
+              文字:
+                type: Text
+                attribute:
+                  texts: ~&f治疗
+                  fontSize: 28
+                  point: ~top_left
+                  width: self.parent.width
+                  height: self.parent.height
+                  limitControl: self.parent
+                  through: true
           滑块:
             type: Texture
             val: slider
@@ -211,65 +259,105 @@ controls:
                           radius: 6
                           through: true
                       列玩家:
-                        type: Text
+                        type: Canvas
                         attribute:
-                          height: 28
-                          limitControl: self
                           x: 16
                           y: 12
                           width: 270
-                          texts: "'&f' + self.parent.entry['name']"
-                          fontSize: 28
-                          limit: 16
-                          through: true
-                      列击杀:
-                        type: Text
-                        attribute:
                           height: 28
-                          limitControl: self
+                          through: true
+                        children:
+                          文字:
+                            type: Text
+                            attribute:
+                              texts: '''&f'' + self.parent.parent.entry[''name'']'
+                              fontSize: 28
+                              limit: 16
+                              point: ~top_left
+                              width: self.parent.width
+                              height: self.parent.height
+                              limitControl: self.parent
+                              through: true
+                      列击杀:
+                        type: Canvas
+                        attribute:
                           x: 312
                           y: 12
                           width: 100
-                          texts: "'&c' + self.parent.entry['killsText']"
-                          fontSize: 28
-                          limit: 7
-                          through: true
-                      列伤害:
-                        type: Text
-                        attribute:
                           height: 28
-                          limitControl: self
+                          through: true
+                        children:
+                          文字:
+                            type: Text
+                            attribute:
+                              texts: '''&c'' + self.parent.parent.entry[''killsText'']'
+                              fontSize: 28
+                              limit: 7
+                              point: ~top_left
+                              width: self.parent.width
+                              height: self.parent.height
+                              limitControl: self.parent
+                              through: true
+                      列伤害:
+                        type: Canvas
+                        attribute:
                           x: 432
                           y: 12
                           width: 156
-                          texts: "'&e' + self.parent.entry['damageText']"
-                          fontSize: 28
-                          limit: 12
-                          through: true
-                      列承伤:
-                        type: Text
-                        attribute:
                           height: 28
-                          limitControl: self
+                          through: true
+                        children:
+                          文字:
+                            type: Text
+                            attribute:
+                              texts: '''&e'' + self.parent.parent.entry[''damageText'']'
+                              fontSize: 28
+                              limit: 12
+                              point: ~top_left
+                              width: self.parent.width
+                              height: self.parent.height
+                              limitControl: self.parent
+                              through: true
+                      列承伤:
+                        type: Canvas
+                        attribute:
                           x: 608
                           y: 12
                           width: 156
-                          texts: "'&7' + self.parent.entry['takenText']"
-                          fontSize: 28
-                          limit: 12
-                          through: true
-                      列治疗:
-                        type: Text
-                        attribute:
                           height: 28
-                          limitControl: self
+                          through: true
+                        children:
+                          文字:
+                            type: Text
+                            attribute:
+                              texts: '''&7'' + self.parent.parent.entry[''takenText'']'
+                              fontSize: 28
+                              limit: 12
+                              point: ~top_left
+                              width: self.parent.width
+                              height: self.parent.height
+                              limitControl: self.parent
+                              through: true
+                      列治疗:
+                        type: Canvas
+                        attribute:
                           x: 784
                           y: 12
                           width: 156
-                          texts: "'&a' + self.parent.entry['healText']"
-                          fontSize: 28
-                          limit: 12
+                          height: 28
                           through: true
+                        children:
+                          文字:
+                            type: Text
+                            attribute:
+                              texts: '''&a'' + self.parent.parent.entry[''healText'']'
+                              fontSize: 28
+                              limit: 12
+                              point: ~top_left
+                              width: self.parent.width
+                              height: self.parent.height
+                              limitControl: self.parent
+                              through: true
           空状态:
             type: Text
             attribute:

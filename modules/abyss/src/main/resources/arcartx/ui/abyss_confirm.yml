@@ -173,21 +173,29 @@ controls:
               radius: 10
               through: true
           描述:
-            type: Text
+            type: Canvas
             attribute:
-              limitControl: self
-              height: 152
-              width: 456
-              lineSpace: 8
               x: 54
               y: 250
-              fontSize: 24
-              limit: 18
+              width: 456
+              height: 152
               through: true
-              texts:
-                - "'&f' + var.desc0"
-                - "'&7' + var.desc1"
-                - "'&7' + var.desc2"
+            children:
+              文字:
+                type: Text
+                attribute:
+                  lineSpace: 8
+                  fontSize: 24
+                  limit: 18
+                  texts:
+                  - '''&f'' + var.desc0'
+                  - '''&7'' + var.desc1'
+                  - '''&7'' + var.desc2'
+                  point: ~top_left
+                  width: self.parent.width
+                  height: self.parent.height
+                  limitControl: self.parent
+                  through: true
           条件标题:
             type: Text
             attribute:

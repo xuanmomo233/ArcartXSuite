@@ -416,18 +416,25 @@ controls:
                         width: 1
                         color: "self.parent.isHovered() ? '208,149,73,220' : '94,91,77,125'"
                   标签:
-                    type: Text
+                    type: Canvas
                     attribute:
-                      limitControl: self
-                      height: 32
-                      width: 236
                       point: ~middle_left
                       x: 22
-                      texts: "'&f' + self.parent.entry['label']"
-                      fontSize: 24
-                      limit: 9
+                      width: 236
+                      height: 32
                       through: true
-                  # ── TEXT/NUMBER：挂载后预填实际值，回车提交 ──
+                    children:
+                      文字:
+                        type: Text
+                        attribute:
+                          texts: '''&f'' + self.parent.parent.entry[''label'']'
+                          fontSize: 24
+                          limit: 9
+                          point: ~top_left
+                          width: self.parent.width
+                          height: self.parent.height
+                          limitControl: self.parent
+                          through: true
                   输入壳:
                     type: Canvas
                     attribute:
@@ -656,17 +663,25 @@ controls:
                       radius: 10
                       through: true
                   组题:
-                    type: Text
+                    type: Canvas
                     attribute:
-                      limitControl: self
-                      height: 40
-                      width: "self.parent.width - 44"
                       point: ~top_left
                       x: 22
                       y: 18
-                      texts: "'&6' + self.parent.entry['label'] + '  &7/  共 ' + self.parent.entry['lineTotal'] + ' 行'"
-                      fontSize: 32
+                      width: self.parent.width - 44
+                      height: 40
                       through: true
+                    children:
+                      文字:
+                        type: Text
+                        attribute:
+                          texts: '''&6'' + self.parent.parent.entry[''label''] + ''  &7/  共 '' + self.parent.parent.entry[''lineTotal''] + '' 行'''
+                          fontSize: 32
+                          point: ~top_left
+                          width: self.parent.width
+                          height: self.parent.height
+                          limitControl: self.parent
+                          through: true
                   行容器:
                     type: VStack
                     attribute:
