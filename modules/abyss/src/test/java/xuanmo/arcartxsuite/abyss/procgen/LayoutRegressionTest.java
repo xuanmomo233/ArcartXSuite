@@ -48,6 +48,13 @@ class LayoutRegressionTest {
         assertArrayEquals(new int[]{5,10,2},(int[])resolve.invoke(materializer,placed,'n',10,5,5));
         assertArrayEquals(new int[]{5,10,2},(int[])resolve.invoke(materializer,placed,'s',10,5,5));
     }
+    @Test void defaultDoorFitsInsideANarrowRoom()throws Exception {
+        var a=asset("narrow",ProcGenRoomAsset.RoomKind.COMBAT,List.of());
+        var placed=new LayoutGenerator.PlacedRoom(a,0,0,0,0,64,0,3,4,3,true);
+        Method resolve=ProcGenMaterializer.class.getDeclaredMethod("resolveDoor",LayoutGenerator.PlacedRoom.class,char.class,int.class,int.class,int.class);
+        resolve.setAccessible(true);
+        assertArrayEquals(new int[]{1,1,2},(int[])resolve.invoke(new ProcGenMaterializer(java.util.logging.Logger.getAnonymousLogger()),placed,'n',1,5,5));
+    }
     @Test void offsetDoorCorridorRemainsConnectedThroughBends()throws Exception {
         Map<String,Material> blocks=new HashMap<>();Map<String,Block> mocks=new HashMap<>();
         World world=mock(World.class);

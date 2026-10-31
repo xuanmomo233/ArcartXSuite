@@ -37,4 +37,12 @@ class AbyssValidationTest {
         var files=files();files.get("puzzles.yml").loadFromString("test:\n  type: input\n  answer: abcd\n  input-pattern: '[0-9]*'\n");
         assertThrows(java.io.IOException.class,()->AbyssValidation.validate(files));
     }
+    @Test void missingSharedAssetReferencesAndSkippedWavesAreRejected(@org.junit.jupiter.api.io.TempDir Path dir)throws Exception {
+        var files=files();var meta=new YamlConfiguration();meta.loadFromString("type: combat\nchests: ['1,1,1: missing']\n");
+        files.put("../../room-sets/example/test.yml",meta);
+        var template=java.nio.file.Files.createDirectories(dir.resolve("abysses/test")).toFile();
+        assertThrows(java.io.IOException.class,()->AbyssValidation.validateFiles(files,template));
+        meta.loadFromString("type: combat\nmobs-wave-3: ['1,1,1: vanilla:zombie']\n");
+        assertThrows(java.io.IOException.class,()->AbyssValidation.validateAsset(meta,null,"room"));
+    }
 }

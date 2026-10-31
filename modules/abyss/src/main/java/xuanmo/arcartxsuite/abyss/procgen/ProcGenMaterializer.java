@@ -172,7 +172,8 @@ public final class ProcGenMaterializer {
                 ? pr.worldX + along : pr.worldZ + along;
             return new int[]{spec.w(), worldAlong, Math.min(spec.h(), pr.h - 2)};
         }
-        return new int[]{dw, axisCenter, Math.min(dh, pr.h - 2)};
+        int span=worldWall=='n'||worldWall=='s'?pr.w:pr.d;
+        return new int[]{Math.min(dw,span-2), axisCenter, Math.min(dh, pr.h - 2)};
     }
 
     /** 局部墙名经旋转映射到世界朝向（n/s/e/w）。 */

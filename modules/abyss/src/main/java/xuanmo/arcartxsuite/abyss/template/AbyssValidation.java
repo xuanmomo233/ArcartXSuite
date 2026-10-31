@@ -102,6 +102,8 @@ public final class AbyssValidation {
         require(Set.of("classic","floors").contains(mode),"config.yml: mode 无效");
         require(!mode.equals("floors") || !floors.floors().isEmpty(),"floors.yml: floors 模式需要楼层定义");
         require(entry.minPlayers()>=1 && entry.maxPlayers()>=entry.minPlayers(),"config.yml: 人数范围无效");
+        require(entry.minLevel()>=0 && entry.maxLevel()>=0 && (entry.maxLevel()==0||entry.maxLevel()>=entry.minLevel())
+            && entry.cooldownSeconds()>=0,"config.yml: 等级或冷却范围无效");
         require(Double.isFinite(entry.moneyCost()) && entry.moneyCost()>=0 && entry.staminaCost()>=0,"config.yml: 门票消耗无效");
         for(var required:entry.requiredItems())require(required.amount()>0,"config.yml: 门票数量必须为正");
         for(var puzzle:PuzzleConfig.load(files.get("puzzles.yml")).puzzles().values()) {
@@ -140,6 +142,15 @@ public final class AbyssValidation {
             File region=meta.resolveSibling(meta.getFileName().toString().replace(".yml",".region.yml")).toFile();
             RegionTemplate volume=region.isFile()?RegionTemplate.load(region):null;
             validateAsset(entry.getValue(),volume,entry.getKey());
+            var chests=new LinkedHashMap<>(RewardConfig.load(files.get("rewards.yml")).chestRewards());
+            chests.putAll(RewardConfig.loadChestOnly(files.get("chest_rewards.yml")));
+            Map<String,Set<String>> allowed=Map.of("chests",chests.keySet(),
+                "npcs",NpcConfig.load(files.get("npcs.yml")).npcs().keySet(),
+                "interacts",InteractConfig.load(files.get("interacts.yml")).interacts().keySet());
+            for(var references:allowed.entrySet())for(String row:entry.getValue().getStringList(references.getKey())) {
+                int colon=row.indexOf(':');require(colon>0 && references.getValue().contains(row.substring(colon+1).trim()),
+                    entry.getKey()+": "+references.getKey()+" 引用不存在 "+row);
+            }
             kinds.add(entry.getValue().getString("type","").toUpperCase(Locale.ROOT));
         }
         if(!files.get("procgen.yml").getKeys(false).isEmpty())
@@ -149,6 +160,13 @@ public final class AbyssValidation {
         try{ProcGenRoomAsset.RoomKind.valueOf(yaml.getString("type","").toUpperCase(Locale.ROOT));}
         catch(IllegalArgumentException invalid){throw new IOException(name+": 房型无效",invalid);}
         require(yaml.getInt("weight",10)>0,name+": weight 必须为正");
+        for(String key:yaml.getKeys(false))if(key.equals("mobs")||key.startsWith("mobs-wave-")) {
+            if(key.startsWith("mobs-wave-"))try {
+                int wave=Integer.parseInt(key.substring("mobs-wave-".length()));
+                require(wave>=2 && wave<=32 && !yaml.getStringList(wave==2?"mobs":"mobs-wave-"+(wave-1)).isEmpty(),name+": 怪物波次不能跳号");
+            }catch(NumberFormatException invalid){throw new IOException(name+": 怪物波次编号无效",invalid);}
+            for(String row:yaml.getStringList(key)){int colon=row.indexOf(':');require(colon>0 && !row.substring(colon+1).isBlank(),name+": 怪物定义缺少ID");}
+        }
         for(String door:yaml.getStringList("doors")) {
             String[] parts=door.split(",");require(parts.length>=2,name+": doors 格式无效");
             String wall=parts[0].trim().toLowerCase(Locale.ROOT);

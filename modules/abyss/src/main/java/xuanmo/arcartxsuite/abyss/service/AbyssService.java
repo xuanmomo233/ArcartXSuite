@@ -853,6 +853,24 @@ public final class AbyssService {
             instances.playerEnterInstance(p, instance);
         }
         broadcast(instance, msg("dungeon.preparing"));
+        // 异步申请世界
+        worldPool.acquireWorld(template, instance.getInstanceId())
+            .thenAccept(world -> runOnMain(() -> onWorldReady(instance, world, players)))
+            .exceptionally(t -> {
+                runOnMain(() -> {
+                    broadcast(instance, msg("error.world-load-failed"));
+                    logger.warning("[abyss] 世界加载失败 实例 " + instance.getInstanceId()
+                        + ": " + t.getMessage());
+                    destroyInstance(instance, true);
+                });
+                return null;
+            });
+        return EnterResult.success();
+    }
+
+    private void publishAdmission(AbyssInstance instance,List<Player> players) {
+        AbyssTemplate template=instance.getTemplate();
+        String resolvedPlan=(String)instance.getVariables().get("plan");
         publishEvent("axs.abyss.enter", players.get(0),
             resolvedPlan != null
                 ? Map.of("dungeon", template.id(), "instance", instance.getInstanceId().toString(),
@@ -871,19 +889,6 @@ public final class AbyssService {
                              "party-size", players.size()));
         }
 
-        // 异步申请世界
-        worldPool.acquireWorld(template, instance.getInstanceId())
-            .thenAccept(world -> runOnMain(() -> onWorldReady(instance, world, players)))
-            .exceptionally(t -> {
-                runOnMain(() -> {
-                    broadcast(instance, msg("error.world-load-failed"));
-                    logger.warning("[abyss] 世界加载失败 实例 " + instance.getInstanceId()
-                        + ": " + t.getMessage());
-                    destroyInstance(instance, true);
-                });
-                return null;
-            });
-        return EnterResult.success();
     }
 
     // ═══ 设计模式 ═══
@@ -1323,6 +1328,7 @@ public final class AbyssService {
             }
         }
         charge.commit();
+        publishAdmission(instance,players);
         if(instance.getParty()!=null)instance.getParty().resetReadiness();
         prepare(instance);
     }
