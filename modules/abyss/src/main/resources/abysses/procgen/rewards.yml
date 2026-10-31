@@ -34,3 +34,5 @@ chest-rewards:
         weight: 30
       - item: "material:COOKED_BEEF:8"
         weight: 30
+# 奖励先由宿主确认持久化，再通过统一发放链自动到账；无需重新登录。
+# 背包溢出由宿主处理仓库/邮件/待发；数据库暂不可用时保留宿主恢复日志。

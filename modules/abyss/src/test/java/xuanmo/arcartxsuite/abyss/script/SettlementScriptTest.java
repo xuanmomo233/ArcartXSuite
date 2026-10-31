@@ -75,6 +75,12 @@ class SettlementScriptTest {
         instance.designMode(true);service.completeDungeon(instance);
         assertEquals(AbyssStatus.PREPARING,instance.getStatus());assertEquals(0,marks.get());
     }
+    @Test void failedCostActionCannotContinueIntoRewardActions() {
+        instance.transitionTo(AbyssStatus.PREPARING,AbyssStatus.ACTIVE);
+        runner.actions().register("cost",(context,args,session)->{throw new IllegalStateException("payment failed");});
+        var session=service.runScript(instance,List.of("cost","mark must-not-award"),ScriptContext.of(instance,null));
+        assertTrue(session.isCancelled());assertEquals(0,marks.get());
+    }
     @Test void completionWritesOneRecordEvenWithLeaderboardEnabledAndRepeatedCallbacks()throws Exception {
         var player=mock(org.bukkit.entity.Player.class);UUID uuid=UUID.randomUUID();
         when(player.getUniqueId()).thenReturn(uuid);when(player.isOnline()).thenReturn(true);

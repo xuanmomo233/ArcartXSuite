@@ -3,6 +3,7 @@ package xuanmo.arcartxsuite.abyss.reward;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.logging.Logger;
 import org.bukkit.Bukkit;
@@ -154,12 +155,9 @@ public final class RewardResolver {
 
     /** 货币发放（CurrencyBridge.deposit）。 */
     public boolean giveMoney(Player player, double amount, String currencyId) {
-        var bridge = currencyManager.bridge(currencyId);
-        if (bridge == null || !bridge.available()) {
-            logger.warning("[abyss] 货币不可用: " + currencyId);
-            return false;
-        }
-        return bridge.deposit(player, BigDecimal.valueOf(amount)).success();
+        if(!Double.isFinite(amount)||amount<=0)throw new IllegalArgumentException("奖励金额必须为正数");
+        return queue(player,"currency:"+java.util.UUID.randomUUID(),List.of(
+            PendingReward.currency(player.getUniqueId(),"abyss",currencyId,amount,"script-currency")));
     }
 
     public boolean refundMoney(Player player, double amount, String currencyId, String requestKey) {

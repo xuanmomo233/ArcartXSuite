@@ -241,7 +241,7 @@ public final class AbyssService {
         reloadTemplates();
 
         // 3) 世界池 + 残留世界清理 + 预热池
-        worldPool = new AbyssWorldPool(plugin, config.abyss(), logger);
+        worldPool = new AbyssWorldPool(plugin, config.abyss(), logger, scheduler);
         int orphans = worldPool.cleanupOrphanWorlds();
         if (orphans > 0) {
             logger.info("[abyss] 清理残留副本世界 x" + orphans);
@@ -1947,18 +1947,17 @@ public final class AbyssService {
     public void giveDefinedItem(Player player, String def, AbyssInstance instance) {
         ItemStack item = rewards.buildItem(def, player);
         if (item == null) {
-            logger.warning("[abyss] give_item 构建失败: " + def);
-            return;
+            throw new IllegalArgumentException("give_item 构建失败: " + def);
         }
         if(!dispatchItems(player,List.of(item),"give_item:"+def))throw new IllegalStateException("物品奖励尚未确认保存");
     }
 
     public void takeDefinedItem(Player player, String def) {
-        rewards.takeItem(player, def);
+        if(!rewards.takeItem(player, def))throw new IllegalStateException("所需物品不足，后续动作已取消");
     }
 
     public void giveMoney(Player player, double amount) {
-        rewards.giveMoney(player, amount, "money");
+        if(!rewards.giveMoney(player, amount, "money"))throw new IllegalStateException("货币奖励尚未确认保存");
     }
 
     public void castMythicSkill(Player player, String skill, double power) {

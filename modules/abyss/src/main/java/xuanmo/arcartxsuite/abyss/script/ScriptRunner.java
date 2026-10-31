@@ -89,12 +89,14 @@ public final class ScriptRunner {
         if (action == null) {
             logger.warning("[abyss] 未知脚本动作: " + name + " (实例 "
                 + context.getInstance().getInstanceId() + ")");
-            return false;
+            session.cancel();return false;
         }
         try {
             action.execute(context, args, session);
         } catch (Throwable t) {
             logger.warning("[abyss] 脚本动作 " + name + " 执行异常: " + t.getMessage());
+            session.cancel();
+            if(context.getTrigger()!=null)context.getTrigger().sendMessage("§c副本操作未完成，后续动作已停止，请联系管理员。");
         }
         return false;
     }

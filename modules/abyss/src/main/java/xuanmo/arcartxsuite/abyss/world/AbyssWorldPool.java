@@ -34,6 +34,10 @@ public final class AbyssWorldPool {
     private final AbyssModuleConfiguration.AbyssSection cfg;
     private final Logger logger;
     private final ExecutorService ioExecutor;
+    private final xuanmo.arcartxsuite.api.scheduler.SchedulerAPI scheduler;
+    private final Map<UUID,Integer> removalAttempts=new ConcurrentHashMap<>();
+    private final java.util.Set<xuanmo.arcartxsuite.api.scheduler.ScheduledTask> cleanupTasks=ConcurrentHashMap.newKeySet();
+    private volatile boolean closing;
     private final Map<UUID, CompletableFuture<Void>> worldWrites = new ConcurrentHashMap<>();
     private volatile NmsWorldLoader nmsLoader;
     private volatile SchematicWorldService schematicService;
@@ -53,9 +57,15 @@ public final class AbyssWorldPool {
                            @Nullable SchematicWorldService.Session schematicSession) { }
 
     public AbyssWorldPool(Plugin plugin, AbyssModuleConfiguration.AbyssSection cfg, Logger logger) {
+        this(plugin,cfg,logger,null);
+    }
+
+    public AbyssWorldPool(Plugin plugin,AbyssModuleConfiguration.AbyssSection cfg,Logger logger,
+            xuanmo.arcartxsuite.api.scheduler.SchedulerAPI scheduler) {
         this.plugin = plugin;
         this.cfg = cfg;
         this.logger = logger;
+        this.scheduler=scheduler;
         this.ioExecutor = Executors.newFixedThreadPool(2, r -> {
             Thread t = new Thread(r, "Abyss-WorldIO");
             t.setDaemon(true);
@@ -254,7 +264,7 @@ public final class AbyssWorldPool {
 
     /** 预热一个实例世界（预热名 axs_abyss_pre_<地牢>_<seq>，worldPrefix 前缀命中残留清理）。 */
     private void warmOne(AbyssTemplate template) {
-        String name = cfg.worldPrefix() + "pre_" + template.id() + "_" + preloadSeq.incrementAndGet();
+        String name = cfg.worldPrefix() + "pre_" + template.id() + "_" + UUID.randomUUID().toString().substring(0,8);
         materialize(template, name).whenComplete((pre, err) -> {
             if (err != null) {
                 logger.warning("[abyss] 预热失败 " + template.id() + ": " + err.getMessage());
@@ -373,14 +383,17 @@ public final class AbyssWorldPool {
                 });
                 if (!unloadForDeletion(world)) {
                     logger.warning("[abyss] 世界卸载被拒绝，保留登记与目录: " + name);
+                    retryRemoval(instanceId);
                     return;
                 }
             } catch (Throwable t) {
                 logger.warning("[abyss] 卸载世界失败 " + name + ": " + t.getMessage());
+                retryRemoval(instanceId);
                 return;
             }
         }
         instanceWorldNames.remove(instanceId);
+        removalAttempts.remove(instanceId);
         SchematicWorldService.Session s = schematicSessions.remove(instanceId);
         if (s != null) {
             try { s.close(); } catch (Throwable ignored) { }
@@ -439,7 +452,20 @@ public final class AbyssWorldPool {
         return world.getPlayers().isEmpty() && Bukkit.unloadWorld(world, false);
     }
 
+    private void retryRemoval(UUID id) {
+        if(closing || scheduler==null || removalAttempts.merge(id,1,Integer::sum)>3)return;
+        xuanmo.arcartxsuite.api.scheduler.ScheduledTask[] task=new xuanmo.arcartxsuite.api.scheduler.ScheduledTask[1];
+        task[0]=scheduler.scheduleOnce(plugin,()->{
+            if(task[0]!=null)cleanupTasks.remove(task[0]);
+            if(!closing)releaseWorld(id);
+        },40L);
+        if(task[0]!=null)cleanupTasks.add(task[0]);
+    }
+
     public void shutdown() {
+        closing=true;
+        for(var task:cleanupTasks)try{task.cancel();}catch(RuntimeException ignored){}
+        cleanupTasks.clear();
         ioExecutor.shutdown();
         try {
             ioExecutor.awaitTermination(10, TimeUnit.SECONDS);
