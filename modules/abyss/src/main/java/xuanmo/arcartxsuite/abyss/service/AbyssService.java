@@ -101,9 +101,12 @@ import xuanmo.arcartxsuite.api.storage.StorageManager;
  */
 public final class AbyssService {
     private final AdmissionAccess admission = new AdmissionAccess(this);
+    private final EntryCosts entryCosts = new EntryCosts(this);
     private final RunResults runResults = new RunResults(this);
     public AbyssAdmissionAccess admissionAccess() { return admission; }
     public AbyssRunResultAccess runResultAccess() { return runResults; }
+    public xuanmo.arcartxsuite.api.capability.AbyssEntryCostAccess entryCostAccess() { return entryCosts; }
+    EntryCosts entryCosts() { return entryCosts; }
 
     private final AbyssModule module;
     private final Plugin plugin;
@@ -459,6 +462,7 @@ public final class AbyssService {
 
     public void shutdown() {
         admission.shutdown();
+        entryCosts.clear();
         stopping=true;
         if(uiFacade instanceof AbyssUiService ui)ui.stopQueries();
         for(ScheduledTask task:serviceTasks)task.cancel();
@@ -830,6 +834,13 @@ public final class AbyssService {
         var failures = new java.util.ArrayList<Denial>();
         var template = instances.getTemplate(intent.dungeon());
         if (template == null) return List.of(AdmissionAccess.deny("UNKNOWN_DUNGEON", "副本不存在"));
+        String costOwner = template.requirements().externalCostOwner();
+        if (costOwner != null) {
+            if (!entryCosts.available(costOwner))
+                failures.add(AdmissionAccess.deny("COST_PROVIDER_UNAVAILABLE", "门票提供方不可用"));
+            if (!template.requirements().requiredItems().isEmpty())
+                failures.add(AdmissionAccess.deny("COST_CONFIGURATION_CONFLICT", "外部门票与原生物品消耗不能同时配置"));
+        }
         if (template.crossServer() != null && !template.crossServer().isBlank()
             && (crossDungeon == null || !template.crossServer().equals(crossDungeon.nodeId())))
             return List.of(AdmissionAccess.deny("REMOTE_REQUEST_UNSUPPORTED", "公开事务暂不支持跨服转发"));
@@ -876,6 +887,10 @@ public final class AbyssService {
         if (template == null) {
             return EnterResult.fail(msg("error.dungeon-not-found", "dungeon", templateId));
         }
+        String costOwner = template.requirements().externalCostOwner();
+        if (costOwner != null && (!costOwner.equals(operation.costOwner)
+            || operation.costState != xuanmo.arcartxsuite.api.capability.AbyssEntryCostAccess.State.COMMITTED))
+            return EnterResult.fail("该模板需要由正式入场接口协调外部门票");
         // 逐人查重：任一成员已在其它实例则整队拒绝
         // （只查首人会漏掉队员→其旧实例成员关系残留、被映射进新实例双重记账）
         for (Player member : players) {
@@ -1454,6 +1469,11 @@ public final class AbyssService {
         }
         var op = admission.operation(instance);
         if (op != null) {
+            if (!entryCosts.authorized(op)) {
+                op.reason = "COST_PROVIDER_CHANGED";
+                destroyInstance(instance, true);
+                return;
+            }
             if (!admission.policyUnchanged(op)) {
                 op.reason = "POLICY_CHANGED";
                 destroyInstance(instance, true);

@@ -43,9 +43,14 @@ public interface AbyssAdmissionAccess {
         public Preflight { denials = List.copyOf(denials); }
         public boolean allowed() { return token != null && denials.isEmpty(); }
     }
-    enum Phase { PREPARING, TELEPORTING, STARTED, REJECTED, CANCELLED, COMPENSATED, REVIEW_REQUIRED, CONFLICT }
-    record Entry(Phase phase, UUID runId, String reason, Map<UUID, String> members) {
+    enum Phase { PREPARING, RESERVING_COST, COMMITTING_COST, TELEPORTING, STARTED,
+        REJECTED, CANCELLED, COMPENSATING_COST, COMPENSATED, REVIEW_REQUIRED, CONFLICT }
+    record Cost(String owner, UUID transactionId, AbyssEntryCostAccess.State lastKnownState) { }
+    record Entry(Phase phase, UUID runId, String reason, Map<UUID, String> members, Cost cost) {
         public Entry { members = Map.copyOf(members); }
+        public Entry(Phase phase, UUID runId, String reason, Map<UUID, String> members) {
+            this(phase, runId, reason, members, null);
+        }
     }
     record PlayerState(boolean available, UUID requestId, UUID runId, String state) { }
     record Run(UUID id, String dungeon, String plan, String difficulty, String rulesVersion,

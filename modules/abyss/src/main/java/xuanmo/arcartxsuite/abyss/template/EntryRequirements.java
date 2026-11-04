@@ -44,7 +44,8 @@ public record EntryRequirements(
     List<ScriptCondition> leaderOnlyConditions,
     List<String> disabledCommands,
     List<String> disabledItems,
-    List<String> admissionPolicies
+    List<String> admissionPolicies,
+    @org.jetbrains.annotations.Nullable String externalCostOwner
 ) {
 
     public record RequiredItem(String source, String id, int amount) {
@@ -76,7 +77,7 @@ public record EntryRequirements(
 
     public static EntryRequirements defaults() {
         return new EntryRequirements(1, 4, false, null, 0, 0, 0L, 0.0, "money", 0,
-            List.of(), List.of(), List.of(), true, List.of(), List.of(), List.of(), List.of());
+            List.of(), List.of(), List.of(), true, List.of(), List.of(), List.of(), List.of(), null);
     }
 
     private static List<String> firstNonEmpty(List<String> a, List<String> b) {
@@ -114,7 +115,8 @@ public record EntryRequirements(
                 s.getStringList("disabled_commands")),
             firstNonEmpty(s.getStringList("disabled-items"),
                 s.getStringList("disabled_items")),
-            List.copyOf(s.getStringList("admission-policies"))
+            List.copyOf(s.getStringList("admission-policies")),
+            empty2null(s.getString("external-cost-owner"))
         );
     }
 }

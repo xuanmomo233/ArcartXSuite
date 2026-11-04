@@ -13,6 +13,7 @@ import xuanmo.arcartxsuite.abyss.data.JdbcAbyssRepository;
 import xuanmo.arcartxsuite.abyss.data.JdbcAbyssRepository.AdmissionReceipt;
 import xuanmo.arcartxsuite.abyss.data.PlayerDataManager;
 import xuanmo.arcartxsuite.api.capability.AbyssAdmissionAccess;
+import xuanmo.arcartxsuite.api.capability.AbyssEntryCostAccess.State;
 import xuanmo.arcartxsuite.abyss.instance.AbyssInstance;
 import xuanmo.arcartxsuite.abyss.party.Party;
 import xuanmo.arcartxsuite.abyss.template.AbyssTemplate;
@@ -48,12 +49,19 @@ final class AdmissionAccess implements AbyssAdmissionAccess {
         String fingerprint;
         boolean persisted;
         boolean costUncertain;
+        String costOwner;
+        UUID costId;
+        State costState;
+        boolean cancelRequested;
+        xuanmo.arcartxsuite.api.capability.AbyssEntryCostAccess.Participant costParticipant;
+        boolean compensationAttempted;
         Operation(Intent intent) {
             this.intent = intent;
             this.fingerprint = fingerprint(intent);
             intent.members().forEach(id -> outcomes.put(id, "PENDING"));
         }
-        Entry snapshot() { return new Entry(phase, runId, reason, outcomes); }
+        Entry snapshot() { return new Entry(phase, runId, reason, outcomes,
+            costId == null ? null : new Cost(costOwner, costId, costState)); }
     }
 
     AdmissionAccess(AbyssService service) { this.service = service; }
@@ -71,13 +79,20 @@ final class AdmissionAccess implements AbyssAdmissionAccess {
             op.phase = Phase.valueOf(yaml.getString("phase"));
             op.reason = yaml.getString("reason");
             if (yaml.isString("run")) op.runId = UUID.fromString(yaml.getString("run"));
+            if (yaml.isString("cost.id")) {
+                op.costOwner = yaml.getString("cost.owner");
+                op.costId = UUID.fromString(yaml.getString("cost.id"));
+                op.costState = State.valueOf(yaml.getString("cost.state"));
+            }
             var outcomes = yaml.getConfigurationSection("members");
             if (outcomes != null) for (String member : outcomes.getKeys(false)) {
                 op.outcomes.put(UUID.fromString(member), outcomes.getString(member));
             }
-            if (op.phase == Phase.PREPARING || op.phase == Phase.TELEPORTING) {
+            if (op.phase == Phase.PREPARING || op.phase == Phase.TELEPORTING
+                || op.phase == Phase.RESERVING_COST || op.phase == Phase.COMMITTING_COST || op.phase == Phase.COMPENSATING_COST) {
                 op.phase = Phase.REVIEW_REQUIRED;
                 op.reason = "INTERRUPTED_ADMISSION";
+                if (op.costId != null) op.costState = State.UNKNOWN;
             }
             journal.put(new Key(receipt.owner(), id), op);
         }
@@ -89,7 +104,8 @@ final class AdmissionAccess implements AbyssAdmissionAccess {
         return new IntegrationInfo(1, generation, catalogRevision, running, running ? null : "UNAVAILABLE",
             Map.of("catalog", running ? "AVAILABLE" : "UNAVAILABLE",
                 "hostEntry", running && storage != null ? "AVAILABLE" : "UNAVAILABLE",
-                "remoteEntry", "UNSUPPORTED", "originalRunReconnect", "UNSUPPORTED"));
+                "remoteEntry", "UNSUPPORTED", "originalRunReconnect", "UNSUPPORTED",
+                "externalCost", running && storage != null ? "AVAILABLE" : "UNAVAILABLE"));
     }
 
     @Override public List<Dungeon> catalog() {
@@ -175,6 +191,13 @@ final class AdmissionAccess implements AbyssAdmissionAccess {
         if (intent.members().stream().anyMatch(reservations::containsKey)) return rejected("MEMBER_BUSY");
         tickets.remove(token);
         var op = new Operation(intent);
+        var template = ticket.binding().template();
+        if (template != null && template.requirements().externalCostOwner() != null) {
+            op.costOwner = template.requirements().externalCostOwner();
+            op.costId = UUID.nameUUIDFromBytes(("axs.abyss.cost/" + intent.owner() + "/" + intent.requestId())
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            op.costState = State.NONE;
+        }
         journal.put(key, op);
         if (storage == null) {
             op.phase = Phase.REJECTED;
@@ -183,8 +206,10 @@ final class AdmissionAccess implements AbyssAdmissionAccess {
             intent.members().forEach(member -> reservations.put(member, op));
             storage.writeAdmission(receipt(op), true).whenComplete((ignored, error) -> service.runOnMain(() -> {
                 if (error != null) {
-                    op.phase = Phase.REVIEW_REQUIRED;
-                    op.reason = "JOURNAL_RESERVATION_UNKNOWN";
+                    if (op.phase != Phase.CANCELLED) {
+                        op.phase = Phase.REVIEW_REQUIRED;
+                        op.reason = "JOURNAL_RESERVATION_UNKNOWN";
+                    }
                     release(op);
                     return;
                 }
@@ -195,26 +220,44 @@ final class AdmissionAccess implements AbyssAdmissionAccess {
                     release(op);
                     return;
                 }
-                if (ticket.expires() <= System.currentTimeMillis() || !ticket.binding().equals(binding(intent))) {
-                    op.phase = Phase.REJECTED;
-                    op.reason = "PREFLIGHT_STALE";
-                } else {
-                    try {
-                        var result = service.enterExternal(intent, op);
-                        if (!result.ok() && op.phase == Phase.PREPARING) {
-                            op.phase = Phase.REJECTED;
-                            op.reason = result.reason();
-                        }
-                    } catch (RuntimeException failure) {
-                        op.phase = Phase.REVIEW_REQUIRED;
-                        op.reason = "ENTRY_RESULT_UNKNOWN";
+                if (op.costId != null && current(ticket)) {
+                    var denials = service.preflightExternal(intent);
+                    if (!denials.isEmpty()) {
+                        op.phase = Phase.REJECTED;
+                        op.reason = denials.get(0).code();
+                        for (var denial : denials) if (denial.member() != null)
+                            op.outcomes.put(denial.member(), denial.code());
+                        changed(op);
+                        return;
                     }
-                }
-                changed(op);
-                release(op);
+                    service.entryCosts().begin(op, this::changed, () -> continueEntry(op, ticket));
+                } else continueEntry(op, ticket);
             }));
         }
         return op.snapshot();
+    }
+
+    private boolean current(Ticket ticket) {
+        return ticket.expires() > System.currentTimeMillis() && ticket.binding().equals(binding(ticket.intent()));
+    }
+
+    private void continueEntry(Operation op, Ticket ticket) {
+        if (!current(ticket)) {
+            op.phase = Phase.REJECTED;
+            op.reason = "PREFLIGHT_STALE";
+        } else {
+            try {
+                var result = service.enterExternal(op.intent, op);
+                if (!result.ok() && op.phase == Phase.PREPARING) {
+                    op.phase = Phase.REJECTED;
+                    op.reason = result.reason();
+                }
+            } catch (RuntimeException failure) {
+                op.phase = Phase.REVIEW_REQUIRED;
+                op.reason = "ENTRY_RESULT_UNKNOWN";
+            }
+        }
+        changed(op);
     }
 
     @Override public Entry entryStatus(String owner, UUID requestId) {
@@ -228,6 +271,10 @@ final class AdmissionAccess implements AbyssAdmissionAccess {
         Operation op = journal.get(new Key(owner, requestId));
         if (op == null) return null;
         if (checkingPolicy) return op.snapshot();
+        if (op.phase == Phase.RESERVING_COST || op.phase == Phase.COMMITTING_COST) {
+            op.cancelRequested = true;
+            return op.snapshot();
+        }
         if (op.phase == Phase.PREPARING) {
             if (op.runId != null) service.cancelAdmission(op.runId);
             else {
@@ -327,12 +374,27 @@ final class AdmissionAccess implements AbyssAdmissionAccess {
         yaml.set("phase", op.phase.name());
         yaml.set("run", op.runId == null ? null : op.runId.toString());
         yaml.set("reason", op.reason);
+        if (op.costId != null) {
+            yaml.set("cost.owner", op.costOwner);
+            yaml.set("cost.id", op.costId.toString());
+            yaml.set("cost.state", op.costState.name());
+        }
         op.outcomes.forEach((id, status) -> yaml.set("members." + id, status));
         return new AdmissionReceipt(op.intent.owner(), op.intent.requestId().toString(), op.fingerprint, yaml.saveToString());
     }
 
     void changed(Operation op) {
-        if (op == null || !op.persisted || storage == null) return;
+        if (op != null && op.costId != null) service.entryCosts().compensate(op, this::persist);
+        persist(op);
+    }
+
+    private void persist(Operation op) {
+        if (op == null) return;
+        if (switch (op.phase) {
+            case STARTED, REJECTED, CANCELLED, COMPENSATED, REVIEW_REQUIRED, CONFLICT -> true;
+            default -> false;
+        }) release(op);
+        if (!op.persisted || storage == null) return;
         storage.writeAdmission(receipt(op), false).exceptionally(error -> {
             java.util.logging.Logger.getLogger("Abyss").warning("Admission journal write failed: " + op.intent.requestId());
             return null;
