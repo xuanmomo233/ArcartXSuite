@@ -141,7 +141,7 @@ command_signal_accept_mainline:
       quest-id: "{quest-id}"     # 任务 ID (上下文变量)
     - type: command.dispatch     # 派发命令
       executor: console          # 执行者: console/player
-      command: "say {player_name} accepted {quest-id}"
+      command: "say {player} accepted {quest-id}"
 
 # 任务完成后发放称号并推送 UI 通知
 quest_completed_title_reward:
@@ -373,7 +373,7 @@ chemdah_level_up_celebrate:
       group-id: "level_up"
     - type: command.dispatch
       executor: console
-      command: "say {player_name} 的 {level_option} 等级提升到了 {new_level} 级！"
+      command: "say {player} 的 {level_option} 等级提升到了 {new_level} 级！"
 
 # ── 脚本触发器示例 ──────────────────────────────────────────
 
@@ -404,4 +404,4 @@ aria_high_altitude:
       group-id: "high_altitude"
     - type: command.dispatch
       executor: console
-      command: "say {player_name} 飞到了 Y={script_result} 的高空！"
+      command: "say {player} 飞到了 Y={script_result} 的高空！"

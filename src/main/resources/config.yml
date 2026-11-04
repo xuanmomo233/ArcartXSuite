@@ -70,6 +70,7 @@ version-check-public-key: ""
 # provider 支持: vault / playerpoints / xconomy / rondo / command / placeholder-command / custom。
 # command、placeholder-command、custom 当前共用 CommandCurrencyBridge。
 # 标准字段：enabled、provider、display-name、scale、rounding、balance-placeholder、withdraw-command、deposit-command。
+# 货币命令使用 {player}、{uuid}、{amount}。balance-placeholder 使用实际的 PlaceholderAPI 占位符。
 # scale 是标准小数位字段；为兼容旧配置，parser 仍会在缺少 scale 时读取 precision。
 currencies:
   money:

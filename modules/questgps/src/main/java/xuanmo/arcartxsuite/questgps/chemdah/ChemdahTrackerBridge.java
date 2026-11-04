@@ -26,7 +26,7 @@ public final class ChemdahTrackerBridge {
     if (available) {
       logger.info("QuestGPS: Chemdah Tracker API 已就绪");
     } else {
-      logger.warning("QuestGPS: Chemdah Tracker API 不可用，将回退 overlay 导航");
+      logger.warning("QuestGPS: Chemdah Tracker API 不可用，将使用展示组件中的有效目的地");
     }
   }
 

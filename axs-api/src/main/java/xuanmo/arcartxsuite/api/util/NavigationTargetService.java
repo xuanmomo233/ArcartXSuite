@@ -560,10 +560,15 @@ public final class NavigationTargetService {
             }
             String command = raw.trim()
                 .replace("%player_name%", player.getName())
+                .replace("{player}", player.getName())
                 .replace("%player%", player.getName())
+                .replace("{world}", worldName)
                 .replace("%world%", worldName)
+                .replace("{x}", String.valueOf((int) resolved.getX()))
                 .replace("%x%", String.valueOf((int) resolved.getX()))
+                .replace("{y}", String.valueOf((int) resolved.getY()))
                 .replace("%y%", String.valueOf((int) resolved.getY()))
+                .replace("{z}", String.valueOf((int) resolved.getZ()))
                 .replace("%z%", String.valueOf((int) resolved.getZ()));
             // 占位符展开后校验：玩家名/世界名理论上无分隔符，但占位符值可被配置注入，
             // 最终命令统一过校验——命中分隔符拒绝执行
@@ -600,14 +605,21 @@ public final class NavigationTargetService {
         }
         String worldName = resolved.getWorld() == null ? target.world() : resolved.getWorld().getName();
         String rendered = template
+            .replace("{label}", target.title())
             .replace("%label%", target.title())
+            .replace("{world}", worldName)
             .replace("%world%", worldName)
+            .replace("{x}", String.valueOf((int) resolved.getX()))
             .replace("%x%", String.valueOf((int) resolved.getX()))
+            .replace("{y}", String.valueOf((int) resolved.getY()))
             .replace("%y%", String.valueOf((int) resolved.getY()))
+            .replace("{z}", String.valueOf((int) resolved.getZ()))
             .replace("%z%", String.valueOf((int) resolved.getZ()))
+            .replace("{distance}", String.valueOf(Math.round(distance)))
             .replace("%distance%", String.valueOf(Math.round(distance)));
         for (Map.Entry<String, String> entry : target.placeholders().entrySet()) {
-            rendered = rendered.replace("%" + entry.getKey() + "%", entry.getValue());
+            rendered = rendered.replace("{" + entry.getKey() + "}", entry.getValue())
+                .replace("%" + entry.getKey() + "%", entry.getValue());
         }
         return rendered;
     }

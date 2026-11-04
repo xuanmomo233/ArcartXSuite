@@ -80,13 +80,13 @@ public final class QuestGpsPresentationService {
                     template.getId(),
                     category,
                     page,
-                    metadataReader.questDisplayName(template, definition, configuration.presentation()),
+                    metadataReader.questDisplayName(template, definition),
                     buildQuestSummary(page, taskDescriptors),
                     page.displayName(),
                     safe(template.getPath()),
-                    metadataReader.questDescription(template, definition, configuration.presentation()),
+                    metadataReader.questDescription(profile, template, definition),
                     taskDescriptors,
-                    rewardReader.resolve(configuration, definition, template),
+                    rewardReader.resolve(configuration, definition, questPlayer),
                     canAccept,
                     page == QuestGpsPage.ACTIVE && definition.allowAbandon(),
                     page == QuestGpsPage.ACTIVE
@@ -119,12 +119,12 @@ public final class QuestGpsPresentationService {
                 case COMPLETED -> profile.getQuestTaskCompleteDate(template.getId(), task.getId()) > 0L || task.isCompleted(profile);
                 case AVAILABLE -> false;
             };
-            List<String> descriptionLines = metadataReader.taskDescription(task, definition, configuration.presentation());
+            List<String> descriptionLines = metadataReader.taskDescription(profile, task, definition);
             String descriptionText = descriptionLines.isEmpty() ? "" : String.join("\n", descriptionLines);
             descriptors.add(
                 new QuestGpsSnapshotBuilder.TaskDescriptor(
                     task.getId(),
-                    metadataReader.taskDisplayText(profile, template, task, definition, configuration.presentation()),
+                    metadataReader.taskDisplayText(profile, template, task, definition),
                     descriptionText,
                     metadataReader.taskStatusText(profile, task, completed, page),
                     completed,

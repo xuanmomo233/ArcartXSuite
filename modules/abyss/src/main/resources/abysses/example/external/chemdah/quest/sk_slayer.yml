@@ -27,6 +27,16 @@ sk_slayer:
           name: '深渊魔物'
           description: '&7击杀地牢魔物 &c{{ quest progress value task kills }}/{{ quest progress target task kills }}'
   addon:
+    axs-view:
+      sort-order: 50
+      allow-abandon: true
+      navigation:
+        enabled: false
+      hooks:
+        accepted:
+          - questgps_quest_accepted
+        completed:
+          - questgps_quest_completed
     track:
       scoreboard: true
     ui:

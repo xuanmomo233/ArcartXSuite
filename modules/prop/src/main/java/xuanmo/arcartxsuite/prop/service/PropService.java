@@ -740,8 +740,8 @@ public final class PropService implements Listener {
 
     private String render(String template, String itemName, long cooldownMillis) {
         String rendered = template
-            .replace("{NAME}", itemName == null ? "" : itemName)
-            .replace("{TIME}", String.format(Locale.US, "%.2f", Math.max(0L, cooldownMillis) / 1000.0D));
+            .replace("{item}", itemName == null ? "" : itemName)
+            .replace("{remaining_seconds}", String.format(Locale.US, "%.2f", Math.max(0L, cooldownMillis) / 1000.0D));
         return ChatColor.translateAlternateColorCodes('&', rendered);
     }
 
@@ -820,8 +820,8 @@ public final class PropService implements Listener {
 
     private String renderCondition(String template, String itemName, String conditionRaw) {
         String rendered = template
-            .replace("{NAME}", itemName == null ? "" : itemName)
-            .replace("{CONDITION}", conditionRaw == null ? "" : conditionRaw);
+            .replace("{item}", itemName == null ? "" : itemName)
+            .replace("{condition}", conditionRaw == null ? "" : conditionRaw);
         return ChatColor.translateAlternateColorCodes('&', rendered);
     }
 

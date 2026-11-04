@@ -24,7 +24,7 @@ help:
 # ── status ────────────────────────────────────────────
 status:
   title: "&6QuestGPS 状态"
-  configured-quests: "&7配置任务数: &f{0}"              # {0}=已配置任务总数
+  configured-quests: "&7原生任务数: &f{0}"              # {0}=已识别的 Chemdah 任务总数
   tracking-players: "&7追踪中: &f{0}"                  # {0}=正在追踪任务的玩家数
   nav-ready: "&7导航就绪: &f{0}"                       # {0}=导航是否就绪（true/false）
 

@@ -75,7 +75,7 @@ navigation:
   world-hint-interval: 30
   # 到达触发半径（格），0 = 不启用；到达不取消导航，须离开 finish-range + finish-rearm-buffer 再触发
   finish-range: 0
-  # 到达命令（控制台执行，支持 %player% 占位符）
+  # 到达命令（控制台执行，使用 {player}、{world}、{x}、{y}、{z}）
   finish-commands: []
   # 到达判定的滞回缓冲（格）：触发后须离开 finish-range + 本值 才重新武装
   finish-rearm-buffer: 3.0
@@ -86,7 +86,7 @@ navigation:
     enabled: true
     # 路标样式 ID，在 ArcartX waypoint 目录下定义
     style-id: "default"
-    # 路标标题模板（单行；支持 %label%/%type%/%distance%/%world%/%x%/%y%/%z%），留空显示目标名
+    # 路标标题模板（单行；支持 {label}/{type}/{distance}/{world}/{x}/{y}/{z}），留空显示目标名
     title-template: ""
 
   # 模型导航提示 — 使用 Adyeshach 私有实体 + ArcartX 模型渲染客户端导航标记。

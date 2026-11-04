@@ -273,8 +273,8 @@ public class PlayerShopService {
         Player sellerOnline = Bukkit.getPlayer(listing.getSeller());
         if (sellerOnline != null) {
             sellerOnline.sendMessage(ChatColor.translateAlternateColorCodes('&',
-                messages.playerShopSold().replace("%item%", listing.getItemDisplayName())
-                    .replace("%amount%", currencyManager.format(currency, BigDecimal.valueOf(sellerIncome)))));
+                messages.playerShopSold().replace("{item}", listing.getItemDisplayName())
+                    .replace("{amount}", currencyManager.format(currency, BigDecimal.valueOf(sellerIncome)))));
         }
 
         // 跨服广播
@@ -376,7 +376,7 @@ public class PlayerShopService {
         Player sellerOnline = Bukkit.getPlayer(listing.getSeller());
         if (sellerOnline != null) {
             sellerOnline.sendMessage(ChatColor.translateAlternateColorCodes('&',
-                messages.playerShopExpired().replace("%item%", listing.getItemDisplayName())));
+                messages.playerShopExpired().replace("{item}", listing.getItemDisplayName())));
         }
 
         if (redisCache != null && redisCache.isAvailable()) {

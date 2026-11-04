@@ -12,4 +12,4 @@ welcome:
 player:
   enabled: true  # 是否启用此条目
   text: "你好，%player_name%。"  # 公告文本（%player_name% 会被 PAPI 解析）
-  click-command: "say <player> 点击了公告"  # 点击时执行命令（<player> 替换为点击者名）
+  click-command: "say {player} 点击了公告"  # 点击时执行命令（{player} 替换为点击者名）

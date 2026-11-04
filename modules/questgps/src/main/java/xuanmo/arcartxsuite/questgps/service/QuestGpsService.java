@@ -42,7 +42,7 @@ import xuanmo.arcartxsuite.questgps.chemdah.ChemdahMetadataReader;
 import xuanmo.arcartxsuite.questgps.chemdah.ChemdahQuestDiscovery;
 import xuanmo.arcartxsuite.questgps.chemdah.ChemdahRewardReader;
 import xuanmo.arcartxsuite.questgps.chemdah.ChemdahTrackerBridge;
-import xuanmo.arcartxsuite.questgps.chemdah.QuestGpsOverlayValidator;
+import xuanmo.arcartxsuite.questgps.chemdah.QuestGpsNativeViews;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
 import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.api.capability.TitleConfigQueryable;
@@ -74,7 +74,7 @@ public final class QuestGpsService implements Listener {
     private final ChemdahCategoryResolver categoryResolver;
     private final ChemdahQuestDiscovery questDiscovery;
     private final QuestGpsPresentationService presentationService;
-    private final QuestGpsOverlayValidator overlayValidator;
+    private final QuestGpsNativeViews nativeViews;
     private final QuestGpsNavigationService navigationService;
     private final QuestGpsSnapshotBuilder snapshotBuilder = new QuestGpsSnapshotBuilder();
     private final QuestGpsUiPacketHandler uiPacketHandler;
@@ -130,19 +130,9 @@ public final class QuestGpsService implements Listener {
         ChemdahMetadataReader metadataReader = new ChemdahMetadataReader(this.logger);
         ChemdahRewardReader rewardReader = new ChemdahRewardReader(this.logger, rewardResolver);
         ChemdahTrackerBridge trackerBridge = new ChemdahTrackerBridge(this.logger);
-        this.chemdahBootstrap = new ChemdahIntegrationBootstrap(
-            this.logger,
-            configuration,
-            metadataReader,
-            rewardReader,
-            trackerBridge
-        );
+        this.chemdahBootstrap = new ChemdahIntegrationBootstrap(metadataReader, rewardReader, trackerBridge);
         this.navigationService = new QuestGpsNavigationService(plugin, this.logger, configuration, waypointBridge, npcBridge, trackerBridge, worldTextureBridge);
-        this.categoryResolver = new ChemdahCategoryResolver(
-            this.logger,
-            configuration.categoryDefaults(),
-            configuration.categoryRegistry()
-        );
+        this.categoryResolver = new ChemdahCategoryResolver(configuration.categoryDefaults(), configuration::categoryRegistry);
         this.questDiscovery = new ChemdahQuestDiscovery(this.logger, categoryResolver);
         this.presentationService = new QuestGpsPresentationService(
             configuration,
@@ -152,7 +142,7 @@ public final class QuestGpsService implements Listener {
             rewardReader,
             navigationService
         );
-        this.overlayValidator = new QuestGpsOverlayValidator(this.logger, configuration, categoryResolver);
+        this.nativeViews = new QuestGpsNativeViews(plugin, this.logger, configuration, this::onNativeViewsChanged);
         this.uiPacketHandler = new QuestGpsUiPacketHandler(this, configuration.ui().packetId());
     }
 
@@ -161,8 +151,7 @@ public final class QuestGpsService implements Listener {
     }
 
     public void start() {
-        chemdahBootstrap.initialize();
-        overlayValidator.validate();
+        nativeViews.start();
         // 导航坐标变更 → 地图外部目标坐标跟随（仅"该任务最近激活的追踪"驱动外部目标坐标）
         navigationService.setPositionListener((player, tracking, point) -> {
             MapNavigable map = mapNavigableProvider.get();
@@ -202,7 +191,23 @@ public final class QuestGpsService implements Listener {
         registerChemdahEventListeners();
     }
 
+    private void onNativeViewsChanged() {
+        questTargetIndex.clear();
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            clearTrackInternal(player, true, false);
+            MapNavigable map = mapNavigableProvider.get();
+            if (map != null) map.clearExternalTargets(player, MAP_SOURCE, false);
+            QuestGpsViewState state = viewStates.get(player.getUniqueId());
+            if (state != null) {
+                if (configuration.quest(state.selectedQuestId()) == null) state.setSelectedQuestId("");
+                if (state.category() != null) state.setCategory(configuration.categoryRegistry().get(state.category().id()));
+                if (menuUiIds.stream().anyMatch(id -> bridge.isUiOpen(player, id))) refreshViewer(player);
+            }
+        }
+    }
+
     public void shutdown() {
+        nativeViews.close();
         HandlerList.unregisterAll(this);
         for (Listener listener : chemdahEventListeners) {
             HandlerList.unregisterAll(listener);
@@ -352,7 +357,7 @@ public final class QuestGpsService implements Listener {
                 state.setSelectedQuestId(definition.id());
                 player.sendMessage(PREFIX + message(
                     "player.accept-success",
-                    chemdahBootstrap.metadataReader().questDisplayName(template, definition, configuration.presentation())
+                    chemdahBootstrap.metadataReader().questDisplayName(template, definition)
                 ));
             } else {
                 String reason = result == null ? "未知原因" : MessageProvider.translateColors(safe(result.getReason()));
@@ -417,7 +422,7 @@ public final class QuestGpsService implements Listener {
             state.setSelectedQuestId(definition.id());
             player.sendMessage(PREFIX + message(
                 "player.abandon-success",
-                chemdahBootstrap.metadataReader().questDisplayName(template, definition, configuration.presentation())
+                chemdahBootstrap.metadataReader().questDisplayName(template, definition)
             ));
             refreshViewer(player);
         }));

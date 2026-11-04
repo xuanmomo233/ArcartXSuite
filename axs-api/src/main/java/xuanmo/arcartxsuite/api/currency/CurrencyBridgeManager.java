@@ -520,8 +520,11 @@ public final class CurrencyBridgeManager implements CurrencyBridgeAPI {
             }
             String amountStr = formatAmount(amount);
             String rendered = template
+                .replace("{player}", playerName)
                 .replace("%player%", playerName)
+                .replace("{uuid}", player.getUniqueId().toString())
                 .replace("%uuid%", player.getUniqueId().toString())
+                .replace("{amount}", amountStr)
                 .replace("%amount%", amountStr);
             // 防止换行注入多条命令
             if (rendered.indexOf('\n') >= 0 || rendered.indexOf('\r') >= 0) {

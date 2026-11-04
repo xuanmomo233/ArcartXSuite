@@ -139,7 +139,7 @@ public class RecycleService {
                 .map(e -> currencyManager.format(e.getKey(), BigDecimal.valueOf(e.getValue())))
                 .collect(java.util.stream.Collectors.joining(", "));
             player.sendMessage(ChatColor.translateAlternateColorCodes('&',
-                messages.recycleSuccess().replace("%amount%", earnings)));
+                messages.recycleSuccess().replace("{amount}", earnings)));
         } else {
             player.sendMessage(ChatColor.RED + result.error());
         }

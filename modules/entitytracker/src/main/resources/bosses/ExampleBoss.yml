@@ -55,7 +55,7 @@ damage-ranking:
             target: "player"
             text: "&e你在 {boss_display_name} 伤害排名第 {rank} 名。"
     # 奖励动作支持变量:
-    # {player} {player_name} {player_uuid} {player_display_name}
+    # {player} {uuid} {player_display_name}
     # {boss_id} {boss_display_name} {entity_uuid}
     # {rank} {rank_text} {damage} {damage_percent} {taken_damage}
     # {total_damage} {participant_count} {tracked_player_count}

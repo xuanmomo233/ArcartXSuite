@@ -1,189 +1,94 @@
 package xuanmo.arcartxsuite.questgps.chemdah;
 
 import ink.ptms.chemdah.core.PlayerProfile;
+import ink.ptms.chemdah.core.quest.QuestContainer;
 import ink.ptms.chemdah.core.quest.Task;
 import ink.ptms.chemdah.core.quest.Template;
-import ink.ptms.chemdah.core.quest.addon.AddonStats;
-import ink.ptms.chemdah.core.quest.objective.Progress;
-import java.util.ArrayList;
+import ink.ptms.chemdah.core.quest.addon.Addon;
+import ink.ptms.chemdah.core.quest.meta.MetaName;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 import java.util.logging.Logger;
-import org.bukkit.configuration.ConfigurationSection;
+import org.bukkit.entity.Player;
 import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.questgps.QuestGpsPage;
-import xuanmo.arcartxsuite.questgps.config.QuestGpsModuleConfiguration;
+import xuanmo.arcartxsuite.questgps.config.QuestGpsModuleConfiguration.QuestDefinition;
 
-/**
- * 从 Chemdah Template / Task 读取展示元数据，并按 overlay 策略合并。
- */
+/** Reads parsed native components; the view component overrides individual fields only. */
 public final class ChemdahMetadataReader {
-
     private final Logger logger;
 
     public ChemdahMetadataReader(Logger logger) {
         this.logger = logger;
     }
 
-    public String questDisplayName(
-        Template template,
-        QuestGpsModuleConfiguration.QuestDefinition overlay,
-        QuestGpsModuleConfiguration.PresentationDefaults defaults
-    ) {
-        String chemdahName = readMetaName(template);
-        if (chemdahName.isBlank()) {
-            chemdahName = ChemdahConfigAccessor.readString(template, "name", "");
-        }
-        return MessageProvider.translateColors(
-            ChemdahConfigAccessor.pickString(
-                overlay.presentation().source(defaults.source()),
-                chemdahName,
-                overlay.displayNameOverride(),
-                template.getId()
-            )
-        );
+    public String questDisplayName(Template template, QuestDefinition view) {
+        Object meta = template.metaAll().get("name");
+        String name = meta instanceof MetaName nativeName ? nativeName.getDisplayName() : "";
+        return MessageProvider.translateColors(ChemdahViewText.choose(view.displayNameOverride(), name, template.getId()));
     }
 
-    public List<String> questDescription(
-        Template template,
-        QuestGpsModuleConfiguration.QuestDefinition overlay,
-        QuestGpsModuleConfiguration.PresentationDefaults defaults
-    ) {
-        List<String> chemdahLines = readMetaDescription(template);
-        if (chemdahLines.isEmpty()) {
-            chemdahLines = ChemdahConfigAccessor.readMultiline(template, "description");
-        }
-        List<String> fallback = List.of("该任务未配置描述。");
-        return translateLines(
-            ChemdahConfigAccessor.pickLines(
-                overlay.presentation().source(defaults.source()),
-                chemdahLines,
-                overlay.description(),
-                fallback
-            )
-        );
+    public List<String> questDescription(PlayerProfile profile, Template template, QuestDefinition view) {
+        return translated(ChemdahViewText.choose(view.description(), nativeDescription(template, player(profile)), List.of()));
     }
 
-    public String taskDisplayText(
-        PlayerProfile profile,
-        Template template,
-        Task task,
-        QuestGpsModuleConfiguration.QuestDefinition overlay,
-        QuestGpsModuleConfiguration.PresentationDefaults defaults
-    ) {
-        QuestGpsModuleConfiguration.TaskDefinition taskOverlay = overlay.task(task.getId());
-        String overlayText = taskOverlay == null ? "" : taskOverlay.displayText();
-        String chemdahName = ChemdahConfigAccessor.readString(task, "name", task.getId());
-        String base = ChemdahConfigAccessor.pickString(
-            overlay.presentation().source(defaults.source()),
-            chemdahName,
-            overlayText,
-            task.getId()
-        );
-        String progressSuffix = progressSuffix(profile, template, task);
-        if (progressSuffix.isEmpty()) {
-            return MessageProvider.translateColors(base);
-        }
-        return MessageProvider.translateColors(base + progressSuffix);
+    public String taskDisplayText(PlayerProfile profile, Template template, Task task, QuestDefinition view) {
+        var override = view.task(task.getId());
+        MetaName meta = task.meta("name");
+        String nativeName = meta == null ? nativeText(task.addon("track"), "getName", player(profile)).stream().findFirst().orElse("")
+            : meta.getDisplayName();
+        String label = ChemdahViewText.choose(override == null ? "" : override.displayText(), nativeName, task.getId());
+        return MessageProvider.translateColors(label + progressSuffix(profile, template, task));
     }
 
-    public List<String> taskDescription(
-        Task task,
-        QuestGpsModuleConfiguration.QuestDefinition overlay,
-        QuestGpsModuleConfiguration.PresentationDefaults defaults
-    ) {
-        QuestGpsModuleConfiguration.TaskDefinition taskOverlay = overlay.task(task.getId());
-        List<String> overlayLines = taskOverlay == null ? List.of() : taskOverlay.description();
-        List<String> chemdahLines = ChemdahConfigAccessor.readMultiline(task, "description");
-        return translateLines(
-            ChemdahConfigAccessor.pickLines(
-                overlay.presentation().source(defaults.source()),
-                chemdahLines,
-                overlayLines,
-                List.of()
-            )
-        );
+    public List<String> taskDescription(PlayerProfile profile, Task task, QuestDefinition view) {
+        var override = view.task(task.getId());
+        return translated(ChemdahViewText.choose(override == null ? List.of() : override.description(),
+            nativeDescription(task, player(profile)), List.of()));
     }
 
-    private static List<String> translateLines(List<String> lines) {
-        if (lines == null || lines.isEmpty()) {
+    private List<String> nativeDescription(QuestContainer container, Player player) {
+        List<String> ui = nativeText(container.addon("ui"), "getDescription", player);
+        return ui.isEmpty() ? nativeText(container.addon("track"), "getDescription", player) : ui;
+    }
+
+    // These translated types are supplied by Chemdah's runtime language dependency, not Bukkit YAML.
+    private List<String> nativeText(Addon addon, String getter, Player player) {
+        if (addon == null) return List.of();
+        try {
+            Object text = addon.getClass().getMethod(getter).invoke(addon);
+            if (text == null) return List.of();
+            Object value = player == null
+                ? text.getClass().getMethod("getDefault").invoke(text)
+                : text.getClass().getMethod("get", String.class).invoke(text, player.getLocale());
+            return ChemdahConfigAccessor.normalizeMultiline(value);
+        } catch (ReflectiveOperationException e) {
+            logger.fine("QuestGPS: 原生任务文字读取失败: " + e.getMessage());
             return List.of();
         }
-        List<String> translated = new ArrayList<>(lines.size());
-        for (String line : lines) {
-            translated.add(MessageProvider.translateColors(line == null ? "" : line));
-        }
-        return List.copyOf(translated);
+    }
+
+    private static Player player(PlayerProfile profile) {
+        return profile == null ? null : profile.getPlayer();
+    }
+
+    private static List<String> translated(List<String> lines) {
+        return lines.stream().map(MessageProvider::translateColors).toList();
     }
 
     public String taskStatusText(PlayerProfile profile, Task task, boolean completed, QuestGpsPage page) {
-        if (completed) {
-            return "已完成";
-        }
-        // 已结束的任务不再有实时目标进度；缺少历史记录不能当作仍在进行，
-        // 也不能把可选或后来新增的目标直接标记为完成。
-        if (page == QuestGpsPage.COMPLETED) {
-            return "任务已结束（无历史进度）";
-        }
-        if (page == QuestGpsPage.AVAILABLE) {
-            return "未开始";
-        }
-        return "进行中";
-    }
-
-    private String readMetaName(Template template) {
-        ConfigurationSection section = ChemdahConfigAccessor.section(template);
-        if (section == null) {
-            return "";
-        }
-        ConfigurationSection meta = section.getConfigurationSection("meta");
-        if (meta == null) {
-            return "";
-        }
-        return meta.getString("name", "").trim();
-    }
-
-    private List<String> readMetaDescription(Template template) {
-        ConfigurationSection section = ChemdahConfigAccessor.section(template);
-        if (section == null) {
-            return List.of();
-        }
-        ConfigurationSection meta = section.getConfigurationSection("meta");
-        if (meta == null) {
-            return List.of();
-        }
-        List<String> lines = ChemdahConfigAccessor.normalizeMultiline(meta.get("description"));
-        if (!lines.isEmpty()) {
-            return lines;
-        }
-        return ChemdahConfigAccessor.normalizeMultiline(meta.get("lore"));
+        if (completed) return "已完成";
+        if (page == QuestGpsPage.COMPLETED) return "任务已结束（无历史进度）";
+        return page == QuestGpsPage.AVAILABLE ? "未开始" : "进行中";
     }
 
     private String progressSuffix(PlayerProfile profile, Template template, Task task) {
-        if (profile == null || template == null || task == null) {
-            return "";
-        }
+        if (profile == null || task.getObjective() == null || profile.getQuestById(template.getId(), false) == null) return "";
         try {
-            AddonStats stats = template.addon("stats");
-            if (stats == null) {
-                return "";
-            }
-            if (profile.getQuestById(template.getId(), false) == null) {
-                return "";
-            }
-            CompletableFuture<Progress> future = stats.getProgress(profile, task);
-            Progress progress = future.getNow(null);
-            if (progress == null) {
-                return "";
-            }
-            Object value = progress.getValue();
-            Object target = progress.getTarget();
-            if (value == null || target == null) {
-                return "";
-            }
-            return " (" + value + "/" + target + ")";
-        } catch (Exception ex) {
-            logger.fine("QuestGPS: 读取 Chemdah 进度失败: " + template.getId() + "/" + task.getId() + " -> " + ex.getMessage());
+            var progress = task.getObjective().getProgress(profile, task);
+            if (progress == null || progress.getValue() == null || progress.getTarget() == null) return "";
+            return " (" + progress.getValue() + "/" + progress.getTarget() + ")";
+        } catch (RuntimeException e) {
+            logger.fine("QuestGPS: 原生目标进度读取失败: " + template.getId() + "/" + task.getId() + " | " + e.getMessage());
             return "";
         }
     }

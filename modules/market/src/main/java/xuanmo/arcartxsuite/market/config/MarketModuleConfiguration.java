@@ -263,25 +263,29 @@ public record MarketModuleConfiguration(
         return new MessagesConfiguration(
             readStr(sec, "prefix", "&8[&6AXS市场&8] &7"),
             readStr(sec, "auction-listed", "&a物品已成功上架！"),
-            readStr(sec, "auction-bid-placed", "&a出价成功！当前最高出价: &e%amount%"),
-            readStr(sec, "auction-outbid", "&c您对 &e%item% &c的出价已被超越！新最高价: &e%amount%"),
-            readStr(sec, "auction-expired", "&7您上架的 &e%item% &7已到期，已退回。"),
-            readStr(sec, "auction-sold", "&a您上架的 &e%item% &a已售出！收入: &e%amount%"),
+            readTradeMessage(sec, "auction-bid-placed", "&a出价成功！当前最高出价: &e{amount}"),
+            readTradeMessage(sec, "auction-outbid", "&c您对 &e{item} &c的出价已被超越！新最高价: &e{amount}"),
+            readTradeMessage(sec, "auction-expired", "&7您上架的 &e{item} &7已到期，已退回。"),
+            readTradeMessage(sec, "auction-sold", "&a您上架的 &e{item} &a已售出！收入: &e{amount}"),
             readStr(sec, "auction-cancelled", "&7已取消上架。"),
-            readStr(sec, "shop-bought", "&a购买成功！花费: &e%amount%"),
+            readTradeMessage(sec, "shop-bought", "&a购买成功！花费: &e{amount}"),
             readStr(sec, "shop-limit-reached", "&c该商品已达购买上限。"),
             readStr(sec, "shop-condition-denied", "&c你不满足该商品的上架条件。"),
-            readStr(sec, "recycle-success", "&a回收成功！获得: &e%amount%"),
+            readTradeMessage(sec, "recycle-success", "&a回收成功！获得: &e{amount}"),
             readStr(sec, "recycle-nothing", "&7背包中没有可回收的物品。"),
             readStr(sec, "insufficient-funds", "&c余额不足。"),
             readStr(sec, "item-blacklisted", "&c该物品不允许上架。"),
             readStr(sec, "batch-recycle-disabled", "&c一键回收功能已关闭"),
             readStr(sec, "player-shop-listed", "&a商品已上架到你的商店！"),
-            readStr(sec, "player-shop-bought", "&a购买成功！花费: &e%amount%"),
-            readStr(sec, "player-shop-sold", "&a你商店中的 &e%item% &a已售出！收入: &e%amount%"),
-            readStr(sec, "player-shop-expired", "&7你商店中的 &e%item% &7已到期，已退回。"),
+            readTradeMessage(sec, "player-shop-bought", "&a购买成功！花费: &e{amount}"),
+            readTradeMessage(sec, "player-shop-sold", "&a你商店中的 &e{item} &a已售出！收入: &e{amount}"),
+            readTradeMessage(sec, "player-shop-expired", "&7你商店中的 &e{item} &7已到期，已退回。"),
             readStr(sec, "player-shop-cancelled", "&7已下架商品。")
         );
+    }
+
+    private static String readTradeMessage(ConfigurationSection section, String key, String fallback) {
+        return readStr(section, key, fallback).replace("%item%", "{item}").replace("%amount%", "{amount}");
     }
 
     private static String readStr(ConfigurationSection sec, String path, String def) {
@@ -519,17 +523,17 @@ public record MarketModuleConfiguration(
         public static MessagesConfiguration defaults() {
             return new MessagesConfiguration(
                 "&8[&6AXS市场&8] &7", "&a物品已成功上架！",
-                "&a出价成功！当前最高出价: &e%amount%", "&c您对 &e%item% &c的出价已被超越！新最高价: &e%amount%",
-                "&7您上架的 &e%item% &7已到期，已退回。", "&a您上架的 &e%item% &a已售出！收入: &e%amount%",
-                "&7已取消上架。", "&a购买成功！花费: &e%amount%", "&c该商品已达购买上限。",
+                "&a出价成功！当前最高出价: &e{amount}", "&c您对 &e{item} &c的出价已被超越！新最高价: &e{amount}",
+                "&7您上架的 &e{item} &7已到期，已退回。", "&a您上架的 &e{item} &a已售出！收入: &e{amount}",
+                "&7已取消上架。", "&a购买成功！花费: &e{amount}", "&c该商品已达购买上限。",
                 "&c你不满足该商品的上架条件。",
-                "&a回收成功！获得: &e%amount%", "&7背包中没有可回收的物品。",
+                "&a回收成功！获得: &e{amount}", "&7背包中没有可回收的物品。",
                 "&c余额不足。",
                 "&c该物品不允许上架。",
                 "&c一键回收功能已关闭",
-                "&a商品已上架到你的商店！", "&a购买成功！花费: &e%amount%",
-                "&a你商店中的 &e%item% &a已售出！收入: &e%amount%",
-                "&7你商店中的 &e%item% &7已到期，已退回。", "&7已下架商品。"
+                "&a商品已上架到你的商店！", "&a购买成功！花费: &e{amount}",
+                "&a你商店中的 &e{item} &a已售出！收入: &e{amount}",
+                "&7你商店中的 &e{item} &7已到期，已退回。", "&7已下架商品。"
             );
         }
     }

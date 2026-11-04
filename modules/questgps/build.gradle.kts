@@ -2,6 +2,8 @@
     id("java")
 }
 
+version = "2.0.0"
+
 dependencies {
     testImplementation(platform("org.junit:junit-bom:5.10.2"))
     testImplementation("org.junit.jupiter:junit-jupiter")
@@ -30,6 +32,7 @@ tasks.test {
 }
 
 tasks.jar {
+    includeEmptyDirs = false
     archiveBaseName.set("ArcartXSuite-QuestGPS")
     archiveClassifier.set("")
     // 仅编译期占位：运行时由 TabooLib 重定位提供，避免污染最终 JAR / 与运行时类冲突。

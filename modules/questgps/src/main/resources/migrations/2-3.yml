@@ -1,7 +1,0 @@
-from-version: 2
-to-version: 3
-description: "导航标记节重命名 navigation.marker→navigation.model-marker（与新增的 navigation.texture-marker 贴图提示成对命名），保留用户已有值"
-operations:
-  - type: rename
-    from: navigation.marker
-    to: navigation.model-marker

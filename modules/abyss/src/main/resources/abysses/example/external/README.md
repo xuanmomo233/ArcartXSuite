@@ -12,11 +12,10 @@ abyss 在每次加载地牢模板（`/axs abyss reload`、模块启动）时自�
 |---|---|
 | `chemdah/conversation/sk_guide.yml` | `plugins/Chemdah/core/conversation/` |
 | `chemdah/quest/sk_slayer.yml` | `plugins/Chemdah/core/quest/` |
-| `questgps/sk_slayer.yml` | `plugins/ArcartXSuite/data/questgps/quests/` |
 
 规则：目标插件/模块缺席则整组跳过；目标文件已存在则跳过
 （管理员自行修改不会被覆盖）。部署成功后自动执行
-`chemdah reload` 与 questgps 模块重载。
+`chemdah reload`。QuestGPS 的展示设置直接位于 Chemdah 任务的 `addon.axs-view` 中，任务重载后自动刷新。
 
 ## 模块分工（本示例演示的边界）
 
