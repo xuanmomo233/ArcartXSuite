@@ -46,6 +46,12 @@ public final class DesignSession {
     private volatile String selectedNode;
     private volatile long lastAction = System.currentTimeMillis();
     private boolean saving;
+    private DraftTrial trial;
+    public DraftTrial trial() { return trial; }
+    public void trial(DraftTrial next) {
+        if (trial != null) trial.close();
+        trial = next;
+    }
     private boolean worldDirty;
     private boolean worldSnapshot;
     private boolean unknownWorldEdits;

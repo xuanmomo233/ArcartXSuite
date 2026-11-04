@@ -66,8 +66,36 @@ public final class ScriptRunner {
      * @return true 表示该行使会话挂起（wait）；false 继续下一行
      */
     boolean executeLine(String line, ScriptContext context, ScriptSession session) {
+        var trial = context.getInstance().draftTrial();
+        if (trial != null && !trial.consumeStep()) return false;
+        if (line.startsWith("flow_if ")) {
+            int end = line.indexOf(' ', 8);
+            if (end < 0) { session.cancel(); return false; }
+            String condition = line.substring(8, end);
+            if (!condition.matches("(?:var:|group_cleared:|room_cleared:)[\\p{L}\\p{N}_.-]{1,64}")) {
+                session.cancel();
+                return false;
+            }
+            var stages = service.get().stages();
+            if (stages == null || !stages.evalCond(context.getInstance(), condition)) return false;
+            line = line.substring(end + 1).trim();
+            if (line.startsWith("flow_if ")) { session.cancel(); return false; }
+        }
         // ── 行内宿主脚本 ──
         String lower = line.toLowerCase();
+        if (trial != null) {
+            int split = line.indexOf(' ');
+            String action = split < 0 ? lower : lower.substring(0, split);
+            String args = split < 0 ? "" : line.substring(split + 1).trim();
+            if (action.equals("wait")) {
+                long ticks = Math.min(200, parseWaitTicks(args));
+                trial.trace("等待 " + ticks + " tick（试跑上限 200）");
+                if (ticks > 0) return suspend(session, ticks);
+                return false;
+            }
+            trial.execute(action, args);
+            return false;
+        }
         if (lower.startsWith("aria:")) {
             evalInline(context.getTrigger(), ScriptActionKind.ARIA, line.substring(5).trim());
             return false;
@@ -118,6 +146,10 @@ public final class ScriptRunner {
     private boolean doWait(String arg, ScriptContext context, ScriptSession session) {
         long ticks = parseWaitTicks(context.replace(arg));
         if (ticks <= 0) return false;
+        return suspend(session, ticks);
+    }
+
+    private boolean suspend(ScriptSession session, long ticks) {
         session.suspend(scheduler.scheduleOnce(plugin, () -> {
             if (!session.isCancelled()) {
                 runOnMain(session::resume);

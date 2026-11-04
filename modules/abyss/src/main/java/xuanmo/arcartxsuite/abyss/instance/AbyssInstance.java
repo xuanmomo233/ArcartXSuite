@@ -79,6 +79,9 @@ public final class AbyssInstance {
     // ── 基础 ──────────────────────────────────────────
 
     public UUID getInstanceId() { return instanceId; }
+    private xuanmo.arcartxsuite.abyss.design.DraftTrial draftTrial;
+    public @Nullable xuanmo.arcartxsuite.abyss.design.DraftTrial draftTrial() { return draftTrial; }
+    public void draftTrial(xuanmo.arcartxsuite.abyss.design.DraftTrial trial) { draftTrial = trial; }
     public AbyssTemplate getTemplate() { return template; }
     public boolean designMode() { return designMode; }
     public void designMode(boolean value) { designMode = value; }

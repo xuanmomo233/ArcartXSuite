@@ -817,15 +817,55 @@ controls:
                   height: self.parent.height
                   limitControl: self.parent
                   through: true
-          底栏副注:
-            type: Text
+          草稿试跑:
+            type: Canvas
             attribute:
               point: ~top_left
               x: 28
-              y: 68
-              texts: ~&7标记杖右键落点 · Shift+右键取消选区
-              fontSize: 32
-              through: true
+              y: 64
+              width: 126
+              height: 38
+            action:
+              clickLeft: "Packet.send(var.packetId, 'design_trial', 'start', var.actionToken)"
+            children:
+              字:
+                type: Text
+                attribute:
+                  texts: ~&d草稿试跑
+                  fontSize: 30
+                  through: true
+          模拟清图:
+            type: Canvas
+            attribute:
+              x: 166
+              y: 64
+              width: 126
+              height: 38
+            action:
+              clickLeft: "Packet.send(var.packetId, 'design_trial', 'clear', var.actionToken)"
+            children:
+              字:
+                type: Text
+                attribute:
+                  texts: ~&e模拟清图
+                  fontSize: 30
+                  through: true
+          结束试跑:
+            type: Canvas
+            attribute:
+              x: 304
+              y: 64
+              width: 126
+              height: 38
+            action:
+              clickLeft: "Packet.send(var.packetId, 'design_trial', 'stop', var.actionToken)"
+            children:
+              字:
+                type: Text
+                attribute:
+                  texts: ~&7结束试跑
+                  fontSize: 30
+                  through: true
           保存钮:
             type: Canvas
             attribute:

@@ -108,6 +108,24 @@ public record DesignObject(
 
     /** 各类型字段 schema（编辑器显隐/控件由服务端决定，UI 纯渲染）。 */
     public static List<FieldSpec> schema(Kind kind) {
+        var base = baseSchema(kind);
+        if (kind == Kind.STAGE) return base;
+        var hooks = base.stream().filter(field -> field.editor() == Editor.SCRIPT)
+            .map(FieldSpec::name).toArray(String[]::new);
+        if (hooks.length == 0) return base;
+        var fields = new java.util.ArrayList<>(base);
+        fields.add(FieldSpec.cycle("design-action-hook", "触发时机", hooks));
+        fields.add(FieldSpec.cycle("design-action", "动作类型", "提示", "等待", "刷怪", "开门", "关门",
+            "发奖励", "开奖励箱", "设置变量", "跳到阶段", "通关", "判负"));
+        fields.add(FieldSpec.text("design-action-arg", "动作目标、文案或等待秒数"));
+        fields.add(FieldSpec.text("design-action-value", "变量值"));
+        fields.add(FieldSpec.cycle("design-action-condition", "动作条件", "无条件", "地图清空", "怪组清空", "房间清空", "变量成立"));
+        fields.add(FieldSpec.text("design-action-condition-ref", "条件目标或变量"));
+        fields.add(FieldSpec.cycle("design-append-action", "追加到动作列表", "添加动作"));
+        return List.copyOf(fields);
+    }
+
+    private static List<FieldSpec> baseSchema(Kind kind) {
         return switch (kind) {
             case INTERACT -> List.of(
                 FieldSpec.cycle("type", "触发方式",
@@ -214,7 +232,9 @@ public record DesignObject(
                 FieldSpec.list("rooms", "房间顺序（每行一个房间ID）"),
                 FieldSpec.cycle("boss-room", "Boss 房间"),
                 FieldSpec.cycle("advance", "进下一层", "portal", "auto"),
-                FieldSpec.num("advance-timeout", "出口等待上限（秒）"));
+                FieldSpec.num("advance-timeout", "出口等待上限（秒）"),
+                FieldSpec.script("on-enter", "进入本层"),
+                FieldSpec.script("on-clear", "清空本层"));
             case STAGE -> List.of(
                 FieldSpec.text("name", "阶段名称"),
                 FieldSpec.toggle("design-entry", "设为入口阶段"),

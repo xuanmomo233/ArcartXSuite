@@ -692,6 +692,24 @@ controls:
                           height: self.parent.height
                           limitControl: self.parent
                           through: true
+                  试跑事件:
+                    type: Canvas
+                    attribute:
+                      point: ~top_right
+                      x: -18
+                      y: 18
+                      width: 120
+                      height: 40
+                      visible: "self.parent.entry['trialEvent'] == true"
+                    action:
+                      clickLeft: "Packet.send(var.packetId, 'design_trial_event', var.objKey, self.parent.entry['field'], var.actionToken)"
+                    children:
+                      字:
+                        type: Text
+                        attribute:
+                          texts: ~&d试跑事件
+                          fontSize: 29
+                          through: true
                   行容器:
                     type: VStack
                     attribute:

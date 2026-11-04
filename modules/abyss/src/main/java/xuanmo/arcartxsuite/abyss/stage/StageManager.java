@@ -135,7 +135,7 @@ public final class StageManager {
         if (states.get(instance.getInstanceId()) != rt || instance.isFinished()) return;
         if (!success) {
             clear(instance);
-            service.failDungeon(instance, FailReason.SCRIPTED);
+            finish(instance, false);
             return;
         }
         completions.put(rt, Completion.WAITING_FOR_BRANCH);
@@ -146,13 +146,14 @@ public final class StageManager {
         if (states.get(instance.getInstanceId()) != rt || instance.isFinished()) return;
         if (stage.next().isEmpty()) {
             clear(instance);
-            service.completeDungeon(instance);
+            finish(instance, true);
             return;
         }
         // 分支按序判定：第一个条件成立的命中；无命中找无条件兜底
         for (Branch b : stage.next()) {
             if (b.condition() == null || b.condition().isBlank()
                 || evalCond(instance, b.condition())) {
+                if (instance.draftTrial() != null) instance.draftTrial().trace("分支 → " + b.target());
                 enter(instance, b.target());
                 return;
             }
@@ -163,7 +164,7 @@ public final class StageManager {
         if (transitionDepth >= 32) {
             logger.warning("[abyss] 阶段连续推进超过上限: " + stageId);
             clear(instance);
-            service.failDungeon(instance, FailReason.SCRIPTED);
+            finish(instance, false);
             return;
         }
         transitionDepth++;
@@ -191,6 +192,7 @@ public final class StageManager {
         }
         Runtime entered = new Runtime(stageId, generation, timeoutTask);
         states.put(instance.getInstanceId(), entered);
+        if (instance.draftTrial() != null) instance.draftTrial().trace("进入阶段 " + stageId);
         if (stage.name() != null) {
             String text = service.msg("dungeon.stage-enter", "stage", stage.name());
             instance.getPlayers().forEach(p -> p.sendMessage(text));
@@ -219,6 +221,12 @@ public final class StageManager {
         return cfg == null ? null : cfg.stages().get(stageId);
     }
 
+    private void finish(AbyssInstance instance, boolean success) {
+        if (instance.draftTrial() != null) instance.draftTrial().finish(success);
+        else if (success) service.completeDungeon(instance);
+        else service.failDungeon(instance, FailReason.SCRIPTED);
+    }
+
     private @Nullable ScriptSession runLines(AbyssInstance instance, List<String> lines,
                           @Nullable Player trigger, String stageId) {
         if (lines.isEmpty() || scriptLauncher == null) return null;
@@ -234,9 +242,15 @@ public final class StageManager {
      * </pre>
      * 空条件 = 不自动推进（manual，靠 complete_stage）。
      */
-    private boolean evalCond(AbyssInstance instance, @Nullable String cond) {
+    public boolean evalCond(AbyssInstance instance, @Nullable String cond) {
         if (cond == null || cond.isBlank()) return false;
         String c = cond.trim();
+        if (instance.draftTrial() != null) {
+            boolean matched = c.startsWith("var:") ? compare(instance.getVariables(), c.substring(4).trim())
+                : instance.draftTrial().matches(c);
+            instance.draftTrial().trace("条件 " + c + " → " + matched);
+            return matched;
+        }
         try {
             if (c.regionMatches(true, 0, "group_cleared:", 0, 14)) {
                 return service.mobGroups().isGroupComplete(instance, c.substring(14).trim());

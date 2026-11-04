@@ -1050,7 +1050,10 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
             groups.put(Integer.toString(gi++), Map.of(
                 "field", field, "label", v[1],
                 "lines", lineMap, "lineCount", lineMap.size(), "lineTotal", lines.size(),
-                "lineOffset", offset, "linePage", page, "linePages", pages));
+                "lineOffset", offset, "linePage", page, "linePages", pages,
+                "trialEvent", xuanmo.arcartxsuite.abyss.design.DesignObject.schema(obj.kind()).stream()
+                    .anyMatch(spec -> spec.name().equals(field)
+                        && spec.editor() == xuanmo.arcartxsuite.abyss.design.DesignObject.Editor.SCRIPT)));
         }
         payload.put("groupRows", groups);
         payload.put("groupCount", gi);
@@ -1783,6 +1786,34 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
                     dm.lineMove(s, data.get(1), data.get(2),
                         parseInt(data.get(3), -1), parseInt(data.get(4), 0));
                     pushDesignEdit(player, s, data.get(1));
+                }
+                return true;
+            }
+            case "design_trial" -> {
+                var session = designSession(player);
+                if (session != null && checkToken(player, data, 2)) {
+                    switch (data.get(1)) {
+                        case "start" -> service.startDesignTrial(player);
+                        case "clear" -> {
+                            if (session.trial() != null) session.trial().mapCleared();
+                            else player.sendMessage("§e请先开启草稿试跑。");
+                        }
+                        case "stop" -> {
+                            session.trial(null);
+                            player.sendMessage("§a试跑已结束。");
+                        }
+                        default -> { }
+                    }
+                }
+                return true;
+            }
+            case "design_trial_event" -> {
+                var session = designSession(player);
+                if (session != null && checkToken(player, data, 3)) {
+                    var object = session.get(data.get(1));
+                    if (session.trial() == null) player.sendMessage("§e请先开启草稿试跑。");
+                    else if (object != null)
+                        session.trial().event(object.key(), data.get(2), object.id(), object.kind());
                 }
                 return true;
             }

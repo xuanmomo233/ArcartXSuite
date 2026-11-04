@@ -163,6 +163,7 @@ public final class DesignManager {
     public void close(Player player) {
         DesignSession s = sessions.remove(player.getUniqueId());
         if (s != null) {
+            s.trial(null);
             DesignWriter.saveDraft(s.instance().getTemplate(), s, logger);
             byInstance.remove(s.instance().getInstanceId(), s);
             clearMarkers(s);
@@ -171,6 +172,7 @@ public final class DesignManager {
 
     /** 保存后刷新：对象表从磁盘重建（dirty 清零，id 沿用文件键）。 */
     public void refresh(DesignSession s) {
+        s.trial(null);
         s.resetTracking();
         s.putAll(loadObjects(s.instance().getTemplate()));
         DesignWriter.captureBaseline(s.instance().getTemplate(), s);
@@ -182,6 +184,7 @@ public final class DesignManager {
     public void closeInstance(AbyssInstance instance) {
         DesignSession s = byInstance.remove(instance.getInstanceId());
         if (s != null) {
+            s.trial(null);
             DesignWriter.saveDraft(instance.getTemplate(), s, logger);
             sessions.remove(s.playerId(), s);
             clearMarkers(s);
@@ -929,13 +932,16 @@ public final class DesignManager {
             lineAdd(s, key, "rooms", room);
             return "已添加";
         }
-        if (o.kind() == DesignObject.Kind.STAGE && field.equals("design-append-action")) {
+        if (field.equals("design-append-action") && specOf(o.kind(), field) != null) {
+            List<String> hooks = specOf(o.kind(), "design-action-hook").options();
             String hook = o.str("design-action-hook");
-            if (hook.isBlank()) hook = "on-start";
-            if (!Set.of("on-start", "on-complete", "on-timeout").contains(hook))
+            if (hook.isBlank()) hook = hooks.get(0);
+            if (!hooks.contains(hook))
                 throw new IllegalArgumentException("动作时机无效");
             validateActionTarget(s, o);
-            lineAdd(s, key, hook, StageForm.action(o));
+            String action = StageForm.action(o);
+            String condition = StageForm.condition(o.str("design-action-condition"), o.str("design-action-condition-ref"));
+            lineAdd(s, key, hook, condition.isBlank() ? action : "flow_if " + condition + " " + action);
             return "已添加";
         }
         if (o.kind() == DesignObject.Kind.STAGE && field.equals("design-append-branch")) {
@@ -1130,8 +1136,8 @@ public final class DesignManager {
             case "design-room-ref", "boss-room" -> DesignObject.Kind.ROOM;
             case "design-branch-target" -> DesignObject.Kind.STAGE;
             case "design-action-arg" -> StageForm.actionTarget(object.str("design-action"));
-            case "design-condition-ref", "design-branch-ref" -> switch (object.str(
-                field.name().equals("design-condition-ref") ? "design-condition" : "design-branch-condition")) {
+            case "design-condition-ref", "design-branch-ref", "design-action-condition-ref" -> switch (object.str(
+                field.name().substring(0, field.name().length() - 4))) {
                 case "怪组清空" -> DesignObject.Kind.GROUP;
                 case "房间清空" -> DesignObject.Kind.ROOM;
                 default -> null;

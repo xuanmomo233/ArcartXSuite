@@ -1040,6 +1040,33 @@ public final class AbyssService {
             new File(template.dir(), "config.yml")).getBoolean("world.design-snapshot", false);
     }
 
+    public void startDesignTrial(Player player) {
+        var session = designManager.session(player);
+        if (session == null || session.saving()) return;
+        try {
+            var source = session.instance().getTemplate();
+            var files = xuanmo.arcartxsuite.abyss.design.DesignWriter.prepare(source, session);
+            var draft = templateLoader.loadPrepared(source.id(), source.dir(), files);
+            if (draft == null) throw new IllegalArgumentException("无法加载试跑草稿");
+            Map<xuanmo.arcartxsuite.abyss.design.DraftTrial.Hook, List<String>> hooks = new LinkedHashMap<>();
+            for (var object : session.objects().values()) {
+                for (var field : xuanmo.arcartxsuite.abyss.design.DesignObject.schema(object.kind())) {
+                    if (field.editor() == xuanmo.arcartxsuite.abyss.design.DesignObject.Editor.SCRIPT) {
+                        hooks.put(new xuanmo.arcartxsuite.abyss.design.DraftTrial.Hook(object.key(), field.name()),
+                            List.copyOf(object.strList(field.name())));
+                    }
+                }
+            }
+            var trial = new xuanmo.arcartxsuite.abyss.design.DraftTrial(draft, stageManager, scriptRunner, hooks,
+                line -> { if (player.isOnline()) player.sendMessage("§8[§d试跑§8] §f" + line); });
+            session.trial(trial);
+            trial.start();
+        } catch (Exception error) {
+            session.trial(null);
+            player.sendMessage("§c草稿试跑未启动：" + error.getMessage());
+        }
+    }
+
     public void saveDesign(Player player, boolean withWorld) {
         var session = designManager != null ? designManager.session(player) : null;
         if (session == null) { player.sendMessage(msg("design.no-session")); return; }

@@ -133,6 +133,7 @@ public final class DesignWriter {
                 else if (old.equals(yaml.getString("entry"))) yaml.set("entry", null);
                 values.keySet().removeIf(key -> key.startsWith("design-"));
             }
+            values.keySet().removeIf(key -> key.startsWith("design-action-"));
             yaml.set(join(o.path(), o.id()), values);
         }
         // Bukkit set(path, Map) does not create child sections; materialize parents before child writes.
@@ -177,7 +178,9 @@ public final class DesignWriter {
             YamlConfiguration yaml = files.get(o.file());
             String old = session.originalId(o.key());
             if (!old.equals(o.id())) yaml.set(join(path, old), null);
-            yaml.set(join(path, o.id()), DesignValues.copy(o.values()));
+            Map<String, Object> values = DesignValues.copy(o.values());
+            values.keySet().removeIf(key -> key.startsWith("design-action-"));
+            yaml.set(join(path, o.id()), values);
         }
         for (var entry : files.entrySet()) {
             YamlConfiguration parsed = new YamlConfiguration();

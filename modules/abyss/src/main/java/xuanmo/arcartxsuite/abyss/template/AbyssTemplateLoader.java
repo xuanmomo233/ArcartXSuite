@@ -65,6 +65,11 @@ public final class AbyssTemplateLoader {
         Map<String,YamlConfiguration> validated;
         try { validated=AbyssValidation.read(dir); AbyssValidation.validateFiles(validated,dir); }
         catch(Exception invalid){logger.warning("[abyss] 地牢配置校验失败 "+id+": "+invalid.getMessage());return null;}
+        return loadPrepared(id, dir, validated);
+    }
+
+    /** Parses an already validated configuration snapshot without publishing it. */
+    public @Nullable AbyssTemplate loadPrepared(String id, File dir, Map<String, YamlConfiguration> validated) {
         YamlConfiguration cfg = validated.get("config.yml");
 
         // ── 世界模板来源解析 ──
