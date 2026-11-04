@@ -72,6 +72,18 @@ final class DesignReferences {
         }
         if(!(value instanceof String text))return value;
         String prop=property.replace('_','-');
+        String anchorSection = switch (kind) {
+            case NPC -> "npcs";
+            case CHEST -> "chests";
+            case INTERACT -> "interacts";
+            default -> "";
+        };
+        if (!anchorSection.isEmpty() && prop.equals(anchorSection)) {
+            int colon = text.indexOf(':');
+            if (colon > 0 && text.substring(colon + 1).trim().equals(oldId)) {
+                return text.substring(0, colon + 1) + " " + newId;
+            }
+        }
         boolean ref=switch(kind) {
             case GROUP -> dependencies && prop.equals("trigger-after");
             case INTERACT -> prop.equals("steps") || prop.equals("design-interact");

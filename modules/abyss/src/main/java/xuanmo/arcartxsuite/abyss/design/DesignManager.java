@@ -31,6 +31,13 @@ import xuanmo.arcartxsuite.abyss.template.FloorConfig;
  * UI 是纯渲染器——字段 schema 由 {@link DesignObject#schema} 服务端下发。
  */
 public final class DesignManager {
+    private java.util.function.BiFunction<AbyssInstance, Location,
+        xuanmo.arcartxsuite.abyss.procgen.ProcGenManager.DesignAnchor> designAnchor;
+
+    public void setDesignAnchor(java.util.function.BiFunction<AbyssInstance, Location,
+            xuanmo.arcartxsuite.abyss.procgen.ProcGenManager.DesignAnchor> resolver) {
+        designAnchor = resolver;
+    }
 
     /** 流程节点（主面板顶部节点链）。 */
     public record Node(String key, String label, int depth, int objectCount) { }
@@ -493,6 +500,10 @@ public final class DesignManager {
         if (pending.objKind() == DesignObject.Kind.GROUP
             || pending.objKind() == DesignObject.Kind.ROOM_GROUP
             || pending.objKind() == DesignObject.Kind.NPC) pt[1]++;
+        if (s.instance().getTemplate().procgen() != null) {
+            landProcgenPoint(s, p, pending, loc, pt);
+            return;
+        }
         if (pending.targetKey() != null) {
             // 重新定位已有对象
             DesignObject o = s.get(pending.targetKey());
@@ -595,6 +606,54 @@ public final class DesignManager {
         if (ui != null) ui.openEdit(p, s, key);
     }
 
+    private void landProcgenPoint(DesignSession s, Player player, DesignSession.PendingMark pending,
+                                  Location clicked, int[] point) {
+        var kind = pending.objKind();
+        String section = switch (kind) {
+            case INTERACT -> "interacts";
+            case NPC -> "npcs";
+            case CHEST -> "chests";
+            default -> null;
+        };
+        if (section == null || pending.targetKey() != null) {
+            messager.accept(player, "§e此点位需要在共享构件元数据中调整，不能保存为本次布局的坐标。");
+            s.pending(null);
+            return;
+        }
+        var anchor = designAnchor == null ? null : designAnchor.apply(s.instance(),
+            new Location(clicked.getWorld(), point[0], point[1], point[2]));
+        DesignObject document = anchor == null ? null : s.get("document:" + anchor.document());
+        if (document == null) {
+            messager.accept(player, "§e请选择构件内部的方块，走廊不能绑定锚点。");
+            return;
+        }
+        String id = s.nextId(kind, "anchor");
+        var yaml = new org.bukkit.configuration.file.YamlConfiguration();
+        yaml.options().parseComments(true);
+        try {
+            yaml.loadFromString(String.join("\n", document.strList("content")));
+        } catch (org.bukkit.configuration.InvalidConfigurationException error) {
+            messager.accept(player, "§c共享构件草稿格式无效，请修正后重新标点。");
+            return;
+        }
+        var rows = new ArrayList<>(yaml.getStringList(section));
+        rows.add(anchor.position() + ": " + id);
+        yaml.set(section, rows);
+        Map<String, Object> values = new LinkedHashMap<>();
+        seedDefaults(kind, values);
+        // 构件引用在物化时注册。全局定义只提供属性和动作。
+        if (kind != DesignObject.Kind.CHEST) values.put("location", "asset-anchor");
+        String key = s.uniqueKey(kind, id);
+        String node = inferNode(s.instance().getTemplate(), null, null, Map.of(), kind);
+        s.put(document.withValue("content", yaml.saveToString().lines().toList()));
+        s.put(new DesignObject(key, kind, id, kind.file(), kind.path(), kind.label(),
+            point, null, node, values, true));
+        s.pending(null);
+        messager.accept(player, "§a锚点已绑定共享构件，保存后同名构件都会使用该定义。");
+        syncMarkers(s);
+        if (ui != null) ui.openEdit(player, s, key);
+    }
+
     /** 选区模式入口：isB=false=A点、true=B点（B 点落定时完成选区）。 */
     public void handleRegionClick(Player p, Location loc, boolean isB) {
         DesignSession s = session(p);
@@ -610,6 +669,11 @@ public final class DesignManager {
 
     /** 选区模式：B点落定完成（A 未取时把本次点击当 A）。 */
     private void landRegionPoint(DesignSession s, Player p, Location loc) {
+        if (s.instance().getTemplate().procgen() != null) {
+            s.pending(null);
+            messager.accept(p, "§e随机布局不保存世界绝对选区，请使用共享构件的局部数据。");
+            return;
+        }
         int[] a = s.regionPointA();
         if (a == null) {
             s.regionPointA(new int[]{loc.getBlockX(), loc.getBlockY(), loc.getBlockZ()});

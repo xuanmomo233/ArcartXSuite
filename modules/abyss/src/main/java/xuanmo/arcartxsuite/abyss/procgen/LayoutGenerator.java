@@ -48,6 +48,17 @@ public final class LayoutGenerator {
                 : new int[]{lx, ly, lz};
             return new int[]{worldX + p[0], worldY + p[1], worldZ + p[2]};
         }
+
+        public int[] toLocal(int x, int y, int z) {
+            int lx = x - worldX, ly = y - worldY, lz = z - worldZ;
+            if (asset.region() == null) return new int[]{lx, ly, lz};
+            return switch (rotDeg) {
+                case 90 -> new int[]{lz, ly, w - 1 - lx};
+                case 180 -> new int[]{w - 1 - lx, ly, d - 1 - lz};
+                case 270 -> new int[]{d - 1 - lz, ly, lx};
+                default -> new int[]{lx, ly, lz};
+            };
+        }
     }
 
     /** 一面墙上的门洞盒（房间内边界面，1 格厚）。 */

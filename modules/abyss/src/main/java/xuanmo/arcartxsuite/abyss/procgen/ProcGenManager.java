@@ -396,6 +396,20 @@ public final class ProcGenManager {
         }
     }
 
+    public record DesignAnchor(String document, String position) { }
+
+    public @Nullable DesignAnchor designAnchor(AbyssInstance instance, Location location) {
+        InstState state = states.get(instance.getInstanceId());
+        if (state == null || location.getWorld() != instance.getWorld()) return null;
+        for (RoomRuntime room : state.rooms) {
+            if (!room.contains(location)) continue;
+            int[] local = room.placed.toLocal(location.getBlockX(), location.getBlockY(), location.getBlockZ());
+            String document = "../../room-sets/" + state.cfg.roomSet() + "/" + room.placed.asset.name() + ".yml";
+            return new DesignAnchor(document, local[0] + "," + local[1] + "," + local[2]);
+        }
+        return null;
+    }
+
     public DesignRoomCapture captureDesignRoom(AbyssInstance instance, Location location) throws Exception {
         InstState state = states.get(instance.getInstanceId());
         if (state == null || instance.getWorld() == null) throw new IllegalStateException("随机房间尚未生成");
@@ -409,16 +423,7 @@ public final class ProcGenManager {
             for (DoorBox door : room.doorBoxes)
                 for (int x = door.x1; x <= door.x2; x++) for (int y = door.y1; y <= door.y2; y++)
                     for (int z = door.z1; z <= door.z2; z++) {
-                        int[] local = placed.asset.region().rotatedSize(placed.rotDeg);
-                        // The captured volume is in world orientation; inverse rotation uses that footprint.
-                        int lx = x - room.minX, ly = y - room.minY, lz = z - room.minZ;
-                        int[] point = switch (placed.rotDeg) {
-                            case 90 -> new int[]{lz, ly, local[0] - 1 - lx};
-                            case 180 -> new int[]{local[0] - 1 - lx, ly, local[2] - 1 - lz};
-                            case 270 -> new int[]{local[2] - 1 - lz, ly, lx};
-                            default -> new int[]{lx, ly, lz};
-                        };
-                        generatedDoors.add(point);
+                        generatedDoors.add(placed.toLocal(x, y, z));
                     }
             volume = volume.restoreGeneratedAir(placed.asset.region(), generatedDoors);
             java.io.File root = library.dir(state.cfg.roomSet());
@@ -693,7 +698,7 @@ public final class ProcGenManager {
         broadcastIn(instance, msg("procgen.grade", "grade", grade,
             "score", String.valueOf(score)));
         // Boss 清完 → 副本通关
-        service.completeDungeon(instance);
+        service.completeMap(instance);
     }
 
     private static boolean hasWaves(RoomRuntime rr) {

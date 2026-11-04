@@ -70,12 +70,13 @@ public final class InteractManager {
     public void initInstance(AbyssInstance instance) {
         active.put(instance.getInstanceId(),
             new ConcurrentHashMap<>(instance.getTemplate().interacts().interacts()));
+        active.get(instance.getInstanceId()).values().removeIf(i -> "asset-anchor".equals(i.location()));
     }
 
     /** 动态注册（脚本 create_interact）。 */
     public boolean create(AbyssInstance instance, String name) {
         Interact i = instance.getTemplate().interacts().interacts().get(name);
-        if (i == null) return false;
+        if (i == null || "asset-anchor".equals(i.location())) return false;
         Map<String, Interact> map = active.computeIfAbsent(
             instance.getInstanceId(), k -> new ConcurrentHashMap<>());
         map.put(name, i);

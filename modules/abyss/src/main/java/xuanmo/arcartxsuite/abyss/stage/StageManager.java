@@ -9,6 +9,8 @@ import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.abyss.instance.AbyssInstance;
+import xuanmo.arcartxsuite.abyss.instance.FailReason;
+import xuanmo.arcartxsuite.abyss.script.ScriptSession;
 import xuanmo.arcartxsuite.abyss.service.AbyssService;
 import xuanmo.arcartxsuite.abyss.template.StageConfig;
 import xuanmo.arcartxsuite.abyss.template.StageConfig.Branch;
@@ -29,7 +31,7 @@ public final class StageManager {
     /** 脚本行执行器（service 注入；vars 进 ScriptContext 额外变量）。 */
     @FunctionalInterface
     public interface ScriptLauncher {
-        void run(AbyssInstance instance, List<String> lines,
+        ScriptSession run(AbyssInstance instance, List<String> lines,
                  @Nullable Player trigger, Map<String, String> vars);
     }
 
@@ -37,11 +39,15 @@ public final class StageManager {
     private record Runtime(String stageId, long enteredAt,
                            @Nullable ScheduledTask timeoutTask) { }
 
+    private enum Completion { RUNNING_ACTIONS, WAITING_FOR_BRANCH }
+
     private final AbyssService service;
     private final Plugin plugin;
     private final SchedulerAPI scheduler;
     private final Logger logger;
     private final Map<UUID, Runtime> states = new ConcurrentHashMap<>();
+    private final Map<Runtime, Completion> completions = new java.util.IdentityHashMap<>();
+    private int transitionDepth;
     private volatile ScriptLauncher scriptLauncher;
 
     public StageManager(AbyssService service, Plugin plugin,
@@ -91,7 +97,10 @@ public final class StageManager {
     /** 实例销毁清理。 */
     public void clear(AbyssInstance instance) {
         Runtime rt = states.remove(instance.getInstanceId());
-        if (rt != null && rt.timeoutTask() != null) rt.timeoutTask().cancel();
+        if (rt != null) {
+            completions.remove(rt);
+            if (rt.timeoutTask() != null) rt.timeoutTask().cancel();
+        }
     }
 
     // ── 内部 ─────────────────────────────────────────────
@@ -99,6 +108,12 @@ public final class StageManager {
     private void reevaluate(AbyssInstance instance, Runtime rt, @Nullable Player trigger) {
         Stage stage = stageOf(instance, rt.stageId());
         if (stage == null) { states.remove(instance.getInstanceId()); return; }
+        Completion completion = completions.get(rt);
+        if (completion == Completion.WAITING_FOR_BRANCH) {
+            chooseBranch(instance, rt, stage);
+            return;
+        }
+        if (completion == Completion.RUNNING_ACTIONS) return;
         if (evalCond(instance, stage.completeWhen())) {
             advance(instance, rt, trigger);
         }
@@ -107,38 +122,74 @@ public final class StageManager {
     private void advance(AbyssInstance instance, Runtime rt, @Nullable Player trigger) {
         Stage stage = stageOf(instance, rt.stageId());
         if (stage == null) { states.remove(instance.getInstanceId()); return; }
-        runLines(instance, stage.onComplete(), trigger, rt.stageId());
-        // 分支按序判定：第一个条件成立的命中；无命中找无条件兜底
-        String next = null;
-        for (Branch b : stage.next()) {
-            if (b.condition() == null || b.condition().isBlank()
-                || evalCond(instance, b.condition())) { next = b.target(); break; }
+        if (completions.putIfAbsent(rt, Completion.RUNNING_ACTIONS) != null) return;
+        ScriptSession actions = runLines(instance, stage.onComplete(), trigger, rt.stageId());
+        if (actions == null) {
+            finishActions(instance, rt, stage, true);
+        } else {
+            actions.completion().thenAccept(success -> finishActions(instance, rt, stage, success));
         }
-        if (next == null || next.isBlank()) {
-            states.remove(instance.getInstanceId());
+    }
+
+    private void finishActions(AbyssInstance instance, Runtime rt, Stage stage, boolean success) {
+        if (states.get(instance.getInstanceId()) != rt || instance.isFinished()) return;
+        if (!success) {
+            clear(instance);
+            service.failDungeon(instance, FailReason.SCRIPTED);
+            return;
+        }
+        completions.put(rt, Completion.WAITING_FOR_BRANCH);
+        chooseBranch(instance, rt, stage);
+    }
+
+    private void chooseBranch(AbyssInstance instance, Runtime rt, Stage stage) {
+        if (states.get(instance.getInstanceId()) != rt || instance.isFinished()) return;
+        if (stage.next().isEmpty()) {
+            clear(instance);
             service.completeDungeon(instance);
             return;
         }
-        enter(instance, next);
+        // 分支按序判定：第一个条件成立的命中；无命中找无条件兜底
+        for (Branch b : stage.next()) {
+            if (b.condition() == null || b.condition().isBlank()
+                || evalCond(instance, b.condition())) {
+                enter(instance, b.target());
+                return;
+            }
+        }
     }
 
     private void enter(AbyssInstance instance, String stageId) {
+        if (transitionDepth >= 32) {
+            logger.warning("[abyss] 阶段连续推进超过上限: " + stageId);
+            clear(instance);
+            service.failDungeon(instance, FailReason.SCRIPTED);
+            return;
+        }
+        transitionDepth++;
+        try {
+            enterStage(instance, stageId);
+        } finally {
+            transitionDepth--;
+        }
+    }
+
+    private void enterStage(AbyssInstance instance, String stageId) {
         Stage stage = stageOf(instance, stageId);
         if (stage == null) {
             logger.fine("[abyss] 阶段不存在: " + stageId
                 + "（地牢 " + instance.getTemplate().id() + "）");
-            states.remove(instance.getInstanceId());
             return;
         }
-        cancelTimeout(instance);
+        clear(instance);
         ScheduledTask timeoutTask = null;
         if (stage.timeoutSeconds() > 0) {
             timeoutTask = scheduler.scheduleOnceSeconds(plugin,
                 () -> onTimeout(instance, stageId), stage.timeoutSeconds());
             instance.registerTask(timeoutTask);
         }
-        states.put(instance.getInstanceId(),
-            new Runtime(stageId, System.currentTimeMillis(), timeoutTask));
+        Runtime entered = new Runtime(stageId, System.currentTimeMillis(), timeoutTask);
+        states.put(instance.getInstanceId(), entered);
         if (stage.name() != null) {
             String text = service.msg("dungeon.stage-enter", "stage", stage.name());
             instance.getPlayers().forEach(p -> p.sendMessage(text));
@@ -146,7 +197,7 @@ public final class StageManager {
         runLines(instance, stage.onStart(), null, stageId);
         // 进入即判一次：条件瞬间成立则连跳
         Runtime rt = states.get(instance.getInstanceId());
-        if (rt != null && rt.stageId().equals(stageId)) {
+        if (rt == entered && !instance.isFinished()) {
             reevaluate(instance, rt, null);
         }
     }
@@ -160,20 +211,15 @@ public final class StageManager {
         reevaluate(instance, rt, null);
     }
 
-    private void cancelTimeout(AbyssInstance instance) {
-        Runtime rt = states.get(instance.getInstanceId());
-        if (rt != null && rt.timeoutTask() != null) rt.timeoutTask().cancel();
-    }
-
     private @Nullable Stage stageOf(AbyssInstance instance, String stageId) {
         StageConfig cfg = instance.getTemplate().stages();
         return cfg == null ? null : cfg.stages().get(stageId);
     }
 
-    private void runLines(AbyssInstance instance, List<String> lines,
+    private @Nullable ScriptSession runLines(AbyssInstance instance, List<String> lines,
                           @Nullable Player trigger, String stageId) {
-        if (lines.isEmpty() || scriptLauncher == null) return;
-        scriptLauncher.run(instance, lines, trigger, Map.of("stage", stageId));
+        if (lines.isEmpty() || scriptLauncher == null) return null;
+        return scriptLauncher.run(instance, lines, trigger, Map.of("stage", stageId));
     }
 
     /**

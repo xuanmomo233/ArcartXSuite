@@ -412,6 +412,7 @@ public final class AbyssService {
         designManager = new xuanmo.arcartxsuite.abyss.design.DesignManager(
             logger, (p, m) -> p.sendMessage(m));
         designManager.setMsgResolver((key, kv) -> msg(key, kv));
+        designManager.setDesignAnchor(procgenManager::designAnchor);
         designManager.setUi(ui);
         designListener = new xuanmo.arcartxsuite.abyss.design.DesignListener(
             plugin, designManager);
@@ -1603,6 +1604,16 @@ public final class AbyssService {
     // ═══ 结束流程 ═══
 
     /** 通关：状态→COMPLETED，跑 complete 脚本，记成绩，延时撤出+清理。 */
+    public void completeMap(AbyssInstance instance) {
+        instance.getVariables().put("map_cleared", true);
+        var stages = instance.getTemplate().stages();
+        if (stages != null && !stages.isEmpty()) {
+            if (stageManager != null) stageManager.onEvent(instance);
+            return;
+        }
+        completeDungeon(instance);
+    }
+
     public void completeDungeon(AbyssInstance instance) {
         if (isDesignInstance(instance)) return;
         if(!instance.admitted()) {
@@ -2620,7 +2631,7 @@ public final class AbyssService {
 
         @Override
         public void onDungeonComplete(AbyssInstance instance) {
-            completeDungeon(instance);
+            completeMap(instance);
         }
 
         @Override

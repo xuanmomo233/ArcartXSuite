@@ -124,6 +124,9 @@ public final class DesignWriter {
             DesignObject original = session.originalObject(deletion.getKey());
             String path = original != null ? original.path() : kind.path();
             String file = original != null ? original.file() : kind.file();
+            if (documents.contains(file)) {
+                throw new IOException(file + " 同时存在文件编辑和对象删除，请先分别保存");
+            }
             if (kind == DesignObject.Kind.ROOM_GROUP) {
                 String compound = deletion.getKey().substring(6);
                 String room = compound.substring(0, compound.indexOf('.'));
