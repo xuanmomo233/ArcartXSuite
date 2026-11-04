@@ -144,6 +144,7 @@ command_signal_accept_mainline:
       command: "say {player} accepted {quest-id}"
 
 # 任务完成后发放称号并推送 UI 通知
+# 在对应 Chemdah 任务的 addon.axs-view.hooks.completed 中添加 questgps_quest_completed。
 quest_completed_title_reward:
   enabled: false
   trigger: command-signal
@@ -160,7 +161,7 @@ quest_completed_title_reward:
         - self                   # self=仅触发者, all=全服, world=同世界
       pack:                      # 包数据 (键值对，客户端 packet['key'] 读取)
         player: "{player_name}"
-        quest: "{quest-id}"
+        quest: "{quest_id}"
         time: "{timestamp_local}"
 
 # ── 模块联动示例 ──────────────────────────────────────────────

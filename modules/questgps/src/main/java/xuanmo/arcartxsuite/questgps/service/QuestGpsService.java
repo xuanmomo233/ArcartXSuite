@@ -195,8 +195,7 @@ public final class QuestGpsService implements Listener {
         questTargetIndex.clear();
         for (Player player : Bukkit.getOnlinePlayers()) {
             clearTrackInternal(player, true, false);
-            MapNavigable map = mapNavigableProvider.get();
-            if (map != null) map.clearExternalTargets(player, MAP_SOURCE, false);
+            syncQuestMapTargets(player);
             QuestGpsViewState state = viewStates.get(player.getUniqueId());
             if (state != null) {
                 if (configuration.quest(state.selectedQuestId()) == null) state.setSelectedQuestId("");
@@ -800,7 +799,9 @@ public final class QuestGpsService implements Listener {
         try {
             Map<String, String> payload = new java.util.LinkedHashMap<>();
             payload.put("quest_id", questId);
-            String questName = definition == null ? questId : definition.displayNameOverride();
+            var template = ChemdahAPI.INSTANCE.getQuestTemplate(questId);
+            String questName = template == null ? questId
+                : chemdahBootstrap.metadataReader().questDisplayName(template, definition);
             payload.put("quest_name", questName == null || questName.isBlank() ? questId : questName);
             eventBus.publish("axs.questgps.quest_completed", player, payload);
         } catch (Exception exception) {
@@ -1153,7 +1154,12 @@ public final class QuestGpsService implements Listener {
         };
         for (String signal : signals) {
             if (hookDispatcher != null) {
-                hookDispatcher.dispatch(signal, player, definition.id());
+                try {
+                    hookDispatcher.dispatch(signal, player, definition.id());
+                } catch (RuntimeException exception) {
+                    logger.warning("QuestGPS 任务信号发送失败: " + definition.id() + " / " + signal
+                        + " | " + exception.getMessage());
+                }
             }
         }
     }

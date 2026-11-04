@@ -24,7 +24,8 @@ public final class ChemdahMetadataReader {
     public String questDisplayName(Template template, QuestDefinition view) {
         Object meta = template.metaAll().get("name");
         String name = meta instanceof MetaName nativeName ? nativeName.getDisplayName() : "";
-        return MessageProvider.translateColors(ChemdahViewText.choose(view.displayNameOverride(), name, template.getId()));
+        String override = view == null ? "" : view.displayNameOverride();
+        return MessageProvider.translateColors(ChemdahViewText.choose(override, name, template.getId()));
     }
 
     public List<String> questDescription(PlayerProfile profile, Template template, QuestDefinition view) {
