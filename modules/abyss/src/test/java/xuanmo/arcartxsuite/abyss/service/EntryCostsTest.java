@@ -75,6 +75,15 @@ class EntryCostsTest {
         });
     }
 
+    @Test void aPreviouslyCommittedReservationRequiresReviewWithoutRefundingAFormerRun() throws Exception {
+        exercise((costs, provider, operation, changed) -> {
+            when(provider.reserve(any())).thenReturn(CompletableFuture.completedFuture(State.COMMITTED));
+            costs.begin(operation, changed, () -> fail("A historical consumption must not start another run"));
+            assertEquals(Phase.REVIEW_REQUIRED, operation.phase);
+            verify(provider, never()).compensate(any());
+        });
+    }
+
     @FunctionalInterface interface Scenario {
         void run(EntryCosts costs, Participant provider, AdmissionAccess.Operation operation,
                  Consumer<AdmissionAccess.Operation> changed);

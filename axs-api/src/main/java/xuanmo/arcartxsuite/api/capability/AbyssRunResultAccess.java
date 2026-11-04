@@ -9,6 +9,7 @@ import java.util.concurrent.CompletableFuture;
 public interface AbyssRunResultAccess {
     String RESULT_COMMITTED_TOPIC = "axs.abyss.result_committed";
     String RUN_NOTICE_TOPIC = "axs.abyss.run_notice";
+    String ENTRY_NOTICE_TOPIC = "axs.abyss.entry_notice";
 
     enum Outcome { COMPLETED, FAILED, CANCELLED }
     enum MemberState { PRESENT, DISCONNECTED, LEFT }
@@ -26,6 +27,9 @@ public interface AbyssRunResultAccess {
     /** Server-thread notification. Sequence is scoped to a run; notices are not replayed. */
     record RunNotice(int schemaVersion, UUID eventId, UUID runId, UUID requestId, long sequence,
                      long occurredAt, NoticeKind kind, Member member) { }
+    /** Published after the corresponding admission snapshot has been stored. */
+    record EntryNotice(int schemaVersion, UUID eventId, UUID generation, String owner, UUID requestId,
+                       long sequence, long occurredAt, AbyssAdmissionAccess.Entry entry) { }
 
     /** Completes with null if there is no committed result; storage failure completes exceptionally. */
     CompletableFuture<Result> result(UUID runId);

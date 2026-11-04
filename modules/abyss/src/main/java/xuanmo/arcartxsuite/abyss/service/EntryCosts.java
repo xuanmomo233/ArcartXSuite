@@ -62,6 +62,7 @@ final class EntryCosts implements AbyssEntryCostAccess {
         invoke(() -> provider.reserve(transaction), reserved -> {
             op.costState = reserved;
             if (reserved != State.RESERVED) {
+                if (reserved == State.COMMITTED) op.entryOutcomeUncertain = true;
                 op.phase = reserved == State.NONE ? Phase.REJECTED : Phase.REVIEW_REQUIRED;
                 op.reason = reserved == State.NONE ? "COST_REJECTED" : "COST_RESERVATION_UNKNOWN";
                 changed.accept(op);

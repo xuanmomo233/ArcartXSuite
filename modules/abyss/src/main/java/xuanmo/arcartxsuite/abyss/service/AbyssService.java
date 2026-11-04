@@ -2699,6 +2699,15 @@ public final class AbyssService {
         }
     }
 
+    void publishEntryNotice(AbyssRunResultAccess.EntryNotice notice) {
+        try {
+            var bus = eventBusProvider.get();
+            if (bus != null) bus.publish(AbyssRunResultAccess.ENTRY_NOTICE_TOPIC, null, notice);
+        } catch (RuntimeException failure) {
+            logger.warning("[abyss] 入场状态通知发布失败 " + notice.requestId());
+        }
+    }
+
     public void publishEvent(String topic, @Nullable Player player, Map<String, Object> data) {
         try {
             EventBusCapability bus = eventBusProvider.get();

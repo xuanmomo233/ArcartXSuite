@@ -272,6 +272,7 @@ public final class AbyssModule extends AbstractAXSModule implements ModuleComman
             "axs.abyss.complete",
             xuanmo.arcartxsuite.api.capability.AbyssRunResultAccess.RESULT_COMMITTED_TOPIC,
             xuanmo.arcartxsuite.api.capability.AbyssRunResultAccess.RUN_NOTICE_TOPIC,
+            xuanmo.arcartxsuite.api.capability.AbyssRunResultAccess.ENTRY_NOTICE_TOPIC,
             "axs.abyss.fail",
             "axs.abyss.leave",
             "axs.abyss.player_death",

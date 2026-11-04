@@ -56,6 +56,8 @@ final class AdmissionAccess implements AbyssAdmissionAccess {
         xuanmo.arcartxsuite.api.capability.AbyssEntryCostAccess.Participant costParticipant;
         boolean compensationAttempted;
         boolean entryOutcomeUncertain;
+        long noticeSequence;
+        Entry lastQueuedSnapshot;
         Operation(Intent intent) {
             this.intent = intent;
             this.fingerprint = fingerprint(intent);
@@ -399,10 +401,21 @@ final class AdmissionAccess implements AbyssAdmissionAccess {
             default -> false;
         }) release(op);
         if (!op.persisted || storage == null) return;
-        storage.writeAdmission(receipt(op), false).exceptionally(error -> {
-            java.util.logging.Logger.getLogger("Abyss").warning("Admission journal write failed: " + op.intent.requestId());
-            return null;
-        });
+        var snapshot = op.snapshot();
+        if (snapshot.equals(op.lastQueuedSnapshot)) return;
+        op.lastQueuedSnapshot = snapshot;
+        long sequence = ++op.noticeSequence;
+        long occurredAt = System.currentTimeMillis();
+        storage.writeAdmission(receipt(op), false).whenComplete((ignored, error) -> service.runOnMain(() -> {
+            if (error != null) {
+                if (snapshot.equals(op.lastQueuedSnapshot)) op.lastQueuedSnapshot = null;
+                java.util.logging.Logger.getLogger("Abyss").warning("Admission journal write failed: " + op.intent.requestId());
+            } else if (service.running()) {
+                service.publishEntryNotice(new xuanmo.arcartxsuite.api.capability.AbyssRunResultAccess.EntryNotice(
+                    1, UUID.randomUUID(), generation, op.intent.owner(), op.intent.requestId(),
+                    sequence, occurredAt, snapshot));
+            }
+        }));
     }
 
     static Denial deny(String code, String message) { return new Denial(null, code, message); }
