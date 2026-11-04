@@ -1,20 +1,13 @@
-# 副本任务 → questgps/Chemdah 适配层
-# 任务语义（目标/进度/完成）全部在 Chemdah 侧定义（external/chemdah/quest/sk_slayer.yml），
-# 这里只登记映射 + 副本内钩子。Chemdah 任务为玩家级持久档案，重复刷本需任务可重复接取。
+# 在副本中引用 Chemdah 任务并配置副本动作。名称、说明、目标和预览写在 Chemdah 任务文件。
+# 本例沿用 Chemdah 的 sk_slayer ID。现有脚本需要保留不同的副本 ID 时，才填写 chemdah-id。
 
-slayer:
-  chemdah-id: "sk_slayer"            # Chemdah 任务模板 id（QuestGPS 呈现层同名）
-  name: "讨伐深渊魔物"
-  description: "深入地牢，击杀 15 只魔物并击败深渊领主"
-  # 接取后自动加入 QuestGPS 追踪：guide HUD 立即出卡显示名称/进度/当前目标。
-  # navigation.enabled=false 只关导航点（副本世界是动态坐标，路标由 abyss
-  # guide_point 承担），不影响 HUD 卡片与进度文本。
-  auto-track: true
-  # on-accept 不再发"已接取"消息——questgps 通知 + Chemdah agent tell 已各播一遍，
-  # 这里再加一条就是三层刷屏。钩子保留位：要加副本内动作（指路/音效）写在下面。
+sk_slayer:
+  # auto-track 默认 true。设为 false 时，接取任务后由玩家或脚本手动追踪。
+  # on-accept 在副本接取成功后执行，@trigger 指接取者。
   on-accept:
     - "sound @trigger ENTITY_EXPERIENCE_ORB_PICKUP 1 1.2"
-  on-complete:                       # Chemdah 完成 → EventBus 路由到此发奖
+  # on-complete 在完成后执行，quest_pack 对应同一副本 rewards.yml 中的奖励集。
+  # manual-claim 默认 false。设为 true 时，玩家完成后通过 NPC 的 quest_step 或 submit_quest 领取。
+  on-complete:
     - "grant_reward @trigger quest_pack"
     - "message @trigger &6委托达成！奖励已发放"
-  manual-claim: false                # true=完成不自动发奖，回 NPC submit_quest 领取

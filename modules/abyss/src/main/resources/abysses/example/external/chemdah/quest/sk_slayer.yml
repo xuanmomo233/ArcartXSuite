@@ -1,14 +1,11 @@
-# Chemdah 任务模板：讨伐深渊魔物（abyss quests.yml 的 slayer.chemdah-id 指向这里）
+# Chemdah 任务模板。副本 quests.yml 和 NPC 使用相同的 sk_slayer ID。
 # 部署：plugins/Chemdah/core/quest/sk_slayer.yml（abyss 启动/重载时自动部署）
-# 玩家级持久档案；副本内击杀计数自动推进，完成事件经 questgps EventBus
-# 路由回 abyss quests.yml 的 on-complete 钩子发副本侧奖励。
-# 可重复接取：Chemdah 默认完成后可再次接取（如需间隔可在 agent 里加条件）。
+# 任务完成后，副本按 quests.yml 的 on-complete 执行奖励。重复接取按 Chemdah 任务规则设置。
 
 sk_slayer:
   meta:
     name: "讨伐深渊魔物"
-    # 任务类型 → questgps categories 注册 id（mainline/side/encounter…）
-    type: side
+    type: "副本委托"
   task:
     kills:
       objective: player kill            # 玩家击杀实体（AEntityDeath 系）
@@ -32,11 +29,17 @@ sk_slayer:
       allow-abandon: true
       navigation:
         enabled: false
-      hooks:
-        accepted:
-          - questgps_quest_accepted
-        completed:
-          - questgps_quest_completed
+      # 奖励预览对应副本 rewards.yml 的 quest_pack。
+      rewards:
+        - type: material
+          material: EMERALD
+          amount: 5
+        - type: material
+          material: IRON_INGOT
+          amount: 8
+        - type: text
+          display-name: "货币奖励"
+          text: "80"
     track:
       scoreboard: true
     ui:

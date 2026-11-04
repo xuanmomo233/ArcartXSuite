@@ -17,7 +17,7 @@ guide:
     - "&a需要委托的话，我可以给你登记讨伐任务。"
   dialog-interval: 40
   click-script:
-    - "quest_step slayer"          # 未接取→接 Chemdah 委托；已完成→领奖励
+    - "quest_step sk_slayer"       # 未接取时接委托，已完成且未领取时发奖
     - "run_script guide_guide"     # 指路：从"找向导"切到"穿过东廊"
   once: false
 
