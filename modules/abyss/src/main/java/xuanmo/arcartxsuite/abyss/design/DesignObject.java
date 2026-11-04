@@ -51,6 +51,7 @@ public record DesignObject(
         ROOM("⌂", "房间", "rooms.yml", "rooms", "170,170,190"),
         FLOOR("⌂", "楼层", "floors.yml", "floors", "170,170,190"),
         STAGE("➜", "阶段", "stages.yml", "", "130,210,140"),
+        SCRIPT("➜", "流程段", "scripts.yml", "", "130,210,140"),
         SETTLEMENT("❖", "结算策略", "config.yml", "", "245,200,110"),
         BUFF("✦", "增益池", "buffs.yml", "pools", "240,150,200"),
         DOCUMENT("≡", "配置文件", "", "", "150,200,220");
@@ -109,16 +110,18 @@ public record DesignObject(
     /** 各类型字段 schema（编辑器显隐/控件由服务端决定，UI 纯渲染）。 */
     public static List<FieldSpec> schema(Kind kind) {
         var base = baseSchema(kind);
-        if (kind == Kind.STAGE) return base;
         var hooks = base.stream().filter(field -> field.editor() == Editor.SCRIPT)
             .map(FieldSpec::name).toArray(String[]::new);
         if (hooks.length == 0) return base;
         var fields = new java.util.ArrayList<>(base);
         fields.add(FieldSpec.cycle("design-action-hook", "触发时机", hooks));
-        fields.add(FieldSpec.cycle("design-action", "动作类型", "提示", "等待", "刷怪", "开门", "关门",
-            "发奖励", "开奖励箱", "设置变量", "跳到阶段", "通关", "判负"));
+        fields.add(FieldSpec.cycle("design-action", "动作类型", StageForm.actionNames()));
         fields.add(FieldSpec.text("design-action-arg", "动作目标、文案或等待秒数"));
         fields.add(FieldSpec.text("design-action-value", "变量值"));
+        fields.add(FieldSpec.cycle("design-action-selector", "执行对象", "@all", "@trigger", "@random", "@dead"));
+        fields.add(FieldSpec.text("design-action-extra-1", "参数三"));
+        fields.add(FieldSpec.text("design-action-extra-2", "参数四"));
+        fields.add(FieldSpec.text("design-action-extra-3", "参数五"));
         fields.add(FieldSpec.cycle("design-action-condition", "动作条件", "无条件", "地图清空", "怪组清空", "房间清空", "变量成立"));
         fields.add(FieldSpec.text("design-action-condition-ref", "条件目标或变量"));
         fields.add(FieldSpec.cycle("design-append-action", "追加到动作列表", "添加动作"));
@@ -246,12 +249,6 @@ public record DesignObject(
                 FieldSpec.cycle("design-condition", "完成条件",
                     "手动推进", "地图清空", "怪组清空", "房间清空", "变量成立"),
                 FieldSpec.text("design-condition-ref", "条件目标ID或变量"),
-                FieldSpec.cycle("design-action-hook", "动作时机", "on-start", "on-complete", "on-timeout"),
-                FieldSpec.cycle("design-action", "动作类型", "提示", "等待", "刷怪", "开门", "关门",
-                    "发奖励", "开奖励箱", "设置变量", "通关", "判负"),
-                FieldSpec.text("design-action-arg", "动作目标、文案或等待秒数"),
-                FieldSpec.text("design-action-value", "变量值"),
-                FieldSpec.cycle("design-append-action", "追加到动作列表", "添加动作"),
                 FieldSpec.text("design-branch-target", "后继阶段ID"),
                 FieldSpec.cycle("design-branch-condition", "分支条件", "无条件", "地图清空", "怪组清空", "房间清空", "变量成立"),
                 FieldSpec.text("design-branch-ref", "分支条件目标ID或变量"),
@@ -260,6 +257,7 @@ public record DesignObject(
                 FieldSpec.script("on-complete", "完成动作"),
                 FieldSpec.script("on-timeout", "超时动作"),
                 FieldSpec.yaml("next", "分支顺序"));
+            case SCRIPT -> List.of(FieldSpec.script("script", "动作顺序"));
             case SETTLEMENT -> List.of(
                 FieldSpec.cycle("exit-mode", "离开方式", "IMMEDIATE", "COUNTDOWN", "MANUAL"),
                 FieldSpec.num("exit-delay-seconds", "倒计时（秒）"),

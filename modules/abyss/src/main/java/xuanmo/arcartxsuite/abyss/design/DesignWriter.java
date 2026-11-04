@@ -120,6 +120,12 @@ public final class DesignWriter {
             }
             String old = session.originalId(o.key());
             if (!old.equals(o.id())) yaml.set(join(o.path(), old), null);
+            if (o.kind() == DesignObject.Kind.SCRIPT) {
+                if (DesignManager.LIFECYCLE_SEGMENTS.contains(o.id()) && o.id().contains("-"))
+                    yaml.set(o.id().replace('-', '_'), null);
+                yaml.set(o.id(), o.strList("script"));
+                continue;
+            }
             Map<String, Object> values = DesignValues.copy(o.values());
             if (o.kind() == DesignObject.Kind.STAGE) {
                 if (values.containsKey("design-condition")) {

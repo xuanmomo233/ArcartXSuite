@@ -2014,10 +2014,11 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
                     || kind == xuanmo.arcartxsuite.abyss.design.DesignObject.Kind.ROOM);
         }
         if (node.equals("misc:stages")) return kind == xuanmo.arcartxsuite.abyss.design.DesignObject.Kind.STAGE;
+        if (node.equals("misc:scripts")) return kind == xuanmo.arcartxsuite.abyss.design.DesignObject.Kind.SCRIPT;
         if (Set.of("misc:settlement", "misc:files", "misc:assets", "misc:trial").contains(node)) return false;
         boolean inRoom = node.startsWith("room:");
         return switch (kind) {
-            case ROOM, FLOOR, STAGE, SETTLEMENT, DOCUMENT -> false;
+            case ROOM, FLOOR, STAGE, SCRIPT, SETTLEMENT, DOCUMENT -> false;
             case ROOM_GROUP -> inRoom && session.get(node) != null;
             case GROUP -> !inRoom;
             default -> true;

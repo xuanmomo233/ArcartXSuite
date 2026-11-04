@@ -218,6 +218,7 @@ public final class DesignManager {
         loadSection(out, t, dir, "chest_rewards.yml", "", DesignObject.Kind.CHEST, roomBoxes);
         loadSection(out, t, dir, "buffs.yml", "pools", DesignObject.Kind.BUFF, roomBoxes);
         loadStages(out, dir);
+        loadScriptSegments(out, dir);
         loadLayoutAndSettlement(out, dir);
 
         // floors：房间模板本身 + 房内怪组
@@ -386,6 +387,29 @@ public final class DesignManager {
         }
     }
 
+    static final Set<String> LIFECYCLE_SEGMENTS = Set.of("world-init", "init", "start", "complete",
+        "fail", "player-death", "all-death", "exit");
+
+    private void loadScriptSegments(List<DesignObject> out, File dir) {
+        var yaml = loadYaml(dir, "scripts.yml");
+        var lifecycle = List.of("world-init", "init", "start", "complete", "fail", "player-death", "all-death", "exit");
+        for (String key : lifecycle) {
+            List<String> lines = yaml == null ? List.of() : yaml.getStringList(key);
+            if (lines.isEmpty() && yaml != null) lines = yaml.getStringList(key.replace('-', '_'));
+            out.add(segment(key, "生命周期", lines));
+        }
+        if (yaml == null) return;
+        for (String key : yaml.getKeys(false)) {
+            if (!LIFECYCLE_SEGMENTS.contains(key.toLowerCase(java.util.Locale.ROOT).replace('_', '-'))
+                && yaml.isList(key)) out.add(segment(key, "自定义流程段", yaml.getStringList(key)));
+        }
+    }
+
+    private DesignObject segment(String key, String summary, List<String> lines) {
+        return new DesignObject("script:" + key, DesignObject.Kind.SCRIPT, key, "scripts.yml",
+            "", summary, null, null, "misc:scripts", Map.of("script", lines), false);
+    }
+
     private void loadLayoutAndSettlement(List<DesignObject> out, File dir) {
         YamlConfiguration floors = loadYaml(dir, "floors.yml");
         if (floors != null) {
@@ -523,6 +547,7 @@ public final class DesignManager {
         }
         out.add(new Node("misc:settlement", "结算策略", 0, s.nodeObjects("misc:settlement").size()));
         out.add(new Node("misc:stages", "流程阶段", 0, s.nodeObjects("misc:stages").size()));
+        out.add(new Node("misc:scripts", "生命周期与流程段", 0, s.nodeObjects("misc:scripts").size()));
         out.add(new Node("misc:trial", "试跑追踪", 0, s.trial() == null ? 0 : s.trial().traceSnapshot().size()));
         if(t.procgen()!=null)out.add(new Node("misc:assets","共享构件元数据",0,s.nodeObjects("misc:assets").size()));
         return out;
@@ -1067,6 +1092,9 @@ public final class DesignManager {
     public boolean rename(DesignSession s, String key, String newId) {
         DesignObject o = s.get(key);
         if (o == null || o.kind() == DesignObject.Kind.DOCUMENT || o.kind() == DesignObject.Kind.SETTLEMENT
+            || (o.kind() == DesignObject.Kind.SCRIPT && (LIFECYCLE_SEGMENTS.contains(o.id())
+                || LIFECYCLE_SEGMENTS.contains(newId.toLowerCase(java.util.Locale.ROOT).replace('_', '-'))
+                || Set.of("stages", "阶段").contains(newId.toLowerCase(java.util.Locale.ROOT))))
             || (o.kind() == DesignObject.Kind.STAGE && newId.equalsIgnoreCase("entry"))
             || newId.isBlank() || !newId.matches("[\\p{L}\\p{N}_\\-]{1,64}")) return false;
         if (s.idTaken(o.kind(), newId, key)) return false;
@@ -1077,6 +1105,9 @@ public final class DesignManager {
 
     /** 删除对象。 */
     public void delete(DesignSession s, String key) {
+        DesignObject candidate = s.get(key);
+        if (candidate != null && candidate.kind() == DesignObject.Kind.SCRIPT && LIFECYCLE_SEGMENTS.contains(candidate.id()))
+            throw new IllegalArgumentException("生命周期流程段固定，可清空动作但不能删除");
         if (s.get(key) != null && s.get(key).kind() == DesignObject.Kind.SETTLEMENT)
             throw new IllegalArgumentException("通关和失败结算属于固定设置");
         if (s.get(key) != null && s.get(key).kind() == DesignObject.Kind.DOCUMENT)
@@ -1132,12 +1163,14 @@ public final class DesignManager {
             if (f.editor() == DesignObject.Editor.SCRIPT
                 || f.editor() == DesignObject.Editor.LIST || f.editor() == DesignObject.Editor.YAML) continue;
             String val = fieldStr(o, f.name());
+            String parameter = StageForm.parameterLabel(o.str("design-action"), f.name());
+            if (parameter == null) continue;
             List<String> options = fieldOptions(s, o, f);
             var editor = options.isEmpty() ? f.editor() : DesignObject.Editor.CYCLE;
             String valZh = (editor == DesignObject.Editor.CYCLE
                 || f.editor() == DesignObject.Editor.TOGGLE) ? zh(val) : val;
             String opts = options.isEmpty() ? "-" : String.join(",", options);
-            out.add(f.name() + "|" + editor.name() + "|" + f.label()
+            out.add(f.name() + "|" + editor.name() + "|" + (parameter.isEmpty() ? f.label() : parameter)
                 + "|" + val.replace("|", "/") + "|"
                 + valZh.replace("|", "/") + "|" + opts);
         }
@@ -1149,6 +1182,8 @@ public final class DesignManager {
             case "design-room-ref", "boss-room" -> DesignObject.Kind.ROOM;
             case "design-branch-target" -> DesignObject.Kind.STAGE;
             case "design-action-arg" -> StageForm.actionTarget(object.str("design-action"));
+            case "design-action-value" -> object.str("design-action").equals("延时调用流程段")
+                ? DesignObject.Kind.SCRIPT : null;
             case "design-condition-ref", "design-branch-ref", "design-action-condition-ref" -> switch (object.str(
                 field.name().substring(0, field.name().length() - 4))) {
                 case "怪组清空" -> DesignObject.Kind.GROUP;
@@ -1165,11 +1200,15 @@ public final class DesignManager {
 
     private List<String> objectIds(DesignSession session, DesignObject.Kind kind) {
         return session.objects().values().stream().filter(o -> o.kind() == kind)
+            .filter(o -> kind != DesignObject.Kind.SCRIPT || !LIFECYCLE_SEGMENTS.contains(o.id()))
             .map(DesignObject::id).distinct().toList();
     }
 
     private void validateActionTarget(DesignSession session, DesignObject object) {
         var kind = StageForm.actionTarget(object.str("design-action"));
+        if (object.str("design-action").equals("延时调用流程段")
+            && !objectIds(session, DesignObject.Kind.SCRIPT).contains(object.str("design-action-value").trim()))
+            throw new IllegalArgumentException("请选择已存在的自定义流程段");
         if (kind != null && !objectIds(session, kind).contains(object.str("design-action-arg").trim()))
             throw new IllegalArgumentException("请选择已存在的" + kind.label());
     }
@@ -1282,6 +1321,7 @@ public final class DesignManager {
             case ROOM -> zh(str(vals, "type"));
             case FLOOR -> str(vals, "name");
             case STAGE -> str(vals, "name");
+            case SCRIPT -> "流程段";
             case SETTLEMENT -> str(vals, "exit-mode");
             case DOCUMENT -> id;
         };
@@ -1330,6 +1370,7 @@ public final class DesignManager {
                 vals.put("advance", "portal");
             }
             case SETTLEMENT -> { }
+            case SCRIPT -> vals.put("script", List.of());
             case STAGE -> {
                 vals.put("design-condition", "地图清空");
                 vals.put("design-action-hook", "on-start");

@@ -17,6 +17,7 @@ final class DesignReferences {
         Map.entry("room_status", DesignObject.Kind.ROOM), Map.entry("grant_reward", DesignObject.Kind.REWARD),
         Map.entry("set_stage", DesignObject.Kind.STAGE),
         Map.entry("flow_jump", DesignObject.Kind.STAGE),
+        Map.entry("run_script", DesignObject.Kind.SCRIPT),
         Map.entry("open_chest_ui", DesignObject.Kind.CHEST), Map.entry("buff_offer", DesignObject.Kind.BUFF),
         Map.entry("buff_grant", DesignObject.Kind.BUFF), Map.entry("buff_clear", DesignObject.Kind.BUFF));
     static void migrate(Map<String,YamlConfiguration> files, DesignObject.Kind kind, String oldId,
@@ -101,6 +102,11 @@ final class DesignReferences {
         };
         if(ref && text.equals(oldId))return newId;
         if (!scripts) return text;
+        if (kind == DesignObject.Kind.SCRIPT && text.matches("(?i)^delay\\s+\\S+\\s+run_script\\s+\\S+$")) {
+            int index = text.lastIndexOf(' ');
+            if (index >= 0 && text.substring(index + 1).equalsIgnoreCase(oldId))
+                return text.substring(0, index + 1) + newId;
+        }
         if (text.startsWith("flow_if ")) {
             int end = text.indexOf(' ', 8);
             if (end > 8) {

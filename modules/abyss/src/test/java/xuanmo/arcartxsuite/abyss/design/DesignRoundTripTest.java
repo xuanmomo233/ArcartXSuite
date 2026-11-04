@@ -205,6 +205,29 @@ class DesignRoundTripTest {
         assertFalse(saved.contains("intro.design-action"));
     }
 
+    @Test void lifecycleAndCustomFormsCompileAdvancedActionsAndKeepLegacyKeysConsistent() throws Exception {
+        write("scripts.yml", "world_init: ['setblock 0,64,0 STONE']\nside_route: ['message @all old']\n");
+        open(false);
+        manager.setField(session, "script:world-init", "design-action", "填充方块");
+        manager.setField(session, "script:world-init", "design-action-arg", "1,64,1");
+        manager.setField(session, "script:world-init", "design-action-value", "3,64,3");
+        manager.setField(session, "script:world-init", "design-action-extra-1", "STONE");
+        manager.cycleNext(session, "script:world-init", "design-append-action");
+        manager.setField(session, "script:start", "design-action", "延时调用流程段");
+        manager.setField(session, "script:start", "design-action-arg", "2");
+        manager.setField(session, "script:start", "design-action-value", "side_route");
+        manager.cycleNext(session, "script:start", "design-append-action");
+        assertTrue(manager.rename(session, "script:side_route", "alternate"));
+        assertFalse(manager.rename(session, "script:world-init", "other"));
+        assertTrue(save().ok());
+        var yaml = read("scripts.yml");
+        var scripts = ScriptConfig.load(yaml);
+        assertEquals(List.of("setblock 0,64,0 STONE", "fillblocks 1,64,1 3,64,3 STONE"), scripts.worldInit());
+        assertEquals(List.of("delay 2 run_script alternate"), scripts.start());
+        assertEquals(List.of("message @all old"), scripts.customs().get("alternate"));
+        assertFalse(yaml.contains("world_init"));
+    }
+
     @Test void successfulSaveBacksUpOriginalBytes()throws Exception {
         write("npcs.yml","# original comment\none: {name: original}\n");open(false);
         byte[] before=Files.readAllBytes(dir.resolve("npcs.yml"));
