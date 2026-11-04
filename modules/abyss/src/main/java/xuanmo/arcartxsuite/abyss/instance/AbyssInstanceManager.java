@@ -71,13 +71,17 @@ public final class AbyssInstanceManager {
 
     /** 玩家当前所在实例（顺带清理脏映射）。 */
     public @Nullable AbyssInstance getInstance(Player player) {
-        UUID id = playerInstance.get(player.getUniqueId());
+        return getPlayerInstance(player.getUniqueId());
+    }
+
+    public @Nullable AbyssInstance getPlayerInstance(UUID player) {
+        UUID id = playerInstance.get(player);
         if (id == null) return null;
         AbyssInstance inst = instances.get(id);
-        if (inst != null && inst.hasPlayer(player.getUniqueId())) {
+        if (inst != null && inst.hasPlayer(player)) {
             return inst;
         }
-        playerInstance.remove(player.getUniqueId(), id);
+        playerInstance.remove(player, id);
         return null;
     }
 

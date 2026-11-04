@@ -23,6 +23,18 @@ public final class PlayerDataManager {
     private final JdbcAbyssRepository repository;
     private final Logger logger;
     private final ExecutorService dbExecutor;
+
+    public java.util.concurrent.CompletableFuture<Void> writeAdmission(
+            JdbcAbyssRepository.AdmissionReceipt receipt, boolean reserve) {
+        return java.util.concurrent.CompletableFuture.runAsync(() -> {
+            try {
+                if (reserve) repository.insertAdmission(receipt);
+                else repository.updateAdmission(receipt);
+            } catch (java.sql.SQLException error) {
+                throw new java.util.concurrent.CompletionException(error);
+            }
+        }, dbExecutor);
+    }
     private final int defaultStamina;
     private final Map<UUID, java.util.concurrent.CompletableFuture<Void>> loading = new ConcurrentHashMap<>();
     private final java.util.Set<UUID> ready = ConcurrentHashMap.newKeySet();

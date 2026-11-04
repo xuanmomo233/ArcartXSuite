@@ -47,7 +47,7 @@ public final class CrossDungeonManager {
     /** 源节点：一次远端进本请求。 */
     private record PendingForward(String dungeon,
                                   List<UUID> players,
-                                  long deadline, String host) { }
+                                  long deadline, String host, UUID partyId, long partyRevision) { }
 
     /** 宿主节点：一次远端队伍预订。 */
     private static final class PendingEnter {
@@ -133,9 +133,10 @@ public final class CrossDungeonManager {
         }
         String reqId = UUID.randomUUID().toString();
         List<UUID> uuids = players.stream().map(Player::getUniqueId).toList();
-        pendingOut.put(reqId, new PendingForward(template.id(), uuids,
-            System.currentTimeMillis() + OUT_TIMEOUT_MS,template.crossServer()));
         var party=service.party().partyOf(players.get(0));
+        pendingOut.put(reqId, new PendingForward(template.id(), uuids,
+            System.currentTimeMillis() + OUT_TIMEOUT_MS,template.crossServer(),
+            party == null ? null : party.id(), party == null ? 0 : party.revision()));
         UUID leader=party!=null?party.leader():players.get(0).getUniqueId();
         for (Player p : players) {
             p.sendMessage(service.msg("cross.requesting",
@@ -229,7 +230,16 @@ public final class CrossDungeonManager {
             Player p = Bukkit.getPlayer(u);
             if (p != null && p.isOnline()) online.add(p);
         }
-        if (online.isEmpty()) return;
+        if (online.size() != pf.players().size() || online.isEmpty()) {
+            notifyPlayers(pf.players(), "§c队伍成员未全部在线，跨服进入已取消。");
+            return;
+        }
+        var party = service.party().partyOf(online.get(0));
+        if (!java.util.Objects.equals(pf.partyId(), party == null ? null : party.id())
+            || (party != null && (party.revision() != pf.partyRevision() || !party.allReady()))) {
+            notifyPlayers(pf.players(), "§c等待跨服确认期间队伍状态已变化，进入已取消。");
+            return;
+        }
         for (Player p : online) {
             p.sendMessage(service.msg("cross.forwarding", "node", host));
             sendToServer(p, host);

@@ -92,6 +92,40 @@ class SettlementLifecycleTest {
         currentWorld.set(home);listener.onChangedWorld(new org.bukkit.event.player.PlayerChangedWorldEvent(player,world));
         assertNull(instances.getInstance(player));verify(player,never()).teleport(any(Location.class));
     }
+    @Test void partialAdmissionKeepsPlayerAndWorldWhenReturnTeleportFails()throws Exception {
+        instances.playerLeaveInstance(player);
+        instances.destroyInstance(instance);
+        instance = instances.createInstance(template, null);
+        instances.playerEnterInstance(player, instance);
+        instance.setWorld(world);
+        instance.saveOriginalLocation(player, new Location(home, 1, 64, 1));
+        var failed = mock(Player.class);
+        UUID failedId = UUID.randomUUID();
+        when(failed.getUniqueId()).thenReturn(failedId);
+        when(failed.isOnline()).thenReturn(true);
+        when(failed.getWorld()).thenReturn(home);
+        when(server.getPlayer(failedId)).thenReturn(failed);
+        instances.playerEnterInstance(failed, instance);
+        var intent = new xuanmo.arcartxsuite.api.capability.AbyssAdmissionAccess.Intent(
+            "xc", UUID.randomUUID(), player.getUniqueId(), List.of(player.getUniqueId(), failedId),
+            "test", null, null, null);
+        var operation = new AdmissionAccess.Operation(intent);
+        operation.outcomes.put(player.getUniqueId(), "ARRIVED");
+        var refunds = new AtomicInteger();
+        var charge = new RequirementChecker.Charge(true, null, refunds::incrementAndGet, () -> fail("No commit"));
+        doReturn(false).when(player).teleport(any(Location.class));
+        var rollback = AbyssService.class.getDeclaredMethod("rollbackAdmission", AbyssInstance.class,
+            AdmissionAccess.Operation.class, Player.class, RequirementChecker.Charge.class);
+        rollback.setAccessible(true);
+        rollback.invoke(service, instance, operation, failed, charge);
+        assertEquals(1, refunds.get());
+        assertEquals(xuanmo.arcartxsuite.api.capability.AbyssAdmissionAccess.Phase.REVIEW_REQUIRED, operation.phase);
+        assertEquals("RETURN_PENDING", operation.outcomes.get(player.getUniqueId()));
+        assertEquals("TELEPORT_FAILED", operation.outcomes.get(failedId));
+        assertSame(instance, instances.getInstance(player));
+        verify(pool, never()).releaseWorld(any());
+    }
+
     @Test void rejectedReconnectTeleportPreservesRecoveryAndOldLoginCannotConsumeIt()throws Exception {
         var data=fake(xuanmo.arcartxsuite.abyss.data.PlayerDataManager.class);set(service,"playerData",data);
         var field=AbyssService.class.getDeclaredField("recoveringPlayers");field.setAccessible(true);

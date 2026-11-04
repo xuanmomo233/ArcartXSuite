@@ -35,7 +35,7 @@ import xuanmo.arcartxsuite.api.storage.StorageDescriptor;
 public final class JdbcAbyssRepository extends AbstractModuleRepository {
 
     private boolean sqlite = true;
-    private String tPlayer, tCooldowns, tRecords, tPending, tGlobals;
+    private String tPlayer, tCooldowns, tRecords, tPending, tGlobals, tAdmission;
 
     public JdbcAbyssRepository(DataSource dataSource, StorageDescriptor descriptor,
                              File dataFolder, Logger logger) {
@@ -51,8 +51,12 @@ public final class JdbcAbyssRepository extends AbstractModuleRepository {
         tRecords = p + "records";
         tPending = p + "pending_location";
         tGlobals = p + "globals";
+        tAdmission = p + "admission_requests";
 
         try (Statement st = conn.createStatement()) {
+            st.executeUpdate("CREATE TABLE IF NOT EXISTS " + tAdmission
+                + " (owner VARCHAR(96) NOT NULL, request_id VARCHAR(36) NOT NULL,"
+                + " fingerprint VARCHAR(64) NOT NULL, snapshot TEXT NOT NULL, PRIMARY KEY (owner, request_id))");
             if (sqlite) {
                 st.executeUpdate("CREATE TABLE IF NOT EXISTS " + tPlayer + " ("
                     + "player_uuid TEXT PRIMARY KEY,"
@@ -121,7 +125,38 @@ public final class JdbcAbyssRepository extends AbstractModuleRepository {
         // globals 是全服共享计数（非玩家数据），不列入 playerDataTables 防清理误删
         List<String> all = new ArrayList<>(playerDataTables());
         all.add(tGlobals);
+        all.add(tAdmission);
         return all;
+    }
+
+    public record AdmissionReceipt(String owner, String requestId, String fingerprint, String snapshot) { }
+
+    public List<AdmissionReceipt> loadAdmissions() throws SQLException {
+        var receipts = new ArrayList<AdmissionReceipt>();
+        try (Connection c = getConnection();
+             PreparedStatement ps = c.prepareStatement("SELECT owner, request_id, fingerprint, snapshot FROM " + tAdmission + " LIMIT 32769");
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) receipts.add(new AdmissionReceipt(rs.getString(1), rs.getString(2), rs.getString(3), rs.getString(4)));
+        }
+        return receipts;
+    }
+
+    public void insertAdmission(AdmissionReceipt receipt) throws SQLException {
+        try (Connection c = getConnection(); PreparedStatement ps = c.prepareStatement("INSERT INTO " + tAdmission
+                + " (owner, request_id, fingerprint, snapshot) VALUES (?, ?, ?, ?)")) {
+            ps.setString(1, receipt.owner()); ps.setString(2, receipt.requestId());
+            ps.setString(3, receipt.fingerprint()); ps.setString(4, receipt.snapshot());
+            ps.executeUpdate();
+        }
+    }
+
+    public void updateAdmission(AdmissionReceipt receipt) throws SQLException {
+        try (Connection c = getConnection(); PreparedStatement ps = c.prepareStatement("UPDATE " + tAdmission
+                + " SET snapshot=? WHERE owner=? AND request_id=? AND fingerprint=?")) {
+            ps.setString(1, receipt.snapshot()); ps.setString(2, receipt.owner());
+            ps.setString(3, receipt.requestId()); ps.setString(4, receipt.fingerprint());
+            if (ps.executeUpdate() != 1) throw new SQLException("Admission receipt not found");
+        }
     }
 
     // ═══ 体力 ═══

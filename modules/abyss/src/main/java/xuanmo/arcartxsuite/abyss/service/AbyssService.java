@@ -1,5 +1,10 @@
 package xuanmo.arcartxsuite.abyss.service;
 
+import xuanmo.arcartxsuite.api.capability.AbyssAdmissionAccess;
+import xuanmo.arcartxsuite.api.capability.AbyssAdmissionAccess.Denial;
+import xuanmo.arcartxsuite.api.capability.AbyssAdmissionAccess.Intent;
+import xuanmo.arcartxsuite.api.capability.AbyssAdmissionAccess.Phase;
+
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
@@ -94,6 +99,8 @@ import xuanmo.arcartxsuite.api.storage.StorageManager;
  * </pre>
  */
 public final class AbyssService {
+    private final AdmissionAccess admission = new AdmissionAccess(this);
+    public AbyssAdmissionAccess admissionAccess() { return admission; }
 
     private final AbyssModule module;
     private final Plugin plugin;
@@ -252,6 +259,7 @@ public final class AbyssService {
         repository = new JdbcAbyssRepository(ds, desc, dataFolder, logger);
         repository.initialize();
         playerData = new PlayerDataManager(repository, logger, config.stamina().max());
+        admission.load(repository, playerData);
 
         // 2) 模板加载（首次启动导出示例地牢）
         templateLoader = new AbyssTemplateLoader(dataFolder, logger);
@@ -442,6 +450,7 @@ public final class AbyssService {
     private ScheduledTask proximityTask;
 
     public void shutdown() {
+        admission.shutdown();
         stopping=true;
         if(uiFacade instanceof AbyssUiService ui)ui.stopQueries();
         for(ScheduledTask task:serviceTasks)task.cancel();
@@ -784,6 +793,73 @@ public final class AbyssService {
      */
     public EnterResult enterDungeon(List<Player> players, String templateId,
                                     @Nullable String plan) {
+        if (players.isEmpty()) return EnterResult.fail("队伍为空");
+        var intent = new Intent("abyss", UUID.randomUUID(), players.get(0).getUniqueId(),
+            players.stream().map(Player::getUniqueId).toList(), templateId, plan, null, null);
+        return enterDungeon(players, intent, new AdmissionAccess.Operation(intent));
+    }
+
+    EnterResult enterExternal(Intent intent, AdmissionAccess.Operation operation) {
+        var failures = preflightExternal(intent);
+        if (!failures.isEmpty()) {
+            for (Denial failure : failures) {
+                if (failure.member() != null) operation.outcomes.put(failure.member(), failure.code());
+            }
+            return EnterResult.fail(failures.get(0).code());
+        }
+        return enterDungeon(resolveMembers(intent), intent, operation);
+    }
+
+    private List<Player> resolveMembers(Intent intent) {
+        var ordered = new java.util.ArrayList<>(intent.members());
+        ordered.remove(intent.actor());
+        ordered.add(0, intent.actor());
+        return ordered.stream().map(org.bukkit.Bukkit::getPlayer).filter(java.util.Objects::nonNull).toList();
+    }
+
+    List<Denial> preflightExternal(Intent intent) {
+        var failures = new java.util.ArrayList<Denial>();
+        var template = instances.getTemplate(intent.dungeon());
+        if (template == null) return List.of(AdmissionAccess.deny("UNKNOWN_DUNGEON", "副本不存在"));
+        if (template.crossServer() != null && !template.crossServer().isBlank()
+            && (crossDungeon == null || !template.crossServer().equals(crossDungeon.nodeId())))
+            return List.of(AdmissionAccess.deny("REMOTE_REQUEST_UNSUPPORTED", "公开事务暂不支持跨服转发"));
+        if (intent.plan() != null && !intent.plan().isBlank() && !template.plans().containsKey(intent.plan()))
+            failures.add(AdmissionAccess.deny("UNKNOWN_PLAN", "方案不存在"));
+        if (!instances.hasAvailableSlot(template))
+            failures.add(AdmissionAccess.deny("CAPACITY", "副本实例已达上限"));
+        List<Player> members = resolveMembers(intent);
+        Player actor = org.bukkit.Bukkit.getPlayer(intent.actor());
+        Party party = actor == null ? null : partyManager.partyOf(actor);
+        if (party != null && (!party.isLeader(intent.actor()) || !party.allReady()
+            || !new java.util.HashSet<>(party.members()).equals(new java.util.HashSet<>(intent.members()))))
+            failures.add(AdmissionAccess.deny("ROSTER_CHANGED", "需要真实队长及完整的已准备队伍"));
+        if (party == null && intent.members().size() != 1)
+            failures.add(AdmissionAccess.deny("PARTY_REQUIRED", "整队入场需要对应的原生队伍"));
+        for (UUID id : intent.members()) {
+            Player player = org.bukkit.Bukkit.getPlayer(id);
+            if (player == null || !player.isOnline() || player.isDead()) {
+                failures.add(new Denial(id, "MEMBER_UNAVAILABLE", "成员离线或已死亡"));
+                continue;
+            }
+            if (recoveringPlayers.containsKey(id) || instances.getInstance(player) != null)
+                failures.add(new Denial(id, "MEMBER_BUSY", "成员正在副本中或等待恢复"));
+            var check = requirementChecker.checkSingle(template, player);
+            if (!check.ok()) failures.add(new Denial(id, "REQUIREMENT", check.reason()));
+            if (links != null && links.moduleEntryLocked(player, "abyss." + template.id()))
+                failures.add(new Denial(id, "QUEST_GATE", "成员尚未解锁主线门禁"));
+        }
+        if (failures.isEmpty()) {
+            var group = requirementChecker.check(template, members, party);
+            if (!group.ok()) failures.add(AdmissionAccess.deny("REQUIREMENT", group.reason()));
+        }
+        failures.addAll(admission.policies(intent, template));
+        return failures;
+    }
+
+    private EnterResult enterDungeon(List<Player> players, Intent intent, AdmissionAccess.Operation operation) {
+        String templateId = intent.dungeon();
+        String plan = intent.plan();
         if (!started || players.isEmpty()) {
             return EnterResult.fail("服务未就绪");
         }
@@ -794,6 +870,7 @@ public final class AbyssService {
         // 逐人查重：任一成员已在其它实例则整队拒绝
         // （只查首人会漏掉队员→其旧实例成员关系残留、被映射进新实例双重记账）
         for (Player member : players) {
+            if (!member.isOnline() || member.isDead()) return EnterResult.fail("成员离线或已死亡");
             if(recoveringPlayers.containsKey(member.getUniqueId()))return EnterResult.fail("玩家断线恢复尚未完成，请稍后重试或重新连接服务器");
             if (instances.getInstance(member) != null) {
                 return EnterResult.fail(msg("error.already-in-dungeon-member",
@@ -802,6 +879,17 @@ public final class AbyssService {
         }
         if (!instances.hasAvailableSlot(template)) {
             return EnterResult.fail("副本实例已达上限");
+        }
+        List<Denial> policyDenials = admission.policies(intent, template);
+        if (!policyDenials.isEmpty()) return EnterResult.fail(policyDenials.get(0).message());
+        Party party = partyManager.partyOf(players.get(0));
+        RequirementChecker.CheckResult check = requirementChecker.check(template, players, party);
+        if (!check.ok()) return EnterResult.fail(msg("error.requirements-failed", "reason", check.reason()));
+        if (links != null) {
+            for (Player member : players) {
+                if (links.moduleEntryLocked(member, "abyss." + template.id()))
+                    return EnterResult.fail(msg("dungeon.module-locked"));
+            }
         }
         // 远端副本：cross-server 声明宿主节点。
         //   本节点=宿主 → 走本地路径；本节点≠宿主 → 跨服握手前送；
@@ -823,21 +911,6 @@ public final class AbyssService {
             && preloadCfg.dungeons().containsKey(template.id())
             && worldPool.preparedCount(template.id()) == 0) {
             return EnterResult.fail(msg("error.preload-empty"));
-        }
-        // 队伍：无论进本人数都取发起者队伍——party-mode 校验需要单人也识别 guild 队
-        Party party = partyManager.partyOf(players.get(0));
-        RequirementChecker.CheckResult check = requirementChecker.check(template, players, party);
-        if (!check.ok()) {
-            return EnterResult.fail(msg("error.requirements-failed", "reason", check.reason()));
-        }
-        // questgps 主线门禁：abyss.<副本id> 被 gate.blocked-module-entries 声明时，
-        // 未完成主线的队员拒绝进入（questgps 未装载时恒放行）
-        if (links != null) {
-            for (Player member : players) {
-                if (links.moduleEntryLocked(member, "abyss." + template.id())) {
-                    return EnterResult.fail(msg("dungeon.module-locked"));
-                }
-            }
         }
         // procgen 前置校验：房间集缺失/缺必需房型 → 加载世界前就拒绝
         if (template.procgen() != null && procgenManager != null) {
@@ -865,6 +938,7 @@ public final class AbyssService {
         }
 
         AbyssInstance instance = instances.createInstance(template, party);
+        admission.attach(instance, operation);
         if(party!=null)instance.getVariables().put("admission_party_revision",party.revision());
         // 方案写入实例变量：{plan}=id、{plan_name}=显示名；怪组 plans 过滤也读这里
         if (resolvedPlan != null) {
@@ -1268,19 +1342,13 @@ public final class AbyssService {
         AbyssTemplate template = hit.template();
         AbyssTemplate.EntrancePoint ep = hit.point();
 
-        // 队伍带入：发起者是队长则带全队
-        Party party = partyManager.partyOf(player);
-        List<Player> members =
-            (party != null && party.isLeader(player.getUniqueId()) && party.size() > 1)
-                ? party.onlineMembers() : List.of(player);
-
         // 方案落定：入口固定 plan 直接用；模板多方案且未固定 → 弹选择菜单
         String plan = ep.plan();
         if ((plan == null || plan.isBlank()) && template.plans().size() > 1) {
             sendPlanMenu(player, template);
             return true;
         }
-        EnterResult r = enterDungeon(members, template.id(), plan);
+        EnterResult r = enterFromPlayer(player, template.id(), plan);
         if (!r.ok() && r.reason() != null) {
             player.sendMessage(msg("error.enter-failed", "reason", r.reason()));
         }
@@ -1339,6 +1407,7 @@ public final class AbyssService {
     /** 区块就绪后的进图主流程：world-init → 落点兜底 → 传送+扣费 → 全员进图判定。 */
     private void continueWorldReady(AbyssInstance instance, World world,
                                     Location spawn, List<Player> players) {
+        if (instances.getInstance(instance.getInstanceId()) != instance || instance.isFinished()) return;
         // procgen 物化先于 world-init：随机地牢几何由引擎建好，
         // world-init 脚本仍可在其上叠加；出生点换到起点房 spawn
         AbyssTemplate tpl = instance.getTemplate();
@@ -1359,7 +1428,7 @@ public final class AbyssService {
         ensureFooting(world, spawn);
 
         // Revalidate the complete admission after asynchronous world preparation.
-        boolean changed = players.stream().anyMatch(p -> !p.isOnline() || !instance.hasPlayer(p.getUniqueId())
+        boolean changed = instances.getTemplate(tpl.id()) != tpl || players.stream().anyMatch(p -> !p.isOnline() || p.isDead() || !instance.hasPlayer(p.getUniqueId())
             || partyManager.partyOf(p) != instance.getParty());
         if(instance.getParty()!=null)changed |= !instance.getParty().allReady()
             || !java.util.Objects.equals(instance.getVariables().get("admission_party_revision"),instance.getParty().revision());
@@ -1368,6 +1437,33 @@ public final class AbyssService {
         if (!fresh.ok()) {
             broadcast(instance, msg("error.enter-failed", "reason", fresh.reason()));
             destroyInstance(instance, true); return;
+        }
+        var op = admission.operation(instance);
+        if (op != null) {
+            if (!admission.policyUnchanged(op)) {
+                op.reason = "POLICY_CHANGED";
+                destroyInstance(instance, true);
+                return;
+            }
+            var denials = admission.policies(op.intent, tpl);
+            if (!denials.isEmpty()) {
+                op.reason = denials.get(0).code();
+                broadcast(instance, denials.get(0).message());
+                destroyInstance(instance, true);
+                return;
+            }
+            for (Player player : players) {
+                var individual = !op.intent.owner().equals("abyss")
+                    ? requirementChecker.checkSingle(tpl, player) : RequirementChecker.CheckResult.pass();
+                if (!individual.ok() || (links != null && links.moduleEntryLocked(player, "abyss." + tpl.id()))) {
+                    op.outcomes.put(player.getUniqueId(), "FINAL_CHECK_FAILED");
+                    broadcast(instance, msg("dungeon.module-locked"));
+                    destroyInstance(instance, true);
+                    return;
+                }
+            }
+            op.phase = Phase.TELEPORTING;
+            admission.changed(op);
         }
         var charge = requirementChecker.charge(tpl, players);
         if (!charge.ok()) {
@@ -1384,9 +1480,9 @@ public final class AbyssService {
             finally {transferringInstances.remove(instance.getInstanceId());}
             if (ok && !instance.isFinished() && !stopping) {
                 instance.markEntered(p.getUniqueId());
+                if (op != null) op.outcomes.put(p.getUniqueId(), "ARRIVED");
             } else {
-                try { charge.rollback(); }
-                finally { broadcast(instance,msg("error.enter-failed","reason","传送失败，已取消整队进入")); destroyInstance(instance,true); }
+                rollbackAdmission(instance, op, p, charge);
                 return;
             }
         }
@@ -1616,6 +1712,11 @@ public final class AbyssService {
         npcs.initInstance(instance);
         // procgen：怪组/交互/NPC 注册必须在各自 initInstance 之后（init 会覆盖注册表）
         if (procgenManager != null) procgenManager.initRuntime(instance);
+        var operation = admission.operation(instance);
+        if (operation != null) {
+            operation.phase = Phase.STARTED;
+            admission.changed(operation);
+        }
         // start 脚本
         runLifecycleScript(instance, "start", null);
         // 阶段机启动（stages.yml 配置的副本从入口阶段开始推进）
@@ -2348,8 +2449,19 @@ public final class AbyssService {
         if(settlement!=null && settlement.timer!=null)settlement.timer.cancel();
         designOwners.remove(instance.getTemplate().id(), instance.getInstanceId());
         if (releasePlayers) {
+            boolean returned = true;
             for (Player p : instance.getPlayers()) {
-                try { playerExit(instance, p, LeaveReason.END); } catch (Throwable ignored) { }
+                try { returned &= playerExit(instance, p, LeaveReason.END); }
+                catch (RuntimeException failure) { returned = false; }
+            }
+            if (!returned && instance.getOnlinePlayerCount() > 0) {
+                var pending = admission.operation(instance);
+                if (pending != null && pending.phase != Phase.STARTED) {
+                    pending.phase = Phase.REVIEW_REQUIRED;
+                    pending.reason = "RETURN_PENDING";
+                }
+                instance.transitionTo(AbyssStatus.PREPARING, AbyssStatus.CANCELLED);
+                return;
             }
         }
         // 取消实例任务+脚本会话
@@ -2375,6 +2487,51 @@ public final class AbyssService {
         worldPool.releaseWorld(instance.getInstanceId());
         instance.clearRuntime();
         instances.destroyInstance(instance);
+        var operation = admission.operation(instance);
+        if (operation != null && (operation.phase == Phase.PREPARING || operation.phase == Phase.TELEPORTING)) {
+            operation.phase = instance.admitted() ? Phase.REVIEW_REQUIRED : Phase.REJECTED;
+            if (operation.reason == null) operation.reason = "ENTRY_ABORTED";
+        }
+        admission.changed(operation);
+        admission.detached(instance);
+    }
+
+    void cancelAdmission(UUID runId) {
+        var instance = instances.getInstance(runId);
+        if (instance == null || instance.admitted() || transferringInstances.contains(runId)) return;
+        var op = admission.operation(instance);
+        if (op == null || op.phase != Phase.PREPARING) return;
+        op.phase = Phase.CANCELLED;
+        admission.changed(op);
+        instance.transitionTo(AbyssStatus.PREPARING, AbyssStatus.CANCELLED);
+        destroyInstance(instance, true);
+    }
+
+    private void rollbackAdmission(AbyssInstance instance, AdmissionAccess.Operation op, Player failed,
+                                   RequirementChecker.Charge charge) {
+        boolean review = false;
+        try { charge.rollback(); }
+        catch (RuntimeException error) {
+            review = true;
+            logger.warning("[abyss] 入场补偿待核对: " + instance.getInstanceId() + " " + error.getMessage());
+        }
+        instance.transitionTo(AbyssStatus.PREPARING, AbyssStatus.CANCELLED);
+        if (op != null) op.outcomes.put(failed.getUniqueId(), "TELEPORT_FAILED");
+        for (Player player : instance.getPlayers()) {
+            UUID id = player.getUniqueId();
+            boolean returned = false;
+            try { returned = playerExit(instance, player, LeaveReason.END); }
+            catch (RuntimeException failure) { logger.warning("[abyss] 入场回退异常: " + id); }
+            if (!returned) review = true;
+            if (op != null && (!returned || "ARRIVED".equals(op.outcomes.get(id))))
+                op.outcomes.put(id, returned ? "RETURNED" : "RETURN_PENDING");
+        }
+        if (op != null) {
+            op.phase = review ? Phase.REVIEW_REQUIRED : Phase.COMPENSATED;
+            op.reason = "TELEPORT_FAILED";
+            admission.changed(op);
+        }
+        if (instance.getOnlinePlayerCount() == 0) destroyInstance(instance, false);
     }
 
     private boolean teleportWithRetry(Player p, Location loc, int attempts) {

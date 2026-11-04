@@ -98,7 +98,7 @@ public final class RequirementChecker {
         return CheckResult.pass();
     }
 
-    private CheckResult checkSingle(AbyssTemplate template, Player p) {
+    CheckResult checkSingle(AbyssTemplate template, Player p) {
         EntryRequirements r = template.requirements();
         if (!stamina.ready(p.getUniqueId())) return CheckResult.fail("玩家数据正在加载或暂不可用，请稍后重试");
         // 等级
