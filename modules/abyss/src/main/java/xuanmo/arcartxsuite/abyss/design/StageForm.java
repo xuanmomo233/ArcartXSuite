@@ -36,7 +36,7 @@ final class StageForm {
             case "关门" -> "room_lock " + identifier(argument);
             case "发奖励" -> "grant_reward @all " + identifier(argument);
             case "开奖励箱" -> "open_chest_ui @all " + identifier(argument);
-            case "跳到阶段" -> "set_stage " + identifier(argument);
+            case "跳到阶段" -> "flow_jump " + identifier(argument);
             case "设置变量" -> "setvar " + identifier(argument) + " " + text(stage.str("design-action-value"));
             case "通关" -> "complete_dungeon";
             case "判负" -> "fail_dungeon";

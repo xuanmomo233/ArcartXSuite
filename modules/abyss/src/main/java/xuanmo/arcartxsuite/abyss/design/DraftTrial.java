@@ -30,6 +30,7 @@ public final class DraftTrial implements AutoCloseable {
     private final ArrayDeque<String> trace = new ArrayDeque<>();
     private final Consumer<String> output;
     private int remainingActions = 512;
+    private int nestedScripts;
     private boolean closed;
 
     public DraftTrial(AbyssTemplate draft, StageManager stages, ScriptRunner scripts,
@@ -86,12 +87,7 @@ public final class DraftTrial implements AutoCloseable {
 
     public void execute(String action, String args) {
         switch (action) {
-            case "setvar" -> {
-                int split = args.indexOf(' ');
-                if (split <= 0) { trace("参数错误 setvar"); return; }
-                instance.getVariables().put(args.substring(0, split), args.substring(split + 1));
-                trace("执行 " + action + " " + args);
-            }
+            case "run_script" -> runNested(args);
             case "set_stage" -> {
                 trace("执行跳转 " + args);
                 stages.jump(instance, args, null);
@@ -101,6 +97,21 @@ public final class DraftTrial implements AutoCloseable {
             case "fail_dungeon" -> finish(false);
             case "message" -> trace("提示 " + args);
             default -> trace("记录动作 " + action.split(":", 2)[0]);
+        }
+    }
+
+    private void runNested(String name) {
+        var lines = instance.getTemplate().scripts().customs().get(name.toLowerCase(java.util.Locale.ROOT));
+        if (lines == null || nestedScripts >= 16) {
+            trace("跳过未定义或过深的子脚本 " + name);
+            return;
+        }
+        trace("进入子脚本 " + name);
+        nestedScripts++;
+        try {
+            run(name, lines, false);
+        } finally {
+            nestedScripts--;
         }
     }
 

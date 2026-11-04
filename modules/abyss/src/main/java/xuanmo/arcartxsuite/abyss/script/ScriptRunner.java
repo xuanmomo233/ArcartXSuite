@@ -93,7 +93,18 @@ public final class ScriptRunner {
                 if (ticks > 0) return suspend(session, ticks);
                 return false;
             }
-            trial.execute(action, args);
+            if (java.util.Set.of("setvar", "delvar", "addvar", "if_var").contains(action) && !args.contains("{")) {
+                try {
+                    actions.get(action).execute(context, args, session);
+                    trial.trace((session.isCancelled() ? "守卫终止 " : "执行 ") + action + " " + args);
+                } catch (Exception error) {
+                    trial.trace("动作失败 " + action);
+                    session.cancel();
+                }
+                return false;
+            }
+            trial.execute(action.equals("flow_jump") ? "set_stage" : action, args);
+            if (action.equals("flow_jump")) session.completeBranch();
             return false;
         }
         if (lower.startsWith("aria:")) {
@@ -114,7 +125,8 @@ public final class ScriptRunner {
         int sp = line.indexOf(' ');
         String name = (sp < 0 ? line : line.substring(0, sp)).toLowerCase();
         String args = sp < 0 ? "" : line.substring(sp + 1).trim();
-        Action action = actions.get(name);
+        boolean branch = name.equals("flow_jump");
+        Action action = actions.get(branch ? "set_stage" : name);
         if (action == null) {
             logger.warning("[abyss] 未知脚本动作: " + name + " (实例 "
                 + context.getInstance().getInstanceId() + ")");
@@ -122,6 +134,7 @@ public final class ScriptRunner {
         }
         try {
             action.execute(context, args, session);
+            if (branch) session.completeBranch();
         } catch (Throwable t) {
             logger.warning("[abyss] 脚本动作 " + name + " 执行异常: " + t.getMessage());
             session.cancel();

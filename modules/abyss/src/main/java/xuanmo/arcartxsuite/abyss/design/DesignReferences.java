@@ -16,6 +16,7 @@ final class DesignReferences {
         Map.entry("room_lock", DesignObject.Kind.ROOM), Map.entry("room_unlock", DesignObject.Kind.ROOM),
         Map.entry("room_status", DesignObject.Kind.ROOM), Map.entry("grant_reward", DesignObject.Kind.REWARD),
         Map.entry("set_stage", DesignObject.Kind.STAGE),
+        Map.entry("flow_jump", DesignObject.Kind.STAGE),
         Map.entry("open_chest_ui", DesignObject.Kind.CHEST), Map.entry("buff_offer", DesignObject.Kind.BUFF),
         Map.entry("buff_grant", DesignObject.Kind.BUFF), Map.entry("buff_clear", DesignObject.Kind.BUFF));
     static void migrate(Map<String,YamlConfiguration> files, DesignObject.Kind kind, String oldId,

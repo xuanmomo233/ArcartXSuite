@@ -27,6 +27,9 @@ public final class ScriptSession {
     private final AtomicInteger successfulActions=new AtomicInteger();
     public int successfulActions() {return successfulActions.get();}
     public int nextLineIndex() {return cursor.get();}
+    void completeBranch() {
+        cursor.set(lines.size());
+    }
 
     public ScriptSession(String name, List<String> lines, ScriptContext context, ScriptRunner runner) {
         this.name = name;
