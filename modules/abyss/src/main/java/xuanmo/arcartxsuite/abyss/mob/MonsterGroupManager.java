@@ -39,7 +39,14 @@ public final class MonsterGroupManager {
         volatile boolean spawnQueued;
         final Set<UUID> alive = ConcurrentHashMap.newKeySet();
         ScheduledTask delayedTask;
-        GroupRuntime(MonsterGroup g) { this.group = g; }
+        final String encounter;
+        final String role;
+        GroupRuntime(MonsterGroup g) { this(g, g.name(), "GROUP"); }
+        GroupRuntime(MonsterGroup g, String encounter, String role) {
+            this.group = g;
+            this.encounter = encounter;
+            this.role = role;
+        }
     }
 
     private final Map<UUID, Map<String, GroupRuntime>> instanceGroups = new ConcurrentHashMap<>();
@@ -64,6 +71,7 @@ public final class MonsterGroupManager {
         void publishEvent(String topic, Map<String, Object> data);
         default void entityChanged(xuanmo.arcartxsuite.api.capability.AbyssRunAccess.Entity context,
                                    xuanmo.arcartxsuite.api.capability.AbyssRunAccess.EntityChange change) { }
+        default @Nullable String currentStage(AbyssInstance instance) { return null; }
     }
 
     public MonsterGroupManager(org.bukkit.plugin.Plugin plugin, SchedulerAPI scheduler,
@@ -116,11 +124,15 @@ public final class MonsterGroupManager {
      * AUTO_START 不会立即刷——由调用方（如房间锁门）显式 spawnGroup。</p>
      */
     public void registerRuntimeGroup(AbyssInstance instance, MonsterGroup group) {
+        registerRuntimeGroup(instance, group, group.name(), "GROUP");
+    }
+
+    public void registerRuntimeGroup(AbyssInstance instance, MonsterGroup group, String encounter, String role) {
         if (!planAllowed(instance, group)) return;
         Map<String, GroupRuntime> groups =
             instanceGroups.computeIfAbsent(instance.getInstanceId(),
                 k -> new ConcurrentHashMap<>());
-        if (groups.putIfAbsent(group.name(), new GroupRuntime(group)) != null)
+        if (groups.putIfAbsent(group.name(), new GroupRuntime(group, encounter, role)) != null)
             logger.warning("[abyss] 忽略重复的运行时怪组 " + group.name());
     }
 
@@ -145,11 +157,23 @@ public final class MonsterGroupManager {
             // 区块票据：防怪被区块卸载
             keepChunkLoaded(loc);
             for (int i = 0; i < ms.amount(); i++) {
-                Entity e = provider.spawn(ms.mobId(), loc, ms.level());
+                Entity e;
+                String source;
+                if (provider instanceof CompositeMobProvider composite) {
+                    var spawnedMob = composite.spawnWithSource(ms.mobId(), loc, ms.level());
+                    if (spawnedMob == null) continue;
+                    e = spawnedMob.entity();
+                    source = spawnedMob.source();
+                } else {
+                    e = provider.spawn(ms.mobId(), loc, ms.level());
+                    source = provider instanceof VanillaMobProvider ? "vanilla"
+                        : provider instanceof MythicMobProvider ? "mythic" : "custom";
+                }
                 if (e != null && e.getWorld() == world && entityToGroup.putIfAbsent(e.getUniqueId(), rt) == null) {
                     rt.alive.add(e.getUniqueId());
                     var context = new xuanmo.arcartxsuite.api.capability.AbyssRunAccess.Entity(e.getUniqueId(),
-                        instance.getInstanceId(), world.getUID(), groupName, ms.mobId());
+                        instance.getInstanceId(), world.getUID(), groupName, ms.mobId(), source,
+                        rt.encounter, rt.role, callback.currentStage(instance));
                     entityContexts.put(e.getUniqueId(), context);
                     callback.entityChanged(context, xuanmo.arcartxsuite.api.capability.AbyssRunAccess.EntityChange.SPAWNED);
                     spawned++;

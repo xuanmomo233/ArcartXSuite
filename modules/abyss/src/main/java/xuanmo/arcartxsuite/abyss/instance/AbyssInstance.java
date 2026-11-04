@@ -158,6 +158,10 @@ public final class AbyssInstance {
         savedGameModes.putIfAbsent(p.getUniqueId(), p.getGameMode());
     }
 
+    public void savePlayerGameMode(UUID player, GameMode mode) {
+        savedGameModes.putIfAbsent(player, mode);
+    }
+
     public void restorePlayerGameMode(Player p) {
         GameMode gm = savedGameModes.remove(p.getUniqueId());
         if (gm != null && p.getGameMode() != gm) {

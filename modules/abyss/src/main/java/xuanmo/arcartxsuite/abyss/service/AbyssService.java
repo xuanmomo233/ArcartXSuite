@@ -2225,7 +2225,8 @@ public final class AbyssService {
             instances.playerEnterInstance(player, instance);
             instance.markEntered(id);
             instance.saveOriginalLocation(player, seat.returnLocation());
-            instance.savePlayerGameMode(player);
+            if (seat.mode() == null) instance.savePlayerGameMode(player);
+            else instance.savePlayerGameMode(id, seat.mode());
             if (seat.dead()) {
                 instance.restoreDeathState(id);
                 player.setGameMode(GameMode.SPECTATOR);
@@ -2916,6 +2917,10 @@ public final class AbyssService {
     }
 
     private final class GroupCallbackImpl implements MonsterGroupManager.GroupCallback {
+        @Override
+        public @Nullable String currentStage(AbyssInstance instance) {
+            return stageManager == null ? null : stageManager.currentStage(instance);
+        }
         @Override
         public void onSpawnFailed(AbyssInstance instance, String groupName) {
             broadcast(instance, "§c怪组 " + groupName + " 生成失败，请联系管理员检查配置。");

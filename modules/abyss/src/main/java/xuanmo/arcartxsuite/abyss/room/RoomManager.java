@@ -348,7 +348,8 @@ public final class RoomManager {
             mobGroups.registerRuntimeGroup(instance, new MonsterGroup(
                 runtimeName, false, timing, g.delaySeconds(), rest, deps, shifted,
                 g.completeWhenAliveBelow(), g.onPrespawn(),
-                g.onStart(), g.onEnd(), g.plans()));
+                g.onStart(), g.onEnd(), g.plans()), room.id,
+                tpl.type() == FloorConfig.RoomType.BOSS ? "BOSS_ROOM_WAVE" : "ROOM_WAVE");
             room.groupNames.add(runtimeName);
             groupToRoom.put(groupKey(instance, runtimeName), room);
         }

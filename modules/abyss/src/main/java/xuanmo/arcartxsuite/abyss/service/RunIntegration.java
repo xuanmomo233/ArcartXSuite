@@ -47,6 +47,13 @@ final class RunIntegration implements AbyssRunAccess {
         return entity != null && active(entity.runId()) != null ? entity : null;
     }
 
+    @Override public List<UUID> audience(UUID runId) {
+        requireMain();
+        var run = active(runId);
+        return run == null ? List.of() : run.getPlayers().stream().filter(player -> player.getWorld() == run.getWorld())
+            .map(org.bukkit.entity.Player::getUniqueId).sorted().toList();
+    }
+
     @Override public OperationResult execute(Operation request) {
         requireMain();
         if (readingProvider) return denied("CALLBACK_REENTRANCY", 0);

@@ -48,10 +48,13 @@ class MonsterSpawnFailureTest {
         when(mob.getUniqueId()).thenReturn(id);
         when(mob.getWorld()).thenReturn(instance.getWorld());
         when(callback.provider().spawn(eq("vanilla:zombie"), any(), anyDouble())).thenReturn(mob);
-        manager.registerRuntimeGroup(instance, group(List.of(new MonsterConfig.MonsterSpawn("vanilla:zombie", "0,65,0", 1, 1))));
+        manager.registerRuntimeGroup(instance, group(List.of(new MonsterConfig.MonsterSpawn("vanilla:zombie", "0,65,0", 1, 1))),
+            "boss-room", "REINFORCEMENT");
         assertTrue(manager.spawnGroup(instance, "wave", null));
         var context = manager.entityContext(id);
         assertEquals(instance.getInstanceId(), context.runId());
+        assertEquals("boss-room", context.encounterId());
+        assertEquals("REINFORCEMENT", context.role());
         var another = new AbyssInstance(UUID.randomUUID(), instance.getTemplate(), null);
         manager.onEntityDeath(id, another, null);
         assertEquals(context, manager.entityContext(id));

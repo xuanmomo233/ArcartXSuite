@@ -126,6 +126,16 @@ class SettlementLifecycleTest {
         var other = new xuanmo.arcartxsuite.api.capability.AbyssRunAccess.Operation(UUID.randomUUID(), run,
             result.revision(), "other", request.action(), null, "flag", "no");
         assertEquals("NOT_OWNER", access.execute(other).code());
+        try (var ignored = access.registerObjectives("xc", id -> List.of(
+                new xuanmo.arcartxsuite.api.capability.AbyssRunAccess.Objective("chapter", "gate", "PENDING", 0, 1)))) {
+            var current = access.snapshot(run);
+            assertTrue(current.objectives().stream().anyMatch(objective -> objective.kind().equals("external:xc")
+                && objective.id().equals("gate")));
+            var complete = new xuanmo.arcartxsuite.api.capability.AbyssRunAccess.Operation(UUID.randomUUID(), run,
+                current.revision(), "xc", xuanmo.arcartxsuite.api.capability.AbyssRunAccess.Action.COMPLETE, null, null, null);
+            assertEquals("OBJECTIVES_INCOMPLETE", access.execute(complete).code());
+            assertEquals(AbyssStatus.ACTIVE, instance.getStatus());
+        }
     }
     void policy(String mode,int seconds)throws Exception {
         var yaml=new YamlConfiguration();yaml.set("exit-mode",mode);yaml.set("exit-delay-seconds",seconds);when(template.settlement()).thenReturn(SettlementConfig.load(yaml));

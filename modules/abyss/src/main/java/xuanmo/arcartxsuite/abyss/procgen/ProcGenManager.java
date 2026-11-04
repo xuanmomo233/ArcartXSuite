@@ -593,7 +593,8 @@ public final class ProcGenManager {
         service.mobGroups().registerRuntimeGroup(instance,
             new MonsterGroup(gname, false, SpawnTiming.MANUAL,
                 0, -1, List.of(), spawns, 0,
-                List.of(), List.of(), List.of(), List.of()));
+                List.of(), List.of(), List.of(), List.of()), "procgen:" + ri,
+            reinforceMode ? "REINFORCEMENT" : rr.placed.asset.kind() == RoomKind.BOSS ? "BOSS_ROOM_WAVE" : "ROOM_WAVE");
         service.mobGroups().spawnGroup(instance, gname, null);
     }
 

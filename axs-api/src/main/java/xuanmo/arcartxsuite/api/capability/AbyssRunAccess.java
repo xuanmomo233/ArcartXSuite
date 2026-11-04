@@ -12,7 +12,8 @@ public interface AbyssRunAccess {
     record Snapshot(UUID runId, long revision, String state, List<Objective> objectives) {
         public Snapshot { objectives = List.copyOf(objectives); }
     }
-    record Entity(UUID id, UUID runId, UUID worldId, String groupId, String mobId) { }
+    record Entity(UUID id, UUID runId, UUID worldId, String groupId, String mobId,
+                  String source, String encounterId, String role, String stageAtSpawn) { }
     enum EntityChange { SPAWNED, DIED, REMOVED, VANISHED }
     record EntityNotice(int schemaVersion, UUID eventId, Entity entity, EntityChange change, long occurredAt) { }
 
@@ -28,6 +29,7 @@ public interface AbyssRunAccess {
     Snapshot snapshot(UUID runId);
     List<Entity> entities(UUID runId);
     Entity entity(UUID entityId);
+    List<UUID> audience(UUID runId);
     OperationResult execute(Operation operation);
     AbyssAdmissionAccess.Registration registerObjectives(String owner, ObjectiveProvider provider);
 }
