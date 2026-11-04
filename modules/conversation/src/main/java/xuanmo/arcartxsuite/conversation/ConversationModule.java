@@ -150,7 +150,7 @@ public final class ConversationModule extends AbstractAXSModule implements Modul
         if (!exampleFile.exists()) {
             exportResource("cinematics/cinematic_example.yml", exampleFile, false);
         }
-        CinematicConfiguration cinematicConfig = CinematicConfiguration.loadFromDirectory(cinematicsDir);
+        CinematicConfiguration cinematicConfig = CinematicConfiguration.loadFromDirectory(cinematicsDir, logger);
         java.util.List<String> letterboxRuntimeUiIds = new java.util.ArrayList<>();
         for (String candidateUiId : configuration.cinematic().letterboxUiIds()) {
             UiBinding letterboxBinding = registerModuleUi(
@@ -163,14 +163,14 @@ public final class ConversationModule extends AbstractAXSModule implements Modul
                 letterboxRuntimeUiIds.add(letterboxBinding.runtimeUiId());
             }
         }
-        cinematicService = new CinematicService(
+        if (configuration.cinematic().enabled()) cinematicService = new CinematicService(
             plugin, logger, cinematicConfig,
             createAdyeshachNpcBridge(), packetBridge,
             createSoundPlayerBridge(),
             getCapability(xuanmo.arcartxsuite.api.capability.SubtitlePlayable.class),
             java.util.List.copyOf(letterboxRuntimeUiIds)
         );
-        cinematicService.setDebug(configuration.debug());
+        if (cinematicService != null) cinematicService.setDebug(configuration.debug());
 
         adminCommand = new ConversationAdminCommand(
             () -> service, () -> service == null ? null : service.npcBridge(),

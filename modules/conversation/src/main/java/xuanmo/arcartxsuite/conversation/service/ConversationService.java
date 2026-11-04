@@ -687,14 +687,14 @@ public final class ConversationService implements Listener {
             UUID playerId = player.getUniqueId();
             onlinePlayerIds.add(playerId);
             try {
-                SelectorState state = selectorStates.computeIfAbsent(playerId, ignored -> new SelectorState());
-                List<NpcCandidate> candidates = findCandidatesForPlayer(player, conversationCache);
-                boolean changed = refreshSelectorState(state, candidates, now);
-
                 if (dialogRenderer.hasDialog(playerId)) {
                     closeSelectorView(player, true, "dialog-active");
                     continue;
                 }
+                SelectorState state = selectorStates.computeIfAbsent(playerId, ignored -> new SelectorState());
+                List<NpcCandidate> candidates = findCandidatesForPlayer(player, conversationCache);
+                boolean changed = refreshSelectorState(state, candidates, now);
+
                 if (!state.hasCandidates()) {
                     closeSelectorView(player, true, "no-candidates");
                     continue;

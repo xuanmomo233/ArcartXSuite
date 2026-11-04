@@ -26,7 +26,9 @@ public final class ConversationAdminCommand implements ModuleCommandHandler {
 
     private static final List<String> ACTIONS = List.of("help", "status", "adyeshach", "cinematic");
     private static final List<String> ADYESHACH_ACTIONS = List.of("setModel", "setAnimation", "playAnimation");
-    private static final List<String> CINEMATIC_ACTIONS = List.of("play", "stop", "list");
+    private static final List<String> CINEMATIC_ACTIONS = List.of(
+        "play", "stop", "list", "preview", "pause", "resume", "seek", "step", "loop", "unloop", "status", "point"
+    );
 
     private final Supplier<ConversationService> serviceProvider;
     private final Supplier<AdyeshachNpcBridgeAPI> npcBridgeProvider;
@@ -89,7 +91,8 @@ public final class ConversationAdminCommand implements ModuleCommandHandler {
         if (args.length == 3 && "cinematic".equalsIgnoreCase(args[1])) {
             return filter(CINEMATIC_ACTIONS, args[2]);
         }
-        if (args.length == 4 && "cinematic".equalsIgnoreCase(args[1]) && "play".equalsIgnoreCase(args[2])) {
+        if (args.length == 4 && "cinematic".equalsIgnoreCase(args[1])
+            && ("play".equalsIgnoreCase(args[2]) || "preview".equalsIgnoreCase(args[2]))) {
             CinematicService svc = cinematicServiceProvider.get();
             if (svc != null) {
                 return filter(svc.sequenceIds(), args[3]);
@@ -270,8 +273,60 @@ public final class ConversationAdminCommand implements ModuleCommandHandler {
             case "play" -> handleCinematicPlay(sender, args);
             case "stop" -> handleCinematicStop(sender);
             case "list" -> handleCinematicList(sender);
+            case "preview", "pause", "resume", "seek", "step", "loop", "unloop", "status", "point" ->
+                handleRehearsal(sender, sub, args);
             default -> sendCinematicHelp(sender, label);
         }
+    }
+
+    private void handleRehearsal(CommandSender sender, String operation, String[] args) {
+        if (!(sender instanceof Player player)) {
+            sender.sendMessage("请在游戏内执行彩排命令。");
+            return;
+        }
+        if (operation.equals("point")) {
+            var location = player.getLocation();
+            sender.sendMessage("world: " + player.getWorld().getName());
+            sender.sendMessage(String.format(Locale.ROOT, "- { x: %.3f, y: %.3f, z: %.3f, yaw: %.2f, pitch: %.2f }",
+                location.getX(), location.getY(), location.getZ(), location.getYaw(), location.getPitch()));
+            return;
+        }
+        CinematicService service = cinematicServiceProvider.get();
+        if (service == null) {
+            sender.sendMessage(fullMsg("cinematic.service-unavailable"));
+            return;
+        }
+        try {
+            switch (operation) {
+                case "preview" -> {
+                    if (args.length != 4) throw new IllegalArgumentException("用法: cinematic preview <序列ID>");
+                    sender.sendMessage(service.preview(player, args[3])
+                        ? "彩排已就绪，使用 resume 播放，或用 step 执行下一组提示。"
+                        : "无法开始彩排，请检查序列 ID 和当前播放状态。");
+                }
+                case "seek" -> {
+                    if (args.length != 4) throw new IllegalArgumentException("用法: cinematic seek <毫秒>");
+                    sender.sendMessage(service.control(player, operation, parseRehearsalTick(args[3]), 0));
+                }
+                case "loop" -> {
+                    if (args.length != 5) throw new IllegalArgumentException("用法: cinematic loop <起点毫秒> <终点毫秒>");
+                    sender.sendMessage(service.control(player, operation, parseRehearsalTick(args[3]), parseRehearsalTick(args[4])));
+                }
+                default -> sender.sendMessage(service.control(player, operation, 0, 0));
+            }
+        } catch (IllegalArgumentException exception) {
+            sender.sendMessage(exception.getMessage());
+        }
+    }
+
+    private static long parseRehearsalTick(String value) {
+        try {
+            long milliseconds = Long.parseLong(value);
+            if (milliseconds >= 0 && milliseconds % 50 == 0) return milliseconds / 50;
+        } catch (NumberFormatException ignored) {
+            // Report the same validation message for malformed values.
+        }
+        throw new IllegalArgumentException("时间必须是非负的 50 毫秒整数倍。");
     }
 
     /**
@@ -369,6 +424,8 @@ public final class ConversationAdminCommand implements ModuleCommandHandler {
         sender.sendMessage(fullMsg("cinematic.help.play"));
         sender.sendMessage(fullMsg("cinematic.help.stop"));
         sender.sendMessage(fullMsg("cinematic.help.list"));
+        sender.sendMessage("彩排: preview <序列ID> / resume / pause / seek <毫秒> / step");
+        sender.sendMessage("片段: loop <起点毫秒> <终点毫秒> / unloop / status / point");
     }
 
     // ─── help / status ───────────────────────────────

@@ -2,24 +2,8 @@ package xuanmo.arcartxsuite.conversation.cinematic;
 
 import org.bukkit.entity.Player;
 
-/**
- * 电影序列中的单个动作。
- * <p>
- * 每个动作在序列中被依次执行，{@link #execute} 返回一个延迟（毫秒），
- * 表示执行完毕后需要等待多久再执行下一个动作。
- */
+/** A cue executed on the server thread. */
 public abstract class CinematicAction {
-
-    protected final long delayAfterMs;
-
-    protected CinematicAction(long delayAfterMs) {
-        this.delayAfterMs = Math.max(0L, delayAfterMs);
-    }
-
-    /** 动作结束后等待的毫秒数 */
-    public long delayAfterMs() {
-        return delayAfterMs;
-    }
 
     /**
      * 在主线程执行此动作。

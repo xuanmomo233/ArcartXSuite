@@ -7,7 +7,6 @@ import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Sound;
 import org.bukkit.entity.Player;
-import org.bukkit.plugin.java.JavaPlugin;
 import xuanmo.arcartxsuite.api.bridge.AdyeshachNpcBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.SoundPlayerBridgeAPI;
@@ -28,8 +27,7 @@ public final class CinematicActions {
         private final double x, y, z;
         private final Float yaw, pitch;
 
-        public TeleportAction(long delayAfterMs, String worldName, double x, double y, double z, Float yaw, Float pitch) {
-            super(delayAfterMs);
+        public TeleportAction(String worldName, double x, double y, double z, Float yaw, Float pitch) {
             this.worldName = worldName;
             this.x = x;
             this.y = y;
@@ -41,13 +39,11 @@ public final class CinematicActions {
         @Override
         public void execute(Player player, CinematicActionContext ctx) {
             var world = Bukkit.getWorld(worldName);
-            if (world == null) {
-                world = player.getWorld();
-            }
+            if (world == null) throw new IllegalStateException("传送世界未加载: " + worldName);
             Location loc = new Location(world, x, y, z);
             if (yaw != null) loc.setYaw(yaw);
             if (pitch != null) loc.setPitch(pitch);
-            player.teleport(loc);
+            if (!player.teleport(loc)) throw new IllegalStateException("场景传送被取消");
         }
 
         @Override
@@ -62,36 +58,29 @@ public final class CinematicActions {
         private final String worldName;
         private final List<double[]> points;
         private final long durationMs;
-        private final int ticksPerFrame;
 
-        public CameraPathAction(long delayAfterMs, String worldName, List<double[]> points, long durationMs, int ticksPerFrame) {
-            super(delayAfterMs);
+        public CameraPathAction(String worldName, List<double[]> points, long durationMs) {
             this.worldName = worldName;
             this.points = points;
             this.durationMs = Math.max(50L, durationMs);
-            this.ticksPerFrame = Math.max(1, ticksPerFrame);
         }
 
         @Override
         public void execute(Player player, CinematicActionContext ctx) {
-            if (points == null || points.size() < 2) return;
+            sample(player, 0);
+        }
+
+        public long durationTicks() {
+            return durationMs / 50;
+        }
+
+        public void sample(Player player, long elapsedTicks) {
             var world = Bukkit.getWorld(worldName);
-            if (world == null) world = player.getWorld();
-
-            int totalFrames = (int) (durationMs / (ticksPerFrame * 50L));
-            if (totalFrames < 1) totalFrames = 1;
-            final int finalFrames = totalFrames;
-            final var finalWorld = world;
-
-            for (int frame = 0; frame <= finalFrames; frame++) {
-                double progress = (double) frame / finalFrames;
-                double[] pos = interpolatePath(points, progress);
-                long delay = (long) frame * ticksPerFrame;
-                Bukkit.getScheduler().runTaskLater(JavaPlugin.getProvidingPlugin(CinematicActions.class), () -> {
-                    if (!player.isOnline()) return;
-                    player.teleport(new Location(finalWorld, pos[0], pos[1], pos[2],
-                        (float) pos[3], (float) pos[4]));
-                }, delay);
+            if (world == null) throw new IllegalStateException("镜头世界未加载: " + worldName);
+            double progress = Math.min(1.0, (double) elapsedTicks / durationTicks());
+            double[] pos = interpolatePath(points, progress);
+            if (!player.teleport(new Location(world, pos[0], pos[1], pos[2], (float) pos[3], (float) pos[4]))) {
+                throw new IllegalStateException("镜头传送被取消");
             }
         }
 
@@ -112,7 +101,7 @@ public final class CinematicActions {
                 lerp(p0[0], p1[0], localT),
                 lerp(p0[1], p1[1], localT),
                 lerp(p0[2], p1[2], localT),
-                lerp(p0.length > 3 ? p0[3] : 0, p1.length > 3 ? p1[3] : 0, localT),
+                p0[3] + Math.IEEEremainder(p1[3] - p0[3], 360.0) * localT,
                 lerp(p0.length > 4 ? p0[4] : 0, p1.length > 4 ? p1[4] : 0, localT)
             };
         }
@@ -129,8 +118,7 @@ public final class CinematicActions {
         private final String subtitle;
         private final int fadeIn, stay, fadeOut;
 
-        public TitleAction(long delayAfterMs, String title, String subtitle, int fadeIn, int stay, int fadeOut) {
-            super(delayAfterMs);
+        public TitleAction(String title, String subtitle, int fadeIn, int stay, int fadeOut) {
             this.title = title == null ? "" : title;
             this.subtitle = subtitle == null ? "" : subtitle;
             this.fadeIn = fadeIn;
@@ -154,8 +142,7 @@ public final class CinematicActions {
     public static final class ActionBarAction extends CinematicAction {
         private final String message;
 
-        public ActionBarAction(long delayAfterMs, String message) {
-            super(delayAfterMs);
+        public ActionBarAction(String message) {
             this.message = message == null ? "" : message;
         }
 
@@ -171,24 +158,6 @@ public final class CinematicActions {
         }
     }
 
-    // ─── Wait ──────────────────────────────────────────────
-
-    public static final class WaitAction extends CinematicAction {
-        public WaitAction(long delayAfterMs) {
-            super(delayAfterMs);
-        }
-
-        @Override
-        public void execute(Player player, CinematicActionContext ctx) {
-            // 纯等待，不做任何操作
-        }
-
-        @Override
-        public String type() {
-            return "wait";
-        }
-    }
-
     // ─── Sound ─────────────────────────────────────────────
 
     public static final class SoundAction extends CinematicAction {
@@ -199,9 +168,8 @@ public final class CinematicActions {
         private final float pitch;
         private final boolean atPlayer;
 
-        public SoundAction(long delayAfterMs, String soundName, String worldName,
+        public SoundAction(String soundName, String worldName,
                            double x, double y, double z, float volume, float pitch, boolean atPlayer) {
-            super(delayAfterMs);
             this.soundName = soundName;
             this.worldName = worldName;
             this.x = x;
@@ -232,6 +200,17 @@ public final class CinematicActions {
         public String type() {
             return "sound";
         }
+
+        public void stop(Player player) {
+            Sound sound;
+            try {
+                sound = Sound.valueOf(soundName.toUpperCase(java.util.Locale.ROOT));
+            } catch (IllegalArgumentException ignored) {
+                player.stopSound(soundName);
+                return;
+            }
+            player.stopSound(sound);
+        }
     }
 
     // ─── Game Mode ─────────────────────────────────────────
@@ -239,8 +218,7 @@ public final class CinematicActions {
     public static final class GameModeAction extends CinematicAction {
         private final GameMode gameMode;
 
-        public GameModeAction(long delayAfterMs, GameMode gameMode) {
-            super(delayAfterMs);
+        public GameModeAction(GameMode gameMode) {
             this.gameMode = gameMode;
         }
 
@@ -264,9 +242,8 @@ public final class CinematicActions {
         private final int transitionTime;
         private final long keepTime;
 
-        public NpcAnimationAction(long delayAfterMs, String npcName, String animation,
+        public NpcAnimationAction(String npcName, String animation,
                                   double speed, int transitionTime, long keepTime) {
-            super(delayAfterMs);
             this.npcName = npcName;
             this.animation = animation;
             this.speed = speed;
@@ -297,8 +274,7 @@ public final class CinematicActions {
         private final String modelId;
         private final double scale;
 
-        public NpcModelAction(long delayAfterMs, String npcName, String modelId, double scale) {
-            super(delayAfterMs);
+        public NpcModelAction(String npcName, String modelId, double scale) {
             this.npcName = npcName;
             this.modelId = modelId;
             this.scale = scale;
@@ -325,8 +301,7 @@ public final class CinematicActions {
     public static final class MessageAction extends CinematicAction {
         private final String message;
 
-        public MessageAction(long delayAfterMs, String message) {
-            super(delayAfterMs);
+        public MessageAction(String message) {
             this.message = message == null ? "" : message;
         }
 
@@ -347,8 +322,7 @@ public final class CinematicActions {
         private final String command;
         private final boolean asConsole;
 
-        public CommandAction(long delayAfterMs, String command, boolean asConsole) {
-            super(delayAfterMs);
+        public CommandAction(String command, boolean asConsole) {
             this.command = command;
             this.asConsole = asConsole;
         }
@@ -381,8 +355,7 @@ public final class CinematicActions {
         private final Float walkSpeed;
         private final Float flySpeed;
 
-        public SpeedAction(long delayAfterMs, Float walkSpeed, Float flySpeed) {
-            super(delayAfterMs);
+        public SpeedAction(Float walkSpeed, Float flySpeed) {
             this.walkSpeed = walkSpeed;
             this.flySpeed = flySpeed;
         }
@@ -404,8 +377,7 @@ public final class CinematicActions {
     public static final class LockMovementAction extends CinematicAction {
         private final boolean locked;
 
-        public LockMovementAction(long delayAfterMs, boolean locked) {
-            super(delayAfterMs);
+        public LockMovementAction(boolean locked) {
             this.locked = locked;
         }
 
@@ -431,8 +403,7 @@ public final class CinematicActions {
     public static final class SubtitleAction extends CinematicAction {
         private final String groupId;
 
-        public SubtitleAction(long delayAfterMs, String groupId) {
-            super(delayAfterMs);
+        public SubtitleAction(String groupId) {
             this.groupId = groupId;
         }
 
@@ -457,8 +428,7 @@ public final class CinematicActions {
         private final String handler;
         private final Map<String, Object> payload;
 
-        public UiPacketAction(long delayAfterMs, String uiId, String handler, Map<String, Object> payload) {
-            super(delayAfterMs);
+        public UiPacketAction(String uiId, String handler, Map<String, Object> payload) {
             this.uiId = uiId;
             this.handler = handler;
             this.payload = payload;
@@ -490,10 +460,9 @@ public final class CinematicActions {
         private final int keepTimeMs;
         private final boolean atPlayer;
 
-        public ArcartXSoundAction(long delayAfterMs, String resourcePath, String category,
+        public ArcartXSoundAction(String resourcePath, String category,
                                    String worldName, double x, double y, double z,
                                    int distOrRoll, double pitch, int keepTimeMs, boolean atPlayer) {
-            super(delayAfterMs);
             this.resourcePath = resourcePath;
             this.category = category == null ? "master" : category;
             this.worldName = worldName;
