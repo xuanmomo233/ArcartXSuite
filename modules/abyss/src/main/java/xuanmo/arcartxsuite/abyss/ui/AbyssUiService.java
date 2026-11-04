@@ -1813,7 +1813,7 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
                     var object = session.get(data.get(1));
                     if (session.trial() == null) player.sendMessage("§e请先开启草稿试跑。");
                     else if (object != null)
-                        session.trial().event(object.key(), data.get(2), object.id(), object.kind());
+                        session.trial().event(object.key(), data.get(2));
                 }
                 return true;
             }

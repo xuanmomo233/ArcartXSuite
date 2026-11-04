@@ -100,6 +100,13 @@ final class DesignReferences {
         };
         if(ref && text.equals(oldId))return newId;
         if (!scripts) return text;
+        if (text.startsWith("flow_if ")) {
+            int end = text.indexOf(' ', 8);
+            if (end > 8) {
+                return "flow_if " + rewrite(text.substring(8, end), property, kind, oldId, newId, dependencies, true)
+                    + " " + rewrite(text.substring(end + 1), property, kind, oldId, newId, dependencies, true);
+            }
+        }
         String prefix = kind == DesignObject.Kind.GROUP ? "group_cleared:"
             : kind == DesignObject.Kind.ROOM ? "room_cleared:" : "";
         if (!prefix.isEmpty() && text.equals(prefix + oldId)) return prefix + newId;

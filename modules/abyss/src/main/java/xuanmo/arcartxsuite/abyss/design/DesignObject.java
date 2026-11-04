@@ -138,6 +138,10 @@ public record DesignObject(
                 FieldSpec.text("entity-name", "实体名"),
                 FieldSpec.toggle("once", "一次性"),
                 FieldSpec.text("fail-message", "失败提示"),
+                FieldSpec.text("design-action-placeholder", "玩家条件变量名"),
+                FieldSpec.cycle("design-action-compare", "比较方式", ">=", "<=", "==", "!="),
+                FieldSpec.num("design-action-threshold", "条件数值"),
+                FieldSpec.cycle("design-action-add-trigger", "添加玩家触发条件", "添加条件"),
                 FieldSpec.list("conditions", "触发条件"),
                 FieldSpec.script("script", "触发脚本"));
             case OBSTACLE -> List.of(

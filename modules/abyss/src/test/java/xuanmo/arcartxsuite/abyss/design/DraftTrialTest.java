@@ -3,6 +3,7 @@ package xuanmo.arcartxsuite.abyss.design;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -41,12 +42,30 @@ class DraftTrialTest {
         var template = loader.load(id, directory.toFile());
         assertNotNull(template);
         var design = new DesignSession(UUID.randomUUID(), new AbyssInstance(UUID.randomUUID(), template, null));
-        design.put(new DesignObject("document:stages.yml", DesignObject.Kind.DOCUMENT, "stages.yml",
-            "stages.yml", "", "", null, null, "misc:files", Map.of("content", List.of(
-            "entry: first", "first:", "  complete-when: 'var:draft_event'",
-            "  on-complete: ['flow_if var:draft_event setvar open yes']",
-            "  next: [{target: last, condition: 'var:open'}]",
-            "last:", "  complete-when: 'var:map_cleared'")), true));
+        var manager = new DesignManager(logger, (player, message) -> { });
+        var load = DesignManager.class.getDeclaredMethod("loadObjects", template.getClass());
+        load.setAccessible(true);
+        @SuppressWarnings("unchecked")
+        List<DesignObject> objects = (List<DesignObject>) load.invoke(manager, template);
+        design.putAll(objects);
+        addStage(design, "first");
+        addStage(design, "last");
+        manager.setField(design, "stage:first", "design-entry", "true");
+        manager.setField(design, "stage:first", "design-condition", "变量成立");
+        manager.setField(design, "stage:first", "design-condition-ref", "draft_event");
+        manager.setField(design, "stage:first", "design-branch-target", "last");
+        manager.cycleNext(design, "stage:first", "design-append-branch");
+        String event = id.equals("example") ? "on-clear" : "click-script";
+        var kind = id.equals("example") ? DesignObject.Kind.ROOM : DesignObject.Kind.NPC;
+        String key = objects.stream().filter(object -> object.kind() == kind).findFirst().orElseThrow().key();
+        manager.setField(design, key, "design-action-hook", event);
+        manager.setField(design, key, "design-action", "设置变量");
+        manager.setField(design, key, "design-action-arg", "draft_event");
+        manager.setField(design, key, "design-action-value", "yes");
+        manager.cycleNext(design, key, "design-append-action");
+        manager.lineAdd(design, key, event, "console prohibited");
+        manager.lineAdd(design, key, event, "js: prohibited");
+        var object = design.get(key);
         var draft = loader.loadPrepared(id, directory.toFile(), DesignWriter.prepare(template, design));
         assertNotNull(draft);
         assertTrue(template.stages().isEmpty());
@@ -69,13 +88,11 @@ class DraftTrialTest {
             when(service.stages()).thenReturn(stages);
             stages.setScriptLauncher((instance, lines, trigger, vars) ->
                 runner.run("stage", lines, ScriptContext.withVars(instance, trigger, vars), instance));
-            String event = id.equals("example") ? "on-clear" : "click-script";
-            var kind = id.equals("example") ? DesignObject.Kind.ROOM : DesignObject.Kind.NPC;
-            try (var trial = new DraftTrial(draft, stages, runner, Map.of(new DraftTrial.Hook("object", event),
-                    List.of("setvar draft_event yes", "console prohibited", "js: prohibited")), line -> { })) {
+            try (var trial = new DraftTrial(draft, stages, runner, Map.of(new DraftTrial.Hook(key, event),
+                    new DraftTrial.Event(object.id(), kind, object.strList(event))), line -> { })) {
                 trial.start();
                 while (!scheduled.isEmpty()) scheduled.remove().run();
-                trial.event("object", event, "draft", kind);
+                trial.event(key, event);
                 trial.mapCleared();
                 var trace = trial.traceSnapshot();
                 assertTrue(trace.contains("分支 → last"), trace::toString);
@@ -90,5 +107,12 @@ class DraftTrialTest {
         } finally {
             serverField.set(null, previous);
         }
+    }
+
+    private void addStage(DesignSession design, String id) {
+        var values = new LinkedHashMap<String, Object>();
+        DesignManager.seedDefaults(DesignObject.Kind.STAGE, values);
+        design.put(new DesignObject("stage:" + id, DesignObject.Kind.STAGE, id, "stages.yml",
+            "", "", null, null, "misc:stages", values, true));
     }
 }

@@ -924,6 +924,18 @@ public final class DesignManager {
     public @Nullable String cycleNext(DesignSession s, String key, String field) {
         DesignObject o = s.get(key);
         if (o == null) return null;
+        if (o.kind() == DesignObject.Kind.INTERACT && field.equals("design-action-add-trigger")) {
+            String placeholder = o.str("design-action-placeholder").trim();
+            String comparison = o.str("design-action-compare");
+            if (comparison.isBlank()) comparison = ">=";
+            Object threshold = o.values().get("design-action-threshold");
+            if (!placeholder.matches("[a-zA-Z0-9_.-]{1,64}")
+                || !Set.of(">=", "<=", "==", "!=").contains(comparison) || !(threshold instanceof Number)) {
+                throw new IllegalArgumentException("请填写有效的玩家条件变量和数值");
+            }
+            lineAdd(s, key, "conditions", "%" + placeholder + "% " + comparison + " " + threshold);
+            return "已添加";
+        }
         if (o.kind() == DesignObject.Kind.FLOOR && field.equals("design-append-room")) {
             String room = o.str("design-room-ref");
             if (!objectIds(s, DesignObject.Kind.ROOM).contains(room))

@@ -17,11 +17,14 @@ import xuanmo.arcartxsuite.abyss.template.AbyssTemplate;
 /** Isolated event rehearsal using the real stage and script dispatchers. */
 public final class DraftTrial implements AutoCloseable {
     public record Hook(String object, String event) { }
+    public record Event(String id, DesignObject.Kind kind, List<String> lines) {
+        public Event { lines = List.copyOf(lines); }
+    }
 
     private final AbyssInstance instance;
     private final StageManager stages;
     private final ScriptRunner scripts;
-    private final Map<Hook, List<String>> hooks;
+    private final Map<Hook, Event> hooks;
     private final Set<String> rooms = new HashSet<>();
     private final Set<String> groups = new HashSet<>();
     private final ArrayDeque<String> trace = new ArrayDeque<>();
@@ -30,7 +33,7 @@ public final class DraftTrial implements AutoCloseable {
     private boolean closed;
 
     public DraftTrial(AbyssTemplate draft, StageManager stages, ScriptRunner scripts,
-                      Map<Hook, List<String>> hooks, Consumer<String> output) {
+                      Map<Hook, Event> hooks, Consumer<String> output) {
         this.instance = new AbyssInstance(UUID.randomUUID(), draft, null);
         instance.draftTrial(this);
         this.stages = stages;
@@ -46,18 +49,19 @@ public final class DraftTrial implements AutoCloseable {
             after(run("开始", instance.getTemplate().scripts().start(), false), () -> stages.start(instance)));
     }
 
-    public void event(String object, String event, String id, DesignObject.Kind kind) {
-        if (!ready()) return;
-        List<String> lines = hooks.get(new Hook(object, event));
-        if (lines == null) throw new IllegalArgumentException("该事件不在试跑快照中");
-        trace("注入事件 " + id + " / " + event);
-        if (kind == DesignObject.Kind.ROOM && event.equals("on-clear")) rooms.add(id);
-        if ((kind == DesignObject.Kind.GROUP || kind == DesignObject.Kind.ROOM_GROUP) && event.equals("on-end")) groups.add(id);
-        after(run(event, lines, false), () -> stages.onEvent(instance));
+    public void event(String object, String event) {
+        requireReady();
+        Event selected = hooks.get(new Hook(object, event));
+        if (selected == null) throw new IllegalArgumentException("该事件不在试跑快照中");
+        trace("注入事件 " + selected.id() + " / " + event);
+        if (selected.kind() == DesignObject.Kind.ROOM && event.equals("on-clear")) rooms.add(selected.id());
+        if ((selected.kind() == DesignObject.Kind.GROUP || selected.kind() == DesignObject.Kind.ROOM_GROUP)
+            && event.equals("on-end")) groups.add(selected.id());
+        after(run(event, selected.lines(), false), () -> stages.onEvent(instance));
     }
 
     public void mapCleared() {
-        if (!ready()) return;
+        requireReady();
         instance.getVariables().put("map_cleared", true);
         trace("注入事件 地图清空");
         if (instance.getTemplate().stages().isEmpty()) finish(true);
@@ -119,10 +123,9 @@ public final class DraftTrial implements AutoCloseable {
 
     public List<String> traceSnapshot() { return List.copyOf(trace); }
 
-    private boolean ready() {
+    private void requireReady() {
         if (closed || instance.isFinished()) throw new IllegalArgumentException("请先开始新一轮草稿试跑");
         if (!instance.getScriptSessions().isEmpty()) throw new IllegalArgumentException("请等待当前动作结束");
-        return true;
     }
 
     private void after(xuanmo.arcartxsuite.abyss.script.ScriptSession script, Runnable next) {
