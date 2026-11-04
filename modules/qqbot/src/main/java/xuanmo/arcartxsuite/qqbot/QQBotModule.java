@@ -276,10 +276,10 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
                 }
             });
 
-        // 11. 注册 QqBindCapable capability（供 loginview 等模块查询绑定状态）
+        // 11. 注册 QQ 绑定能力。
         QQBotBindService bindSvc = bindService;
-        registerCapability(xuanmo.arcartxsuite.api.capability.QqBindCapable.class,
-            new xuanmo.arcartxsuite.api.capability.QqBindCapable() {
+        registerCapability(xuanmo.arcartxsuite.api.capability.QQBindCapable.class,
+            new xuanmo.arcartxsuite.api.capability.QQBindCapable() {
                 @Override public boolean isBound(@NotNull java.util.UUID playerUuid) {
                     return bindSvc.findByPlayer(playerUuid) != null;
                 }

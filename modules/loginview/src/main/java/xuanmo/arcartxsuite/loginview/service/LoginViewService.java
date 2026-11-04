@@ -39,7 +39,7 @@ import org.bukkit.scheduler.BukkitTask;
 import xuanmo.arcartxsuite.api.account.AccountType;
 import xuanmo.arcartxsuite.api.account.AccountTypeService;
 import xuanmo.arcartxsuite.api.capability.EventBusCapability;
-import xuanmo.arcartxsuite.api.capability.QqBindCapable;
+import xuanmo.arcartxsuite.api.capability.QQBindCapable;
 import xuanmo.arcartxsuite.api.capability.SignalDispatchable;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.loginview.auth.AuthMeBridge;
@@ -77,7 +77,7 @@ public final class LoginViewService implements Listener {
     private final LoginViewPasswordHasher passwordHasher = new LoginViewPasswordHasher();
     private final AuthMeBridge authMeBridge = new AuthMeBridge();
     private final AccountTypeService accountTypeService;
-    private final Supplier<QqBindCapable> qqBindProvider;
+    private final Supplier<QQBindCapable> qqBindProvider;
     private final MessageProvider messages;
     private Supplier<EventBusCapability> eventBusProvider;
     private final Set<UUID> authenticatedPlayers = java.util.concurrent.ConcurrentHashMap.newKeySet();
@@ -98,7 +98,7 @@ public final class LoginViewService implements Listener {
         PacketGuardAPI packetGuard,
         Supplier<SignalDispatchable> signalProvider,
         AccountTypeService accountTypeService,
-        Supplier<QqBindCapable> qqBindProvider,
+        Supplier<QQBindCapable> qqBindProvider,
         String uiId,
         MessageProvider messages
     ) {
@@ -467,12 +467,12 @@ public final class LoginViewService implements Listener {
             sendResult(player, color("&c请输入绑定验证码。"), false);
             return;
         }
-        QqBindCapable bindService = qqBindProvider == null ? null : qqBindProvider.get();
+        QQBindCapable bindService = qqBindProvider == null ? null : qqBindProvider.get();
         if (bindService == null) {
             sendResult(player, color("&cQQ 绑定服务当前不可用。"), false);
             return;
         }
-        QqBindCapable.BindResult result = bindService.confirmBind(player, code);
+        QQBindCapable.BindResult result = bindService.confirmBind(player, code);
         if (result.success()) {
             sendResult(player, color("&a" + result.message()), true);
             // 绑定成功后刷新面板（切换为已绑定状态）
@@ -483,7 +483,7 @@ public final class LoginViewService implements Listener {
     }
 
     private boolean isQqBound(Player player) {
-        QqBindCapable bindService = qqBindProvider == null ? null : qqBindProvider.get();
+        QQBindCapable bindService = qqBindProvider == null ? null : qqBindProvider.get();
         return bindService != null && bindService.isBound(player.getUniqueId());
     }
 

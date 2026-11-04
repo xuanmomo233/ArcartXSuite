@@ -220,7 +220,7 @@ public final class LoginViewModule extends AbstractAXSModule implements ModuleCo
         service = new LoginViewService(
             plugin, logger, configuration, repository, packetBridge, packetGuard,
             () -> getCapability(SignalDispatchable.class), accountTypeService,
-            () -> getCapability(xuanmo.arcartxsuite.api.capability.QqBindCapable.class),
+            () -> getCapability(xuanmo.arcartxsuite.api.capability.QQBindCapable.class),
             uiBinding.runtimeUiId(),
             messages()
         );

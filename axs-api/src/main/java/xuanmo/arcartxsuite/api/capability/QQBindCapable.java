@@ -7,15 +7,13 @@ import org.jetbrains.annotations.Nullable;
 import java.util.UUID;
 
 /**
- * QQ 绑定查询与操作能力接口。
+ * QQ 绑定查询与确认能力。
  * <p>
  * 由 QQBot 模块实现并注册，供 LoginView 等模块在玩家进服后
  * 查询绑定状态或在 UI 面板中完成绑定确认。
- * <p>
- * 公开 capability：外部插件可经 {@code AxsCapabilities.get(QqBindCapable.class)} 获取。
  */
 @PublicCapability
-public interface QqBindCapable {
+public interface QQBindCapable {
 
     /**
      * 检查玩家是否已绑定 QQ。
