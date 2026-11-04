@@ -24,6 +24,15 @@ public final class PlayerDataManager {
     private final Logger logger;
     private final ExecutorService dbExecutor;
 
+    @FunctionalInterface public interface DatabaseRead<T> { T execute() throws Exception; }
+
+    public <T> java.util.concurrent.CompletableFuture<T> submitDatabase(DatabaseRead<T> task) {
+        return java.util.concurrent.CompletableFuture.supplyAsync(() -> {
+            try { return task.execute(); }
+            catch (Exception failure) { throw new java.util.concurrent.CompletionException(failure); }
+        }, dbExecutor);
+    }
+
     public java.util.concurrent.CompletableFuture<Void> writeAdmission(
             JdbcAbyssRepository.AdmissionReceipt receipt, boolean reserve) {
         return java.util.concurrent.CompletableFuture.runAsync(() -> {

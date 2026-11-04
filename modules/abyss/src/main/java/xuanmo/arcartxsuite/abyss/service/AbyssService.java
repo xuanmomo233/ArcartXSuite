@@ -1,6 +1,7 @@
 package xuanmo.arcartxsuite.abyss.service;
 
 import xuanmo.arcartxsuite.api.capability.AbyssAdmissionAccess;
+import xuanmo.arcartxsuite.api.capability.AbyssRunResultAccess;
 import xuanmo.arcartxsuite.api.capability.AbyssAdmissionAccess.Denial;
 import xuanmo.arcartxsuite.api.capability.AbyssAdmissionAccess.Intent;
 import xuanmo.arcartxsuite.api.capability.AbyssAdmissionAccess.Phase;
@@ -100,7 +101,9 @@ import xuanmo.arcartxsuite.api.storage.StorageManager;
  */
 public final class AbyssService {
     private final AdmissionAccess admission = new AdmissionAccess(this);
+    private final RunResults runResults = new RunResults(this);
     public AbyssAdmissionAccess admissionAccess() { return admission; }
+    public AbyssRunResultAccess runResultAccess() { return runResults; }
 
     private final AbyssModule module;
     private final Plugin plugin;
@@ -259,6 +262,7 @@ public final class AbyssService {
         repository = new JdbcAbyssRepository(ds, desc, dataFolder, logger);
         repository.initialize();
         playerData = new PlayerDataManager(repository, logger, config.stamina().max());
+        runResults.configure(repository, playerData);
         try {
             admission.load(repository, playerData);
         } catch (Exception error) {
@@ -976,6 +980,7 @@ public final class AbyssService {
 
     private void publishAdmission(AbyssInstance instance,List<Player> players) {
         instance.confirmAdmission();
+        runResults.admitted(instance, admission.operation(instance));
         AbyssTemplate template=instance.getTemplate();
         String resolvedPlan=(String)instance.getVariables().get("plan");
         publishEvent("axs.abyss.enter", players.get(0),
@@ -1731,6 +1736,7 @@ public final class AbyssService {
             operation.phase = Phase.STARTED;
             admission.changed(operation);
         }
+        runResults.started(instance);
         // start 脚本
         runLifecycleScript(instance, "start", null);
         // 阶段机启动（stages.yml 配置的副本从入口阶段开始推进）
@@ -1778,6 +1784,7 @@ public final class AbyssService {
         AbyssTemplate t = instance.getTemplate();
         List<UUID> completedPlayers = new ArrayList<>(instance.getPlayerUUIDs());
         List<Player> completedOnlinePlayers = instance.getPlayers();
+        runResults.finish(instance, AbyssRunResultAccess.Outcome.COMPLETED, "COMPLETED");
         beginSettlement(instance,true);
         runLifecycleScript(instance, "complete", null);
         broadcast(instance, msg("dungeon.completed",
@@ -1820,6 +1827,7 @@ public final class AbyssService {
         AbyssStatus cur = instance.getStatus();
         if (cur != AbyssStatus.ACTIVE && cur != AbyssStatus.PREPARING) return;
         if (!instance.transitionTo(cur, AbyssStatus.FAILED)) return;
+        runResults.finish(instance, AbyssRunResultAccess.Outcome.FAILED, reason.name());
         if(cur==AbyssStatus.PREPARING && !instance.hasEnteredPlayers()) {
             broadcast(instance,msg("dungeon.failed","reason",failReasonText(reason)));
             destroyInstance(instance,true);return;
@@ -1843,7 +1851,8 @@ public final class AbyssService {
     public void cancelDungeon(AbyssInstance instance) {
         AbyssStatus cur = instance.getStatus();
         if (instance.isFinished()) return;
-        instance.transitionTo(cur, AbyssStatus.CANCELLED);
+        if (!instance.transitionTo(cur, AbyssStatus.CANCELLED)) return;
+        runResults.finish(instance, AbyssRunResultAccess.Outcome.CANCELLED, "CANCELLED");
         broadcast(instance, msg("dungeon.cancelled"));
         finishAndCleanup(instance);
     }
@@ -1986,6 +1995,7 @@ public final class AbyssService {
         }
         instance.removePlayer(player.getUniqueId());
         instances.playerLeaveInstance(player);
+        runResults.member(instance, player.getUniqueId(), AbyssRunResultAccess.MemberState.LEFT, reason.name(), null);
         var admissionOperation = admission.operation(instance);
         if (admissionOperation != null && "RETURN_PENDING".equals(admissionOperation.outcomes.get(player.getUniqueId()))) {
             admissionOperation.outcomes.put(player.getUniqueId(), "RETURNED");
@@ -2072,6 +2082,7 @@ public final class AbyssService {
             playerData.savePendingLocation(player.getUniqueId(), back);
         }
         instance.removePlayer(player.getUniqueId());
+        runResults.member(instance, player.getUniqueId(), AbyssRunResultAccess.MemberState.DISCONNECTED, "DISCONNECT", null);
         if (links != null) links.removeAttribute(player, "abyss");
         // 不触发退出消息；无人清理由 watchdog/playerExit 路径处理
         if (instance.getOnlinePlayerCount() == 0 && !instance.isFinished()) {
@@ -2172,6 +2183,7 @@ public final class AbyssService {
      * 保证两条路径语义一致。
      */
     public void notifyPlayerDeath(AbyssInstance instance, Player player, int deaths) {
+        runResults.member(instance, player.getUniqueId(), AbyssRunResultAccess.MemberState.PRESENT, null, deaths);
         publishEvent("axs.abyss.player_death", player, Map.of(
             "dungeon", instance.getTemplate().id(),
             "instance", instance.getInstanceId().toString(),
@@ -2466,6 +2478,7 @@ public final class AbyssService {
     /** 销毁实例：清理全部子系统 + 释放世界 + 从注册表移除。 */
     public void destroyInstance(AbyssInstance instance, boolean releasePlayers) {
         if(transferringInstances.contains(instance.getInstanceId())) {scheduleDelayedRaw(()->destroyInstance(instance,releasePlayers),1L);return;}
+        runResults.finish(instance, AbyssRunResultAccess.Outcome.CANCELLED, stopping ? "SERVICE_STOPPING" : "INSTANCE_DESTROYED");
         SettlementSession settlement=settlements.remove(instance.getInstanceId());
         if(settlement!=null && settlement.timer!=null)settlement.timer.cancel();
         designOwners.remove(instance.getTemplate().id(), instance.getInstanceId());
@@ -2643,6 +2656,28 @@ public final class AbyssService {
     }
 
     /** EventBus 发布（无总线静默）。 */
+    void logRunResultFailure(UUID run, Throwable error) {
+        logger.log(java.util.logging.Level.SEVERE, "[abyss] 运行结果写入失败 " + run, error);
+    }
+
+    void publishRunResult(AbyssRunResultAccess.ResultCommitted result) {
+        try {
+            var bus = eventBusProvider.get();
+            if (bus != null) bus.publish(AbyssRunResultAccess.RESULT_COMMITTED_TOPIC, null, result);
+        } catch (RuntimeException failure) {
+            logger.warning("[abyss] 运行结果已提交，通知发布失败 " + result.runId());
+        }
+    }
+
+    void publishRunNotice(AbyssRunResultAccess.RunNotice notice) {
+        try {
+            var bus = eventBusProvider.get();
+            if (bus != null) bus.publish(AbyssRunResultAccess.RUN_NOTICE_TOPIC, null, notice);
+        } catch (RuntimeException failure) {
+            logger.warning("[abyss] 运行通知发布失败 " + notice.runId());
+        }
+    }
+
     public void publishEvent(String topic, @Nullable Player player, Map<String, Object> data) {
         try {
             EventBusCapability bus = eventBusProvider.get();

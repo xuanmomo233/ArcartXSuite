@@ -119,6 +119,7 @@ public final class AbyssModule extends AbstractAXSModule implements ModuleComman
         // 公开能力
         registerCapability(AbyssQueryable.class, new AbyssQueryableImpl(service));
         registerCapability(xuanmo.arcartxsuite.api.capability.AbyssAdmissionAccess.class, service.admissionAccess());
+        registerCapability(xuanmo.arcartxsuite.api.capability.AbyssRunResultAccess.class, service.runResultAccess());
         registerCapability(xuanmo.arcartxsuite.api.capability.AbyssPartyAccess.class,
             new xuanmo.arcartxsuite.abyss.capability.AbyssPartyAccessImpl(service));
         registerCapability(PlayerDataPurgeable.class, new PlayerDataPurgeable() {
@@ -268,6 +269,8 @@ public final class AbyssModule extends AbstractAXSModule implements ModuleComman
             "axs.abyss.enter",
             "axs.abyss.start",
             "axs.abyss.complete",
+            xuanmo.arcartxsuite.api.capability.AbyssRunResultAccess.RESULT_COMMITTED_TOPIC,
+            xuanmo.arcartxsuite.api.capability.AbyssRunResultAccess.RUN_NOTICE_TOPIC,
             "axs.abyss.fail",
             "axs.abyss.leave",
             "axs.abyss.player_death",
