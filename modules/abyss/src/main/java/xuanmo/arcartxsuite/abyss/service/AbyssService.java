@@ -565,6 +565,7 @@ public final class AbyssService {
 
     /** 重载模板（/axs reload abyss 时模块会重建服务；另供 admin reload 用）。 */
     public void reloadTemplates() {
+        admission.catalogChanged();
         instances.clearTemplates();
         var loaded = templateLoader.loadAll();
         loaded.values().forEach(instances::registerTemplate);

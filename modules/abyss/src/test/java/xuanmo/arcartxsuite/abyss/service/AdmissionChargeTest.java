@@ -60,6 +60,23 @@ class AdmissionChargeTest {
         assertFalse(checker.charge(template,List.of(player)).ok());
         verify(money,never()).withdraw(any(),any(BigDecimal.class));assertEquals(1,player.getInventory().getContents()[0].getAmount());
     }
+    @Test void rollbackDoesNotOverwriteItemsChangedDuringTeleport() {
+        var yaml = new org.bukkit.configuration.file.YamlConfiguration();
+        yaml.set("money-cost", 5);
+        yaml.set("required-items", List.of("material:DIAMOND:1"));
+        when(template.requirements()).thenReturn(EntryRequirements.load(yaml));
+        Player player = player();
+        when(rewards.matches(anyString(), any())).thenReturn(true);
+        player.getInventory().setContents(new ItemStack[]{new ItemStack(Material.DIAMOND)});
+        var charge = checker.charge(template, List.of(player));
+        assertTrue(charge.ok());
+        player.getInventory().setContents(new ItemStack[]{new ItemStack(Material.STONE)});
+        assertThrows(IllegalStateException.class, charge::rollback);
+        assertEquals(Material.STONE, player.getInventory().getContents()[0].getType());
+        verify(rewards).refundMoney(eq(player), eq(5d), eq("money"), anyString());
+        verifyNoInteractions(cooldown);
+    }
+
     @Test void unloadedPlayerDataBlocksAllCharges() {
         Player player=player();when(stamina.ready(player.getUniqueId())).thenReturn(false);
         assertFalse(checker.charge(template,List.of(player)).ok());verify(money,never()).withdraw(any(),any());

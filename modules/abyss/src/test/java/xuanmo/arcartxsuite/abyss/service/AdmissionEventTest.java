@@ -57,6 +57,11 @@ class AdmissionEventTest {
             assertTrue(preflight.denials().stream().anyMatch(denial -> second.equals(denial.member())));
             assertTrue(preflight.denials().stream().anyMatch(denial -> third.equals(denial.member())));
             verify(pool, never()).acquireWorld(any(), any());
+            try (var policy = service.admissionAccess().registerPolicy("xc", 0, ignored ->
+                    List.of(AdmissionAccess.deny("WARZONE_ACTIVE", "当前在战区")))) {
+                assertFalse(service.enterDungeon(List.of(player), "test").ok());
+                verify(pool, never()).acquireWorld(any(), any());
+            }
             assertTrue(service.enterDungeon(List.of(player),"test").ok());
             verifyNoInteractions(bus);
         }

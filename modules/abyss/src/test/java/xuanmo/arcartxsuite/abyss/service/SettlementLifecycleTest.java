@@ -92,7 +92,9 @@ class SettlementLifecycleTest {
         currentWorld.set(home);listener.onChangedWorld(new org.bukkit.event.player.PlayerChangedWorldEvent(player,world));
         assertNull(instances.getInstance(player));verify(player,never()).teleport(any(Location.class));
     }
-    @Test void partialAdmissionKeepsPlayerAndWorldWhenReturnTeleportFails()throws Exception {
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {true, false})
+    void partialAdmissionReportsActualReturnAndKeepsAnOccupiedWorld(boolean canReturn)throws Exception {
         instances.playerLeaveInstance(player);
         instances.destroyInstance(instance);
         instance = instances.createInstance(template, null);
@@ -113,17 +115,23 @@ class SettlementLifecycleTest {
         operation.outcomes.put(player.getUniqueId(), "ARRIVED");
         var refunds = new AtomicInteger();
         var charge = new RequirementChecker.Charge(true, null, refunds::incrementAndGet, () -> fail("No commit"));
-        doReturn(false).when(player).teleport(any(Location.class));
+        if (!canReturn) doReturn(false).when(player).teleport(any(Location.class));
         var rollback = AbyssService.class.getDeclaredMethod("rollbackAdmission", AbyssInstance.class,
             AdmissionAccess.Operation.class, Player.class, RequirementChecker.Charge.class);
         rollback.setAccessible(true);
         rollback.invoke(service, instance, operation, failed, charge);
         assertEquals(1, refunds.get());
-        assertEquals(xuanmo.arcartxsuite.api.capability.AbyssAdmissionAccess.Phase.REVIEW_REQUIRED, operation.phase);
-        assertEquals("RETURN_PENDING", operation.outcomes.get(player.getUniqueId()));
+        assertEquals(canReturn ? xuanmo.arcartxsuite.api.capability.AbyssAdmissionAccess.Phase.COMPENSATED
+            : xuanmo.arcartxsuite.api.capability.AbyssAdmissionAccess.Phase.REVIEW_REQUIRED, operation.phase);
+        assertEquals(canReturn ? "RETURNED" : "RETURN_PENDING", operation.outcomes.get(player.getUniqueId()));
         assertEquals("TELEPORT_FAILED", operation.outcomes.get(failedId));
-        assertSame(instance, instances.getInstance(player));
-        verify(pool, never()).releaseWorld(any());
+        if (canReturn) {
+            assertNull(instances.getInstance(player));
+            verify(pool).releaseWorld(instance.getInstanceId());
+        } else {
+            assertSame(instance, instances.getInstance(player));
+            verify(pool, never()).releaseWorld(any());
+        }
     }
 
     @Test void rejectedReconnectTeleportPreservesRecoveryAndOldLoginCannotConsumeIt()throws Exception {

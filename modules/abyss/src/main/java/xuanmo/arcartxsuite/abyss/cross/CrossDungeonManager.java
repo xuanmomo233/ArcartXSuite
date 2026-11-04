@@ -76,6 +76,7 @@ public final class CrossDungeonManager {
     private final Map<String, PendingForward> pendingOut = new ConcurrentHashMap<>();
     private final java.util.Set<String> forwarding = ConcurrentHashMap.newKeySet();
     private final Map<String, PendingEnter> pendingIn = new ConcurrentHashMap<>();
+    private final Map<String, Long> recentReservations = new ConcurrentHashMap<>();
     private final Map<UUID, String> expectedArrivals = new ConcurrentHashMap<>();
 
     public CrossDungeonManager(AbyssService service,
@@ -112,6 +113,7 @@ public final class CrossDungeonManager {
         pendingOut.clear();
         forwarding.clear();
         pendingIn.clear();
+        recentReservations.clear();
         expectedArrivals.clear();
     }
 
@@ -187,6 +189,9 @@ public final class CrossDungeonManager {
         if (reqId == null || dungeon == null || from == null) return;
         if(!from.equals(kv.get("_sender")))return;
         if (from.equals(nodeId())) return; // 自己的回声
+        long now = System.currentTimeMillis();
+        recentReservations.values().removeIf(deadline -> deadline <= now);
+        if (recentReservations.containsKey(reqId) || recentReservations.size() >= 32768) return;
         AbyssTemplate tpl = service.instances().getTemplate(dungeon);
         String cs = tpl != null ? tpl.crossServer() : null;
         if (cs == null || !cs.equals(nodeId())) return;   // 非本节点宿主
@@ -209,6 +214,7 @@ public final class CrossDungeonManager {
             return;
         }
         PendingEnter pe = new PendingEnter(dungeon,players,leader,mode,plan,"true".equals(kv.get("party")),capacity);
+        recentReservations.put(reqId, now + IN_TIMEOUT_MS + OUT_TIMEOUT_MS);
         pendingIn.put(reqId, pe);
         for (UUID u : players) expectedArrivals.put(u, reqId);
         publish("op=accept;req=" + reqId + ";dungeon=" + dungeon

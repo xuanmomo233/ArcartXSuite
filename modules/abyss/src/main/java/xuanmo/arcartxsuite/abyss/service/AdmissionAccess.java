@@ -22,7 +22,9 @@ final class AdmissionAccess implements AbyssAdmissionAccess {
     private record Key(String owner, UUID id) { }
     private record Binding(AbyssTemplate template, Party party, long partyRevision, long policyRevision) { }
     private record Ticket(Intent intent, Binding binding, long expires) { }
-    private record Rule(String owner, int priority, Policy policy) { }
+    private record Rule(org.bukkit.plugin.Plugin plugin, String owner, int priority, Policy policy) {
+        boolean available() { return plugin == null || plugin.isEnabled(); }
+    }
     private static final int LIMIT = 32768;
     private final UUID generation = UUID.randomUUID();
     private final AbyssService service;
@@ -32,6 +34,7 @@ final class AdmissionAccess implements AbyssAdmissionAccess {
     private final Map<UUID, Operation> operations = new LinkedHashMap<>();
     private final Map<UUID, Operation> reservations = new LinkedHashMap<>();
     private long policyRevision;
+    private long catalogRevision;
     private boolean checkingPolicy;
     private PlayerDataManager storage;
 
@@ -83,7 +86,7 @@ final class AdmissionAccess implements AbyssAdmissionAccess {
 
     @Override public IntegrationInfo integrationInfo() {
         boolean running = service.running();
-        return new IntegrationInfo(1, generation, running, running ? null : "UNAVAILABLE",
+        return new IntegrationInfo(1, generation, catalogRevision, running, running ? null : "UNAVAILABLE",
             Map.of("catalog", running ? "AVAILABLE" : "UNAVAILABLE",
                 "hostEntry", running && storage != null ? "AVAILABLE" : "UNAVAILABLE",
                 "remoteEntry", "UNSUPPORTED", "originalRunReconnect", "UNSUPPORTED"));
@@ -95,7 +98,10 @@ final class AdmissionAccess implements AbyssAdmissionAccess {
         return service.instances().getAllTemplates().stream().sorted(Comparator.comparing(AbyssTemplate::id))
             .map(t -> new Dungeon(t.id(), t.name(), String.join("\n", t.description()), t.difficulty(),
                 t.requirements().minPlayers(), t.requirements().maxPlayers(), t.requirements().partyRequired(),
-                t.requirements().partyMode(), t.maxInstances(), List.copyOf(t.plans().keySet()), t.crossServer())).toList();
+                t.requirements().partyMode(), t.maxInstances(),
+                t.plans().values().stream().map(plan -> new Plan(plan.id(), plan.name(), plan.lore())).toList(),
+                t.crossServer(), t.requirements().cooldownSeconds(), t.requirements().moneyCost(),
+                t.requirements().currencyId(), t.requirements().staminaCost())).toList();
     }
 
     @Override public PlayerState playerState(UUID player) {
@@ -119,10 +125,19 @@ final class AdmissionAccess implements AbyssAdmissionAccess {
         var instance = service.instances().getInstance(id);
         if (instance == null || instance.designMode()) return null;
         var op = operations.get(id);
+        var memberStates = new LinkedHashMap<UUID, String>();
+        for (UUID member : instance.getPlayerUUIDs()) {
+            var online = Bukkit.getPlayer(member);
+            memberStates.put(member, online == null || !online.isOnline() ? "OFFLINE"
+                : !instance.hasEntered(member) ? "ADMISSION_PENDING"
+                : instance.isPlayerCurrentlyDead(online) ? "DEAD" : "PRESENT");
+        }
         return new Run(id, instance.getTemplate().id(), (String)instance.getVariables().get("plan"),
             op == null ? null : op.intent.difficulty(), op == null ? null : op.intent.rulesVersion(),
             instance.getStatus().name(), op == null ? List.of() : op.intent.members(),
-            List.copyOf(instance.getPlayerUUIDs()), instance.getWorld() == null ? null : instance.getWorld().getUID());
+            List.copyOf(instance.getPlayerUUIDs()), instance.getWorld() == null ? null : instance.getWorld().getUID(),
+            op == null ? null : op.intent.requestId(), op == null ? null : op.intent.actor(),
+            op == null ? null : op.intent.externalPartyId(), instance.getCreateTime(), instance.getStartTime(), memberStates);
     }
 
     @Override public List<Run> activeRuns() {
@@ -225,11 +240,15 @@ final class AdmissionAccess implements AbyssAdmissionAccess {
     }
 
     @Override public Registration registerPolicy(String owner, int priority, Policy policy) {
+        return registerPolicy(null, owner, priority, policy);
+    }
+
+    @Override public Registration registerPolicy(org.bukkit.plugin.Plugin plugin, String owner, int priority, Policy policy) {
         requireMain();
         if (!service.running() || checkingPolicy) throw new IllegalStateException("Abyss admission unavailable");
         if (owner == null || !owner.matches("[a-zA-Z0-9_.:-]{1,96}")) throw new IllegalArgumentException("Invalid policy owner");
         UUID id = UUID.randomUUID();
-        rules.put(id, new Rule(owner, priority, Objects.requireNonNull(policy)));
+        rules.put(id, new Rule(plugin, owner, priority, Objects.requireNonNull(policy)));
         policyRevision++;
         return () -> {
             requireMain();
@@ -242,12 +261,12 @@ final class AdmissionAccess implements AbyssAdmissionAccess {
         if (checkingPolicy) return List.of(deny("POLICY_REENTRANCY", "准入策略不能递归发起入场"));
         var failures = new ArrayList<Denial>();
         for (String required : template.requirements().admissionPolicies()) {
-            if (rules.values().stream().noneMatch(rule -> rule.owner().equals(required)))
+            if (rules.values().stream().noneMatch(rule -> rule.owner().equals(required) && rule.available()))
                 failures.add(deny("POLICY_UNAVAILABLE", "必要准入策略不可用: " + required));
         }
         checkingPolicy = true;
         try {
-            for (Rule rule : rules.values().stream().sorted(Comparator.comparingInt(Rule::priority)).toList()) {
+            for (Rule rule : rules.values().stream().filter(Rule::available).sorted(Comparator.comparingInt(Rule::priority)).toList()) {
                 try { failures.addAll(List.copyOf(rule.policy().check(intent))); }
                 catch (RuntimeException failure) { failures.add(deny("POLICY_UNAVAILABLE", "准入策略不可用: " + rule.owner())); }
             }
@@ -275,6 +294,7 @@ final class AdmissionAccess implements AbyssAdmissionAccess {
             && !intent.owner().equals("abyss") && intent.requestId() != null && intent.actor() != null
             && intent.dungeon() != null && !intent.dungeon().isBlank() && token(intent.dungeon())
             && token(intent.plan()) && token(intent.difficulty()) && token(intent.rulesVersion()) && intent.members().contains(intent.actor())
+            && token(intent.externalPartyId()) && intent.rosterRevision() >= 0 && intent.selectionRevision() >= 0
             && intent.members().size() <= 256 && intent.members().stream().distinct().count() == intent.members().size();
     }
 
@@ -285,12 +305,15 @@ final class AdmissionAccess implements AbyssAdmissionAccess {
             var bytes = new java.io.ByteArrayOutputStream();
             try (var out = new java.io.DataOutputStream(bytes)) {
                 for (String part : java.util.Arrays.asList(intent.owner(), String.valueOf(intent.requestId()),
-                        String.valueOf(intent.actor()), intent.dungeon(), intent.plan(), intent.difficulty(), intent.rulesVersion())) {
+                        String.valueOf(intent.actor()), intent.dungeon(), intent.plan(), intent.difficulty(),
+                        intent.rulesVersion(), intent.externalPartyId())) {
                     out.writeBoolean(part != null);
                     if (part != null) out.writeUTF(part);
                 }
                 out.writeInt(intent.members().size());
                 for (UUID member : intent.members()) out.writeUTF(member.toString());
+                out.writeLong(intent.rosterRevision());
+                out.writeLong(intent.selectionRevision());
             }
             return java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256")
                 .digest(bytes.toByteArray()));
@@ -340,5 +363,6 @@ final class AdmissionAccess implements AbyssAdmissionAccess {
     Operation operation(AbyssInstance instance) { return operations.get(instance.getInstanceId()); }
     boolean policyUnchanged(Operation operation) { return operation.policyRevision == policyRevision; }
     void detached(AbyssInstance instance) { operations.remove(instance.getInstanceId()); }
+    void catalogChanged() { catalogRevision++; }
     void shutdown() { tickets.clear(); rules.clear(); reservations.clear(); policyRevision++; }
 }
