@@ -55,6 +55,7 @@ final class AdmissionAccess implements AbyssAdmissionAccess {
         boolean cancelRequested;
         xuanmo.arcartxsuite.api.capability.AbyssEntryCostAccess.Participant costParticipant;
         boolean compensationAttempted;
+        boolean entryOutcomeUncertain;
         Operation(Intent intent) {
             this.intent = intent;
             this.fingerprint = fingerprint(intent);
@@ -253,8 +254,11 @@ final class AdmissionAccess implements AbyssAdmissionAccess {
                     op.reason = result.reason();
                 }
             } catch (RuntimeException failure) {
-                op.phase = Phase.REVIEW_REQUIRED;
-                op.reason = "ENTRY_RESULT_UNKNOWN";
+                if (op.phase != Phase.STARTED) {
+                    op.phase = Phase.REVIEW_REQUIRED;
+                    op.reason = "ENTRY_RESULT_UNKNOWN";
+                    op.entryOutcomeUncertain = true;
+                }
             }
         }
         changed(op);

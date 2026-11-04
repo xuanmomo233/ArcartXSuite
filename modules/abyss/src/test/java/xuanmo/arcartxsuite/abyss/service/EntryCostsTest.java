@@ -60,6 +60,21 @@ class EntryCostsTest {
         });
     }
 
+    @Test void confirmedConsumptionIsNotCompensatedWhenItIsUnknownWhetherPlayStarted() throws Exception {
+        exercise((costs, provider, operation, changed) -> {
+            when(provider.reserve(any())).thenReturn(CompletableFuture.completedFuture(State.RESERVED));
+            when(provider.commit(any())).thenReturn(CompletableFuture.completedFuture(State.COMMITTED));
+            costs.begin(operation, changed, () -> {
+                operation.phase = Phase.REVIEW_REQUIRED;
+                operation.entryOutcomeUncertain = true;
+                changed.accept(operation);
+            });
+            assertEquals(Phase.REVIEW_REQUIRED, operation.phase);
+            assertEquals(State.COMMITTED, operation.costState);
+            verify(provider, never()).compensate(any());
+        });
+    }
+
     @FunctionalInterface interface Scenario {
         void run(EntryCosts costs, Participant provider, AdmissionAccess.Operation operation,
                  Consumer<AdmissionAccess.Operation> changed);

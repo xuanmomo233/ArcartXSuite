@@ -15,6 +15,38 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class RunResultsTest {
+    @org.junit.jupiter.api.io.TempDir java.nio.file.Path directory;
+
+    @Test void databaseOutageLeavesAReplayableResultWithoutPublishing() throws Exception {
+        var service = fake(AbyssService.class);
+        when(service.running()).thenReturn(true);
+        doAnswer(call -> { call.<Runnable>getArgument(0).run(); return null; }).when(service).runOnMain(any());
+        var repository = fake(JdbcAbyssRepository.class);
+        when(repository.insertRunResult(any(), anyString(), anyLong(), anyString()))
+            .thenThrow(new java.sql.SQLException("unavailable")).thenReturn(true);
+        var database = fake(PlayerDataManager.class);
+        when(database.submitDatabase(any())).thenAnswer(call -> {
+            PlayerDataManager.DatabaseRead<?> task = call.getArgument(0);
+            try { return CompletableFuture.completedFuture(task.execute()); }
+            catch (Exception failure) { return CompletableFuture.failedFuture(failure); }
+        });
+        var results = new RunResults(service);
+        results.configure(repository, database, directory);
+        var instance = new AbyssInstance(UUID.randomUUID(), fake(AbyssTemplate.class), null);
+        UUID player = UUID.randomUUID();
+        results.admitted(instance, new AdmissionAccess.Operation(new Intent("xc", UUID.randomUUID(),
+            player, List.of(player), "example", null, null, null)));
+        results.finish(instance, Outcome.COMPLETED, "COMPLETED");
+        var file = directory.resolve(instance.getInstanceId() + ".yml");
+        assertTrue(java.nio.file.Files.isRegularFile(file));
+        verify(service, never()).publishRunResult(any());
+        var reopened = new RunResults(service);
+        reopened.configure(repository, database, directory);
+        reopened.replay();
+        verify(service).publishRunResult(argThat(event -> event.runId().equals(instance.getInstanceId())));
+        assertFalse(java.nio.file.Files.exists(file));
+    }
+
     @Test void terminalSnapshotIncludesOfflineMembersAndNotifiesOnlyAfterCommit() throws Exception {
         var service = fake(AbyssService.class);
         when(service.running()).thenReturn(true);

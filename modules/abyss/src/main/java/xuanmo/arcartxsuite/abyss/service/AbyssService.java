@@ -265,7 +265,7 @@ public final class AbyssService {
         repository = new JdbcAbyssRepository(ds, desc, dataFolder, logger);
         repository.initialize();
         playerData = new PlayerDataManager(repository, logger, config.stamina().max());
-        runResults.configure(repository, playerData);
+        runResults.configure(repository, playerData, dataFolder.toPath().resolve("run-result-outbox"));
         try {
             admission.load(repository, playerData);
         } catch (Exception error) {
@@ -455,6 +455,7 @@ public final class AbyssService {
 
         subscribeQuestCompleted(); // EventBus 晚注册时补订（幂等）
         started = true;
+        runResults.replay();
         logger.info("[abyss] 已启动，地牢模板: " + instances.getAllTemplates().size());
     }
 
@@ -2712,6 +2713,7 @@ public final class AbyssService {
     // ═══ 周期看守 ═══
 
     private void watchdog() {
+        runResults.replay();
         if (!started) return;
         for (AbyssInstance i : new ArrayList<>(instances.getAllInstances())) {
             // 设计实例冻结：不做消失扫描/超时/兜底回收/AFK 踢

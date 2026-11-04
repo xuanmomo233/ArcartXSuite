@@ -97,7 +97,7 @@ final class EntryCosts implements AbyssEntryCostAccess {
     }
 
     void compensate(AdmissionAccess.Operation op, Consumer<AdmissionAccess.Operation> persist) {
-        if (op.compensationAttempted) return;
+        if (op.compensationAttempted || op.entryOutcomeUncertain) return;
         if (op.costState != State.COMMITTED && op.costState != State.RESERVED) return;
         Phase terminal = op.phase;
         if (terminal != Phase.REJECTED && terminal != Phase.CANCELLED && terminal != Phase.COMPENSATED
