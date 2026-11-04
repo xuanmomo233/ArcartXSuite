@@ -1057,8 +1057,17 @@ public final class AbyssService {
                     }
                 }
             }
-            var trial = new xuanmo.arcartxsuite.abyss.design.DraftTrial(draft, stageManager, scriptRunner, hooks,
-                line -> { if (player.isOnline()) player.sendMessage("§8[§d试跑§8] §f" + line); });
+            var refreshQueued = new java.util.concurrent.atomic.AtomicBoolean();
+            var trial = new xuanmo.arcartxsuite.abyss.design.DraftTrial(draft, stageManager, scriptRunner, hooks, line -> {
+                if (!refreshQueued.compareAndSet(false, true)) return;
+                scheduleDelayedRaw(() -> {
+                    refreshQueued.set(false);
+                    if (player.isOnline() && designManager.session(player) == session
+                        && "misc:trial".equals(session.selectedNode()) && uiFacade instanceof AbyssUiService ui) {
+                        ui.pushDesignMain(player, session);
+                    }
+                }, 1L);
+            });
             session.trial(trial);
             trial.start();
         } catch (Exception error) {

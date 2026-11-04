@@ -939,7 +939,13 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         Map<String, Object> objs = new LinkedHashMap<>();
         String sel = s.selectedNode();
         int oi = 0;
-        if (sel != null && dm != null) {
+        if ("misc:trial".equals(sel) && s.trial() != null) {
+            for (String trace : s.trial().traceSnapshot()) {
+                objs.put(Integer.toString(oi), Map.of("key", "", "icon", "➜", "kindLabel", "试跑追踪",
+                    "kindColor", "150,130,220", "id", Integer.toString(oi + 1), "summary", trace, "dirty", false));
+                oi++;
+            }
+        } else if (sel != null && dm != null) {
             for (var o : s.nodeObjects(sel)) {
                 objs.put(Integer.toString(oi++), Map.of(
                     "key", o.key(), "icon", o.kind().icon(),
@@ -1793,7 +1799,10 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
                 var session = designSession(player);
                 if (session != null && checkToken(player, data, 2)) {
                     switch (data.get(1)) {
-                        case "start" -> service.startDesignTrial(player);
+                        case "start" -> {
+                            service.startDesignTrial(player);
+                            if (session.trial() != null) session.selectedNode("misc:trial");
+                        }
                         case "clear" -> {
                             if (session.trial() != null) session.trial().mapCleared();
                             else player.sendMessage("§e请先开启草稿试跑。");
@@ -1804,6 +1813,7 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
                         }
                         default -> { }
                     }
+                    pushDesignMain(player, session);
                 }
                 return true;
             }
@@ -2004,7 +2014,7 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
                     || kind == xuanmo.arcartxsuite.abyss.design.DesignObject.Kind.ROOM);
         }
         if (node.equals("misc:stages")) return kind == xuanmo.arcartxsuite.abyss.design.DesignObject.Kind.STAGE;
-        if (node.equals("misc:settlement") || node.equals("misc:files") || node.equals("misc:assets")) return false;
+        if (Set.of("misc:settlement", "misc:files", "misc:assets", "misc:trial").contains(node)) return false;
         boolean inRoom = node.startsWith("room:");
         return switch (kind) {
             case ROOM, FLOOR, STAGE, SETTLEMENT, DOCUMENT -> false;

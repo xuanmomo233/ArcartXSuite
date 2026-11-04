@@ -523,6 +523,7 @@ public final class DesignManager {
         }
         out.add(new Node("misc:settlement", "结算策略", 0, s.nodeObjects("misc:settlement").size()));
         out.add(new Node("misc:stages", "流程阶段", 0, s.nodeObjects("misc:stages").size()));
+        out.add(new Node("misc:trial", "试跑追踪", 0, s.trial() == null ? 0 : s.trial().traceSnapshot().size()));
         if(t.procgen()!=null)out.add(new Node("misc:assets","共享构件元数据",0,s.nodeObjects("misc:assets").size()));
         return out;
     }

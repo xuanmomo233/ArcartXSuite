@@ -515,6 +515,7 @@ controls:
       添加钮:
         type: Canvas
         attribute:
+          visible: "var.selNode != 'misc:trial'"
           point: ~top_right
           x: "-78 + var.offX"
           y: 148
@@ -676,11 +677,12 @@ controls:
                       y: 26
                       texts: "'&7' + self.parent.entry['summary']"
                       fontSize: 32
-                      limit: 27
+                      limit: "self.parent.entry['kindLabel'] == '试跑追踪' ? 60 : 27"
                       through: true
                   传送钮:
                     type: Canvas
                     attribute:
+                      visible: "self.parent.entry['kindLabel'] != '试跑追踪'"
                       point: ~middle_right
                       x: -304
                       width: 90
@@ -710,6 +712,7 @@ controls:
                   编辑钮:
                     type: Canvas
                     attribute:
+                      visible: "self.parent.entry['kindLabel'] != '试跑追踪'"
                       point: ~middle_right
                       x: -204
                       width: 90
@@ -739,7 +742,7 @@ controls:
                   删除钮:
                     type: Canvas
                     attribute:
-                      visible: "self.parent.entry['kindLabel'] != '配置文件' && self.parent.entry['kindLabel'] != '结算策略'"
+                      visible: "self.parent.entry['kindLabel'] != '配置文件' && self.parent.entry['kindLabel'] != '结算策略' && self.parent.entry['kindLabel'] != '试跑追踪'"
                       point: ~middle_right
                       x: -104
                       width: 90
