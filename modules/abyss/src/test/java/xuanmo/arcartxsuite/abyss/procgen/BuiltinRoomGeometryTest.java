@@ -27,6 +27,18 @@ class BuiltinRoomGeometryTest {
         assertFalse(Files.readString(Path.of("src/main/resources/abysses/example/scripts.yml")).contains("GLOWSTONE"));
     }
 
+    @Test void bundledAnchorCoordinatesSurviveRotationAndTranslation() throws Exception {
+        for (var asset : assets()) for (int rotation = 0; rotation < 360; rotation += 90) {
+            var room = placed(asset, rotation, -37, 21);
+            for (int x = 0; x < asset.region().width(); x++) {
+                for (int z = 0; z < asset.region().depth(); z++) {
+                    int[] world = room.toWorld(x, 1, z);
+                    assertArrayEquals(new int[]{x, 1, z}, room.toLocal(world[0], world[1], world[2]));
+                }
+            }
+        }
+    }
+
     @Test void allBundledRoomsRemainWalkableAcrossBothAxesAndAllRotations() throws Exception {
         Field field = Bukkit.class.getDeclaredField("server");
         field.setAccessible(true);

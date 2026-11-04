@@ -36,7 +36,7 @@ public final class StageManager {
     }
 
     /** 实例运行态。 */
-    private record Runtime(String stageId, long enteredAt,
+    private record Runtime(String stageId, UUID generation,
                            @Nullable ScheduledTask timeoutTask) { }
 
     private enum Completion { RUNNING_ACTIONS, WAITING_FOR_BRANCH }
@@ -182,13 +182,14 @@ public final class StageManager {
             return;
         }
         clear(instance);
+        UUID generation = UUID.randomUUID();
         ScheduledTask timeoutTask = null;
         if (stage.timeoutSeconds() > 0) {
             timeoutTask = scheduler.scheduleOnceSeconds(plugin,
-                () -> onTimeout(instance, stageId), stage.timeoutSeconds());
+                () -> onTimeout(instance, generation), stage.timeoutSeconds());
             instance.registerTask(timeoutTask);
         }
-        Runtime entered = new Runtime(stageId, System.currentTimeMillis(), timeoutTask);
+        Runtime entered = new Runtime(stageId, generation, timeoutTask);
         states.put(instance.getInstanceId(), entered);
         if (stage.name() != null) {
             String text = service.msg("dungeon.stage-enter", "stage", stage.name());
@@ -202,13 +203,15 @@ public final class StageManager {
         }
     }
 
-    private void onTimeout(AbyssInstance instance, String stageId) {
+    private void onTimeout(AbyssInstance instance, UUID generation) {
         Runtime rt = states.get(instance.getInstanceId());
-        if (rt == null || !rt.stageId().equals(stageId) || instance.isFinished()) return;
-        Stage stage = stageOf(instance, stageId);
-        if (stage != null) runLines(instance, stage.onTimeout(), null, stageId);
+        if (rt == null || !rt.generation().equals(generation) || instance.isFinished()) return;
+        Stage stage = stageOf(instance, rt.stageId());
+        if (stage != null) runLines(instance, stage.onTimeout(), null, rt.stageId());
         // 超时只跑脚本不自动推进（作者可在 on-timeout 里 fail/complete_stage）
-        reevaluate(instance, rt, null);
+        if (states.get(instance.getInstanceId()) == rt && !instance.isFinished()) {
+            reevaluate(instance, rt, null);
+        }
     }
 
     private @Nullable Stage stageOf(AbyssInstance instance, String stageId) {

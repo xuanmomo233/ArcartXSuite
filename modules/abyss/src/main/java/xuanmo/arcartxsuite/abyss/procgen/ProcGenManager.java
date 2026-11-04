@@ -56,6 +56,7 @@ public final class ProcGenManager {
         Layout layout;
         List<RoomRuntime> rooms;
         ProcGenConfig cfg;
+        boolean mainCleared;
         final Map<String, Map<String, String>> assetBaselines = new HashMap<>();
         final Map<RoomRuntime, Map<String, String>> roomBaselines = new java.util.IdentityHashMap<>();
         /** 房间运行态：roomIndex → state。 */
@@ -662,11 +663,13 @@ public final class ProcGenManager {
     }
 
     private void finishIfMainCleared(AbyssInstance instance, InstState st) {
+        if (st.mainCleared) return;
         for (int i = 0; i < st.rooms.size(); i++) {
             var placed = st.rooms.get(i).placed;
             if (placed.mainChain && placed.asset.kind() != RoomKind.START
                 && st.roomState.get(i) != RoomState.CLEARED) return;
         }
+        st.mainCleared = true;
         gradeAndFinish(instance, st);
     }
 

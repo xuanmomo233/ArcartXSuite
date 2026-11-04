@@ -138,6 +138,13 @@ class DesignRoundTripTest {
         manager.lineSet(session,"document:npcs.yml","content",0,"one: {name: document}");
         assertFalse(save().ok());assertEquals("original",read("npcs.yml").getString("one.name"));
     }
+    @Test void documentAndDeletionCannotOverwriteEachOther()throws Exception {
+        write("npcs.yml","one: {name: original}\n");open(false);
+        manager.delete(session,"npc:one");
+        manager.lineSet(session,"document:npcs.yml","content",0,"one: {name: document}");
+        assertFalse(save().ok());
+        assertEquals("original",read("npcs.yml").getString("one.name"));
+    }
     @Test void documentEditorCanCreateFloorAndRoomTogether()throws Exception {
         open(false);
         manager.lineAdd(session,"document:floors.yml","content","floors: [{id: f1, rooms: [new_room]}]");
