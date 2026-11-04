@@ -30,6 +30,7 @@ final class AdmissionAccess implements AbyssAdmissionAccess {
     private final Map<UUID, Rule> rules = new LinkedHashMap<>();
     private final Map<Key, Operation> journal = new LinkedHashMap<>();
     private final Map<UUID, Operation> operations = new LinkedHashMap<>();
+    private final Map<UUID, Operation> reservations = new LinkedHashMap<>();
     private long policyRevision;
     private boolean checkingPolicy;
     private PlayerDataManager storage;
@@ -43,6 +44,7 @@ final class AdmissionAccess implements AbyssAdmissionAccess {
         long policyRevision;
         String fingerprint;
         boolean persisted;
+        boolean costUncertain;
         Operation(Intent intent) {
             this.intent = intent;
             this.fingerprint = fingerprint(intent);
@@ -80,7 +82,11 @@ final class AdmissionAccess implements AbyssAdmissionAccess {
     }
 
     @Override public IntegrationInfo integrationInfo() {
-        return new IntegrationInfo(1, generation, service.running(), service.running() ? null : "UNAVAILABLE");
+        boolean running = service.running();
+        return new IntegrationInfo(1, generation, running, running ? null : "UNAVAILABLE",
+            Map.of("catalog", running ? "AVAILABLE" : "UNAVAILABLE",
+                "hostEntry", running && storage != null ? "AVAILABLE" : "UNAVAILABLE",
+                "remoteEntry", "UNSUPPORTED", "originalRunReconnect", "UNSUPPORTED"));
     }
 
     @Override public List<Dungeon> catalog() {
@@ -94,10 +100,17 @@ final class AdmissionAccess implements AbyssAdmissionAccess {
 
     @Override public PlayerState playerState(UUID player) {
         requireMain();
-        if (!service.running()) return new PlayerState(false, null, "UNKNOWN");
+        if (!service.running()) return new PlayerState(false, null, null, "UNKNOWN");
         var run = service.instances().getPlayerInstance(player);
-        return run == null ? new PlayerState(true, null, "IDLE")
-            : new PlayerState(true, run.getInstanceId(), run.getStatus().name());
+        if (run == null) {
+            var pending = reservations.get(player);
+            return pending == null ? new PlayerState(true, null, null, "IDLE")
+                : new PlayerState(true, pending.intent.requestId(), null, "RESERVING");
+        }
+        var op = operations.get(run.getInstanceId());
+        String state = run.designMode() ? "DESIGN" : !run.hasEntered(player) && !run.isFinished()
+            ? "ADMISSION_PENDING" : run.getStatus().name();
+        return new PlayerState(true, op == null ? null : op.intent.requestId(), run.getInstanceId(), state);
     }
 
     @Override public Run run(UUID id) {
@@ -110,6 +123,13 @@ final class AdmissionAccess implements AbyssAdmissionAccess {
             op == null ? null : op.intent.difficulty(), op == null ? null : op.intent.rulesVersion(),
             instance.getStatus().name(), op == null ? List.of() : op.intent.members(),
             List.copyOf(instance.getPlayerUUIDs()), instance.getWorld() == null ? null : instance.getWorld().getUID());
+    }
+
+    @Override public List<Run> activeRuns() {
+        requireMain();
+        if (!service.running()) return List.of();
+        return service.instances().getAllInstances().stream().filter(instance -> !instance.designMode() && !instance.isFinished())
+            .map(instance -> run(instance.getInstanceId())).toList();
     }
 
     @Override public Preflight preflight(Intent intent) {
@@ -137,6 +157,7 @@ final class AdmissionAccess implements AbyssAdmissionAccess {
         if (ticket == null || ticket.expires() <= System.currentTimeMillis() || !ticket.intent().equals(intent)
             || !ticket.binding().equals(binding(intent))) return rejected("PREFLIGHT_STALE");
         if (journal.size() >= LIMIT) return rejected("JOURNAL_FULL");
+        if (intent.members().stream().anyMatch(reservations::containsKey)) return rejected("MEMBER_BUSY");
         tickets.remove(token);
         var op = new Operation(intent);
         journal.put(key, op);
@@ -144,16 +165,19 @@ final class AdmissionAccess implements AbyssAdmissionAccess {
             op.phase = Phase.REJECTED;
             op.reason = "JOURNAL_UNAVAILABLE";
         } else {
+            intent.members().forEach(member -> reservations.put(member, op));
             storage.writeAdmission(receipt(op), true).whenComplete((ignored, error) -> service.runOnMain(() -> {
                 if (error != null) {
                     op.phase = Phase.REVIEW_REQUIRED;
                     op.reason = "JOURNAL_RESERVATION_UNKNOWN";
+                    release(op);
                     return;
                 }
                 op.persisted = true;
                 if (op.phase == Phase.CANCELLED || !service.running()) {
                     op.phase = Phase.CANCELLED;
                     changed(op);
+                    release(op);
                     return;
                 }
                 if (ticket.expires() <= System.currentTimeMillis() || !ticket.binding().equals(binding(intent))) {
@@ -172,6 +196,7 @@ final class AdmissionAccess implements AbyssAdmissionAccess {
                     }
                 }
                 changed(op);
+                release(op);
             }));
         }
         return op.snapshot();
@@ -187,11 +212,13 @@ final class AdmissionAccess implements AbyssAdmissionAccess {
         requireMain();
         Operation op = journal.get(new Key(owner, requestId));
         if (op == null) return null;
+        if (checkingPolicy) return op.snapshot();
         if (op.phase == Phase.PREPARING) {
             if (op.runId != null) service.cancelAdmission(op.runId);
             else {
                 op.phase = Phase.CANCELLED;
                 changed(op);
+                release(op);
             }
         }
         return op.snapshot();
@@ -295,6 +322,15 @@ final class AdmissionAccess implements AbyssAdmissionAccess {
         if (!Bukkit.isPrimaryThread()) throw new IllegalStateException("Call Abyss admission on the server thread");
     }
 
+    boolean reservedByOther(UUID member, Intent intent) {
+        var pending = reservations.get(member);
+        return pending != null && !pending.intent.equals(intent);
+    }
+
+    private void release(Operation op) {
+        op.intent.members().forEach(member -> reservations.remove(member, op));
+    }
+
     void attach(AbyssInstance instance, Operation op) {
         op.runId = instance.getInstanceId();
         op.policyRevision = policyRevision;
@@ -304,5 +340,5 @@ final class AdmissionAccess implements AbyssAdmissionAccess {
     Operation operation(AbyssInstance instance) { return operations.get(instance.getInstanceId()); }
     boolean policyUnchanged(Operation operation) { return operation.policyRevision == policyRevision; }
     void detached(AbyssInstance instance) { operations.remove(instance.getInstanceId()); }
-    void shutdown() { tickets.clear(); rules.clear(); policyRevision++; }
+    void shutdown() { tickets.clear(); rules.clear(); reservations.clear(); policyRevision++; }
 }

@@ -128,6 +128,7 @@ public final class AbyssInstance {
 
     public boolean hasPlayer(UUID uuid) { return players.contains(uuid); }
     public boolean hasEnteredPlayers() { return !enteredPlayers.isEmpty(); }
+    public boolean hasEntered(UUID player) { return enteredPlayers.contains(player); }
     public void addPlayer(Player p) { players.add(p.getUniqueId()); }
     public void removePlayer(UUID uuid) {
         players.remove(uuid);

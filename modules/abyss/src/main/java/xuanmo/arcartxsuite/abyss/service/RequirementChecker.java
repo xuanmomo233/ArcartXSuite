@@ -166,11 +166,13 @@ public final class RequirementChecker {
     public static final class Charge {
         private final boolean ok; private final String reason;
         private final Runnable rollback, commit; private boolean closed;
+        private boolean reviewRequired;
         Charge(boolean ok, String reason, Runnable rollback, Runnable commit) {
             this.ok=ok; this.reason=reason; this.rollback=rollback; this.commit=commit;
         }
         public boolean ok() { return ok; }
         public String reason() { return reason; }
+        public boolean reviewRequired() { return reviewRequired; }
         public void rollback() { if (!closed && ok) { closed=true; rollback.run(); } }
         public void commit() { if (!closed && ok) { closed=true; commit.run(); } }
     }
@@ -232,7 +234,9 @@ public final class RequirementChecker {
         } catch (RuntimeException failure) {
             try { rollback.run(); } catch(RuntimeException refund) {
                 failure.addSuppressed(refund);
-                return new Charge(false,failure.getMessage()+"；退款需核对: "+refund.getMessage(),()->{},()->{});
+                var uncertain = new Charge(false,failure.getMessage()+"；退款需核对: "+refund.getMessage(),()->{},()->{});
+                uncertain.reviewRequired = true;
+                return uncertain;
             }
             return new Charge(false,failure.getMessage(),()->{},()->{});
         }
