@@ -185,9 +185,16 @@ public final class DesignSession {
     public List<DesignObject> nodeObjects(String node) {
         List<DesignObject> out = new ArrayList<>();
         for (DesignObject o : objects.values()) {
-            if (node.equals(o.node())) out.add(o);
+            if (node.equals(o.node()) || (o.kind() == DesignObject.Kind.FLOOR && node.equals(o.key()))) out.add(o);
         }
         return out;
+    }
+
+    public List<DesignObject> floorsInOrder() {
+        return objects.values().stream().filter(o -> o.kind() == DesignObject.Kind.FLOOR)
+            .sorted(java.util.Comparator.comparingDouble(o ->
+                o.values().get("design-order") instanceof Number n ? n.doubleValue() : Double.MAX_VALUE))
+            .toList();
     }
 
     /** 新对象唯一键（kind:id，id 冲突自动加序号）。 */

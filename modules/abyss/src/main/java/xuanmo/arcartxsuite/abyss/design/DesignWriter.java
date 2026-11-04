@@ -110,8 +110,14 @@ public final class DesignWriter {
         }
         // Parent snapshots are applied before child mutations, including renames and deletions.
         for (DesignObject o : session.objects().values()) {
-            if (!o.dirty() || o.kind() == DesignObject.Kind.DOCUMENT || o.kind() == DesignObject.Kind.ROOM_GROUP) continue;
+            if (!o.dirty() || o.kind() == DesignObject.Kind.DOCUMENT
+                || o.kind() == DesignObject.Kind.ROOM_GROUP || o.kind() == DesignObject.Kind.FLOOR) continue;
             YamlConfiguration yaml = files.get(o.file());
+            if (o.kind() == DesignObject.Kind.SETTLEMENT) {
+                String prefix = join(o.path(), o.id());
+                o.values().forEach((key, value) -> yaml.set(prefix + "." + key, value));
+                continue;
+            }
             String old = session.originalId(o.key());
             if (!old.equals(o.id())) yaml.set(join(o.path(), old), null);
             yaml.set(join(o.path(), o.id()), DesignValues.copy(o.values()));
@@ -127,12 +133,26 @@ public final class DesignWriter {
             if (documents.contains(file)) {
                 throw new IOException(file + " 同时存在文件编辑和对象删除，请先分别保存");
             }
+            if (kind == DesignObject.Kind.FLOOR) continue;
             if (kind == DesignObject.Kind.ROOM_GROUP) {
                 String compound = deletion.getKey().substring(6);
                 String room = compound.substring(0, compound.indexOf('.'));
                 path = "rooms." + roomRenames.getOrDefault(room, room) + ".groups";
             }
             files.get(file).set(join(path, deletion.getValue()), null);
+        }
+        boolean floorsChanged = session.objects().values().stream()
+            .anyMatch(o -> o.kind() == DesignObject.Kind.FLOOR && o.dirty())
+            || session.deletions().keySet().stream().anyMatch(key -> key.startsWith("floor:"));
+        if (floorsChanged) {
+            var rows = session.floorsInOrder().stream()
+                .map(o -> {
+                    Map<String, Object> row = DesignValues.copy(o.values());
+                    row.remove("design-order");
+                    row.put("id", o.id());
+                    return row;
+                }).toList();
+            files.get("floors.yml").set("floors", rows);
         }
         for (DesignObject o : session.objects().values()) {
             if (o.kind() != DesignObject.Kind.ROOM_GROUP || !o.dirty()) continue;

@@ -214,6 +214,7 @@ public final class DesignManager {
         loadSection(out, t, dir, "rewards.yml", "chest_rewards", DesignObject.Kind.CHEST, roomBoxes);
         loadSection(out, t, dir, "chest_rewards.yml", "", DesignObject.Kind.CHEST, roomBoxes);
         loadSection(out, t, dir, "buffs.yml", "pools", DesignObject.Kind.BUFF, roomBoxes);
+        loadLayoutAndSettlement(out, dir);
 
         // floors：房间模板本身 + 房内怪组
         if (t.mode() == AbyssTemplate.Mode.FLOORS) {
@@ -361,6 +362,43 @@ public final class DesignManager {
         return out;
     }
 
+    private void loadLayoutAndSettlement(List<DesignObject> out, File dir) {
+        YamlConfiguration floors = loadYaml(dir, "floors.yml");
+        if (floors != null) {
+            int order = 0;
+            for (var row : floors.getMapList("floors")) {
+                Map<String, Object> values = new LinkedHashMap<>();
+                row.forEach((key, value) -> values.put(String.valueOf(key), DesignValues.copyValue(value)));
+                String id = String.valueOf(values.getOrDefault("id", "floor_" + order));
+                values.remove("id");
+                values.put("design-order", ++order);
+                out.add(new DesignObject("floor:" + id, DesignObject.Kind.FLOOR, id, "floors.yml",
+                    "floors", "楼层路线", null, null, "misc:layout", values, false));
+            }
+        }
+        YamlConfiguration config = loadYaml(dir, "config.yml");
+        var settlement = xuanmo.arcartxsuite.abyss.template.SettlementConfig.load(
+            config == null ? null : config.getConfigurationSection("settlement"));
+        addSettlement(out, "settlement", "通关结算", settlement.complete());
+        addSettlement(out, "failure", "失败结算", settlement.failure());
+    }
+
+    private void addSettlement(List<DesignObject> out, String id, String label,
+                               xuanmo.arcartxsuite.abyss.template.SettlementConfig.Policy policy) {
+        Map<String, Object> values = new LinkedHashMap<>();
+        values.put("exit-mode", policy.mode().name());
+        values.put("exit-delay-seconds", policy.seconds());
+        values.put("manual-timeout-seconds", policy.manualTimeoutSeconds());
+        values.put("show-stats", policy.showStats());
+        values.put("show-stats-after-exit", policy.showAfterExit());
+        values.put("protect-players", policy.protectPlayers());
+        values.put("revive-players", policy.revivePlayers());
+        values.put("script-timeout-seconds", policy.scriptTimeoutSeconds());
+        out.add(new DesignObject("settlement:" + id, DesignObject.Kind.SETTLEMENT, id,
+            "config.yml", id.equals("failure") ? "settlement" : "", label,
+            null, null, "misc:settlement", values, false));
+    }
+
     private void loadSection(List<DesignObject> out, AbyssTemplate t, File dir,
                              String file, String path, DesignObject.Kind kind,
                              Map<String, int[]> roomBoxes) {
@@ -427,19 +465,21 @@ public final class DesignManager {
         AbyssTemplate t = s.instance().getTemplate();
         List<Node> out = new ArrayList<>();
         if (t.mode() == AbyssTemplate.Mode.FLOORS) {
-            for (FloorConfig.Floor f : t.floors().floors()) {
-                int count = 0;
-                List<Node> subs = new ArrayList<>();
-                List<String> refs = new ArrayList<>(f.roomRefs());
-                if (f.bossRoom() != null && !refs.contains(f.bossRoom())) refs.add(f.bossRoom());
-                for (String rid : refs) {
-                    int n = 1 + s.nodeObjects("room:" + rid).size(); // +房间对象自身
-                    subs.add(new Node("room:" + rid, roomLabel(t, rid), 1,
-                        s.nodeObjects("room:" + rid).size()));
-                    count += n;
+            Set<String> placed = new java.util.HashSet<>();
+            for (DesignObject floor : s.floorsInOrder()) {
+                out.add(new Node(floor.key(), floor.str("name").isBlank() ? floor.id() : floor.str("name"), 0, 1));
+                Set<String> refs = new java.util.LinkedHashSet<>(floor.strList("rooms"));
+                if (!floor.str("boss-room").isBlank()) refs.add(floor.str("boss-room"));
+                for (DesignObject room : s.objects().values()) {
+                    if (room.kind() == DesignObject.Kind.ROOM && refs.contains(room.id()) && placed.add(room.key())) {
+                        out.add(new Node(room.key(), room.id(), 1, s.nodeObjects(room.key()).size()));
+                    }
                 }
-                out.add(new Node("floor:" + f.id(), f.name(), 0, count));
-                out.addAll(subs);
+            }
+            for (DesignObject room : s.objects().values()) {
+                if (room.kind() == DesignObject.Kind.ROOM && !placed.contains(room.key())) {
+                    out.add(new Node(room.key(), room.id() + " · 未编入路线", 0, s.nodeObjects(room.key()).size()));
+                }
             }
             out.add(new Node("misc:global", "全局对象", 0,
                 s.nodeObjects("misc:global").size()));
@@ -452,6 +492,10 @@ public final class DesignManager {
                 s.nodeObjects("misc:reward").size()));
         }
         out.add(new Node("misc:files", "完整配置文件", 0, s.nodeObjects("misc:files").size()));
+        if (t.mode() == AbyssTemplate.Mode.FLOORS && t.procgen() == null) {
+            out.add(new Node("misc:layout", "楼层路线", 0, s.nodeObjects("misc:layout").size()));
+        }
+        out.add(new Node("misc:settlement", "结算策略", 0, s.nodeObjects("misc:settlement").size()));
         if(t.procgen()!=null)out.add(new Node("misc:assets","共享构件元数据",0,s.nodeObjects("misc:assets").size()));
         return out;
     }
@@ -462,11 +506,6 @@ public final class DesignManager {
             return !f.roomRefs().isEmpty() ? "room:" + f.roomRefs().get(0) : "misc:global";
         }
         return "misc:objects";
-    }
-
-    private String roomLabel(AbyssTemplate t, String rid) {
-        FloorConfig.RoomTemplate r = t.floors().rooms().get(rid);
-        return r != null ? rid : rid;
     }
 
     // ═══ 标记落地 ═══
@@ -729,6 +768,7 @@ public final class DesignManager {
         String node = inferNode(t, DesignCoords.center(box), box,
             floorsRegionBoxes(t), kind);
         String key = s.uniqueKey(kind, id);
+        if (kind == DesignObject.Kind.ROOM) node = key;
         DesignObject o = new DesignObject(key, kind, id, kind.file(), kind.path(),
             kind.label() + " " + summaryTail, DesignCoords.center(box), box,
             node, vals, true);
@@ -940,7 +980,7 @@ public final class DesignManager {
     /** 重命名 id。 */
     public boolean rename(DesignSession s, String key, String newId) {
         DesignObject o = s.get(key);
-        if (o == null || o.kind() == DesignObject.Kind.DOCUMENT
+        if (o == null || o.kind() == DesignObject.Kind.DOCUMENT || o.kind() == DesignObject.Kind.SETTLEMENT
             || newId.isBlank() || !newId.matches("[\\p{L}\\p{N}_\\-]{1,64}")) return false;
         if (s.idTaken(o.kind(), newId, key)) return false;
         s.put(o.withId(newId));
@@ -950,6 +990,8 @@ public final class DesignManager {
 
     /** 删除对象。 */
     public void delete(DesignSession s, String key) {
+        if (s.get(key) != null && s.get(key).kind() == DesignObject.Kind.SETTLEMENT)
+            throw new IllegalArgumentException("通关和失败结算属于固定设置");
         if (s.get(key) != null && s.get(key).kind() == DesignObject.Kind.DOCUMENT)
             throw new IllegalArgumentException("配置文件不能从对象面板删除，请编辑文件内容");
         DesignObject object = s.get(key);
@@ -1119,6 +1161,8 @@ public final class DesignManager {
             case CHEST -> str(vals, "title");
             case BUFF -> str(vals, "name");
             case ROOM -> zh(str(vals, "type"));
+            case FLOOR -> str(vals, "name");
+            case SETTLEMENT -> str(vals, "exit-mode");
             case DOCUMENT -> id;
         };
         String pos = anchor != null ? " " + DesignCoords.pointStr(anchor)
@@ -1161,6 +1205,11 @@ public final class DesignManager {
                     "item", "material:IRON_INGOT:1", "weight", 10)))));
             }
             case ROOM -> vals.put("type", "combat");
+            case FLOOR -> {
+                vals.put("source", "region");
+                vals.put("advance", "portal");
+            }
+            case SETTLEMENT -> { }
             case BUFF -> { vals.put("pick", 1); vals.put("presentation", "panel"); }
             case DOCUMENT -> { }
         }

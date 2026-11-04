@@ -49,6 +49,8 @@ public record DesignObject(
         REWARD("❖", "奖励", "rewards.yml", "rewards", "245,200,110"),
         CHEST("▤", "宝箱", "rewards.yml", "chest-rewards", "230,160,90"),
         ROOM("⌂", "房间", "rooms.yml", "rooms", "170,170,190"),
+        FLOOR("⌂", "楼层", "floors.yml", "floors", "170,170,190"),
+        SETTLEMENT("❖", "结算策略", "config.yml", "", "245,200,110"),
         BUFF("✦", "增益池", "buffs.yml", "pools", "240,150,200"),
         DOCUMENT("≡", "配置文件", "", "", "150,200,220");
 
@@ -202,6 +204,23 @@ public record DesignObject(
                 FieldSpec.script("on-enter", "进房时"),
                 FieldSpec.script("on-lock", "锁门时"),
                 FieldSpec.script("on-clear", "清完时"));
+            case FLOOR -> List.of(
+                FieldSpec.text("name", "楼层名称"),
+                FieldSpec.num("design-order", "楼层顺序"),
+                FieldSpec.text("spawn", "入口坐标"),
+                FieldSpec.list("rooms", "房间顺序（每行一个房间ID）"),
+                FieldSpec.text("boss-room", "Boss 房间ID"),
+                FieldSpec.cycle("advance", "进下一层", "portal", "auto"),
+                FieldSpec.num("advance-timeout", "出口等待上限（秒）"));
+            case SETTLEMENT -> List.of(
+                FieldSpec.cycle("exit-mode", "离开方式", "IMMEDIATE", "COUNTDOWN", "MANUAL"),
+                FieldSpec.num("exit-delay-seconds", "倒计时（秒）"),
+                FieldSpec.num("manual-timeout-seconds", "手动离开上限（秒）"),
+                FieldSpec.toggle("show-stats", "显示结算"),
+                FieldSpec.toggle("show-stats-after-exit", "退出后再显示"),
+                FieldSpec.toggle("protect-players", "保护玩家"),
+                FieldSpec.toggle("revive-players", "复活旁观者"),
+                FieldSpec.num("script-timeout-seconds", "脚本收尾上限（秒）"));
             case BUFF -> List.of(
                 FieldSpec.text("name", "池名"),
                 FieldSpec.num("pick", "选取数"),

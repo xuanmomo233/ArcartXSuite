@@ -154,6 +154,34 @@ class DesignRoundTripTest {
         assertTrue(FloorConfig.load(read("floors.yml"),read("rooms.yml")).rooms().containsKey("new_room"));
         assertTrue(read("stages.yml").contains("stages.intro"));
     }
+    @Test void floorFormAddsAndReordersRoutesWithoutWritingEditorFields() throws Exception {
+        roomFixture();
+        var values = new LinkedHashMap<String, Object>();
+        DesignManager.seedDefaults(DesignObject.Kind.FLOOR, values);
+        values.put("rooms", List.of("room_a"));
+        values.put("design-order", 0);
+        session.put(new DesignObject("floor:first", DesignObject.Kind.FLOOR, "first",
+            "floors.yml", "floors", "楼层路线", null, null, "misc:layout", values, true));
+        assertTrue(save().ok());
+        var floors = FloorConfig.load(read("floors.yml"), read("rooms.yml")).floors();
+        assertEquals(List.of("first", "f1"), floors.stream().map(FloorConfig.Floor::id).toList());
+        assertFalse(read("floors.yml").getMapList("floors").get(0).containsKey("design-order"));
+    }
+
+    @Test void settlementFormKeepsFailureOverridesAndUnrelatedConfiguration() throws Exception {
+        write("config.yml", "name: test\nsettlement:\n  failure: {exit-mode: IMMEDIATE}\n");
+        open(false);
+        manager.setField(session, "settlement:settlement", "exit-mode", "MANUAL");
+        manager.setField(session, "settlement:settlement", "manual-timeout-seconds", "45");
+        assertTrue(save().ok());
+        var yaml = read("config.yml");
+        var settlement = SettlementConfig.load(yaml.getConfigurationSection("settlement"));
+        assertEquals(SettlementConfig.ExitMode.MANUAL, settlement.complete().mode());
+        assertEquals(45, settlement.complete().manualTimeoutSeconds());
+        assertEquals(SettlementConfig.ExitMode.IMMEDIATE, settlement.failure().mode());
+        assertEquals("test", yaml.getString("name"));
+    }
+
     @Test void successfulSaveBacksUpOriginalBytes()throws Exception {
         write("npcs.yml","# original comment\none: {name: original}\n");open(false);
         byte[] before=Files.readAllBytes(dir.resolve("npcs.yml"));

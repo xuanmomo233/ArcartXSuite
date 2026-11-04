@@ -739,7 +739,7 @@ controls:
                   删除钮:
                     type: Canvas
                     attribute:
-                      visible: "self.parent.entry['kindLabel'] != '配置文件'"
+                      visible: "self.parent.entry['kindLabel'] != '配置文件' && self.parent.entry['kindLabel'] != '结算策略'"
                       point: ~middle_right
                       x: -104
                       width: 90

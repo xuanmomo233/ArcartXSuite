@@ -306,7 +306,7 @@ controls:
       改名壳:
         type: Canvas
         attribute:
-          visible: "var.kindLabel != '配置文件'"
+          visible: "var.kindLabel != '配置文件' && var.kindLabel != '结算策略'"
           point: ~top_left
           x: "72 - var.offX"
           y: 252

@@ -966,12 +966,7 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         Map<String, Object> kinds = new LinkedHashMap<>();
         int i = 0;
         for (var kind : xuanmo.arcartxsuite.abyss.design.DesignObject.Kind.values()) {
-            // 房间/房内怪组不在挑选列表（房间由 floors.yml 结构决定，不在此处新建）
-            if (kind == xuanmo.arcartxsuite.abyss.design.DesignObject.Kind.ROOM
-                || kind == xuanmo.arcartxsuite.abyss.design.DesignObject.Kind.DOCUMENT) continue;
-            boolean inRoom = nodeKey.startsWith("room:");
-            if (kind == xuanmo.arcartxsuite.abyss.design.DesignObject.Kind.ROOM_GROUP && !inRoom) continue;
-            if (kind == xuanmo.arcartxsuite.abyss.design.DesignObject.Kind.GROUP && inRoom) continue;
+            if (!canCreateDesignObject(s, nodeKey, kind)) continue;
             String mark = kind.pointMarkable() ? "point"
                 : (kind.regionMarkable() ? "region" : "none");
             kinds.put(Integer.toString(i++), Map.of(
@@ -1634,7 +1629,7 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
                 var dm = service.designManager();
                 if (s != null && dm != null && checkToken(player, data, 3)) {
                     var kind = parseKind(data.get(1));
-                    if (kind != null) {
+                    if (kind != null && canCreateDesignObject(s, data.get(2), kind)) {
                         s.selectedNode(data.get(2));
                         beginMarkOrCreate(player, s, dm, kind, null);
                     }
@@ -1966,6 +1961,25 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         } catch (Exception e) {
             return null;
         }
+    }
+
+    private static boolean canCreateDesignObject(
+            xuanmo.arcartxsuite.abyss.design.DesignSession session, String node,
+            xuanmo.arcartxsuite.abyss.design.DesignObject.Kind kind) {
+        if (node.equals("misc:layout")) {
+            var template = session.instance().getTemplate();
+            return template.mode() == AbyssTemplate.Mode.FLOORS && template.procgen() == null
+                && (kind == xuanmo.arcartxsuite.abyss.design.DesignObject.Kind.FLOOR
+                    || kind == xuanmo.arcartxsuite.abyss.design.DesignObject.Kind.ROOM);
+        }
+        if (node.equals("misc:settlement") || node.equals("misc:files") || node.equals("misc:assets")) return false;
+        boolean inRoom = node.startsWith("room:");
+        return switch (kind) {
+            case ROOM, FLOOR, SETTLEMENT, DOCUMENT -> false;
+            case ROOM_GROUP -> inRoom && session.get(node) != null;
+            case GROUP -> !inRoom;
+            default -> true;
+        };
     }
 
     private void closeUi(Player p, String uiId) {
