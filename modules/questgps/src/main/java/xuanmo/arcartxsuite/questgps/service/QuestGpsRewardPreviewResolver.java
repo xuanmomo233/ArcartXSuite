@@ -6,11 +6,11 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.function.Function;
 import java.util.logging.Logger;
+import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import java.util.function.Supplier;
 import org.bukkit.plugin.java.JavaPlugin;
-import xuanmo.arcartxsuite.questgps.QuestGpsCategory;
 import xuanmo.arcartxsuite.questgps.config.QuestGpsModuleConfiguration;
 import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.api.capability.TitleConfigQueryable;
@@ -53,7 +53,7 @@ public final class QuestGpsRewardPreviewResolver {
 
     public List<ResolvedRewardPreview> resolve(
         QuestGpsModuleConfiguration configuration,
-        QuestGpsCategory category,
+        Player player,
         String questId
     ) {
         QuestGpsModuleConfiguration.QuestDefinition quest = configuration.quest(questId);
@@ -62,12 +62,13 @@ public final class QuestGpsRewardPreviewResolver {
         }
         List<ResolvedRewardPreview> resolved = new ArrayList<>(quest.rewards().size());
         for (int index = 0; index < quest.rewards().size(); index++) {
-            resolved.add(resolveSingle(quest.id(), index, quest.rewards().get(index)));
+            resolved.add(resolveSingle(player, quest.id(), index, quest.rewards().get(index)));
         }
         return List.copyOf(resolved);
     }
 
     private ResolvedRewardPreview resolveSingle(
+        Player player,
         String questId,
         int index,
         QuestGpsModuleConfiguration.RewardPreviewDefinition definition
@@ -78,28 +79,28 @@ public final class QuestGpsRewardPreviewResolver {
             case "neigeitems" -> resolveItem(
                 rewardId,
                 type,
-                generateIcon("neige", definition.neigeItemId(), definition),
+                generateIcon(player, "neige", definition.neigeItemId(), definition),
                 definition,
                 definition.neigeItemId()
             );
             case "mythicmobs", "mythicitems" -> resolveItem(
                 rewardId,
                 type,
-                generateIcon("mythic", definition.mythicItemId(), definition),
+                generateIcon(player, "mythic", definition.mythicItemId(), definition),
                 definition,
                 definition.mythicItemId()
             );
             case "overture" -> resolveItem(
                 rewardId,
                 type,
-                generateIcon("overture", definition.overtureItemId(), definition),
+                generateIcon(player, "overture", definition.overtureItemId(), definition),
                 definition,
                 definition.overtureItemId()
             );
             case "mmoitems" -> resolveItem(
                 rewardId,
                 type,
-                generateIcon("mmoitems", definition.mmoItemType() + ";" + definition.mmoItemId(), definition),
+                generateIcon(player, "mmoitems", definition.mmoItemType() + ";" + definition.mmoItemId(), definition),
                 definition,
                 definition.mmoItemType() + ":" + definition.mmoItemId()
             );
@@ -127,7 +128,7 @@ public final class QuestGpsRewardPreviewResolver {
     /**
      * 通过 {@link IconResolver} 生成外部物品库物品。
      */
-    private ItemStack generateIcon(String source, String sourceId,
+    private ItemStack generateIcon(Player player, String source, String sourceId,
                                    QuestGpsModuleConfiguration.RewardPreviewDefinition definition) {
         if (sourceId == null || sourceId.isBlank()) return null;
         IconDefinition icon = new IconDefinition(
@@ -135,7 +136,7 @@ public final class QuestGpsRewardPreviewResolver {
             source, sourceId, "", "", "",
             "", "", java.util.Map.of(), "", false, "", ""
         );
-        return iconResolver.resolveItemStack(null, icon);
+        return iconResolver.resolveItemStack(player, icon);
     }
 
     /**

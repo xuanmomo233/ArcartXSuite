@@ -29,7 +29,6 @@ import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.questgps.command.QuestGpsAdminCommand;
 import xuanmo.arcartxsuite.questgps.command.QuestGpsPlayerCommand;
 import xuanmo.arcartxsuite.questgps.config.QuestGpsModuleConfiguration;
-import xuanmo.arcartxsuite.questgps.chemdah.database.QuestGpsMysqlDatabase;
 import xuanmo.arcartxsuite.questgps.service.QuestGpsService;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
 import xuanmo.arcartxsuite.api.capability.TitleConfigQueryable;
@@ -59,7 +58,7 @@ public final class QuestGpsModule extends AbstractAXSModule implements ModuleCom
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("questgps")
             .name("QuestGPS")
-            .version("1.5.0")
+            .version("2.0.0")
             .mainClass(getClass().getName())
             .build();
     }
@@ -72,14 +71,11 @@ public final class QuestGpsModule extends AbstractAXSModule implements ModuleCom
             .syncPolicy(SyncPolicy.builder()
                     .dynamicSection("categories")
                 .build())
-            .currentVersion(3)
+            .currentVersion(4)
             .validations(List.of(
                     ValidationRule.required("ui.packet-id", ValueType.STRING),
                     ValidationRule.of("navigation.enabled", ValueType.BOOLEAN),
                     ValidationRule.of("navigation.waypoint.enabled", ValueType.BOOLEAN),
-                    ValidationRule.of("navigation.mode", ValueType.STRING),
-                    ValidationRule.of("database.enabled", ValueType.BOOLEAN),
-                    ValidationRule.of("discovery.mode", ValueType.STRING),
                     ValidationRule.of("navigation.model-marker.path-max-iterations", ValueType.INT).withRange(100, 50000),
                     ValidationRule.of("navigation.texture-marker.enabled", ValueType.BOOLEAN),
                     ValidationRule.of("navigation.texture-marker.width", ValueType.DOUBLE).withRange(0.0, null),
@@ -114,37 +110,10 @@ public final class QuestGpsModule extends AbstractAXSModule implements ModuleCom
      */
     @Override
     protected void loadConfiguration(@Nullable File configFile) throws Exception {
-        if (configFile == null) {
-            throw new IllegalStateException("ArcartXQuestGPS.yml 配置文件缺失");
-        }
-        var yaml = YamlConfiguration.loadConfiguration(configFile);
-        String questsDirRelative = yaml.getString("quests-directory", "quests");
-        File questsDirectory = new File(dataFolder, questsDirRelative);
-        if (!questsDirectory.exists()) {
-            questsDirectory.mkdirs();
-        }
-        ensureQuestDefaults(questsDirectory);
-        configuration = QuestGpsModuleConfiguration.load(yaml, logger, questsDirectory);
-        if (configuration.database().enabled() && Bukkit.getPluginManager().getPlugin("Chemdah") == null) {
-            logger.fine("QuestGPS: database.enabled=true 但未检测到 Chemdah 插件，MySQL 数据库注册已跳过。");
-        } else {
-            QuestGpsMysqlDatabase.registerIfNeeded(logger, configuration.database());
-        }
-    }
-
-    private void ensureQuestDefaults(File questsDirectory) {
-        File[] existing = questsDirectory.listFiles((dir, name) -> name.endsWith(".yml") || name.endsWith(".yaml"));
-        if (existing != null && existing.length > 0) {
-            return;
-        }
-        String[] defaults = {"quests/mainline.yml", "quests/side.yml", "quests/encounter.yml"};
-        for (String res : defaults) {
-            String fileName = res.substring(res.lastIndexOf('/') + 1);
-            File target = new File(questsDirectory, fileName);
-            if (!target.exists()) {
-                exportResource(res, target, false);
-            }
-        }
+        if (configFile == null) throw new IllegalStateException("ArcartXQuestGPS.yml 配置文件缺失");
+        configuration = QuestGpsModuleConfiguration.load(YamlConfiguration.loadConfiguration(configFile), logger);
+        File example = new File(dataFolder, "examples/chemdah-quest.yml");
+        if (!example.exists()) exportResource("examples/chemdah-quest.yml", example, false);
     }
 
     /**

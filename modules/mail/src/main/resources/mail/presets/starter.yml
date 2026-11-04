@@ -81,7 +81,7 @@ preset:
 
   # 玩家领取邮件时额外执行的命令。
   claim-commands:
-    - "tell <player> 你领取了示例邮件奖励。"
+    - "tell {player} 你领取了示例邮件奖励。"
 
   # 领取条件（与 AXS 本体 ScriptCondition 同一套，详见 axs-api/condition/ScriptCondition.java）：
   #   内联:  "%placeholder% <op> <value>"   op ∈ == != >= <= > < contains regex

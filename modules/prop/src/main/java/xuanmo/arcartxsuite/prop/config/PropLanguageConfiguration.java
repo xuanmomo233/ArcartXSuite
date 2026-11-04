@@ -7,12 +7,12 @@ import org.bukkit.configuration.file.FileConfiguration;
  * <p>
  * 从 {@code language.yml} 解析，包含冷却、无权限、无按键、无手持、条件不满足等提示消息模板。
  *
- * @param coolDown         冷却中提示，支持 {NAME} 和 {TIME} 占位符
- * @param noPermission     无权限提示，支持 {NAME} 占位符
- * @param noKey            无法按键使用提示，支持 {NAME} 占位符
- * @param noHand           无法手持使用提示，支持 {NAME} 占位符
- * @param conditionNotMet 条件不满足提示，支持 {NAME} 和 {CONDITION} 占位符
- * @param autoUsed        自动触发成功提示，支持 {NAME} 占位符
+ * @param coolDown         冷却中提示，支持 {item} 和 {remaining_seconds} 占位符
+ * @param noPermission     无权限提示，支持 {item} 占位符
+ * @param noKey            无法按键使用提示，支持 {item} 占位符
+ * @param noHand           无法手持使用提示，支持 {item} 占位符
+ * @param conditionNotMet 条件不满足提示，支持 {item} 和 {condition} 占位符
+ * @param autoUsed        自动触发成功提示，支持 {item} 占位符
  */
 public record PropLanguageConfiguration(
     String coolDown,
@@ -23,12 +23,12 @@ public record PropLanguageConfiguration(
     String autoUsed
 ) {
 
-    private static final String DEFAULT_COOLDOWN = "&7[&dArcartXProp&7]&c{NAME}&f还在冷却,你还需要等待&a{TIME}秒&f才能使用道具";
-    private static final String DEFAULT_NO_PERMISSION = "&7[&dArcartXProp&7]&f你没有权限使用 &c{NAME}";
-    private static final String DEFAULT_NO_KEY = "&7[&dArcartXProp&7]&c{NAME} &f无法按键使用";
-    private static final String DEFAULT_NO_HAND = "&7[&dArcartXProp&7]&c{NAME} &f该道具无法手持使用";
-    private static final String DEFAULT_CONDITION_NOT_MET = "&7[&dArcartXProp&7]&c{NAME} &f使用条件不满足: &e{CONDITION}";
-    private static final String DEFAULT_AUTO_USED = "&7[&dArcartXProp&7]&f已自动使用 &a{NAME}";
+    private static final String DEFAULT_COOLDOWN = "&7[&dArcartXProp&7]&c{item}&f还在冷却,你还需要等待&a{remaining_seconds}秒&f才能使用道具";
+    private static final String DEFAULT_NO_PERMISSION = "&7[&dArcartXProp&7]&f你没有权限使用 &c{item}";
+    private static final String DEFAULT_NO_KEY = "&7[&dArcartXProp&7]&c{item} &f无法按键使用";
+    private static final String DEFAULT_NO_HAND = "&7[&dArcartXProp&7]&c{item} &f该道具无法手持使用";
+    private static final String DEFAULT_CONDITION_NOT_MET = "&7[&dArcartXProp&7]&c{item} &f使用条件不满足: &e{condition}";
+    private static final String DEFAULT_AUTO_USED = "&7[&dArcartXProp&7]&f已自动使用 &a{item}";
 
     /**
      * 从 YAML 配置加载语言配置。
@@ -49,6 +49,7 @@ public record PropLanguageConfiguration(
 
     private static String readString(FileConfiguration configuration, String path, String defaultValue) {
         String value = configuration.getString(path, defaultValue);
-        return value == null || value.isBlank() ? defaultValue : value.trim();
+        return value == null || value.isBlank() ? defaultValue : value.trim()
+            .replace("{NAME}", "{item}").replace("{TIME}", "{remaining_seconds}").replace("{CONDITION}", "{condition}");
     }
 }

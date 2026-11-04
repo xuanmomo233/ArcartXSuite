@@ -1,0 +1,124 @@
+# 复制到 plugins/Chemdah/core/quest/ 下，再按实际任务修改。
+# 这是 Chemdah 任务文件；QuestGPS 不再维护另一份任务定义。
+# /chemdah reload 后用 /questgps 查看分类、列表和详情。任务页签、目标进度、完成状态来自玩家档案。
+# 任务路径由 Chemdah 提供。接取并追踪后可检查 HUD 的任务名、目标进度及导航提示。
+suite_demo_hunt:
+  meta:
+    name: "初次讨伐"
+    type: "主线"
+  task:
+    kills:
+      meta:
+        name: "击败三个僵尸"
+      objective: player kill
+      condition:
+        victim: zombie
+      goal:
+        amount: 3
+      addon:
+        track:
+          center: "world 100 64 100"
+          name: "讨伐区域"
+          description:
+            - "前往目的地击败僵尸。"
+        # 只影响 kills 目标。省略整个小节时仍读取 Chemdah 原生字段。
+        axs-view:
+          # name 覆盖目标行名称。省略时依次取 meta.name、track 名称或目标 ID。
+          # name: "清理村外僵尸"
+          # description 可写一行或文字列表，供自定义界面读取。默认目标行显示名称和状态。
+          # description: "前往村外清理三只僵尸。"
+          # 目标排序，默认 0，值越小越靠前。
+          sort-order: 0
+          # navigation 可为该目标单独指定目的地。写法见下方任务导航，enabled 只允许在任务级填写。
+  addon:
+    ui:
+      icon: iron_sword
+      description:
+        - "村外有僵尸出没，请清理三只。"
+    # 以下为整项任务的 QuestGPS 选项，可按需填写。未覆盖的文字和目的地继续读取 Chemdah。
+    axs-view:
+      # visible 默认 true，改为 false 会从 QuestGPS 隐藏该任务。
+      # visible: true
+      # name 覆盖界面任务名，description 覆盖详情说明。空值回退到原生内容。
+      # name: "村外清剿"
+      # description:
+      #   - "请到村外清理三只僵尸。"
+      # category 覆盖菜单分类。省略时取 meta.type 中首个可用分类。
+      # category: "新手任务"
+      # 任务列表排序，默认 0，值越小越靠前。
+      sort-order: 10
+      # 默认 false。设为 true 后，进行中的任务才可在菜单显示放弃按钮。
+      allow-abandon: true
+      # required-mainline 填必须已完成的 Chemdah 任务 ID。默认空列表。
+      # required-mainline: [village_intro]
+      # navigation 覆盖原生追踪目的地。坐标直接填 world/x/y/z，NPC 则用 npc: "guide_demo"（Adyeshach 名称或 ID）。
+      # navigation:
+      #   enabled: true             # 默认 true，false 禁用整项任务的 QuestGPS 导航
+      #   world: world
+      #   x: 100
+      #   y: 64
+      #   z: 100
+      #   title: "讨伐区域"          # 导航目的地标题
+      #   map-label: "村外"          # 地图目标名称
+      #   style-id: default          # 引用全局导航样式 ID
+      #   finish-range: 4            # 到达半径，省略时沿用全局设置
+      #   finish-commands:           # 到达后由控制台执行
+      #     - "tell {player} 你已到达讨伐区域。"
+      #   teleport:                  # 可选的跨世界落点，和导航目的地分别配置
+      #     world: world
+      #     x: 98
+      #     y: 64
+      #     z: 100
+      # rewards 按列表顺序显示预览。真正的奖励由任务完成流程发放。
+      # type 决定读取哪种物品 ID。请将下方物品库和称号 ID 换成服务器中实际存在的 ID。
+      # amount 默认 1，大于 1 显示数量角标。display-name 覆盖名称，text 覆盖右侧说明。
+      # lore 用于原版或备用物品的描述。物品库生成失败时用 fallback-material 作为备用图标。
+      rewards:
+        - type: material
+          material: APPLE
+          amount: 2
+          display-name: "补给苹果"
+          text: "原版物品预览。"
+          lore:
+            - "&7讨伐结束后的补给"
+        - type: mythicmobs
+          mythic-item-id: "MythicStarterSword"
+          fallback-material: IRON_SWORD
+          display-name: "讨伐长剑"
+          text: "MythicMobs 物品预览。"
+        - type: neigeitems
+          neige-item-id: "NeigeStarterArmor"
+          fallback-material: LEATHER_CHESTPLATE
+          display-name: "巡守护甲"
+          text: "NeigeItems 物品预览。"
+        - type: overture
+          overture-item-id: "OvertureStarterGem"
+          fallback-material: AMETHYST_SHARD
+          display-name: "讨伐宝石"
+          text: "Overture 物品预览。"
+        - type: mmoitems
+          type-id: "SWORD"          # MMOItems 类型 ID
+          id: "LEGENDARY_SWORD"     # 该类型下的物品 ID
+          fallback-material: GOLDEN_SWORD
+          display-name: "勇者之剑"
+          text: "MMOItems 物品预览。"
+        - type: title
+          title-id: "village_guard"
+          duration: permanent      # 默认永久，其他值作为限时说明
+          display-name: "称号 · 村庄守卫"
+          text: "永久称号预览。"
+        - type: text
+          display-name: "示例说明"
+          text: "完成脚本仅发送提示。正式使用时请配置真实发放并同步预览。"
+      # hooks 各字段均为信号名列表。triggered 在 QuestGPS 推荐该任务时发送。
+      # accepted、abandoned、completed、track-changed 分别在接取、放弃、完成及追踪变更时发送。
+      # 可省略 hooks。需要联动时，在 EventPacket 中用 trigger: command-signal 接收。
+      # 规则的 signal 填下方同名值，actions 决定收到后做什么，例如向完成任务的玩家发邮件。
+      # hooks:
+      #   completed:
+      #     - demo_hunt_completed
+  agent:
+    accepted: |
+      tell "你已接取初次讨伐。"
+    completed: |
+      tell "初次讨伐已完成。"

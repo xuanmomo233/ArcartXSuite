@@ -317,8 +317,8 @@ public class AuctionService {
             if (prevPlayer != null) {
                 prevPlayer.sendMessage(ChatColor.translateAlternateColorCodes('&',
                     messages.auctionOutbid()
-                        .replace("%item%", listing.getItemDisplayName())
-                        .replace("%amount%", currencyManager.format(
+                        .replace("{item}", listing.getItemDisplayName())
+                        .replace("{amount}", currencyManager.format(
                             listing.getCurrency(),
                             BigDecimal.valueOf(amount)
                         ))));
@@ -539,7 +539,7 @@ public class AuctionService {
             Player seller = Bukkit.getPlayer(listing.getSeller());
             if (seller != null) {
                 seller.sendMessage(ChatColor.translateAlternateColorCodes('&',
-                    messages.auctionExpired().replace("%item%", listing.getItemDisplayName())));
+                    messages.auctionExpired().replace("{item}", listing.getItemDisplayName())));
             }
         }
 

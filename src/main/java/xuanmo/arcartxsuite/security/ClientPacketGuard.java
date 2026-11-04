@@ -143,7 +143,7 @@ public final class ClientPacketGuard implements PacketGuardAPI {
                     if (!command.isBlank()) {
                         String safeName = sanitizePlayerName(player.getName());
                         if (safeName != null) {
-                            Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command.replace("<player>", safeName));
+                            Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command.replace("{player}", safeName).replace("<player>", safeName));
                         }
                     }
                 }

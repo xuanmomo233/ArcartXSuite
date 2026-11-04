@@ -324,7 +324,7 @@ public class MarketService {
         if (result.success()) {
             rotateToken(player, config.ui().shopId());
             player.sendMessage(ChatColor.translateAlternateColorCodes('&',
-                config.messages().shopBought().replace("%amount%",
+                config.messages().shopBought().replace("{amount}",
                     currencyManager.format(result.currency(), BigDecimal.valueOf(result.totalPrice())))));
         } else {
             player.sendMessage(ChatColor.RED + result.error());
@@ -342,7 +342,7 @@ public class MarketService {
         if (result.success()) {
             rotateToken(player, config.ui().recycleId());
             player.sendMessage(ChatColor.translateAlternateColorCodes('&',
-                config.messages().recycleSuccess().replace("%amount%",
+                config.messages().recycleSuccess().replace("{amount}",
                     formatRecycleEarnings(result.earningsByCurrency()))));
         } else {
             player.sendMessage(ChatColor.translateAlternateColorCodes('&', result.error()));
@@ -785,7 +785,7 @@ public class MarketService {
             return;
         }
         player.sendMessage(ChatColor.translateAlternateColorCodes('&',
-            config.messages().playerShopBought().replace("%amount%",
+            config.messages().playerShopBought().replace("{amount}",
                 currencyManager.format(result.currency(), BigDecimal.valueOf(result.price())))));
         // 刷新列表
         handlePlayerShopListPacket(player, List.of("pshop_list", "0", ""));
@@ -951,7 +951,7 @@ public class MarketService {
         if (result.success()) {
             rotateToken(player, config.ui().auctionId());
             player.sendMessage(ChatColor.translateAlternateColorCodes('&',
-                config.messages().auctionBidPlaced().replace("%amount%", String.valueOf(result.amount()))));
+                config.messages().auctionBidPlaced().replace("{amount}", String.valueOf(result.amount()))));
         } else {
             player.sendMessage(ChatColor.RED + result.error());
         }
@@ -1023,7 +1023,7 @@ public class MarketService {
         if (result.success()) {
             rotateToken(player, config.ui().recycleId());
             player.sendMessage(ChatColor.translateAlternateColorCodes('&',
-                config.messages().recycleSuccess().replace("%amount%",
+                config.messages().recycleSuccess().replace("{amount}",
                     formatRecycleEarnings(result.earningsByCurrency()))));
         } else {
             player.sendMessage(ChatColor.RED + result.error());

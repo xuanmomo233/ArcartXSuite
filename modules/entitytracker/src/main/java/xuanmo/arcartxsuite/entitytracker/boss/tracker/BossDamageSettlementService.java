@@ -446,7 +446,7 @@ final class BossDamageSettlementService {
             String resolved = switch (placeholderKey.toLowerCase(Locale.ROOT)) {
                 case "player", "player_name" -> playerName;
                 case "player_display_name" -> playerDisplayName;
-                case "player_uuid" -> playerUuid;
+                case "uuid", "player_uuid" -> playerUuid;
                 default -> context.resolve(placeholderKey);
             };
             matcher.appendReplacement(

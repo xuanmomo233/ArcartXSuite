@@ -467,7 +467,7 @@ public final class EventPacketDispatchService {
     }
 
     private boolean executeCommandDispatch(EventPacketRule rule, EventPacketAction action, Player subject, EventPacketContext context) {
-        String command = renderString(action.object("command"), context, subject);
+        String command = context.renderCommand(action.object("command"), subject);
         if (command.isBlank()) {
             return false;
         }

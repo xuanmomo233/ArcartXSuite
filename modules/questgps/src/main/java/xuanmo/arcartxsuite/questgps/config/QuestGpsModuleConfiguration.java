@@ -1,8 +1,6 @@
 package xuanmo.arcartxsuite.questgps.config;
 
-import java.io.File;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -14,24 +12,19 @@ import java.util.Set;
 import java.util.logging.Logger;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
-import org.bukkit.configuration.file.YamlConfiguration;
 import xuanmo.arcartxsuite.api.config.UiIdParser;
 import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.questgps.QuestGpsCategory;
-import xuanmo.arcartxsuite.questgps.chemdah.PresentationSource;
-import xuanmo.arcartxsuite.questgps.chemdah.database.QuestGpsDatabaseSettings;
+import xuanmo.arcartxsuite.questgps.chemdah.QuestViewIndex;
 
 public record QuestGpsModuleConfiguration(
     boolean debug,
     UiConfiguration ui,
     NavigationDefaults navigation,
-    PresentationDefaults presentation,
     CategoryDefaults categoryDefaults,
-    QuestGpsDatabaseSettings database,
-    String discoveryMode,
     GateConfiguration gate,
-    Map<String, QuestGpsCategory> categoryRegistry,
-    Map<String, QuestDefinition> quests
+    Map<String, QuestGpsCategory> categoryStyles,
+    QuestViewIndex definitions
 ) {
 
     private static final String DEFAULT_PACKET_ID = "AXS_QUESTGPS";
@@ -45,89 +38,52 @@ public record QuestGpsModuleConfiguration(
     private static final boolean DEFAULT_REMOVE_ON_FINISH = true;
 
     public static QuestGpsModuleConfiguration load(FileConfiguration configuration, Logger logger) {
-        return load(configuration, logger, null);
-    }
-
-    public static QuestGpsModuleConfiguration load(FileConfiguration configuration, Logger logger, File questsDirectory) {
         Objects.requireNonNull(configuration, "configuration");
         Objects.requireNonNull(logger, "logger");
-
-        boolean debug = configuration.getBoolean("debug.enabled", false);
-        UiConfiguration ui = loadUi(configuration.getConfigurationSection("ui"));
-        NavigationDefaults navigation = loadNavigationDefaults(configuration.getConfigurationSection("navigation"));
-        PresentationDefaults presentation = loadPresentationDefaults(configuration.getConfigurationSection("presentation"), logger);
-        CategoryDefaults categoryDefaults = loadCategoryDefaults(configuration.getConfigurationSection("category"), logger);
-        QuestGpsDatabaseSettings database = loadDatabaseSettings(configuration.getConfigurationSection("database"));
-        String discoveryMode = string(configuration.getString("discovery.mode"), "overlay");
-        List<QuestGpsCategory> customCategories = loadCustomCategories(configuration.getConfigurationSection("categories"), logger);
-        if (categoryDefaults.fallback().enabled()) {
-            CategoryDefaults.FallbackCategory fallback = categoryDefaults.fallback();
-            customCategories.add(new QuestGpsCategory(fallback.id(), fallback.displayName(), fallback.sortOrder()));
+        CategoryDefaults category = loadCategoryDefaults(configuration.getConfigurationSection("category"), logger);
+        List<QuestGpsCategory> styles = loadCustomCategories(configuration.getConfigurationSection("categories"), logger);
+        if (category.fallback().enabled()) {
+            var fallback = category.fallback();
+            styles.add(new QuestGpsCategory(fallback.id(), fallback.displayName(), fallback.sortOrder()));
         }
-        Map<String, QuestGpsCategory> categoryRegistry = QuestGpsCategory.buildRegistry(customCategories);
-        GateConfiguration gate = loadGate(configuration.getConfigurationSection("gate"), categoryRegistry);
-        Map<String, QuestDefinition> quests = new LinkedHashMap<>();
-        if (questsDirectory != null && questsDirectory.isDirectory()) {
-            loadQuestsFromDirectory(questsDirectory, quests, categoryRegistry, logger);
-        }
+        Map<String, QuestGpsCategory> registry = QuestGpsCategory.buildRegistry(styles);
         return new QuestGpsModuleConfiguration(
-            debug,
-            ui,
-            navigation,
-            presentation,
-            categoryDefaults,
-            database,
-            discoveryMode,
-            gate,
-            categoryRegistry,
-            Map.copyOf(quests)
+            configuration.getBoolean("debug.enabled", false),
+            loadUi(configuration.getConfigurationSection("ui")),
+            loadNavigationDefaults(configuration.getConfigurationSection("navigation")),
+            category,
+            loadGate(configuration.getConfigurationSection("gate"), registry),
+            registry,
+            new QuestViewIndex()
         );
+    }
+
+    public Map<String, QuestGpsCategory> categoryRegistry() {
+        Map<String, QuestGpsCategory> categories = definitions.snapshot().categories();
+        return categories.isEmpty() ? categoryStyles : categories;
     }
 
     public QuestDefinition quest(String questId) {
-        return quests.get(normalizeKey(questId));
+        return definitions.snapshot().quests().get(normalizeKey(questId));
     }
 
     public TaskDefinition task(String questId, String taskId) {
-        QuestDefinition quest = quest(questId);
-        return quest == null ? null : quest.task(taskId);
+        QuestDefinition definition = quest(questId);
+        return definition == null ? null : definition.task(taskId);
     }
 
     public List<QuestDefinition> orderedQuests() {
-        List<QuestDefinition> definitions = new ArrayList<>(quests.values());
-        definitions.sort(
-            Comparator
-                .comparingInt((QuestDefinition d) -> categorySortPlaceholder(d.categoryOverride()))
-                .thenComparingInt(QuestDefinition::sortOrder)
-                .thenComparing(QuestDefinition::id, String.CASE_INSENSITIVE_ORDER)
-        );
-        return List.copyOf(definitions);
+        return definitions.snapshot().quests().values().stream()
+            .sorted(Comparator.comparingInt(QuestDefinition::sortOrder)
+                .thenComparing(QuestDefinition::id, String.CASE_INSENSITIVE_ORDER)).toList();
     }
 
     public int configuredQuestCount() {
-        return quests.size();
+        return definitions.snapshot().quests().size();
     }
 
-    /**
-     * auto 发现模式下，为未在 overlay 登记的任务生成最小定义。
-     */
     public static QuestDefinition syntheticQuest(String questId) {
-        String id = questId == null ? "" : questId.trim();
-        return new QuestDefinition(
-            id,
-            true,
-            null,
-            "",
-            List.of(),
-            0,
-            false,
-            List.of(),
-            List.of(),
-            new QuestNavigation(false, null),
-            HookSignals.empty(),
-            QuestPresentationOverride.empty(),
-            Map.of()
-        );
+        return readNativeView(questId, new org.bukkit.configuration.MemoryConfiguration(), Map.of(), Map.of(), Logger.getAnonymousLogger());
     }
 
     private static UiConfiguration loadUi(ConfigurationSection section) {
@@ -151,7 +107,6 @@ public record QuestGpsModuleConfiguration(
             section == null || section.getBoolean("enabled", DEFAULT_NAVIGATION_ENABLED),
             string(section == null ? null : section.getString("quest-id-prefix"), DEFAULT_QUEST_ID_PREFIX),
             section == null || section.getBoolean("remove-on-finish", DEFAULT_REMOVE_ON_FINISH),
-            string(section == null ? null : section.getString("mode"), "hybrid"),
             loadModelMarkerDefaults(section == null ? null : section.getConfigurationSection("model-marker")),
             loadTextureMarkerDefaults(section == null ? null : section.getConfigurationSection("texture-marker")),
             waypoint,
@@ -167,14 +122,7 @@ public record QuestGpsModuleConfiguration(
         if (section == null) {
             return CategoryDefaults.defaults();
         }
-        CategorySource source = CategorySource.parse(section.getString("source"), CategorySource.CHEMDAH);
-        if (section.contains("id-prefix-rules")) {
-            logger.warning(
-                "QuestGPS: category.id-prefix-rules 已废弃，分类仅由 category.source 指定的一种数据源决定"
-                    + "（chemdah=meta.type，overlay=quests/*.yml 的 category）"
-            );
-        }
-        CategoryDefaults.FallbackCategory fallbackDefaults = CategoryDefaults.FallbackCategory.disabled();
+        CategoryDefaults.FallbackCategory fallbackDefaults = CategoryDefaults.defaults().fallback();
         ConfigurationSection fallbackSection = section.getConfigurationSection("fallback");
         if (fallbackSection != null) {
             fallbackDefaults = new CategoryDefaults.FallbackCategory(
@@ -184,7 +132,7 @@ public record QuestGpsModuleConfiguration(
                 fallbackSection.getInt("sort-order", fallbackDefaults.sortOrder())
             );
         }
-        return new CategoryDefaults(source, fallbackDefaults);
+        return new CategoryDefaults(fallbackDefaults);
     }
 
     private static int categorySortPlaceholder(QuestGpsCategory categoryOverride) {
@@ -206,57 +154,6 @@ public record QuestGpsModuleConfiguration(
             return null;
         }
         return parsed;
-    }
-
-    private static PresentationDefaults loadPresentationDefaults(ConfigurationSection section, Logger logger) {
-        if (section == null) {
-            return PresentationDefaults.defaults();
-        }
-        warnDeprecatedPresentationFields(section, logger);
-        PresentationSource source = PresentationSource.parseGlobal(section.getString("source"), PresentationSource.CHEMDAH);
-        return new PresentationDefaults(source);
-    }
-
-    private static void warnDeprecatedPresentationFields(ConfigurationSection section, Logger logger) {
-        for (String key : List.of(
-            "name-source",
-            "description-source",
-            "task-text-source",
-            "task-description-source",
-            "rewards-source"
-        )) {
-            if (!section.contains(key)) {
-                continue;
-            }
-            String value = section.getString(key);
-            logger.warning(
-                "QuestGPS: presentation." + key + " 已废弃，请改用 presentation.source（chemdah | overlay）"
-            );
-        }
-    }
-
-    private static QuestGpsDatabaseSettings loadDatabaseSettings(ConfigurationSection section) {
-        if (section == null) {
-            return QuestGpsDatabaseSettings.defaults();
-        }
-        return new QuestGpsDatabaseSettings(
-            section.getBoolean("enabled", false),
-            section.getBoolean("load-in-join-event", true),
-            section.getBoolean("release-in-quit-event", true),
-            section.getBoolean("disable-auto-save", false),
-            section.getBoolean("disable-auto-create-table", false)
-        );
-    }
-
-    private static QuestPresentationOverride loadQuestPresentation(ConfigurationSection section) {
-        if (section == null) {
-            return QuestPresentationOverride.empty();
-        }
-        String raw = section.getString("source");
-        if (raw == null || raw.isBlank()) {
-            return QuestPresentationOverride.empty();
-        }
-        return new QuestPresentationOverride(PresentationSource.parseGlobal(raw, PresentationSource.CHEMDAH));
     }
 
     private static ModelMarkerDefaults loadModelMarkerDefaults(ConfigurationSection section) {
@@ -343,68 +240,76 @@ public record QuestGpsModuleConfiguration(
         );
     }
 
-    private static void loadQuestsFromDirectory(File directory, Map<String, QuestDefinition> target, Map<String, QuestGpsCategory> categoryRegistry, Logger logger) {
-        File[] files = directory.listFiles((dir, name) -> name.endsWith(".yml"));
-        if (files == null) return;
-        Arrays.sort(files, (a, b) -> a.getName().compareToIgnoreCase(b.getName()));
-        for (File file : files) {
-            YamlConfiguration yaml = YamlConfiguration.loadConfiguration(file);
-            for (String questId : yaml.getKeys(false)) {
-                ConfigurationSection questSection = yaml.getConfigurationSection(questId);
-                if (questSection == null) continue;
-                boolean enabled = questSection.getBoolean("enabled", true);
-                if (!enabled) continue;
-                QuestGpsCategory categoryOverride = readOptionalCategory(questSection, categoryRegistry, logger, questId);
-                List<RewardPreviewDefinition> rewards = readRewardList(questSection.getMapList("rewards"), logger, questId);
-                Map<String, TaskDefinition> tasks = loadTasks(questSection.getConfigurationSection("tasks"), logger, questId);
-                QuestNavigation navigation = loadQuestNavigation(questSection.getConfigurationSection("navigation"));
-                HookSignals hooks = loadHooks(questSection.getConfigurationSection("hooks"));
-                QuestPresentationOverride presentation = loadQuestPresentation(questSection.getConfigurationSection("presentation"));
-                target.put(normalizeKey(questId), new QuestDefinition(
-                    questId.trim(), true, categoryOverride,
-                    string(questSection.getString("display-name-override"), ""),
-                    normalizeMultiline(questSection.get("description")),
-                    questSection.getInt("sort-order", 0),
-                    questSection.getBoolean("allow-abandon", false),
-                    normalizeStringList(questSection.getStringList("required-mainline")),
-                    rewards, navigation, hooks, presentation, tasks
-                ));
-            }
-        }
+    public static QuestDefinition readNativeView(String questId, ConfigurationSection view,
+            Map<String, TaskDefinition> tasks, Map<String, QuestGpsCategory> categories, Logger logger) {
+        validateView(view, Set.of("visible", "name", "description", "category", "sort-order", "allow-abandon",
+            "required-mainline", "rewards", "navigation", "hooks"), questId);
+        return new QuestDefinition(
+            questId.trim(), view.getBoolean("visible", true),
+            readOptionalCategory(view, categories, logger, questId),
+            string(view.getString("name"), ""), normalizeMultiline(view.get("description")),
+            view.getInt("sort-order", 0), view.getBoolean("allow-abandon", false),
+            normalizeStringList(view.getStringList("required-mainline")),
+            readRewardList(view.getMapList("rewards"), logger, questId),
+            loadQuestNavigation(view.getConfigurationSection("navigation")),
+            loadHooks(view.getConfigurationSection("hooks")), Map.copyOf(tasks)
+        );
     }
 
-    private static Map<String, TaskDefinition> loadTasks(
-        ConfigurationSection section,
-        Logger logger,
-        String questId
-    ) {
-        Map<String, TaskDefinition> tasks = new LinkedHashMap<>();
-        if (section == null) {
-            return Map.of();
+    public static TaskDefinition readNativeTask(String taskId, ConfigurationSection view) {
+        validateView(view, Set.of("name", "description", "sort-order", "navigation"), taskId);
+        if (view.contains("navigation.enabled")) throw new IllegalArgumentException(taskId + ": 导航开关在任务级配置");
+        return new TaskDefinition(taskId.trim(), string(view.getString("name"), ""),
+            normalizeMultiline(view.get("description")), view.getInt("sort-order", 0),
+            readNavigationPoint(view.getConfigurationSection("navigation")));
+    }
+
+    private static void validateView(ConfigurationSection view, Set<String> allowed, String id) {
+        for (String key : view.getKeys(false)) {
+            if (!allowed.contains(key)) throw new IllegalArgumentException(id + " 的 addon.axs-view 字段未知: " + key);
         }
-        for (String taskId : section.getKeys(false)) {
-            ConfigurationSection taskSection = section.getConfigurationSection(taskId);
-            if (taskSection == null) {
-                logger.warning("QuestGPS: 任务目标配置格式无效，已跳过: " + questId + "/" + taskId);
-                continue;
+        for (String key : List.of("visible", "allow-abandon")) {
+            if (view.contains(key) && !(view.get(key) instanceof Boolean)) {
+                throw new IllegalArgumentException(id + ": " + key + " 必须是 true / false");
             }
-            TaskDefinition definition = new TaskDefinition(
-                taskId.trim(),
-                string(taskSection.getString("display-text"), ""),
-                normalizeMultiline(taskSection.get("description")),
-                taskSection.getInt("sort-order", 0),
-                readNavigationPoint(taskSection.getConfigurationSection("navigation"))
-            );
-            tasks.put(normalizeKey(taskId), definition);
         }
-        return Map.copyOf(tasks);
+        for (String key : List.of("name", "category")) {
+            if (view.contains(key) && !(view.get(key) instanceof String)) throw new IllegalArgumentException(id + ": " + key + " 必须是文字");
+        }
+        for (String key : List.of("navigation", "hooks")) {
+            if (view.contains(key) && !view.isConfigurationSection(key)) throw new IllegalArgumentException(id + ": " + key + " 必须是配置节");
+        }
+        if (view.contains("sort-order") && !(view.get("sort-order") instanceof Integer)) {
+            throw new IllegalArgumentException(id + ": sort-order 必须是整数");
+        }
+        if (view.contains("description")) {
+            Object raw = view.get("description");
+            if (!(raw instanceof String) && !(raw instanceof List<?> list && list.stream().allMatch(String.class::isInstance))) {
+                throw new IllegalArgumentException(id + ": description 必须是文字或文字列表");
+            }
+        }
+        if (view.contains("rewards") && !(view.get("rewards") instanceof List<?> list && list.stream().allMatch(Map.class::isInstance))) {
+            throw new IllegalArgumentException(id + ": rewards 必须是配置列表");
+        }
+        ConfigurationSection navigation = view.getConfigurationSection("navigation");
+        if (navigation != null && navigation.contains("point")) {
+            throw new IllegalArgumentException(id + ": navigation 坐标直接填写 world / x / y / z");
+        }
+        if (navigation != null && !navigation.getString("world", "").isBlank() && navigation.getString("npc", "").isBlank()) {
+            for (String axis : List.of("x", "y", "z")) {
+                Object value = navigation.get(axis);
+                if (!(value instanceof Number number) || !Double.isFinite(number.doubleValue())) {
+                    throw new IllegalArgumentException(id + ": navigation." + axis + " 必须是有限数值");
+                }
+            }
+        }
     }
 
     private static QuestNavigation loadQuestNavigation(ConfigurationSection section) {
         if (section == null) {
             return new QuestNavigation(true, readNavigationPoint(null));
         }
-        return new QuestNavigation(section.getBoolean("enabled", true), readNavigationPoint(section.getConfigurationSection("point")));
+        return new QuestNavigation(section.getBoolean("enabled", true), readNavigationPoint(section));
     }
 
     private static HookSignals loadHooks(ConfigurationSection section) {
@@ -572,7 +477,7 @@ public record QuestGpsModuleConfiguration(
         for (String rawValue : rawValues) {
             if (rawValue == null) continue;
             String normalized = rawValue.trim().toLowerCase(Locale.ROOT);
-            if (!normalized.isEmpty() && registry.containsKey(normalized)) {
+            if (!normalized.isEmpty()) {
                 ids.add(normalized);
             }
         }
@@ -623,7 +528,6 @@ public record QuestGpsModuleConfiguration(
         boolean enabled,
         String questIdPrefix,
         boolean removeOnFinish,
-        String mode,
         ModelMarkerDefaults modelMarker,
         TextureMarkerDefaults textureMarker,
         WaypointDefaults waypoint,
@@ -652,22 +556,6 @@ public record QuestGpsModuleConfiguration(
             return titleTemplate == null || titleTemplate.isEmpty()
                 ? ""
                 : MessageProvider.translateColors(String.join(" ", titleTemplate));
-        }
-    }
-
-    public record PresentationDefaults(PresentationSource source) {
-        public static PresentationDefaults defaults() {
-            return new PresentationDefaults(PresentationSource.CHEMDAH);
-        }
-    }
-
-    public record QuestPresentationOverride(PresentationSource source) {
-        public static QuestPresentationOverride empty() {
-            return new QuestPresentationOverride(null);
-        }
-
-        public PresentationSource source(PresentationSource fallback) {
-            return source == null ? fallback : source;
         }
     }
 
@@ -770,7 +658,6 @@ public record QuestGpsModuleConfiguration(
         List<RewardPreviewDefinition> rewards,
         QuestNavigation navigation,
         HookSignals hooks,
-        QuestPresentationOverride presentation,
         Map<String, TaskDefinition> tasks
     ) {
         public TaskDefinition task(String taskId) {

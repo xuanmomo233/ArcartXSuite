@@ -30,7 +30,7 @@ import xuanmo.arcartxsuite.questgps.config.QuestGpsModuleConfiguration;
  * <p>
  * 属于 {@code questgps} 模块，负责管理玩家任务/子任务的路径点追踪、
  * 导航标记模型显示以及 Chemdah/Adyeshach 动态坐标解析。
- * 支持 overlay（配置坐标）、chemdah（任务系统动态坐标）、npc（Adyeshach 实体定位）
+ * 支持 view（配置坐标）、chemdah（任务系统动态坐标）、npc（Adyeshach 实体定位）
  * 三种坐标来源；玩家可同时追踪多个目标（追踪态/到达判定并行），
  * 但屏幕路标与路径标记链只跟随"最新激活且同世界"的目标（避免多路标误导玩家）。
  * 坐标推送、到达滞回判定、跨世界抑制由共享 {@link NavigationTargetService} 完成。
@@ -343,60 +343,55 @@ public final class QuestGpsNavigationService {
     /**
      * 判断指定任务是否存在可用的导航坐标点。
      *
-     * @param player             玩家，为 {@code null} 时仅检查 overlay 配置
+     * @param player             玩家，为 {@code null} 时仅检查 view 配置
      * @param questId            任务 ID
      * @param prioritizedTaskIds 优先检查的子任务 ID 列表
      * @return 存在可用坐标点时返回 {@code true}
      */
     public boolean hasQuestPoint(Player player, String questId, List<String> prioritizedTaskIds) {
+        if (!navigationAllowed(questId)) return false;
         if (!runtimeReady()) {
             return false;
         }
-        boolean overlay = overlayNavigationEnabled() && hasOverlayQuestPoint(questId, prioritizedTaskIds);
+        boolean view = hasViewQuestPoint(questId, prioritizedTaskIds);
         if (!chemdahNavigationEnabled()) {
-            return overlay;
+            return view;
         }
         if (player == null || !player.isOnline()) {
-            return overlay;
+            return view;
         }
-        if (chemdahOnlyNavigation()) {
-            return true;
-        }
-        return overlay || trackerBridge.resolveTrackingLocation(player, questId).isPresent();
+        return view || trackerBridge.resolveTrackingLocation(player, questId).isPresent();
     }
 
     /**
      * 判断指定子任务是否存在可用的导航坐标点。
      *
-     * @param player  玩家，为 {@code null} 时仅检查 overlay 配置
+     * @param player  玩家，为 {@code null} 时仅检查 view 配置
      * @param questId 任务 ID
      * @param taskId  子任务 ID
      * @return 存在可用坐标点时返回 {@code true}
      */
     public boolean hasTaskPoint(Player player, String questId, String taskId) {
+        if (!navigationAllowed(questId)) return false;
         if (!runtimeReady()) {
             return false;
         }
-        boolean overlay = overlayNavigationEnabled() && hasOverlayTaskPoint(questId, taskId);
+        boolean view = hasViewTaskPoint(questId, taskId);
         if (!chemdahNavigationEnabled()) {
-            return overlay;
+            return view;
         }
         if (player == null || !player.isOnline()) {
-            return overlay;
+            return view;
         }
-        if (chemdahOnlyNavigation()) {
-            return true;
-        }
-        return overlay || trackerBridge.resolveTrackingLocation(player, questId).isPresent();
+        return view || trackerBridge.resolveTrackingLocation(player, questId).isPresent();
     }
 
     /**
      * 判断任务追踪能否建立追踪态（与 {@link #trackQuest} 的实际成功条件一致）。
      * <p>
      * 与 {@link #hasQuestPoint} 的区别：本方法判断"能否追踪"，而非"有无坐标点"。
-     * Chemdah 追踪在线时（chemdah/hybrid 模式），{@code trackQuest} 允许无坐标点
-     * 激活——追踪态照样建立，HUD 卡片照常显示（仅隐藏导航行）；overlay 独存模式
-     * 下无坐标点则激活必然失败，此时才要求 overlay 点真实存在。
+     * Chemdah 追踪可用时允许先建立无坐标的追踪态，稍后解析动态目标；
+     * 只有展示组件提供坐标时也可以独立建立导航。
      *
      * @param player             玩家
      * @param questId            任务 ID
@@ -404,13 +399,14 @@ public final class QuestGpsNavigationService {
      * @return 调用 {@code trackQuest} 可建立追踪态时返回 {@code true}
      */
     public boolean questTrackable(Player player, String questId, List<String> prioritizedTaskIds) {
+        if (!navigationAllowed(questId)) return false;
         if (!runtimeReady() || player == null || !player.isOnline()) {
             return false;
         }
         if (chemdahNavigationEnabled()) {
             return true;
         }
-        return hasOverlayQuestPoint(questId, prioritizedTaskIds);
+        return hasViewQuestPoint(questId, prioritizedTaskIds);
     }
 
     /**
@@ -418,13 +414,14 @@ public final class QuestGpsNavigationService {
      * 语义同 {@link #questTrackable}。
      */
     public boolean taskTrackable(Player player, String questId, String taskId) {
+        if (!navigationAllowed(questId)) return false;
         if (!runtimeReady() || player == null || !player.isOnline()) {
             return false;
         }
         if (chemdahNavigationEnabled()) {
             return true;
         }
-        return hasOverlayTaskPoint(questId, taskId);
+        return hasViewTaskPoint(questId, taskId);
     }
 
     /**
@@ -581,7 +578,7 @@ public final class QuestGpsNavigationService {
     }
 
     /**
-     * 动态目标实时解析：chemdah → overlay/npc 链，供 {@link NavigationTarget} resolver 调用。
+     * 动态目标实时解析：chemdah → view/npc 链，供 {@link NavigationTarget} resolver 调用。
      * 同时把解析出的最新 NavigationPoint 写回 trackingPoints（地图外部目标同步读取）。
      */
     private Location resolveLive(Player player, TrackContext context) {
@@ -771,50 +768,30 @@ public final class QuestGpsNavigationService {
             .orElse("");
     }
 
-    private Optional<NavigationPoint> resolveQuestPoint(
-        Player player,
-        String questId,
-        List<String> prioritizedTaskIds,
-        String fallbackTitle
-    ) {
-        if (!runtimeReady()) {
-            return Optional.empty();
-        }
-        Optional<NavigationPoint> chemdahPoint = resolveChemdahPoint(player, questId, "", fallbackTitle);
-        if (chemdahPoint.isPresent()) {
-            return chemdahPoint.map(point -> withQuestTeleport(questId, point));
-        }
-        if (!overlayNavigationEnabled()) {
-            return Optional.empty();
-        }
-        return resolveOverlayQuestPoint(questId, prioritizedTaskIds, fallbackTitle)
+    private Optional<NavigationPoint> resolveQuestPoint(Player player, String questId,
+            List<String> prioritizedTaskIds, String fallbackTitle) {
+        if (!runtimeReady() || !navigationAllowed(questId)) return Optional.empty();
+        Optional<NavigationPoint> view = resolveViewQuestPoint(questId, prioritizedTaskIds, fallbackTitle);
+        return (view.isPresent() ? view : resolveChemdahPoint(player, questId, "", fallbackTitle))
             .map(point -> withQuestTeleport(questId, point));
     }
 
     private Optional<NavigationPoint> resolveTaskPoint(Player player, String questId, String taskId, String fallbackTitle) {
-        if (!runtimeReady()) {
-            return Optional.empty();
-        }
-        Optional<NavigationPoint> chemdahPoint = resolveChemdahPoint(player, questId, taskId, fallbackTitle);
-        if (chemdahPoint.isPresent()) {
-            return chemdahPoint.map(point -> withQuestTeleport(questId, point));
-        }
-        if (!overlayNavigationEnabled()) {
-            return Optional.empty();
-        }
-        return resolveOverlayTaskPoint(questId, taskId, fallbackTitle)
+        if (!runtimeReady() || !navigationAllowed(questId)) return Optional.empty();
+        Optional<NavigationPoint> view = resolveViewTaskPoint(questId, taskId, fallbackTitle);
+        return (view.isPresent() ? view : resolveChemdahPoint(player, questId, taskId, fallbackTitle))
             .map(point -> withQuestTeleport(questId, point));
     }
 
-    private boolean hasOverlayQuestPoint(String questId, List<String> prioritizedTaskIds) {
-        return resolveOverlayQuestPoint(questId, prioritizedTaskIds, "").isPresent();
+    private boolean hasViewQuestPoint(String questId, List<String> prioritizedTaskIds) {
+        return resolveViewQuestPoint(questId, prioritizedTaskIds, "").isPresent();
     }
 
-    private boolean hasOverlayTaskPoint(String questId, String taskId) {
-        return resolveOverlayTaskPoint(questId, taskId, "").isPresent();
+    private boolean hasViewTaskPoint(String questId, String taskId) {
+        return resolveViewTaskPoint(questId, taskId, "").isPresent();
     }
 
-    private Optional<NavigationPoint> resolveOverlayQuestPoint(
+    private Optional<NavigationPoint> resolveViewQuestPoint(
         String questId,
         List<String> prioritizedTaskIds,
         String fallbackTitle
@@ -825,7 +802,7 @@ public final class QuestGpsNavigationService {
         }
         if (prioritizedTaskIds != null) {
             for (String taskId : prioritizedTaskIds) {
-                Optional<NavigationPoint> taskPoint = resolveOverlayTaskPoint(questId, taskId, fallbackTitle);
+                Optional<NavigationPoint> taskPoint = resolveViewTaskPoint(questId, taskId, fallbackTitle);
                 if (taskPoint.isPresent()) {
                     return taskPoint;
                 }
@@ -835,7 +812,7 @@ public final class QuestGpsNavigationService {
         return point == null ? Optional.empty() : Optional.of(toNavigationPoint(questId, "", point, fallbackTitle));
     }
 
-    private Optional<NavigationPoint> resolveOverlayTaskPoint(String questId, String taskId, String fallbackTitle) {
+    private Optional<NavigationPoint> resolveViewTaskPoint(String questId, String taskId, String fallbackTitle) {
         QuestGpsModuleConfiguration.TaskDefinition task = configuration.task(questId, taskId);
         if (task == null || task.navigation() == null) {
             return Optional.empty();
@@ -940,24 +917,13 @@ public final class QuestGpsNavigationService {
         return safe(taskId).isBlank() ? base : base + "|" + safe(taskId).toLowerCase(Locale.ROOT);
     }
 
-    private String navigationMode() {
-        String mode = configuration.navigation().mode();
-        if (mode == null || mode.isBlank()) {
-            return "hybrid";
-        }
-        return mode.trim().toLowerCase(Locale.ROOT);
-    }
-
     private boolean chemdahNavigationEnabled() {
-        return trackerBridge != null && trackerBridge.available() && !navigationMode().equals("overlay");
+        return trackerBridge != null && trackerBridge.available();
     }
 
-    private boolean overlayNavigationEnabled() {
-        return navigationMode().equals("overlay") || navigationMode().equals("hybrid");
-    }
-
-    private boolean chemdahOnlyNavigation() {
-        return navigationMode().equals("chemdah") && chemdahNavigationEnabled();
+    private boolean navigationAllowed(String questId) {
+        var quest = configuration.quest(questId);
+        return quest != null && quest.enabled() && quest.navigation().enabled();
     }
 
     /** 世界查找：精确匹配优先，其次大小写不敏感（配置的世界名可能大小写不一致）。 */

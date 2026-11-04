@@ -83,23 +83,23 @@ player:
 
 # ── 拍卖行消息 ──
 auction-listed: "&a物品已成功上架！"                    # 上架成功提示
-auction-bid-placed: "&a出价成功！当前最高出价: &e%amount%"  # %amount%=出价金额
-auction-outbid: "&c您对 &e%item% &c的出价已被超越！新最高价: &e%amount%"  # 被超越通知，%item%=物品名
-auction-expired: "&7您上架的 &e%item% &7已到期，已退回。"  # 到期退回通知
-auction-sold: "&a您上架的 &e%item% &a已售出！收入: &e%amount%"  # 售出通知，%amount%=税后收入
+auction-bid-placed: "&a出价成功！当前最高出价: &e{amount}"  # {amount}=出价金额
+auction-outbid: "&c您对 &e{item} &c的出价已被超越！新最高价: &e{amount}"  # 被超越通知，{item}=物品名
+auction-expired: "&7您上架的 &e{item} &7已到期，已退回。"  # 到期退回通知
+auction-sold: "&a您上架的 &e{item} &a已售出！收入: &e{amount}"  # 售出通知，{amount}=税后收入
 auction-cancelled: "&7已取消上架。"                    # 取消上架成功
 # ── 系统商店消息 ──
-shop-bought: "&a购买成功！花费: &e%amount%"            # %amount%=花费金额
+shop-bought: "&a购买成功！花费: &e{amount}"            # {amount}=花费金额
 shop-limit-reached: "&c该商品已达购买上限。"           # 限购商品达到上限
 shop-condition-denied: "&c你不满足该商品的上架条件。"      # 商品 conditions 条件不满足
 # ── 回收商店消息 ──
-recycle-success: "&a回收成功！获得: &e%amount%"        # %amount%=获得金额
+recycle-success: "&a回收成功！获得: &e{amount}"        # {amount}=获得金额
 recycle-nothing: "&7背包中没有可回收的物品。"          # 无可回收物品
 # ── 玩家商店消息 ──
 player-shop-listed: "&a商品已上架到你的商店！"          # 上架成功
-player-shop-bought: "&a购买成功！花费: &e%amount%"     # %amount%=花费金额
-player-shop-sold: "&a你商店中的 &e%item% &a已售出！收入: &e%amount%"  # %item%=物品名 %amount%=税后收入
-player-shop-expired: "&7你商店中的 &e%item% &7已到期，已退回。"  # 到期退回通知
+player-shop-bought: "&a购买成功！花费: &e{amount}"     # {amount}=花费金额
+player-shop-sold: "&a你商店中的 &e{item} &a已售出！收入: &e{amount}"  # {item}=物品名 {amount}=税后收入
+player-shop-expired: "&7你商店中的 &e{item} &7已到期，已退回。"  # 到期退回通知
 player-shop-cancelled: "&7已下架商品。"                # 下架成功
 # ── 通用错误消息 ──
 insufficient-funds: "&c余额不足。"                    # 货币余额不足

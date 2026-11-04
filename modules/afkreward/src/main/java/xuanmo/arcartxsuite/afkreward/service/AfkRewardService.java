@@ -652,7 +652,8 @@ public final class AfkRewardService {
             computeMultiplier(player, state, area));
         // 验证玩家名防止命令注入
         String safeName = xuanmo.arcartxsuite.api.command.CommandSanitizer.validatePlayerName(player.getName());
-        return command.replace("%player_name%", safeName)
+        return command.replace("{player}", safeName).replace("%player_name%", safeName)
+            .replace("{multiplier}", value)
             .replace("%axsafk_multiplier%", value)
             .replace("%axsafkreward_multiplier%", value);
     }

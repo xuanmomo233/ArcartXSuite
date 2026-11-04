@@ -244,7 +244,7 @@ public final class RewardActionExecutor {
                 resolved = switch (key.toLowerCase(java.util.Locale.ROOT)) {
                     case "player", "player_name" -> sanitizeName(resolvePlayerName(target, variables));
                     case "player_display_name" -> sanitizeName(resolvePlayerDisplayName(target, variables));
-                    case "player_uuid" -> target != null ? target.getUniqueId().toString() : "";
+                    case "uuid", "player_uuid" -> variables.getOrDefault("player_uuid", target != null ? target.getUniqueId().toString() : "");
                     default -> null;
                 };
             }

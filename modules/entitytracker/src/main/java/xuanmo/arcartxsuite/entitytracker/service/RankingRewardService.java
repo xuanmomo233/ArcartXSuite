@@ -274,6 +274,7 @@ public class RankingRewardService {
         Map<String, String> variables = new LinkedHashMap<>();
         variables.put("player", ranking.getPlayerName());
         variables.put("player_name", ranking.getPlayerName());
+        variables.put("uuid", ranking.getPlayerUuid());
         variables.put("player_uuid", ranking.getPlayerUuid());
         variables.put("rank", String.valueOf(ranking.getRank()));
         variables.put("damage", NUMBER_FORMAT.format(ranking.getBestDamage()));
@@ -468,6 +469,7 @@ public class RankingRewardService {
             Map<String, String> variables = new LinkedHashMap<>();
             variables.put("player", record.getPlayerName());
             variables.put("player_name", record.getPlayerName());
+            variables.put("uuid", record.getPlayerUuid());
             variables.put("player_uuid", record.getPlayerUuid());
             variables.put("rank", String.valueOf(rank));
             variables.put("boss_id", boss.mythicMobId());

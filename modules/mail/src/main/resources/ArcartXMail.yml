@@ -9,7 +9,7 @@ config-version: 3
 #   %axsmail_claimable_count% 当前玩家可领取邮件数。
 #   %axsmail_total_count% 当前玩家收件箱总邮件数。
 # 可消费的 PAPI: currencies.<id>.balance-placeholder 用于读取余额；data/mail/presets/*.yml 的 claim-conditions 会解析 PAPI 后判断领取条件。
-# 内置变量: claim-commands、withdraw-command、deposit-command 等命令支持玩家相关 token，例如 <player>。
+# 内置变量: claim-commands 使用 {player} 表示领取者。货币命令变量见本体货币配置。
 # 关联资源: data/mail/presets/*.yml、ui/mail_*.yml
 
 settings:

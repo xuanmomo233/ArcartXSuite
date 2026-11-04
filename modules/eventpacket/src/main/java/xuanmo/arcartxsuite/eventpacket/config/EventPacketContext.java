@@ -168,6 +168,14 @@ public final class EventPacketContext {
         return renderNode(template, values);
     }
 
+    public String renderCommand(Object template, Player player) {
+        if (template == null || player == null) return "";
+        Map<String, String> values = buildValues(EventPacketRecipient.SELF, player);
+        values.putIfAbsent("player", subject.name);
+        values.putIfAbsent("uuid", subject.uuid);
+        return String.valueOf(renderNode(template, values)).trim();
+    }
+
     /**
      * 构建用于条件评估的上下文变量表，以触发者自身作为接收者。
      * <p>

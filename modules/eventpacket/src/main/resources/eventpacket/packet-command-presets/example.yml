@@ -20,7 +20,7 @@ example_op:
   # 当 allow-args 为 true 时，对每个参数进行正则校验
   args-pattern: "[\\w.:-]{1,64}"
   commands:
-    - say 你好，我是 <player>
+    - say 你好，我是 {player}
     - say 这里是 OP 身份执行
 
 example_console:
@@ -30,7 +30,7 @@ example_console:
   allow-args: false
   args-pattern: "[\\w.:-]{1,64}"
   commands:
-    - say 控制台正在响应 <player>
+    - say 控制台正在响应 {player}
 
 # 带参数透传的示例
 # 客户端调用: Packet.send('ArcartXEventPacket', 'give_item', 'DIAMOND_SWORD', '1')
@@ -41,5 +41,5 @@ example_with_args:
   allow-args: true
   args-pattern: "[A-Z_0-9]{1,64}"
   commands:
-    - give <player> <arg1> <arg2>
+    - give {player} {arg1} {arg2}
 

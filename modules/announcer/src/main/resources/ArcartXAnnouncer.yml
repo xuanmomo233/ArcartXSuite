@@ -5,7 +5,7 @@ config-version: 2
 # 重载: /axs announcer reload
 # PAPI 输出: 无独立 PlaceholderAPI 输出。
 # 可解析的 PAPI: entries.<id>.text / subtitle.groups-directory 下字幕文本 会按接收玩家解析。
-# 内置变量: click-command 中的 <player> 会替换为点击玩家名。
+# 内置变量: click-command 中的 {player} 会替换为点击玩家名。
 # 关联资源: ui/announcer_hud.yml、ui/subtitle_hud.yml、subtitle/groups/*.yml
 
 # 统一 UI 配置节：公告 HUD 与字幕 HUD 的 UI 注册/覆盖开关集中在此。
