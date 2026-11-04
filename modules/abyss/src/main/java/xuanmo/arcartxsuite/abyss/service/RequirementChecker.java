@@ -98,7 +98,7 @@ public final class RequirementChecker {
         return CheckResult.pass();
     }
 
-    private CheckResult checkSingle(AbyssTemplate template, Player p) {
+    CheckResult checkSingle(AbyssTemplate template, Player p) {
         EntryRequirements r = template.requirements();
         if (!stamina.ready(p.getUniqueId())) return CheckResult.fail("玩家数据正在加载或暂不可用，请稍后重试");
         // 等级
@@ -135,10 +135,10 @@ public final class RequirementChecker {
                 + "，当前 " + stamina.getStamina(p.getUniqueId()) + "）");
         }
         // 物品
-        for (EntryRequirements.RequiredItem item : r.requiredItems()) {
-            if (!hasEnough(p, item)) {
-                return CheckResult.fail("缺少物品 " + item.id() + " x" + item.amount());
-            }
+        if (!r.requiredItems().isEmpty()) {
+            var inventory = cloneContents(p.getInventory().getContents());
+            var missing = deductItems(inventory, r.requiredItems());
+            if (missing != null) return CheckResult.fail("缺少物品 " + missing.id() + " x" + missing.amount());
         }
         // 条件表达式（PAPI/ARIA/JS/CONTEXT）
         var failed = evaluator.firstFailed(p, r.conditions());
@@ -148,16 +148,26 @@ public final class RequirementChecker {
         return CheckResult.pass();
     }
 
-    private boolean hasEnough(Player p, EntryRequirements.RequiredItem item) {
-        int found = 0;
-        String def = item.source() + ":" + item.id();
-        for (var it : p.getInventory().getContents()) {
-            if (it != null && rewards.matches(def, it)) {
-                found += it.getAmount();
-                if (found >= item.amount()) return true;
+    private static org.bukkit.inventory.ItemStack[] cloneContents(org.bukkit.inventory.ItemStack[] contents) {
+        return java.util.Arrays.stream(contents).map(item -> item == null ? null : item.clone())
+            .toArray(org.bukkit.inventory.ItemStack[]::new);
+    }
+
+    private @Nullable EntryRequirements.RequiredItem deductItems(org.bukkit.inventory.ItemStack[] plan,
+                                                                 List<EntryRequirements.RequiredItem> items) {
+        for (var item : items) {
+            int remaining = item.amount();
+            for (int slot = 0; slot < plan.length && remaining > 0; slot++) {
+                var stack = plan[slot];
+                if (stack == null || !rewards.matches(item.source() + ":" + item.id(), stack)) continue;
+                int count = Math.min(remaining, stack.getAmount());
+                remaining -= count;
+                stack.setAmount(stack.getAmount() - count);
+                if (stack.getAmount() == 0) plan[slot] = null;
             }
+            if (remaining > 0) return item;
         }
-        return false;
+        return null;
     }
 
     /**
@@ -166,11 +176,13 @@ public final class RequirementChecker {
     public static final class Charge {
         private final boolean ok; private final String reason;
         private final Runnable rollback, commit; private boolean closed;
+        private boolean reviewRequired;
         Charge(boolean ok, String reason, Runnable rollback, Runnable commit) {
             this.ok=ok; this.reason=reason; this.rollback=rollback; this.commit=commit;
         }
         public boolean ok() { return ok; }
         public String reason() { return reason; }
+        public boolean reviewRequired() { return reviewRequired; }
         public void rollback() { if (!closed && ok) { closed=true; rollback.run(); } }
         public void commit() { if (!closed && ok) { closed=true; commit.run(); } }
     }
@@ -189,18 +201,10 @@ public final class RequirementChecker {
             java.util.Map<Player,org.bukkit.inventory.ItemStack[]> originals = new java.util.LinkedHashMap<>();
             for (Player p : members) {
                 if (!p.isOnline() || !stamina.ready(p.getUniqueId())) throw new IllegalStateException("成员离线或数据尚未就绪");
-                var plan = java.util.Arrays.stream(p.getInventory().getContents())
-                    .map(it -> it == null ? null : it.clone()).toArray(org.bukkit.inventory.ItemStack[]::new);
-                originals.put(p,java.util.Arrays.stream(plan).map(it->it==null?null:it.clone()).toArray(org.bukkit.inventory.ItemStack[]::new));
-                for (EntryRequirements.RequiredItem item : r.requiredItems()) {
-                    int remaining = item.amount();
-                    for (int i=0;i<plan.length && remaining>0;i++) {
-                        var it=plan[i]; if (it==null || !rewards.matches(item.source()+":"+item.id(),it)) continue;
-                        int amount=Math.min(remaining,it.getAmount()); remaining-=amount;
-                        it.setAmount(it.getAmount()-amount); if(it.getAmount()==0)plan[i]=null;
-                    }
-                    if (remaining>0) throw new IllegalStateException("门票物品不足: "+p.getName());
-                }
+                var plan = cloneContents(p.getInventory().getContents());
+                originals.put(p, cloneContents(plan));
+                if (deductItems(plan, r.requiredItems()) != null)
+                    throw new IllegalStateException("门票物品不足: "+p.getName());
                 if (stamina.getStamina(p.getUniqueId()) < r.staminaCost()) throw new IllegalStateException("体力不足: "+p.getName());
                 plans.put(p,plan);
             }
@@ -220,9 +224,13 @@ public final class RequirementChecker {
                 if (!r.requiredItems().isEmpty()) {
                     if(!java.util.Arrays.equals(p.getInventory().getContents(),originals.get(p)))
                         throw new IllegalStateException("门票物品在扣费时发生变化");
-                    var original=java.util.Arrays.stream(p.getInventory().getContents())
-                        .map(it->it==null?null:it.clone()).toArray(org.bukkit.inventory.ItemStack[]::new);
-                    undo.add(() -> p.getInventory().setContents(original));
+                    var original = cloneContents(p.getInventory().getContents());
+                    var expected = cloneContents(plans.get(p));
+                    undo.add(() -> {
+                        if (!java.util.Arrays.equals(p.getInventory().getContents(), expected))
+                            throw new IllegalStateException("背包在扣票后发生变化，退款需核对: " + p.getName());
+                        p.getInventory().setContents(original);
+                    });
                     p.getInventory().setContents(plans.get(p));
                 }
             }
@@ -232,7 +240,9 @@ public final class RequirementChecker {
         } catch (RuntimeException failure) {
             try { rollback.run(); } catch(RuntimeException refund) {
                 failure.addSuppressed(refund);
-                return new Charge(false,failure.getMessage()+"；退款需核对: "+refund.getMessage(),()->{},()->{});
+                var uncertain = new Charge(false,failure.getMessage()+"；退款需核对: "+refund.getMessage(),()->{},()->{});
+                uncertain.reviewRequired = true;
+                return uncertain;
             }
             return new Charge(false,failure.getMessage(),()->{},()->{});
         }

@@ -58,6 +58,15 @@ class CrossPartyHandoffTest {
         var expire=CrossDungeonManager.class.getDeclaredMethod("expirePendingIn",String.class);expire.setAccessible(true);expire.invoke(manager,"request");
         verify(service,never()).enterDungeon(anyList(),anyString(),any());assertNull(parties.partyOf(member));
     }
+    @Test void replayedReservationDoesNotStartASecondRun() throws Exception {
+        request(context());
+        manager.onPlayerJoin(member);
+        manager.onPlayerJoin(leader);
+        request(context());
+        manager.onPlayerJoin(member);
+        manager.onPlayerJoin(leader);
+        verify(service, times(1)).enterDungeon(anyList(), eq("test"), eq("route_a"));
+    }
     @Test void unexpectedSenderCannotReservePlayers()throws Exception {
         var context=context();context.put("_sender","wrong-node");request(context);manager.onPlayerJoin(member);manager.onPlayerJoin(leader);
         verify(service,never()).enterDungeon(anyList(),anyString(),any());

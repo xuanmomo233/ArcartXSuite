@@ -60,6 +60,35 @@ class AdmissionChargeTest {
         assertFalse(checker.charge(template,List.of(player)).ok());
         verify(money,never()).withdraw(any(),any(BigDecimal.class));assertEquals(1,player.getInventory().getContents()[0].getAmount());
     }
+    @Test void rollbackDoesNotOverwriteItemsChangedDuringTeleport() throws Exception {
+        var yaml = new org.bukkit.configuration.file.YamlConfiguration();
+        yaml.set("money-cost", 5);
+        yaml.set("required-items", List.of("material:DIAMOND:1"));
+        when(template.requirements()).thenReturn(EntryRequirements.load(yaml));
+        Player player = player();
+        when(rewards.matches(anyString(), any())).thenReturn(true);
+        player.getInventory().setContents(new ItemStack[]{new ItemStack(Material.DIAMOND)});
+        var serverField = org.bukkit.Bukkit.class.getDeclaredField("server");
+        serverField.setAccessible(true);
+        Object previous = serverField.get(null);
+        var server = mock(org.bukkit.Server.class);
+        var factory = mock(ItemFactory.class);
+        when(factory.equals(isNull(), isNull())).thenReturn(true);
+        when(server.getItemFactory()).thenReturn(factory);
+        try {
+            serverField.set(null, server);
+            var charge = checker.charge(template, List.of(player));
+            assertTrue(charge.ok(), charge::reason);
+            player.getInventory().setContents(new ItemStack[]{new ItemStack(Material.STONE)});
+            assertThrows(IllegalStateException.class, charge::rollback);
+            assertEquals(Material.STONE, player.getInventory().getContents()[0].getType());
+            verify(rewards).refundMoney(eq(player), eq(5d), eq("money"), anyString());
+            verifyNoInteractions(cooldown);
+        } finally {
+            serverField.set(null, previous);
+        }
+    }
+
     @Test void unloadedPlayerDataBlocksAllCharges() {
         Player player=player();when(stamina.ready(player.getUniqueId())).thenReturn(false);
         assertFalse(checker.charge(template,List.of(player)).ok());verify(money,never()).withdraw(any(),any());

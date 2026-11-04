@@ -39,11 +39,19 @@ public final class MonsterGroupManager {
         volatile boolean spawnQueued;
         final Set<UUID> alive = ConcurrentHashMap.newKeySet();
         ScheduledTask delayedTask;
-        GroupRuntime(MonsterGroup g) { this.group = g; }
+        final String encounter;
+        final String role;
+        GroupRuntime(MonsterGroup g) { this(g, g.name(), "GROUP"); }
+        GroupRuntime(MonsterGroup g, String encounter, String role) {
+            this.group = g;
+            this.encounter = encounter;
+            this.role = role;
+        }
     }
 
     private final Map<UUID, Map<String, GroupRuntime>> instanceGroups = new ConcurrentHashMap<>();
     private final Map<UUID, GroupRuntime> entityToGroup = new ConcurrentHashMap<>();
+    private final Map<UUID, xuanmo.arcartxsuite.api.capability.AbyssRunAccess.Entity> entityContexts = new ConcurrentHashMap<>();
     private final SchedulerAPI scheduler;
     private final org.bukkit.plugin.Plugin plugin;
     private final Logger logger;
@@ -61,6 +69,9 @@ public final class MonsterGroupManager {
         @Nullable Location parseLocation(AbyssInstance instance, String locStr);
         @Nullable MobProvider provider();
         void publishEvent(String topic, Map<String, Object> data);
+        default void entityChanged(xuanmo.arcartxsuite.api.capability.AbyssRunAccess.Entity context,
+                                   xuanmo.arcartxsuite.api.capability.AbyssRunAccess.EntityChange change) { }
+        default @Nullable String currentStage(AbyssInstance instance) { return null; }
     }
 
     public MonsterGroupManager(org.bukkit.plugin.Plugin plugin, SchedulerAPI scheduler,
@@ -113,11 +124,16 @@ public final class MonsterGroupManager {
      * AUTO_START 不会立即刷——由调用方（如房间锁门）显式 spawnGroup。</p>
      */
     public void registerRuntimeGroup(AbyssInstance instance, MonsterGroup group) {
+        registerRuntimeGroup(instance, group, group.name(), "GROUP");
+    }
+
+    public void registerRuntimeGroup(AbyssInstance instance, MonsterGroup group, String encounter, String role) {
         if (!planAllowed(instance, group)) return;
         Map<String, GroupRuntime> groups =
             instanceGroups.computeIfAbsent(instance.getInstanceId(),
                 k -> new ConcurrentHashMap<>());
-        groups.put(group.name(), new GroupRuntime(group));
+        if (groups.putIfAbsent(group.name(), new GroupRuntime(group, encounter, role)) != null)
+            logger.warning("[abyss] 忽略重复的运行时怪组 " + group.name());
     }
 
     /** 生成怪物组（MANUAL/TRIGGERED/脚本均可调）。 */
@@ -141,10 +157,25 @@ public final class MonsterGroupManager {
             // 区块票据：防怪被区块卸载
             keepChunkLoaded(loc);
             for (int i = 0; i < ms.amount(); i++) {
-                Entity e = provider.spawn(ms.mobId(), loc, ms.level());
-                if (e != null) {
+                Entity e;
+                String source;
+                if (provider instanceof CompositeMobProvider composite) {
+                    var spawnedMob = composite.spawnWithSource(ms.mobId(), loc, ms.level());
+                    if (spawnedMob == null) continue;
+                    e = spawnedMob.entity();
+                    source = spawnedMob.source();
+                } else {
+                    e = provider.spawn(ms.mobId(), loc, ms.level());
+                    source = provider instanceof VanillaMobProvider ? "vanilla"
+                        : provider instanceof MythicMobProvider ? "mythic" : "custom";
+                }
+                if (e != null && e.getWorld() == world && entityToGroup.putIfAbsent(e.getUniqueId(), rt) == null) {
                     rt.alive.add(e.getUniqueId());
-                    entityToGroup.put(e.getUniqueId(), rt);
+                    var context = new xuanmo.arcartxsuite.api.capability.AbyssRunAccess.Entity(e.getUniqueId(),
+                        instance.getInstanceId(), world.getUID(), groupName, ms.mobId(), source,
+                        rt.encounter, rt.role, callback.currentStage(instance));
+                    entityContexts.put(e.getUniqueId(), context);
+                    callback.entityChanged(context, xuanmo.arcartxsuite.api.capability.AbyssRunAccess.EntityChange.SPAWNED);
                     spawned++;
                 }
             }
@@ -169,9 +200,12 @@ public final class MonsterGroupManager {
 
     /** 实体死亡回调（由监听器/中继调用）。 */
     public void onEntityDeath(UUID entityUuid, AbyssInstance instance, @Nullable Player killer) {
+        var context = entityContexts.get(entityUuid);
+        if (context != null && !context.runId().equals(instance.getInstanceId())) return;
         GroupRuntime rt = entityToGroup.remove(entityUuid);
         if (rt != null) {
             rt.alive.remove(entityUuid);
+            removeContext(entityUuid, xuanmo.arcartxsuite.api.capability.AbyssRunAccess.EntityChange.DIED);
             if (callback != null) {
                 callback.onMobDeath(instance, entityUuid, killer);
             }
@@ -191,6 +225,7 @@ public final class MonsterGroupManager {
                 if (e == null || e.isDead() || !e.isValid()) {
                     rt.alive.remove(u);
                     entityToGroup.remove(u);
+                    removeContext(u, xuanmo.arcartxsuite.api.capability.AbyssRunAccess.EntityChange.VANISHED);
                     changed = true;
                 }
             }
@@ -299,10 +334,9 @@ public final class MonsterGroupManager {
         if (rt == null) return;
         for (UUID u : rt.alive) {
             Entity e = Bukkit.getEntity(u);
-            if (e != null) {
-                entityToGroup.remove(u);
-                e.remove();
-            }
+            entityToGroup.remove(u);
+            removeContext(u, xuanmo.arcartxsuite.api.capability.AbyssRunAccess.EntityChange.REMOVED);
+            if (e != null) e.remove();
         }
         rt.alive.clear();
         // ACTIVE 走正常完成链；PENDING（从未生成）也视为完成——随机波次等场景
@@ -324,8 +358,9 @@ public final class MonsterGroupManager {
         cancelDelayed(rt);
         for (UUID u : rt.alive) {
             Entity e = Bukkit.getEntity(u);
-            if (e != null) e.remove();
             entityToGroup.remove(u);
+            removeContext(u, xuanmo.arcartxsuite.api.capability.AbyssRunAccess.EntityChange.REMOVED);
+            if (e != null) e.remove();
         }
         rt.state = GroupState.REMOVED;
     }
@@ -337,8 +372,9 @@ public final class MonsterGroupManager {
         for (GroupRuntime rt : groups.values()) {
             for (UUID u : rt.alive) {
                 Entity e = Bukkit.getEntity(u);
-                if (e != null) e.remove();
                 entityToGroup.remove(u);
+                removeContext(u, xuanmo.arcartxsuite.api.capability.AbyssRunAccess.EntityChange.REMOVED);
+                if (e != null) e.remove();
             }
             rt.alive.clear();
         }
@@ -399,13 +435,39 @@ public final class MonsterGroupManager {
         return entityToGroup.containsKey(entityUuid);
     }
 
+    private void removeContext(UUID id, xuanmo.arcartxsuite.api.capability.AbyssRunAccess.EntityChange change) {
+        var context = entityContexts.remove(id);
+        if (context != null && callback != null) callback.entityChanged(context, change);
+    }
+
+    public xuanmo.arcartxsuite.api.capability.AbyssRunAccess.Entity entityContext(UUID id) {
+        return entityContexts.get(id);
+    }
+
+    public List<xuanmo.arcartxsuite.api.capability.AbyssRunAccess.Entity> entityContexts(UUID runId) {
+        return entityContexts.values().stream().filter(entity -> entity.runId().equals(runId))
+            .sorted(java.util.Comparator.comparing(xuanmo.arcartxsuite.api.capability.AbyssRunAccess.Entity::id)).toList();
+    }
+
+    public List<xuanmo.arcartxsuite.api.capability.AbyssRunAccess.Objective> groupObjectives(UUID runId) {
+        var groups = instanceGroups.get(runId);
+        if (groups == null) return List.of();
+        return groups.entrySet().stream().sorted(Map.Entry.comparingByKey())
+            .map(entry -> new xuanmo.arcartxsuite.api.capability.AbyssRunAccess.Objective(
+                "mob_group", entry.getKey(), entry.getValue().state.name(),
+                entry.getValue().state == GroupState.COMPLETED ? 1 : 0, 1)).toList();
+    }
+
     /** 清理实例全部组状态。 */
     public void cleanup(AbyssInstance instance) {
         Map<String, GroupRuntime> groups = instanceGroups.remove(instance.getInstanceId());
         if (groups != null) {
             for (GroupRuntime rt : groups.values()) {
                 cancelDelayed(rt);
-                for (UUID u : rt.alive) entityToGroup.remove(u);
+                for (UUID u : rt.alive) {
+                    entityToGroup.remove(u);
+                    removeContext(u, xuanmo.arcartxsuite.api.capability.AbyssRunAccess.EntityChange.REMOVED);
+                }
             }
         }
     }
@@ -426,5 +488,7 @@ public final class MonsterGroupManager {
         }
         instanceGroups.clear();
         entityToGroup.clear();
+        for (UUID id : List.copyOf(entityContexts.keySet()))
+            removeContext(id, xuanmo.arcartxsuite.api.capability.AbyssRunAccess.EntityChange.REMOVED);
     }
 }

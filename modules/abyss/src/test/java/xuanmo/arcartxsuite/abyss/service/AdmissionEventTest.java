@@ -33,6 +33,7 @@ class AdmissionEventTest {
         var instances=new AbyssInstanceManager();set(service,"instances",instances);set(service,"started",true);
         set(service,"partyManager",new PartyManager(cfg.party(),s->{},null));
         var template=mock(AbyssTemplate.class,withSettings().mockMaker(org.mockito.MockMakers.INLINE));
+        when(template.requirements()).thenReturn(xuanmo.arcartxsuite.abyss.template.EntryRequirements.defaults());
         when(template.id()).thenReturn("test");when(template.mode()).thenReturn(AbyssTemplate.Mode.CLASSIC);when(template.plans()).thenReturn(Map.of());
         instances.registerTemplate(template);
         var checker=mock(RequirementChecker.class,withSettings().mockMaker(org.mockito.MockMakers.INLINE));
@@ -41,8 +42,29 @@ class AdmissionEventTest {
         when(pool.acquireWorld(eq(template),any())).thenReturn(new CompletableFuture<World>());set(service,"worldPool",pool);
         Player player=mock(Player.class);when(player.getUniqueId()).thenReturn(UUID.randomUUID());when(player.isOnline()).thenReturn(true);
         var server=mock(org.bukkit.Server.class);when(server.getPlayer(player.getUniqueId())).thenReturn(player);
+        when(server.isPrimaryThread()).thenReturn(true);
         var field=org.bukkit.Bukkit.class.getDeclaredField("server");field.setAccessible(true);Object previous=field.get(null);
-        try {field.set(null,server);assertTrue(service.enterDungeon(List.of(player),"test").ok());verifyNoInteractions(bus);}
+        try {
+            field.set(null,server);
+            var second = UUID.randomUUID();
+            var third = UUID.randomUUID();
+            when(checker.checkSingle(template, player)).thenReturn(RequirementChecker.CheckResult.pass());
+            var intent = new xuanmo.arcartxsuite.api.capability.AbyssAdmissionAccess.Intent(
+                "xc", UUID.randomUUID(), player.getUniqueId(), List.of(player.getUniqueId(), second, third),
+                "test", null, null, null);
+            var preflight = service.admissionAccess().preflight(intent);
+            assertFalse(preflight.allowed());
+            assertTrue(preflight.denials().stream().anyMatch(denial -> second.equals(denial.member())));
+            assertTrue(preflight.denials().stream().anyMatch(denial -> third.equals(denial.member())));
+            verify(pool, never()).acquireWorld(any(), any());
+            try (var policy = service.admissionAccess().registerPolicy("xc", 0, ignored ->
+                    List.of(AdmissionAccess.deny("WARZONE_ACTIVE", "当前在战区")))) {
+                assertFalse(service.enterDungeon(List.of(player), "test").ok());
+                verify(pool, never()).acquireWorld(any(), any());
+            }
+            assertTrue(service.enterDungeon(List.of(player),"test").ok());
+            verifyNoInteractions(bus);
+        }
         finally {field.set(null,previous);}
     }
 }

@@ -47,7 +47,7 @@ public final class CrossDungeonManager {
     /** 源节点：一次远端进本请求。 */
     private record PendingForward(String dungeon,
                                   List<UUID> players,
-                                  long deadline, String host) { }
+                                  long deadline, String host, UUID partyId, long partyRevision) { }
 
     /** 宿主节点：一次远端队伍预订。 */
     private static final class PendingEnter {
@@ -74,7 +74,9 @@ public final class CrossDungeonManager {
     private final Logger logger;
     private CrossServerChannel channel;
     private final Map<String, PendingForward> pendingOut = new ConcurrentHashMap<>();
+    private final java.util.Set<String> forwarding = ConcurrentHashMap.newKeySet();
     private final Map<String, PendingEnter> pendingIn = new ConcurrentHashMap<>();
+    private final Map<String, Long> recentReservations = new ConcurrentHashMap<>();
     private final Map<UUID, String> expectedArrivals = new ConcurrentHashMap<>();
 
     public CrossDungeonManager(AbyssService service,
@@ -109,7 +111,9 @@ public final class CrossDungeonManager {
             try { channel.close(); } catch (Throwable ignored) { }
         }
         pendingOut.clear();
+        forwarding.clear();
         pendingIn.clear();
+        recentReservations.clear();
         expectedArrivals.clear();
     }
 
@@ -133,9 +137,10 @@ public final class CrossDungeonManager {
         }
         String reqId = UUID.randomUUID().toString();
         List<UUID> uuids = players.stream().map(Player::getUniqueId).toList();
-        pendingOut.put(reqId, new PendingForward(template.id(), uuids,
-            System.currentTimeMillis() + OUT_TIMEOUT_MS,template.crossServer()));
         var party=service.party().partyOf(players.get(0));
+        pendingOut.put(reqId, new PendingForward(template.id(), uuids,
+            System.currentTimeMillis() + OUT_TIMEOUT_MS,template.crossServer(),
+            party == null ? null : party.id(), party == null ? 0 : party.revision()));
         UUID leader=party!=null?party.leader():players.get(0).getUniqueId();
         for (Player p : players) {
             p.sendMessage(service.msg("cross.requesting",
@@ -149,7 +154,8 @@ public final class CrossDungeonManager {
         // 超时兜底
         service.scheduleDelayedRaw(() -> {
             PendingForward pf = pendingOut.remove(reqId);
-            if (pf != null) {
+            boolean sent = forwarding.remove(reqId);
+            if (pf != null && !sent) {
                 notifyPlayers(pf.players,
                     service.msg("cross.timeout", "dungeon", template.id()));
             }
@@ -183,6 +189,9 @@ public final class CrossDungeonManager {
         if (reqId == null || dungeon == null || from == null) return;
         if(!from.equals(kv.get("_sender")))return;
         if (from.equals(nodeId())) return; // 自己的回声
+        long now = System.currentTimeMillis();
+        recentReservations.values().removeIf(deadline -> deadline <= now);
+        if (recentReservations.containsKey(reqId) || recentReservations.size() >= 32768) return;
         AbyssTemplate tpl = service.instances().getTemplate(dungeon);
         String cs = tpl != null ? tpl.crossServer() : null;
         if (cs == null || !cs.equals(nodeId())) return;   // 非本节点宿主
@@ -205,6 +214,7 @@ public final class CrossDungeonManager {
             return;
         }
         PendingEnter pe = new PendingEnter(dungeon,players,leader,mode,plan,"true".equals(kv.get("party")),capacity);
+        recentReservations.put(reqId, now + IN_TIMEOUT_MS + OUT_TIMEOUT_MS);
         pendingIn.put(reqId, pe);
         for (UUID u : players) expectedArrivals.put(u, reqId);
         publish("op=accept;req=" + reqId + ";dungeon=" + dungeon
@@ -223,13 +233,26 @@ public final class CrossDungeonManager {
         PendingForward pf = reqId != null ? pendingOut.get(reqId) : null;
         if (pf == null || host == null) return;
         if(!pf.host().equals(host) || !host.equals(kv.get("_sender")))return;
-        pendingOut.remove(reqId,pf);
+        if (!forwarding.add(reqId)) return;
         List<Player> online = new ArrayList<>();
         for (UUID u : pf.players) {
             Player p = Bukkit.getPlayer(u);
             if (p != null && p.isOnline()) online.add(p);
         }
-        if (online.isEmpty()) return;
+        if (online.size() != pf.players().size() || online.isEmpty()) {
+            pendingOut.remove(reqId, pf);
+            forwarding.remove(reqId);
+            notifyPlayers(pf.players(), "§c队伍成员未全部在线，跨服进入已取消。");
+            return;
+        }
+        var party = service.party().partyOf(online.get(0));
+        if (!java.util.Objects.equals(pf.partyId(), party == null ? null : party.id())
+            || (party != null && (party.revision() != pf.partyRevision() || !party.allReady()))) {
+            pendingOut.remove(reqId, pf);
+            forwarding.remove(reqId);
+            notifyPlayers(pf.players(), "§c等待跨服确认期间队伍状态已变化，进入已取消。");
+            return;
+        }
         for (Player p : online) {
             p.sendMessage(service.msg("cross.forwarding", "node", host));
             sendToServer(p, host);
@@ -241,6 +264,7 @@ public final class CrossDungeonManager {
         PendingForward pf = reqId != null ? pendingOut.get(reqId) : null;
         if (pf == null) return;
         if(!pf.host().equals(kv.get("_sender")))return;
+        if (forwarding.contains(reqId)) return;
         pendingOut.remove(reqId,pf);
         notifyPlayers(pf.players, service.msg("cross.declined",
             "reason", kv.getOrDefault("reason", "?")));

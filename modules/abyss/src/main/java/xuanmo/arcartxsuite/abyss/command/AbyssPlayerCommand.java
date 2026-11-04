@@ -67,6 +67,12 @@ public final class AbyssPlayerCommand implements TabExecutor {
                 var r = service.enterFromPlayer(player, args[1], plan);
                 if (!r.ok()) player.sendMessage(service.msg("error.enter-failed", "reason", r.reason()));
             }
+            case "rejoin" -> {
+                var access = service.reconnectAccess();
+                var status = access.reconnectStatus(player.getUniqueId());
+                if (status.eligible()) status = access.requestReconnect(player.getUniqueId(), status.runId());
+                player.sendMessage(status.code().equals("REJOINED") ? "§a已回到原副本。" : "§e无法回归副本：" + status.code());
+            }
             case "leave", "quit" -> {
                 AbyssInstance i = service.instances().getInstance(player);
                 if (i == null) {
@@ -486,7 +492,7 @@ public final class AbyssPlayerCommand implements TabExecutor {
         }
         // /abyss ...
         if (args.length == 1) {
-            return filter(List.of("enter", "leave", "list", "info", "stamina",
+            return filter(List.of("enter", "rejoin", "leave", "list", "info", "stamina",
                 "rank", "party", "ui", "stats"), args[0]);
         }
         if (args.length == 2 && ("enter".equalsIgnoreCase(args[0])

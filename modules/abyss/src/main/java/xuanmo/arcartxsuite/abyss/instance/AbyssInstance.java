@@ -128,6 +128,7 @@ public final class AbyssInstance {
 
     public boolean hasPlayer(UUID uuid) { return players.contains(uuid); }
     public boolean hasEnteredPlayers() { return !enteredPlayers.isEmpty(); }
+    public boolean hasEntered(UUID player) { return enteredPlayers.contains(player); }
     public void addPlayer(Player p) { players.add(p.getUniqueId()); }
     public void removePlayer(UUID uuid) {
         players.remove(uuid);
@@ -157,6 +158,10 @@ public final class AbyssInstance {
         savedGameModes.putIfAbsent(p.getUniqueId(), p.getGameMode());
     }
 
+    public void savePlayerGameMode(UUID player, GameMode mode) {
+        savedGameModes.putIfAbsent(player, mode);
+    }
+
     public void restorePlayerGameMode(Player p) {
         GameMode gm = savedGameModes.remove(p.getUniqueId());
         if (gm != null && p.getGameMode() != gm) {
@@ -180,6 +185,8 @@ public final class AbyssInstance {
     public void revive(Player p) {
         deadPlayers.remove(p.getUniqueId());
     }
+
+    public void restoreDeathState(UUID player) { deadPlayers.add(player); }
 
     public boolean isPlayerCurrentlyDead(Player p) {
         return deadPlayers.contains(p.getUniqueId());

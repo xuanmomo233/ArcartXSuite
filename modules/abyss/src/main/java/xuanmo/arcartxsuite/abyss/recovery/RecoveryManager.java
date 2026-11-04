@@ -51,6 +51,11 @@ public final class RecoveryManager {
     }
 
     /** 进服时检查并执行恢复动作；无标记直接返回。 */
+    public void discardMark(UUID player) {
+        File file = fileOf(player);
+        if (file.isFile() && !file.delete()) logger.warning("[abyss] 无法删除已处理的恢复标记 " + player);
+    }
+
     public void runIfMarked(Player player) {
         if (!cfg.enabled()) return;
         File f = fileOf(player.getUniqueId());

@@ -53,6 +53,90 @@ class SettlementLifecycleTest {
         instance.confirmAdmission();
     }
     @AfterEach void restore()throws Exception{serverField.set(null,previous);}
+
+    @Test void optedInDisconnectedPlayerReturnsToOriginalRunWithDeathState() throws Exception {
+        var yaml = new YamlConfiguration();
+        yaml.set("reconnect-grace-seconds", 60);
+        when(template.requirements()).thenReturn(EntryRequirements.load(yaml));
+        when(template.spawn()).thenReturn("1,65,1");
+        set(service, "partyManager", new xuanmo.arcartxsuite.abyss.party.PartyManager(
+            service.config().party(), text -> { }, null));
+        instance.recordDeath(player);
+        when(player.isOnline()).thenReturn(false);
+        service.handleQuit(player);
+        var access = service.reconnectAccess();
+        var status = access.reconnectStatus(player.getUniqueId());
+        assertTrue(status.eligible());
+        assertEquals(instance.getInstanceId(), status.runId());
+        when(player.isOnline()).thenReturn(true);
+        currentWorld.set(home);
+        assertEquals("NO_ACTIVE_RESERVATION", access.requestReconnect(player.getUniqueId(), UUID.randomUUID()).code());
+        assertEquals("REJOINED", access.requestReconnect(player.getUniqueId(), instance.getInstanceId()).code());
+        assertSame(instance, instances.getInstance(player));
+        assertTrue(instance.isPlayerCurrentlyDead(player));
+        assertEquals(1, instance.getDeaths(player.getUniqueId()));
+        verify(player).setGameMode(GameMode.SPECTATOR);
+        assertFalse(access.reconnectStatus(player.getUniqueId()).eligible());
+    }
+
+    @Test void externalRosterIsVerifiedWithoutCreatingANativeParty() throws Exception {
+        var parties = new xuanmo.arcartxsuite.abyss.party.PartyManager(service.config().party(), text -> { }, null);
+        set(service, "partyManager", parties);
+        var access = new ExternalParties(service);
+        UUID leader = player.getUniqueId(), member = UUID.randomUUID();
+        var intent = new xuanmo.arcartxsuite.api.capability.AbyssAdmissionAccess.Intent(
+            "xc", UUID.randomUUID(), leader, List.of(leader, member), "test",
+            null, null, null, "squad", 2, 3);
+        var roster = new AtomicReference<>(new xuanmo.arcartxsuite.api.capability.AbyssExternalPartyAccess.Roster(
+            "squad", leader, List.of(leader, member), "guild", 10, 2, 3, true));
+        try (var ignored = access.register("xc", request -> roster.get())) {
+            var verified = access.verify(intent);
+            assertNotNull(verified);
+            assertTrue(ExternalParties.context(verified).allReady());
+            assertFalse(parties.inParty(leader));
+            roster.set(new xuanmo.arcartxsuite.api.capability.AbyssExternalPartyAccess.Roster(
+                "squad", leader, List.of(leader, member), "guild", 10, 3, 3, true));
+            assertNull(access.verify(intent));
+        }
+        assertNull(access.verify(intent));
+    }
+
+    @Test void runControlChecksOwnerRevisionAndIdempotency() throws Exception {
+        var yaml = new YamlConfiguration();
+        yaml.set("external-control-owner", "xc");
+        when(template.requirements()).thenReturn(EntryRequirements.load(yaml));
+        var field = AbyssService.class.getDeclaredField("admission");
+        field.setAccessible(true);
+        var admission = (AdmissionAccess) field.get(service);
+        UUID owner = player.getUniqueId(), run = instance.getInstanceId();
+        admission.attach(instance, new AdmissionAccess.Operation(new xuanmo.arcartxsuite.api.capability.AbyssAdmissionAccess.Intent(
+            "xc", UUID.randomUUID(), owner, List.of(owner), "test", null, null, null)));
+        var access = service.runAccess();
+        long revision = access.snapshot(run).revision();
+        var request = new xuanmo.arcartxsuite.api.capability.AbyssRunAccess.Operation(UUID.randomUUID(), run, revision,
+            "xc", xuanmo.arcartxsuite.api.capability.AbyssRunAccess.Action.SET_VARIABLE, null, "flag", "yes");
+        var result = access.execute(request);
+        assertTrue(result.applied());
+        assertEquals(result, access.execute(request));
+        assertEquals("yes", instance.getVariables().get("external:xc:flag"));
+        assertEquals(result.revision(), access.snapshot(run).revision());
+        var stale = new xuanmo.arcartxsuite.api.capability.AbyssRunAccess.Operation(UUID.randomUUID(), run, revision,
+            "xc", request.action(), null, "flag", "no");
+        assertEquals("STALE_REVISION", access.execute(stale).code());
+        var other = new xuanmo.arcartxsuite.api.capability.AbyssRunAccess.Operation(UUID.randomUUID(), run,
+            result.revision(), "other", request.action(), null, "flag", "no");
+        assertEquals("NOT_OWNER", access.execute(other).code());
+        try (var ignored = access.registerObjectives("xc", id -> List.of(
+                new xuanmo.arcartxsuite.api.capability.AbyssRunAccess.Objective("chapter", "gate", "PENDING", 0, 1)))) {
+            var current = access.snapshot(run);
+            assertTrue(current.objectives().stream().anyMatch(objective -> objective.kind().equals("external:xc")
+                && objective.id().equals("gate")));
+            var complete = new xuanmo.arcartxsuite.api.capability.AbyssRunAccess.Operation(UUID.randomUUID(), run,
+                current.revision(), "xc", xuanmo.arcartxsuite.api.capability.AbyssRunAccess.Action.COMPLETE, null, null, null);
+            assertEquals("OBJECTIVES_INCOMPLETE", access.execute(complete).code());
+            assertEquals(AbyssStatus.ACTIVE, instance.getStatus());
+        }
+    }
     void policy(String mode,int seconds)throws Exception {
         var yaml=new YamlConfiguration();yaml.set("exit-mode",mode);yaml.set("exit-delay-seconds",seconds);when(template.settlement()).thenReturn(SettlementConfig.load(yaml));
     }
@@ -92,6 +176,48 @@ class SettlementLifecycleTest {
         currentWorld.set(home);listener.onChangedWorld(new org.bukkit.event.player.PlayerChangedWorldEvent(player,world));
         assertNull(instances.getInstance(player));verify(player,never()).teleport(any(Location.class));
     }
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {true, false})
+    void partialAdmissionReportsActualReturnAndKeepsAnOccupiedWorld(boolean canReturn)throws Exception {
+        instances.playerLeaveInstance(player);
+        instances.destroyInstance(instance);
+        instance = instances.createInstance(template, null);
+        instances.playerEnterInstance(player, instance);
+        instance.setWorld(world);
+        instance.saveOriginalLocation(player, new Location(home, 1, 64, 1));
+        var failed = mock(Player.class);
+        UUID failedId = UUID.randomUUID();
+        when(failed.getUniqueId()).thenReturn(failedId);
+        when(failed.isOnline()).thenReturn(true);
+        when(failed.getWorld()).thenReturn(home);
+        when(server.getPlayer(failedId)).thenReturn(failed);
+        instances.playerEnterInstance(failed, instance);
+        var intent = new xuanmo.arcartxsuite.api.capability.AbyssAdmissionAccess.Intent(
+            "xc", UUID.randomUUID(), player.getUniqueId(), List.of(player.getUniqueId(), failedId),
+            "test", null, null, null);
+        var operation = new AdmissionAccess.Operation(intent);
+        operation.outcomes.put(player.getUniqueId(), "ARRIVED");
+        var refunds = new AtomicInteger();
+        var charge = new RequirementChecker.Charge(true, null, refunds::incrementAndGet, () -> fail("No commit"));
+        if (!canReturn) doReturn(false).when(player).teleport(any(Location.class));
+        var rollback = AbyssService.class.getDeclaredMethod("rollbackAdmission", AbyssInstance.class,
+            AdmissionAccess.Operation.class, Player.class, RequirementChecker.Charge.class);
+        rollback.setAccessible(true);
+        rollback.invoke(service, instance, operation, failed, charge);
+        assertEquals(1, refunds.get());
+        assertEquals(canReturn ? xuanmo.arcartxsuite.api.capability.AbyssAdmissionAccess.Phase.COMPENSATED
+            : xuanmo.arcartxsuite.api.capability.AbyssAdmissionAccess.Phase.REVIEW_REQUIRED, operation.phase);
+        assertEquals(canReturn ? "RETURNED" : "RETURN_PENDING", operation.outcomes.get(player.getUniqueId()));
+        assertEquals("TELEPORT_FAILED", operation.outcomes.get(failedId));
+        if (canReturn) {
+            assertNull(instances.getInstance(player));
+            verify(pool).releaseWorld(instance.getInstanceId());
+        } else {
+            assertSame(instance, instances.getInstance(player));
+            verify(pool, never()).releaseWorld(any());
+        }
+    }
+
     @Test void rejectedReconnectTeleportPreservesRecoveryAndOldLoginCannotConsumeIt()throws Exception {
         var data=fake(xuanmo.arcartxsuite.abyss.data.PlayerDataManager.class);set(service,"playerData",data);
         var field=AbyssService.class.getDeclaredField("recoveringPlayers");field.setAccessible(true);

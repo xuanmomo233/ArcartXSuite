@@ -38,22 +38,31 @@ public final class CompositeMobProvider implements MobProvider {
 
     @Override
     public @Nullable Entity spawn(String mobId, Location location, double level) {
+        var spawned = spawnWithSource(mobId, location, level);
+        return spawned == null ? null : spawned.entity();
+    }
+
+    record Spawned(Entity entity, String source) { }
+
+    @Nullable Spawned spawnWithSource(String mobId, Location location, double level) {
         if (mobId == null || mobId.isBlank()) return null;
         String id = mobId.trim();
         String lower = id.toLowerCase(java.util.Locale.ROOT);
 
         if (lower.startsWith("vanilla:")) {
-            return vanilla.spawn(id.substring(8), location, level);
+            Entity entity = vanilla.spawn(id.substring(8), location, level);
+            return entity == null ? null : new Spawned(entity, "vanilla");
         }
         if (lower.startsWith("mythic:")) {
             id = id.substring(7);
         }
         if (mythic != null && mythic.available()) {
             Entity e = mythic.spawn(id, location, level);
-            if (e != null) return e;
+            if (e != null) return new Spawned(e, "mythic");
         }
         // MM 不可用/生成失败：尝试按原版 EntityType 兜底
-        return vanilla.spawn(id, location, level);
+        Entity entity = vanilla.spawn(id, location, level);
+        return entity == null ? null : new Spawned(entity, "vanilla");
     }
 
     @Override
