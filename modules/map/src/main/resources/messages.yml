@@ -55,6 +55,8 @@ refresh:
 
 # ── player ────────────────────────────────────────────
 player:
+  action-busy: "&e上一项地图操作仍在处理中，请稍候。"
+  storage-failed: "&c地图数据操作失败，请稍后重试。"
   usage: "&e用法: /{0} open [world]|hud [on|off|toggle]|cleartrack|unlock <锚点ID>|claim <分享码>"
   help:
     title: "&6地图 命令"

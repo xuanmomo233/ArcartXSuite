@@ -52,6 +52,12 @@ public final class MapUiPacketHandler {
             default -> false;
         };
         if (tokenized && !target.beginActionToken(player, action, data)) return true;
+        try {
+            if (target.dispatchAsyncAction(player, action, data, tokenized)) return true;
+        } catch (RuntimeException | Error failure) {
+            if (tokenized) target.finishActionToken(player, false);
+            throw failure;
+        }
         boolean committed = false;
         try {
         switch (action) {
@@ -91,13 +97,7 @@ public final class MapUiPacketHandler {
                     target.refresh(player);
                 }
             }
-            case "unlock_anchor" -> {
-                if (hasValue(data, 1)) {
-                    committed = target.unlockAnchor(player, data.get(1));
-                } else {
-                    target.refresh(player);
-                }
-            }
+
             case "teleport_anchor" -> {
                 if (hasValue(data, 1)) {
                     committed = target.teleportAnchor(player, data.get(1));
@@ -167,51 +167,8 @@ public final class MapUiPacketHandler {
             case "clear_track" -> target.clearTrack(player);
             case "hud_ready" -> target.hudReady(player);
             case "deselect" -> target.deselect(player);
-            case "create_waypoint" -> committed = target.createWaypoint(player);
-            case "delete_waypoint" -> {
-                if (hasValue(data, 1)) {
-                    committed = target.deleteWaypoint(player, data.get(1));
-                } else {
-                    target.refresh(player);
-                }
-            }
-            case "update_waypoint" -> {
-                if (hasValue(data, 1)) {
-                    target.updateWaypoint(player, data.get(1),
-                        hasValue(data, 2) ? data.get(2) : "",
-                        hasValue(data, 3) ? data.get(3) : "");
-                } else {
-                    target.refresh(player);
-                }
-            }
-            case "create_pin" -> {
-                // create_pin <x> <z> <worldId> <token>：坐标取玩家正在浏览的世界
-                // （pin 允许任意点），NaN/Infinity 等非法坐标直接当 refresh 丢弃
-                double pinX = hasValue(data, 1) ? parseDouble(data.get(1)) : Double.NaN;
-                double pinZ = hasValue(data, 2) ? parseDouble(data.get(2)) : Double.NaN;
-                if (Double.isFinite(pinX) && Double.isFinite(pinZ)) {
-                    committed = target.createPin(player, pinX, pinZ,
-                        hasValue(data, 3) ? data.get(3) : "");
-                } else {
-                    target.refresh(player);
-                }
-            }
-            case "delete_pin" -> {
-                if (hasValue(data, 1)) {
-                    committed = target.deletePin(player, data.get(1));
-                } else {
-                    target.refresh(player);
-                }
-            }
-            case "update_pin" -> {
-                if (hasValue(data, 1)) {
-                    target.updatePin(player, data.get(1),
-                        hasValue(data, 2) ? data.get(2) : "",
-                        hasValue(data, 3) ? data.get(3) : "");
-                } else {
-                    target.refresh(player);
-                }
-            }
+
+
             case "share_waypoint" -> {
                 if (hasValue(data, 1)) {
                     target.shareWaypoint(player, data.get(1));
@@ -272,6 +229,7 @@ public final class MapUiPacketHandler {
      * 由 {@code MapService} 实现，将 UI 事件映射到具体的业务逻辑。
      */
     public interface ActionTarget {
+        default boolean dispatchAsyncAction(Player player, String action, List<String> data, boolean tokenized) { return false; }
         boolean allowClientPacket(Player player, String action);
 
         void refresh(Player player);
@@ -288,7 +246,6 @@ public final class MapUiPacketHandler {
 
         void selectPin(Player player, String pinId);
 
-        boolean unlockAnchor(Player player, String anchorId);
 
         boolean teleportAnchor(Player player, String anchorId);
 
@@ -314,17 +271,6 @@ public final class MapUiPacketHandler {
 
         void hudReady(Player player);
 
-        boolean createWaypoint(Player player);
-
-        boolean deleteWaypoint(Player player, String waypointId);
-
-        void updateWaypoint(Player player, String waypointId, String name, String description);
-
-        boolean createPin(Player player, double x, double z, String worldId);
-
-        boolean deletePin(Player player, String pinId);
-
-        void updatePin(Player player, String pinId, String name, String description);
 
         void shareWaypoint(Player player, String waypointId);
 

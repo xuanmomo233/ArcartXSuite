@@ -104,6 +104,7 @@ public final class MapCrossServerService {
 
     private volatile CrossServerChannel channel;
     private volatile org.bukkit.scheduler.BukkitTask sweepTask;
+    private final Map<UUID, Object> validatingArrivals = new java.util.concurrent.ConcurrentHashMap<>();
     private volatile long lastAnnounceAt;
 
     public MapCrossServerService(
@@ -147,6 +148,7 @@ public final class MapCrossServerService {
 
     /** 关闭通道、停止清扫并清空全部跨服状态。 */
     public void shutdown() {
+        validatingArrivals.clear();
         if (sweepTask != null) {
             sweepTask.cancel();
             sweepTask = null;
@@ -734,16 +736,19 @@ public final class MapCrossServerService {
                 "[Map] pendingArrivals 已达上限 " + MAX_PENDING_ARRIVALS + "，丢弃来自 " + source + " 的传送握手");
             return;
         }
-        MapOperationResult check = handler.validateArrival(playerUuid, worldId, anchorId);
-        if (!check.success()) {
-            respondTeleport(source, requestId, false, check.message());
-            return;
-        }
+        if (validatingArrivals.size() + pendingArrivals.size() >= MAX_PENDING_ARRIVALS) return;
+        Object ticket = new Object();
+        if (validatingArrivals.putIfAbsent(playerUuid, ticket) != null) return;
         lastTeleportRequestAt.put(playerUuid, now);
-        // 只记最近一次：玩家重复发起时旧 pending 直接覆盖
-        pendingArrivals.put(playerUuid, new PendingArrival(
-            worldId, anchorId, now + ARRIVAL_TTL_MS));
-        respondTeleport(source, requestId, true, "");
+        handler.validateArrival(playerUuid, worldId, anchorId).whenComplete((check, error) -> {
+            if (!validatingArrivals.remove(playerUuid, ticket) || sweepTask == null) return;
+            if (error != null || !check.success()) {
+                respondTeleport(source, requestId, false, error == null ? check.message() : "storage-error");
+                return;
+            }
+            pendingArrivals.put(playerUuid, new PendingArrival(worldId, anchorId, System.currentTimeMillis() + ARRIVAL_TTL_MS));
+            respondTeleport(source, requestId, true, "");
+        });
     }
 
     private void onTeleportResponse(String source, JsonObject obj) {
@@ -1285,7 +1290,7 @@ public final class MapCrossServerService {
          * @param anchorId   锚点 id（空 = 世界出生点）
          * @return 校验结果；失败 message 会透传回源服展示给玩家
          */
-        MapOperationResult validateArrival(UUID playerUuid, String worldId, String anchorId);
+        java.util.concurrent.CompletableFuture<MapOperationResult> validateArrival(UUID playerUuid, String worldId, String anchorId);
 
         /**
          * 目标服侧：玩家已加入本机，执行落地传送（含可选费用）。

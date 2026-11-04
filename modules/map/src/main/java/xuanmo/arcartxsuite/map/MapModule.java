@@ -325,8 +325,13 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
                 public java.util.concurrent.CompletableFuture<Boolean> unlock(
                     @NotNull Player player, @NotNull String anchorId) {
                     java.util.concurrent.CompletableFuture<Boolean> future = new java.util.concurrent.CompletableFuture<>();
-                    Runnable task = () -> future.complete(service != null
-                        && service.grantAnchorUnlock(player, anchorId).success());
+                    Runnable task = () -> {
+                        if (service == null) { future.complete(false); return; }
+                        service.grantAnchorUnlock(player, anchorId).whenComplete((result, error) -> {
+                            if (error != null) future.completeExceptionally(error);
+                            else future.complete(result.success());
+                        });
+                    };
                     if (Bukkit.isPrimaryThread()) task.run();
                     else Bukkit.getScheduler().runTask(plugin, task);
                     return future;
@@ -336,7 +341,13 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
                 public java.util.concurrent.CompletableFuture<Boolean> tryUnlock(
                     @NotNull Player player, @NotNull String anchorId) {
                     java.util.concurrent.CompletableFuture<Boolean> future = new java.util.concurrent.CompletableFuture<>();
-                    Runnable task = () -> future.complete(service != null && service.unlockAnchor(player, anchorId));
+                    Runnable task = () -> {
+                        if (service == null) { future.complete(false); return; }
+                        service.unlockAnchorAsync(player, anchorId).whenComplete((result, error) -> {
+                            if (error != null) future.completeExceptionally(error);
+                            else future.complete(result.success());
+                        });
+                    };
                     if (Bukkit.isPrimaryThread()) task.run();
                     else Bukkit.getScheduler().runTask(plugin, task);
                     return future;

@@ -112,10 +112,7 @@ import xuanmo.arcartxsuite.map.model.MapPlayerViewState;
             if (bukkitWorld == null) {
                 return null;
             }
-            Set<Long> allowed = new HashSet<>();
-            for (int[] c : service.preloadChunkCoords(world)) {
-                allowed.add(((long) c[0] << 32) | (c[1] & 0xffffffffL));
-            }
+            Set<Long> allowed = service.preloadPackedChunkCoords(world);
             List<Long> accepted = new ArrayList<>(chunks.size());
             for (long[] c : chunks) {
                 if (c == null || c.length < 2) {
@@ -136,32 +133,23 @@ import xuanmo.arcartxsuite.map.model.MapPlayerViewState;
          * 世界允许落地、锚点属于该世界；require-anchor-unlock 时查解锁记录。
          */
         @Override
-        public MapOperationResult validateArrival(UUID playerUuid, String worldId, String anchorId) {
-            if (!service.configuration.crossServer().arrivals().enabled()) {
-                return MapOperationResult.failure("arrivals-disabled");
-            }
+        public java.util.concurrent.CompletableFuture<MapOperationResult> validateArrival(UUID playerUuid, String worldId, String anchorId) {
+            if (!service.configuration.crossServer().arrivals().enabled()) return arrivalResult("arrivals-disabled");
             WorldDefinition world = service.configuration.worlds().get(worldId);
-            if (world == null || !world.crossArrive()) {
-                return MapOperationResult.failure("world-no-arrive");
+            if (world == null || !world.crossArrive()) return arrivalResult("world-no-arrive");
+            AnchorDefinition anchor = anchorId.isEmpty() ? null : service.configuration.anchor(anchorId);
+            if (!anchorId.isEmpty() && (anchor == null || !MapService.normalizeId(anchor.worldId()).equals(world.id()))) return arrivalResult("anchor-unknown");
+            if (MapService.resolveWorld(world.id()) == null) return arrivalResult("world-unloaded");
+            if (anchor != null && service.configuration.crossServer().arrivals().requireAnchorUnlock()) {
+                return service.storage.query(() -> service.repository.loadUnlockedAnchors(playerUuid).contains(anchor.id()))
+                    .handle((unlocked, error) -> error != null ? MapOperationResult.failure("storage-error")
+                        : unlocked ? MapOperationResult.success("") : MapOperationResult.failure("anchor-locked"));
             }
-            if (!anchorId.isEmpty()) {
-                AnchorDefinition anchor = service.configuration.anchor(anchorId);
-                if (anchor == null || !MapService.normalizeId(anchor.worldId()).equals(world.id())) {
-                    return MapOperationResult.failure("anchor-unknown");
-                }
-                if (service.configuration.crossServer().arrivals().requireAnchorUnlock()) {
-                    try {
-                        if (!service.repository.loadUnlockedAnchors(playerUuid).contains(anchor.id())) {
-                            return MapOperationResult.failure("anchor-locked");
-                        }
-                    } catch (Exception e) {
-                        return MapOperationResult.failure("storage-error");
-                    }
-                }
-            }
-            return MapService.resolveWorld(world.id()) == null
-                ? MapOperationResult.failure("world-unloaded")
-                : MapOperationResult.success("");
+            return java.util.concurrent.CompletableFuture.completedFuture(MapOperationResult.success(""));
+        }
+
+        private java.util.concurrent.CompletableFuture<MapOperationResult> arrivalResult(String reason) {
+            return java.util.concurrent.CompletableFuture.completedFuture(MapOperationResult.failure(reason));
         }
 
         /**

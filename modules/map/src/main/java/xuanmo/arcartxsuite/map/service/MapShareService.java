@@ -93,109 +93,13 @@ final class MapShareService {
      * 把快照复制为点击者自己的路径点/标记点，受其世界内数量上限约束；
      * 不需要点击者与分享点位处于同一世界。
      */
-    void claimShare(Player player, String code) {
-        if (player == null || !player.isOnline()) {
-            return;
-        }
-        if (!shareEnabled()) {
-            service.sendPlayerResult(player, MapOperationResult.failure(service.message("player.share-disabled")));
-            return;
-        }
-        String normalized = MapService.normalizeId(code);
-        SharedPoint point = shareCache.get(normalized);
-        if (point == null) {
-            service.sendPlayerResult(player, MapOperationResult.failure(service.message("player.share-not-found", code)));
-            return;
-        }
-        if (point.expiresAt() < System.currentTimeMillis()) {
-            shareCache.remove(normalized);
-            service.sendPlayerResult(player, MapOperationResult.failure(service.message("player.share-expired")));
-            return;
-        }
-        if ("pin".equals(point.type())) {
-            claimPinShare(player, point);
-        } else {
-            claimWaypointShare(player, point);
-        }
-    }
 
 
-    void claimWaypointShare(Player player, SharedPoint point) {
-        if (!service.configuration.waypoints().enabled()) {
-            service.sendPlayerResult(player, MapOperationResult.failure(service.message("player.custom-waypoints-disabled")));
-            return;
-        }
-        if (!service.configuration.worlds().containsKey(point.world())) {
-            service.sendPlayerResult(player, MapOperationResult.failure(service.message("player.waypoint-world-not-configured")));
-            return;
-        }
-        int limit = service.resolveWaypointLimit(player);
-        long countInWorld = service.loadWaypoints(player).stream()
-            .filter(waypoint -> MapService.normalizeId(waypoint.world()).equals(point.world())).count();
-        if (countInWorld >= limit) {
-            service.sendPlayerResult(player, MapOperationResult.failure(service.message("player.waypoint-limit-reached", limit)));
-            return;
-        }
-        long now = System.currentTimeMillis();
-        String waypointId = service.configuration.waypoints().idPrefix() + UUID.randomUUID().toString().replace("-", "");
-        MapWaypoint waypoint = new MapWaypoint(
-            MapService.normalizeId(waypointId), point.name(), point.description(),
-            point.world(), point.x(), point.y(), point.z(), now, now
-        );
-        try {
-            if (!service.repository.createWaypointIfUnderWorldLimit(player.getUniqueId(), waypoint, point.world(), limit)) {
-                service.sendPlayerResult(player, MapOperationResult.failure(service.message("player.waypoint-limit-reached", limit)));
-                return;
-            }
-            service.invalidatePlayerDataCache(player.getUniqueId());
-            service.state(player).selectWorld(point.world());
-            service.state(player).selectWaypoint(waypoint.waypointId());
-            service.sync(player, false);
-            service.sendPlayerResult(player, MapOperationResult.success(
-                service.message("player.waypoint-claimed", point.name(), point.senderName())));
-        } catch (Exception e) {
-            service.sendPlayerResult(player, MapOperationResult.failure(service.message("player.waypoint-save-failed")));
-        }
-    }
 
 
-    void claimPinShare(Player player, SharedPoint point) {
-        if (!service.configuration.waypoints().enabled()) {
-            service.sendPlayerResult(player, MapOperationResult.failure(service.message("player.custom-waypoints-disabled")));
-            return;
-        }
-        if (!service.configuration.worlds().containsKey(point.world())) {
-            service.sendPlayerResult(player, MapOperationResult.failure(service.message("player.waypoint-world-not-configured")));
-            return;
-        }
-        int limit = service.resolveWaypointLimit(player);
-        long countInWorld = service.loadPins(player).stream()
-            .filter(pin -> MapService.normalizeId(pin.world()).equals(point.world())).count();
-        if (countInWorld >= limit) {
-            service.sendPlayerResult(player, MapOperationResult.failure(service.message("player.waypoint-limit-reached", limit)));
-            return;
-        }
-        long now = System.currentTimeMillis();
-        String pinId = service.configuration.waypoints().idPrefix() + "pin-" + UUID.randomUUID().toString().replace("-", "");
-        MapPin pin = new MapPin(
-            MapService.normalizeId(pinId), point.name(), point.description(),
-            point.world(), point.x(), point.z(), now, now
-        );
-        try {
-            if (!service.repository.createPinIfUnderWorldLimit(player.getUniqueId(), pin, point.world(), limit)) {
-                service.sendPlayerResult(player, MapOperationResult.failure(service.message("player.waypoint-limit-reached", limit)));
-                return;
-            }
-            service.invalidatePlayerDataCache(player.getUniqueId());
-            service.state(player).selectWorld(point.world());
-            service.state(player).selectPin(pin.pinId());
-            service.sync(player, false);
-            service.sendPlayerResult(player, MapOperationResult.success(
-                service.message("player.pin-claimed", point.name(), point.senderName())));
-        } catch (Exception e) {
-            service.sendPlayerResult(player, MapOperationResult.failure(service.message("player.waypoint-save-failed")));
-        }
-    }
+
+
+
 
 
     /**
@@ -204,6 +108,31 @@ final class MapShareService {
      * {@code share.card-id} 配置非空 → 聊天卡片（ArcartX/chat_card/&lt;card-id&gt;.yml）；
      * 留空 → 纯文本降级广播，附带可点击的"[点击领取]"（RUN_COMMAND 执行 /map claim &lt;code&gt;）。
      */
+    java.util.concurrent.CompletableFuture<MapOperationResult> claimShareAsync(Player player, String code) {
+        if (!shareEnabled()) return failedClaim("player.share-disabled");
+        String normalized = MapService.normalizeId(code);
+        SharedPoint point = shareCache.get(normalized);
+        if (point == null) return failedClaim("player.share-not-found", code);
+        if (point.expiresAt() < System.currentTimeMillis()) {
+            shareCache.remove(normalized);
+            return failedClaim("player.share-expired");
+        }
+        if (!service.configuration.waypoints().enabled()) return failedClaim("player.custom-waypoints-disabled");
+        if (!service.configuration.worlds().containsKey(point.world())) return failedClaim("player.waypoint-world-not-configured");
+        int limit = service.resolveWaypointLimit(player);
+        long now = System.currentTimeMillis();
+        if ("pin".equals(point.type())) {
+            MapPin pin = new MapPin(service.asyncActions.newId(true), point.name(), point.description(), point.world(), point.x(), point.z(), now, now);
+            return service.asyncActions.insertPin(player, pin, limit, service.message("player.pin-claimed", point.name(), point.senderName()));
+        }
+        MapWaypoint waypoint = new MapWaypoint(service.asyncActions.newId(false), point.name(), point.description(), point.world(), point.x(), point.y(), point.z(), now, now);
+        return service.asyncActions.insertWaypoint(player, waypoint, limit, service.message("player.waypoint-claimed", point.name(), point.senderName()));
+    }
+
+    private java.util.concurrent.CompletableFuture<MapOperationResult> failedClaim(String key, Object... args) {
+        return java.util.concurrent.CompletableFuture.completedFuture(MapOperationResult.failure(service.message(key, args)));
+    }
+
     void broadcastShare(Player sender, String code, String type, String name,
                                 String worldId, double x, double y, double z) {
         WorldDefinition definition = service.configuration.worlds().get(MapService.normalizeId(worldId));

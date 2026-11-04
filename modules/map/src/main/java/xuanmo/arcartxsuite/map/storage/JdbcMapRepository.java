@@ -31,6 +31,17 @@ public final class JdbcMapRepository extends AbstractModuleRepository implements
         super("AXS-Map", dataSource, descriptor, dataFolder, logger);
     }
 
+    private PreparedStatement prepare(Connection connection, String sql) throws SQLException {
+        PreparedStatement statement = connection.prepareStatement(sql);
+        try {
+            statement.setQueryTimeout(5);
+            return statement;
+        } catch (SQLException error) {
+            statement.close();
+            throw error;
+        }
+    }
+
     @Override
     protected void onInitialize(Connection conn) throws SQLException {
         createTables(conn);
@@ -62,7 +73,7 @@ public final class JdbcMapRepository extends AbstractModuleRepository implements
     public Set<String> loadUnlockedAnchors(UUID playerUuid) throws SQLException {
         LinkedHashSet<String> result = new LinkedHashSet<>();
         try (Connection connection = getConnection();
-             PreparedStatement statement = connection.prepareStatement(
+             PreparedStatement statement = prepare(connection,
                  "SELECT anchor_id FROM AXS_map_unlocks WHERE uuid = ? ORDER BY unlock_time ASC, anchor_id ASC"
              )) {
             statement.setString(1, playerUuid.toString());
@@ -103,7 +114,7 @@ public final class JdbcMapRepository extends AbstractModuleRepository implements
             ? "INSERT OR IGNORE INTO AXS_map_unlocks (uuid, anchor_id, unlock_time) VALUES (?, ?, ?)"
             : "INSERT IGNORE INTO AXS_map_unlocks (uuid, anchor_id, unlock_time) VALUES (?, ?, ?)";
         try (Connection connection = getConnection();
-             PreparedStatement statement = connection.prepareStatement(sql)) {
+             PreparedStatement statement = prepare(connection, sql)) {
             statement.setString(1, playerUuid.toString());
             statement.setString(2, anchorId);
             statement.setLong(3, unlockTime);
@@ -121,7 +132,7 @@ public final class JdbcMapRepository extends AbstractModuleRepository implements
     @Override
     public void removeUnlock(UUID playerUuid, String anchorId) throws SQLException {
         try (Connection connection = getConnection();
-             PreparedStatement statement = connection.prepareStatement(
+             PreparedStatement statement = prepare(connection,
                  "DELETE FROM AXS_map_unlocks WHERE uuid = ? AND anchor_id = ?"
              )) {
             statement.setString(1, playerUuid.toString());
@@ -151,7 +162,7 @@ public final class JdbcMapRepository extends AbstractModuleRepository implements
             connection.setAutoCommit(false);
             try {
                 int count;
-                try (PreparedStatement countStatement = connection.prepareStatement(
+                try (PreparedStatement countStatement = prepare(connection,
                     "SELECT COUNT(*) FROM AXS_map_waypoints WHERE uuid = ? AND world = ?"
                 )) {
                     countStatement.setString(1, playerUuid.toString());
@@ -164,7 +175,7 @@ public final class JdbcMapRepository extends AbstractModuleRepository implements
                     connection.rollback();
                     return false;
                 }
-                try (PreparedStatement statement = connection.prepareStatement(waypointUpsertSql())) {
+                try (PreparedStatement statement = prepare(connection, waypointUpsertSql())) {
                     statement.setString(1, playerUuid.toString());
                     statement.setString(2, waypoint.waypointId());
                     statement.setString(3, waypoint.name());
@@ -199,7 +210,7 @@ public final class JdbcMapRepository extends AbstractModuleRepository implements
     public List<MapWaypoint> loadWaypoints(UUID playerUuid) throws SQLException {
         List<MapWaypoint> result = new ArrayList<>();
         try (Connection connection = getConnection();
-             PreparedStatement statement = connection.prepareStatement(
+             PreparedStatement statement = prepare(connection,
                  "SELECT waypoint_id, name, description, world, x, y, z, created_at, updated_at "
                      + "FROM AXS_map_waypoints WHERE uuid = ? ORDER BY updated_at DESC, waypoint_id ASC"
              )) {
@@ -235,7 +246,7 @@ public final class JdbcMapRepository extends AbstractModuleRepository implements
     @Override
     public void upsertWaypoint(UUID playerUuid, MapWaypoint waypoint) throws SQLException {
         try (Connection connection = getConnection();
-             PreparedStatement statement = connection.prepareStatement(waypointUpsertSql())) {
+             PreparedStatement statement = prepare(connection, waypointUpsertSql())) {
             statement.setString(1, playerUuid.toString());
             statement.setString(2, waypoint.waypointId());
             statement.setString(3, waypoint.name());
@@ -261,7 +272,7 @@ public final class JdbcMapRepository extends AbstractModuleRepository implements
     @Override
     public boolean deleteWaypoint(UUID playerUuid, String waypointId) throws SQLException {
         try (Connection connection = getConnection();
-             PreparedStatement statement = connection.prepareStatement(
+             PreparedStatement statement = prepare(connection,
                  "DELETE FROM AXS_map_waypoints WHERE uuid = ? AND waypoint_id = ?"
              )) {
             statement.setString(1, playerUuid.toString());
@@ -280,9 +291,9 @@ public final class JdbcMapRepository extends AbstractModuleRepository implements
     public void clearPlayer(UUID playerUuid) throws SQLException {
         try (Connection connection = getConnection()) {
             connection.setAutoCommit(false);
-            try (PreparedStatement deleteUnlocks = connection.prepareStatement("DELETE FROM AXS_map_unlocks WHERE uuid = ?");
-                 PreparedStatement deleteWaypoints = connection.prepareStatement("DELETE FROM AXS_map_waypoints WHERE uuid = ?");
-                 PreparedStatement deletePins = connection.prepareStatement("DELETE FROM AXS_map_pins WHERE uuid = ?")) {
+            try (PreparedStatement deleteUnlocks = prepare(connection, "DELETE FROM AXS_map_unlocks WHERE uuid = ?");
+                 PreparedStatement deleteWaypoints = prepare(connection, "DELETE FROM AXS_map_waypoints WHERE uuid = ?");
+                 PreparedStatement deletePins = prepare(connection, "DELETE FROM AXS_map_pins WHERE uuid = ?")) {
                 deleteUnlocks.setString(1, playerUuid.toString());
                 deleteUnlocks.executeUpdate();
                 deleteWaypoints.setString(1, playerUuid.toString());
@@ -290,7 +301,7 @@ public final class JdbcMapRepository extends AbstractModuleRepository implements
                 // pin 也是玩家数据，clearPlayer 语义要求一并清掉
                 deletePins.setString(1, playerUuid.toString());
                 deletePins.executeUpdate();
-                try (PreparedStatement deleteSettings = connection.prepareStatement(
+                try (PreparedStatement deleteSettings = prepare(connection,
                         "DELETE FROM AXS_map_settings WHERE uuid = ?")) {
                     deleteSettings.setString(1, playerUuid.toString());
                     deleteSettings.executeUpdate();
@@ -454,7 +465,7 @@ public final class JdbcMapRepository extends AbstractModuleRepository implements
     public java.util.Map<String, String> loadPlayerSettings(UUID playerUuid) throws SQLException {
         java.util.Map<String, String> result = new java.util.LinkedHashMap<>();
         try (Connection connection = getConnection();
-             PreparedStatement statement = connection.prepareStatement(
+             PreparedStatement statement = prepare(connection,
                  "SELECT skey, svalue FROM AXS_map_settings WHERE uuid = ?"
              )) {
             statement.setString(1, playerUuid.toString());
@@ -483,7 +494,7 @@ public final class JdbcMapRepository extends AbstractModuleRepository implements
             : "INSERT INTO AXS_map_settings (uuid, skey, svalue) VALUES (?, ?, ?) "
                 + "ON DUPLICATE KEY UPDATE svalue = VALUES(svalue)";
         try (Connection connection = getConnection();
-             PreparedStatement statement = connection.prepareStatement(sql)) {
+             PreparedStatement statement = prepare(connection, sql)) {
             statement.setString(1, playerUuid.toString());
             statement.setString(2, key);
             statement.setString(3, value);
@@ -524,7 +535,7 @@ public final class JdbcMapRepository extends AbstractModuleRepository implements
             connection.setAutoCommit(false);
             try {
                 int count;
-                try (PreparedStatement countStatement = connection.prepareStatement(
+                try (PreparedStatement countStatement = prepare(connection,
                     "SELECT COUNT(*) FROM AXS_map_pins WHERE uuid = ? AND world = ?"
                 )) {
                     countStatement.setString(1, playerUuid.toString());
@@ -537,7 +548,7 @@ public final class JdbcMapRepository extends AbstractModuleRepository implements
                     connection.rollback();
                     return false;
                 }
-                try (PreparedStatement statement = connection.prepareStatement(pinUpsertSql())) {
+                try (PreparedStatement statement = prepare(connection, pinUpsertSql())) {
                     statement.setString(1, playerUuid.toString());
                     statement.setString(2, pin.pinId());
                     statement.setString(3, pin.name());
@@ -564,7 +575,7 @@ public final class JdbcMapRepository extends AbstractModuleRepository implements
     public List<MapPin> loadPins(UUID playerUuid) throws SQLException {
         List<MapPin> result = new ArrayList<>();
         try (Connection connection = getConnection();
-             PreparedStatement statement = connection.prepareStatement(
+             PreparedStatement statement = prepare(connection,
                 "SELECT pin_id, name, description, world, x, z, created_at, updated_at "
                     + "FROM AXS_map_pins WHERE uuid = ? ORDER BY updated_at DESC, pin_id ASC"
             )) {
@@ -592,7 +603,7 @@ public final class JdbcMapRepository extends AbstractModuleRepository implements
     @Override
     public void upsertPin(UUID playerUuid, MapPin pin) throws SQLException {
         try (Connection connection = getConnection();
-             PreparedStatement statement = connection.prepareStatement(pinUpsertSql())) {
+             PreparedStatement statement = prepare(connection, pinUpsertSql())) {
             statement.setString(1, playerUuid.toString());
             statement.setString(2, pin.pinId());
             statement.setString(3, pin.name());
@@ -609,7 +620,7 @@ public final class JdbcMapRepository extends AbstractModuleRepository implements
     @Override
     public boolean deletePin(UUID playerUuid, String pinId) throws SQLException {
         try (Connection connection = getConnection();
-             PreparedStatement statement = connection.prepareStatement(
+             PreparedStatement statement = prepare(connection,
                 "DELETE FROM AXS_map_pins WHERE uuid = ? AND pin_id = ?"
             )) {
             statement.setString(1, playerUuid.toString());

@@ -41,6 +41,8 @@ final class MapPreloadService {
      *  圆形部分实时取当前 spawn（/mv setspawn 即生效），
      *  多边形部分按 WorldDefinition 缓存（配置重载后新实例自然换键）。 */
     private final Map<WorldDefinition, Set<Long>> preloadRegionCoordCache = new ConcurrentHashMap<>();
+    private record Coverage(double x, double z, Set<Long> chunks) { }
+    private final Map<WorldDefinition, Coverage> coverageCache = new ConcurrentHashMap<>();
 
 
     /** 世界预加载区域 → 多边形并集（preload.radius 圆心=配置 center 或出生点链，16 边形近似）。 */
@@ -143,19 +145,28 @@ final class MapPreloadService {
 
 
     List<int[]> preloadChunkCoords(WorldDefinition world) {
+        Set<Long> coords = preloadPackedChunkCoords(world);
+        List<int[]> out = new ArrayList<>(coords.size());
+        for (long packed : coords) out.add(new int[]{(int) (packed >> 32), (int) packed});
+        return out;
+    }
+
+    Set<Long> preloadPackedChunkCoords(WorldDefinition world) {
+        Location center = world.preloadRadius() > 0 ? resolveWorldCenter(world) : null;
+        double x = center == null ? Double.NaN : center.getX();
+        double z = center == null ? Double.NaN : center.getZ();
+        Coverage cached = coverageCache.get(world);
+        if (cached != null && Double.compare(cached.x(), x) == 0 && Double.compare(cached.z(), z) == 0) {
+            return cached.chunks();
+        }
         Set<Long> coords = new HashSet<>();
-        if (world.preloadRadius() > 0) {
-            Location center = resolveWorldCenter(world);
-            if (center != null) {
-                collectCircleChunks(coords, center.getX(), center.getZ(), world.preloadRadius());
-            }
+        if (center != null) {
+            collectCircleChunks(coords, x, z, world.preloadRadius());
         }
         coords.addAll(preloadRegionChunkCoords(world));
-        List<int[]> out = new ArrayList<>(coords.size());
-        for (long packed : coords) {
-            out.add(new int[]{(int) (packed >> 32), (int) packed});
-        }
-        return out;
+        Set<Long> result = Set.copyOf(coords);
+        coverageCache.put(world, new Coverage(x, z, result));
+        return result;
     }
 
 
@@ -224,18 +235,28 @@ final class MapPreloadService {
     }
 
 
-    /** 顶点/边中点是否落在 64² 块内（含边界）。 */
+    /** Segment/rectangle clipping catches long, thin polygons crossing a chunk. */
     static boolean chunkTouchesPolygon(List<int[]> points, int bx, int bz) {
         int n = points.size();
         for (int i = 0, j = n - 1; i < n; j = i++) {
             int[] a = points.get(i), b = points.get(j);
-            if (a[0] >= bx && a[0] < bx + 64 && a[1] >= bz && a[1] < bz + 64) {
-                return true;
+            double enter = 0, exit = 1;
+            boolean intersects = true;
+            for (int axis = 0; axis < 2; axis++) {
+                double origin = a[axis];
+                double delta = (double) b[axis] - origin;
+                double min = axis == 0 ? bx : bz;
+                double max = min + 64;
+                if (delta == 0) {
+                    if (origin < min || origin > max) { intersects = false; break; }
+                } else {
+                    double t0 = (min - origin) / delta, t1 = (max - origin) / delta;
+                    enter = Math.max(enter, Math.min(t0, t1));
+                    exit = Math.min(exit, Math.max(t0, t1));
+                    if (enter > exit) { intersects = false; break; }
+                }
             }
-            double mx = (a[0] + b[0]) / 2.0, mz = (a[1] + b[1]) / 2.0;
-            if (mx >= bx && mx < bx + 64 && mz >= bz && mz < bz + 64) {
-                return true;
-            }
+            if (intersects) return true;
         }
         return false;
     }

@@ -126,9 +126,9 @@ public final class MapAdminCommand implements ModuleCommandHandler {
         if (args.length < 4) { sender.sendMessage(fullMsg("unlock.usage")); return; }
         Player target = Bukkit.getPlayer(args[2]);
         if (target == null) { sender.sendMessage(fullMsg("open.not-online", args[2])); return; }
-        MapOperationResult result = svc.grantAnchorUnlock(target, args[3]);
-        sender.sendMessage((messages != null ? messages.get("prefix") : "")
-            + (result.success() ? ChatColor.GREEN : ChatColor.RED) + result.message());
+        svc.grantAnchorUnlock(target, args[3]).thenAccept(result ->
+            sender.sendMessage((messages != null ? messages.get("prefix") : "")
+                + (result.success() ? ChatColor.GREEN : ChatColor.RED) + result.message()));
     }
 
     private void sendStatus(CommandSender sender) {

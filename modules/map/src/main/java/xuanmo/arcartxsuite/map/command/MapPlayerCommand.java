@@ -100,7 +100,7 @@ public final class MapPlayerCommand implements org.bukkit.command.TabExecutor {
         if ("unlock".equalsIgnoreCase(args[0])) {
             // 手动解锁锚点：走完整流程（permission + unlock.radius 距离门 + 费用）
             if (args.length >= 2) {
-                svc.unlockAnchor(player, args[1]);
+                svc.unlockAnchorAsync(player, args[1]);
             } else {
                 player.sendMessage(fullMsg("player.unlock-usage", label));
             }
