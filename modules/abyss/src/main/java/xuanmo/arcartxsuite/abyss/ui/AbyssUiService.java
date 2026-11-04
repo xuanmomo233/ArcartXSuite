@@ -1020,7 +1020,7 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         payload.put("markable", obj.kind().pointMarkable() || obj.kind().regionMarkable());
         // 单值字段行
         Map<String, Object> fields = new LinkedHashMap<>();
-        List<String> rows = dm.fieldRows(obj);
+        List<String> rows = dm.fieldRows(s, obj);
         for (int i = 0; i < rows.size(); i++) {
             String[] v = rows.get(i).split("\\|", -1);
             if (v.length < 6) continue;

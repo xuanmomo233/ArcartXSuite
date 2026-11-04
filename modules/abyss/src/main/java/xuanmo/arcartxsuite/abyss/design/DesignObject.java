@@ -209,8 +209,10 @@ public record DesignObject(
                 FieldSpec.text("name", "楼层名称"),
                 FieldSpec.num("design-order", "楼层顺序"),
                 FieldSpec.text("spawn", "入口坐标"),
+                FieldSpec.cycle("design-room-ref", "可用房间"),
+                FieldSpec.cycle("design-append-room", "追加到路线", "添加房间"),
                 FieldSpec.list("rooms", "房间顺序（每行一个房间ID）"),
-                FieldSpec.text("boss-room", "Boss 房间ID"),
+                FieldSpec.cycle("boss-room", "Boss 房间"),
                 FieldSpec.cycle("advance", "进下一层", "portal", "auto"),
                 FieldSpec.num("advance-timeout", "出口等待上限（秒）"));
             case STAGE -> List.of(

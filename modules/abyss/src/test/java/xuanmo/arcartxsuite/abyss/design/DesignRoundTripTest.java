@@ -158,10 +158,11 @@ class DesignRoundTripTest {
         roomFixture();
         var values = new LinkedHashMap<String, Object>();
         DesignManager.seedDefaults(DesignObject.Kind.FLOOR, values);
-        values.put("rooms", List.of("room_a"));
         values.put("design-order", 0);
         session.put(new DesignObject("floor:first", DesignObject.Kind.FLOOR, "first",
             "floors.yml", "floors", "楼层路线", null, null, "misc:layout", values, true));
+        assertEquals("room_a", manager.cycleNext(session, "floor:first", "design-room-ref"));
+        manager.cycleNext(session, "floor:first", "design-append-room");
         assertTrue(save().ok());
         var floors = FloorConfig.load(read("floors.yml"), read("rooms.yml")).floors();
         assertEquals(List.of("first", "f1"), floors.stream().map(FloorConfig.Floor::id).toList());
@@ -191,7 +192,8 @@ class DesignRoundTripTest {
         manager.setField(session, "stage:intro", "design-action", "提示");
         manager.setField(session, "stage:intro", "design-action-arg", "路线已解锁");
         manager.cycleNext(session, "stage:intro", "design-append-action");
-        manager.setField(session, "stage:intro", "design-branch-target", "ending");
+        manager.setField(session, "stage:intro", "design-branch-target", "intro");
+        assertEquals("ending", manager.cycleNext(session, "stage:intro", "design-branch-target"));
         manager.cycleNext(session, "stage:intro", "design-append-branch");
         assertTrue(save().ok());
         var saved = read("stages.yml");

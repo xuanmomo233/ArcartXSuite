@@ -163,7 +163,7 @@ public final class DesignWriter {
             var rows = session.floorsInOrder().stream()
                 .map(o -> {
                     Map<String, Object> row = DesignValues.copy(o.values());
-                    row.remove("design-order");
+                    row.keySet().removeIf(key -> key.startsWith("design-"));
                     row.put("id", o.id());
                     return row;
                 }).toList();

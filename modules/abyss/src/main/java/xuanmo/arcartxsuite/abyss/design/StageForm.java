@@ -4,6 +4,16 @@ package xuanmo.arcartxsuite.abyss.design;
 final class StageForm {
     private StageForm() { }
 
+    static DesignObject.Kind actionTarget(String action) {
+        return switch (action) {
+            case "刷怪" -> DesignObject.Kind.GROUP;
+            case "开门", "关门" -> DesignObject.Kind.ROOM;
+            case "发奖励" -> DesignObject.Kind.REWARD;
+            case "开奖励箱" -> DesignObject.Kind.CHEST;
+            default -> null;
+        };
+    }
+
     static String condition(String kind, String reference) {
         return switch (kind) {
             case "", "手动推进", "无条件" -> "";

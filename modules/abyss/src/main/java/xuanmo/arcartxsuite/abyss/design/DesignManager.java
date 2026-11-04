@@ -491,9 +491,11 @@ public final class DesignManager {
                 out.add(new Node(floor.key(), floor.str("name").isBlank() ? floor.id() : floor.str("name"), 0, 1));
                 Set<String> refs = new java.util.LinkedHashSet<>(floor.strList("rooms"));
                 if (!floor.str("boss-room").isBlank()) refs.add(floor.str("boss-room"));
-                for (DesignObject room : s.objects().values()) {
-                    if (room.kind() == DesignObject.Kind.ROOM && refs.contains(room.id()) && placed.add(room.key())) {
-                        out.add(new Node(room.key(), room.id(), 1, s.nodeObjects(room.key()).size()));
+                for (String reference : refs) {
+                    for (DesignObject room : s.objects().values()) {
+                        if (room.kind() == DesignObject.Kind.ROOM && room.id().equals(reference) && placed.add(room.key())) {
+                            out.add(new Node(room.key(), room.id(), 1, s.nodeObjects(room.key()).size()));
+                        }
                     }
                 }
             }
@@ -786,6 +788,10 @@ public final class DesignManager {
         } else {
             vals.put(pending != null && pending.field() != null ? pending.field() : "region",
                 regionStr);
+            if (kind == DesignObject.Kind.ROOM) {
+                int[] center = DesignCoords.center(box);
+                vals.put("spawn", DesignCoords.pointStr(new int[]{center[0], box[1] + 1, center[2]}));
+            }
         }
         String node = inferNode(t, DesignCoords.center(box), box,
             floorsRegionBoxes(t), kind);
@@ -915,11 +921,20 @@ public final class DesignManager {
     public @Nullable String cycleNext(DesignSession s, String key, String field) {
         DesignObject o = s.get(key);
         if (o == null) return null;
+        if (o.kind() == DesignObject.Kind.FLOOR && field.equals("design-append-room")) {
+            String room = o.str("design-room-ref");
+            if (!objectIds(s, DesignObject.Kind.ROOM).contains(room))
+                throw new IllegalArgumentException("请先选择要加入路线的房间");
+            if (o.strList("rooms").contains(room)) throw new IllegalArgumentException("房间已在本层路线中");
+            lineAdd(s, key, "rooms", room);
+            return "已添加";
+        }
         if (o.kind() == DesignObject.Kind.STAGE && field.equals("design-append-action")) {
             String hook = o.str("design-action-hook");
             if (hook.isBlank()) hook = "on-start";
             if (!Set.of("on-start", "on-complete", "on-timeout").contains(hook))
                 throw new IllegalArgumentException("动作时机无效");
+            validateActionTarget(s, o);
             lineAdd(s, key, hook, StageForm.action(o));
             return "已添加";
         }
@@ -936,10 +951,12 @@ public final class DesignManager {
             return "已添加";
         }
         DesignObject.FieldSpec spec = specOf(o.kind(), field);
-        if (spec == null || spec.options().isEmpty()) return null;
+        if (spec == null) return null;
+        List<String> options = fieldOptions(s, o, spec);
+        if (options.isEmpty()) return null;
         String cur = fieldStr(o, field);
-        int idx = spec.options().indexOf(cur);
-        String next = spec.options().get((idx + 1) % spec.options().size());
+        int idx = options.indexOf(cur);
+        String next = options.get((idx + 1) % options.size());
         s.put(o.withValue(field, next));
         postEdit(s, s.get(key));
         return next;
@@ -1090,20 +1107,52 @@ public final class DesignManager {
      * 编辑面板字段行：{@code name|editor|label|value|valueZh|options}。
      * valueZh=展示中文（CYCLE/TOGGLE 枚举值翻译；其余=value）；options 为原值列表。
      */
-    public List<String> fieldRows(DesignObject o) {
+    public List<String> fieldRows(DesignSession s, DesignObject o) {
         List<String> out = new ArrayList<>();
         for (DesignObject.FieldSpec f : DesignObject.schema(o.kind())) {
             if (f.editor() == DesignObject.Editor.SCRIPT
                 || f.editor() == DesignObject.Editor.LIST || f.editor() == DesignObject.Editor.YAML) continue;
             String val = fieldStr(o, f.name());
-            String valZh = (f.editor() == DesignObject.Editor.CYCLE
+            List<String> options = fieldOptions(s, o, f);
+            var editor = options.isEmpty() ? f.editor() : DesignObject.Editor.CYCLE;
+            String valZh = (editor == DesignObject.Editor.CYCLE
                 || f.editor() == DesignObject.Editor.TOGGLE) ? zh(val) : val;
-            String opts = f.options().isEmpty() ? "-" : String.join(",", f.options());
-            out.add(f.name() + "|" + f.editor().name() + "|" + f.label()
+            String opts = options.isEmpty() ? "-" : String.join(",", options);
+            out.add(f.name() + "|" + editor.name() + "|" + f.label()
                 + "|" + val.replace("|", "/") + "|"
                 + valZh.replace("|", "/") + "|" + opts);
         }
         return out;
+    }
+
+    private List<String> fieldOptions(DesignSession s, DesignObject object, DesignObject.FieldSpec field) {
+        var kind = switch (field.name()) {
+            case "design-room-ref", "boss-room" -> DesignObject.Kind.ROOM;
+            case "design-branch-target" -> DesignObject.Kind.STAGE;
+            case "design-action-arg" -> StageForm.actionTarget(object.str("design-action"));
+            case "design-condition-ref", "design-branch-ref" -> switch (object.str(
+                field.name().equals("design-condition-ref") ? "design-condition" : "design-branch-condition")) {
+                case "怪组清空" -> DesignObject.Kind.GROUP;
+                case "房间清空" -> DesignObject.Kind.ROOM;
+                default -> null;
+            };
+            default -> null;
+        };
+        if (kind == null) return field.options();
+        List<String> options = new ArrayList<>(objectIds(s, kind));
+        if (field.name().equals("boss-room")) options.add("");
+        return options;
+    }
+
+    private List<String> objectIds(DesignSession session, DesignObject.Kind kind) {
+        return session.objects().values().stream().filter(o -> o.kind() == kind)
+            .map(DesignObject::id).distinct().toList();
+    }
+
+    private void validateActionTarget(DesignSession session, DesignObject object) {
+        var kind = StageForm.actionTarget(object.str("design-action"));
+        if (kind != null && !objectIds(session, kind).contains(object.str("design-action-arg").trim()))
+            throw new IllegalArgumentException("请选择已存在的" + kind.label());
     }
 
     /** 脚本/列表字段行：field|label|行数。List<Map> 字段（结构化行）不进组——防止行编辑把结构降级成字符串。 */
