@@ -120,7 +120,20 @@ public final class DesignWriter {
             }
             String old = session.originalId(o.key());
             if (!old.equals(o.id())) yaml.set(join(o.path(), old), null);
-            yaml.set(join(o.path(), o.id()), DesignValues.copy(o.values()));
+            Map<String, Object> values = DesignValues.copy(o.values());
+            if (o.kind() == DesignObject.Kind.STAGE) {
+                if (values.containsKey("design-condition")) {
+                    values.remove("complete_when");
+                    values.remove("when");
+                    String condition = StageForm.condition(o.str("design-condition"), o.str("design-condition-ref"));
+                    if (condition.isBlank()) values.remove("complete-when");
+                    else values.put("complete-when", condition);
+                }
+                if (Boolean.TRUE.equals(values.get("design-entry"))) yaml.set("entry", o.id());
+                else if (old.equals(yaml.getString("entry"))) yaml.set("entry", null);
+                values.keySet().removeIf(key -> key.startsWith("design-"));
+            }
+            yaml.set(join(o.path(), o.id()), values);
         }
         // Bukkit set(path, Map) does not create child sections; materialize parents before child writes.
         materialize(files);
@@ -134,6 +147,8 @@ public final class DesignWriter {
                 throw new IOException(file + " 同时存在文件编辑和对象删除，请先分别保存");
             }
             if (kind == DesignObject.Kind.FLOOR) continue;
+            if (kind == DesignObject.Kind.STAGE && deletion.getValue().equals(files.get(file).getString("entry")))
+                files.get(file).set("entry", null);
             if (kind == DesignObject.Kind.ROOM_GROUP) {
                 String compound = deletion.getKey().substring(6);
                 String room = compound.substring(0, compound.indexOf('.'));

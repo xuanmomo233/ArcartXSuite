@@ -1972,10 +1972,11 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
                 && (kind == xuanmo.arcartxsuite.abyss.design.DesignObject.Kind.FLOOR
                     || kind == xuanmo.arcartxsuite.abyss.design.DesignObject.Kind.ROOM);
         }
+        if (node.equals("misc:stages")) return kind == xuanmo.arcartxsuite.abyss.design.DesignObject.Kind.STAGE;
         if (node.equals("misc:settlement") || node.equals("misc:files") || node.equals("misc:assets")) return false;
         boolean inRoom = node.startsWith("room:");
         return switch (kind) {
-            case ROOM, FLOOR, SETTLEMENT, DOCUMENT -> false;
+            case ROOM, FLOOR, STAGE, SETTLEMENT, DOCUMENT -> false;
             case ROOM_GROUP -> inRoom && session.get(node) != null;
             case GROUP -> !inRoom;
             default -> true;

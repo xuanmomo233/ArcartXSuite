@@ -15,6 +15,7 @@ final class DesignReferences {
         Map.entry("puzzle_prompt", DesignObject.Kind.PUZZLE), Map.entry("puzzle_state", DesignObject.Kind.PUZZLE),
         Map.entry("room_lock", DesignObject.Kind.ROOM), Map.entry("room_unlock", DesignObject.Kind.ROOM),
         Map.entry("room_status", DesignObject.Kind.ROOM), Map.entry("grant_reward", DesignObject.Kind.REWARD),
+        Map.entry("set_stage", DesignObject.Kind.STAGE),
         Map.entry("open_chest_ui", DesignObject.Kind.CHEST), Map.entry("buff_offer", DesignObject.Kind.BUFF),
         Map.entry("buff_grant", DesignObject.Kind.BUFF), Map.entry("buff_clear", DesignObject.Kind.BUFF));
     static void migrate(Map<String,YamlConfiguration> files, DesignObject.Kind kind, String oldId,
@@ -30,7 +31,7 @@ final class DesignReferences {
         }
         for (var entry:files.entrySet()) {
             Map<String,Object> values=DesignValues.copy(entry.getValue().getValues(false));
-            boolean dependencies = !(kind == DesignObject.Kind.GROUP && entry.getKey().equals("rooms.yml"));
+            boolean dependencies = objectReferencesIn(kind, entry.getKey());
             @SuppressWarnings("unchecked") Map<String,Object> replaced=(Map<String,Object>)rewrite(values,"",kind,oldId,newId,dependencies,true);
             YamlConfiguration output=entry.getValue();
             replaced.forEach(output::set);
@@ -42,7 +43,7 @@ final class DesignReferences {
         DesignObject.Kind target=kind==DesignObject.Kind.ROOM_GROUP?DesignObject.Kind.GROUP:kind;
         for(var entry:files.entrySet()) {
             Object values=DesignValues.copy(entry.getValue().getValues(false));
-            boolean dependencies = !(kind == DesignObject.Kind.GROUP && entry.getKey().equals("rooms.yml"));
+            boolean dependencies = objectReferencesIn(kind, entry.getKey());
             if(!values.equals(rewrite(values,"",target,id,"__deleted_reference__",dependencies,true))) return true;
         }
         return false;
@@ -54,6 +55,11 @@ final class DesignReferences {
         if (section == null) return false;
         Object values = DesignValues.copy(section.getValues(false));
         return !values.equals(rewrite(values,"",DesignObject.Kind.GROUP,id,"__deleted_reference__",true,false));
+    }
+
+    private static boolean objectReferencesIn(DesignObject.Kind kind, String file) {
+        if (kind == DesignObject.Kind.STAGE) return file.equals("stages.yml");
+        return kind != DesignObject.Kind.GROUP || !file.equals("rooms.yml");
     }
     private static Object rewrite(Object value,String property,DesignObject.Kind kind,String oldId,String newId) {
         return rewrite(value,property,kind,oldId,newId,true,true);
@@ -89,6 +95,7 @@ final class DesignReferences {
             case INTERACT -> prop.equals("steps") || prop.equals("design-interact");
             case ROOM -> Set.of("rooms","pool","boss-room").contains(prop);
             case REWARD -> prop.equals("reward") || prop.equals("challenge-reward");
+            case STAGE -> dependencies && Set.of("next", "target", "stage", "entry").contains(prop);
             default -> false;
         };
         if(ref && text.equals(oldId))return newId;

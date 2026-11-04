@@ -214,6 +214,7 @@ public final class DesignManager {
         loadSection(out, t, dir, "rewards.yml", "chest_rewards", DesignObject.Kind.CHEST, roomBoxes);
         loadSection(out, t, dir, "chest_rewards.yml", "", DesignObject.Kind.CHEST, roomBoxes);
         loadSection(out, t, dir, "buffs.yml", "pools", DesignObject.Kind.BUFF, roomBoxes);
+        loadStages(out, dir);
         loadLayoutAndSettlement(out, dir);
 
         // floors：房间模板本身 + 房内怪组
@@ -362,6 +363,26 @@ public final class DesignManager {
         return out;
     }
 
+    private void loadStages(List<DesignObject> out, File dir) {
+        YamlConfiguration yaml = loadYaml(dir, "stages.yml");
+        if (yaml == null) return;
+        for (String id : yaml.getKeys(false)) {
+            if (id.equalsIgnoreCase("entry")) continue;
+            var section = yaml.getConfigurationSection(id);
+            if (section == null) continue;
+            Map<String, Object> values = deepValues(section);
+            if (values.get("next") instanceof String target && !target.isBlank()) {
+                values.put("next", List.of(Map.of("target", target)));
+            } else if (values.get("next") instanceof List<?> branches) {
+                values.put("next", branches.stream().map(branch -> branch instanceof String target
+                    ? Map.of("target", target) : branch).toList());
+            }
+            if (id.equals(yaml.getString("entry"))) values.put("design-entry", true);
+            out.add(new DesignObject("stage:" + id, DesignObject.Kind.STAGE, id,
+                "stages.yml", "", "流程阶段", null, null, "misc:stages", values, false));
+        }
+    }
+
     private void loadLayoutAndSettlement(List<DesignObject> out, File dir) {
         YamlConfiguration floors = loadYaml(dir, "floors.yml");
         if (floors != null) {
@@ -496,6 +517,7 @@ public final class DesignManager {
             out.add(new Node("misc:layout", "楼层路线", 0, s.nodeObjects("misc:layout").size()));
         }
         out.add(new Node("misc:settlement", "结算策略", 0, s.nodeObjects("misc:settlement").size()));
+        out.add(new Node("misc:stages", "流程阶段", 0, s.nodeObjects("misc:stages").size()));
         if(t.procgen()!=null)out.add(new Node("misc:assets","共享构件元数据",0,s.nodeObjects("misc:assets").size()));
         return out;
     }
@@ -876,6 +898,14 @@ public final class DesignManager {
                 return true;
             }
         }
+        if (o.kind() == DesignObject.Kind.STAGE && field.equals("design-entry") && Boolean.TRUE.equals(value)) {
+            for (DesignObject stage : List.copyOf(s.objects().values())) {
+                if (stage.kind() == DesignObject.Kind.STAGE && !stage.key().equals(key)
+                    && Boolean.TRUE.equals(stage.values().get("design-entry"))) {
+                    s.put(stage.withValue("design-entry", false));
+                }
+            }
+        }
         s.put(o.withValue(field, value));
         postEdit(s, s.get(key));
         return true;
@@ -885,6 +915,26 @@ public final class DesignManager {
     public @Nullable String cycleNext(DesignSession s, String key, String field) {
         DesignObject o = s.get(key);
         if (o == null) return null;
+        if (o.kind() == DesignObject.Kind.STAGE && field.equals("design-append-action")) {
+            String hook = o.str("design-action-hook");
+            if (hook.isBlank()) hook = "on-start";
+            if (!Set.of("on-start", "on-complete", "on-timeout").contains(hook))
+                throw new IllegalArgumentException("动作时机无效");
+            lineAdd(s, key, hook, StageForm.action(o));
+            return "已添加";
+        }
+        if (o.kind() == DesignObject.Kind.STAGE && field.equals("design-append-branch")) {
+            String target = o.str("design-branch-target").trim();
+            if (s.objects().values().stream().noneMatch(stage -> stage.kind() == DesignObject.Kind.STAGE
+                && stage.id().equals(target))) throw new IllegalArgumentException("请选择已存在的阶段ID");
+            var branches = editableLines(o, "next");
+            if (branches.size() >= 128) throw new IllegalArgumentException("阶段分支最多128条");
+            String condition = StageForm.condition(o.str("design-branch-condition"), o.str("design-branch-ref"));
+            if (condition.isBlank()) branches.add(Map.of("target", target));
+            else branches.add(Map.of("target", target, "condition", condition));
+            s.put(o.withValue("next", branches));
+            return "已添加";
+        }
         DesignObject.FieldSpec spec = specOf(o.kind(), field);
         if (spec == null || spec.options().isEmpty()) return null;
         String cur = fieldStr(o, field);
@@ -981,6 +1031,7 @@ public final class DesignManager {
     public boolean rename(DesignSession s, String key, String newId) {
         DesignObject o = s.get(key);
         if (o == null || o.kind() == DesignObject.Kind.DOCUMENT || o.kind() == DesignObject.Kind.SETTLEMENT
+            || (o.kind() == DesignObject.Kind.STAGE && newId.equalsIgnoreCase("entry"))
             || newId.isBlank() || !newId.matches("[\\p{L}\\p{N}_\\-]{1,64}")) return false;
         if (s.idTaken(o.kind(), newId, key)) return false;
         s.put(o.withId(newId));
@@ -1162,6 +1213,7 @@ public final class DesignManager {
             case BUFF -> str(vals, "name");
             case ROOM -> zh(str(vals, "type"));
             case FLOOR -> str(vals, "name");
+            case STAGE -> str(vals, "name");
             case SETTLEMENT -> str(vals, "exit-mode");
             case DOCUMENT -> id;
         };
@@ -1210,6 +1262,11 @@ public final class DesignManager {
                 vals.put("advance", "portal");
             }
             case SETTLEMENT -> { }
+            case STAGE -> {
+                vals.put("design-condition", "地图清空");
+                vals.put("design-action-hook", "on-start");
+                vals.put("design-action", "提示");
+            }
             case BUFF -> { vals.put("pick", 1); vals.put("presentation", "panel"); }
             case DOCUMENT -> { }
         }

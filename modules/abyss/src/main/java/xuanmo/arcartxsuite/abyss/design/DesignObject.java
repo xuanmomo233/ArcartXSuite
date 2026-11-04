@@ -50,6 +50,7 @@ public record DesignObject(
         CHEST("▤", "宝箱", "rewards.yml", "chest-rewards", "230,160,90"),
         ROOM("⌂", "房间", "rooms.yml", "rooms", "170,170,190"),
         FLOOR("⌂", "楼层", "floors.yml", "floors", "170,170,190"),
+        STAGE("➜", "阶段", "stages.yml", "", "130,210,140"),
         SETTLEMENT("❖", "结算策略", "config.yml", "", "245,200,110"),
         BUFF("✦", "增益池", "buffs.yml", "pools", "240,150,200"),
         DOCUMENT("≡", "配置文件", "", "", "150,200,220");
@@ -212,6 +213,27 @@ public record DesignObject(
                 FieldSpec.text("boss-room", "Boss 房间ID"),
                 FieldSpec.cycle("advance", "进下一层", "portal", "auto"),
                 FieldSpec.num("advance-timeout", "出口等待上限（秒）"));
+            case STAGE -> List.of(
+                FieldSpec.text("name", "阶段名称"),
+                FieldSpec.toggle("design-entry", "设为入口阶段"),
+                FieldSpec.num("timeout", "阶段超时（秒）"),
+                FieldSpec.cycle("design-condition", "完成条件",
+                    "手动推进", "地图清空", "怪组清空", "房间清空", "变量成立"),
+                FieldSpec.text("design-condition-ref", "条件目标ID或变量"),
+                FieldSpec.cycle("design-action-hook", "动作时机", "on-start", "on-complete", "on-timeout"),
+                FieldSpec.cycle("design-action", "动作类型", "提示", "等待", "刷怪", "开门", "关门",
+                    "发奖励", "开奖励箱", "设置变量", "通关", "判负"),
+                FieldSpec.text("design-action-arg", "动作目标、文案或等待秒数"),
+                FieldSpec.text("design-action-value", "变量值"),
+                FieldSpec.cycle("design-append-action", "追加到动作列表", "添加动作"),
+                FieldSpec.text("design-branch-target", "后继阶段ID"),
+                FieldSpec.cycle("design-branch-condition", "分支条件", "无条件", "地图清空", "怪组清空", "房间清空", "变量成立"),
+                FieldSpec.text("design-branch-ref", "分支条件目标ID或变量"),
+                FieldSpec.cycle("design-append-branch", "追加到分支列表", "添加分支"),
+                FieldSpec.script("on-start", "进入动作"),
+                FieldSpec.script("on-complete", "完成动作"),
+                FieldSpec.script("on-timeout", "超时动作"),
+                FieldSpec.yaml("next", "分支顺序"));
             case SETTLEMENT -> List.of(
                 FieldSpec.cycle("exit-mode", "离开方式", "IMMEDIATE", "COUNTDOWN", "MANUAL"),
                 FieldSpec.num("exit-delay-seconds", "倒计时（秒）"),

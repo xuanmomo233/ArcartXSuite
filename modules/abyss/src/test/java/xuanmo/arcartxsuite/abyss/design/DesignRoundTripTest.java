@@ -182,6 +182,27 @@ class DesignRoundTripTest {
         assertEquals("test", yaml.getString("name"));
     }
 
+    @Test void stageFormComposesExecutableActionsAndBranchesWithoutRawLines() throws Exception {
+        write("stages.yml", "intro: {}\nending: {}\n");
+        open(false);
+        manager.setField(session, "stage:intro", "design-entry", "true");
+        manager.setField(session, "stage:intro", "design-condition", "地图清空");
+        manager.setField(session, "stage:intro", "design-action-hook", "on-complete");
+        manager.setField(session, "stage:intro", "design-action", "提示");
+        manager.setField(session, "stage:intro", "design-action-arg", "路线已解锁");
+        manager.cycleNext(session, "stage:intro", "design-append-action");
+        manager.setField(session, "stage:intro", "design-branch-target", "ending");
+        manager.cycleNext(session, "stage:intro", "design-append-branch");
+        assertTrue(save().ok());
+        var saved = read("stages.yml");
+        var stages = StageConfig.load(saved, null);
+        assertEquals("intro", stages.entryId());
+        assertEquals("var:map_cleared", stages.stages().get("intro").completeWhen());
+        assertEquals(List.of("message @all 路线已解锁"), stages.stages().get("intro").onComplete());
+        assertEquals("ending", stages.stages().get("intro").next().get(0).target());
+        assertFalse(saved.contains("intro.design-action"));
+    }
+
     @Test void successfulSaveBacksUpOriginalBytes()throws Exception {
         write("npcs.yml","# original comment\none: {name: original}\n");open(false);
         byte[] before=Files.readAllBytes(dir.resolve("npcs.yml"));
