@@ -56,6 +56,7 @@ final class AdmissionAccess implements AbyssAdmissionAccess {
         xuanmo.arcartxsuite.api.capability.AbyssEntryCostAccess.Participant costParticipant;
         boolean compensationAttempted;
         boolean entryOutcomeUncertain;
+        ExternalParties.Verified externalRoster;
         long noticeSequence;
         Entry lastQueuedSnapshot;
         Operation(Intent intent) {
@@ -107,7 +108,7 @@ final class AdmissionAccess implements AbyssAdmissionAccess {
         return new IntegrationInfo(1, generation, catalogRevision, running, running ? null : "UNAVAILABLE",
             Map.of("catalog", running ? "AVAILABLE" : "UNAVAILABLE",
                 "hostEntry", running && storage != null ? "AVAILABLE" : "UNAVAILABLE",
-                "remoteEntry", "UNSUPPORTED", "originalRunReconnect", "UNSUPPORTED",
+                "remoteEntry", "UNSUPPORTED", "originalRunReconnect", running ? "SAME_PROCESS_OPT_IN" : "UNAVAILABLE",
                 "externalCost", running && storage != null ? "AVAILABLE" : "UNAVAILABLE"));
     }
 

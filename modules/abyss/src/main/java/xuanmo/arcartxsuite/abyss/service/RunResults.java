@@ -50,6 +50,15 @@ final class RunResults implements AbyssRunResultAccess {
         if (facts != null) notice(instance, facts, NoticeKind.STARTED, null);
     }
 
+    void reconnected(AbyssInstance instance, UUID player) {
+        var facts = live.get(instance.getInstanceId());
+        var previous = facts == null ? null : facts.members().get(player);
+        if (previous == null) return;
+        var member = new Member(player, MemberState.PRESENT, previous.deaths(), null, System.currentTimeMillis());
+        facts.members().put(player, member);
+        notice(instance, facts, NoticeKind.RECONNECTED, member);
+    }
+
     void member(AbyssInstance instance, UUID player, MemberState state, String reason, Integer deaths) {
         var facts = live.get(instance.getInstanceId());
         if (facts == null) return;

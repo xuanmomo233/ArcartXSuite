@@ -120,6 +120,9 @@ public final class AbyssModule extends AbstractAXSModule implements ModuleComman
         registerCapability(AbyssQueryable.class, new AbyssQueryableImpl(service));
         registerCapability(xuanmo.arcartxsuite.api.capability.AbyssAdmissionAccess.class, service.admissionAccess());
         registerCapability(xuanmo.arcartxsuite.api.capability.AbyssRunResultAccess.class, service.runResultAccess());
+        registerCapability(xuanmo.arcartxsuite.api.capability.AbyssRunAccess.class, service.runAccess());
+        registerCapability(xuanmo.arcartxsuite.api.capability.AbyssExternalPartyAccess.class, service.externalPartyAccess());
+        registerCapability(xuanmo.arcartxsuite.api.capability.AbyssReconnectAccess.class, service.reconnectAccess());
         registerCapability(xuanmo.arcartxsuite.api.capability.AbyssEntryCostAccess.class, service.entryCostAccess());
         registerCapability(xuanmo.arcartxsuite.api.capability.AbyssPartyAccess.class,
             new xuanmo.arcartxsuite.abyss.capability.AbyssPartyAccessImpl(service));
@@ -273,6 +276,8 @@ public final class AbyssModule extends AbstractAXSModule implements ModuleComman
             xuanmo.arcartxsuite.api.capability.AbyssRunResultAccess.RESULT_COMMITTED_TOPIC,
             xuanmo.arcartxsuite.api.capability.AbyssRunResultAccess.RUN_NOTICE_TOPIC,
             xuanmo.arcartxsuite.api.capability.AbyssRunResultAccess.ENTRY_NOTICE_TOPIC,
+            xuanmo.arcartxsuite.api.capability.AbyssRunAccess.ENTITY_TOPIC,
+            xuanmo.arcartxsuite.api.capability.AbyssRunAccess.OBJECTIVES_TOPIC,
             "axs.abyss.fail",
             "axs.abyss.leave",
             "axs.abyss.player_death",

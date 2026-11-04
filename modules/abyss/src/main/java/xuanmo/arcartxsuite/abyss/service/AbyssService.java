@@ -103,8 +103,15 @@ public final class AbyssService {
     private final AdmissionAccess admission = new AdmissionAccess(this);
     private final EntryCosts entryCosts = new EntryCosts(this);
     private final RunResults runResults = new RunResults(this);
+    private final RunIntegration runIntegration = new RunIntegration(this);
+    private final ExternalParties externalParties = new ExternalParties(this);
+    private final RunReconnects reconnects = new RunReconnects(this);
     public AbyssAdmissionAccess admissionAccess() { return admission; }
     public AbyssRunResultAccess runResultAccess() { return runResults; }
+    public xuanmo.arcartxsuite.api.capability.AbyssRunAccess runAccess() { return runIntegration; }
+    public xuanmo.arcartxsuite.api.capability.AbyssExternalPartyAccess externalPartyAccess() { return externalParties; }
+    public xuanmo.arcartxsuite.api.capability.AbyssReconnectAccess reconnectAccess() { return reconnects; }
+    AdmissionAccess.Operation admissionOperation(AbyssInstance instance) { return admission.operation(instance); }
     public xuanmo.arcartxsuite.api.capability.AbyssEntryCostAccess entryCostAccess() { return entryCosts; }
     EntryCosts entryCosts() { return entryCosts; }
 
@@ -462,7 +469,9 @@ public final class AbyssService {
     private ScheduledTask proximityTask;
 
     public void shutdown() {
+        runIntegration.shutdown();
         admission.shutdown();
+        externalParties.clear();
         entryCosts.clear();
         stopping=true;
         if(uiFacade instanceof AbyssUiService ui)ui.stopQueries();
@@ -852,6 +861,11 @@ public final class AbyssService {
         List<Player> members = resolveMembers(intent);
         Player actor = org.bukkit.Bukkit.getPlayer(intent.actor());
         Party party = actor == null ? null : partyManager.partyOf(actor);
+        if (intent.externalPartyId() != null) {
+            var verified = externalParties.verify(intent);
+            if (verified == null) failures.add(AdmissionAccess.deny("EXTERNAL_ROSTER_UNAVAILABLE", "外部队伍或准备状态未通过确认"));
+            else party = ExternalParties.context(verified);
+        }
         if (party != null && (!party.isLeader(intent.actor()) || !party.allReady()
             || !new java.util.HashSet<>(party.members()).equals(new java.util.HashSet<>(intent.members()))))
             failures.add(AdmissionAccess.deny("ROSTER_CHANGED", "需要真实队长及完整的已准备队伍"));
@@ -863,7 +877,8 @@ public final class AbyssService {
                 failures.add(new Denial(id, "MEMBER_UNAVAILABLE", "成员离线或已死亡"));
                 continue;
             }
-            if (recoveringPlayers.containsKey(id) || instances.getInstance(player) != null || admission.reservedByOther(id, intent))
+            if (recoveringPlayers.containsKey(id) || instances.getInstance(player) != null
+                || admission.reservedByOther(id, intent) || reconnects.eligible(id) != null)
                 failures.add(new Denial(id, "MEMBER_BUSY", "成员正在副本中或等待恢复"));
             var check = requirementChecker.checkSingle(template, player);
             if (!check.ok()) failures.add(new Denial(id, "REQUIREMENT", check.reason()));
@@ -895,6 +910,7 @@ public final class AbyssService {
         // 逐人查重：任一成员已在其它实例则整队拒绝
         // （只查首人会漏掉队员→其旧实例成员关系残留、被映射进新实例双重记账）
         for (Player member : players) {
+            if (reconnects.eligible(member.getUniqueId()) != null) return EnterResult.fail("成员仍有原副本回归资格");
             if (admission.reservedByOther(member.getUniqueId(), intent)) return EnterResult.fail("成员已有待处理入场");
             if (!member.isOnline() || member.isDead()) return EnterResult.fail("成员离线或已死亡");
             if(recoveringPlayers.containsKey(member.getUniqueId()))return EnterResult.fail("玩家断线恢复尚未完成，请稍后重试或重新连接服务器");
@@ -909,6 +925,11 @@ public final class AbyssService {
         List<Denial> policyDenials = admission.policies(intent, template);
         if (!policyDenials.isEmpty()) return EnterResult.fail(policyDenials.get(0).message());
         Party party = partyManager.partyOf(players.get(0));
+        if (intent.externalPartyId() != null) {
+            operation.externalRoster = externalParties.verify(intent);
+            if (operation.externalRoster == null) return EnterResult.fail("外部队伍状态已变化或存在原生队伍冲突");
+            party = ExternalParties.context(operation.externalRoster);
+        }
         if (players.size() > 1 && (party == null || !party.isLeader(intent.actor()) || !party.allReady()
             || !new java.util.HashSet<>(party.members()).equals(new java.util.HashSet<>(intent.members()))))
             return EnterResult.fail("需要真实队长及完整的已准备队伍");
@@ -1458,8 +1479,11 @@ public final class AbyssService {
         ensureFooting(world, spawn);
 
         // Revalidate the complete admission after asynchronous world preparation.
+        var op = admission.operation(instance);
+        boolean external = op != null && op.externalRoster != null;
         boolean changed = instances.getTemplate(tpl.id()) != tpl || players.stream().anyMatch(p -> !p.isOnline() || p.isDead() || !instance.hasPlayer(p.getUniqueId())
-            || partyManager.partyOf(p) != instance.getParty());
+            || (!external && partyManager.partyOf(p) != instance.getParty()));
+        if (external) changed |= !op.externalRoster.equals(externalParties.verify(op.intent));
         if(instance.getParty()!=null)changed |= !instance.getParty().allReady()
             || !java.util.Objects.equals(instance.getVariables().get("admission_party_revision"),instance.getParty().revision());
         var fresh = changed ? RequirementChecker.CheckResult.fail("队伍或成员状态已变化")
@@ -1468,7 +1492,6 @@ public final class AbyssService {
             broadcast(instance, msg("error.enter-failed", "reason", fresh.reason()));
             destroyInstance(instance, true); return;
         }
-        var op = admission.operation(instance);
         if (op != null) {
             if (!entryCosts.authorized(op)) {
                 op.reason = "COST_PROVIDER_CHANGED";
@@ -2067,7 +2090,7 @@ public final class AbyssService {
         if (instance.getOnlinePlayerCount() == 0 && !instance.isFinished()) {
             long delay = config.abyss().emptyCleanupDelaySeconds() * 20L;
             scheduleOnce(instance, () -> {
-                if (instance.getOnlinePlayerCount() == 0) {
+                if (instance.getOnlinePlayerCount() == 0 && !reconnects.retains(instance.getInstanceId())) {
                     cancelDungeon(instance);
                 }
             }, delay);
@@ -2091,6 +2114,7 @@ public final class AbyssService {
         if (crossDungeon != null) crossDungeon.onPlayerQuit(player);
         AbyssInstance instance = instances.getInstance(player);
         if (instance == null) return;
+        reconnects.retain(instance, player);
         // 非正常退出标记（下次进服执行恢复动作；顺带记录进本前 GameMode——
         // 旁观死亡态断线重连若不还原会永久卡 SPECTATOR）
         if (recoveryManager != null) {
@@ -2109,7 +2133,7 @@ public final class AbyssService {
         if (instance.getOnlinePlayerCount() == 0 && !instance.isFinished()) {
             long delay = config.abyss().emptyCleanupDelaySeconds() * 20L;
             scheduleOnce(instance, () -> {
-                if (instance.getOnlinePlayerCount() == 0) cancelDungeon(instance);
+                if (instance.getOnlinePlayerCount() == 0 && !reconnects.retains(instance.getInstanceId())) cancelDungeon(instance);
             }, delay);
         }
         partyManager.onQuit(player);
@@ -2162,12 +2186,71 @@ public final class AbyssService {
     }
     private void finishJoinRecovery(Player player) {
         if(!currentRecovery(player))return;
-        if(recoveryManager!=null)recoveryManager.runIfMarked(player);
+        var seat = reconnects.eligible(player.getUniqueId());
+        if (seat == null) {
+            if(recoveryManager!=null)recoveryManager.runIfMarked(player);
+        } else {
+            if (seat.mode() != null && player.getGameMode() != seat.mode()) player.setGameMode(seat.mode());
+            player.sendMessage("§e原副本仍可返回，使用 /abyss rejoin。");
+        }
         recoveringPlayers.remove(player.getUniqueId(),player);
         scheduleDelayedRaw(()->{
             if(crossDungeon!=null && player.isOnline() && org.bukkit.Bukkit.getPlayer(player.getUniqueId())==player)
                 crossDungeon.onPlayerJoin(player);
         },60L);
+    }
+
+    String resumeMember(Player player, RunReconnects.Seat seat) {
+        UUID id = player.getUniqueId();
+        if (!running() || recoveringPlayers.containsKey(id) || player.isDead()
+            || instances.getInstance(player) != null) return "MEMBER_UNAVAILABLE";
+        AbyssInstance instance = instances.getInstance(seat.run());
+        if (instance == null || instance.getStatus() != AbyssStatus.ACTIVE || instance.isTimeout()
+            || transferringInstances.contains(seat.run())) return "RUN_UNAVAILABLE";
+        Location target = spawnLocation(instance);
+        if (target == null || target.getWorld() != instance.getWorld()) return "CHECKPOINT_UNAVAILABLE";
+        Location safe = player.getLocation().clone();
+        transferringInstances.add(seat.run());
+        try {
+            if (!teleportWithRetry(player, target, 3) || player.getWorld() != target.getWorld()) return "TELEPORT_FAILED";
+            if (instance.getStatus() != AbyssStatus.ACTIVE || !player.isOnline()) {
+                if (player.isOnline() && !teleportWithRetry(player, safe, 3)) {
+                    instances.playerEnterInstance(player, instance);
+                    instance.saveOriginalLocation(player, safe);
+                    scheduleDelayedRaw(() -> finishAndCleanup(instance), 1L);
+                    return "RETURN_PENDING";
+                }
+                return "RUN_UNAVAILABLE";
+            }
+            instances.playerEnterInstance(player, instance);
+            instance.markEntered(id);
+            instance.saveOriginalLocation(player, seat.returnLocation());
+            instance.savePlayerGameMode(player);
+            if (seat.dead()) {
+                instance.restoreDeathState(id);
+                player.setGameMode(GameMode.SPECTATOR);
+            }
+        } finally {
+            transferringInstances.remove(seat.run());
+        }
+        if (recoveryManager != null) recoveryManager.discardMark(id);
+        runResults.reconnected(instance, id);
+        if (uiFacade instanceof AbyssUiService ui) ui.openHud(player, instance);
+        return "REJOINED";
+    }
+
+    void expireReconnect(UUID player, UUID runId) {
+        finishExpiredReconnect(player);
+        var instance = instances.getInstance(runId);
+        if (instance != null && !instance.isFinished() && instance.getOnlinePlayerCount() == 0 && !reconnects.retains(runId))
+            cancelDungeon(instance);
+    }
+
+    void finishExpiredReconnect(UUID id) {
+        if (recoveryManager == null || !running() || recoveringPlayers.containsKey(id)) return;
+        var player = org.bukkit.Bukkit.getPlayer(id);
+        if (player != null && player.isOnline() && instances.getInstance(player) == null)
+            recoveryManager.runIfMarked(player);
     }
 
     // ═══ 死亡处理 ═══
@@ -2549,6 +2632,8 @@ public final class AbyssService {
         }
         admission.changed(operation);
         admission.detached(instance);
+        runIntegration.detached(instance.getInstanceId());
+        reconnects.detach(instance.getInstanceId());
     }
 
     void cancelAdmission(UUID runId) {
@@ -2735,6 +2820,7 @@ public final class AbyssService {
                 continue;
             }
             try {
+                runIntegration.tick(i);
                 if(i.isFinished()) {
                     if(i.getOnlinePlayerCount()==0)finishAndCleanup(i);
                     else if(!settlements.containsKey(i.getInstanceId()))finishAndCleanup(i);
@@ -2820,6 +2906,15 @@ public final class AbyssService {
     }
 
     /** 怪物组回调实现（MonsterGroupManager.GroupCallback）。 */
+    void publishObjectiveNotice(xuanmo.arcartxsuite.api.capability.AbyssRunAccess.Snapshot snapshot) {
+        try {
+            var bus = eventBusProvider.get();
+            if (bus != null) bus.publish(xuanmo.arcartxsuite.api.capability.AbyssRunAccess.OBJECTIVES_TOPIC, null, snapshot);
+        } catch (RuntimeException failure) {
+            logger.warning("[abyss] 目标通知发布失败 " + snapshot.runId());
+        }
+    }
+
     private final class GroupCallbackImpl implements MonsterGroupManager.GroupCallback {
         @Override
         public void onSpawnFailed(AbyssInstance instance, String groupName) {
@@ -2830,6 +2925,22 @@ public final class AbyssService {
         public void onGroupStart(AbyssInstance instance, String groupName) {
             instanceTasks.fireEvent(instance, "wave_start",
                 Map.of("group", groupName));
+        }
+
+        @Override
+        public void entityChanged(xuanmo.arcartxsuite.api.capability.AbyssRunAccess.Entity context,
+                                  xuanmo.arcartxsuite.api.capability.AbyssRunAccess.EntityChange change) {
+            var notice = new xuanmo.arcartxsuite.api.capability.AbyssRunAccess.EntityNotice(
+                1, UUID.randomUUID(), context, change, System.currentTimeMillis());
+            scheduleDelayedRaw(() -> {
+                if (!running()) return;
+                try {
+                    var bus = eventBusProvider.get();
+                    if (bus != null) bus.publish(xuanmo.arcartxsuite.api.capability.AbyssRunAccess.ENTITY_TOPIC, null, notice);
+                } catch (RuntimeException failure) {
+                    logger.warning("[abyss] 实体通知发布失败 " + context.id());
+                }
+            }, 1L);
         }
 
         @Override

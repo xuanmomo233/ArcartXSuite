@@ -23,7 +23,7 @@ public interface AbyssRunResultAccess {
     record Cursor(long endedAt, UUID runId) { }
     record ResultCommitted(int schemaVersion, UUID eventId, UUID runId, UUID requestId,
                            long occurredAt) { }
-    enum NoticeKind { ADMITTED, STARTED, DISCONNECTED, LEFT, DIED }
+    enum NoticeKind { ADMITTED, STARTED, DISCONNECTED, RECONNECTED, LEFT, DIED }
     /** Server-thread notification. Sequence is scoped to a run; notices are not replayed. */
     record RunNotice(int schemaVersion, UUID eventId, UUID runId, UUID requestId, long sequence,
                      long occurredAt, NoticeKind kind, Member member) { }

@@ -53,6 +53,80 @@ class SettlementLifecycleTest {
         instance.confirmAdmission();
     }
     @AfterEach void restore()throws Exception{serverField.set(null,previous);}
+
+    @Test void optedInDisconnectedPlayerReturnsToOriginalRunWithDeathState() throws Exception {
+        var yaml = new YamlConfiguration();
+        yaml.set("reconnect-grace-seconds", 60);
+        when(template.requirements()).thenReturn(EntryRequirements.load(yaml));
+        when(template.spawn()).thenReturn("1,65,1");
+        set(service, "partyManager", new xuanmo.arcartxsuite.abyss.party.PartyManager(
+            service.config().party(), text -> { }, null));
+        instance.recordDeath(player);
+        when(player.isOnline()).thenReturn(false);
+        service.handleQuit(player);
+        var access = service.reconnectAccess();
+        var status = access.reconnectStatus(player.getUniqueId());
+        assertTrue(status.eligible());
+        assertEquals(instance.getInstanceId(), status.runId());
+        when(player.isOnline()).thenReturn(true);
+        currentWorld.set(home);
+        assertEquals("NO_ACTIVE_RESERVATION", access.requestReconnect(player.getUniqueId(), UUID.randomUUID()).code());
+        assertEquals("REJOINED", access.requestReconnect(player.getUniqueId(), instance.getInstanceId()).code());
+        assertSame(instance, instances.getInstance(player));
+        assertTrue(instance.isPlayerCurrentlyDead(player));
+        assertEquals(1, instance.getDeaths(player.getUniqueId()));
+        verify(player).setGameMode(GameMode.SPECTATOR);
+        assertFalse(access.reconnectStatus(player.getUniqueId()).eligible());
+    }
+
+    @Test void externalRosterIsVerifiedWithoutCreatingANativeParty() throws Exception {
+        var parties = new xuanmo.arcartxsuite.abyss.party.PartyManager(service.config().party(), text -> { }, null);
+        set(service, "partyManager", parties);
+        var access = new ExternalParties(service);
+        UUID leader = player.getUniqueId(), member = UUID.randomUUID();
+        var intent = new xuanmo.arcartxsuite.api.capability.AbyssAdmissionAccess.Intent(
+            "xc", UUID.randomUUID(), leader, List.of(leader, member), "test",
+            null, null, null, "squad", 2, 3);
+        var roster = new AtomicReference<>(new xuanmo.arcartxsuite.api.capability.AbyssExternalPartyAccess.Roster(
+            "squad", leader, List.of(leader, member), "guild", 10, 2, 3, true));
+        try (var ignored = access.register("xc", request -> roster.get())) {
+            var verified = access.verify(intent);
+            assertNotNull(verified);
+            assertTrue(ExternalParties.context(verified).allReady());
+            assertFalse(parties.inParty(leader));
+            roster.set(new xuanmo.arcartxsuite.api.capability.AbyssExternalPartyAccess.Roster(
+                "squad", leader, List.of(leader, member), "guild", 10, 3, 3, true));
+            assertNull(access.verify(intent));
+        }
+        assertNull(access.verify(intent));
+    }
+
+    @Test void runControlChecksOwnerRevisionAndIdempotency() throws Exception {
+        var yaml = new YamlConfiguration();
+        yaml.set("external-control-owner", "xc");
+        when(template.requirements()).thenReturn(EntryRequirements.load(yaml));
+        var field = AbyssService.class.getDeclaredField("admission");
+        field.setAccessible(true);
+        var admission = (AdmissionAccess) field.get(service);
+        UUID owner = player.getUniqueId(), run = instance.getInstanceId();
+        admission.attach(instance, new AdmissionAccess.Operation(new xuanmo.arcartxsuite.api.capability.AbyssAdmissionAccess.Intent(
+            "xc", UUID.randomUUID(), owner, List.of(owner), "test", null, null, null)));
+        var access = service.runAccess();
+        long revision = access.snapshot(run).revision();
+        var request = new xuanmo.arcartxsuite.api.capability.AbyssRunAccess.Operation(UUID.randomUUID(), run, revision,
+            "xc", xuanmo.arcartxsuite.api.capability.AbyssRunAccess.Action.SET_VARIABLE, null, "flag", "yes");
+        var result = access.execute(request);
+        assertTrue(result.applied());
+        assertEquals(result, access.execute(request));
+        assertEquals("yes", instance.getVariables().get("external:xc:flag"));
+        assertEquals(result.revision(), access.snapshot(run).revision());
+        var stale = new xuanmo.arcartxsuite.api.capability.AbyssRunAccess.Operation(UUID.randomUUID(), run, revision,
+            "xc", request.action(), null, "flag", "no");
+        assertEquals("STALE_REVISION", access.execute(stale).code());
+        var other = new xuanmo.arcartxsuite.api.capability.AbyssRunAccess.Operation(UUID.randomUUID(), run,
+            result.revision(), "other", request.action(), null, "flag", "no");
+        assertEquals("NOT_OWNER", access.execute(other).code());
+    }
     void policy(String mode,int seconds)throws Exception {
         var yaml=new YamlConfiguration();yaml.set("exit-mode",mode);yaml.set("exit-delay-seconds",seconds);when(template.settlement()).thenReturn(SettlementConfig.load(yaml));
     }

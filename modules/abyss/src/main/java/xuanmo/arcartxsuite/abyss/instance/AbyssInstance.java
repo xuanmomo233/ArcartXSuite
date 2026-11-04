@@ -182,6 +182,8 @@ public final class AbyssInstance {
         deadPlayers.remove(p.getUniqueId());
     }
 
+    public void restoreDeathState(UUID player) { deadPlayers.add(player); }
+
     public boolean isPlayerCurrentlyDead(Player p) {
         return deadPlayers.contains(p.getUniqueId());
     }

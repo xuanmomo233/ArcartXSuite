@@ -41,4 +41,25 @@ class MonsterSpawnFailureTest {
         verify(callback).onGroupComplete(instance,"wave");verify(callback,never()).onSpawnFailed(any(),anyString());
         manager.sweepVanished(instance);verify(callback,times(1)).onGroupComplete(instance,"wave");
     }
+
+    @Test void trackedMobCannotBeCompletedByAnotherRunAndDeathIsReportedOnce() {
+        var mob = mock(org.bukkit.entity.Entity.class);
+        UUID id = UUID.randomUUID();
+        when(mob.getUniqueId()).thenReturn(id);
+        when(mob.getWorld()).thenReturn(instance.getWorld());
+        when(callback.provider().spawn(eq("vanilla:zombie"), any(), anyDouble())).thenReturn(mob);
+        manager.registerRuntimeGroup(instance, group(List.of(new MonsterConfig.MonsterSpawn("vanilla:zombie", "0,65,0", 1, 1))));
+        assertTrue(manager.spawnGroup(instance, "wave", null));
+        var context = manager.entityContext(id);
+        assertEquals(instance.getInstanceId(), context.runId());
+        var another = new AbyssInstance(UUID.randomUUID(), instance.getTemplate(), null);
+        manager.onEntityDeath(id, another, null);
+        assertEquals(context, manager.entityContext(id));
+        verify(callback, never()).onMobDeath(any(), any(), any());
+        manager.onEntityDeath(id, instance, null);
+        manager.onEntityDeath(id, instance, null);
+        verify(callback, times(1)).onMobDeath(instance, id, null);
+        assertNull(manager.entityContext(id));
+        assertTrue(manager.entityContexts(instance.getInstanceId()).isEmpty());
+    }
 }
