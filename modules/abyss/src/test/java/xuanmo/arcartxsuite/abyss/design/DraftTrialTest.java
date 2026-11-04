@@ -58,10 +58,17 @@ class DraftTrialTest {
         String event = id.equals("example") ? "on-clear" : "click-script";
         var kind = id.equals("example") ? DesignObject.Kind.ROOM : DesignObject.Kind.NPC;
         String key = objects.stream().filter(object -> object.kind() == kind).findFirst().orElseThrow().key();
+        String segment = "script:draft_rehearsal";
+        design.put(new DesignObject(segment, DesignObject.Kind.SCRIPT, "draft_rehearsal", "scripts.yml",
+            "", "", null, null, "misc:scripts", Map.of("script", List.of()), true));
+        manager.setField(design, segment, "design-action", "设置变量");
+        manager.setField(design, segment, "design-action-arg", "draft_event");
+        manager.setField(design, segment, "design-action-value", "yes");
+        manager.cycleNext(design, segment, "design-append-action");
         manager.setField(design, key, "design-action-hook", event);
-        manager.setField(design, key, "design-action", "设置变量");
-        manager.setField(design, key, "design-action-arg", "draft_event");
-        manager.setField(design, key, "design-action-value", "yes");
+        manager.setField(design, key, "design-action", "延时调用流程段");
+        manager.setField(design, key, "design-action-arg", "2");
+        manager.setField(design, key, "design-action-value", "draft_rehearsal");
         manager.cycleNext(design, key, "design-append-action");
         manager.lineAdd(design, key, event, "console prohibited");
         manager.lineAdd(design, key, event, "js: prohibited");
@@ -93,10 +100,13 @@ class DraftTrialTest {
                 trial.start();
                 while (!scheduled.isEmpty()) scheduled.remove().run();
                 trial.event(key, event);
+                assertFalse(trial.traceSnapshot().contains("分支 → last"));
+                while (!scheduled.isEmpty()) scheduled.remove().run();
                 trial.mapCleared();
                 var trace = trial.traceSnapshot();
                 assertTrue(trace.contains("分支 → last"), trace::toString);
                 assertTrue(trace.contains("进入阶段 last"), trace::toString);
+                assertTrue(trace.contains("进入子脚本 draft_rehearsal"), trace::toString);
                 assertTrue(trace.contains("通关结算 COUNTDOWN " + seconds + " 秒"), trace::toString);
                 assertTrue(trace.contains("记录动作 grant_reward"), trace::toString);
                 assertFalse(trace.stream().anyMatch(line -> line.contains("prohibited")), trace::toString);

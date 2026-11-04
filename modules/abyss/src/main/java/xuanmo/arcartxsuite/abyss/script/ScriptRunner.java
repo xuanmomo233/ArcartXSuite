@@ -93,7 +93,11 @@ public final class ScriptRunner {
                 if (ticks > 0) return suspend(session, ticks);
                 return false;
             }
-            if (java.util.Set.of("setvar", "delvar", "addvar", "if_var").contains(action) && !args.contains("{")) {
+            boolean variableAction = java.util.Set.of("setvar", "delvar", "addvar", "if_var").contains(action)
+                && !args.contains("{");
+            boolean delayedSegment = action.equals("delay")
+                && args.matches("[1-9][0-9]{0,3} run_script [\\p{L}\\p{N}_.-]{1,64}");
+            if (variableAction || delayedSegment) {
                 try {
                     actions.get(action).execute(context, args, session);
                     trial.trace((session.isCancelled() ? "守卫终止 " : "执行 ") + action + " " + args);

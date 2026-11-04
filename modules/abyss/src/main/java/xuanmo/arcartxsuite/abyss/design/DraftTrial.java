@@ -109,7 +109,7 @@ public final class DraftTrial implements AutoCloseable {
         trace("进入子脚本 " + name);
         nestedScripts++;
         try {
-            run(name, lines, false);
+            after(run(name, lines, false), () -> stages.onEvent(instance));
         } finally {
             nestedScripts--;
         }
@@ -160,6 +160,7 @@ public final class DraftTrial implements AutoCloseable {
         closed = true;
         instance.transitionTo(AbyssStatus.ACTIVE, AbyssStatus.CANCELLED);
         stages.clear(instance);
+        for (var task : List.copyOf(instance.getTasks())) task.cancel();
         for (var session : List.copyOf(instance.getScriptSessions())) session.cancel();
         instance.clearRuntime();
     }
