@@ -14,7 +14,7 @@ ui:
   isHud: false
   background: false
   closeDied: true
-  escClose: true
+  escClose: false
   through: false
   screenScale: true
   show: true
@@ -67,11 +67,30 @@ ui:
       var.detailRemote = packet['detailRemote']
       var.detailServerName = packet['detailServerName']
       var.maxWorldCount = packet['maxWorldCount']
-      var.maxAnchorCount = packet['maxAnchorCount']
-      var.maxWaypointCount = packet['maxWaypointCount']
-      var.maxExternalCount = packet['maxExternalCount']
-      var.maxPinCount = packet['maxPinCount']
+      var.maxAnchorCount = packet['browseAnchorCount']
+      var.maxWaypointCount = packet['browseWaypointCount']
+      var.maxExternalCount = packet['browseExternalCount']
+      var.maxPinCount = packet['browsePinCount']
       var.actionToken = packet['action_token']
+      var.actionRevision = packet['actionRevision']
+      var.serverActionBusy = packet['actionBusy'] == true
+      var.dataState = packet['dataState']
+      var.actionMessage = packet['actionMessage']
+      var.serverQuery = packet['browseQuery']
+      var.browseAnchorRows = packet['browseAnchorRows']
+      var.browseWaypointRows = packet['browseWaypointRows']
+      var.browsePinRows = packet['browsePinRows']
+      var.browseExternalRows = packet['browseExternalRows']
+      var.browseAnchorCount = packet['browseAnchorCount']
+      var.browseWaypointCount = packet['browseWaypointCount']
+      var.browsePinCount = packet['browsePinCount']
+      var.browseExternalCount = packet['browseExternalCount']
+      if(var.serverActionBusy || (var.actionBusy && var.actionRevision <= var.pendingRevision)) {
+        var.actionBusy = true
+      } else {
+        var.actionBusy = false
+        var.actionBusySeconds = 0
+      }
       // 池化条目：entryKey 自绑定行数据（entry: var.xxxRows[self.entryKey]），
       // 数据刷新无需重建——仅 maxXxxCount 变化时才删建，消掉 update 闪烁。
       var.worldTpl = val.world_entry['地图项目']
@@ -87,51 +106,58 @@ ui:
         }
       }
       // 浏览面板分类列表：与世界列表同款模板复制（模板=栈子0，复制 max-1 份）
-      if(val.browse_anchor != none && val.browse_anchor['浏览锚点项'] != none && var.maxAnchorCount > 1 && var.maxAnchorCount != var.lastAnchorPool) {
+      if(val.browse_anchor != none && val.browse_anchor['浏览锚点项'] != none && var.maxAnchorCount != var.lastAnchorPool) {
         var.lastAnchorPool = var.maxAnchorCount
         while(val.browse_anchor.childrenCount() > 1){
           val.browse_anchor.get(1).remove()
         }
-        for(i in range(1, var.maxAnchorCount - 1)){
-          var.key = i.round()
-          var.entry = val.browse_anchor['浏览锚点项'].copy('浏览锚点项' + var.key)
-          var.entry.entryKey = var.key
+        if(var.maxAnchorCount > 1) {
+          for(i in range(1, var.maxAnchorCount - 1)){
+            var.key = i.round()
+            var.entry = val.browse_anchor['浏览锚点项'].copy('浏览锚点项' + var.key)
+            var.entry.entryKey = var.key
+          }
         }
       }
-      if(val.browse_waypoint != none && val.browse_waypoint['浏览路径点项'] != none && var.maxWaypointCount > 1 && var.maxWaypointCount != var.lastWaypointPool) {
+      if(val.browse_waypoint != none && val.browse_waypoint['浏览路径点项'] != none && var.maxWaypointCount != var.lastWaypointPool) {
         var.lastWaypointPool = var.maxWaypointCount
         while(val.browse_waypoint.childrenCount() > 1){
           val.browse_waypoint.get(1).remove()
         }
-        for(i in range(1, var.maxWaypointCount - 1)){
-          var.key = i.round()
-          var.entry = val.browse_waypoint['浏览路径点项'].copy('浏览路径点项' + var.key)
-          var.entry.entryKey = var.key
+        if(var.maxWaypointCount > 1) {
+          for(i in range(1, var.maxWaypointCount - 1)){
+            var.key = i.round()
+            var.entry = val.browse_waypoint['浏览路径点项'].copy('浏览路径点项' + var.key)
+            var.entry.entryKey = var.key
+          }
         }
       }
-      if(val.browse_pin != none && val.browse_pin['浏览标记点项'] != none && var.maxPinCount > 1 && var.maxPinCount != var.lastPinPool) {
+      if(val.browse_pin != none && val.browse_pin['浏览标记点项'] != none && var.maxPinCount != var.lastPinPool) {
         var.lastPinPool = var.maxPinCount
         while(val.browse_pin.childrenCount() > 1){
           val.browse_pin.get(1).remove()
         }
-        for(i in range(1, var.maxPinCount - 1)){
-          var.key = i.round()
-          var.entry = val.browse_pin['浏览标记点项'].copy('浏览标记点项' + var.key)
-          var.entry.entryKey = var.key
+        if(var.maxPinCount > 1) {
+          for(i in range(1, var.maxPinCount - 1)){
+            var.key = i.round()
+            var.entry = val.browse_pin['浏览标记点项'].copy('浏览标记点项' + var.key)
+            var.entry.entryKey = var.key
+          }
         }
       }
-      if(val.browse_external != none && val.browse_external['浏览其它项'] != none && var.maxExternalCount > 1 && var.maxExternalCount != var.lastExternalPool) {
+      if(val.browse_external != none && val.browse_external['浏览其它项'] != none && var.maxExternalCount != var.lastExternalPool) {
         var.lastExternalPool = var.maxExternalCount
         while(val.browse_external.childrenCount() > 1){
           val.browse_external.get(1).remove()
         }
-        for(i in range(1, var.maxExternalCount - 1)){
-          var.key = i.round()
-          var.entry = val.browse_external['浏览其它项'].copy('浏览其它项' + var.key)
-          var.entry.entryKey = var.key
+        if(var.maxExternalCount > 1) {
+          for(i in range(1, var.maxExternalCount - 1)){
+            var.key = i.round()
+            var.entry = val.browse_external['浏览其它项'].copy('浏览其它项' + var.key)
+            var.entry.entryKey = var.key
+          }
         }
       }
-      var.actionBusy = false
       if(var.mapRenderer != none) {
         var.mapRenderer.beginMarkers()
         if(var.anchorRows != none) {
@@ -214,11 +240,30 @@ ui:
       var.detailRemote = packet['detailRemote']
       var.detailServerName = packet['detailServerName']
       var.maxWorldCount = packet['maxWorldCount']
-      var.maxAnchorCount = packet['maxAnchorCount']
-      var.maxWaypointCount = packet['maxWaypointCount']
-      var.maxExternalCount = packet['maxExternalCount']
-      var.maxPinCount = packet['maxPinCount']
+      var.maxAnchorCount = packet['browseAnchorCount']
+      var.maxWaypointCount = packet['browseWaypointCount']
+      var.maxExternalCount = packet['browseExternalCount']
+      var.maxPinCount = packet['browsePinCount']
       var.actionToken = packet['action_token']
+      var.actionRevision = packet['actionRevision']
+      var.serverActionBusy = packet['actionBusy'] == true
+      var.dataState = packet['dataState']
+      var.actionMessage = packet['actionMessage']
+      var.serverQuery = packet['browseQuery']
+      var.browseAnchorRows = packet['browseAnchorRows']
+      var.browseWaypointRows = packet['browseWaypointRows']
+      var.browsePinRows = packet['browsePinRows']
+      var.browseExternalRows = packet['browseExternalRows']
+      var.browseAnchorCount = packet['browseAnchorCount']
+      var.browseWaypointCount = packet['browseWaypointCount']
+      var.browsePinCount = packet['browsePinCount']
+      var.browseExternalCount = packet['browseExternalCount']
+      if(var.serverActionBusy || (var.actionBusy && var.actionRevision <= var.pendingRevision)) {
+        var.actionBusy = true
+      } else {
+        var.actionBusy = false
+        var.actionBusySeconds = 0
+      }
       // 池化条目：entryKey 自绑定行数据（entry: var.xxxRows[self.entryKey]），
       // 数据刷新无需重建——仅 maxXxxCount 变化时才删建，消掉 update 闪烁。
       var.worldTpl = val.world_entry['地图项目']
@@ -234,51 +279,58 @@ ui:
         }
       }
       // 浏览面板分类列表：与世界列表同款模板复制（模板=栈子0，复制 max-1 份）
-      if(val.browse_anchor != none && val.browse_anchor['浏览锚点项'] != none && var.maxAnchorCount > 1 && var.maxAnchorCount != var.lastAnchorPool) {
+      if(val.browse_anchor != none && val.browse_anchor['浏览锚点项'] != none && var.maxAnchorCount != var.lastAnchorPool) {
         var.lastAnchorPool = var.maxAnchorCount
         while(val.browse_anchor.childrenCount() > 1){
           val.browse_anchor.get(1).remove()
         }
-        for(i in range(1, var.maxAnchorCount - 1)){
-          var.key = i.round()
-          var.entry = val.browse_anchor['浏览锚点项'].copy('浏览锚点项' + var.key)
-          var.entry.entryKey = var.key
+        if(var.maxAnchorCount > 1) {
+          for(i in range(1, var.maxAnchorCount - 1)){
+            var.key = i.round()
+            var.entry = val.browse_anchor['浏览锚点项'].copy('浏览锚点项' + var.key)
+            var.entry.entryKey = var.key
+          }
         }
       }
-      if(val.browse_waypoint != none && val.browse_waypoint['浏览路径点项'] != none && var.maxWaypointCount > 1 && var.maxWaypointCount != var.lastWaypointPool) {
+      if(val.browse_waypoint != none && val.browse_waypoint['浏览路径点项'] != none && var.maxWaypointCount != var.lastWaypointPool) {
         var.lastWaypointPool = var.maxWaypointCount
         while(val.browse_waypoint.childrenCount() > 1){
           val.browse_waypoint.get(1).remove()
         }
-        for(i in range(1, var.maxWaypointCount - 1)){
-          var.key = i.round()
-          var.entry = val.browse_waypoint['浏览路径点项'].copy('浏览路径点项' + var.key)
-          var.entry.entryKey = var.key
+        if(var.maxWaypointCount > 1) {
+          for(i in range(1, var.maxWaypointCount - 1)){
+            var.key = i.round()
+            var.entry = val.browse_waypoint['浏览路径点项'].copy('浏览路径点项' + var.key)
+            var.entry.entryKey = var.key
+          }
         }
       }
-      if(val.browse_pin != none && val.browse_pin['浏览标记点项'] != none && var.maxPinCount > 1 && var.maxPinCount != var.lastPinPool) {
+      if(val.browse_pin != none && val.browse_pin['浏览标记点项'] != none && var.maxPinCount != var.lastPinPool) {
         var.lastPinPool = var.maxPinCount
         while(val.browse_pin.childrenCount() > 1){
           val.browse_pin.get(1).remove()
         }
-        for(i in range(1, var.maxPinCount - 1)){
-          var.key = i.round()
-          var.entry = val.browse_pin['浏览标记点项'].copy('浏览标记点项' + var.key)
-          var.entry.entryKey = var.key
+        if(var.maxPinCount > 1) {
+          for(i in range(1, var.maxPinCount - 1)){
+            var.key = i.round()
+            var.entry = val.browse_pin['浏览标记点项'].copy('浏览标记点项' + var.key)
+            var.entry.entryKey = var.key
+          }
         }
       }
-      if(val.browse_external != none && val.browse_external['浏览其它项'] != none && var.maxExternalCount > 1 && var.maxExternalCount != var.lastExternalPool) {
+      if(val.browse_external != none && val.browse_external['浏览其它项'] != none && var.maxExternalCount != var.lastExternalPool) {
         var.lastExternalPool = var.maxExternalCount
         while(val.browse_external.childrenCount() > 1){
           val.browse_external.get(1).remove()
         }
-        for(i in range(1, var.maxExternalCount - 1)){
-          var.key = i.round()
-          var.entry = val.browse_external['浏览其它项'].copy('浏览其它项' + var.key)
-          var.entry.entryKey = var.key
+        if(var.maxExternalCount > 1) {
+          for(i in range(1, var.maxExternalCount - 1)){
+            var.key = i.round()
+            var.entry = val.browse_external['浏览其它项'].copy('浏览其它项' + var.key)
+            var.entry.entryKey = var.key
+          }
         }
       }
-      var.actionBusy = false
       if(var.mapRenderer != none) {
         var.mapRenderer.beginMarkers()
         if(var.anchorRows != none) {
@@ -394,6 +446,37 @@ ui:
       var.viewH = Screen.getHeight() / var.scale
       var.offX = (var.viewW - 1920) / 2
     tick: |-
+      // interaction-status-start
+      if(var.mapRenderer != none) {
+        var.clockNow = var.mapRenderer.getUiTimeMillis()
+        if(val.地图搜索框 != none) {
+          var.searchText = val.地图搜索框.getContent()
+        }
+        if(var.searchText != var.observedQuery) {
+          var.observedQuery = var.searchText
+          var.searchDue = var.clockNow + 250
+        }
+        if(var.searchDue != none && var.clockNow >= var.searchDue && (var.searchText != var.searchSent || (var.serverQuery != var.searchText && var.clockNow - var.searchSentAt >= 1500))) {
+          var.searchSent = var.searchText
+          var.searchSentAt = var.clockNow
+          Packet.send(var.packetId, 'browse_options', var.searchText, var.filterUnlocked, var.sortDistance ? 'distance' : 'name')
+        }
+        if(var.actionBusy) {
+          if(var.busyStartedAt == none) {
+            var.busyStartedAt = var.clockNow
+            var.lastStatusAt = var.clockNow
+          }
+          var.actionBusySeconds = (var.clockNow - var.busyStartedAt) / 1000
+          if(var.clockNow - var.lastStatusAt >= 5000) {
+            var.lastStatusAt = var.clockNow
+            Packet.send(var.packetId, 'action_status')
+          }
+        } else {
+          var.busyStartedAt = none
+          var.actionBusySeconds = 0
+        }
+      }
+      // interaction-status-end
       if(var.mapRenderer != none) {
         // 大地图全屏渲染：渲染区 = 整个窗口
         sw = Screen.getWidth()
@@ -412,7 +495,9 @@ ui:
             var.uiCapture = true
           }
         }
-        var.mapRenderer.setUiCapturing(var.uiCapture)
+        var.modalOpen = var.showHudSettings || var.editPanelVisible || var.crossWorldPromptVisible || var.deletePromptVisible || var.showKeyHelp
+        var.mapRenderer.setUiModal(var.modalOpen)
+        var.mapRenderer.setUiCapturing(var.uiCapture || var.modalOpen)
         var.mapRenderer.setWorldId(var.selectedWorldId)
         // 玩家当前世界 id 同步给 mod：未配置世界无 worldId→dimKey 映射时
         // getSelectedDimKey 用它判定"选中世界==本地世界"→ 回退本地维度桶
@@ -426,6 +511,8 @@ ui:
           if(hit == 'none:') {
             // 点在可交互区外：取消选中，也清掉落点光标
             var.mapRenderer.clearCursor()
+            var.pinCreateX = none
+            var.pinCreateZ = none
             Packet.send(var.packetId, 'deselect')
           } else {
             if(hit.startsWith('none:')) {
@@ -481,32 +568,51 @@ ui:
       var.worldRows = {}
       var.crossWorldPromptVisible = false
       var.crossWorldPromptType = 'navigate'
-      var.actionBusy = false
-      // 打开菜单默认回到玩家当前位置：清掉上次残留的拖拽/缩放
-      if(var.mapRenderer != none) {
-        var.mapRenderer.resetView()
-      }
+      var.pendingRevision = -1
+      var.actionBusy = var.serverActionBusy == true
+      var.searchText = ''
+      var.searchSent = ''
+      var.observedQuery = ''
+      var.searchSentAt = 0
+      var.filterUnlocked = false
+      var.sortDistance = false
+      var.showKeyHelp = false
+      var.deletePromptVisible = false
+      Packet.send(var.packetId, 'browse_options', '', false, 'name')
     close: |-
       // closeMenu 立即停大地图渲染（仅 MENU 模式生效，HUD 不受影响）；
       // 若 close 没执行，mod 端 region 新鲜度 300ms 过期兜底
       if(var.mapRenderer != none) {
         var.mapRenderer.closeMenu()
       }
-    seconds: |-
-      if(var.actionBusy){
-        var.actionBusySeconds = var.actionBusySeconds + 1
-        if(var.actionBusySeconds >= 3){
-          var.actionBusy = false
-          var.actionBusySeconds = 0
+    keyPress: |-
+      if(self.currentKeyPress() == 'ESCAPE') {
+        if(var.deletePromptVisible) {
+          var.deletePromptVisible = false
+        } elif(var.crossWorldPromptVisible) {
+          var.crossWorldPromptVisible = false
+        } elif(var.editPanelVisible) {
+          var.editPanelVisible = false
+        } elif(var.showKeyHelp) {
+          var.showKeyHelp = false
+        } elif(var.showHudSettings) {
+          var.showHudSettings = false
+        } elif(var.browsePanelOpen && var.searchText != none && var.searchText != '') {
+          val.地图搜索框.setContent('')
+          val.地图搜索框.setFocus(false)
+          var.searchText = ''
+          var.searchSent = ''
+          Packet.send(var.packetId, 'browse_options', '', var.filterUnlocked, var.sortDistance ? 'distance' : 'name')
+        } elif(var.pinCreateX != none || var.detailSelectedType != 'none') {
+          var.pinCreateX = none
+          var.pinCreateZ = none
+          Packet.send(var.packetId, 'deselect')
+        } elif(var.browsePanelOpen || var.worldListOpen) {
+          var.browsePanelOpen = false
+          var.worldListOpen = false
+        } else {
+          Screen.close()
         }
-      }else{
-        var.actionBusySeconds = 0
-      }
-      // 距离门槛实时刷新：选中未解锁+带 unlock.radius 门槛的锚点时
-      // 每秒重拉快照 → detailUnlockRangeText / detailUnlockInRange 实时更新
-      if(var.detailSelectedType == 'anchor' && var.detailUnlocked != true
-        && var.detailUnlockRadius > 0) {
-        Packet.send(var.packetId, 'refresh')
       }
 
 controls:
@@ -743,12 +849,15 @@ controls:
                   y: 300
                   width: 110
                   height: 44
-                  enable: "!var.actionBusy && var.actionToken != none && var.detailUnlockInRange"
+                  enable: "!var.actionBusy && var.dataState == 'ready' && var.actionToken != none && var.detailCanUnlock && var.detailUnlockInRange"
                   # 远程锚点不可在本服解锁（解锁/费用均由目标服权威）
                   visible: "var.detailRemote != true"
                 action:
                   clickLeft: |-
                     if (var.detailCanUnlock && var.detailUnlockInRange) {
+                      var.busyStartedAt = none
+                      var.pendingRevision = var.actionRevision
+                      var.actionBusySeconds = 0
                       var.actionBusy = true
                       Packet.send(var.packetId, 'unlock_anchor', var.detailSelectedId, var.actionToken)
                     }
@@ -776,13 +885,13 @@ controls:
               锚点传送按钮:
                 type: Canvas
                 attribute:
-                  tip: ~&f传送到锚点
+                  tip: "var.detailCanTeleport ? '&f传送费用: ' + var.detailTeleportCostText : '&7当前不可传送，请检查解锁状态与权限'"
                   point: ~top_left
                   x: 146
                   y: 300
                   width: 110
                   height: 44
-                  enable: "!var.actionBusy && var.actionToken != none"
+                  enable: "!var.actionBusy && var.dataState == 'ready' && var.actionToken != none && var.detailCanTeleport"
                 action:
                   clickLeft: |-
                     if (var.detailCanTeleport) {
@@ -794,6 +903,9 @@ controls:
                       var.crossWorldRemote = var.detailRemote == true
                       var.crossWorldPromptVisible = true
                       } else {
+                        var.busyStartedAt = none
+                        var.pendingRevision = var.actionRevision
+                        var.actionBusySeconds = 0
                         var.actionBusy = true
                         Packet.send(var.packetId, 'teleport_anchor', var.detailSelectedId, var.actionToken)
                       }
@@ -1060,12 +1172,14 @@ controls:
                   y: 260
                   width: 90
                   height: 44
-                  enable: "!var.actionBusy && var.actionToken != none"
+                  enable: "!var.actionBusy && var.dataState == 'ready' && var.actionToken != none"
                 action:
                   clickLeft: |-
                     if (var.detailCanDeleteWaypoint) {
-                      var.actionBusy = true
-                      Packet.send(var.packetId, 'delete_waypoint', var.detailSelectedId, var.actionToken)
+                      var.deleteTargetType = 'waypoint'
+                      var.deleteTargetId = var.detailSelectedId
+                      var.deleteTargetName = var.detailTitle
+                      var.deletePromptVisible = true
                     }
                 children:
                   路径点删除按钮底:
@@ -1373,12 +1487,14 @@ controls:
                   y: 260
                   width: 90
                   height: 44
-                  enable: "!var.actionBusy && var.actionToken != none"
+                  enable: "!var.actionBusy && var.dataState == 'ready' && var.actionToken != none"
                 action:
                   clickLeft: |-
                     if (var.detailCanDeletePin) {
-                      var.actionBusy = true
-                      Packet.send(var.packetId, 'delete_pin', var.detailSelectedId, var.actionToken)
+                      var.deleteTargetType = 'pin'
+                      var.deleteTargetId = var.detailSelectedId
+                      var.deleteTargetName = var.detailTitle
+                      var.deletePromptVisible = true
                     }
                 children:
                   标记点删除按钮底:
@@ -1405,17 +1521,20 @@ controls:
           新建路径点按钮:
             type: Canvas
             attribute:
-              tip: ~&f在选中位置新建路径点
+              tip: ~&f在玩家当前位置新建路径点
               point: ~top_left
               x: "var.viewW - 300"
               y: "var.viewH - 60"
               width: 130
               height: 44
               enable: "!var.actionBusy && var.actionToken != none && var.canCreateWaypoint"
-              visible: "var.detailSelectedType != 'anchor' && var.detailSelectedType != 'external'"
+              visible: true
             action:
               clickLeft: |-
                 if (var.canCreateWaypoint) {
+                  var.busyStartedAt = none
+                  var.pendingRevision = var.actionRevision
+                  var.actionBusySeconds = 0
                   var.actionBusy = true
                   Packet.send(var.packetId, 'create_waypoint', var.actionToken)
                 }
@@ -1437,7 +1556,7 @@ controls:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  texts: ~&f新建路径点
+                  texts: ~&f记录当前位置
                   fontSize: 36
                   through: true
           # ─── 右下角常驻：新建标记点按钮（点击空白处后出现）───
@@ -1450,11 +1569,14 @@ controls:
               y: "var.viewH - 60"
               width: 130
               height: 44
-              enable: "!var.actionBusy && var.actionToken != none"
+              enable: "!var.actionBusy && var.dataState == 'ready' && var.actionToken != none"
               visible: "var.pinCreateX != none && var.pinCreateZ != none"
             action:
               clickLeft: |-
                 if (var.pinCreateX != none && var.pinCreateZ != none) {
+                  var.busyStartedAt = none
+                  var.pendingRevision = var.actionRevision
+                  var.actionBusySeconds = 0
                   var.actionBusy = true
                   // create_pin <x> <z> <worldId> <token>：pin 建在玩家当前浏览的世界
                   // （允许任意点），与服务端 tokenIndex=4 对齐
@@ -1480,7 +1602,7 @@ controls:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  texts: ~&f新建标记点
+                  texts: ~&f标记此处
                   fontSize: 36
                   through: true
           # ─── 右下角浮层：标记浏览按钮（展开分类浏览面板；详情面板展开时左移避让）───
@@ -1561,7 +1683,7 @@ controls:
           洞深按钮:
             type: Canvas
             attribute:
-              tip: ~&f洞穴层深度（按 N 切换）
+              tip: ~&f循环洞穴层深度；快捷键可自行绑定
               point: ~top_left
               x: 288
               y: "var.viewH - 96"
@@ -1601,8 +1723,8 @@ controls:
               point: ~bottom_left
               x: 28
               y: -134
-              width: 360
-              height: 380
+              width: 430
+              height: 660
               visible: "var.browsePanelOpen"
               mapCapture: true
             children:
@@ -1750,14 +1872,137 @@ controls:
                       texts: ~&f其它
                       fontSize: 36
                       through: true
+              地图搜索框:
+                type: TextBox
+                val: 地图搜索框
+                attribute:
+                  point: ~top_left
+                  x: 14
+                  y: 62
+                  width: 378
+                  height: 28
+                  length: 64
+                  fontSize: 36
+                  emptyText: ~搜索名称或编号
+                  background: ~28,34,46,235
+                  canLoseFocus: true
+                action:
+                  textChange: |-
+                    var.searchText = self.getContent()
+              仅已解锁筛选:
+                type: Canvas
+                attribute:
+                  point: ~top_left
+                  x: 14
+                  y: 112
+                  width: 124
+                  height: 36
+                  tip: "var.filterUnlocked ? '&a仅已解锁 ✓' : '&f全部锚点'"
+                action:
+                  clickLeft: |-
+                    var.filterUnlocked = !var.filterUnlocked
+                    Packet.send(var.packetId, 'browse_options', var.searchText, var.filterUnlocked, var.sortDistance ? 'distance' : 'name')
+                children:
+                  底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~42,50,64,245
+                      hover: ~64,90,124,255
+                      shape: ~round_rect
+                      radius: 8
+                  字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: "var.filterUnlocked ? '&a仅已解锁 ✓' : '&f全部锚点'"
+                      fontSize: 28
+                      through: true
+              距离排序:
+                type: Canvas
+                attribute:
+                  point: ~top_left
+                  x: 148
+                  y: 112
+                  width: 124
+                  height: 36
+                  tip: "非当前世界按名称排序"
+                action:
+                  clickLeft: |-
+                    var.sortDistance = !var.sortDistance
+                    Packet.send(var.packetId, 'browse_options', var.searchText, var.filterUnlocked, var.sortDistance ? 'distance' : 'name')
+                children:
+                  底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~42,50,64,245
+                      hover: ~64,90,124,255
+                      shape: ~round_rect
+                      radius: 8
+                  字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: "var.sortDistance ? '&b距离排序' : '&f名称排序'"
+                      fontSize: 28
+                      through: true
+              当前世界筛选:
+                type: Canvas
+                attribute:
+                  point: ~top_left
+                  x: 282
+                  y: 112
+                  width: 132
+                  height: 36
+                  tip: "'&f当前世界'"
+                action:
+                  clickLeft: |-
+                    Packet.send(var.packetId, 'open_world', var.playerWorldId)
+                children:
+                  底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~42,50,64,245
+                      hover: ~64,90,124,255
+                      shape: ~round_rect
+                      radius: 8
+                  字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: "'&f当前世界'"
+                      fontSize: 28
+                      through: true
+              浏览结果提示:
+                type: Text
+                attribute:
+                  point: ~top_left
+                  x: 16
+                  y: 154
+                  texts: "'&7所选世界 · ' + (var.browseCategory == 'anchor' ? var.browseAnchorCount : (var.browseCategory == 'waypoint' ? var.browseWaypointCount : (var.browseCategory == 'pin' ? var.browsePinCount : var.browseExternalCount))).round() + ' 项'"
+                  fontSize: 26
+                  through: true
+              无匹配结果:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: ~&7没有匹配结果，试试其他名称或筛选
+                  fontSize: 28
+                  through: true
+                  visible: "var.dataState == 'ready' && (var.browseCategory == 'anchor' ? var.browseAnchorCount == 0 : (var.browseCategory == 'waypoint' ? var.browseWaypointCount == 0 : (var.browseCategory == 'pin' ? var.browsePinCount == 0 : var.browseExternalCount == 0)))"
               浏览滑轨:
                 type: Texture
                 attribute:
                   point: ~top_right
                   x: -8
-                  y: 60
+                  y: 180
                   width: 12
-                  height: 308
+                  height: 468
                   normal: ~40,44,52,225
                   shape: ~round_rect
                   radius: 6
@@ -1771,11 +2016,11 @@ controls:
                 attribute:
                   point: ~top_right
                   x: -8
-                  y: 60
+                  y: 180
                   width: 12
                   height: 60
                   normal: ~74,144,226,255
-                  maxDragY: 248
+                  maxDragY: 408
                   shape: ~round_rect
                   radius: 6
               浏览滚动栏:
@@ -1783,9 +2028,9 @@ controls:
                 attribute:
                   point: ~top_left
                   x: 10
-                  y: 60
-                  width: 328
-                  height: 308
+                  y: 180
+                  width: 398
+                  height: 468
                   moveY: "self.parent['浏览滑块'].getDragYRatio()"
                 action:
                   wheel: |-
@@ -1799,25 +2044,25 @@ controls:
                   浏览列表:
                     type: VStack
                     attribute:
-                      width: 328
+                      width: 398
                     children:
                       # ── 锚点列表（browseCategory 过滤；条目由 init/update copy 循环生成） ──
                       锚点列表:
                         type: VStack
                         val: browse_anchor
                         attribute:
-                          width: 328
+                          width: 398
                           spaceBetween: 10
                           visible: "var.browseCategory == 'anchor'"
                         children:
                           浏览锚点项:
                             type: Canvas
                             attribute:
-                              tip: ~&f点击定位并选中
+                              tip: "self.entry != none ? '&f' + self.entry['displayName'] + ' · 点击定位并选中' : ''"
                               entryKey: 0.round()
-                              entry: var.anchorRows[self.entryKey]
+                              entry: var.browseAnchorRows[self.entryKey]
                               visible: self.entry != none
-                              width: 328
+                              width: 398
                               height: 64
                             action:
                               clickLeft: |-
@@ -1826,7 +2071,7 @@ controls:
                                     var.mapRenderer.centerOnWorldPos(Cast.toDouble(self.entry['x']), Cast.toDouble(self.entry['z']))
                                   }
                                   Packet.send(var.packetId, 'select_anchor', self.entry['id'])
-                                  var.browsePanelOpen = false
+                                  // 保留列表，便于连续浏览
                                 }
                             children:
                               浏览锚点项底:
@@ -1853,36 +2098,38 @@ controls:
                               浏览锚点项名称:
                                 type: Text
                                 attribute:
-                                  point: ~middle_left
+                                  point: ~top_left
                                   x: 56
-                                  texts: "'&f' + self.parent.entry['displayName']"
-                                  fontSize: 40
+                                  y: 8
+                                  texts: "'&f' + self.parent.entry['listLabel']"
+                                  fontSize: 32
                                   through: true
                               浏览锚点项坐标:
                                 type: Text
                                 attribute:
-                                  point: ~middle_right
-                                  x: -16
+                                  point: ~bottom_left
+                                  x: 56
+                                  y: -6
                                   texts: "'&f' + self.parent.entry['x'].round() + ',' + self.parent.entry['z'].round()"
-                                  fontSize: 36
+                                  fontSize: 26
                                   through: true
                       # ── 路径点列表 ──
                       路径点列表:
                         type: VStack
                         val: browse_waypoint
                         attribute:
-                          width: 328
+                          width: 398
                           spaceBetween: 10
                           visible: "var.browseCategory == 'waypoint'"
                         children:
                           浏览路径点项:
                             type: Canvas
                             attribute:
-                              tip: ~&f点击定位并选中
+                              tip: "self.entry != none ? '&f' + self.entry['name'] + ' · 点击定位并选中' : ''"
                               entryKey: 0.round()
-                              entry: var.waypointRows[self.entryKey]
+                              entry: var.browseWaypointRows[self.entryKey]
                               visible: self.entry != none
-                              width: 328
+                              width: 398
                               height: 64
                             action:
                               clickLeft: |-
@@ -1891,7 +2138,7 @@ controls:
                                     var.mapRenderer.centerOnWorldPos(Cast.toDouble(self.entry['x']), Cast.toDouble(self.entry['z']))
                                   }
                                   Packet.send(var.packetId, 'select_waypoint', self.entry['id'])
-                                  var.browsePanelOpen = false
+                                  // 保留列表，便于连续浏览
                                 }
                             children:
                               浏览路径点项底:
@@ -1918,36 +2165,38 @@ controls:
                               浏览路径点项名称:
                                 type: Text
                                 attribute:
-                                  point: ~middle_left
+                                  point: ~top_left
                                   x: 56
-                                  texts: "'&f' + self.parent.entry['name']"
-                                  fontSize: 40
+                                  y: 8
+                                  texts: "'&f' + self.parent.entry['listLabel']"
+                                  fontSize: 32
                                   through: true
                               浏览路径点项坐标:
                                 type: Text
                                 attribute:
-                                  point: ~middle_right
-                                  x: -16
+                                  point: ~bottom_left
+                                  x: 56
+                                  y: -6
                                   texts: "'&f' + self.parent.entry['x'].round() + ',' + self.parent.entry['z'].round()"
-                                  fontSize: 36
+                                  fontSize: 26
                                   through: true
                       # ── 标记点列表 ──
                       标记点列表:
                         type: VStack
                         val: browse_pin
                         attribute:
-                          width: 328
+                          width: 398
                           spaceBetween: 10
                           visible: "var.browseCategory == 'pin'"
                         children:
                           浏览标记点项:
                             type: Canvas
                             attribute:
-                              tip: ~&f点击定位并选中
+                              tip: "self.entry != none ? '&f' + self.entry['name'] + ' · 点击定位并选中' : ''"
                               entryKey: 0.round()
-                              entry: var.pinRows[self.entryKey]
+                              entry: var.browsePinRows[self.entryKey]
                               visible: self.entry != none
-                              width: 328
+                              width: 398
                               height: 64
                             action:
                               clickLeft: |-
@@ -1956,7 +2205,7 @@ controls:
                                     var.mapRenderer.centerOnWorldPos(Cast.toDouble(self.entry['x']), Cast.toDouble(self.entry['z']))
                                   }
                                   Packet.send(var.packetId, 'select_pin', self.entry['id'])
-                                  var.browsePanelOpen = false
+                                  // 保留列表，便于连续浏览
                                 }
                             children:
                               浏览标记点项底:
@@ -1983,36 +2232,38 @@ controls:
                               浏览标记点项名称:
                                 type: Text
                                 attribute:
-                                  point: ~middle_left
+                                  point: ~top_left
                                   x: 56
-                                  texts: "'&f' + self.parent.entry['name']"
-                                  fontSize: 40
+                                  y: 8
+                                  texts: "'&f' + self.parent.entry['listLabel']"
+                                  fontSize: 32
                                   through: true
                               浏览标记点项坐标:
                                 type: Text
                                 attribute:
-                                  point: ~middle_right
-                                  x: -16
+                                  point: ~bottom_left
+                                  x: 56
+                                  y: -6
                                   texts: "'&f' + self.parent.entry['x'].round() + ',' + self.parent.entry['z'].round()"
-                                  fontSize: 36
+                                  fontSize: 26
                                   through: true
                       # ── 其它目标列表 ──
                       其它列表:
                         type: VStack
                         val: browse_external
                         attribute:
-                          width: 328
+                          width: 398
                           spaceBetween: 10
                           visible: "var.browseCategory == 'external'"
                         children:
                           浏览其它项:
                             type: Canvas
                             attribute:
-                              tip: ~&f点击定位并选中
+                              tip: "self.entry != none ? '&f' + self.entry['name'] + ' · 点击定位并选中' : ''"
                               entryKey: 0.round()
-                              entry: var.externalTargetRows[self.entryKey]
+                              entry: var.browseExternalRows[self.entryKey]
                               visible: self.entry != none
-                              width: 328
+                              width: 398
                               height: 64
                             action:
                               clickLeft: |-
@@ -2021,7 +2272,7 @@ controls:
                                     var.mapRenderer.centerOnWorldPos(Cast.toDouble(self.entry['x']), Cast.toDouble(self.entry['z']))
                                   }
                                   Packet.send(var.packetId, 'select_external', self.entry['id'])
-                                  var.browsePanelOpen = false
+                                  // 保留列表，便于连续浏览
                                 }
                             children:
                               浏览其它项底:
@@ -2048,18 +2299,20 @@ controls:
                               浏览其它项名称:
                                 type: Text
                                 attribute:
-                                  point: ~middle_left
+                                  point: ~top_left
                                   x: 56
-                                  texts: "'&f' + self.parent.entry['name']"
-                                  fontSize: 40
+                                  y: 8
+                                  texts: "'&f' + self.parent.entry['listLabel']"
+                                  fontSize: 32
                                   through: true
                               浏览其它项坐标:
                                 type: Text
                                 attribute:
-                                  point: ~middle_right
-                                  x: -16
+                                  point: ~bottom_left
+                                  x: 56
+                                  y: -6
                                   texts: "'&f' + self.parent.entry['x'].round() + ',' + self.parent.entry['z'].round()"
-                                  fontSize: 36
+                                  fontSize: 26
                                   through: true
           # ─── 左下角：世界切换槽位 + 世界列表浮层（原神式）───
           世界槽位:
@@ -2295,7 +2548,7 @@ controls:
           复位按钮:
             type: Canvas
             attribute:
-              tip: ~&f复位视野
+              tip: ~&f回到玩家并恢复默认缩放
               point: ~top_left
               x: 204
               y: "var.viewH - 96"
@@ -2305,6 +2558,7 @@ controls:
             action:
               clickLeft: |-
                 if (var.mapRenderer != none) {
+                  Packet.send(var.packetId, 'open_world', var.playerWorldId)
                   var.mapRenderer.resetView()
                 }
             children:
@@ -2326,8 +2580,8 @@ controls:
                 attribute:
                   point: ~middle_center
                   y: -3
-                  texts: ~&f⟳
-                  fontSize: 72
+                  texts: ~&f回到玩家
+                  fontSize: 28
                   through: true
           # 取消导航按钮（顶栏右侧，清除当前追踪）
           取消导航按钮:
@@ -3099,7 +3353,7 @@ controls:
                     attribute:
                       point: ~top_center
                       y: 392
-                      texts: ~&7快捷键：V 雷达 · 右键按钮切名称 · N 切洞穴深度 · [ 切形状 · +- 大小（可客户端自定义按键绑定）
+                      texts: ~&7按键可在「按键与帮助」查看当前绑定；低频功能默认不占用按键
                       fontSize: 32
                       through: true
           # ─── 路径点/标记点编辑面板（模态遮罩，居中弹窗）───
@@ -3199,9 +3453,12 @@ controls:
                       y: -30
                       width: 170
                       height: 52
-                      enable: "!var.actionBusy && var.actionToken != none"
+                      enable: "!var.actionBusy && var.dataState == 'ready' && var.actionToken != none"
                     action:
                       clickLeft: |-
+                        var.busyStartedAt = none
+                        var.pendingRevision = var.actionRevision
+                        var.actionBusySeconds = 0
                         var.actionBusy = true
                         var.editName = val.编辑名称输入框.getContent()
                         var.editDesc = val.编辑描述输入框.getContent()
@@ -3342,15 +3599,21 @@ controls:
                       y: -24
                       width: 180
                       height: 52
-                      enable: "var.actionToken != none"
+                      enable: "!var.actionBusy && var.dataState == 'ready' && var.actionToken != none"
                     action:
                       clickLeft: |-
                         var.crossWorldPromptVisible = false
                         // navigate=传送+追踪；teleport=锚点传送；teleport_world=世界出生点传送
                         if (var.crossWorldPromptType == 'teleport_world') {
+                          var.busyStartedAt = none
+                          var.pendingRevision = var.actionRevision
+                          var.actionBusySeconds = 0
                           var.actionBusy = true
                           Packet.send(var.packetId, 'teleport_to_world', var.crossWorldTargetWorld, var.actionToken)
                         } elif (var.crossWorldPromptType == 'teleport') {
+                          var.busyStartedAt = none
+                          var.pendingRevision = var.actionRevision
+                          var.actionBusySeconds = 0
                           var.actionBusy = true
                           Packet.send(var.packetId, 'teleport_anchor', var.detailSelectedId, var.actionToken)
                         } else {
@@ -3408,5 +3671,493 @@ controls:
                         attribute:
                           point: ~middle_center
                           texts: ~&f取消
+                          fontSize: 36
+                          through: true
+          操作反馈:
+            type: Text
+            attribute:
+              point: ~top_center
+              y: 110
+              texts: "var.actionBusy ? (var.actionBusySeconds >= 5 ? '&e仍在处理，请勿重复操作' : '&b正在处理…') : (var.dataState == 'loading' ? '&b正在加载地图数据…' : (var.dataState == 'error' ? '&c加载失败，请点击重新加载' : var.actionMessage))"
+              fontSize: 32
+              through: true
+          浏览模式提示:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 28
+              y: 108
+              texts: "var.mapRenderer != none ? '&b' + var.mapRenderer.getViewModeText() : ''"
+              fontSize: 32
+              through: true
+          地形状态提示:
+            type: Text
+            attribute:
+              point: ~top_center
+              y: 150
+              texts: "var.mapRenderer != none ? '&7' + var.mapRenderer.getTerrainStatusText() : ''"
+              fontSize: 28
+              through: true
+          落点坐标:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: "var.viewW - 300"
+              y: "var.viewH - 94"
+              texts: "'&f落点 X ' + Cast.toDouble(var.pinCreateX).round() + ' Z ' + Cast.toDouble(var.pinCreateZ).round()"
+              fontSize: 28
+              through: true
+              visible: "var.pinCreateX != none && var.pinCreateZ != none"
+          按键帮助按钮:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: var.viewW - 190
+              y: 100
+              width: 162
+              height: 36
+              tip: "'&f按键与帮助'"
+            action:
+              clickLeft: |-
+                var.showKeyHelp = true
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~42,50,64,245
+                  hover: ~64,90,124,255
+                  shape: ~round_rect
+                  radius: 8
+              字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "'&f按键与帮助'"
+                  fontSize: 28
+                  through: true
+          重新加载按钮:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: var.viewW / 2 - 80
+              y: 150
+              width: 160
+              height: 36
+              visible: "var.dataState == 'error'"
+              tip: "'&f重新加载'"
+            action:
+              clickLeft: |-
+                Packet.send(var.packetId, 'retry_load')
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~42,50,64,245
+                  hover: ~64,90,124,255
+                  shape: ~round_rect
+                  radius: 8
+              字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "'&f重新加载'"
+                  fontSize: 28
+                  through: true
+          按键帮助层:
+            type: Canvas
+            attribute:
+              point: ~stretch_all
+              visible: "var.showKeyHelp"
+              mapCapture: true
+            children:
+              遮罩:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~0,0,0,160
+              对话框:
+                type: Canvas
+                attribute:
+                  point: ~middle_center
+                  width: 900
+                  height: 750
+                children:
+                  背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~Frosted:30;100,100,100,255
+                      shape: ~round_rect
+                      radius: 16
+                    effect:
+                      stroke:
+                        width: 4
+                        color: ~255,255,255,255
+                  标题:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 30
+                      y: 22
+                      texts: ~&f按键与地图操作
+                      fontSize: 40
+                      through: true
+                  绑定行0:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 30
+                      y: 78
+                      texts: "var.mapRenderer != none ? var.mapRenderer.getKeybindLine(0) : ''"
+                      fontSize: 30
+                      through: true
+                  绑定行1:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 30
+                      y: 108
+                      texts: "var.mapRenderer != none ? var.mapRenderer.getKeybindLine(1) : ''"
+                      fontSize: 30
+                      through: true
+                  绑定行2:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 30
+                      y: 138
+                      texts: "var.mapRenderer != none ? var.mapRenderer.getKeybindLine(2) : ''"
+                      fontSize: 30
+                      through: true
+                  绑定行3:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 30
+                      y: 168
+                      texts: "var.mapRenderer != none ? var.mapRenderer.getKeybindLine(3) : ''"
+                      fontSize: 30
+                      through: true
+                  绑定行4:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 30
+                      y: 198
+                      texts: "var.mapRenderer != none ? var.mapRenderer.getKeybindLine(4) : ''"
+                      fontSize: 30
+                      through: true
+                  绑定行5:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 30
+                      y: 228
+                      texts: "var.mapRenderer != none ? var.mapRenderer.getKeybindLine(5) : ''"
+                      fontSize: 30
+                      through: true
+                  绑定行6:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 30
+                      y: 258
+                      texts: "var.mapRenderer != none ? var.mapRenderer.getKeybindLine(6) : ''"
+                      fontSize: 30
+                      through: true
+                  绑定行7:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 30
+                      y: 288
+                      texts: "var.mapRenderer != none ? var.mapRenderer.getKeybindLine(7) : ''"
+                      fontSize: 30
+                      through: true
+                  绑定行8:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 30
+                      y: 318
+                      texts: "var.mapRenderer != none ? var.mapRenderer.getKeybindLine(8) : ''"
+                      fontSize: 30
+                      through: true
+                  绑定行9:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 30
+                      y: 348
+                      texts: "var.mapRenderer != none ? var.mapRenderer.getKeybindLine(9) : ''"
+                      fontSize: 30
+                      through: true
+                  绑定行10:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 30
+                      y: 378
+                      texts: "var.mapRenderer != none ? var.mapRenderer.getKeybindLine(10) : ''"
+                      fontSize: 30
+                      through: true
+                  绑定行11:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 30
+                      y: 408
+                      texts: "var.mapRenderer != none ? var.mapRenderer.getKeybindLine(11) : ''"
+                      fontSize: 30
+                      through: true
+                  绑定行12:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 30
+                      y: 438
+                      texts: "var.mapRenderer != none ? var.mapRenderer.getKeybindLine(12) : ''"
+                      fontSize: 30
+                      through: true
+                  绑定行13:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 30
+                      y: 468
+                      texts: "var.mapRenderer != none ? var.mapRenderer.getKeybindLine(13) : ''"
+                      fontSize: 30
+                      through: true
+                  绑定行14:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 30
+                      y: 498
+                      texts: "var.mapRenderer != none ? var.mapRenderer.getKeybindLine(14) : ''"
+                      fontSize: 30
+                      through: true
+                  绑定行15:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 30
+                      y: 528
+                      texts: "var.mapRenderer != none ? var.mapRenderer.getKeybindLine(15) : ''"
+                      fontSize: 30
+                      through: true
+                  鼠标说明0:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 30
+                      y: 580
+                      texts: "~&7左键选择 / 拖动平移 / 滚轮缩放 / 右键取消选中"
+                      fontSize: 28
+                      through: true
+                  鼠标说明1:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 30
+                      y: 610
+                      texts: "~&7点击聚合数字展开；回到玩家按钮恢复跟随"
+                      fontSize: 28
+                      through: true
+                  鼠标说明2:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 30
+                      y: 640
+                      texts: "~&7Esc 依次关闭弹窗、清除搜索或选中、关闭地图"
+                      fontSize: 28
+                      through: true
+                  关闭帮助:
+                    type: Canvas
+                    attribute:
+                      point: ~top_left
+                      x: 30
+                      y: 680
+                      width: 160
+                      height: 52
+                      tip: "'&f关闭'"
+                    action:
+                      clickLeft: |-
+                        var.showKeyHelp = false
+                    children:
+                      底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: ~52,56,64,255
+                          hover: ~72,76,84,255
+                          shape: ~round_rect
+                          radius: 12
+                        effect:
+                          stroke:
+                            width: "self.isHovered() ? '4' : '3'"
+                            color: ~255,255,255,255
+                      字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: "'&f关闭'"
+                          fontSize: 28
+                          through: true
+          删除确认层:
+            type: Canvas
+            attribute:
+              point: ~stretch_all
+              visible: "var.deletePromptVisible"
+              mapCapture: true
+            children:
+              遮罩:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~0,0,0,160
+              对话框:
+                type: Canvas
+                attribute:
+                  point: ~middle_center
+                  width: 520
+                  height: 280
+                children:
+                  背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~Frosted:30;100,100,100,255
+                      shape: ~round_rect
+                      radius: 16
+                    effect:
+                      stroke:
+                        width: 4
+                        color: ~255,255,255,255
+                  标题:
+                    type: Text
+                    attribute:
+                      point: ~top_center
+                      y: 28
+                      texts: ~&c确认删除
+                      fontSize: 48
+                      through: true
+                  内容:
+                    type: Scroll
+                    attribute:
+                      point: ~top_left
+                      x: 36
+                      y: 88
+                      width: 448
+                      height: 40
+                      scrollAnim: none
+                      moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
+                    action:
+                      enter: |-
+                        self.scrollAnim = Lerp(0, 1, 2000)
+                      leave: |-
+                        self.scrollAnim = none
+                    children:
+                      内容布局:
+                        type: HStack
+                        attribute:
+                          height: 40
+                        children:
+                          名称:
+                            type: Text
+                            attribute:
+                              texts: "'&f删除「' + var.deleteTargetName + '」？'"
+                              fontSize: 36
+                              through: true
+                  删除提示:
+                    type: Text
+                    attribute:
+                      point: ~top_center
+                      y: 140
+                      texts: ~&7删除后无法恢复，当前导航也会一并清除。
+                      fontSize: 32
+                      through: true
+                  确认删除:
+                    type: Canvas
+                    attribute:
+                      point: ~bottom_left
+                      x: 60
+                      y: -30
+                      width: 170
+                      enable: "!var.actionBusy && var.dataState == 'ready' && var.actionToken != none"
+                      height: 52
+                      tip: "'&c确认删除'"
+                    action:
+                      clickLeft: |-
+                        if(!var.actionBusy) {
+                          var.busyStartedAt = none
+                          var.pendingRevision = var.actionRevision
+                          var.actionBusySeconds = 0
+                          var.actionBusy = true
+                          var.deletePromptVisible = false
+                          Packet.send(var.packetId, var.deleteTargetType == 'pin' ? 'delete_pin' : 'delete_waypoint', var.deleteTargetId, var.actionToken)
+                        }
+                    children:
+                      底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: ~220,80,80,255
+                          hover: ~240,100,100,255
+                          shape: ~round_rect
+                          radius: 12
+                        effect:
+                          stroke:
+                            width: "self.isHovered() ? '4' : '3'"
+                            color: ~255,255,255,255
+                      字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: "'&f确认删除'"
+                          fontSize: 36
+                          through: true
+                  取消删除:
+                    type: Canvas
+                    attribute:
+                      point: ~bottom_right
+                      x: -60
+                      y: -30
+                      width: 170
+                      height: 52
+                      tip: "'&f取消'"
+                    action:
+                      clickLeft: |-
+                        var.deletePromptVisible = false
+                    children:
+                      底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: ~52,56,64,255
+                          hover: ~72,76,84,255
+                          shape: ~round_rect
+                          radius: 12
+                        effect:
+                          stroke:
+                            width: "self.isHovered() ? '4' : '3'"
+                            color: ~255,255,255,255
+                      字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: "'&f取消'"
                           fontSize: 36
                           through: true

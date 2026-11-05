@@ -159,45 +159,47 @@ import xuanmo.arcartxsuite.map.model.MapPlayerViewState;
          */
         @Override
         public void executeArrival(Player player, String worldId, String anchorId) {
+            service.crossServerFeedback(player, MapOperationResult.success(service.message("player.cross-server-arriving")));
             WorldDefinition world = service.configuration.worlds().get(worldId);
             if (world == null || !world.crossArrive()) {
-                service.sendPlayerResult(player, MapOperationResult.failure(service.message("player.cross-server-arrive-failed", worldId)));
+                service.crossServerFeedback(player, MapOperationResult.failure(service.message("player.cross-server-arrive-failed", worldId)));
                 return;
             }
             World bukkitWorld = MapService.resolveWorld(world.id());
             if (bukkitWorld == null) {
-                service.sendPlayerResult(player, MapOperationResult.failure(service.message("player.anchor-world-unloaded", worldId)));
+                service.crossServerFeedback(player, MapOperationResult.failure(service.message("player.anchor-world-unloaded", worldId)));
                 return;
             }
             if (anchorId.isEmpty()) {
                 Location spawn = service.resolveWorldSpawn(bukkitWorld);
                 if (spawn == null) {
-                    service.sendPlayerResult(player, MapOperationResult.failure(service.message("player.anchor-world-unloaded", worldId)));
+                    service.crossServerFeedback(player, MapOperationResult.failure(service.message("player.anchor-world-unloaded", worldId)));
                     return;
                 }
-                player.teleport(spawn);
-                service.sendPlayerResult(player, MapOperationResult.success(
-                    service.message("player.cross-server-arrived", service.resolveDisplayName(world))));
+                boolean arrived = player.teleport(spawn);
+                service.crossServerFeedback(player, arrived ? MapOperationResult.success(
+                    service.message("player.cross-server-arrived", service.resolveDisplayName(world)))
+                    : MapOperationResult.failure(service.message("player.cross-server-arrive-cancelled")));
                 service.sync(player, false);
                 return;
             }
             AnchorDefinition anchor = service.configuration.anchor(anchorId);
             if (anchor == null || !MapService.normalizeId(anchor.worldId()).equals(world.id())) {
-                service.sendPlayerResult(player, MapOperationResult.failure(service.message("player.anchor-not-found", anchorId)));
+                service.crossServerFeedback(player, MapOperationResult.failure(service.message("player.anchor-not-found", anchorId)));
                 return;
             }
             // 收费路径复用本服锚点传送链（扣费→传送→失败回滚）；免费则直传
             MapOperationResult result = service.configuration.crossServer().arrivals().chargeTeleportCost()
                 ? service.performAnchorTeleport(player, anchor)
                 : service.performFreeAnchorTeleport(player, anchor, bukkitWorld);
-            service.sendPlayerResult(player, result);
+            service.crossServerFeedback(player, result);
         }
 
         @Override
         public void notifyPlayerResult(UUID playerUuid, MapOperationResult result) {
             Player player = playerUuid == null ? null : Bukkit.getPlayer(playerUuid);
             if (player != null) {
-                service.sendPlayerResult(player, result);
+                service.crossServerFeedback(player, result);
             }
         }
 

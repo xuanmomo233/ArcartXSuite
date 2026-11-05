@@ -51,7 +51,10 @@ public final class MapUiPacketHandler {
                  "cross_world_navigate", "teleport_to_world" -> true;
             default -> false;
         };
-        if (tokenized && !target.beginActionToken(player, action, data)) return true;
+        if (tokenized && !target.beginActionToken(player, action, data)) {
+            target.actionStatus(player);
+            return true;
+        }
         try {
             if (target.dispatchAsyncAction(player, action, data, tokenized)) return true;
         } catch (RuntimeException | Error failure) {
@@ -69,6 +72,11 @@ public final class MapUiPacketHandler {
                     target.refresh(player);
                 }
             }
+            case "browse_options" -> target.browseOptions(player,
+                data.size() > 1 ? data.get(1) : "", data.size() > 2 && Boolean.parseBoolean(data.get(2)),
+                data.size() > 3 && "distance".equals(data.get(3)));
+            case "retry_load" -> target.retryData(player);
+            case "action_status" -> target.actionStatus(player);
             case "select_anchor" -> {
                 if (hasValue(data, 1)) {
                     target.selectAnchor(player, data.get(1));
@@ -229,6 +237,9 @@ public final class MapUiPacketHandler {
      * 由 {@code MapService} 实现，将 UI 事件映射到具体的业务逻辑。
      */
     public interface ActionTarget {
+        default void browseOptions(Player player, String query, boolean unlockedOnly, boolean distanceOrder) { }
+        default void retryData(Player player) { refresh(player); }
+        default void actionStatus(Player player) { refresh(player); }
         default boolean dispatchAsyncAction(Player player, String action, List<String> data, boolean tokenized) { return false; }
         boolean allowClientPacket(Player player, String action);
 
