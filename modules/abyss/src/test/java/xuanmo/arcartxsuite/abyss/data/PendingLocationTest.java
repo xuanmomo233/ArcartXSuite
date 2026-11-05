@@ -13,6 +13,35 @@ import static org.mockito.Mockito.*;
 
 class PendingLocationTest {
     @TempDir Path dir;
+    @Test void lateResultsFollowCommitOrderAndDuplicateResultsDoNotCreateFeedEntries() throws Exception {
+        var ds = mock(DataSource.class);
+        when(ds.getConnection()).thenAnswer(call -> DriverManager.getConnection("jdbc:sqlite:" + dir.resolve("feed.db")));
+        var repository = new JdbcAbyssRepository(ds, StorageDescriptor.sqlite("feed.db"), dir.toFile(), Logger.getAnonymousLogger());
+        repository.initialize();
+        UUID recent = UUID.randomUUID(), late = UUID.randomUUID();
+        assertTrue(repository.insertRunResult(recent, "xc", 200, "recent"));
+        long cursor = repository.committedResults("xc", 0, 1).get(0).sequence();
+        assertTrue(repository.insertRunResult(late, "xc", 100, "late"));
+        assertFalse(repository.insertRunResult(late, "xc", 100, "late"));
+        repository.backfillResultFeed();
+        var recovered = repository.committedResults("xc", cursor, 100);
+        assertEquals(java.util.List.of("late"), recovered.stream().map(JdbcAbyssRepository.CommittedSnapshot::snapshot).toList());
+        assertTrue(repository.committedResults("xc", recovered.get(0).sequence(), 100).isEmpty());
+    }
+
+    @Test void archivedRequestsKeepTheirIdentityAndCannotBeReservedAgain() throws Exception {
+        var ds = mock(DataSource.class);
+        when(ds.getConnection()).thenAnswer(call -> DriverManager.getConnection("jdbc:sqlite:" + dir.resolve("archive.db")));
+        var repository = new JdbcAbyssRepository(ds, StorageDescriptor.sqlite("archive.db"), dir.toFile(), Logger.getAnonymousLogger());
+        repository.initialize();
+        UUID id = UUID.randomUUID();
+        var receipt = new JdbcAbyssRepository.AdmissionReceipt("xc", id.toString(), "abc", "phase: STARTED");
+        repository.insertAdmission(receipt);
+        assertTrue(repository.archiveAdmission(receipt));
+        assertFalse(repository.archiveAdmission(receipt));
+        assertEquals(receipt, repository.loadAdmission("xc", id));
+        assertThrows(java.sql.SQLException.class, () -> repository.insertAdmission(receipt));
+    }
     @Test void finalResultsAreImmutableAndHistoryPagingIsScopedByOwner() throws Exception {
         var ds = mock(DataSource.class);
         when(ds.getConnection()).thenAnswer(call -> DriverManager.getConnection("jdbc:sqlite:" + dir.resolve("results.db")));

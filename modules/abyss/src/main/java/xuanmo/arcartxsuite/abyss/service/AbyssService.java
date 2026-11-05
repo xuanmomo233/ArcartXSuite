@@ -1474,9 +1474,14 @@ public final class AbyssService {
             }
         }
         // world-init 段：玩家传送前跑（造平台/铺场景），init 保持原位（进图后）
-        if (!usesDesignSnapshot(instance.getTemplate())) runLifecycleScript(instance, "world_init", null);
-        // 落点兜底：spawn 下方 4 格无支撑时垫一块，防虚空模板直接坠亡
+        Location initial = spawn;
+        afterAdmissionScript(instance, usesDesignSnapshot(tpl) ? List.of() : tpl.scripts().worldInit(),
+            "WORLD_INIT_FAILED", () -> transferAdmission(instance, world, initial, players));
+    }
+
+    private void transferAdmission(AbyssInstance instance, World world, Location spawn, List<Player> players) {
         ensureFooting(world, spawn);
+        AbyssTemplate tpl = instance.getTemplate();
 
         // Revalidate the complete admission after asynchronous world preparation.
         var op = admission.operation(instance);
@@ -1523,16 +1528,6 @@ public final class AbyssService {
             op.phase = Phase.TELEPORTING;
             admission.changed(op);
         }
-        var charge = requirementChecker.charge(tpl, players);
-        if (!charge.ok()) {
-            if (op != null && charge.reviewRequired()) {
-                op.phase = Phase.REVIEW_REQUIRED;
-                op.reason = "CHARGE_COMPENSATION_UNKNOWN";
-                admission.changed(op);
-            }
-            broadcast(instance, msg("error.enter-failed", "reason", charge.reason()));
-            destroyInstance(instance, true); return;
-        }
         // All players and resources form one admission operation. A failed teleport refunds all.
         for (Player p : players) {
             instance.saveOriginalLocation(p, p.getLocation());
@@ -1541,18 +1536,18 @@ public final class AbyssService {
             transferringInstances.add(instance.getInstanceId());
             try {ok=teleportWithRetry(p,spawn,3);}
             finally {transferringInstances.remove(instance.getInstanceId());}
-            if (ok && !instance.isFinished() && !stopping) {
+            if (ok && p.isOnline() && p.getWorld() == world && instance.hasPlayer(p.getUniqueId())
+                && !instance.isFinished() && !stopping) {
                 instance.markEntered(p.getUniqueId());
                 if (op != null) op.outcomes.put(p.getUniqueId(), "ARRIVED");
             } else {
-                rollbackAdmission(instance, op, p, charge);
+                rollbackAdmission(instance, op, p, null);
                 return;
             }
         }
-        charge.commit();
-        publishAdmission(instance,players);
-        if(instance.getParty()!=null)instance.getParty().resetReadiness();
-        prepare(instance);
+        afterAdmissionScript(instance, tpl.scripts().init(), "INIT_FAILED",
+            () -> scheduleOnce(instance, () -> advanceAdmission(instance, true, "RUNTIME_INIT_FAILED",
+                () -> startInstance(instance, players)), 40L));
     }
 
     /**
@@ -1732,16 +1727,36 @@ public final class AbyssService {
         logger.info("[abyss] " + world.getName() + " 出生点无支撑，已垫 5x5 兜底平台");
     }
 
-    private void prepare(AbyssInstance instance) {
-        if (instance.getStatus() != AbyssStatus.PREPARING) return;
-        // init 脚本
-        runLifecycleScript(instance, "init", null);
-        // 40 tick 后 start（等待玩家传送稳定）
-        scheduleOnce(instance, () -> startInstance(instance), 40L);
+    private void afterAdmissionScript(AbyssInstance instance, List<String> lines, String failure, Runnable next) {
+        try {
+            var session = runScript(instance, lines, ScriptContext.of(instance, null));
+            if (session == null) advanceAdmission(instance, true, failure, next);
+            else session.completion().whenComplete((ok, error) ->
+                runOnMain(() -> advanceAdmission(instance, error == null && Boolean.TRUE.equals(ok), failure, next)));
+        } catch (RuntimeException error) {
+            abortAdmission(instance, failure);
+        }
     }
 
-    private void startInstance(AbyssInstance instance) {
-        if (!instance.transitionTo(AbyssStatus.PREPARING, AbyssStatus.ACTIVE)) return;
+    private void advanceAdmission(AbyssInstance instance, boolean success, String failure, Runnable next) {
+        if (instance.getStatus() != AbyssStatus.PREPARING || instances.getInstance(instance.getInstanceId()) != instance) return;
+        try {
+            if (success) next.run();
+            else abortAdmission(instance, failure);
+        } catch (RuntimeException error) {
+            if (!instance.admitted()) abortAdmission(instance, failure);
+            else logger.log(java.util.logging.Level.WARNING, "[abyss] 开局后通知或脚本异常", error);
+        }
+    }
+
+    private void abortAdmission(AbyssInstance instance, String reason) {
+        if (instances.getInstance(instance.getInstanceId()) != instance || instance.admitted() || instance.isFinished()) return;
+        var operation = admission.operation(instance);
+        rollbackAdmission(instance, operation, null, null, reason);
+    }
+
+    private void startInstance(AbyssInstance instance, List<Player> players) {
+        if (instance.getStatus() != AbyssStatus.PREPARING) return;
         AbyssTemplate t = instance.getTemplate();
         // 怪物组（AUTO_START/DELAYED 自动调度）
         mobGroups.initInstance(instance);
@@ -1753,13 +1768,16 @@ public final class AbyssService {
                 // 物化完成后对齐到首层入口（进图时房间尚未生成，落点是模板 spawn）
                 Location entry = roomManager.currentSpawn(instance);
                 if (entry != null) {
-                    for (Player p : instance.getPlayers()) {
-                        teleportWithRetry(p, entry, 3);
+                    for (Player p : players) {
+                        if (!p.isOnline() || !teleportWithRetry(p, entry, 3) || p.getWorld() != instance.getWorld()) {
+                            rollbackAdmission(instance, admission.operation(instance), p, null, "FINAL_TELEPORT_FAILED");
+                            return;
+                        }
                     }
                 }
             } catch (Throwable ex) {
                 logger.warning("[abyss] floors 物化失败 " + t.id() + ": " + ex.getMessage());
-                failDungeon(instance, FailReason.SCRIPTED);
+                abortAdmission(instance, "FLOOR_INIT_FAILED");
                 return;
             }
         }
@@ -1776,10 +1794,51 @@ public final class AbyssService {
         // procgen：怪组/交互/NPC 注册必须在各自 initInstance 之后（init 会覆盖注册表）
         if (procgenManager != null) procgenManager.initRuntime(instance);
         var operation = admission.operation(instance);
+        if (instance.isFinished() || instances.getInstance(instance.getInstanceId()) != instance) return;
+        if (players.stream().anyMatch(player -> !player.isOnline() || player.isDead()
+                || !instance.hasPlayer(player.getUniqueId()) || player.getWorld() != instance.getWorld())) {
+            abortAdmission(instance, "MEMBER_LOST_BEFORE_START");
+            return;
+        }
+        if (operation != null && (!entryCosts.authorized(operation) || !admission.policyUnchanged(operation)
+            || (operation.externalRoster != null && !operation.externalRoster.equals(externalParties.verify(operation.intent)))
+            || !admission.policies(operation.intent, t).isEmpty())) {
+            abortAdmission(instance, "FINAL_ADMISSION_CHANGED");
+            return;
+        }
+        var finalCheck = requirementChecker.check(t, players, instance.getParty());
+        if (!finalCheck.ok() || players.stream().anyMatch(player ->
+                (operation != null && !operation.intent.owner().equals("abyss") && !requirementChecker.checkSingle(t, player).ok())
+                || (links != null && links.moduleEntryLocked(player, "abyss." + t.id())))) {
+            abortAdmission(instance, "FINAL_REQUIREMENTS_FAILED");
+            return;
+        }
+        var charge = requirementChecker.charge(t, players);
+        if (!charge.ok()) {
+            if (operation != null) operation.costUncertain = charge.reviewRequired();
+            abortAdmission(instance, "CHARGE_FAILED");
+            return;
+        }
+        if (players.stream().anyMatch(player -> !player.isOnline() || !instance.hasPlayer(player.getUniqueId())
+                || player.getWorld() != instance.getWorld()) || !instance.transitionTo(AbyssStatus.PREPARING, AbyssStatus.ACTIVE)) {
+            rollbackAdmission(instance, operation, null, charge, "MEMBER_LOST_BEFORE_START");
+            return;
+        }
+        try {
+            charge.commit();
+        } catch (RuntimeException failure) {
+            if (operation != null) operation.costUncertain = true;
+            instance.transitionTo(AbyssStatus.ACTIVE, AbyssStatus.PREPARING);
+            rollbackAdmission(instance, operation, null, charge, "COOLDOWN_COMMIT_UNKNOWN");
+            return;
+        }
+        instance.confirmAdmission();
         if (operation != null) {
             operation.phase = Phase.STARTED;
             admission.changed(operation);
         }
+        publishAdmission(instance, players);
+        if (instance.getParty() != null) instance.getParty().resetReadiness();
         runResults.started(instance);
         // start 脚本
         runLifecycleScript(instance, "start", null);
@@ -1868,6 +1927,10 @@ public final class AbyssService {
     /** 失败：状态→FAILED，跑 fail 脚本，撤出+清理。 */
     public void failDungeon(AbyssInstance instance, FailReason reason) {
         if (isDesignInstance(instance)) { cancelDungeon(instance); return; }
+        if (!instance.admitted() && admission.operation(instance) != null) {
+            abortAdmission(instance, "INIT_" + reason.name());
+            return;
+        }
         AbyssStatus cur = instance.getStatus();
         if (cur != AbyssStatus.ACTIVE && cur != AbyssStatus.PREPARING) return;
         if (!instance.transitionTo(cur, AbyssStatus.FAILED)) return;
@@ -1893,6 +1956,10 @@ public final class AbyssService {
 
     /** 取消（管理/无人/卸载）：不跑脚本。 */
     public void cancelDungeon(AbyssInstance instance) {
+        if (!instance.admitted() && admission.operation(instance) != null) {
+            abortAdmission(instance, "ENTRY_CANCELLED");
+            return;
+        }
         AbyssStatus cur = instance.getStatus();
         if (instance.isFinished()) return;
         if (!instance.transitionTo(cur, AbyssStatus.CANCELLED)) return;
@@ -2043,7 +2110,7 @@ public final class AbyssService {
         var admissionOperation = admission.operation(instance);
         if (admissionOperation != null && "RETURN_PENDING".equals(admissionOperation.outcomes.get(player.getUniqueId()))) {
             admissionOperation.outcomes.put(player.getUniqueId(), "RETURNED");
-            if (!admissionOperation.costUncertain && "TELEPORT_FAILED".equals(admissionOperation.reason)
+            if (!admissionOperation.costUncertain && admissionOperation.phase == Phase.REVIEW_REQUIRED
                 && !admissionOperation.outcomes.containsValue("RETURN_PENDING")) admissionOperation.phase = Phase.COMPENSATED;
             admission.changed(admissionOperation);
         }
@@ -2128,6 +2195,12 @@ public final class AbyssService {
         }
         instance.removePlayer(player.getUniqueId());
         runResults.member(instance, player.getUniqueId(), AbyssRunResultAccess.MemberState.DISCONNECTED, "DISCONNECT", null);
+        var pendingAdmission = admission.operation(instance);
+        if (!instance.admitted() && !instance.isFinished() && pendingAdmission != null) {
+            pendingAdmission.outcomes.put(player.getUniqueId(), back != null ? "RETURN_PENDING" : "DISCONNECTED");
+            admission.changed(pendingAdmission);
+            if (!transferringInstances.contains(instance.getInstanceId())) abortAdmission(instance, "MEMBER_DISCONNECTED");
+        }
         if (links != null) links.removeAttribute(player, "abyss");
         // 不触发退出消息；无人清理由 watchdog/playerExit 路径处理
         if (instance.getOnlinePlayerCount() == 0 && !instance.isFinished()) {
@@ -2650,15 +2723,29 @@ public final class AbyssService {
 
     private void rollbackAdmission(AbyssInstance instance, AdmissionAccess.Operation op, Player failed,
                                    RequirementChecker.Charge charge) {
-        boolean review = false;
-        try { charge.rollback(); }
+        rollbackAdmission(instance, op, failed, charge, "TELEPORT_FAILED");
+    }
+
+    private void rollbackAdmission(AbyssInstance instance, AdmissionAccess.Operation op, @Nullable Player failed,
+                                   @Nullable RequirementChecker.Charge charge, String reason) {
+        if (instance.admitted() || !instance.transitionTo(AbyssStatus.PREPARING, AbyssStatus.CANCELLED)) {
+            if (charge != null) {
+                try { charge.rollback(); }
+                catch (RuntimeException failure) {
+                    if (op != null) { op.costUncertain = true; op.phase = Phase.REVIEW_REQUIRED; admission.changed(op); }
+                }
+            }
+            return;
+        }
+        boolean review = op != null && op.costUncertain;
+        try { if (charge != null) charge.rollback(); }
         catch (RuntimeException error) {
             review = true;
             if (op != null) op.costUncertain = true;
             logger.warning("[abyss] 入场补偿待核对: " + instance.getInstanceId() + " " + error.getMessage());
         }
-        instance.transitionTo(AbyssStatus.PREPARING, AbyssStatus.CANCELLED);
-        if (op != null) op.outcomes.put(failed.getUniqueId(), "TELEPORT_FAILED");
+        if (op != null && failed != null && !"RETURN_PENDING".equals(op.outcomes.get(failed.getUniqueId())))
+            op.outcomes.put(failed.getUniqueId(), "TELEPORT_FAILED");
         for (Player player : instance.getPlayers()) {
             UUID id = player.getUniqueId();
             boolean returned = false;
@@ -2672,7 +2759,7 @@ public final class AbyssService {
             op.outcomes.replaceAll((id, state) -> state.equals("ARRIVED") ? "RETURN_PENDING" : state);
             review |= op.outcomes.containsValue("RETURN_PENDING");
             op.phase = review ? Phase.REVIEW_REQUIRED : Phase.COMPENSATED;
-            op.reason = "TELEPORT_FAILED";
+            op.reason = reason;
             admission.changed(op);
         }
         if (instance.getOnlinePlayerCount() == 0) destroyInstance(instance, false);

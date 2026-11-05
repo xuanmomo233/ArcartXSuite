@@ -21,6 +21,7 @@ public interface AbyssRunResultAccess {
         public Result { roster = List.copyOf(roster); }
     }
     record Cursor(long endedAt, UUID runId) { }
+    record Committed(long sequence, Result result) { }
     record ResultCommitted(int schemaVersion, UUID eventId, UUID runId, UUID requestId,
                            long occurredAt) { }
     enum NoticeKind { ADMITTED, STARTED, DISCONNECTED, RECONNECTED, LEFT, DIED }
@@ -35,4 +36,7 @@ public interface AbyssRunResultAccess {
     CompletableFuture<Result> result(UUID runId);
     /** History pagination, not a commit-order change feed. Ascending (endedAt, runId), max 100. */
     CompletableFuture<List<Result>> results(String owner, Cursor after, int limit);
+
+    /** Durable, ascending commit cursor. Process idempotently by resultId before advancing the cursor. */
+    CompletableFuture<List<Committed>> committedResults(String owner, long afterSequence, int limit);
 }

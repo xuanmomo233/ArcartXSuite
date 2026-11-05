@@ -142,6 +142,7 @@ final class RunResults implements AbyssRunResultAccess {
         if (now < nextReplay) return;
         nextReplay = now + 60000L;
         database.submitDatabase(() -> {
+            repository.backfillResultFeed();
             var committed = new java.util.ArrayList<Result>();
             if (!Files.isDirectory(outbox)) return committed;
             try (var files = Files.newDirectoryStream(outbox, "*.yml")) {
@@ -185,6 +186,17 @@ final class RunResults implements AbyssRunResultAccess {
                 after == null ? "" : after.runId().toString(), Math.min(100, Math.max(1, limit)));
             var results = new java.util.ArrayList<Result>();
             for (String snapshot : snapshots) results.add(decode(snapshot));
+            return List.copyOf(results);
+        });
+    }
+
+    @Override public CompletableFuture<List<Committed>> committedResults(String owner, long afterSequence, int limit) {
+        var reader = database;
+        if (reader == null || !service.running()) return CompletableFuture.failedFuture(new IllegalStateException("Abyss unavailable"));
+        return reader.submitDatabase(() -> {
+            var results = new java.util.ArrayList<Committed>();
+            for (var snapshot : repository.committedResults(owner, Math.max(0, afterSequence), Math.min(100, Math.max(1, limit))))
+                results.add(new Committed(snapshot.sequence(), decode(snapshot.snapshot())));
             return List.copyOf(results);
         });
     }

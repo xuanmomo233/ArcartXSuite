@@ -21,12 +21,15 @@ class AdmissionAccessTest {
             var service = fake(AbyssService.class);
             var repository = fake(JdbcAbyssRepository.class);
             UUID request = UUID.randomUUID(), transaction = UUID.randomUUID();
-            when(repository.loadAdmissions()).thenReturn(List.of(new JdbcAbyssRepository.AdmissionReceipt(
+            when(repository.loadAdmission("xc", request)).thenReturn(new JdbcAbyssRepository.AdmissionReceipt(
                 "xc", request.toString(), "fingerprint", "phase: COMMITTING_COST\ncost:\n  owner: keys\n  id: "
-                + transaction + "\n  state: RESERVED\n")));
+                + transaction + "\n  state: RESERVED\n"));
             var access = new AdmissionAccess(service);
-            access.load(repository, fake(PlayerDataManager.class));
-            var state = access.entryStatus("xc", request);
+            var writer = fake(PlayerDataManager.class);
+            when(writer.submitDatabase(any())).thenAnswer(call ->
+                CompletableFuture.completedFuture(call.<PlayerDataManager.DatabaseRead<?>>getArgument(0).execute()));
+            access.load(repository, writer);
+            var state = access.lookupEntry("xc", request).join();
             assertEquals(AbyssAdmissionAccess.Phase.REVIEW_REQUIRED, state.phase());
             assertEquals(transaction, state.cost().transactionId());
             assertEquals(xuanmo.arcartxsuite.api.capability.AbyssEntryCostAccess.State.UNKNOWN, state.cost().lastKnownState());

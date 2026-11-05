@@ -11,8 +11,7 @@ import java.util.UUID;
  * The first revision does not forward API requests to another server.
  * A request remains deduplicated while its receipt is retained. An interrupted
  * admission is reported as REVIEW_REQUIRED and is never automatically replayed.
- * Receipts are not automatically expired; the host rejects new API requests
- * when its retained journal reaches capacity.
+ * Archived receipts retain their request key and fingerprint for deduplication.
  */
 @PublicCapability
 public interface AbyssAdmissionAccess {
@@ -46,6 +45,7 @@ public interface AbyssAdmissionAccess {
     enum Phase { PREPARING, RESERVING_COST, COMMITTING_COST, TELEPORTING, STARTED,
         REJECTED, CANCELLED, COMPENSATING_COST, COMPENSATED, REVIEW_REQUIRED, CONFLICT }
     record Cost(String owner, UUID transactionId, AbyssEntryCostAccess.State lastKnownState) { }
+    record Review(Entry entry, AbyssEntryCostAccess.State observedCost) { }
     record Entry(Phase phase, UUID runId, String reason, Map<UUID, String> members, Cost cost) {
         public Entry { members = Map.copyOf(members); }
         public Entry(Phase phase, UUID runId, String reason, Map<UUID, String> members) {
@@ -77,6 +77,12 @@ public interface AbyssAdmissionAccess {
     Entry requestEntry(Intent intent, UUID token);
     /** Returns null for an unknown request. */
     Entry entryStatus(String owner, UUID requestId);
+    /** Reads through to the active or archived durable journal. Call on the server thread. */
+    java.util.concurrent.CompletableFuture<Entry> lookupEntry(String owner, UUID requestId);
+    /** Moves a confirmed terminal admission to archival storage without releasing its deduplication key. */
+    java.util.concurrent.CompletableFuture<Boolean> archiveEntry(String owner, UUID requestId);
+    /** Reads the receipt and queries the cost authority without performing a debit or refund. */
+    java.util.concurrent.CompletionStage<Review> reviewEntry(String owner, UUID requestId);
     /** Cancels only before teleport begins; otherwise returns the existing state. */
     Entry cancelEntry(String owner, UUID requestId);
     Registration registerPolicy(String owner, int priority, Policy policy);

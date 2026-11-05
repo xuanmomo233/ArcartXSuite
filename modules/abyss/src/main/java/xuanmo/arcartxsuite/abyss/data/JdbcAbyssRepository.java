@@ -36,6 +36,7 @@ public final class JdbcAbyssRepository extends AbstractModuleRepository {
 
     private boolean sqlite = true;
     private String tPlayer, tCooldowns, tRecords, tPending, tGlobals, tAdmission, tRunResults;
+    private String tResultSequence, tResultFeed, tAdmissionArchive;
 
     public JdbcAbyssRepository(DataSource dataSource, StorageDescriptor descriptor,
                              File dataFolder, Logger logger) {
@@ -53,6 +54,9 @@ public final class JdbcAbyssRepository extends AbstractModuleRepository {
         tGlobals = p + "globals";
         tAdmission = p + "admission_requests";
         tRunResults = p + "run_results";
+        tResultSequence = p + "result_sequence";
+        tResultFeed = p + "result_feed";
+        tAdmissionArchive = p + "admission_archive";
 
         try (Statement st = conn.createStatement()) {
             st.executeUpdate("CREATE TABLE IF NOT EXISTS " + tAdmission
@@ -61,6 +65,14 @@ public final class JdbcAbyssRepository extends AbstractModuleRepository {
             st.executeUpdate("CREATE TABLE IF NOT EXISTS " + tRunResults
                 + " (run_id VARCHAR(36) PRIMARY KEY, owner VARCHAR(96) NOT NULL,"
                 + " ended_at BIGINT NOT NULL, snapshot TEXT NOT NULL)");
+            st.executeUpdate("CREATE TABLE IF NOT EXISTS " + tResultSequence + " (id INTEGER PRIMARY KEY, seq BIGINT NOT NULL)");
+            st.executeUpdate("CREATE TABLE IF NOT EXISTS " + tResultFeed
+                + " (seq BIGINT PRIMARY KEY, run_id VARCHAR(36) NOT NULL UNIQUE)");
+            st.executeUpdate("CREATE TABLE IF NOT EXISTS " + tAdmissionArchive
+                + " (owner VARCHAR(96) NOT NULL, request_id VARCHAR(36) NOT NULL, snapshot TEXT NOT NULL,"
+                + " archived_at BIGINT NOT NULL, PRIMARY KEY (owner, request_id))");
+            st.executeUpdate(sqlite ? "INSERT INTO " + tResultSequence + " VALUES (1,0) ON CONFLICT(id) DO NOTHING"
+                : "INSERT INTO " + tResultSequence + " VALUES (1,0) ON DUPLICATE KEY UPDATE id=id");
             if (sqlite) {
                 st.executeUpdate("CREATE TABLE IF NOT EXISTS " + tPlayer + " ("
                     + "player_uuid TEXT PRIMARY KEY,"
@@ -131,23 +143,91 @@ public final class JdbcAbyssRepository extends AbstractModuleRepository {
         all.add(tGlobals);
         all.add(tAdmission);
         all.add(tRunResults);
+        all.add(tResultSequence);
+        all.add(tResultFeed);
+        all.add(tAdmissionArchive);
         return all;
     }
 
     public record AdmissionReceipt(String owner, String requestId, String fingerprint, String snapshot) { }
+    public record CommittedSnapshot(long sequence, String snapshot) { }
 
     public boolean insertRunResult(UUID run, String owner, long endedAt, String snapshot) throws SQLException {
         String sql = sqlite
             ? "INSERT INTO " + tRunResults + " (run_id, owner, ended_at, snapshot) VALUES (?, ?, ?, ?) ON CONFLICT(run_id) DO NOTHING"
             : "INSERT INTO " + tRunResults + " (run_id, owner, ended_at, snapshot) VALUES (?, ?, ?, ?)";
-        try (Connection c = getConnection(); PreparedStatement ps = c.prepareStatement(sql)) {
-            ps.setString(1, run.toString()); ps.setString(2, owner);
-            ps.setLong(3, endedAt); ps.setString(4, snapshot);
-            return ps.executeUpdate() == 1;
+        try (Connection c = getConnection()) {
+            c.setAutoCommit(false);
+            try {
+                lockResultSequence(c);
+                boolean inserted;
+                try (PreparedStatement ps = c.prepareStatement(sql)) {
+                    ps.setString(1, run.toString()); ps.setString(2, owner);
+                    ps.setLong(3, endedAt); ps.setString(4, snapshot);
+                    inserted = ps.executeUpdate() == 1;
+                }
+                if (inserted) appendResultFeed(c, run.toString());
+                c.commit();
+                return inserted;
+            } catch (SQLException failure) {
+                c.rollback();
+                throw failure;
+            }
         } catch (SQLException failure) {
             if (!sqlite && failure.getErrorCode() == 1062) return false;
             throw failure;
         }
+    }
+
+    private void lockResultSequence(Connection c) throws SQLException {
+        try (Statement st = c.createStatement()) {
+            // Serialize publishers until commit, including when multiple servers share MySQL.
+            st.executeUpdate("UPDATE " + tResultSequence + " SET seq=seq+1 WHERE id=1");
+        }
+    }
+
+    private void appendResultFeed(Connection c, String run) throws SQLException {
+        try (PreparedStatement ps = c.prepareStatement("INSERT INTO " + tResultFeed
+                + " (seq, run_id) SELECT seq, ? FROM " + tResultSequence + " WHERE id=1")) {
+            ps.setString(1, run);
+            ps.executeUpdate();
+        }
+    }
+
+    public void backfillResultFeed() throws SQLException {
+        try (Connection c = getConnection()) {
+            c.setAutoCommit(false);
+            try {
+                lockResultSequence(c);
+                var pending = new ArrayList<String>();
+                try (Statement st = c.createStatement(); ResultSet rows = st.executeQuery(
+                        "SELECT r.run_id FROM " + tRunResults + " r LEFT JOIN " + tResultFeed
+                        + " f ON f.run_id=r.run_id WHERE f.run_id IS NULL ORDER BY r.ended_at,r.run_id")) {
+                    while (rows.next()) pending.add(rows.getString(1));
+                }
+                for (String run : pending) {
+                    appendResultFeed(c, run);
+                    lockResultSequence(c);
+                }
+                c.commit();
+            } catch (SQLException failure) {
+                c.rollback();
+                throw failure;
+            }
+        }
+    }
+
+    public List<CommittedSnapshot> committedResults(String owner, long after, int limit) throws SQLException {
+        var results = new ArrayList<CommittedSnapshot>();
+        try (Connection c = getConnection(); PreparedStatement ps = c.prepareStatement(
+                "SELECT f.seq,r.snapshot FROM " + tResultFeed + " f JOIN " + tRunResults
+                + " r ON r.run_id=f.run_id WHERE f.seq>? AND r.owner=? ORDER BY f.seq LIMIT ?")) {
+            ps.setLong(1, after); ps.setString(2, owner); ps.setInt(3, limit);
+            try (ResultSet rows = ps.executeQuery()) {
+                while (rows.next()) results.add(new CommittedSnapshot(rows.getLong(1), rows.getString(2)));
+            }
+        }
+        return results;
     }
 
     public @Nullable String loadRunResult(UUID run) throws SQLException {
@@ -181,6 +261,42 @@ public final class JdbcAbyssRepository extends AbstractModuleRepository {
         return receipts;
     }
 
+    public @Nullable AdmissionReceipt loadAdmission(String owner, UUID request) throws SQLException {
+        try (Connection c = getConnection(); PreparedStatement ps = c.prepareStatement(
+                "SELECT a.fingerprint,COALESCE(b.snapshot,a.snapshot) FROM " + tAdmission + " a LEFT JOIN "
+                + tAdmissionArchive + " b ON a.owner=b.owner AND a.request_id=b.request_id"
+                + " WHERE a.owner=? AND a.request_id=?")) {
+            ps.setString(1, owner); ps.setString(2, request.toString());
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? new AdmissionReceipt(owner, request.toString(), rs.getString(1), rs.getString(2)) : null;
+            }
+        }
+    }
+
+    public boolean archiveAdmission(AdmissionReceipt receipt) throws SQLException {
+        try (Connection c = getConnection()) {
+            c.setAutoCommit(false);
+            try {
+                try (PreparedStatement ps = c.prepareStatement("UPDATE " + tAdmission
+                        + " SET snapshot='' WHERE owner=? AND request_id=? AND snapshot=?")) {
+                    ps.setString(1, receipt.owner()); ps.setString(2, receipt.requestId()); ps.setString(3, receipt.snapshot());
+                    if (ps.executeUpdate() != 1) { c.rollback(); return false; }
+                }
+                try (PreparedStatement ps = c.prepareStatement("INSERT INTO " + tAdmissionArchive
+                        + " (owner,request_id,snapshot,archived_at) VALUES (?,?,?,?)")) {
+                    ps.setString(1, receipt.owner()); ps.setString(2, receipt.requestId());
+                    ps.setString(3, receipt.snapshot()); ps.setLong(4, System.currentTimeMillis());
+                    ps.executeUpdate();
+                }
+                c.commit();
+                return true;
+            } catch (SQLException failure) {
+                c.rollback();
+                throw failure;
+            }
+        }
+    }
+
     public void insertAdmission(AdmissionReceipt receipt) throws SQLException {
         try (Connection c = getConnection(); PreparedStatement ps = c.prepareStatement("INSERT INTO " + tAdmission
                 + " (owner, request_id, fingerprint, snapshot) VALUES (?, ?, ?, ?)")) {
@@ -192,7 +308,7 @@ public final class JdbcAbyssRepository extends AbstractModuleRepository {
 
     public void updateAdmission(AdmissionReceipt receipt) throws SQLException {
         try (Connection c = getConnection(); PreparedStatement ps = c.prepareStatement("UPDATE " + tAdmission
-                + " SET snapshot=? WHERE owner=? AND request_id=? AND fingerprint=?")) {
+                + " SET snapshot=? WHERE owner=? AND request_id=? AND fingerprint=? AND snapshot<>''")) {
             ps.setString(1, receipt.snapshot()); ps.setString(2, receipt.owner());
             ps.setString(3, receipt.requestId()); ps.setString(4, receipt.fingerprint());
             if (ps.executeUpdate() != 1) throw new SQLException("Admission receipt not found");

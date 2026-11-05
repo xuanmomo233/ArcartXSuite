@@ -38,6 +38,8 @@ final class AdmissionAccess implements AbyssAdmissionAccess {
     private long catalogRevision;
     private boolean checkingPolicy;
     private PlayerDataManager storage;
+    private JdbcAbyssRepository repository;
+    private final java.util.Set<Key> lookups = new java.util.HashSet<>();
 
     static final class Operation {
         final Intent intent;
@@ -59,6 +61,7 @@ final class AdmissionAccess implements AbyssAdmissionAccess {
         ExternalParties.Verified externalRoster;
         long noticeSequence;
         Entry lastQueuedSnapshot;
+        Entry storedSnapshot;
         Operation(Intent intent) {
             this.intent = intent;
             this.fingerprint = fingerprint(intent);
@@ -71,9 +74,11 @@ final class AdmissionAccess implements AbyssAdmissionAccess {
     AdmissionAccess(AbyssService service) { this.service = service; }
 
     void load(JdbcAbyssRepository repository, PlayerDataManager writer) throws Exception {
-        var receipts = repository.loadAdmissions();
-        if (receipts.size() > LIMIT) throw new IllegalStateException("Admission journal exceeds capacity");
-        for (var receipt : receipts) {
+        this.repository = repository;
+        storage = writer;
+    }
+
+    private static Operation restore(AdmissionReceipt receipt) throws Exception {
             UUID id = UUID.fromString(receipt.requestId());
             var yaml = new YamlConfiguration();
             yaml.loadFromString(receipt.snapshot());
@@ -98,9 +103,8 @@ final class AdmissionAccess implements AbyssAdmissionAccess {
                 op.reason = "INTERRUPTED_ADMISSION";
                 if (op.costId != null) op.costState = State.UNKNOWN;
             }
-            journal.put(new Key(receipt.owner(), id), op);
-        }
-        storage = writer;
+            op.storedSnapshot = op.snapshot();
+            return op;
     }
 
     @Override public IntegrationInfo integrationInfo() {
@@ -190,8 +194,15 @@ final class AdmissionAccess implements AbyssAdmissionAccess {
         if (!service.running() || checkingPolicy) return rejected("UNAVAILABLE");
         Ticket ticket = tickets.get(token);
         if (ticket == null || ticket.expires() <= System.currentTimeMillis() || !ticket.intent().equals(intent)
-            || !ticket.binding().equals(binding(intent))) return rejected("PREFLIGHT_STALE");
-        if (journal.size() >= LIMIT) return rejected("JOURNAL_FULL");
+            || !ticket.binding().equals(binding(intent))) {
+            if (token == null && storage != null) {
+                warmLookup(key);
+                return new Entry(Phase.PREPARING, null, "LOOKUP_PENDING", Map.of());
+            }
+            return rejected("PREFLIGHT_STALE");
+        }
+        trimCache();
+        if (journal.size() >= LIMIT) return rejected("ADMISSION_BUSY");
         if (intent.members().stream().anyMatch(reservations::containsKey)) return rejected("MEMBER_BUSY");
         tickets.remove(token);
         var op = new Operation(intent);
@@ -210,11 +221,7 @@ final class AdmissionAccess implements AbyssAdmissionAccess {
             intent.members().forEach(member -> reservations.put(member, op));
             storage.writeAdmission(receipt(op), true).whenComplete((ignored, error) -> service.runOnMain(() -> {
                 if (error != null) {
-                    if (op.phase != Phase.CANCELLED) {
-                        op.phase = Phase.REVIEW_REQUIRED;
-                        op.reason = "JOURNAL_RESERVATION_UNKNOWN";
-                    }
-                    release(op);
+                    resolveReservationFailure(key, op);
                     return;
                 }
                 op.persisted = true;
@@ -239,6 +246,20 @@ final class AdmissionAccess implements AbyssAdmissionAccess {
             }));
         }
         return op.snapshot();
+    }
+
+    private void resolveReservationFailure(Key key, Operation op) {
+        read(key).whenComplete((stored, error) -> service.runOnMain(() -> {
+            release(op);
+            if (stored != null && error == null) {
+                journal.replace(key, op, stored);
+            } else {
+                    if (op.phase != Phase.CANCELLED) {
+                        op.phase = Phase.REVIEW_REQUIRED;
+                        op.reason = "JOURNAL_RESERVATION_UNKNOWN";
+                    }
+            }
+        }));
     }
 
     private boolean current(Ticket ticket) {
@@ -269,8 +290,81 @@ final class AdmissionAccess implements AbyssAdmissionAccess {
 
     @Override public Entry entryStatus(String owner, UUID requestId) {
         requireMain();
-        Operation op = journal.get(new Key(owner, requestId));
+        var key = new Key(owner, requestId);
+        Operation op = journal.get(key);
+        if (op == null && storage != null && owner != null && requestId != null) warmLookup(key);
         return op == null ? null : op.snapshot();
+    }
+
+    private java.util.concurrent.CompletableFuture<Operation> read(Key key) {
+        if (storage == null) return java.util.concurrent.CompletableFuture.failedFuture(new IllegalStateException("Abyss journal unavailable"));
+        return storage.submitDatabase(() -> {
+            var receipt = repository.loadAdmission(key.owner(), key.id());
+            return receipt == null ? null : restore(receipt);
+        });
+    }
+
+    private void warmLookup(Key key) {
+        if (lookups.size() >= 1024 || !lookups.add(key)) return;
+        read(key).whenComplete((entry, error) -> service.runOnMain(() -> {
+            lookups.remove(key);
+            if (entry != null && error == null) {
+                trimCache();
+                if (journal.size() < LIMIT) journal.putIfAbsent(key, entry);
+            }
+        }));
+    }
+
+    @Override public java.util.concurrent.CompletableFuture<Entry> lookupEntry(String owner, UUID requestId) {
+        requireMain();
+        var key = new Key(owner, requestId);
+        var cached = journal.get(key);
+        return cached != null ? java.util.concurrent.CompletableFuture.completedFuture(cached.snapshot())
+            : read(key).thenApply(entry -> entry == null ? null : entry.snapshot());
+    }
+
+    @Override public java.util.concurrent.CompletableFuture<Boolean> archiveEntry(String owner, UUID requestId) {
+        requireMain();
+        if (storage == null) return java.util.concurrent.CompletableFuture.failedFuture(new IllegalStateException("Abyss journal unavailable"));
+        return storage.submitDatabase(() -> {
+            var receipt = repository.loadAdmission(owner, requestId);
+            return receipt != null && archivable(restore(receipt)) && repository.archiveAdmission(receipt);
+        });
+    }
+
+    @Override public java.util.concurrent.CompletionStage<Review> reviewEntry(String owner, UUID requestId) {
+        requireMain();
+        var result = new java.util.concurrent.CompletableFuture<Review>();
+        lookupEntry(owner, requestId).whenComplete((entry, error) -> service.runOnMain(() -> {
+            if (error != null) result.completeExceptionally(error);
+            else if (entry == null) result.complete(null);
+            else if (entry.cost() == null) result.complete(new Review(entry, null));
+            else service.entryCosts().query(entry.cost().owner(), entry.cost().transactionId())
+                .whenComplete((state, failure) -> {
+                    if (failure != null) result.completeExceptionally(failure);
+                    else result.complete(new Review(entry, state));
+                });
+        }));
+        return result;
+    }
+
+    private static boolean archivable(Operation operation) {
+        return switch (operation.phase) {
+            case STARTED, REJECTED, CANCELLED, COMPENSATED -> !operation.outcomes.containsValue("RETURN_PENDING")
+                && operation.costState != State.UNKNOWN;
+            default -> false;
+        };
+    }
+
+    private void trimCache() {
+        if (journal.size() < 2048) return;
+        var entries = journal.entrySet().iterator();
+        while (journal.size() >= 2048 && entries.hasNext()) {
+            var op = entries.next().getValue();
+            if (((op.persisted && op.storedSnapshot != null && op.storedSnapshot.equals(op.snapshot()))
+                || (!op.persisted && op.runId == null && op.phase != Phase.PREPARING))
+                && !operations.containsValue(op) && !reservations.containsValue(op)) entries.remove();
+        }
     }
 
     @Override public Entry cancelEntry(String owner, UUID requestId) {
@@ -412,6 +506,7 @@ final class AdmissionAccess implements AbyssAdmissionAccess {
                 if (snapshot.equals(op.lastQueuedSnapshot)) op.lastQueuedSnapshot = null;
                 java.util.logging.Logger.getLogger("Abyss").warning("Admission journal write failed: " + op.intent.requestId());
             } else if (service.running()) {
+                op.storedSnapshot = snapshot;
                 service.publishEntryNotice(new xuanmo.arcartxsuite.api.capability.AbyssRunResultAccess.EntryNotice(
                     1, UUID.randomUUID(), generation, op.intent.owner(), op.intent.requestId(),
                     sequence, occurredAt, snapshot));

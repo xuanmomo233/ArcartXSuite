@@ -54,6 +54,52 @@ class SettlementLifecycleTest {
     }
     @AfterEach void restore()throws Exception{serverField.set(null,previous);}
 
+    @Test void failedInitializationReturnsTheArrivedPlayerWithoutOpeningTheRun() throws Exception {
+        var operation = pendingAdmission();
+        var advance = AbyssService.class.getDeclaredMethod("advanceAdmission", AbyssInstance.class,
+            boolean.class, String.class, Runnable.class);
+        advance.setAccessible(true);
+        advance.invoke(service, instance, false, "INIT_FAILED", (Runnable) () -> fail("Must not start"));
+        assertFalse(instance.admitted());
+        assertSame(home, currentWorld.get());
+        assertEquals("RETURNED", operation.outcomes.get(player.getUniqueId()));
+        assertEquals("INIT_FAILED", operation.reason);
+        assertNull(instances.getInstance(player));
+    }
+
+    @Test void disconnectDuringPreparationAbortsAndPersistsThePlayerReturnLocation() throws Exception {
+        var operation = pendingAdmission();
+        var data = fake(xuanmo.arcartxsuite.abyss.data.PlayerDataManager.class);
+        set(service, "playerData", data);
+        set(service, "partyManager", new xuanmo.arcartxsuite.abyss.party.PartyManager(
+            service.config().party(), text -> { }, null));
+        when(player.isOnline()).thenReturn(false);
+        service.handleQuit(player);
+        verify(data).savePendingLocation(eq(player.getUniqueId()), argThat(location -> location.getWorld() == home));
+        assertFalse(instance.admitted());
+        assertEquals("RETURN_PENDING", operation.outcomes.get(player.getUniqueId()));
+        assertEquals("MEMBER_DISCONNECTED", operation.reason);
+        assertEquals(xuanmo.arcartxsuite.api.capability.AbyssAdmissionAccess.Phase.REVIEW_REQUIRED, operation.phase);
+    }
+
+    private AdmissionAccess.Operation pendingAdmission() throws Exception {
+        instances.playerLeaveInstance(player);
+        instances.destroyInstance(instance);
+        instance = instances.createInstance(template, null);
+        instances.playerEnterInstance(player, instance);
+        instance.setWorld(world);
+        instance.saveOriginalLocation(player, new Location(home, 1, 64, 1));
+        instance.markEntered(player.getUniqueId());
+        var field = AbyssService.class.getDeclaredField("admission");
+        field.setAccessible(true);
+        var admission = (AdmissionAccess) field.get(service);
+        var operation = new AdmissionAccess.Operation(new xuanmo.arcartxsuite.api.capability.AbyssAdmissionAccess.Intent(
+            "xc", UUID.randomUUID(), player.getUniqueId(), List.of(player.getUniqueId()), "test", null, null, null));
+        operation.outcomes.put(player.getUniqueId(), "ARRIVED");
+        admission.attach(instance, operation);
+        return operation;
+    }
+
     @Test void optedInDisconnectedPlayerReturnsToOriginalRunWithDeathState() throws Exception {
         var yaml = new YamlConfiguration();
         yaml.set("reconnect-grace-seconds", 60);
