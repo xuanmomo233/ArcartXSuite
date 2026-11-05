@@ -36,7 +36,7 @@ public final class JdbcAbyssRepository extends AbstractModuleRepository {
 
     private boolean sqlite = true;
     private String tPlayer, tCooldowns, tRecords, tPending, tGlobals, tAdmission, tRunResults;
-    private String tResultSequence, tResultFeed, tAdmissionArchive, tAdmissionReturns;
+    private String tResultSequence, tResultFeed, tAdmissionArchive, tAdmissionReturns, tAdmissionAudit;
 
     public JdbcAbyssRepository(DataSource dataSource, StorageDescriptor descriptor,
                              File dataFolder, Logger logger) {
@@ -58,6 +58,7 @@ public final class JdbcAbyssRepository extends AbstractModuleRepository {
         tResultFeed = p + "result_feed";
         tAdmissionArchive = p + "admission_archive";
         tAdmissionReturns = p + "admission_returns";
+        tAdmissionAudit = p + "admission_audit";
 
         try (Statement st = conn.createStatement()) {
             st.executeUpdate("CREATE TABLE IF NOT EXISTS " + tAdmission
@@ -75,6 +76,9 @@ public final class JdbcAbyssRepository extends AbstractModuleRepository {
             st.executeUpdate("CREATE TABLE IF NOT EXISTS " + tAdmissionReturns
                 + " (owner VARCHAR(96) NOT NULL, request_id VARCHAR(36) NOT NULL, player_uuid VARCHAR(36) NOT NULL,"
                 + " saved_at BIGINT NOT NULL, confirmed INTEGER NOT NULL, PRIMARY KEY (owner, request_id, player_uuid))");
+            st.executeUpdate("CREATE TABLE IF NOT EXISTS " + tAdmissionAudit
+                + " (id VARCHAR(36) PRIMARY KEY, owner VARCHAR(96) NOT NULL, request_id VARCHAR(36) NOT NULL,"
+                + " transaction_id VARCHAR(36), observed_state VARCHAR(32), observed_at BIGINT NOT NULL)");
             st.executeUpdate(sqlite ? "INSERT INTO " + tResultSequence + " VALUES (1,0) ON CONFLICT(id) DO NOTHING"
                 : "INSERT INTO " + tResultSequence + " VALUES (1,0) ON DUPLICATE KEY UPDATE id=id");
             if (sqlite) {
@@ -151,6 +155,7 @@ public final class JdbcAbyssRepository extends AbstractModuleRepository {
         all.add(tResultFeed);
         all.add(tAdmissionArchive);
         all.add(tAdmissionReturns);
+        all.add(tAdmissionAudit);
         return all;
     }
 
@@ -290,12 +295,36 @@ public final class JdbcAbyssRepository extends AbstractModuleRepository {
         return players;
     }
 
+    public List<UUID> admissionReviewIds(String owner, UUID after, int limit) throws SQLException {
+        var requests = new ArrayList<UUID>();
+        try (Connection c = getConnection(); PreparedStatement ps = c.prepareStatement(
+                "SELECT request_id FROM " + tAdmission
+                + " WHERE owner=? AND request_id>? AND snapshot LIKE 'phase: REVIEW_REQUIRED%' ORDER BY request_id LIMIT ?")) {
+            ps.setString(1, owner); ps.setString(2, after == null ? "" : after.toString()); ps.setInt(3, limit);
+            try (ResultSet rows = ps.executeQuery()) {
+                while (rows.next()) requests.add(UUID.fromString(rows.getString(1)));
+            }
+        }
+        return requests;
+    }
+
+    public void recordAdmissionReview(String owner, UUID request, @Nullable UUID transaction,
+                                      @Nullable String observed) throws SQLException {
+        try (Connection c = getConnection(); PreparedStatement ps = c.prepareStatement("INSERT INTO " + tAdmissionAudit
+                + " (id,owner,request_id,transaction_id,observed_state,observed_at) VALUES (?,?,?,?,?,?)")) {
+            ps.setString(1, UUID.randomUUID().toString()); ps.setString(2, owner); ps.setString(3, request.toString());
+            ps.setString(4, transaction == null ? null : transaction.toString()); ps.setString(5, observed);
+            ps.setLong(6, System.currentTimeMillis()); ps.executeUpdate();
+        }
+    }
+
     public boolean archiveAdmission(AdmissionReceipt receipt) throws SQLException {
         try (Connection c = getConnection()) {
             c.setAutoCommit(false);
             try {
                 try (PreparedStatement ps = c.prepareStatement("UPDATE " + tAdmission
-                        + " SET snapshot='' WHERE owner=? AND request_id=? AND snapshot=?")) {
+                        + " SET snapshot='' WHERE owner=? AND request_id=? AND "
+                        + (sqlite ? "snapshot=?" : "BINARY snapshot=BINARY ?"))) {
                     ps.setString(1, receipt.owner()); ps.setString(2, receipt.requestId()); ps.setString(3, receipt.snapshot());
                     if (ps.executeUpdate() != 1) { c.rollback(); return false; }
                 }

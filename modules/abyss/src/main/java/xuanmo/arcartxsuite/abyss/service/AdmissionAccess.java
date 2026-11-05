@@ -299,6 +299,11 @@ final class AdmissionAccess implements AbyssAdmissionAccess {
     private java.util.concurrent.CompletableFuture<Operation> read(Key key) {
         if (storage == null) return java.util.concurrent.CompletableFuture.failedFuture(new IllegalStateException("Abyss journal unavailable"));
         return storage.submitDatabase(() -> {
+            return loadEntry(key);
+        });
+    }
+
+    private Operation loadEntry(Key key) throws Exception {
             var receipt = repository.loadAdmission(key.owner(), key.id());
             if (receipt == null) return null;
             var entry = restore(receipt);
@@ -308,7 +313,6 @@ final class AdmissionAccess implements AbyssAdmissionAccess {
                 entry.storedSnapshot = entry.snapshot();
             }
             return entry;
-        });
     }
 
     private void warmLookup(Key key) {
@@ -346,14 +350,43 @@ final class AdmissionAccess implements AbyssAdmissionAccess {
         lookupEntry(owner, requestId).whenComplete((entry, error) -> service.runOnMain(() -> {
             if (error != null) result.completeExceptionally(error);
             else if (entry == null) result.complete(null);
-            else if (entry.cost() == null) result.complete(new Review(entry, null));
+            else if (entry.cost() == null) auditReview(owner, requestId, entry, null, result);
             else service.entryCosts().query(entry.cost().owner(), entry.cost().transactionId())
                 .whenComplete((state, failure) -> {
                     if (failure != null) result.completeExceptionally(failure);
-                    else result.complete(new Review(entry, state));
+                    else auditReview(owner, requestId, entry, state, result);
                 });
         }));
         return result;
+    }
+
+    private void auditReview(String owner, UUID request, Entry entry, State observed,
+                             java.util.concurrent.CompletableFuture<Review> result) {
+        if (storage == null) {
+            result.completeExceptionally(new IllegalStateException("Abyss journal unavailable"));
+            return;
+        }
+        storage.submitDatabase(() -> {
+            repository.recordAdmissionReview(owner, request, entry.cost() == null ? null : entry.cost().transactionId(),
+                observed == null ? null : observed.name());
+            return new Review(entry, observed);
+        }).whenComplete((review, error) -> {
+            if (error != null) result.completeExceptionally(error);
+            else result.complete(review);
+        });
+    }
+
+    @Override public java.util.concurrent.CompletableFuture<List<ReviewItem>> reviewQueue(String owner, UUID after, int limit) {
+        requireMain();
+        if (storage == null) return java.util.concurrent.CompletableFuture.failedFuture(new IllegalStateException("Abyss journal unavailable"));
+        return storage.submitDatabase(() -> {
+            var results = new ArrayList<ReviewItem>();
+            for (UUID request : repository.admissionReviewIds(owner, after, Math.min(100, Math.max(1, limit)))) {
+                var entry = loadEntry(new Key(owner, request));
+                if (entry != null && entry.phase == Phase.REVIEW_REQUIRED) results.add(new ReviewItem(request, entry.snapshot()));
+            }
+            return List.copyOf(results);
+        });
     }
 
     private static boolean archivable(Operation operation) {

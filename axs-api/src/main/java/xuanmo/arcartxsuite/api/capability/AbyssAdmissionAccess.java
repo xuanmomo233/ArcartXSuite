@@ -46,6 +46,7 @@ public interface AbyssAdmissionAccess {
         REJECTED, CANCELLED, COMPENSATING_COST, COMPENSATED, REVIEW_REQUIRED, CONFLICT }
     record Cost(String owner, UUID transactionId, AbyssEntryCostAccess.State lastKnownState) { }
     record Review(Entry entry, AbyssEntryCostAccess.State observedCost) { }
+    record ReviewItem(UUID requestId, Entry entry) { }
     record Entry(Phase phase, UUID runId, String reason, Map<UUID, String> members, Cost cost) {
         public Entry { members = Map.copyOf(members); }
         public Entry(Phase phase, UUID runId, String reason, Map<UUID, String> members) {
@@ -83,6 +84,8 @@ public interface AbyssAdmissionAccess {
     java.util.concurrent.CompletableFuture<Boolean> archiveEntry(String owner, UUID requestId);
     /** Reads the receipt and queries the cost authority without performing a debit or refund. */
     java.util.concurrent.CompletionStage<Review> reviewEntry(String owner, UUID requestId);
+    /** Lists persisted review-required requests by request ID. A null cursor starts at the beginning. */
+    java.util.concurrent.CompletableFuture<List<ReviewItem>> reviewQueue(String owner, UUID afterRequestId, int limit);
     /** Cancels only before teleport begins; otherwise returns the existing state. */
     Entry cancelEntry(String owner, UUID requestId);
     Registration registerPolicy(String owner, int priority, Policy policy);

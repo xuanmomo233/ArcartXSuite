@@ -67,6 +67,23 @@ class SettlementLifecycleTest {
         assertNull(instances.getInstance(player));
     }
 
+    @Test void preparationWaitsForNestedScriptAndRejectsIrreversibleActions() throws Exception {
+        var operation = pendingAdmission();
+        var yaml = new YamlConfiguration();
+        yaml.set("nested", List.of("wait 1t", "console must-not-run"));
+        when(template.scripts()).thenReturn(ScriptConfig.load(yaml));
+        set(service, "scriptRunner", new ScriptRunner(null, scheduler, () -> service, Logger.getAnonymousLogger()));
+        var prepare = AbyssService.class.getDeclaredMethod("afterAdmissionScript", AbyssInstance.class,
+            List.class, String.class, Runnable.class);
+        prepare.setAccessible(true);
+        prepare.invoke(service, instance, List.of("run_script nested"), "INIT_FAILED", (Runnable) () -> fail("Must not start"));
+        assertSame(instance, instances.getInstance(player));
+        jobs.stream().filter(job -> job.ticks() == 1).findFirst().orElseThrow().run().run();
+        assertEquals("INIT_FAILED", operation.reason);
+        assertSame(home, currentWorld.get());
+        assertFalse(instance.admitted());
+    }
+
     @Test void disconnectDuringPreparationAbortsAndPersistsThePlayerReturnLocation() throws Exception {
         var operation = pendingAdmission();
         var data = fake(xuanmo.arcartxsuite.abyss.data.PlayerDataManager.class);
