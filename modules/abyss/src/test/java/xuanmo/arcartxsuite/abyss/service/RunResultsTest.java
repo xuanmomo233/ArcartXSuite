@@ -30,6 +30,11 @@ class RunResultsTest {
             try { return CompletableFuture.completedFuture(task.execute()); }
             catch (Exception failure) { return CompletableFuture.failedFuture(failure); }
         });
+        when(database.submitMaintenance(any())).thenAnswer(call -> {
+            PlayerDataManager.DatabaseRead<?> task = call.getArgument(0);
+            try { return CompletableFuture.completedFuture(task.execute()); }
+            catch (Exception failure) { return CompletableFuture.failedFuture(failure); }
+        });
         var results = new RunResults(service);
         results.configure(repository, database, directory);
         var instance = new AbyssInstance(UUID.randomUUID(), fake(AbyssTemplate.class), null);

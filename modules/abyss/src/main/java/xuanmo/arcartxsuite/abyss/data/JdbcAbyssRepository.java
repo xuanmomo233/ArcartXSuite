@@ -212,7 +212,7 @@ public final class JdbcAbyssRepository extends AbstractModuleRepository {
                 var pending = new ArrayList<String>();
                 try (Statement st = c.createStatement(); ResultSet rows = st.executeQuery(
                         "SELECT r.run_id FROM " + tRunResults + " r LEFT JOIN " + tResultFeed
-                        + " f ON f.run_id=r.run_id WHERE f.run_id IS NULL ORDER BY r.ended_at,r.run_id")) {
+                        + " f ON f.run_id=r.run_id WHERE f.run_id IS NULL ORDER BY r.ended_at,r.run_id LIMIT 100")) {
                     while (rows.next()) pending.add(rows.getString(1));
                 }
                 for (String run : pending) {

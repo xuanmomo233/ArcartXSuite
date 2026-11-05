@@ -136,6 +136,8 @@ public final class AbyssService {
     private final PlaceholderResolverAPI placeholderResolver;
     private final StorageManager storageManager;
     private final SchedulerAPI scheduler;
+    private ChunkPreloader chunkPreloader;
+    private InstanceTicker instanceTicker;
     private final CrossServerAPI crossServer;
 
     // ── 子系统 ──
@@ -287,6 +289,8 @@ public final class AbyssService {
 
         // 3) 世界池 + 残留世界清理 + 预热池
         worldPool = new AbyssWorldPool(plugin, config.abyss(), logger, scheduler);
+        chunkPreloader = new ChunkPreloader(scheduler, plugin, GET_CHUNK_ASYNC == null ? 2 : 4,
+            GET_CHUNK_ASYNC == null ? 2 : 8);
         int orphans = worldPool.cleanupOrphanWorlds();
         if (orphans > 0) {
             logger.info("[abyss] 清理残留副本世界 x" + orphans);
@@ -451,7 +455,8 @@ public final class AbyssService {
         watchdogTask = scheduler.scheduleEverySeconds(plugin, this::watchdog,
             config.abyss().instanceCheckInterval(), 10 /* 短周期轮询含触发器 */);
         // 触发器需更细粒度：10s 太粗——另起 1s 轮询做 proximity/region
-        proximityTask = scheduler.scheduleEverySeconds(plugin, this::proximityTick, 1, 1);
+        instanceTicker = new InstanceTicker(instances::getAllInstances, instances::getInstance, this::tickInstance);
+        proximityTask = scheduler.scheduleAtFixedRate(plugin, this::proximityTick, 1, 1);
 
         // 11) 副本预热池（预热世界就绪后进入秒开）
         Map<String, AbyssTemplate> tplMap = new java.util.LinkedHashMap<>();
@@ -469,6 +474,7 @@ public final class AbyssService {
     private ScheduledTask proximityTask;
 
     public void shutdown() {
+        if (chunkPreloader != null) chunkPreloader.close();
         runIntegration.shutdown();
         admission.shutdown();
         externalParties.clear();
@@ -1450,7 +1456,9 @@ public final class AbyssService {
         // setType 会在主线程同步触发未生成区块的 initialize_light（看门狗级卡顿）
         preloadInstanceChunks(instance, world).whenComplete((v, err) -> runOnMain(() -> {
             if (err != null) {
-                logger.warning("[abyss] 区块预载未完成（继续初始化）: " + err.getMessage());
+                logger.warning("[abyss] 区块预载未完成，取消入场: " + err.getMessage());
+                abortAdmission(instance, "CHUNK_PREPARATION_FAILED");
+                return;
             }
             if (instance.isFinished()) return;
             continueWorldReady(instance, world, spawn, players);
@@ -1611,42 +1619,19 @@ public final class AbyssService {
                 coords.add(new int[] {cx, cz});
             }
         }
-        // Paper：getChunkAtAsync 并发走区块管线（生成本就在工作线程）
-        if (GET_CHUNK_ASYNC != null) {
-            java.util.List<java.util.concurrent.CompletableFuture<?>> fs =
-                new java.util.ArrayList<>(coords.size());
-            for (int[] c : coords) {
-                try {
-                    fs.add((java.util.concurrent.CompletableFuture<?>)
-                        GET_CHUNK_ASYNC.invoke(world, c[0], c[1]));
-                } catch (Throwable ex) {
-                    logger.fine("[abyss] 异步区块加载失败 " + c[0] + "," + c[1]
-                        + ": " + ex.getMessage());
-                }
+        if (chunkPreloader == null) return java.util.concurrent.CompletableFuture.failedFuture(
+            new IllegalStateException("Chunk preloader unavailable"));
+        return chunkPreloader.submit(coords, coordinate -> {
+            if (GET_CHUNK_ASYNC == null) {
+                world.getChunkAt(coordinate[0], coordinate[1]);
+                return java.util.concurrent.CompletableFuture.completedFuture(null);
             }
-            return java.util.concurrent.CompletableFuture.allOf(
-                fs.toArray(new java.util.concurrent.CompletableFuture[0]));
-        }
-        // Spigot 退化：主线程每 tick 批载 16 块，摊薄生成+光照成本
-        java.util.concurrent.CompletableFuture<Void> done =
-            new java.util.concurrent.CompletableFuture<>();
-        java.util.Iterator<int[]> it = coords.iterator();
-        xuanmo.arcartxsuite.api.scheduler.ScheduledTask[] holder =
-            new xuanmo.arcartxsuite.api.scheduler.ScheduledTask[1];
-        holder[0] = scheduler.scheduleAtFixedRate(plugin, () -> {
-            int n = 16;
-            while (n-- > 0 && it.hasNext()) {
-                int[] c = it.next();
-                try {
-                    world.getChunkAt(c[0], c[1]);
-                } catch (Throwable ignored) { }
+            try {
+                return (java.util.concurrent.CompletableFuture<?>) GET_CHUNK_ASYNC.invoke(world, coordinate[0], coordinate[1]);
+            } catch (ReflectiveOperationException failure) {
+                return java.util.concurrent.CompletableFuture.failedFuture(failure);
             }
-            if (!it.hasNext()) {
-                holder[0].cancel();
-                done.complete(null);
-            }
-        }, 1L, 1L);
-        return done;
+        }, () -> running() && !instance.isFinished() && instances.getInstance(instance.getInstanceId()) == instance);
     }
 
     /** Paper {@code World#getChunkAtAsync(int,int)} 反射句柄；Spigot 缺席为 null。 */
@@ -2945,14 +2930,12 @@ public final class AbyssService {
                 continue;
             }
             try {
-                runIntegration.tick(i);
                 if(i.isFinished()) {
                     if(i.getOnlinePlayerCount()==0)finishAndCleanup(i);
                     else if(!settlements.containsKey(i.getInstanceId()))finishAndCleanup(i);
                     continue;
                 }
                 // 消失扫描（怪被刷掉兜底）
-                mobGroups.sweepVanished(i);
                 // 阶段机慢扫：变量条件等无回调事件的路径兜底
                 if (stageManager != null) stageManager.onEvent(i);
                 // 超时
@@ -3001,14 +2984,19 @@ public final class AbyssService {
 
     /** 1s 轮询：障碍物 proximity + 区域交互点触发。 */
     private void proximityTick() {
-        if (!started) return;
-        for (AbyssInstance i : new ArrayList<>(instances.getAllInstances())) {
-            if (i.getStatus() != AbyssStatus.ACTIVE) continue;
-            if (isDesignInstance(i)) continue; // 设计实例无障碍/房间/interact 初始化
+        if (started && instanceTicker != null) instanceTicker.tick();
+    }
+
+    private void tickInstance(AbyssInstance i) {
             try {
+                mobGroups.sweepVanished(i);
+                if (i.isFinished()) return;
+                runIntegration.tick(i);
                 obstacles.tickProximity(i);
                 if (roomManager != null) roomManager.tick(i);
+                if (i.isFinished()) return;
                 if (procgenManager != null) procgenManager.tick(i);
+                if (i.isFinished()) return;
                 for (Player p : i.getPlayers()) {
                     interacts.onRegionTrigger(i, p,
                         xuanmo.arcartxsuite.abyss.template.InteractConfig.InteractType.STEP_ON);
@@ -3020,7 +3008,6 @@ public final class AbyssService {
                     }
                 }
             } catch (Throwable ignored) { }
-        }
     }
 
     // ═══ 客户端包 ═══

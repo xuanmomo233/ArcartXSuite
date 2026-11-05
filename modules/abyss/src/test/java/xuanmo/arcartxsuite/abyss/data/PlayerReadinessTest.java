@@ -49,7 +49,7 @@ class PlayerReadinessTest {
         var thread=new java.util.concurrent.atomic.AtomicReference<String>();
         when(repository.loadLeaderboard(anyString(),anyInt())).thenAnswer(call->{thread.set(Thread.currentThread().getName());return List.of();});
         var data=new PlayerDataManager(repository,Logger.getAnonymousLogger());
-        try {data.loadLeaderboardAsync("test",1000).get(5,TimeUnit.SECONDS);assertEquals("Abyss-DB",thread.get());verify(repository).loadLeaderboard("test",200);}
+        try {data.loadLeaderboardAsync("test",1000).get(5,TimeUnit.SECONDS);assertEquals("Abyss-DB-Read",thread.get());verify(repository).loadLeaderboard("test",200);}
         finally {data.shutdown();}
     }
 }

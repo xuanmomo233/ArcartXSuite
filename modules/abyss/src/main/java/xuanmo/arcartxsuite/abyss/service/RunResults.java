@@ -23,6 +23,7 @@ final class RunResults implements AbyssRunResultAccess {
     private volatile PlayerDataManager database;
     private Path outbox;
     private long nextReplay;
+    private final java.util.concurrent.atomic.AtomicBoolean replayQueued = new java.util.concurrent.atomic.AtomicBoolean();
 
     RunResults(AbyssService service) { this.service = service; }
 
@@ -140,15 +141,16 @@ final class RunResults implements AbyssRunResultAccess {
         if (outbox == null || database == null || !service.running()) return;
         long now = System.currentTimeMillis();
         if (now < nextReplay) return;
+        if (!replayQueued.compareAndSet(false, true)) return;
         nextReplay = now + 60000L;
-        database.submitDatabase(() -> {
+        database.submitMaintenance(() -> {
             repository.backfillResultFeed();
             var committed = new java.util.ArrayList<Result>();
             if (!Files.isDirectory(outbox)) return committed;
             try (var files = Files.newDirectoryStream(outbox, "*.yml")) {
                 int processed = 0;
                 for (Path path : files) {
-                    if (processed++ >= 100) break;
+                    if (processed++ >= 25) break;
                     try {
                         String snapshot = Files.readString(path);
                         Result result = decode(snapshot);
@@ -162,6 +164,10 @@ final class RunResults implements AbyssRunResultAccess {
                 }
             }
             return committed;
+        }).whenComplete((ignored, failure) -> {
+            replayQueued.set(false);
+            if (failure != null) java.util.logging.Logger.getLogger("Abyss").warning(
+                "Result maintenance deferred: " + failure.getMessage());
         }).thenAccept(committed -> service.runOnMain(() -> {
             if (!service.running()) return;
             for (Result result : committed) service.publishRunResult(new ResultCommitted(1, result.resultId(),

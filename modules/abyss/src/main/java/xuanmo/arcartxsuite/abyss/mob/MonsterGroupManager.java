@@ -1,6 +1,7 @@
 package xuanmo.arcartxsuite.abyss.mob;
 
 import java.util.List;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -52,9 +53,17 @@ public final class MonsterGroupManager {
     private final Map<UUID, Map<String, GroupRuntime>> instanceGroups = new ConcurrentHashMap<>();
     private final Map<UUID, GroupRuntime> entityToGroup = new ConcurrentHashMap<>();
     private final Map<UUID, xuanmo.arcartxsuite.api.capability.AbyssRunAccess.Entity> entityContexts = new ConcurrentHashMap<>();
+    private static final class Sweep {
+        final java.util.Iterator<GroupRuntime> groups;
+        java.util.Iterator<UUID> entities = java.util.Collections.emptyIterator();
+        GroupRuntime current;
+        Sweep(Map<String, GroupRuntime> groups) { this.groups = groups.values().iterator(); }
+    }
+    private final Map<UUID, Sweep> sweeps = new HashMap<>();
     private final SchedulerAPI scheduler;
     private final org.bukkit.plugin.Plugin plugin;
     private final Logger logger;
+    private final ChunkTickets chunkTickets;
 
     /** 回调：组开始/组完成时通知外层跑脚本（避免循环依赖，用函数注入）。 */
     private GroupCallback callback;
@@ -79,6 +88,7 @@ public final class MonsterGroupManager {
         this.plugin = plugin;
         this.scheduler = scheduler;
         this.logger = logger;
+        this.chunkTickets = new ChunkTickets(plugin, logger);
     }
 
     public void setCallback(GroupCallback callback) { this.callback = callback; }
@@ -100,6 +110,7 @@ public final class MonsterGroupManager {
     }
 
     public void initializeGroups(AbyssInstance instance) {
+        sweeps.remove(instance.getInstanceId());
         Map<String, GroupRuntime> groups = new ConcurrentHashMap<>();
         for (MonsterGroup g : instance.getTemplate().monsters().groups().values()) {
             if (!planAllowed(instance, g)) continue;
@@ -164,7 +175,13 @@ public final class MonsterGroupManager {
             Location loc = callback.parseLocation(instance, ms.location());
             if (loc == null) continue;
             // 区块票据：防怪被区块卸载
-            keepChunkLoaded(loc);
+            try {
+                if (!chunkTickets.acquire(instance.getInstanceId(), groupName, world,
+                    loc.getBlockX() >> 4, loc.getBlockZ() >> 4)) continue;
+            } catch (RuntimeException failure) {
+                logger.warning("[abyss] 无法持有怪物区块 " + groupName + ": " + failure.getMessage());
+                continue;
+            }
             for (int i = 0; i < ms.amount(); i++) {
                 Entity e;
                 String source;
@@ -192,6 +209,7 @@ public final class MonsterGroupManager {
         logger.fine("[abyss] 组 " + groupName + " 生成 " + spawned + " 只怪 (实例 "
             + instance.getInstanceId() + ")");
         if (spawned == 0 && !rt.group.monsters().isEmpty()) {
+            chunkTickets.release(instance.getInstanceId(), groupName);
             rt.state = GroupState.REMOVED;
             logger.warning("[abyss] 怪组生成失败，终止副本以避免锁房: " + groupName);
             callback.onSpawnFailed(instance, groupName);
@@ -219,6 +237,7 @@ public final class MonsterGroupManager {
                 callback.onMobDeath(instance, entityUuid, killer);
             }
             checkGroupComplete(instance, rt);
+            if (rt.alive.isEmpty()) chunkTickets.release(instance.getInstanceId(), rt.group.name());
         }
     }
 
@@ -226,19 +245,33 @@ public final class MonsterGroupManager {
     public void sweepVanished(AbyssInstance instance) {
         Map<String, GroupRuntime> groups = instanceGroups.get(instance.getInstanceId());
         if (groups == null) return;
-        for (GroupRuntime rt : groups.values()) {
-            if (rt.state != GroupState.ACTIVE || rt.alive.isEmpty()) continue;
-            boolean changed = false;
-            for (UUID u : rt.alive) {
-                Entity e = Bukkit.getEntity(u);
-                if (e == null || e.isDead() || !e.isValid()) {
-                    rt.alive.remove(u);
-                    entityToGroup.remove(u);
-                    removeContext(u, xuanmo.arcartxsuite.api.capability.AbyssRunAccess.EntityChange.VANISHED);
-                    changed = true;
+        var sweep = sweeps.computeIfAbsent(instance.getInstanceId(), ignored -> new Sweep(groups));
+        int inspected = 0, visitedGroups = 0;
+        while (inspected < 128 && visitedGroups < 128 && !instance.isFinished()) {
+            if (sweep.current == null || sweep.current.state != GroupState.ACTIVE || !sweep.entities.hasNext()
+                || groups.get(sweep.current.group.name()) != sweep.current) {
+                if (!sweep.groups.hasNext()) {
+                    sweeps.remove(instance.getInstanceId());
+                    break;
                 }
+                sweep.current = sweep.groups.next();
+                visitedGroups++;
+                sweep.entities = java.util.Collections.emptyIterator();
+                if (sweep.current.state != GroupState.ACTIVE || sweep.current.alive.isEmpty()) continue;
+                sweep.entities = sweep.current.alive.iterator();
             }
-            if (changed) checkGroupComplete(instance, rt);
+            if (!sweep.entities.hasNext()) continue;
+            UUID id = sweep.entities.next();
+            inspected++;
+            Entity entity = Bukkit.getEntity(id);
+            if (entity == null || entity.isDead() || !entity.isValid()) {
+                var rt = sweep.current;
+                rt.alive.remove(id);
+                entityToGroup.remove(id);
+                removeContext(id, xuanmo.arcartxsuite.api.capability.AbyssRunAccess.EntityChange.VANISHED);
+                checkGroupComplete(instance, rt);
+                if (rt.alive.isEmpty()) chunkTickets.release(instance.getInstanceId(), rt.group.name());
+            }
         }
     }
 
@@ -348,6 +381,7 @@ public final class MonsterGroupManager {
             if (e != null) e.remove();
         }
         rt.alive.clear();
+        chunkTickets.release(instance.getInstanceId(), groupName);
         // ACTIVE 走正常完成链；PENDING（从未生成）也视为完成——随机波次等场景
         // 用 kill_group 显式跳过备选组，否则它永远 PENDING 卡住房间清判
         if (rt.state == GroupState.ACTIVE) {
@@ -372,6 +406,8 @@ public final class MonsterGroupManager {
             if (e != null) e.remove();
         }
         rt.state = GroupState.REMOVED;
+        rt.alive.clear();
+        chunkTickets.release(instance.getInstanceId(), groupName);
     }
 
     /** 杀光实例全部怪（清理用，不触发联动）。 */
@@ -386,6 +422,7 @@ public final class MonsterGroupManager {
                 if (e != null) e.remove();
             }
             rt.alive.clear();
+            chunkTickets.release(instance.getInstanceId(), rt.group.name());
         }
     }
 
@@ -469,6 +506,7 @@ public final class MonsterGroupManager {
 
     /** 清理实例全部组状态。 */
     public void cleanup(AbyssInstance instance) {
+        sweeps.remove(instance.getInstanceId());
         Map<String, GroupRuntime> groups = instanceGroups.remove(instance.getInstanceId());
         if (groups != null) {
             for (GroupRuntime rt : groups.values()) {
@@ -479,17 +517,12 @@ public final class MonsterGroupManager {
                 }
             }
         }
-    }
-
-    private void keepChunkLoaded(Location loc) {
-        try {
-            Chunk c = loc.getChunk();
-            if (!c.isLoaded()) c.load();
-            c.setForceLoaded(true);
-        } catch (Throwable ignored) { }
+        chunkTickets.releaseRun(instance.getInstanceId());
     }
 
     public void shutdown() {
+        chunkTickets.close();
+        sweeps.clear();
         for (Map<String, GroupRuntime> groups : instanceGroups.values()) {
             for (GroupRuntime rt : groups.values()) {
                 cancelDelayed(rt);
