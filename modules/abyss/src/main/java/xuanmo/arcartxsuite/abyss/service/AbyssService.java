@@ -2686,6 +2686,11 @@ public final class AbyssService {
     /** 销毁实例：清理全部子系统 + 释放世界 + 从注册表移除。 */
     public void destroyInstance(AbyssInstance instance, boolean releasePlayers) {
         if(transferringInstances.contains(instance.getInstanceId())) {scheduleDelayedRaw(()->destroyInstance(instance,releasePlayers),1L);return;}
+        var pendingEntry = admission.operation(instance);
+        if (releasePlayers && !instance.admitted() && !instance.isFinished() && pendingEntry != null && instance.hasEnteredPlayers()) {
+            rollbackAdmission(instance, pendingEntry, null, null, stopping ? "SERVICE_STOPPING" : "ENTRY_ABORTED");
+            return;
+        }
         runResults.finish(instance, AbyssRunResultAccess.Outcome.CANCELLED, stopping ? "SERVICE_STOPPING" : "INSTANCE_DESTROYED");
         SettlementSession settlement=settlements.remove(instance.getInstanceId());
         if(settlement!=null && settlement.timer!=null)settlement.timer.cancel();
@@ -2787,7 +2792,8 @@ public final class AbyssService {
         }
         if (op != null) {
             if (charge != null) op.nativeCosts.putAll(charge.memberCosts());
-            op.outcomes.replaceAll((id, state) -> state.equals("ARRIVED") ? "RETURN_PENDING" : state);
+            op.outcomes.replaceAll((id, state) -> state.equals("ARRIVED") ? "RETURN_PENDING"
+                : state.equals("PENDING") ? "NOT_TRANSFERRED" : state);
             review |= op.outcomes.containsValue("RETURN_PENDING");
             op.phase = review ? Phase.REVIEW_REQUIRED : Phase.COMPENSATED;
             op.reason = reason;

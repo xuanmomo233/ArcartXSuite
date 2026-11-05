@@ -208,6 +208,7 @@ public final class RequirementChecker {
             memberCosts.replaceAll((id, state) -> state.equals("NATIVE_DEBITED") ? "NATIVE_COMPENSATED" : state);
             if(failure!=null)throw failure;
         };
+        java.util.UUID uncertainDebit = null;
         try {
             java.util.Map<Player,org.bukkit.inventory.ItemStack[]> plans = new java.util.LinkedHashMap<>();
             java.util.Map<Player,org.bukkit.inventory.ItemStack[]> originals = new java.util.LinkedHashMap<>();
@@ -223,8 +224,12 @@ public final class RequirementChecker {
             for (Player p : members) {
                 if (r.moneyCost()>0) {
                     var bridge=currencyManager.bridge(r.currencyId());
-                    if (bridge==null || !bridge.available() || !bridge.withdraw(p,BigDecimal.valueOf(r.moneyCost())).success())
+                    if (bridge==null || !bridge.available())
                         throw new IllegalStateException("门票扣款失败: "+p.getName());
+                    uncertainDebit = p.getUniqueId();
+                    boolean withdrawn = bridge.withdraw(p,BigDecimal.valueOf(r.moneyCost())).success();
+                    uncertainDebit = null;
+                    if (!withdrawn) throw new IllegalStateException("门票扣款失败: "+p.getName());
                     String key="entry-refund:"+java.util.UUID.randomUUID();
                     undo.add(new Undo(p.getUniqueId(), () -> { if(!rewards.refundMoney(p,r.moneyCost(),r.currencyId(),key))
                         throw new IllegalStateException("门票退款未完成: "+p.getName()); }));
@@ -255,6 +260,7 @@ public final class RequirementChecker {
             charge.memberCosts = memberCosts;
             return charge;
         } catch (RuntimeException failure) {
+            if (uncertainDebit != null) memberCosts.put(uncertainDebit, "NATIVE_REVIEW_REQUIRED");
             try { rollback.run(); } catch(RuntimeException refund) {
                 failure.addSuppressed(refund);
                 var uncertain = new Charge(false,failure.getMessage()+"；退款需核对: "+refund.getMessage(),()->{},()->{});
@@ -264,6 +270,7 @@ public final class RequirementChecker {
             }
             var rejected = new Charge(false,failure.getMessage(),()->{},()->{});
             rejected.memberCosts = memberCosts;
+            rejected.reviewRequired = uncertainDebit != null;
             return rejected;
         }
     }

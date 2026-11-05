@@ -80,7 +80,7 @@ public interface AbyssAdmissionAccess {
     List<Run> activeRuns();
     Preflight preflight(Intent intent);
     Entry requestEntry(Intent intent, UUID token);
-    /** Returns null for an unknown request. */
+    /** Returns the cached state, or null while a cold lookup is pending. Use lookupEntry for a durable read. */
     Entry entryStatus(String owner, UUID requestId);
     /** Reads through to the active or archived durable journal. Call on the server thread. */
     java.util.concurrent.CompletableFuture<Entry> lookupEntry(String owner, UUID requestId);
@@ -88,7 +88,7 @@ public interface AbyssAdmissionAccess {
     java.util.concurrent.CompletableFuture<Boolean> archiveEntry(String owner, UUID requestId);
     /** Reads the receipt and queries the cost authority without performing a debit or refund. */
     java.util.concurrent.CompletionStage<Review> reviewEntry(String owner, UUID requestId);
-    /** Lists persisted review-required requests by request ID. A null cursor starts at the beginning. */
+    /** Lists review candidates by request ID, including unconfirmed receipts. Never treats a candidate as proof of failure. */
     java.util.concurrent.CompletableFuture<List<ReviewItem>> reviewQueue(String owner, UUID afterRequestId, int limit);
     /** Cancels only before teleport begins; otherwise returns the existing state. */
     Entry cancelEntry(String owner, UUID requestId);

@@ -299,7 +299,10 @@ public final class JdbcAbyssRepository extends AbstractModuleRepository {
         var requests = new ArrayList<UUID>();
         try (Connection c = getConnection(); PreparedStatement ps = c.prepareStatement(
                 "SELECT request_id FROM " + tAdmission
-                + " WHERE owner=? AND request_id>? AND snapshot LIKE 'phase: REVIEW_REQUIRED%' ORDER BY request_id LIMIT ?")) {
+                + " WHERE owner=? AND request_id>? AND (snapshot LIKE 'phase: REVIEW_REQUIRED%'"
+                + " OR snapshot LIKE 'phase: PREPARING%' OR snapshot LIKE 'phase: TELEPORTING%'"
+                + " OR snapshot LIKE 'phase: RESERVING_COST%' OR snapshot LIKE 'phase: COMMITTING_COST%'"
+                + " OR snapshot LIKE 'phase: COMPENSATING_COST%') ORDER BY request_id LIMIT ?")) {
             ps.setString(1, owner); ps.setString(2, after == null ? "" : after.toString()); ps.setInt(3, limit);
             try (ResultSet rows = ps.executeQuery()) {
                 while (rows.next()) requests.add(UUID.fromString(rows.getString(1)));

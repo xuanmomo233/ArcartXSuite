@@ -51,6 +51,7 @@ final class AdmissionAccess implements AbyssAdmissionAccess {
         long policyRevision;
         String fingerprint;
         boolean persisted;
+        boolean restored;
         boolean costUncertain;
         String costOwner;
         UUID costId;
@@ -89,6 +90,7 @@ final class AdmissionAccess implements AbyssAdmissionAccess {
             var op = new Operation(new Intent(receipt.owner(), id, null, List.of(), null, null, null, null));
             op.fingerprint = receipt.fingerprint();
             op.persisted = true;
+            op.restored = true;
             op.phase = Phase.valueOf(yaml.getString("phase"));
             op.reason = yaml.getString("reason");
             if (yaml.isString("run")) op.runId = UUID.fromString(yaml.getString("run"));
@@ -106,8 +108,10 @@ final class AdmissionAccess implements AbyssAdmissionAccess {
                 op.nativeCosts.put(UUID.fromString(member), costs.getString(member));
             if (op.phase == Phase.PREPARING || op.phase == Phase.TELEPORTING
                 || op.phase == Phase.RESERVING_COST || op.phase == Phase.COMMITTING_COST || op.phase == Phase.COMPENSATING_COST) {
+                if (op.phase == Phase.TELEPORTING || op.phase == Phase.COMPENSATING_COST)
+                    op.nativeCosts.replaceAll((player, state) -> "NATIVE_UNKNOWN");
                 op.phase = Phase.REVIEW_REQUIRED;
-                op.reason = "INTERRUPTED_ADMISSION";
+                op.reason = "ADMISSION_STATE_UNCONFIRMED";
                 if (op.costId != null) op.costState = State.UNKNOWN;
             }
             op.storedSnapshot = op.snapshot();
@@ -337,7 +341,7 @@ final class AdmissionAccess implements AbyssAdmissionAccess {
         requireMain();
         var key = new Key(owner, requestId);
         var cached = journal.get(key);
-        return cached != null && (!cached.persisted || !cached.outcomes.containsValue("RETURN_PENDING"))
+        return cached != null && !cached.restored && (!cached.persisted || !cached.outcomes.containsValue("RETURN_PENDING"))
             ? java.util.concurrent.CompletableFuture.completedFuture(cached.snapshot())
             : read(key).thenApply(entry -> entry == null ? null : entry.snapshot());
     }
@@ -386,11 +390,17 @@ final class AdmissionAccess implements AbyssAdmissionAccess {
     @Override public java.util.concurrent.CompletableFuture<List<ReviewItem>> reviewQueue(String owner, UUID after, int limit) {
         requireMain();
         if (storage == null) return java.util.concurrent.CompletableFuture.failedFuture(new IllegalStateException("Abyss journal unavailable"));
+        var activeKeys = journal.entrySet().stream().filter(entry -> !entry.getValue().restored
+            && entry.getValue().phase != Phase.REVIEW_REQUIRED && !archivable(entry.getValue()))
+            .map(Map.Entry::getKey).collect(java.util.stream.Collectors.toUnmodifiableSet());
         return storage.submitDatabase(() -> {
             var results = new ArrayList<ReviewItem>();
-            for (UUID request : repository.admissionReviewIds(owner, after, Math.min(100, Math.max(1, limit)))) {
+            int pageSize = Math.min(100, Math.max(1, limit));
+            for (UUID request : repository.admissionReviewIds(owner, after, pageSize + activeKeys.size())) {
+                if (activeKeys.contains(new Key(owner, request))) continue;
                 var entry = loadEntry(new Key(owner, request));
                 if (entry != null && entry.phase == Phase.REVIEW_REQUIRED) results.add(new ReviewItem(request, entry.snapshot()));
+                if (results.size() >= pageSize) break;
             }
             return List.copyOf(results);
         });
