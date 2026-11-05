@@ -24,6 +24,9 @@ public interface WarehouseAutoDepositable {
      */
     @NotNull DepositResult depositToPersonalWarehouse(@NotNull Player player, @NotNull ItemStack itemStack);
 
+    /** 自动入库成功后是否需要聊天提示；HUD 提示由 Pickup 的个人开关控制。 */
+    default boolean shouldNotifyAutoDeposit(@NotNull Player player) { return true; }
+
     /**
      * 自动入库结果。
      *

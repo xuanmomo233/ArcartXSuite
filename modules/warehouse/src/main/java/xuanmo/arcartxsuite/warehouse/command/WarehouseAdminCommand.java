@@ -127,7 +127,6 @@ public final class WarehouseAdminCommand implements ModuleCommandHandler {
         if (svc == null) { sender.sendMessage(fullMsg("common.service-down")); return; }
         sender.sendMessage(fullMsg("status.title"));
         sender.sendMessage(fullMsg("status.cached", svc.cachedPlayerCount()));
-        sender.sendMessage(fullMsg("status.dirty", svc.dirtyPlayerCount()));
         sender.sendMessage(fullMsg("status.currency", String.join(", ", svc.currencyIds())));
         sender.sendMessage(fullMsg("status.cross-server",
             svc.crossServerActive() ? messages.get("status.cross-server-enabled") : messages.get("status.cross-server-disabled")));

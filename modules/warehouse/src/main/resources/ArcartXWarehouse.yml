@@ -1,4 +1,4 @@
-config-version: 5
+config-version: 6
 # AXS Warehouse AXUI
 # 作用: AXUI 驱动个人仓库、共享仓库、NBT 分类、银行、多利率定期存款和二级密码。
 # 重载: /axs warehouse reload
@@ -7,7 +7,6 @@ config-version: 5
 
 settings:
   debug: false  # 是否输出调试日志
-  flush-interval-ticks: 100  # 数据落库间隔（ticks，20 = 1 秒）
   # 共享仓库转让确认等待时长（小时），<=0 表示永不过期。
   transfer-confirm-expire-hours: 24
   # 存入前往返校验级别：off / meta / all。
@@ -320,15 +319,13 @@ sort-profiles:
       - "updated:desc"  # 再按更新时间降序
 
 # ─── 展示柜（Showcase）配置 ────────────────────────────────────────
-# 允许玩家将仓库中的物品展示到聊天卡片，供其他玩家查看。
+# 允许玩家向全服发送公开仓库的预览链接，其他玩家可只读翻阅。
 showcase:
   # 是否启用展示柜功能。
   enabled: true
   # 每次发送展示卡片后的冷却时间（秒），最短 5 秒。
   cooldown-seconds: 60
-  # 单次展示卡片中最多显示的物品数量，最少 1 个。
-  max-items: 9
-  # 展示卡片使用的 ArcartX 卡片 ID（EventPacket/Chat 卡片），留空则使用模块内置默认卡片。
+  # ArcartX 卡片 ID；可用 player_name 与 preview_command，留空发送可点击聊天链接。
   card-id: ""
   # 使用展示柜功能所需的权限节点。
   permission: "arcartxsuite.warehouse.showcase"
@@ -365,8 +362,3 @@ blacklist:
   lore-regex: []
   # 只要物品 PDC 或原始 NMS NBT 复合标签中存在任意一个 key 即禁止存入，原始 NBT 会递归检查嵌套 compound/list，只判断 key 存在不比较 value；反射读取失败时安全降级为无原始 NBT 匹配。
   nbt-keys: []
-
-# ─── 额外槽位背包（Extra Backpack）────────────────────────────────────────
-# 可选功能，默认关闭。启用后由本模块接管玩家原版背包的 27 个存储格（快捷栏 9 格不受影响）。
-# 背包由多个分类页组成（装备/材料/杂物…），每个分类页独立设置容量、上限与付费扩容价格；
-# 物品分类由 warehouse 模块自行按 NBT/lore 判断，无需服主在 ArcartX 中配置槽位。

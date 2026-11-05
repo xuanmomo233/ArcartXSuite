@@ -28,6 +28,66 @@ import xuanmo.arcartxsuite.api.storage.StorageDescriptor;
  */
 public final class JdbcWarehouseRepository extends AbstractModuleRepository implements WarehouseRepository {
 
+    @Override
+    public boolean applySlotChanges(List<SlotChange> changes) throws SQLException {
+        try (Connection connection = getConnection()) {
+            boolean autoCommit = connection.getAutoCommit();
+            connection.setAutoCommit(false);
+            try {
+                for (SlotChange change : changes) {
+                    SlotItemRecord before = change.before();
+                    SlotItemRecord after = change.after();
+                    if (before == null) {
+                        try (PreparedStatement statement = connection.prepareStatement(
+                            "INSERT INTO warehouse_slots (owner_type,owner_id,warehouse_id,slot,item_hash,category_id,display_name,material_id,search_text,pinyin,initials,item_data,item_json,amount,created_at,updated_at,lore_text) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")) {
+                            bindSlot(statement, after);
+                            statement.executeUpdate();
+                        }
+                    } else {
+                        boolean delete = after == null;
+                        try (PreparedStatement statement = connection.prepareStatement(delete
+                            ? "DELETE FROM warehouse_slots WHERE owner_type=? AND owner_id=? AND warehouse_id=? AND slot=? AND item_hash=? AND amount=?"
+                            : "UPDATE warehouse_slots SET amount=?,updated_at=? WHERE owner_type=? AND owner_id=? AND warehouse_id=? AND slot=? AND item_hash=? AND amount=?")) {
+                            int i = 1;
+                            if (!delete) { statement.setLong(i++, after.amount()); statement.setLong(i++, after.updatedAt()); }
+                            statement.setString(i++, before.ownerType());
+                            statement.setString(i++, before.ownerId());
+                            statement.setString(i++, before.warehouseId());
+                            statement.setInt(i++, before.slot());
+                            statement.setString(i++, before.itemHash());
+                            statement.setLong(i, before.amount());
+                            if (statement.executeUpdate() != 1) {
+                                connection.rollback();
+                                return false;
+                            }
+                        }
+                    }
+                }
+                connection.commit();
+                return true;
+            } catch (SQLException | RuntimeException exception) {
+                try { connection.rollback(); } catch (SQLException rollback) { exception.addSuppressed(rollback); }
+                throw exception;
+            } finally {
+                connection.setAutoCommit(autoCommit);
+            }
+        }
+    }
+
+    private static void bindSlot(PreparedStatement statement, SlotItemRecord item) throws SQLException {
+        if (item == null || item.itemData() == null || item.itemData().isBlank() || item.amount() <= 0)
+            throw new IllegalArgumentException("新槽位必须包含完整物品数据与正数量");
+        statement.setString(1, item.ownerType()); statement.setString(2, item.ownerId());
+        statement.setString(3, item.warehouseId()); statement.setInt(4, item.slot());
+        statement.setString(5, item.itemHash()); statement.setString(6, item.categoryId());
+        statement.setString(7, item.displayName()); statement.setString(8, item.materialId());
+        statement.setString(9, item.searchText()); statement.setString(10, item.pinyin());
+        statement.setString(11, item.initials()); statement.setString(12, item.itemData());
+        statement.setString(13, item.itemJson()); statement.setLong(14, item.amount());
+        statement.setLong(15, item.createdAt()); statement.setLong(16, item.updatedAt());
+        statement.setString(17, item.loreText());
+    }
+
     public JdbcWarehouseRepository(DataSource dataSource, StorageDescriptor descriptor,
                                    File dataFolder, Logger logger) {
         super("AXS-Warehouse", dataSource, descriptor, dataFolder, logger);
@@ -50,7 +110,45 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
      */
     @Override
     protected List<String> playerDataTables() {
-        return List.of("warehouse_personal", "warehouse_bank_balances", "warehouse_fixed_deposits", "warehouse_shared_members");
+        return allTables();
+    }
+
+    @Override
+    protected int onPurgePlayerData(UUID playerUuid) throws SQLException {
+        List<String> statements = List.of(
+            "DELETE FROM warehouse_slots WHERE owner_type='personal' AND owner_id=?",
+            "DELETE FROM warehouse_slots WHERE owner_type='shared' AND owner_id IN (SELECT id FROM warehouse_shared WHERE owner_uuid=?)",
+            "DELETE FROM warehouse_shared_members WHERE shared_id IN (SELECT id FROM warehouse_shared WHERE owner_uuid=?)",
+            "DELETE FROM warehouse_shared_members WHERE player_uuid=?",
+            "DELETE FROM warehouse_pending_transfers WHERE shared_id IN (SELECT id FROM warehouse_shared WHERE owner_uuid=?)",
+            "DELETE FROM warehouse_pending_transfers WHERE from_owner_uuid=?",
+            "DELETE FROM warehouse_pending_transfers WHERE to_uuid=?",
+            "DELETE FROM warehouse_shared WHERE owner_uuid=?",
+            "DELETE FROM warehouse_personal WHERE player_uuid=?",
+            "DELETE FROM warehouse_bank_balances WHERE player_uuid=?",
+            "DELETE FROM warehouse_fixed_deposits WHERE player_uuid=?",
+            "DELETE FROM warehouse_player_settings WHERE player_uuid=?"
+        );
+        try (Connection connection = getConnection()) {
+            boolean autoCommit = connection.getAutoCommit();
+            connection.setAutoCommit(false);
+            try {
+                int total = 0;
+                for (String sql : statements) {
+                    try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                        statement.setString(1, playerUuid.toString());
+                        total += statement.executeUpdate();
+                    }
+                }
+                connection.commit();
+                return total;
+            } catch (SQLException exception) {
+                connection.rollback();
+                throw exception;
+            } finally {
+                connection.setAutoCommit(autoCommit);
+            }
+        }
     }
 
     /**
@@ -65,7 +163,8 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
             "warehouse_fixed_deposits",
             "warehouse_shared",
             "warehouse_shared_members",
-            "warehouse_pending_transfers"
+            "warehouse_pending_transfers",
+            "warehouse_player_settings"
         );
     }
 
@@ -600,6 +699,8 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
      */
     @Override
     public Optional<BigDecimal> claimFixedDepositAtomic(String depositId, UUID playerUuid, long now) throws SQLException {
+        // SQLite 不支持 FOR UPDATE，且单连接池不能持有连接再进入备用方法申请第二条连接。
+        if (!isMysql()) return claimFixedDepositAtomicWithoutForUpdate(depositId, playerUuid, now);
         try (Connection connection = getConnection()) {
             connection.setAutoCommit(false);
             try {
@@ -629,9 +730,7 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
                         );
                     }
                 } catch (SQLException forUpdateUnsupported) {
-                    // SQLite 等不支持 FOR UPDATE：降级为条件 UPDATE
-                    connection.rollback();
-                    return claimFixedDepositAtomicWithoutForUpdate(depositId, playerUuid, now);
+                    throw forUpdateUnsupported;
                 }
 
                 BigDecimal payout = deposit.principal()
@@ -907,16 +1006,18 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
      * @throws SQLException 更新失败时抛出
      */
     @Override
-    public void updateSharedWarehouseLevel(String sharedId, int level, long capacity, long updatedAt) throws SQLException {
+    public void updateSharedWarehouseLevel(String sharedId, UUID ownerUuid, int expectedLevel, int level, long capacity, long updatedAt) throws SQLException {
         try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(
-                 "UPDATE warehouse_shared SET level = ?, capacity = ?, updated_at = ? WHERE id = ?"
+                 "UPDATE warehouse_shared SET level = ?, capacity = ?, updated_at = ? WHERE id = ? AND owner_uuid = ? AND level = ?"
              )) {
             statement.setInt(1, level);
             statement.setLong(2, capacity);
             statement.setLong(3, updatedAt);
             statement.setString(4, sharedId);
-            statement.executeUpdate();
+            statement.setString(5, ownerUuid.toString());
+            statement.setInt(6, expectedLevel);
+            if (statement.executeUpdate() != 1) throw new SQLException("共享仓库所有权或等级已变化");
         }
     }
 
@@ -929,15 +1030,16 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
      * @throws SQLException 更新失败时抛出
      */
     @Override
-    public void updateSharedWarehouseName(String sharedId, String name, long updatedAt) throws SQLException {
+    public void updateSharedWarehouseName(String sharedId, UUID ownerUuid, String name, long updatedAt) throws SQLException {
         try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(
-                 "UPDATE warehouse_shared SET name = ?, updated_at = ? WHERE id = ?"
+                 "UPDATE warehouse_shared SET name = ?, updated_at = ? WHERE id = ? AND owner_uuid = ?"
              )) {
             statement.setString(1, name);
             statement.setLong(2, updatedAt);
             statement.setString(3, sharedId);
-            statement.executeUpdate();
+            statement.setString(4, ownerUuid.toString());
+            if (statement.executeUpdate() != 1) throw new SQLException("共享仓库所有权已变化");
         }
     }
 
@@ -950,15 +1052,16 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
      * @throws SQLException 更新失败时抛出
      */
     @Override
-    public void updateSharedWarehouseShowcase(String sharedId, boolean showcaseEnabled, long updatedAt) throws SQLException {
+    public void updateSharedWarehouseShowcase(String sharedId, UUID ownerUuid, boolean showcaseEnabled, long updatedAt) throws SQLException {
         try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(
-                 "UPDATE warehouse_shared SET showcase_enabled = ?, updated_at = ? WHERE id = ?"
+                 "UPDATE warehouse_shared SET showcase_enabled = ?, updated_at = ? WHERE id = ? AND owner_uuid = ?"
              )) {
             statement.setBoolean(1, showcaseEnabled);
             statement.setLong(2, updatedAt);
             statement.setString(3, sharedId);
-            statement.executeUpdate();
+            statement.setString(4, ownerUuid.toString());
+            if (statement.executeUpdate() != 1) throw new SQLException("共享仓库所有权已变化");
         }
     }
 
@@ -1058,28 +1161,28 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
                      "UPDATE warehouse_shared SET owner_uuid = ?, updated_at = ? WHERE id = ? AND owner_uuid = ?"
                  );
                  PreparedStatement oldOwner = connection.prepareStatement(
-                     "UPDATE warehouse_shared_members SET role = ?, updated_at = ? WHERE shared_id = ? AND player_uuid = ?"
+                     "UPDATE warehouse_shared_members SET role = ?, updated_at = ? WHERE shared_id = ? AND player_uuid = ? AND role = 'owner'"
                  );
                  PreparedStatement newOwner = connection.prepareStatement(
-                     "UPDATE warehouse_shared_members SET role = ?, updated_at = ? WHERE shared_id = ? AND player_uuid = ?"
+                     "UPDATE warehouse_shared_members SET role = ?, updated_at = ? WHERE shared_id = ? AND player_uuid = ? AND role = 'member'"
                  )) {
                 shared.setString(1, newOwnerUuid.toString());
                 shared.setLong(2, updatedAt);
                 shared.setString(3, sharedId);
                 shared.setString(4, previousOwnerUuid.toString());
-                shared.executeUpdate();
+                if (shared.executeUpdate() != 1) throw new SQLException("共享仓库所有权已变化，转让已取消");
 
                 oldOwner.setString(1, "member");
                 oldOwner.setLong(2, updatedAt);
                 oldOwner.setString(3, sharedId);
                 oldOwner.setString(4, previousOwnerUuid.toString());
-                oldOwner.executeUpdate();
+                if (oldOwner.executeUpdate() != 1) throw new SQLException("原所有者成员记录已变化，转让已取消");
 
                 newOwner.setString(1, "owner");
                 newOwner.setLong(2, updatedAt);
                 newOwner.setString(3, sharedId);
                 newOwner.setString(4, newOwnerUuid.toString());
-                newOwner.executeUpdate();
+                if (newOwner.executeUpdate() != 1) throw new SQLException("接收者不再是成员，转让已取消");
                 connection.commit();
             } catch (SQLException exception) {
                 connection.rollback();
@@ -1192,14 +1295,14 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
      * @throws SQLException 事务执行失败时抛出
      */
     @Override
-    public void deleteSharedWarehouse(String sharedId) throws SQLException {
+    public void deleteSharedWarehouse(String sharedId, UUID ownerUuid) throws SQLException {
         try (Connection connection = getConnection()) {
             boolean previousAutoCommit = connection.getAutoCommit();
             connection.setAutoCommit(false);
             try (PreparedStatement slots = connection.prepareStatement("DELETE FROM warehouse_slots WHERE owner_type = 'shared' AND owner_id = ?");
                  PreparedStatement members = connection.prepareStatement("DELETE FROM warehouse_shared_members WHERE shared_id = ?");
                  PreparedStatement pending = connection.prepareStatement("DELETE FROM warehouse_pending_transfers WHERE shared_id = ?");
-                 PreparedStatement shared = connection.prepareStatement("DELETE FROM warehouse_shared WHERE id = ?")) {
+                 PreparedStatement shared = connection.prepareStatement("DELETE FROM warehouse_shared WHERE id = ? AND owner_uuid = ?")) {
                 slots.setString(1, sharedId);
                 slots.executeUpdate();
                 members.setString(1, sharedId);
@@ -1207,7 +1310,8 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
                 pending.setString(1, sharedId);
                 pending.executeUpdate();
                 shared.setString(1, sharedId);
-                shared.executeUpdate();
+                shared.setString(2, ownerUuid.toString());
+                if (shared.executeUpdate() != 1) throw new SQLException("共享仓库所有权已变化，删除已取消");
                 connection.commit();
             } catch (SQLException exception) {
                 connection.rollback();
@@ -1393,15 +1497,25 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
      * @throws SQLException 写入失败时抛出
      */
     @Override
-    public void upsertSharedMember(String sharedId, UUID playerUuid, String role, long updatedAt) throws SQLException {
-        try (Connection connection = getConnection();
-             PreparedStatement statement = connection.prepareStatement(upsertSql("warehouse_shared_members", List.of("shared_id", "player_uuid"), List.of("role", "updated_at")))) {
+    public void upsertSharedMember(String sharedId, UUID ownerUuid, UUID playerUuid, String role, int maxMembers, long updatedAt) throws SQLException {
+        if (ownerUuid.equals(playerUuid) || !("member".equals(role) || "viewer".equals(role))) throw new SQLException("不可修改所有者角色");
+        withSharedOwner(sharedId, ownerUuid, connection -> {
+            try (PreparedStatement count = connection.prepareStatement(
+                "SELECT COUNT(*) AS total, SUM(CASE WHEN player_uuid=? THEN 1 ELSE 0 END) AS existing FROM warehouse_shared_members WHERE shared_id=?")) {
+                count.setString(1, playerUuid.toString()); count.setString(2, sharedId);
+                try (ResultSet rows = count.executeQuery()) {
+                    if (rows.next() && rows.getInt("existing") == 0 && rows.getInt("total") >= maxMembers)
+                        throw new SQLException("共享仓库成员数量已达上限");
+                }
+            }
+            try (PreparedStatement statement = connection.prepareStatement(upsertSql("warehouse_shared_members", List.of("shared_id", "player_uuid"), List.of("role", "updated_at")))) {
             statement.setString(1, sharedId);
             statement.setString(2, playerUuid.toString());
             statement.setString(3, role);
             statement.setLong(4, updatedAt);
             statement.executeUpdate();
-        }
+            }
+        });
     }
 
     /**
@@ -1412,14 +1526,41 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
      * @throws SQLException 删除失败时抛出
      */
     @Override
-    public void removeSharedMember(String sharedId, UUID playerUuid) throws SQLException {
-        try (Connection connection = getConnection();
-             PreparedStatement statement = connection.prepareStatement(
+    public void removeSharedMember(String sharedId, UUID ownerUuid, UUID playerUuid) throws SQLException {
+        withSharedOwner(sharedId, ownerUuid, connection -> {
+            try (PreparedStatement statement = connection.prepareStatement(
                  "DELETE FROM warehouse_shared_members WHERE shared_id = ? AND player_uuid = ? AND role <> 'owner'"
              )) {
             statement.setString(1, sharedId);
             statement.setString(2, playerUuid.toString());
-            statement.executeUpdate();
+            if (statement.executeUpdate() != 1) throw new SQLException("目标不再是可移除的成员");
+            }
+        });
+    }
+
+    @FunctionalInterface
+    private interface SharedMutation { void apply(Connection connection) throws SQLException; }
+
+    private void withSharedOwner(String sharedId, UUID ownerUuid, SharedMutation mutation) throws SQLException {
+        try (Connection connection = getConnection()) {
+            boolean autoCommit = connection.getAutoCommit();
+            connection.setAutoCommit(false);
+            try {
+                String sql = "SELECT owner_uuid FROM warehouse_shared WHERE id=?" + (isMysql() ? " FOR UPDATE" : "");
+                try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                    statement.setString(1, sharedId);
+                    try (ResultSet rows = statement.executeQuery()) {
+                        if (!rows.next() || !ownerUuid.toString().equals(rows.getString(1))) throw new SQLException("共享仓库所有权已变化");
+                    }
+                }
+                mutation.apply(connection);
+                connection.commit();
+            } catch (SQLException | RuntimeException exception) {
+                connection.rollback();
+                throw exception;
+            } finally {
+                connection.setAutoCommit(autoCommit);
+            }
         }
     }
 

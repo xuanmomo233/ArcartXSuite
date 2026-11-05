@@ -112,6 +112,7 @@ ui:
       var.autoPickupMythic = packet['autoPickupMythic']
       var.autoPickupNotify = packet['autoPickupNotify']
       var.serverAutoPickup = packet['serverAutoPickup']
+      var.pickupScannerActive = packet['pickupScannerActive']
       var.serverMythicLoot = packet['serverMythicLoot']
       var.showcaseEnabled = packet['showcaseEnabled']
       var.maxManageCount = packet['maxManageCount']
@@ -718,8 +719,8 @@ controls:
                   point: ~top_left
                   x: 20
                   y: 64
-                  texts: "~&f自动拾取"
-                  fontSize: 36
+                  texts: "var.pickupScannerActive ? '&f自动入库 · 扫描拾取模式' : '&f自动入库 · 自动拾取模式'"
+                  fontSize: 28
               拾取关闭提示:
                 type: Text
                 attribute:

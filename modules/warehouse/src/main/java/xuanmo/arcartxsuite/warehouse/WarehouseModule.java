@@ -72,7 +72,7 @@ public final class WarehouseModule extends AbstractAXSModule implements ModuleCo
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("warehouse")
             .name("Warehouse")
-            .version("1.5.0")
+            .version("1.5.1")
             .mainClass(getClass().getName())
             .build();
     }
@@ -93,12 +93,14 @@ public final class WarehouseModule extends AbstractAXSModule implements ModuleCo
                     .obsoletePath("pickup.extra-backpack-fallback")
                     // 已废弃：二级密码策略全部统一到宿主 config.yml 的 security.secondary-password 节
                     .obsoletePath("security")
+                    .obsoletePath("settings.flush-interval-ticks")
+                    .obsoletePath("showcase.max-items")
                     // 已废弃：等级制容量体系与一次性迁移标记，逐格解锁已全面取代
                     .obsoletePath("migration")
                     .obsoletePath("warehouses.personal.default-level")
                     .obsoletePath("warehouses.personal.levels")
                 .build())
-            .currentVersion(5)
+            .currentVersion(6)
             .validations(List.of(
                     // storage.shared 必须是布尔值
                     ValidationRule.required("storage.shared", ValueType.BOOLEAN),
@@ -108,19 +110,11 @@ public final class WarehouseModule extends AbstractAXSModule implements ModuleCo
                     // pool-size 范围 1-100（仅在 shared: false 时生效）
                     ValidationRule.of("storage.pool-size", ValueType.INT)
                         .withRange(1, 100),
-                    // flush-interval-ticks 必须为正
-                    ValidationRule.of("settings.flush-interval-ticks", ValueType.INT)
-                        .withRange(1, null),
                     // 存入往返校验级别枚举串
                     ValidationRule.of("settings.verify-on-deposit", ValueType.STRING),
                     // 物品序列化字节上限，0 = 不限制
                     ValidationRule.of("settings.max-item-bytes", ValueType.INT)
-                        .withRange(0, null),
-                    // 二级密码长度限制
-                    ValidationRule.required("security.min-length", ValueType.INT)
-                        .withRange(1, 32),
-                    ValidationRule.required("security.max-length", ValueType.INT)
-                        .withRange(4, 64)
+                        .withRange(0, null)
             ))
             .build();
     }
@@ -214,21 +208,36 @@ public final class WarehouseModule extends AbstractAXSModule implements ModuleCo
 
         adminCommand = new WarehouseAdminCommand(() -> service, messages());
 
-        registerCapability(WarehouseAutoDepositable.class,
-            (player, itemStack) -> service.depositToPersonalWarehouse(player, itemStack));
+        registerCapability(WarehouseAutoDepositable.class, new WarehouseAutoDepositable() {
+            @Override public DepositResult depositToPersonalWarehouse(org.bukkit.entity.Player player, org.bukkit.inventory.ItemStack stack) {
+                return service.depositToPersonalWarehouse(player, stack);
+            }
+            @Override public boolean shouldNotifyAutoDeposit(org.bukkit.entity.Player player) {
+                return service.shouldNotifyAutoDeposit(player);
+            }
+        });
 
         // 个人仓库直接访问能力：扩展背包等模块经此读写同一套仓库存储
         registerCapability(xuanmo.arcartxsuite.api.capability.WarehouseAccess.class, service);
 
+        WarehouseService registeredService = service;
         registerCapability(xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable.class,
             new xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable() {
                 @Override public @NotNull String moduleId() { return "warehouse"; }
                 @Override public int purgePlayerData(@NotNull java.util.UUID playerUuid) {
-                    try { return warehouseRepo.deletePlayerData(playerUuid); }
+                    try {
+                        int changed = warehouseRepo.deletePlayerData(playerUuid);
+                        registeredService.invalidatePlayerData(playerUuid);
+                        return changed;
+                    }
                     catch (Exception e) { logger.warning("Warehouse purge 失败: " + e.getMessage()); return -1; }
                 }
                 @Override public int purgeAllPlayerData() {
-                    try { return warehouseRepo.deleteAllPlayerData(); }
+                    try {
+                        int changed = warehouseRepo.deleteAllPlayerData();
+                        registeredService.invalidatePlayerData(null);
+                        return changed;
+                    }
                     catch (Exception e) { logger.warning("Warehouse purgeAll 失败: " + e.getMessage()); return -1; }
                 }
             });

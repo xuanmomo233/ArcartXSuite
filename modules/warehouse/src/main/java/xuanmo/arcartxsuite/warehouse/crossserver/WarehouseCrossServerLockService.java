@@ -22,6 +22,7 @@ public final class WarehouseCrossServerLockService {
     private final BiConsumer<WarehouseCrossServerPayloadCodec.UnlockPayload, Void> remoteUnlockHandler;
 
     private CrossServerChannel channel;
+    private volatile boolean active;
 
     public WarehouseCrossServerLockService(
         JavaPlugin plugin,
@@ -40,6 +41,7 @@ public final class WarehouseCrossServerLockService {
     }
 
     public void start() {
+        active = true;
         if (!channelConfig.enabled()) {
             return;
         }
@@ -54,6 +56,7 @@ public final class WarehouseCrossServerLockService {
     }
 
     public void shutdown() {
+        active = false;
         if (channel != null) {
             channel.close();
             channel = null;
@@ -88,6 +91,8 @@ public final class WarehouseCrossServerLockService {
         }
         try {
             WarehouseCrossServerPayloadCodec.DecodedPayload decoded = WarehouseCrossServerPayloadCodec.decode(payload);
+            Runnable apply = () -> {
+            if (!active) return;
             if (WarehouseCrossServerPayloadCodec.TYPE_LOCK.equals(decoded.type())) {
                 if (decoded.lock() != null && decoded.sharedId() != null) {
                     remoteLockHandler.accept(decoded.sharedId(), decoded.lock());
@@ -96,6 +101,9 @@ public final class WarehouseCrossServerLockService {
                 && decoded.unlock() != null) {
                 remoteUnlockHandler.accept(decoded.unlock(), null);
             }
+            };
+            if (org.bukkit.Bukkit.isPrimaryThread()) apply.run();
+            else org.bukkit.Bukkit.getScheduler().runTask(plugin, apply);
         } catch (IllegalArgumentException ignored) {
         }
     }

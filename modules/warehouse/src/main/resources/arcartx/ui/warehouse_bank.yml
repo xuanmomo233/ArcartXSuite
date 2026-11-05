@@ -1308,7 +1308,7 @@ controls:
                       y: -24
                       width: "var.col3W - 48"
                       height: 48
-                      enable: "!var.actionBusy && var.actionToken != '' && var.selectedProduct != none"
+                      enable: "!var.actionBusy && var.actionToken != '' && var.selectedProduct != none && var.selectedProductEntry != none"
                     action:
                       clickLeft: |-
                         var.actionBusy = true

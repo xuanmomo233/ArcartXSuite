@@ -126,11 +126,7 @@ public final class WarehousePlayerCommand implements org.bukkit.command.TabExecu
                 }
             }
             case "spreview" -> {
-                // 静默预览他人仓库与 preview 同级敏感——必须校验管理员权限
-                if (!player.hasPermission("arcartxsuite.warehouse.admin")) {
-                    player.sendMessage(fullMsg("player.no-permission"));
-                    return true;
-                }
+                // 展示链接只允许打开主人明确公开的仓库；管理员 preview 保持独立。
                 if (args.length < 2) {
                     return true;
                 }
@@ -154,7 +150,7 @@ public final class WarehousePlayerCommand implements org.bukkit.command.TabExecu
                     return true;
                 }
                 String warehouseId = args.length > 2 ? args[2] : "";
-                WarehouseService.ActionResult previewResult = service.openPreview(player, targetUuid, warehouseId);
+                WarehouseService.ActionResult previewResult = service.openShowcasePreview(player, targetUuid, warehouseId);
                 if (!previewResult.success()) {
                     player.sendMessage((messages != null ? messages.get("prefix") : "") + ChatColor.RED + previewResult.message());
                 }

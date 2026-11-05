@@ -1,6 +1,6 @@
 id: warehouse
 name: Warehouse
-version: 1.4.4
+version: 1.5.1
 main: xuanmo.arcartxsuite.warehouse.WarehouseModule
 api-version: 1.0
 

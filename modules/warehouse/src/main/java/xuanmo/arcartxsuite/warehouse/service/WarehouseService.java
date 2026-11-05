@@ -150,6 +150,9 @@ public final class WarehouseService implements Listener, WarehouseAccess {
     private final CrossServerChannelConfig crossServerChannelConfig;
     private WarehouseCrossServerLockService crossServerLockService;
     private Supplier<EventBusCapability> eventBusProvider;
+    private boolean active;
+    private org.bukkit.scheduler.BukkitTask recoveryTask;
+    private final Map<UUID, WarehouseRepository.PlayerSettingsRecord> pickupPreferences = new ConcurrentHashMap<>();
     /** 玩家上次展示仓库的时间戳（毫秒），用于冷却控制。 */
     private final ConcurrentMap<UUID, Long> showcaseCooldowns = new ConcurrentHashMap<>();
     /** 仓库级互斥锁：ownerType:ownerId:warehouseId → lock object，防止 deposit/withdraw 竞态。 */
@@ -276,6 +279,7 @@ public final class WarehouseService implements Listener, WarehouseAccess {
     public void start() throws Exception {
         repository.initialize();
         bindUis();
+        active = true;
         if (configuration.shared().enabled()
             && crossServerChannelConfig.enabled()
             && crossServerApi != null) {
@@ -292,7 +296,7 @@ public final class WarehouseService implements Listener, WarehouseAccess {
         Bukkit.getPluginManager().registerEvents(this, plugin);
         // 模块重载后，向所有 UI 仍开着的在线玩家重新签发 token 并推送 update 包，
         // 避免重载导致 token 丢失后玩家操作被静默丢弃。
-        Bukkit.getScheduler().runTaskLater(plugin, this::reissueTokensForOpenUis, 20L);
+        recoveryTask = Bukkit.getScheduler().runTaskLater(plugin, this::reissueTokensForOpenUis, 20L);
     }
 
     /**
@@ -303,7 +307,7 @@ public final class WarehouseService implements Listener, WarehouseAccess {
      * 使客户端 var.actionToken 与服务端同步。
      */
     private void reissueTokensForOpenUis() {
-        if (packetBridge == null) {
+        if (!active || packetBridge == null) {
             return;
         }
         for (org.bukkit.entity.Player player : Bukkit.getOnlinePlayers()) {
@@ -335,6 +339,9 @@ public final class WarehouseService implements Listener, WarehouseAccess {
      * 关闭服务：注销事件监听、清理 UI 回调与玩家状态、关闭数据库连接。
      */
     public void shutdown() {
+        active = false;
+        if (recoveryTask != null) recoveryTask.cancel();
+        for (UUID playerId : new HashSet<>(viewStates.keySet())) releaseSharedLocks(playerId);
         if (crossServerLockService != null) {
             crossServerLockService.shutdown();
             crossServerLockService = null;
@@ -356,15 +363,20 @@ public final class WarehouseService implements Listener, WarehouseAccess {
         }
         viewStates.clear();
         sharedEditLocks.clear();
+        storageActionTokens.clear();
+        manageActionTokens.clear();
+        bankActionTokens.clear();
+        actionTokensInFlight.clear();
+        actionTokenLocks.clear();
+        warehouseLocks.clear();
+        recategorizedRules.clear();
+        showcaseCooldowns.clear();
+        pickupPreferences.clear();
         repository.close();
     }
 
     public int cachedPlayerCount() {
         return viewStates.size();
-    }
-
-    public int dirtyPlayerCount() {
-        return 0;
     }
 
     public boolean mythicBridgeAvailable() {
@@ -428,6 +440,9 @@ public final class WarehouseService implements Listener, WarehouseAccess {
             return new WarehouseAutoDepositable.DepositResult(false, 0L, stack.getAmount(), "服务器已关闭战利品入库功能。");
         }
         try {
+            var settings = pickupSettings(player);
+            boolean allowed = itemSourceRegistry.isMythicItem(stack) ? settings.autoMythic() : settings.autoPickup();
+            if (!allowed) return new WarehouseAutoDepositable.DepositResult(false, 0L, stack.getAmount(), "玩家已关闭此类物品自动入库。");
             DepositResult result = depositStack(player, OWNER_PERSONAL, player.getUniqueId().toString(), packetFactory.firstPersonalWarehouseId(), stack);
             if (result.success()) {
                 publishDepositEvent(player, stack, result.storedAmount());
@@ -435,7 +450,7 @@ public final class WarehouseService implements Listener, WarehouseAccess {
             return new WarehouseAutoDepositable.DepositResult(
                 result.success(),
                 result.storedAmount(),
-                result.remainingAmount(),
+                result.success() ? result.remainingAmount() : stack.getAmount(),
                 result.message()
             );
         } catch (Exception exception) {
@@ -447,6 +462,7 @@ public final class WarehouseService implements Listener, WarehouseAccess {
     }
 
     private void publishDepositEvent(Player player, ItemStack stack, long storedAmount) {
+        try {
         if (eventBusProvider == null) return;
         EventBusCapability eventBus = eventBusProvider.get();
         if (eventBus == null) return;
@@ -454,6 +470,19 @@ public final class WarehouseService implements Listener, WarehouseAccess {
         payload.put("material", stack.getType().name());
         payload.put("amount", String.valueOf(storedAmount));
         eventBus.publish("axs.warehouse.item_deposited", player, payload);
+        } catch (RuntimeException exception) {
+            logger.warning("入库事件通知失败: " + exception.getMessage());
+        }
+    }
+
+    public boolean shouldNotifyAutoDeposit(Player player) {
+        try { return pickupSettings(player).autoNotify(); }
+        catch (java.sql.SQLException exception) { return false; }
+    }
+
+    boolean pickupIntercepted(Player player) {
+        PickupInterceptor interceptor = pickupInterceptorSupplier.get();
+        return interceptor != null && interceptor.isAutoPickupIntercepted(player.getUniqueId());
     }
 
     /**
@@ -499,19 +528,30 @@ public final class WarehouseService implements Listener, WarehouseAccess {
             return ActionResult.failure(message("player.ui-not-registered"));
         }
         try {
+            releaseCurrentSharedLock(viewer);
             String previewOwnerType = OWNER_PERSONAL;
             if (warehouseId != null && !warehouseId.isBlank() && !configuration.warehouses().containsKey(warehouseId)) {
                 previewOwnerType = OWNER_SHARED;
             }
             ViewState previewState = ViewState.preview(targetUuid, warehouseId, previewOwnerType, configuration.search().defaultSortId());
             viewStates.put(viewer.getUniqueId(), previewState);
-            if (packetBridge != null) {
-                packetBridge.openUi(viewer, storageRuntimeUiId);
-            }
             openStorage(viewer);
             return ActionResult.success(message("player.preview-opened"));
         } catch (Exception exception) {
             this.logger.warning("打开仓库预览失败: " + exception.getMessage());
+            return ActionResult.failure(message("player.preview-open-failed"));
+        }
+    }
+
+    public ActionResult openShowcasePreview(Player viewer, UUID targetUuid, String warehouseId) {
+        try {
+            boolean personal = personalWarehouseMap(targetUuid).values().stream()
+                .anyMatch(record -> record.warehouseId().equals(warehouseId) && record.showcaseEnabled());
+            boolean shared = repository.loadSharedWarehousesByOwner(targetUuid).stream()
+                .anyMatch(record -> record.id().equals(warehouseId) && record.showcaseEnabled());
+            if (!personal && !shared) return ActionResult.failure(message("player.preview.not-found", warehouseId));
+            return openPreview(viewer, targetUuid, warehouseId);
+        } catch (Exception exception) {
             return ActionResult.failure(message("player.preview-open-failed"));
         }
     }
@@ -542,7 +582,6 @@ public final class WarehouseService implements Listener, WarehouseAccess {
             long remaining = (showcaseConfig.cooldownSeconds() * 1000L - (now - lastShowcase)) / 1000L;
             return ActionResult.failure(message("player.showcase-cooldown", remaining));
         }
-        showcaseCooldowns.put(showcaseCooldownKey, now);
 
         UUID playerUuid = player.getUniqueId();
         String displayName = player.getName();
@@ -574,12 +613,14 @@ public final class WarehouseService implements Listener, WarehouseAccess {
 
         if (showcaseConfig.useCard()) {
             String previewCommand = "/wh spreview " + playerUuid + " " + showcaseEntries.get(0)[2];
+            boolean sent = false;
             if (packetBridge != null) {
-                packetBridge.sendChatCard(player, showcaseConfig.cardId(), Map.of(
-                    "player_name", displayName,
-                    "preview_command", previewCommand
-                ));
+                for (Player viewer : Bukkit.getOnlinePlayers()) {
+                    sent |= packetBridge.sendChatCard(viewer, showcaseConfig.cardId(), Map.of(
+                        "player_name", displayName, "preview_command", previewCommand));
+                }
             }
+            if (!sent) return ActionResult.failure(message("player.showcase-send-failed"));
         } else {
             net.md_5.bungee.api.chat.TextComponent prefix = new net.md_5.bungee.api.chat.TextComponent(
                 ChatColor.GOLD + "[仓库展示] " + ChatColor.WHITE + displayName + " 正在展示仓库： "
@@ -603,6 +644,7 @@ public final class WarehouseService implements Listener, WarehouseAccess {
                 onlinePlayer.spigot().sendMessage(prefix);
             }
         }
+        showcaseCooldowns.put(showcaseCooldownKey, now);
         return ActionResult.success(message("player.showcase-success"));
     }
 
@@ -618,7 +660,7 @@ public final class WarehouseService implements Listener, WarehouseAccess {
      * @return true 表示已处理（无论成功或失败）
      */
     public boolean handleClientPacket(Player player, String packetId, List<String> data) {
-        if (player == null || !player.isOnline() || packetId == null || !configuration.ui().packetId().equalsIgnoreCase(packetId)) {
+        if (!active || player == null || !player.isOnline() || packetId == null || !configuration.ui().packetId().equalsIgnoreCase(packetId)) {
             return false;
         }
         String action = data == null || data.isEmpty() ? "refresh" : WarehouseTexts.safe(data.get(0)).toLowerCase(Locale.ROOT);
@@ -944,7 +986,11 @@ public final class WarehouseService implements Listener, WarehouseAccess {
 
     @EventHandler
     public void onPlayerQuit(PlayerQuitEvent event) {
-        UUID playerUuid = event.getPlayer().getUniqueId();
+        clearPlayerState(event.getPlayer().getUniqueId());
+    }
+
+    private void clearPlayerState(UUID playerUuid) {
+        pickupPreferences.remove(playerUuid);
         viewStates.remove(playerUuid);
         storageActionTokens.remove(playerUuid);
         manageActionTokens.remove(playerUuid);
@@ -953,9 +999,43 @@ public final class WarehouseService implements Listener, WarehouseAccess {
         committedActionTokens.get().remove(playerUuid);
         actionTokenLocks.remove(playerUuid);
         releaseSharedLocks(playerUuid);
+        for (String warehouseId : configuration.warehouses().keySet()) {
+            String key = OWNER_PERSONAL + ':' + playerUuid + ':' + warehouseId;
+            warehouseLocks.remove(key);
+            recategorizedRules.remove(key);
+        }
     }
 
-    @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
+    /** 数据清理提交后丢弃旧视图和令牌；null 表示全部玩家。 */
+    public void invalidatePlayerData(@Nullable UUID playerUuid) {
+        Runnable invalidate = () -> {
+            if (!active) return;
+            Set<UUID> targets = new HashSet<>();
+            if (playerUuid != null) targets.add(playerUuid);
+            else {
+                targets.addAll(viewStates.keySet());
+                targets.addAll(pickupPreferences.keySet());
+            }
+            for (UUID id : targets) {
+                clearPlayerState(id);
+                Player online = Bukkit.getPlayer(id);
+                if (online != null && online.isOnline() && packetBridge != null) {
+                    for (String uiId : List.of(storageRuntimeUiId, manageRuntimeUiId, bankRuntimeUiId)) {
+                        if (!uiId.isBlank()) packetBridge.closeUi(online, uiId);
+                    }
+                }
+            }
+            if (playerUuid == null) {
+                sharedEditLocks.clear();
+                recategorizedRules.clear();
+                warehouseLocks.clear();
+            }
+        };
+        if (Bukkit.isPrimaryThread()) invalidate.run();
+        else Bukkit.getScheduler().runTask(plugin, invalidate);
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onEntityPickupItem(EntityPickupItemEvent event) {
         if (!(event.getEntity() instanceof Player player) || !player.isOnline()) {
             return;
@@ -972,15 +1052,20 @@ public final class WarehouseService implements Listener, WarehouseAccess {
         }
         // 使用 state(player) 而非 viewStates.get()：确保玩家未打开仓库 UI 时也能从数据库加载持久化的自动入库设置，
         // 否则服务器重启后会回退到 config.yml 的 auto-store-on-pickup 默认值，导致玩家关闭的自动入库被重新开启。
-        ViewState state = state(player);
+        WarehouseRepository.PlayerSettingsRecord pickupSettings;
+        try { pickupSettings = pickupSettings(player); }
+        catch (java.sql.SQLException exception) {
+            logger.warning("读取自动入库设置失败: " + exception.getMessage());
+            return;
+        }
         ItemStack stack = event.getItem().getItemStack().clone();
         // MythicMobs 自定义掉落物走战利品通道（服务器 mythic-loot 开关 + 玩家战利品开关），
         // 其余物品走普通通道（玩家自动入库开关）。isMythicItem 在 MythicMobs 缺席时安全返回 false。
         if (itemSourceRegistry.isMythicItem(stack)) {
-            if (!configuration.pickup().mythicLootEnabled() || !state.autoPickupMythic()) {
+            if (!configuration.pickup().mythicLootEnabled() || !pickupSettings.autoMythic()) {
                 return;
             }
-        } else if (!state.autoPickup()) {
+        } else if (!pickupSettings.autoPickup()) {
             return;
         }
         // 保留原始物品原型用于 HUD 展示：setAmount(0) 会使 ItemStack.getType() 变成 AIR，
@@ -992,15 +1077,16 @@ public final class WarehouseService implements Listener, WarehouseAccess {
                 return;
             }
             int remaining = result.remainingAmount();
-            stack.setAmount(remaining);
-            if (remaining <= 0) {
-                event.setCancelled(true);
+            // 接管整次拾取，避免原版在事件结束后恢复原始堆叠数量。
+            event.setCancelled(true);
+            int groundRemaining = remaining + event.getRemaining();
+            if (groundRemaining <= 0) {
                 event.getItem().remove();
             } else {
-                // 部分存入：必须同步更新实际掉落物的数量，否则玩家会拾取原始数量进背包，
-                // 导致已存入仓库/扩展背包的部分被复制（仓库一份 + 背包一份）。
+                stack.setAmount(groundRemaining);
                 event.getItem().setItemStack(stack);
             }
+            publishDepositEvent(player, displayPrototype, result.storedAmount());
             if (result.storedAmount() > 0) {
                 // 双通道提示：聊天栏与 HUD 独立工作，互不绑架。
                 // 聊天栏由 Warehouse 自身的 notify 开关控制（玩家个人设置优先于全局配置）；
@@ -1008,12 +1094,12 @@ public final class WarehouseService implements Listener, WarehouseAccess {
                 // 注意：notifyPickup 内部为延迟发包的异步任务，返回 true 仅代表已排入推送队列，
                 // 不代表客户端 HUD 已渲染，因此不能用其返回值决定是否发送聊天栏，否则会出现
                 // HUD 实际未显示且聊天栏被跳过的双重丢失。
-                boolean notify = state.autoPickupNotify();
+                boolean notify = pickupSettings.autoNotify();
                 if (notify) {
                     player.sendMessage(PREFIX + ChatColor.GREEN + message("player.auto-deposited", result.storedAmount()));
                 }
                 PickupNotifiable pickupNotifiable = pickupNotifiableSupplier.get();
-                if (pickupNotifiable != null && pickupNotifiable.isNotificationActive(player.getUniqueId())) {
+                if (pickupNotifiable != null) {
                     // 通知模式 HUD 活跃：通过 notifyPickup 主动推送 HUD 提示
                     // 使用存入数量构造展示用 ItemStack（基于原始物品原型，避免 stack 此时 amount=0
                     // 导致 type 变 AIR 使 notifyPickup early-return）
@@ -1189,6 +1275,7 @@ public final class WarehouseService implements Listener, WarehouseAccess {
             || "withdraw_all".equals(action)
             || "deposit_slot".equals(action)
             || "deposit_all_backpack".equals(action)
+            || "toggle_lock".equals(action)
             || "shared_mode".equals(action)) {
             return packetBridge != null
                 && packetBridge.isUiOpen(player, storageRuntimeUiId);
@@ -1235,7 +1322,10 @@ public final class WarehouseService implements Listener, WarehouseAccess {
     }
 
     private boolean requiresActionToken(String action) {
-        return "bank_deposit".equals(action)
+        return "withdraw".equals(action) || "withdraw_quick".equals(action) || "withdraw_all".equals(action)
+            || "deposit_slot".equals(action) || "deposit_all_backpack".equals(action)
+            || "toggle_lock".equals(action) || "shared_mode".equals(action)
+            || "bank_deposit".equals(action)
             || "bank_withdraw".equals(action)
             || "fixed_create".equals(action)
             || "fixed_claim".equals(action)
@@ -1315,7 +1405,7 @@ public final class WarehouseService implements Listener, WarehouseAccess {
         }
     }
 
-    private void issueActionToken(Player player, String uiId) {
+    void issueActionToken(Player player, String uiId) {
         if (player != null && uiId != null && !uiId.isBlank()) {
             tokenMap(uiId).put(player.getUniqueId(), UUID.randomUUID().toString());
         }
@@ -1338,6 +1428,8 @@ public final class WarehouseService implements Listener, WarehouseAccess {
     }
 
     private List<String> tokenUiCandidates(String action) {
+        if (List.of("withdraw", "withdraw_quick", "withdraw_all", "deposit_slot", "deposit_all_backpack", "toggle_lock", "shared_mode").contains(action))
+            return List.of(storageRuntimeUiId);
         if ("bank_deposit".equals(action)
             || "bank_withdraw".equals(action)
             || "fixed_create".equals(action)
@@ -1443,6 +1535,10 @@ public final class WarehouseService implements Listener, WarehouseAccess {
     private void selectPersonalWarehouse(Player player, String warehouseId) throws Exception {
         releaseCurrentSharedLock(player);
         ViewState state = state(player);
+        if (state.previewMode() && !player.hasPermission("arcartxsuite.warehouse.admin")) {
+            WarehouseRecord selected = personalWarehouseMap(state.previewTargetUuid()).get(warehouseId);
+            if (selected == null || !selected.showcaseEnabled()) return;
+        }
         state.setOwnerType(OWNER_PERSONAL);
         if (state.previewMode() && state.previewTargetUuid() != null) {
             state.setOwnerId(state.previewTargetUuid().toString());
@@ -1535,26 +1631,25 @@ public final class WarehouseService implements Listener, WarehouseAccess {
             refreshBoth(player);
             return;
         }
-        switch (kind) {
-            case "pickup" -> {
-                state.setAutoPickup(!state.autoPickup());
-                sendMessage(player, true, message("player.auto-pickup", state.autoPickup() ? message("player.enabled") : message("player.disabled")));
-            }
-            case "mythic" -> {
-                state.setAutoPickupMythic(!state.autoPickupMythic());
-                sendMessage(player, true, message("player.auto-pickup-mythic", state.autoPickupMythic() ? message("player.enabled") : message("player.disabled")));
-            }
-            case "notify" -> {
-                state.setAutoPickupNotify(!state.autoPickupNotify());
-                sendMessage(player, true, message("player.deposit-notify", state.autoPickupNotify() ? message("player.enabled") : message("player.disabled")));
-            }
-        }
-        // 持久化到数据库，玩家重上线后保持设置
+        boolean oldPickup = state.autoPickup(), oldMythic = state.autoPickupMythic(), oldNotify = state.autoPickupNotify();
         try {
+            switch (kind) {
+                case "pickup" -> state.setAutoPickup(!state.autoPickup());
+                case "mythic" -> state.setAutoPickupMythic(!state.autoPickupMythic());
+                case "notify" -> state.setAutoPickupNotify(!state.autoPickupNotify());
+                default -> { return; }
+            }
+            // 先持久化，成功后再更新缓存与提示。
             repository.savePlayerSettings(player.getUniqueId(), state.autoPickup(), state.autoPickupMythic(), state.autoPickupNotify(), System.currentTimeMillis());
+            pickupPreferences.put(player.getUniqueId(), new WarehouseRepository.PlayerSettingsRecord(player.getUniqueId(),
+                state.autoPickup(), state.autoPickupMythic(), state.autoPickupNotify(), System.currentTimeMillis()));
         } catch (Exception exception) {
-            debug("save-player-settings-failed player=" + player.getName() + " error=" + exception.getMessage());
+            state.setAutoPickup(oldPickup); state.setAutoPickupMythic(oldMythic); state.setAutoPickupNotify(oldNotify);
+            throw exception;
         }
+        boolean enabled = switch (kind) { case "pickup" -> state.autoPickup(); case "mythic" -> state.autoPickupMythic(); default -> state.autoPickupNotify(); };
+        String key = switch (kind) { case "pickup" -> "player.auto-pickup"; case "mythic" -> "player.auto-pickup-mythic"; default -> "player.deposit-notify"; };
+        sendMessage(player, true, message(key, enabled ? message("player.enabled") : message("player.disabled")));
         markActionCommitted(player);
         refreshBoth(player);
     }
@@ -1610,6 +1705,7 @@ public final class WarehouseService implements Listener, WarehouseAccess {
         debug("TOGGLE-LOCK player=" + player.getName() + " rawSlot=" + rawSlot + " bukkitSlot=" + slot
             + " locked=" + locked + " stack=" + WarehouseTexts.describeStack(stack));
         sendMessage(player, true, message(locked ? "player.item-lock-on" : "player.item-lock-off"));
+        markActionCommitted(player);
         refreshBoth(player);
     }
 
@@ -1650,7 +1746,7 @@ public final class WarehouseService implements Listener, WarehouseAccess {
             refreshBoth(player);
             return;
         }
-        if (itemMatcherSupport.matches(configuration.blacklist(), stack)) {
+        if (isBlacklisted(stack)) {
             debug("DEPOSIT reject player=" + player.getName() + " reason=blacklist stack=" + WarehouseTexts.describeStack(stack));
             sendMessage(player, false, message("player.item-blocked"));
             refreshBoth(player);
@@ -1678,6 +1774,7 @@ public final class WarehouseService implements Listener, WarehouseAccess {
         }
         player.updateInventory();
         debug("DEPOSIT inventory-updated player=" + player.getName() + " bukkitSlot=" + slot + " newStack=" + WarehouseTexts.describeStack(player.getInventory().getItem(slot)));
+        markActionCommitted(player);
         sendMessage(player, true, message("player.deposit-success", result.storedAmount()));
         refreshBoth(player);
     }
@@ -1720,7 +1817,7 @@ public final class WarehouseService implements Listener, WarehouseAccess {
                 skippedLocked++;
                 continue;
             }
-            if (itemMatcherSupport.matches(configuration.blacklist(), stack)) {
+            if (isBlacklisted(stack)) {
                 skippedBlacklisted++;
                 continue;
             }
@@ -1740,6 +1837,7 @@ public final class WarehouseService implements Listener, WarehouseAccess {
             }
         }
         if (totalStored > 0L) {
+            markActionCommitted(player);
             player.updateInventory();
             List<String> skippedParts = new ArrayList<>(3);
             if (skippedBlacklisted > 0) {
@@ -1778,7 +1876,7 @@ public final class WarehouseService implements Listener, WarehouseAccess {
      * @return 存入结果
      */
     private DepositResult depositStack(Player player, String ownerType, String ownerId, String warehouseId, ItemStack stack) throws Exception {
-        if (stack == null || stack.getType().isAir() || stack.getAmount() <= 0 || itemMatcherSupport.matches(configuration.blacklist(), stack)) {
+        if (stack == null || stack.getType().isAir() || stack.getAmount() <= 0 || isBlacklisted(stack)) {
             debug("DEPOSIT-STACK reject player=" + player.getName() + " reason=invalid-stack stack=" + WarehouseTexts.describeStack(stack));
             return DepositResult.failure(message("player.item-not-depositable"));
         }
@@ -1809,6 +1907,7 @@ public final class WarehouseService implements Listener, WarehouseAccess {
         List<SlotItemRecord> currentSlots;
         synchronized (warehouseLock) {
             currentSlots = repository.loadSlotSummaries(ownerType, ownerId, warehouseId);
+        List<WarehouseRepository.SlotChange> changes = new ArrayList<>();
         debug("DEPOSIT-STACK load player=" + player.getName() + " ownerType=" + ownerType + " ownerId=" + ownerId
             + " warehouseId=" + warehouseId + " currentSlots=" + currentSlots.size() + " hash=" + WarehouseTexts.shortHash(itemHash)
             + " itemJsonEmpty=" + itemJson(prototype).isBlank() + " verify=" + configuration.verifyOnDeposit());
@@ -1820,7 +1919,7 @@ public final class WarehouseService implements Listener, WarehouseAccess {
             long room = Math.max(0L, MAX_AGGREGATED_AMOUNT - current.amount());
             int moved = (int) Math.min(remaining, room);
             if (moved > 0) {
-                repository.updateSlotAmount(ownerType, ownerId, warehouseId, current.slot(), current.amount() + moved, now);
+                changes.add(new WarehouseRepository.SlotChange(current, withAmount(current, current.amount() + moved, now)));
                 debug("DEPOSIT-STACK merge player=" + player.getName() + " slot=" + current.slot()
                     + " moved=" + moved + " oldAmount=" + current.amount() + " newAmount=" + (current.amount() + moved));
                 remaining -= moved;
@@ -1836,7 +1935,7 @@ public final class WarehouseService implements Listener, WarehouseAccess {
                 // searchText 写 displayName（原版物品为中文翻译名，自定义物品为自定义名）
                 SearchTokens searchTokens = WarehouseTexts.toSearchTokens(displayName);
                 String displayJson = itemJson(prototype);
-                repository.upsertSlot(new SlotItemRecord(
+                changes.add(new WarehouseRepository.SlotChange(null, new SlotItemRecord(
                     ownerType,
                     ownerId,
                     warehouseId,
@@ -1854,7 +1953,7 @@ public final class WarehouseService implements Listener, WarehouseAccess {
                     now,
                     now,
                     WarehouseTexts.loreText(prototype)
-                ));
+                )));
                 debug("DEPOSIT-STACK insert player=" + player.getName() + " slot=" + emptySlot + " amount=" + remaining
                     + " item=" + WarehouseTexts.describeStack(prototype) + " itemJsonEmpty=" + displayJson.isBlank());
                 stored += remaining;
@@ -1868,8 +1967,19 @@ public final class WarehouseService implements Listener, WarehouseAccess {
             debug("DEPOSIT-STACK failure player=" + player.getName() + " reason=no-stored remaining=" + remaining);
             return DepositResult.failure(message("player.warehouse-full"));
         }
+            if (!repository.applySlotChanges(changes)) throw new java.sql.SQLException("仓库内容已变化，请重试入库");
             return DepositResult.success(stored, remaining);
         }
+    }
+
+    private static SlotItemRecord withAmount(SlotItemRecord item, long amount, long now) {
+        return new SlotItemRecord(item.ownerType(), item.ownerId(), item.warehouseId(), item.slot(), item.itemHash(),
+            item.categoryId(), item.displayName(), item.materialId(), item.searchText(), item.pinyin(), item.initials(),
+            item.itemData(), item.itemJson(), amount, item.createdAt(), now, item.loreText());
+    }
+
+    boolean isBlacklisted(ItemStack stack) {
+        return configuration.blacklist().stream().anyMatch(rule -> itemMatcherSupport.matches(rule, stack));
     }
 
     /**
@@ -1952,15 +2062,21 @@ public final class WarehouseService implements Listener, WarehouseAccess {
             SlotItemRecord item = optional.get();
             ItemStack base = ItemSerializer.deserialize(Base64.getDecoder().decode(item.itemData()));
             if (base == null || base.getType().isAir()) {
-                repository.deleteSlot(state.ownerType(), state.ownerId(), state.warehouseId(), selectedSlot);
                 sendMessage(player, false, message("player.slot-corrupt"));
                 refreshBoth(player);
                 return;
             }
             // 快捷取出（双击）按「一组」结算：上限收紧为物品自身堆叠数——不可堆叠取 1，16 堆叠取 16，64 堆叠取 64。
+            SlotItemRecord displayed = state.displayedSlots.get(slot);
+            if (displayed == null || !displayed.itemHash().equals(item.itemHash())) {
+                refreshBoth(player);
+                return;
+            }
             long requested = quickStack ? Math.min(requestedAmount, Math.max(1L, base.getMaxStackSize())) : requestedAmount;
             long remaining = all ? item.amount() : Math.max(1L, Math.min(requested, item.amount()));
             delivered = 0L;
+            ItemStack[] beforeInventory = cloneContents(player.getInventory().getStorageContents());
+            try {
             while (remaining > 0L) {
                 int give = (int) Math.min(remaining, Math.max(1, base.getMaxStackSize()));
                 ItemStack clone = base.clone();
@@ -1980,15 +2096,27 @@ public final class WarehouseService implements Listener, WarehouseAccess {
                 return;
             }
             long updatedAmount = item.amount() - delivered;
+            if (!repository.applySlotChanges(List.of(new WarehouseRepository.SlotChange(item,
+                updatedAmount <= 0 ? null : withAmount(item, updatedAmount, System.currentTimeMillis()))))) {
+                throw new java.sql.SQLException("仓库物品已被其他操作修改");
+            }
             if (updatedAmount <= 0L) {
-                repository.deleteSlot(state.ownerType(), state.ownerId(), state.warehouseId(), selectedSlot);
                 state.setSelectedSlot(-1);
-            } else {
-                repository.updateSlotAmount(state.ownerType(), state.ownerId(), state.warehouseId(), selectedSlot, updatedAmount, System.currentTimeMillis());
+            }
+            } catch (Exception exception) {
+                player.getInventory().setStorageContents(beforeInventory);
+                throw exception;
             }
         }
         sendMessage(player, true, message("player.withdraw-success", delivered));
+        markActionCommitted(player);
         refreshBoth(player);
+    }
+
+    private static ItemStack[] cloneContents(ItemStack[] contents) {
+        ItemStack[] result = contents.clone();
+        for (int i = 0; i < result.length; i++) if (result[i] != null) result[i] = result[i].clone();
+        return result;
     }
 
     /**
@@ -1997,6 +2125,7 @@ public final class WarehouseService implements Listener, WarehouseAccess {
      */
     private void bankDeposit(Player player, String currencyId, BigDecimal amount) throws Exception {
         String normalized = WarehouseTexts.normalizeId(currencyId);
+        if (!configuration.bankCurrencies().contains(normalized)) throw new IllegalArgumentException("该货币未启用银行服务");
         var bridge = currencyBridgeManager.bridge(normalized);
         if (bridge == null || !bridge.available()) {
             sendMessage(player, false, bridge == null ? message("player.unknown-currency") : bridge.unavailableReason());
@@ -2036,6 +2165,7 @@ public final class WarehouseService implements Listener, WarehouseAccess {
             return;
         }
         String normalized = WarehouseTexts.normalizeId(currencyId);
+        if (!configuration.bankCurrencies().contains(normalized)) throw new IllegalArgumentException("该货币未启用银行服务");
         var bridge = currencyBridgeManager.bridge(normalized);
         if (bridge == null || !bridge.available()) {
             sendMessage(player, false, bridge == null ? message("player.unknown-currency") : bridge.unavailableReason());
@@ -2072,12 +2202,12 @@ public final class WarehouseService implements Listener, WarehouseAccess {
      */
     private void createFixedDeposit(Player player, String productId, BigDecimal amount) throws Exception {
         DepositProductDefinition product = configuration.depositProduct(productId);
-        if (product == null || !packetFactory.canUseProduct(player, product)) {
+        if (product == null || !configuration.bankCurrencies().contains(product.currencyId()) || !packetFactory.canUseProduct(player, product)) {
             sendMessage(player, false, message("player.fixed-deposit-unavailable"));
             refreshBoth(player);
             return;
         }
-        if (amount.compareTo(product.minAmount()) < 0 || (product.maxAmount().compareTo(BigDecimal.ZERO) > 0 && amount.compareTo(product.maxAmount()) > 0)) {
+        if (amount.signum() <= 0 || amount.compareTo(product.minAmount()) < 0 || (product.maxAmount().compareTo(BigDecimal.ZERO) > 0 && amount.compareTo(product.maxAmount()) > 0)) {
             sendMessage(player, false, message("player.fixed-deposit-range"));
             refreshBoth(player);
             return;
@@ -2088,6 +2218,7 @@ public final class WarehouseService implements Listener, WarehouseAccess {
             refreshBoth(player);
             return;
         }
+        long maturesAt = Math.addExact(System.currentTimeMillis(), Math.multiplyExact(product.durationSeconds(), 1000L));
         BigDecimal current = bankBalance(player.getUniqueId(), product.currencyId());
         if (current.compareTo(amount) < 0) {
             sendMessage(player, false, message("player.bank-insufficient"));
@@ -2109,7 +2240,7 @@ public final class WarehouseService implements Listener, WarehouseAccess {
                 amount,
                 tier.rate(),
                 now,
-                now + product.durationSeconds() * 1000L,
+                maturesAt,
                 false,
                 0L
             ));
@@ -2240,7 +2371,7 @@ public final class WarehouseService implements Listener, WarehouseAccess {
             refreshBoth(player);
             return;
         }
-        repository.deleteSharedWarehouse(sharedId);
+        repository.deleteSharedWarehouse(sharedId, player.getUniqueId());
         SharedEditLock lock = sharedEditLocks.remove(sharedId);
         if (lock != null && crossServerLockService != null && crossServerLockService.isActive()) {
             crossServerLockService.publishUnlock(sharedId, lock.playerUuid());
@@ -2272,7 +2403,7 @@ public final class WarehouseService implements Listener, WarehouseAccess {
             refreshBoth(player);
             return;
         }
-        repository.updateSharedWarehouseName(sharedId, name, System.currentTimeMillis());
+        repository.updateSharedWarehouseName(sharedId, player.getUniqueId(), name, System.currentTimeMillis());
         sendMessage(player, true, message("player.shared-name-updated", name));
         markActionCommitted(player);
         refreshBoth(player);
@@ -2288,7 +2419,7 @@ public final class WarehouseService implements Listener, WarehouseAccess {
             return;
         }
         boolean newValue = !shared.get().showcaseEnabled();
-        repository.updateSharedWarehouseShowcase(sharedId, newValue, System.currentTimeMillis());
+        repository.updateSharedWarehouseShowcase(sharedId, player.getUniqueId(), newValue, System.currentTimeMillis());
         sendMessage(player, true, message("player.shared-showcase-updated", newValue ? message("player.enabled") : message("player.disabled")));
         markActionCommitted(player);
         refreshBoth(player);
@@ -2355,17 +2486,12 @@ public final class WarehouseService implements Listener, WarehouseAccess {
             return;
         }
         SharedPermissionTier tier = packetFactory.resolveSharedTier(player);
-        if (repository.countSharedMembers(sharedId) >= tier.maxMembers()) {
-            sendMessage(player, false, message("player.shared-member-limit"));
-            refreshBoth(player);
-            return;
-        }
         String normalizedRole = switch (WarehouseTexts.normalizeId(role)) {
             case "viewer" -> "viewer";
             case "owner" -> "member";
             default -> "member";
         };
-        repository.upsertSharedMember(sharedId, target.getUniqueId(), normalizedRole, System.currentTimeMillis());
+        repository.upsertSharedMember(sharedId, player.getUniqueId(), target.getUniqueId(), normalizedRole, tier.maxMembers(), System.currentTimeMillis());
         sendMessage(player, true, message("player.shared-member-updated"));
         markActionCommitted(player);
         refreshBoth(player);
@@ -2389,7 +2515,7 @@ public final class WarehouseService implements Listener, WarehouseAccess {
             refreshBoth(player);
             return;
         }
-        repository.removeSharedMember(sharedId, target.getUniqueId());
+        repository.removeSharedMember(sharedId, player.getUniqueId(), target.getUniqueId());
         releaseSharedLocks(target.getUniqueId());
         sendMessage(player, true, message("player.shared-member-removed"));
         markActionCommitted(player);
@@ -2425,6 +2551,8 @@ public final class WarehouseService implements Listener, WarehouseAccess {
 
     public ActionResult confirmPendingTransfer(Player player, String sharedId) {
         try {
+            if (!configuration.shared().enabled() || repository.countOwnedSharedWarehouses(player.getUniqueId()) >= packetFactory.resolveSharedTier(player).maxOwned())
+                return ActionResult.failure(message("player.shared-limit"));
             Optional<PendingTransfer> pendingOptional = repository.loadPendingTransfer(sharedId);
             if (pendingOptional.isEmpty() || !pendingOptional.get().targetUuid().equals(player.getUniqueId())) return ActionResult.failure(message("player.transfer-none"));
             PendingTransfer pending = pendingOptional.get();
@@ -2585,6 +2713,21 @@ public final class WarehouseService implements Listener, WarehouseAccess {
     }
 
     private void ensureCurrentWarehouse(Player player, ViewState state) throws Exception {
+        if (state.previewMode()) {
+            UUID target = state.previewTargetUuid();
+            boolean admin = player.hasPermission("arcartxsuite.warehouse.admin");
+            if (OWNER_SHARED.equals(state.ownerType())) {
+                if (repository.loadSharedWarehousesByOwner(target).stream().noneMatch(record -> record.id().equals(state.warehouseId())
+                    && (admin || record.showcaseEnabled()))) throw new IllegalStateException("该仓库当前不可预览");
+            } else {
+                Map<String, WarehouseRecord> records = personalWarehouseMap(target);
+                if (state.warehouseId() == null || state.warehouseId().isBlank()) state.setWarehouseId(records.keySet().stream().findFirst().orElse(""));
+                WarehouseRecord record = records.get(state.warehouseId());
+                if (record == null || (!admin && !record.showcaseEnabled())) throw new IllegalStateException("该仓库当前不可预览");
+                state.setOwnerId(target.toString());
+            }
+            return;
+        }
         if (OWNER_SHARED.equals(state.ownerType())) {
             Optional<SharedWarehouseRecord> shared = repository.loadSharedWarehouse(player.getUniqueId(), state.ownerId());
             if (shared.isPresent()) {
@@ -2605,12 +2748,8 @@ public final class WarehouseService implements Listener, WarehouseAccess {
             boolean autoMythic = configuration.pickup().autoStoreMythicLoot();
             boolean autoNotify = configuration.pickup().notifyOnAutoStore();
             try {
-                var settings = repository.loadPlayerSettings(player.getUniqueId());
-                if (settings.isPresent()) {
-                    autoPickup = settings.get().autoPickup();
-                    autoMythic = settings.get().autoMythic();
-                    autoNotify = settings.get().autoNotify();
-                }
+                var settings = pickupSettings(player);
+                autoPickup = settings.autoPickup(); autoMythic = settings.autoMythic(); autoNotify = settings.autoNotify();
             } catch (Exception exception) {
                 debug("load-player-settings-failed player=" + player.getName() + " error=" + exception.getMessage());
             }
@@ -2618,6 +2757,17 @@ public final class WarehouseService implements Listener, WarehouseAccess {
                 configuration.bankCurrencies().stream().findFirst().orElse("money"),
                 configuration.search().defaultSortId());
         });
+    }
+
+    private WarehouseRepository.PlayerSettingsRecord pickupSettings(Player player) throws java.sql.SQLException {
+        UUID id = player.getUniqueId();
+        var cached = pickupPreferences.get(id);
+        if (cached != null) return cached;
+        var loaded = repository.loadPlayerSettings(id).orElseGet(() -> new WarehouseRepository.PlayerSettingsRecord(id,
+            configuration.pickup().autoStoreOnPickup(), configuration.pickup().autoStoreMythicLoot(),
+            configuration.pickup().notifyOnAutoStore(), 0));
+        pickupPreferences.put(id, loaded);
+        return loaded;
     }
 
     private List<WarehouseRecord> personalRecords(UUID playerUuid) throws Exception {
@@ -2656,10 +2806,7 @@ public final class WarehouseService implements Listener, WarehouseAccess {
             recategorizeIfStale(ownerType, ownerId, warehouseId);
             return repository.loadSlotSummaries(ownerType, ownerId, warehouseId);
         } catch (Exception exception) {
-            if (configuration.debug()) {
-                this.logger.warning("读取仓库槽位失败: " + exception.getMessage());
-            }
-            return List.of();
+            throw new IllegalStateException("读取仓库物品失败，请稍后重试", exception);
         }
     }
 
@@ -2818,16 +2965,16 @@ public final class WarehouseService implements Listener, WarehouseAccess {
         return Integer.toHexString(builder.toString().hashCode());
     }
 
-    private int firstEmptySlot(List<SlotItemRecord> currentSlots, long capacity) {
-        int cappedCapacity = (int) Math.max(1L, Math.min(Integer.MAX_VALUE - 8L, capacity));
-        boolean[] occupied = new boolean[cappedCapacity];
+    static int firstEmptySlot(List<SlotItemRecord> currentSlots, long capacity) {
+        long cappedCapacity = Math.max(0L, Math.min(Integer.MAX_VALUE, capacity));
+        Set<Integer> occupied = new HashSet<>();
         for (SlotItemRecord item : currentSlots) {
             if (item.slot() >= 0 && item.slot() < cappedCapacity) {
-                occupied[item.slot()] = true;
+                occupied.add(item.slot());
             }
         }
         for (int slot = 0; slot < cappedCapacity; slot++) {
-            if (!occupied[slot]) {
+            if (!occupied.contains(slot)) {
                 return slot;
             }
         }
@@ -2835,6 +2982,7 @@ public final class WarehouseService implements Listener, WarehouseAccess {
     }
 
     boolean canModifyCurrent(Player player, ViewState state) throws Exception {
+        if (state.previewMode()) return false;
         if (OWNER_PERSONAL.equals(state.ownerType())) {
             return player.getUniqueId().toString().equals(state.ownerId());
         }
@@ -2849,7 +2997,7 @@ public final class WarehouseService implements Listener, WarehouseAccess {
         if (lock == null) {
             return false;
         }
-        return lock.heldBy(player.getUniqueId());
+        return lock.heldBy(player.getUniqueId()) && localNodeId().equals(lock.nodeId());
     }
 
     boolean sharedCanEdit(Player player, ViewState state) throws Exception {
@@ -2881,7 +3029,7 @@ public final class WarehouseService implements Listener, WarehouseAccess {
         String sharedId = state.ownerId();
         SharedEditLock existing = sharedEditLocks.get(sharedId);
         if (existing != null) {
-            if (existing.heldBy(player.getUniqueId())) {
+            if (existing.heldBy(player.getUniqueId()) && localNodeId().equals(existing.nodeId())) {
                 return true;
             }
             sendMessage(player, false, buildLockBusyMessage(existing));
@@ -2928,10 +3076,9 @@ public final class WarehouseService implements Listener, WarehouseAccess {
     }
 
     private void releaseSharedLock(String sharedId, UUID playerUuid) {
-        SharedEditLock removed = sharedEditLocks.computeIfPresent(sharedId, (id, lock) ->
-            lock.heldBy(playerUuid) && localNodeId().equals(lock.nodeId()) ? null : lock
-        );
-        if (removed != null && crossServerLockService != null && crossServerLockService.isActive()) {
+        SharedEditLock existing = sharedEditLocks.get(sharedId);
+        if (existing != null && existing.heldBy(playerUuid) && localNodeId().equals(existing.nodeId())
+            && sharedEditLocks.remove(sharedId, existing) && crossServerLockService != null && crossServerLockService.isActive()) {
             crossServerLockService.publishUnlock(sharedId, playerUuid);
         }
     }
@@ -3135,7 +3282,7 @@ public final class WarehouseService implements Listener, WarehouseAccess {
             return;
         }
         try {
-            repository.updateSharedWarehouseLevel(record.id(), next.level(), Math.max(SLOT_COUNT, next.capacity()), System.currentTimeMillis());
+            repository.updateSharedWarehouseLevel(record.id(), player.getUniqueId(), record.level(), next.level(), Math.max(SLOT_COUNT, next.capacity()), System.currentTimeMillis());
         } catch (Exception exception) {
             refundCost(player, cost);
             throw exception;
@@ -3408,6 +3555,8 @@ public final class WarehouseService implements Listener, WarehouseAccess {
         private UUID previewTargetUuid;
         private String previewWarehouseId;
         private String selectedCurrency;
+        final Map<Integer, SlotItemRecord> displayedSlots = new HashMap<>();
+        String displayedView = "";
 
         private ViewState(String ownerType, String ownerId, String warehouseId, String categoryId, String search, String sortId, int selectedSlot,
                           boolean autoPickup, boolean autoPickupMythic, boolean autoPickupNotify, String selectedCurrency) {
@@ -3550,7 +3699,8 @@ public final class WarehouseService implements Listener, WarehouseAccess {
     public @NotNull WarehouseAccess.DepositResult deposit(@NotNull Player player, @NotNull ItemStack itemStack) {
         try {
             DepositResult result = depositStack(player, OWNER_PERSONAL, player.getUniqueId().toString(), packetFactory.firstPersonalWarehouseId(), itemStack);
-            return new WarehouseAccess.DepositResult(result.success(), result.storedAmount(), result.remainingAmount(), result.message());
+            return new WarehouseAccess.DepositResult(result.success(), result.storedAmount(),
+                result.success() ? result.remainingAmount() : itemStack.getAmount(), result.message());
         } catch (Exception exception) {
             return new WarehouseAccess.DepositResult(false, 0L, itemStack == null ? 0 : itemStack.getAmount(), "存入失败");
         }
@@ -3575,6 +3725,9 @@ public final class WarehouseService implements Listener, WarehouseAccess {
                 }
                 if (isItemLocked(itemStack)) {
                     return new WarehouseAccess.SlotWriteResult(false, message("player.item-locked"));
+                }
+                if (isBlacklisted(itemStack)) {
+                    return new WarehouseAccess.SlotWriteResult(false, message("player.item-blocked"));
                 }
                 ItemStack prototype = itemStack.clone();
                 prototype.setAmount(1);
@@ -3619,17 +3772,16 @@ public final class WarehouseService implements Listener, WarehouseAccess {
                     return new WarehouseAccess.WithdrawResult(false, 0, null, "槽位为空");
                 }
                 SlotItemRecord record = slotOpt.get();
+                if (record.amount() <= 0) return new WarehouseAccess.WithdrawResult(false, 0, null, "物品数量异常");
                 int taken = (int) Math.min(amount, record.amount());
                 ItemStack item = ItemSerializer.deserialize(Base64.getDecoder().decode(record.itemData()));
-                if (item == null) {
+                if (item == null || item.getType().isAir()) {
                     return new WarehouseAccess.WithdrawResult(false, 0, null, "物品损坏");
                 }
                 item.setAmount(taken);
-                if (taken >= record.amount()) {
-                    repository.deleteSlot(OWNER_PERSONAL, ownerId, warehouseId, slotIndex);
-                } else {
-                    repository.updateSlotAmount(OWNER_PERSONAL, ownerId, warehouseId, slotIndex, record.amount() - taken, System.currentTimeMillis());
-                }
+                if (!repository.applySlotChanges(List.of(new WarehouseRepository.SlotChange(record,
+                    taken >= record.amount() ? null : withAmount(record, record.amount() - taken, System.currentTimeMillis())))))
+                    return new WarehouseAccess.WithdrawResult(false, 0, null, "槽位已变化，请重试");
                 return new WarehouseAccess.WithdrawResult(true, taken, item, "");
             }
         } catch (Exception exception) {

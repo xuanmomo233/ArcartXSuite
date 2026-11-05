@@ -60,6 +60,7 @@ final class WarehousePacketFactory {
         int pageTotal = Math.max(1, (visibleSlots.size() + pageSize - 1) / pageSize);
         state.setPage(Math.max(1, Math.min(state.page(), pageTotal)));
         int start = (state.page() - 1) * pageSize;
+        Map<Integer, SlotItemRecord> displayedSlots = new LinkedHashMap<>();
         for (int displaySlot = 0; displaySlot < pageSize; displaySlot++) {
             int index = start + displaySlot;
             SlotItemRecord item = index >= 0 && index < visibleSlots.size()
@@ -72,6 +73,7 @@ final class WarehousePacketFactory {
             row.put("key", key);
             slots.put(key, row);
             if (item != null) {
+                displayedSlots.put(displaySlot, item);
                 String itemJson = displayItemJson(item);
                 if (!itemJson.isBlank()) {
                     packet.put("slotItemJson" + key, itemJson);
@@ -79,6 +81,14 @@ final class WarehousePacketFactory {
             }
         }
         String slotKeys = String.join(",", slots.keySet());
+        String viewKey = state.ownerType() + ':' + state.ownerId() + ':' + state.warehouseId() + ':' + state.page()
+            + ':' + state.categoryId() + ':' + state.sortId() + ':' + state.search();
+        if (!viewKey.equals(state.displayedView) || !displayedSlots.equals(state.displayedSlots)) {
+            service.issueActionToken(player, service.storageRuntimeUiId);
+            state.displayedSlots.clear();
+            state.displayedSlots.putAll(displayedSlots);
+            state.displayedView = viewKey;
+        }
         service.debug("buildStoragePacket slots keys order: " + slotKeys);
         int selectedDisplaySlot = selectedDisplaySlot(state, visibleSlots);
         SlotItemRecord selected = service.validSlot(state.selectedSlot())
@@ -136,6 +146,7 @@ final class WarehousePacketFactory {
         packet.put("autoPickupNotify", state.autoPickupNotify());
         packet.put("serverAutoPickup", service.configuration.pickup().enabled());
         packet.put("serverMythicLoot", service.configuration.pickup().mythicLootEnabled());
+        packet.put("pickupScannerActive", service.pickupIntercepted(player));
         packet.put("showcaseEnabled", service.currentShowcaseEnabled(player, state));
         packet.put("maxManageCount", ((java.util.Map<?,?>) packet.getOrDefault("manageWarehouses", java.util.Map.of())).size());
         packet.put("maxMemberCount", sharedMembers.size());
@@ -183,6 +194,7 @@ final class WarehousePacketFactory {
         packet.put("ownerId", state.ownerId());
         packet.put("warehouseId", state.warehouseId());
         packet.put("warehouseName", currentWarehouseName(player, state));
+        packet.put("previewMode", state.previewMode());
         packet.put("categoryId", state.categoryId());
         packet.put("search", state.search());
         packet.put("categories", categories);
@@ -767,9 +779,8 @@ final class WarehousePacketFactory {
         if (displaySlot < 0 || displaySlot >= pageSize) {
             return -1;
         }
-        List<SlotItemRecord> visibleSlots = visibleSlots(state);
-        int index = (Math.max(1, state.page()) - 1) * pageSize + displaySlot;
-        return index >= 0 && index < visibleSlots.size() ? visibleSlots.get(index).slot() : -1;
+        SlotItemRecord displayed = state.displayedSlots.get(displaySlot);
+        return displayed == null ? -1 : displayed.slot();
     }
 
     void clearFilteredSelection(WarehouseService.ViewState state) throws Exception {
@@ -792,7 +803,7 @@ final class WarehousePacketFactory {
             return WarehouseService.SLOT_COUNT;
         }
         long unlocked = service.personalUnlockedSlots(UUID.fromString(ownerId), warehouseId);
-        return unlocked <= 0 ? WarehouseService.SLOT_COUNT : unlocked;
+        return Math.max(0, unlocked);
     }
 
     long currentWarehouseCapacity(Player player, String ownerType, String ownerId, String warehouseId) throws Exception {
@@ -829,7 +840,7 @@ final class WarehousePacketFactory {
         return service.configuration.shared().permissionTiers().values().stream()
             .filter(tier -> tier.permission().isBlank() || player.hasPermission(tier.permission()))
             .max(Comparator.comparingInt(SharedPermissionTier::priority))
-            .orElseGet(() -> service.configuration.shared().permissionTiers().values().iterator().next());
+            .orElseGet(() -> new SharedPermissionTier("none", "", Integer.MIN_VALUE, 0, 0));
     }
 
     boolean canUseProduct(Player player, DepositProductDefinition product) {

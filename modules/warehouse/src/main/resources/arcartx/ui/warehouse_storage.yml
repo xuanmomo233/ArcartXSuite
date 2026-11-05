@@ -103,6 +103,7 @@ ui:
       var.unlocked = packet['unlocked']
       var.hasPassword = packet['hasPassword']
       var.readOnly = packet['readOnly']
+      var.previewMode = packet['previewMode']
       var.sharedEditMode = packet['sharedEditMode']
       var.sharedCanEdit = packet['sharedCanEdit']
       var.lockOwner = packet['lockOwner']
@@ -181,6 +182,8 @@ ui:
       }
       // ── 仓库网格（Slot 控件）：仅在数量变化时重建 ──
       if(var.pageSize != oldPageSize){
+        var.warehouseIcons = {}
+        var.warehouseIcons[0.round()] = val.warehouse_slot_0
         var.刷新轮次 = (var.刷新轮次 + 1).round()
         while(val.仓库网格.childrenCount() > 1){
           val.仓库网格.get(1).remove()
@@ -190,6 +193,7 @@ ui:
             if(val.仓库网格['物品图标'] != none) {
               slot = val.仓库网格['物品图标'].copy('仓库物品图标_' + var.刷新轮次.round() + '_' + 序号.round())
               slot.entryKey = 序号.round()
+              var.warehouseIcons[序号.round()] = slot
             }
           }
         }
@@ -198,7 +202,7 @@ ui:
       // 注意：icon 为裸变量块级作用域，seticon 必须放在赋值所在的 if 块内
       for(i in range(0, var.pageSize - 1)){
         if(val.仓库网格 != none){
-          icon = val.仓库网格.get(i.round())
+          icon = var.warehouseIcons[i.round()]
           if(icon != none){
             icon.seticon()
           }
@@ -219,6 +223,7 @@ ui:
       }
     load: |-
       var.actionToken = ''
+      var.warehouseIcons = {}
       var.capacityText = '0/0'
       var.slotPriceText = ''
       var.canUpgrade = false
@@ -234,6 +239,7 @@ ui:
       var.selectedBackpackSlot = -1
       var.selectedSlot = -1
       var.sharedEditMode = false
+      var.previewMode = false
       var.sharedWarehouseStorageTexts = {}
       var.sortText = '时间'
       var.unlocked = false
@@ -801,6 +807,7 @@ controls:
             children:
               物品图标:
                 type: Slot
+                val: warehouse_slot_0
                 attribute:
                   entryKey: 0.round()
                   entry: var.slots[self.entryKey]
@@ -816,8 +823,8 @@ controls:
                 action:
                   clickLeft: |-
                     now = Time.currentTime()
-                    if(var.lastSlotClickSlot == self.entryKey && now - var.lastSlotClickTime < 300){
-                      Packet.send(var.packetId, 'withdraw_quick', self.entryKey, 64)
+                    if(!var.readOnly && var.unlocked && var.actionToken != '' && var.lastSlotClickSlot == self.entryKey && now - var.lastSlotClickTime < 300){
+                      Packet.send(var.packetId, 'withdraw_quick', self.entryKey, 64, var.actionToken)
                       var.lastSlotClickSlot = none
                     }else{
                       Packet.send(var.packetId, 'select', self.entryKey)
@@ -857,9 +864,9 @@ controls:
                 action:
                   clickLeft: |-
                     if(var.sharedEditMode){
-                      Packet.send(var.packetId, 'shared_mode', 'readonly')
+                      Packet.send(var.packetId, 'shared_mode', 'readonly', var.actionToken)
                     }else{
-                      Packet.send(var.packetId, 'shared_mode', 'edit')
+                      Packet.send(var.packetId, 'shared_mode', 'edit', var.actionToken)
                     }
                 children:
                   模式切换底:
@@ -1090,11 +1097,12 @@ controls:
               取出:
                 type: Canvas
                 attribute:
+                  enable: "!var.readOnly && var.unlocked && !var.actionBusy && var.actionToken != '' && var.selectedSlot >= 0"
                   width: "var.toolW"
                   height: 44
                 action:
                   clickLeft: |-
-                    Packet.send(var.packetId, 'withdraw', var.selectedSlot, var.amount)
+                    Packet.send(var.packetId, 'withdraw', var.selectedSlot, var.amount, var.actionToken)
                 children:
                   取出底:
                     type: Texture
@@ -1118,11 +1126,12 @@ controls:
               全部取出:
                 type: Canvas
                 attribute:
+                  enable: "!var.readOnly && var.unlocked && !var.actionBusy && var.actionToken != '' && var.selectedSlot >= 0"
                   width: "var.toolW"
                   height: 44
                 action:
                   clickLeft: |-
-                    Packet.send(var.packetId, 'withdraw_all', var.selectedSlot)
+                    Packet.send(var.packetId, 'withdraw_all', var.selectedSlot, var.actionToken)
                 children:
                   全部取出底:
                     type: Texture
@@ -1146,11 +1155,12 @@ controls:
               全部存入:
                 type: Canvas
                 attribute:
+                  enable: "!var.readOnly && var.unlocked && !var.actionBusy && var.actionToken != ''"
                   width: "var.toolW"
                   height: 44
                 action:
                   clickLeft: |-
-                    Packet.send(var.packetId, 'deposit_all_backpack')
+                    Packet.send(var.packetId, 'deposit_all_backpack', var.actionToken)
                 children:
                   全部存入底:
                     type: Texture
@@ -1174,12 +1184,13 @@ controls:
               存入:
                 type: Canvas
                 attribute:
+                  enable: "!var.readOnly && var.unlocked && !var.actionBusy && var.actionToken != '' && var.selectedBackpackSlot >= 9"
                   width: "var.toolW"
                   height: 44
                 action:
                   clickLeft: |-
                     if(var.selectedBackpackSlot != (-1).round()){
-                      Packet.send(var.packetId, 'deposit_slot', var.selectedBackpackSlot, var.amount)
+                      Packet.send(var.packetId, 'deposit_slot', var.selectedBackpackSlot, var.amount, var.actionToken)
                     }
                 children:
                   存入底:
@@ -1209,7 +1220,7 @@ controls:
                 action:
                   clickLeft: |-
                     if(var.selectedBackpackSlot != (-1).round()){
-                      Packet.send(var.packetId, 'toggle_lock', var.selectedBackpackSlot)
+                      Packet.send(var.packetId, 'toggle_lock', var.selectedBackpackSlot, var.actionToken)
                     }
                 children:
                   锁定底:
@@ -1272,7 +1283,7 @@ controls:
             action:
               create: |-
                 for(i in range(1,35)){
-                  slot = self['背包槽'].copy('背包槽' + i.round)
+                  slot = self['背包槽'].copy('背包槽' + i.round())
                   slot.entryKey = (9 + i).round()
                   slot.id = (9 + i).round()
                 }
@@ -1295,8 +1306,8 @@ controls:
                 action:
                   clickLeft: |-
                     now = Time.currentTime()
-                    if(var.lastBackpackClickSlot == self.entryKey && now - var.lastBackpackClickTime < 300){
-                      Packet.send(var.packetId, 'deposit_slot', self.entryKey, 0)
+                    if(!var.readOnly && var.unlocked && var.actionToken != '' && var.lastBackpackClickSlot == self.entryKey && now - var.lastBackpackClickTime < 300){
+                      Packet.send(var.packetId, 'deposit_slot', self.entryKey, 0, var.actionToken)
                       var.lastBackpackClickSlot = none
                     }else{
                       var.selectedBackpackSlot = self.entryKey

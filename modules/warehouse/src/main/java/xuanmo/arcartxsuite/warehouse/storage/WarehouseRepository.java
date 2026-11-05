@@ -63,6 +63,11 @@ public interface WarehouseRepository {
 
     void deleteSlot(String ownerType, String ownerId, String warehouseId, int slot) throws SQLException;
 
+    /** 一次提交槽位变更；旧数量或物品已变化时整批回滚，避免跨服覆盖与部分提交。 */
+    boolean applySlotChanges(List<SlotChange> changes) throws SQLException;
+
+    record SlotChange(SlotItemRecord before, SlotItemRecord after) { }
+
     Map<String, BigDecimal> loadBankBalances(UUID playerUuid) throws SQLException;
 
     void setBankBalance(UUID playerUuid, String currencyId, BigDecimal amount, long updatedAt) throws SQLException;
@@ -99,11 +104,11 @@ public interface WarehouseRepository {
 
     void createSharedWarehouse(SharedWarehouseRecord warehouse) throws SQLException;
 
-    void updateSharedWarehouseLevel(String sharedId, int level, long capacity, long updatedAt) throws SQLException;
+    void updateSharedWarehouseLevel(String sharedId, UUID ownerUuid, int expectedLevel, int level, long capacity, long updatedAt) throws SQLException;
 
-    void updateSharedWarehouseName(String sharedId, String name, long updatedAt) throws SQLException;
+    void updateSharedWarehouseName(String sharedId, UUID ownerUuid, String name, long updatedAt) throws SQLException;
 
-    void updateSharedWarehouseShowcase(String sharedId, boolean showcaseEnabled, long updatedAt) throws SQLException;
+    void updateSharedWarehouseShowcase(String sharedId, UUID ownerUuid, boolean showcaseEnabled, long updatedAt) throws SQLException;
 
     void transferSharedWarehouse(String sharedId, UUID previousOwnerUuid, UUID newOwnerUuid, long updatedAt) throws SQLException;
 
@@ -115,7 +120,7 @@ public interface WarehouseRepository {
 
     void deletePendingTransfer(String sharedId) throws SQLException;
 
-    void deleteSharedWarehouse(String sharedId) throws SQLException;
+    void deleteSharedWarehouse(String sharedId, UUID ownerUuid) throws SQLException;
 
     List<SharedWarehouseRecord> loadSharedWarehouses(UUID playerUuid) throws SQLException;
 
@@ -130,9 +135,9 @@ public interface WarehouseRepository {
 
     int countSharedMembers(String sharedId) throws SQLException;
 
-    void upsertSharedMember(String sharedId, UUID playerUuid, String role, long updatedAt) throws SQLException;
+    void upsertSharedMember(String sharedId, UUID ownerUuid, UUID playerUuid, String role, int maxMembers, long updatedAt) throws SQLException;
 
-    void removeSharedMember(String sharedId, UUID playerUuid) throws SQLException;
+    void removeSharedMember(String sharedId, UUID ownerUuid, UUID playerUuid) throws SQLException;
 
     /** 加载玩家个人设置（自动入库/怪物战利品/入库通知）。 */
     Optional<PlayerSettingsRecord> loadPlayerSettings(UUID playerUuid) throws SQLException;

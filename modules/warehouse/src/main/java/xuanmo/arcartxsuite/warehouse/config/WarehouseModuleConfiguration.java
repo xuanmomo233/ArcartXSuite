@@ -24,7 +24,6 @@ import xuanmo.arcartxsuite.api.item.ItemMatcherLoader;
  */
 public record WarehouseModuleConfiguration(
     boolean debug,
-    long flushIntervalTicks,
     long transferConfirmExpireHours,
     VerifyMode verifyOnDeposit,
     long maxItemBytes,
@@ -38,7 +37,7 @@ public record WarehouseModuleConfiguration(
     Map<String, DepositProductDefinition> depositProducts,
     SharedConfiguration shared,
     Map<String, SortProfile> sortProfiles,
-    ItemMatcher blacklist,
+    List<ItemMatcher> blacklist,
     ShowcaseConfiguration showcase
 ) {
 
@@ -56,7 +55,6 @@ public record WarehouseModuleConfiguration(
 
     public static WarehouseModuleConfiguration load(FileConfiguration configuration, Logger logger, CurrencyBridgeAPI currencyBridge) {
         boolean debug = configuration.getBoolean("settings.debug", false);
-        long flushIntervalTicks = Math.max(20L, configuration.getLong("settings.flush-interval-ticks", 100L));
         long transferConfirmExpireHours = configuration.getLong("settings.transfer-confirm-expire-hours", 24L);
         VerifyMode verifyOnDeposit = VerifyMode.parse(configuration.getString("settings.verify-on-deposit", "meta"), logger);
         long maxItemBytes = Math.max(0L, configuration.getLong("settings.max-item-bytes", 4194304L));
@@ -68,7 +66,7 @@ public record WarehouseModuleConfiguration(
             readString(configuration, "ui.packet-id", "AXS_WAREHOUSE"),
             configuration.getBoolean("ui.register-ui-on-enable", true),
             configuration.getBoolean("ui.overwrite-ui-files", false),
-            Math.max(1, configuration.getInt("ui.page-size", configuration.getInt("search.page-size", 18)))
+            Math.max(1, configuration.getInt("ui.page-size", 72))
         );
 
         StorageConfiguration storage = StorageConfiguration.load(
@@ -79,13 +77,13 @@ public record WarehouseModuleConfiguration(
         PickupConfiguration pickup = new PickupConfiguration(
             pickupSection == null || pickupSection.getBoolean("enabled", true),
             pickupSection == null || pickupSection.getBoolean("auto-store-on-pickup", true),
-            pickupSection == null || pickupSection.getBoolean("auto-store-mythic-loot", true),
+            pickupSection != null && pickupSection.getBoolean("auto-store-mythic-loot", false),
             pickupSection == null || pickupSection.getBoolean("mythic-loot-enabled", true),
             pickupSection == null || pickupSection.getBoolean("notify-on-auto-store", true)
         );
 
         SearchConfiguration search = new SearchConfiguration(
-            Math.max(4, configuration.getInt("search.page-size", ui.pageSize())),
+            Math.max(4, configuration.getInt("search.page-size", 18)),
             normalizeId(configuration.getString("search.default-sort", "time"))
         );
 
@@ -99,20 +97,30 @@ public record WarehouseModuleConfiguration(
         Map<String, DepositProductDefinition> depositProducts = loadDepositProducts(configuration.getConfigurationSection("bank.deposit-products"), logger);
         SharedConfiguration shared = loadShared(configuration.getConfigurationSection("shared"));
         Map<String, SortProfile> sortProfiles = loadSortProfiles(configuration.getConfigurationSection("sort-profiles"), logger);
-        ItemMatcher blacklist = ItemMatcherLoader.load(configuration.getConfigurationSection("blacklist"), logger, "blacklist");
+        List<ItemMatcher> blacklist = new ArrayList<>();
+        ConfigurationSection blacklistSection = configuration.getConfigurationSection("blacklist");
+        if (blacklistSection != null) {
+            // 黑名单的各字段独立拦截；不把名称、Lore 等拼成必须同时命中的 AND 条件。
+            for (String key : blacklistSection.getKeys(false)) {
+                var rule = new org.bukkit.configuration.file.YamlConfiguration();
+                ConfigurationSection child = blacklistSection.getConfigurationSection(key);
+                if (child != null) rule.createSection(key, child.getValues(false));
+                else rule.set(key, blacklistSection.get(key));
+                ItemMatcher matcher = ItemMatcherLoader.load(rule, logger, "blacklist." + key);
+                if (!matcher.emptyMatcher()) blacklist.add(matcher);
+            }
+        }
 
         ConfigurationSection showcaseSection = configuration.getConfigurationSection("showcase");
         ShowcaseConfiguration showcase = new ShowcaseConfiguration(
             showcaseSection == null || showcaseSection.getBoolean("enabled", true),
             showcaseSection == null ? 60 : Math.max(5, showcaseSection.getInt("cooldown-seconds", 60)),
-            showcaseSection == null ? 9 : Math.max(1, showcaseSection.getInt("max-items", 9)),
             showcaseSection == null ? "" : readString(showcaseSection, "card-id", ""),
             showcaseSection == null ? "arcartxsuite.warehouse.showcase" : readString(showcaseSection, "permission", "arcartxsuite.warehouse.showcase")
         );
 
         return new WarehouseModuleConfiguration(
             debug,
-            flushIntervalTicks,
             transferConfirmExpireHours,
             verifyOnDeposit,
             maxItemBytes,
@@ -126,13 +134,13 @@ public record WarehouseModuleConfiguration(
             immutableCopy(depositProducts),
             shared,
             immutableCopy(sortProfiles),
-            blacklist,
+            List.copyOf(blacklist),
             showcase
         );
     }
 
     /** 仓库展示配置：冷却、最大展示物品数、聊天卡片 ID。 */
-    public record ShowcaseConfiguration(boolean enabled, int cooldownSeconds, int maxItems, String cardId, String permission) {
+    public record ShowcaseConfiguration(boolean enabled, int cooldownSeconds, String cardId, String permission) {
         public boolean useCard() {
             return cardId != null && !cardId.isBlank();
         }
@@ -207,7 +215,7 @@ public record WarehouseModuleConfiguration(
     private static Map<String, WarehouseDefinition> loadWarehouses(ConfigurationSection section, Logger logger) {
         LinkedHashMap<String, WarehouseDefinition> values = new LinkedHashMap<>();
         if (section == null) {
-            values.put("personal", new WarehouseDefinition("personal", "&6个人仓库", true, "", 32L, 999L, null));
+            values.put("personal", new WarehouseDefinition("personal", "&6个人仓库", true, "", 72L, 720L, null));
             return values;
         }
         for (String rawId : section.getKeys(false)) {
@@ -216,8 +224,8 @@ public record WarehouseModuleConfiguration(
                 continue;
             }
             String id = normalizeId(rawId);
-            long baseSlots = Math.max(1L, child.getLong("base-slots", 32L));
-            long maxSlots = Math.max(baseSlots, child.getLong("max-slots", 999L));
+            long baseSlots = Math.max(1L, child.getLong("base-slots", 72L));
+            long maxSlots = Math.max(baseSlots, child.getLong("max-slots", 720L));
             UpgradeCost slotPrice = loadUpgradeCost(child, "slot-price");
             values.put(
                 id,

@@ -30,7 +30,6 @@ help:
 status:
   title: "&6Warehouse 状态"
   cached: "&7缓存玩家: &f{0}"
-  dirty: "&7脏数据: &f{0}"
   currency: "&7货币: &f{0}"
   cross-server: "&7跨服编辑锁: &f{0}"
   shared-locks: "&7活跃共享锁: &f{0}"
@@ -96,6 +95,7 @@ player:
   showcase-cooldown: "展示冷却中，剩余 {0} 秒。"
   showcase-empty: "没有可展示的仓库，请至少开启一个仓库的展示设置。"
   showcase-success: "已展示仓库。"
+  showcase-send-failed: "展示卡片发送失败，请检查卡片 ID 与 ArcartX 状态后重试。"
   preview-read-only: "预览模式下无法执行此操作。"
   secondary-locked: "已锁定二级密码会话。"
   operation-failed: "操作失败，请查看控制台。"

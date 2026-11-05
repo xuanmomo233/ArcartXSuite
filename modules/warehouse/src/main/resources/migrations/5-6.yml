@@ -1,0 +1,8 @@
+from-version: 5
+to-version: 6
+description: "移除未使用的定时落库和展示物品数量设置。"
+operations:
+  - type: remove
+    path: settings.flush-interval-ticks
+  - type: remove
+    path: showcase.max-items
