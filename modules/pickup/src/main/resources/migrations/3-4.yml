@@ -1,0 +1,7 @@
+from-version: 3
+to-version: 4
+description: "扫描模式改为快捷收取清单，原显示数量改为每页显示行数。"
+operations:
+  - type: move
+    from: scanner.max-display
+    to: scanner.display-rows

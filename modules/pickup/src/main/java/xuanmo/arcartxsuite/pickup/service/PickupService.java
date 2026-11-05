@@ -30,7 +30,7 @@ public final class PickupService implements Listener {
 
     private static final long PREOPEN_DELAY_TICKS = 5L;
     private static final long OPENED_PACKET_DELAY_TICKS = 1L;
-    /** openUi 成功后延迟多少 tick 将玩家标记为已打开并 flush 待发队列 */
+    /** 等待 UI 打开回调的超时；超时只解除 opening，不把未确认界面当成已打开。 */
     private static final long OPEN_CONFIRM_DELAY_TICKS = 40L;
 
     private final JavaPlugin plugin;
@@ -40,6 +40,9 @@ public final class PickupService implements Listener {
     private final ItemBridgeAPI itemStackBridge;
     private final String uiId;
     private final Set<UUID> openedPlayers = ConcurrentHashMap.newKeySet();
+    private final Set<UUID> openingPlayers = ConcurrentHashMap.newKeySet();
+    private final Map<UUID, Object> sessions = new ConcurrentHashMap<>();
+    private org.bukkit.scheduler.BukkitTask initialOpenTask, retryOpenTask;
     private final Map<UUID, Deque<Map<String, Object>>> pendingPickups = new ConcurrentHashMap<>();
     /** 每玩家待推送队列上限：超出丢最旧（防掉线/未开界面时无界堆积）。 */
     private static final int MAX_PENDING_PICKUPS = 64;
@@ -49,6 +52,7 @@ public final class PickupService implements Listener {
     /** 手动关闭拾取通知的玩家集合 */
     private final Set<UUID> disabledPlayers = ConcurrentHashMap.newKeySet();
     private Supplier<EventBusCapability> eventBusProvider;
+    private java.util.function.Function<ItemStack, String> itemNameResolver;
     private boolean active;
 
     public PickupService(
@@ -70,25 +74,41 @@ public final class PickupService implements Listener {
     public void start() {
         active = true;
         Bukkit.getPluginManager().registerEvents(this, plugin);
-        Bukkit.getScheduler().runTaskLater(plugin, this::openForOnlinePlayers, PREOPEN_DELAY_TICKS);
+        bridge.registerUiCloseCallback(uiId, player -> {
+            openedPlayers.remove(player.getUniqueId());
+            openingPlayers.remove(player.getUniqueId());
+            sessions.remove(player.getUniqueId());
+        });
+        initialOpenTask = Bukkit.getScheduler().runTaskLater(plugin, this::openForOnlinePlayers, PREOPEN_DELAY_TICKS);
         // 二次兜底：首次打开时客户端可能尚未就绪，延迟重试
-        Bukkit.getScheduler().runTaskLater(plugin, this::openForOnlinePlayers, PREOPEN_DELAY_TICKS + OPEN_CONFIRM_DELAY_TICKS);
+        retryOpenTask = Bukkit.getScheduler().runTaskLater(plugin, this::openForOnlinePlayers, PREOPEN_DELAY_TICKS + OPEN_CONFIRM_DELAY_TICKS);
     }
 
     public void setEventBusProvider(Supplier<EventBusCapability> eventBusProvider) {
         this.eventBusProvider = eventBusProvider;
     }
 
+    public void setItemNameResolver(java.util.function.Function<ItemStack, String> resolver) {
+        itemNameResolver = resolver;
+    }
+
     public void shutdown() {
         active = false;
+        if (initialOpenTask != null) initialOpenTask.cancel();
+        if (retryOpenTask != null) retryOpenTask.cancel();
+        bridge.unregisterUiCloseCallback(uiId);
         HandlerList.unregisterAll(this);
-        for (UUID playerId : openedPlayers) {
+        var allOpen = new java.util.HashSet<>(openedPlayers);
+        allOpen.addAll(openingPlayers);
+        for (UUID playerId : allOpen) {
             Player player = Bukkit.getPlayer(playerId);
             if (player != null && player.isOnline()) {
                 bridge.closeUi(player, uiId);
             }
         }
         openedPlayers.clear();
+        openingPlayers.clear();
+        sessions.clear();
         pendingPickups.clear();
         disabledPlayers.clear();
     }
@@ -110,6 +130,8 @@ public final class PickupService implements Listener {
         }
         if (shouldDisable) {
             disabledPlayers.add(playerId);
+            sessions.remove(playerId);
+            openingPlayers.remove(playerId);
             // 立即关闭 HUD 并清理该玩家的打开状态与待发队列
             Player player = Bukkit.getPlayer(playerId);
             if (player != null && player.isOnline() && bridge.isAvailable()) {
@@ -145,6 +167,10 @@ public final class PickupService implements Listener {
         if (!active || player == null || !player.isOnline()) {
             return;
         }
+        UUID id = player.getUniqueId();
+        openedPlayers.remove(id);
+        openingPlayers.remove(id);
+        sessions.remove(id);
         ensureUiOpen(player);
     }
 
@@ -177,6 +203,7 @@ public final class PickupService implements Listener {
             return false;
         }
         UUID playerId = player.getUniqueId();
+        publishPickupEvent(player, itemStack, amount);
         if (disabledPlayers.contains(playerId)) {
             if (configuration.debug()) {
                 logger.info("[PickupDiag] notifyPickup early-return-3 reason=disabled-by-player");
@@ -184,12 +211,7 @@ public final class PickupService implements Listener {
             return false;
         }
 
-        Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("itemJson", itemStackBridge.itemToPreviewJson(itemStack).orElse(""));
-        payload.put("amount", amount);
-
-        // 补发路径同样代表"发生了一次拾取"，无论 HUD 最终是否成功打开都发事件
-        publishPickupEvent(player, itemStack, amount);
+        Map<String, Object> payload = notificationPayload(itemStack, amount);
 
         if (openedPlayers.contains(playerId)) {
             if (configuration.debug()) {
@@ -218,42 +240,40 @@ public final class PickupService implements Listener {
         return true;
     }
 
-    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onEntityPickupItem(EntityPickupItemEvent event) {
-        if (!(event.getEntity() instanceof Player player) || !player.isOnline()) {
-            return;
-        }
-        if (disabledPlayers.contains(player.getUniqueId())) {
-            return;
-        }
+        if (!(event.getEntity() instanceof Player player)) return;
+        ItemStack stack = event.getItem().getItemStack();
+        notifyPickup(player, stack, stack.getAmount());
+    }
 
-        ItemStack itemStack = event.getItem().getItemStack();
+    private Map<String, Object> notificationPayload(ItemStack itemStack, int amount) {
         Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("itemJson", itemStackBridge.itemToPreviewJson(itemStack).orElse(""));
-        payload.put("amount", itemStack.getAmount());
-
-        UUID playerId = player.getUniqueId();
-        publishPickupEvent(player, itemStack, itemStack.getAmount());
-        if (openedPlayers.contains(playerId)) {
-            scheduleSend(player, payload, OPENED_PACKET_DELAY_TICKS);
-            return;
+        payload.put("itemJson", itemStackBridge.itemToPreviewJson(itemStack).filter(json -> !json.isBlank())
+            .orElse("{\"id\":\"minecraft:air\",\"Count\":1b}"));
+        if (itemNameResolver != null) {
+            payload.put("name", itemNameResolver.apply(itemStack));
+        } else {
+            var meta = itemStack.getItemMeta();
+            payload.put("name", meta != null && meta.hasDisplayName() ? meta.getDisplayName()
+                : xuanmo.arcartxsuite.api.item.VanillaItemNameTable.translate(itemStack.getType()));
         }
-
-        Map<String, Object> queuedPayload = enqueuePickup(playerId, payload);
-        if (!ensureUiOpen(player)) {
-            removeQueuedPayload(playerId, queuedPayload);
-            logPickupPacket(player, payload, false);
-        }
+        payload.put("amount", amount);
+        return payload;
     }
 
     private void publishPickupEvent(Player player, ItemStack itemStack, int amount) {
-        if (eventBusProvider == null) return;
-        EventBusCapability eventBus = eventBusProvider.get();
-        if (eventBus == null) return;
-        Map<String, String> eventPayload = new HashMap<>();
-        eventPayload.put("material", itemStack.getType().name());
-        eventPayload.put("amount", String.valueOf(amount));
-        eventBus.publish("axs.pickup.item_pickup", player, eventPayload);
+        try {
+            if (eventBusProvider == null) return;
+            EventBusCapability eventBus = eventBusProvider.get();
+            if (eventBus == null) return;
+            Map<String, String> eventPayload = new HashMap<>();
+            eventPayload.put("material", itemStack.getType().name());
+            eventPayload.put("amount", String.valueOf(amount));
+            eventBus.publish("axs.pickup.item_pickup", player, eventPayload);
+        } catch (RuntimeException exception) {
+            logger.warning("拾取事件通知失败: " + exception.getMessage());
+        }
     }
 
     @EventHandler
@@ -261,10 +281,13 @@ public final class PickupService implements Listener {
         UUID playerId = event.getPlayer().getUniqueId();
         openedPlayers.remove(playerId);
         pendingPickups.remove(playerId);
+        openingPlayers.remove(playerId);
+        sessions.remove(playerId);
+        disabledPlayers.remove(playerId);
     }
 
     private boolean ensureUiOpen(Player player) {
-        if (player == null || !player.isOnline() || !bridge.isAvailable()) {
+        if (!active || player == null || !player.isOnline() || disabledPlayers.contains(player.getUniqueId()) || !bridge.isAvailable()) {
             if (configuration.debug()) {
                 logger.info("[PickupDiag] ensureUiOpen skip player=" + (player != null ? player.getName() : "null")
                     + " online=" + (player != null && player.isOnline())
@@ -273,23 +296,25 @@ public final class PickupService implements Listener {
             return false;
         }
         UUID playerId = player.getUniqueId();
-        if (openedPlayers.contains(playerId)) {
+        if (openedPlayers.contains(playerId) || openingPlayers.contains(playerId)) {
             return true;
         }
 
-        // 不依赖客户端回调确认，openUi 返回 true 即视为服务端已下发打开指令。
-        // 延迟 OPEN_CONFIRM_DELAY_TICKS 后将玩家标记为已打开并 flush 待发队列，
-        // 给客户端足够时间完成 HUD 渲染。后续 onClientInitialized 会兜底重试。
-        boolean opened = bridge.openUi(player, uiId);
+        Object session = sessions.computeIfAbsent(playerId, ignored -> new Object());
+        openingPlayers.add(playerId);
+        boolean opened = bridge.openUiWithCallback(player, uiId, () -> {
+            if (sessions.get(playerId) == session) handleUiOpened(player);
+        });
         if (configuration.debug()) {
             logger.info("[PickupDiag] ensureUiOpen openUi player=" + player.getName()
                 + " uiId=" + uiId + " returned=" + opened);
         }
         if (opened) {
             logOpenMode(player, "open");
-            Bukkit.getScheduler().runTaskLater(plugin, () -> handleUiOpened(player), OPEN_CONFIRM_DELAY_TICKS);
+            scheduleForSession(player, () -> openingPlayers.remove(playerId), OPEN_CONFIRM_DELAY_TICKS);
             return true;
         }
+        openingPlayers.remove(playerId);
         return false;
     }
 
@@ -303,10 +328,11 @@ public final class PickupService implements Listener {
     }
 
     private void handleUiOpened(Player player) {
-        if (!active || player == null || !player.isOnline() || !bridge.isAvailable()) {
+        if (!active || player == null || !player.isOnline() || disabledPlayers.contains(player.getUniqueId()) || !bridge.isAvailable()) {
             return;
         }
         UUID playerId = player.getUniqueId();
+        openingPlayers.remove(playerId);
         openedPlayers.add(playerId);
         flushPendingPickups(player);
     }
@@ -349,13 +375,21 @@ public final class PickupService implements Listener {
     }
 
     private void scheduleSend(Player player, Map<String, Object> payload, long delayTicks) {
-        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+        scheduleForSession(player, () -> {
             if (!active || !player.isOnline() || !bridge.isAvailable()) {
                 return;
             }
             boolean success = bridge.sendPacket(player, uiId, "pick", payload);
             logPickupPacket(player, payload, success);
         }, Math.max(0L, delayTicks));
+    }
+
+    private void scheduleForSession(Player player, Runnable action, long delayTicks) {
+        UUID id = player.getUniqueId();
+        Object session = sessions.computeIfAbsent(id, ignored -> new Object());
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            if (active && player.isOnline() && !disabledPlayers.contains(id) && sessions.get(id) == session) action.run();
+        }, delayTicks);
     }
 
     private void logOpenMode(Player player, String mode) {

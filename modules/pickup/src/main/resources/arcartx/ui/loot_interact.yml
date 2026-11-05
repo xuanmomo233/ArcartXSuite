@@ -1,20 +1,1041 @@
-# 掉落物交互面板（透明 Menu，捕获鼠标光标并处理按键交互）
-# 打开后通过发包给服务端，由服务端发包更新 loot_panel HUD。
-# 滚轮切换选中由 loot_panel HUD 的 wheel 触发器统一处理（依赖 var.menuOpen 守卫避免 Menu 打开时双发）
+# Pickup 扫描界面：16 个槽位；HUD 只展示，交互菜单负责鼠标与滚轮。
 ui:
-  isHud: false  # 非 HUD，是独立打开的 Menu 界面
-  defaultOpen: false  # 不随启动自动打开
-  background: false  # 无背景遮罩（透明菜单）
-  escClose: true  # 按 ESC 关闭
-  through: true  # 鼠标穿透（仅捕获交互，不阻挡游戏画面）
-action:
-  # 关闭菜单时通知服务端
-  close: |-
-    Packet.send('pickup', 'close_menu')
+  isHud: false
+  defaultOpen: false
+  through: false
+  background: false
+  escClose: true
+  closeDied: false
+  packetHandler:
+    update: |-
+      var.count = packet['count']
+      var.totalCount = packet['totalCount']
+      var.position = packet['position']
+      var.busy = packet['busy']
+      var.limited = packet['limited']
+      var.limitHint = var.limited ? '&e掉落物较多，收取后将继续扫描' : ''
+      var.batchEnabled = packet['batchEnabled']
+      var.description = packet['description']
+      var.pickKey = packet['pickKey']
+      var.previousKey = packet['previousKey']
+      var.nextKey = packet['nextKey']
+      var.allKey = packet['allKey']
+      var.detailsKey = packet['detailsKey']
+      var.pickLabel = Keyboard.getKeyBindingKeyName(var.pickKey)
+      var.previousLabel = Keyboard.getKeyBindingKeyName(var.previousKey)
+      var.nextLabel = Keyboard.getKeyBindingKeyName(var.nextKey)
+      var.allLabel = Keyboard.getKeyBindingKeyName(var.allKey)
+      var.detailsLabel = Keyboard.getKeyBindingKeyName(var.detailsKey)
+      var.selectedIndex = packet['selectedIndex']
+      var.actionToken = packet['action_token']
+      var.item0Visible = packet['item0Visible'] != none ? packet['item0Visible'] : false
+      var.item0Amount = packet['item0Amount'] != none ? packet['item0Amount'] : 0
+      var.item0ItemJson = packet['item0ItemJson'] != none ? packet['item0ItemJson'] : var.air
+      var.item0Uuid = packet['item0Uuid'] != none ? packet['item0Uuid'] : ''
+      var.item0Name = packet['item0Name'] != none ? packet['item0Name'] : ''
+      var.item1Visible = packet['item1Visible'] != none ? packet['item1Visible'] : false
+      var.item1Amount = packet['item1Amount'] != none ? packet['item1Amount'] : 0
+      var.item1ItemJson = packet['item1ItemJson'] != none ? packet['item1ItemJson'] : var.air
+      var.item1Uuid = packet['item1Uuid'] != none ? packet['item1Uuid'] : ''
+      var.item1Name = packet['item1Name'] != none ? packet['item1Name'] : ''
+      var.item2Visible = packet['item2Visible'] != none ? packet['item2Visible'] : false
+      var.item2Amount = packet['item2Amount'] != none ? packet['item2Amount'] : 0
+      var.item2ItemJson = packet['item2ItemJson'] != none ? packet['item2ItemJson'] : var.air
+      var.item2Uuid = packet['item2Uuid'] != none ? packet['item2Uuid'] : ''
+      var.item2Name = packet['item2Name'] != none ? packet['item2Name'] : ''
+      var.item3Visible = packet['item3Visible'] != none ? packet['item3Visible'] : false
+      var.item3Amount = packet['item3Amount'] != none ? packet['item3Amount'] : 0
+      var.item3ItemJson = packet['item3ItemJson'] != none ? packet['item3ItemJson'] : var.air
+      var.item3Uuid = packet['item3Uuid'] != none ? packet['item3Uuid'] : ''
+      var.item3Name = packet['item3Name'] != none ? packet['item3Name'] : ''
+      var.item4Visible = packet['item4Visible'] != none ? packet['item4Visible'] : false
+      var.item4Amount = packet['item4Amount'] != none ? packet['item4Amount'] : 0
+      var.item4ItemJson = packet['item4ItemJson'] != none ? packet['item4ItemJson'] : var.air
+      var.item4Uuid = packet['item4Uuid'] != none ? packet['item4Uuid'] : ''
+      var.item4Name = packet['item4Name'] != none ? packet['item4Name'] : ''
+      var.item5Visible = packet['item5Visible'] != none ? packet['item5Visible'] : false
+      var.item5Amount = packet['item5Amount'] != none ? packet['item5Amount'] : 0
+      var.item5ItemJson = packet['item5ItemJson'] != none ? packet['item5ItemJson'] : var.air
+      var.item5Uuid = packet['item5Uuid'] != none ? packet['item5Uuid'] : ''
+      var.item5Name = packet['item5Name'] != none ? packet['item5Name'] : ''
+      var.item6Visible = packet['item6Visible'] != none ? packet['item6Visible'] : false
+      var.item6Amount = packet['item6Amount'] != none ? packet['item6Amount'] : 0
+      var.item6ItemJson = packet['item6ItemJson'] != none ? packet['item6ItemJson'] : var.air
+      var.item6Uuid = packet['item6Uuid'] != none ? packet['item6Uuid'] : ''
+      var.item6Name = packet['item6Name'] != none ? packet['item6Name'] : ''
+      var.item7Visible = packet['item7Visible'] != none ? packet['item7Visible'] : false
+      var.item7Amount = packet['item7Amount'] != none ? packet['item7Amount'] : 0
+      var.item7ItemJson = packet['item7ItemJson'] != none ? packet['item7ItemJson'] : var.air
+      var.item7Uuid = packet['item7Uuid'] != none ? packet['item7Uuid'] : ''
+      var.item7Name = packet['item7Name'] != none ? packet['item7Name'] : ''
+      var.item8Visible = packet['item8Visible'] != none ? packet['item8Visible'] : false
+      var.item8Amount = packet['item8Amount'] != none ? packet['item8Amount'] : 0
+      var.item8ItemJson = packet['item8ItemJson'] != none ? packet['item8ItemJson'] : var.air
+      var.item8Uuid = packet['item8Uuid'] != none ? packet['item8Uuid'] : ''
+      var.item8Name = packet['item8Name'] != none ? packet['item8Name'] : ''
+      var.item9Visible = packet['item9Visible'] != none ? packet['item9Visible'] : false
+      var.item9Amount = packet['item9Amount'] != none ? packet['item9Amount'] : 0
+      var.item9ItemJson = packet['item9ItemJson'] != none ? packet['item9ItemJson'] : var.air
+      var.item9Uuid = packet['item9Uuid'] != none ? packet['item9Uuid'] : ''
+      var.item9Name = packet['item9Name'] != none ? packet['item9Name'] : ''
+      var.item10Visible = packet['item10Visible'] != none ? packet['item10Visible'] : false
+      var.item10Amount = packet['item10Amount'] != none ? packet['item10Amount'] : 0
+      var.item10ItemJson = packet['item10ItemJson'] != none ? packet['item10ItemJson'] : var.air
+      var.item10Uuid = packet['item10Uuid'] != none ? packet['item10Uuid'] : ''
+      var.item10Name = packet['item10Name'] != none ? packet['item10Name'] : ''
+      var.item11Visible = packet['item11Visible'] != none ? packet['item11Visible'] : false
+      var.item11Amount = packet['item11Amount'] != none ? packet['item11Amount'] : 0
+      var.item11ItemJson = packet['item11ItemJson'] != none ? packet['item11ItemJson'] : var.air
+      var.item11Uuid = packet['item11Uuid'] != none ? packet['item11Uuid'] : ''
+      var.item11Name = packet['item11Name'] != none ? packet['item11Name'] : ''
+      var.item12Visible = packet['item12Visible'] != none ? packet['item12Visible'] : false
+      var.item12Amount = packet['item12Amount'] != none ? packet['item12Amount'] : 0
+      var.item12ItemJson = packet['item12ItemJson'] != none ? packet['item12ItemJson'] : var.air
+      var.item12Uuid = packet['item12Uuid'] != none ? packet['item12Uuid'] : ''
+      var.item12Name = packet['item12Name'] != none ? packet['item12Name'] : ''
+      var.item13Visible = packet['item13Visible'] != none ? packet['item13Visible'] : false
+      var.item13Amount = packet['item13Amount'] != none ? packet['item13Amount'] : 0
+      var.item13ItemJson = packet['item13ItemJson'] != none ? packet['item13ItemJson'] : var.air
+      var.item13Uuid = packet['item13Uuid'] != none ? packet['item13Uuid'] : ''
+      var.item13Name = packet['item13Name'] != none ? packet['item13Name'] : ''
+      var.item14Visible = packet['item14Visible'] != none ? packet['item14Visible'] : false
+      var.item14Amount = packet['item14Amount'] != none ? packet['item14Amount'] : 0
+      var.item14ItemJson = packet['item14ItemJson'] != none ? packet['item14ItemJson'] : var.air
+      var.item14Uuid = packet['item14Uuid'] != none ? packet['item14Uuid'] : ''
+      var.item14Name = packet['item14Name'] != none ? packet['item14Name'] : ''
+      var.item15Visible = packet['item15Visible'] != none ? packet['item15Visible'] : false
+      var.item15Amount = packet['item15Amount'] != none ? packet['item15Amount'] : 0
+      var.item15ItemJson = packet['item15ItemJson'] != none ? packet['item15ItemJson'] : var.air
+      var.item15Uuid = packet['item15Uuid'] != none ? packet['item15Uuid'] : ''
+      var.item15Name = packet['item15Name'] != none ? packet['item15Name'] : ''
+      var.dirty = true
+    select: |-
+      var.selectedIndex = packet['selectedIndex']
+    menu_state: |-
+      var.menuOpen = packet['open']
+    result: |-
+      var.summary = packet['summary']
+      var.resultUntil = Time.currentTime() + 6000
+  action:
+    seconds: |-
+      if(var.pickKey != ''){
+        var.pickLabel = Keyboard.getKeyBindingKeyName(var.pickKey)
+        var.previousLabel = Keyboard.getKeyBindingKeyName(var.previousKey)
+        var.nextLabel = Keyboard.getKeyBindingKeyName(var.nextKey)
+        var.allLabel = Keyboard.getKeyBindingKeyName(var.allKey)
+        var.detailsLabel = Keyboard.getKeyBindingKeyName(var.detailsKey)
+      }
+    load: |-
+      var.air = '{"id":"minecraft:air","Count":1b}'
+      var.count = 0
+      var.totalCount = 0
+      var.position = 0
+      var.busy = false
+      var.limited = false
+      var.limitHint = ''
+      var.batchEnabled = false
+      var.summary = ''
+      var.resultUntil = 0
+      var.now = 0
+      var.description = []
+      var.pickKey = ''
+      var.pickLabel = '拾取键'
+      var.previousLabel = '上一项'
+      var.nextLabel = '下一项'
+      var.allLabel = '批量键'
+      var.detailsLabel = '详情键'
+      var.selectedIndex = 0
+      var.actionToken = ''
+      var.menuOpen = false
+      var.dirty = false
+      var.item0Visible = false
+      var.item0Amount = 0
+      var.item0Name = ''
+      var.item0Uuid = ''
+      var.item0ItemJson = var.air
+      var.item1Visible = false
+      var.item1Amount = 0
+      var.item1Name = ''
+      var.item1Uuid = ''
+      var.item1ItemJson = var.air
+      var.item2Visible = false
+      var.item2Amount = 0
+      var.item2Name = ''
+      var.item2Uuid = ''
+      var.item2ItemJson = var.air
+      var.item3Visible = false
+      var.item3Amount = 0
+      var.item3Name = ''
+      var.item3Uuid = ''
+      var.item3ItemJson = var.air
+      var.item4Visible = false
+      var.item4Amount = 0
+      var.item4Name = ''
+      var.item4Uuid = ''
+      var.item4ItemJson = var.air
+      var.item5Visible = false
+      var.item5Amount = 0
+      var.item5Name = ''
+      var.item5Uuid = ''
+      var.item5ItemJson = var.air
+      var.item6Visible = false
+      var.item6Amount = 0
+      var.item6Name = ''
+      var.item6Uuid = ''
+      var.item6ItemJson = var.air
+      var.item7Visible = false
+      var.item7Amount = 0
+      var.item7Name = ''
+      var.item7Uuid = ''
+      var.item7ItemJson = var.air
+      var.item8Visible = false
+      var.item8Amount = 0
+      var.item8Name = ''
+      var.item8Uuid = ''
+      var.item8ItemJson = var.air
+      var.item9Visible = false
+      var.item9Amount = 0
+      var.item9Name = ''
+      var.item9Uuid = ''
+      var.item9ItemJson = var.air
+      var.item10Visible = false
+      var.item10Amount = 0
+      var.item10Name = ''
+      var.item10Uuid = ''
+      var.item10ItemJson = var.air
+      var.item11Visible = false
+      var.item11Amount = 0
+      var.item11Name = ''
+      var.item11Uuid = ''
+      var.item11ItemJson = var.air
+      var.item12Visible = false
+      var.item12Amount = 0
+      var.item12Name = ''
+      var.item12Uuid = ''
+      var.item12ItemJson = var.air
+      var.item13Visible = false
+      var.item13Amount = 0
+      var.item13Name = ''
+      var.item13Uuid = ''
+      var.item13ItemJson = var.air
+      var.item14Visible = false
+      var.item14Amount = 0
+      var.item14Name = ''
+      var.item14Uuid = ''
+      var.item14ItemJson = var.air
+      var.item15Visible = false
+      var.item15Amount = 0
+      var.item15Name = ''
+      var.item15Uuid = ''
+      var.item15ItemJson = var.air
+    tick: |-
+      var.now = Time.currentTime()
+      if(var.dirty){
+        val.loot_slot_0.setItemIcon(var.item0ItemJson)
+        val.loot_slot_1.setItemIcon(var.item1ItemJson)
+        val.loot_slot_2.setItemIcon(var.item2ItemJson)
+        val.loot_slot_3.setItemIcon(var.item3ItemJson)
+        val.loot_slot_4.setItemIcon(var.item4ItemJson)
+        val.loot_slot_5.setItemIcon(var.item5ItemJson)
+        val.loot_slot_6.setItemIcon(var.item6ItemJson)
+        val.loot_slot_7.setItemIcon(var.item7ItemJson)
+        val.loot_slot_8.setItemIcon(var.item8ItemJson)
+        val.loot_slot_9.setItemIcon(var.item9ItemJson)
+        val.loot_slot_10.setItemIcon(var.item10ItemJson)
+        val.loot_slot_11.setItemIcon(var.item11ItemJson)
+        val.loot_slot_12.setItemIcon(var.item12ItemJson)
+        val.loot_slot_13.setItemIcon(var.item13ItemJson)
+        val.loot_slot_14.setItemIcon(var.item14ItemJson)
+        val.loot_slot_15.setItemIcon(var.item15ItemJson)
+        var.dirty = false
+      }
+    close: |-
+      Packet.send('pickup', 'close_menu', var.actionToken)
+    wheel: |-
+      if(var.count > 0 && var.actionToken != '' && !val.details_scroll.isHovered()){
+        if(self.wheelValue > 0){ Packet.send('pickup', 'scroll_up', var.actionToken) }
+        if(self.wheelValue < 0){ Packet.send('pickup', 'scroll_down', var.actionToken) }
+      }
+
 controls:
-  自适应全局布局:
+  自适应布局:
     type: Adaptive
     attribute:
       point: ~stretch_all
       width: 1920
       height: 1080
+      through: true
+    children:
+      拾取面板:
+        type: Canvas
+        attribute:
+          point: ~middle_center
+          x: 240
+          y: 0
+          width: 440
+          height: var.count * 42 + 232
+          visible: var.count > 0
+          through: true
+        children:
+          操作提示:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 10
+              y: 6
+              fontSize: 20
+              texts: "var.busy ? '&e收取中…' : '&f点击收取当前类 · 滚轮切换 · Esc 关闭'"
+              through: true
+          清单位置:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 10
+              y: var.count * 42 + 180
+              fontSize: 20
+              texts: "'&7第 ' + var.position.round() + ' / ' + var.totalCount.round() + ' 类'"
+              through: true
+          收取状态:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 10
+              y: var.count * 42 + 202
+              fontSize: 20
+              texts: "var.now < var.resultUntil ? var.summary : var.limitHint"
+              through: true
+          物品说明:
+            type: Scroll
+            val: details_scroll
+            attribute:
+              point: ~top_left
+              x: 10
+              y: var.count * 42 + 80
+              width: 420
+              height: 90
+            children:
+              说明文字:
+                type: Text
+                attribute:
+                  point: ~top_left
+                  fontSize: 20
+                  texts: var.description
+                  through: true
+          上一页:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 0
+              y: var.count * 42 + 42
+              width: 140
+              height: 30
+              enable: var.totalCount > 16
+            action:
+              clickLeft: |-
+                Packet.send('pickup', 'page_up', var.actionToken)
+            children:
+              背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~68,60,48,220
+                  shape: ~round_rect
+                  radius: 6
+                  through: true
+              文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  fontSize: 20
+                  texts: ~上一页
+                  through: true
+          批量收取:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 150
+              y: var.count * 42 + 42
+              width: 140
+              height: 30
+              enable: var.batchEnabled && !var.busy
+            action:
+              clickLeft: |-
+                Packet.send('pickup', 'collect_all', var.actionToken)
+            children:
+              背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~68,60,48,220
+                  shape: ~round_rect
+                  radius: 6
+                  through: true
+              文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  fontSize: 20
+                  texts: ~收取全部
+                  through: true
+          下一页:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 300
+              y: var.count * 42 + 42
+              width: 140
+              height: 30
+              enable: var.totalCount > 16
+            action:
+              clickLeft: |-
+                Packet.send('pickup', 'page_down', var.actionToken)
+            children:
+              背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~68,60,48,220
+                  shape: ~round_rect
+                  radius: 6
+                  through: true
+              文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  fontSize: 20
+                  texts: ~下一页
+                  through: true
+          物品列表:
+            type: VStack
+            attribute:
+              point: ~top_left
+              x: 0
+              y: 40
+              width: 440
+              spaceBetween: 4
+              through: true
+            children:
+              条目0:
+                type: Canvas
+                attribute:
+                  width: 440
+                  height: 38
+                  visible: var.item0Visible
+                  through: false
+                action:
+                  clickLeft: |-
+                    if(!var.busy && var.actionToken != ''){ Packet.send('pickup', 'pick', var.actionToken, var.item0Uuid) }
+                children:
+                  背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: "var.selectedIndex == 0 ? '140,118,78,210' : '30,30,38,190'"
+                      shape: ~round_rect
+                      radius: 6
+                      through: true
+                  图标:
+                    val: loot_slot_0
+                    type: Slot
+                    attribute:
+                      point: ~middle_left
+                      x: 6
+                      width: 30
+                      height: 30
+                      slotType: ~Icon
+                      normal: ~0,0,0,0
+                      hover: ~0,0,0,0
+                      through: true
+                  名称:
+                    type: Text
+                    attribute:
+                      point: ~middle_left
+                      x: 46
+                      fontSize: 24
+                      texts: "var.item0Name + ' &7×' + var.item0Amount.round()"
+                      through: true
+              条目1:
+                type: Canvas
+                attribute:
+                  width: 440
+                  height: 38
+                  visible: var.item1Visible
+                  through: false
+                action:
+                  clickLeft: |-
+                    if(!var.busy && var.actionToken != ''){ Packet.send('pickup', 'pick', var.actionToken, var.item1Uuid) }
+                children:
+                  背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: "var.selectedIndex == 1 ? '140,118,78,210' : '30,30,38,190'"
+                      shape: ~round_rect
+                      radius: 6
+                      through: true
+                  图标:
+                    val: loot_slot_1
+                    type: Slot
+                    attribute:
+                      point: ~middle_left
+                      x: 6
+                      width: 30
+                      height: 30
+                      slotType: ~Icon
+                      normal: ~0,0,0,0
+                      hover: ~0,0,0,0
+                      through: true
+                  名称:
+                    type: Text
+                    attribute:
+                      point: ~middle_left
+                      x: 46
+                      fontSize: 24
+                      texts: "var.item1Name + ' &7×' + var.item1Amount.round()"
+                      through: true
+              条目2:
+                type: Canvas
+                attribute:
+                  width: 440
+                  height: 38
+                  visible: var.item2Visible
+                  through: false
+                action:
+                  clickLeft: |-
+                    if(!var.busy && var.actionToken != ''){ Packet.send('pickup', 'pick', var.actionToken, var.item2Uuid) }
+                children:
+                  背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: "var.selectedIndex == 2 ? '140,118,78,210' : '30,30,38,190'"
+                      shape: ~round_rect
+                      radius: 6
+                      through: true
+                  图标:
+                    val: loot_slot_2
+                    type: Slot
+                    attribute:
+                      point: ~middle_left
+                      x: 6
+                      width: 30
+                      height: 30
+                      slotType: ~Icon
+                      normal: ~0,0,0,0
+                      hover: ~0,0,0,0
+                      through: true
+                  名称:
+                    type: Text
+                    attribute:
+                      point: ~middle_left
+                      x: 46
+                      fontSize: 24
+                      texts: "var.item2Name + ' &7×' + var.item2Amount.round()"
+                      through: true
+              条目3:
+                type: Canvas
+                attribute:
+                  width: 440
+                  height: 38
+                  visible: var.item3Visible
+                  through: false
+                action:
+                  clickLeft: |-
+                    if(!var.busy && var.actionToken != ''){ Packet.send('pickup', 'pick', var.actionToken, var.item3Uuid) }
+                children:
+                  背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: "var.selectedIndex == 3 ? '140,118,78,210' : '30,30,38,190'"
+                      shape: ~round_rect
+                      radius: 6
+                      through: true
+                  图标:
+                    val: loot_slot_3
+                    type: Slot
+                    attribute:
+                      point: ~middle_left
+                      x: 6
+                      width: 30
+                      height: 30
+                      slotType: ~Icon
+                      normal: ~0,0,0,0
+                      hover: ~0,0,0,0
+                      through: true
+                  名称:
+                    type: Text
+                    attribute:
+                      point: ~middle_left
+                      x: 46
+                      fontSize: 24
+                      texts: "var.item3Name + ' &7×' + var.item3Amount.round()"
+                      through: true
+              条目4:
+                type: Canvas
+                attribute:
+                  width: 440
+                  height: 38
+                  visible: var.item4Visible
+                  through: false
+                action:
+                  clickLeft: |-
+                    if(!var.busy && var.actionToken != ''){ Packet.send('pickup', 'pick', var.actionToken, var.item4Uuid) }
+                children:
+                  背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: "var.selectedIndex == 4 ? '140,118,78,210' : '30,30,38,190'"
+                      shape: ~round_rect
+                      radius: 6
+                      through: true
+                  图标:
+                    val: loot_slot_4
+                    type: Slot
+                    attribute:
+                      point: ~middle_left
+                      x: 6
+                      width: 30
+                      height: 30
+                      slotType: ~Icon
+                      normal: ~0,0,0,0
+                      hover: ~0,0,0,0
+                      through: true
+                  名称:
+                    type: Text
+                    attribute:
+                      point: ~middle_left
+                      x: 46
+                      fontSize: 24
+                      texts: "var.item4Name + ' &7×' + var.item4Amount.round()"
+                      through: true
+              条目5:
+                type: Canvas
+                attribute:
+                  width: 440
+                  height: 38
+                  visible: var.item5Visible
+                  through: false
+                action:
+                  clickLeft: |-
+                    if(!var.busy && var.actionToken != ''){ Packet.send('pickup', 'pick', var.actionToken, var.item5Uuid) }
+                children:
+                  背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: "var.selectedIndex == 5 ? '140,118,78,210' : '30,30,38,190'"
+                      shape: ~round_rect
+                      radius: 6
+                      through: true
+                  图标:
+                    val: loot_slot_5
+                    type: Slot
+                    attribute:
+                      point: ~middle_left
+                      x: 6
+                      width: 30
+                      height: 30
+                      slotType: ~Icon
+                      normal: ~0,0,0,0
+                      hover: ~0,0,0,0
+                      through: true
+                  名称:
+                    type: Text
+                    attribute:
+                      point: ~middle_left
+                      x: 46
+                      fontSize: 24
+                      texts: "var.item5Name + ' &7×' + var.item5Amount.round()"
+                      through: true
+              条目6:
+                type: Canvas
+                attribute:
+                  width: 440
+                  height: 38
+                  visible: var.item6Visible
+                  through: false
+                action:
+                  clickLeft: |-
+                    if(!var.busy && var.actionToken != ''){ Packet.send('pickup', 'pick', var.actionToken, var.item6Uuid) }
+                children:
+                  背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: "var.selectedIndex == 6 ? '140,118,78,210' : '30,30,38,190'"
+                      shape: ~round_rect
+                      radius: 6
+                      through: true
+                  图标:
+                    val: loot_slot_6
+                    type: Slot
+                    attribute:
+                      point: ~middle_left
+                      x: 6
+                      width: 30
+                      height: 30
+                      slotType: ~Icon
+                      normal: ~0,0,0,0
+                      hover: ~0,0,0,0
+                      through: true
+                  名称:
+                    type: Text
+                    attribute:
+                      point: ~middle_left
+                      x: 46
+                      fontSize: 24
+                      texts: "var.item6Name + ' &7×' + var.item6Amount.round()"
+                      through: true
+              条目7:
+                type: Canvas
+                attribute:
+                  width: 440
+                  height: 38
+                  visible: var.item7Visible
+                  through: false
+                action:
+                  clickLeft: |-
+                    if(!var.busy && var.actionToken != ''){ Packet.send('pickup', 'pick', var.actionToken, var.item7Uuid) }
+                children:
+                  背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: "var.selectedIndex == 7 ? '140,118,78,210' : '30,30,38,190'"
+                      shape: ~round_rect
+                      radius: 6
+                      through: true
+                  图标:
+                    val: loot_slot_7
+                    type: Slot
+                    attribute:
+                      point: ~middle_left
+                      x: 6
+                      width: 30
+                      height: 30
+                      slotType: ~Icon
+                      normal: ~0,0,0,0
+                      hover: ~0,0,0,0
+                      through: true
+                  名称:
+                    type: Text
+                    attribute:
+                      point: ~middle_left
+                      x: 46
+                      fontSize: 24
+                      texts: "var.item7Name + ' &7×' + var.item7Amount.round()"
+                      through: true
+              条目8:
+                type: Canvas
+                attribute:
+                  width: 440
+                  height: 38
+                  visible: var.item8Visible
+                  through: false
+                action:
+                  clickLeft: |-
+                    if(!var.busy && var.actionToken != ''){ Packet.send('pickup', 'pick', var.actionToken, var.item8Uuid) }
+                children:
+                  背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: "var.selectedIndex == 8 ? '140,118,78,210' : '30,30,38,190'"
+                      shape: ~round_rect
+                      radius: 6
+                      through: true
+                  图标:
+                    val: loot_slot_8
+                    type: Slot
+                    attribute:
+                      point: ~middle_left
+                      x: 6
+                      width: 30
+                      height: 30
+                      slotType: ~Icon
+                      normal: ~0,0,0,0
+                      hover: ~0,0,0,0
+                      through: true
+                  名称:
+                    type: Text
+                    attribute:
+                      point: ~middle_left
+                      x: 46
+                      fontSize: 24
+                      texts: "var.item8Name + ' &7×' + var.item8Amount.round()"
+                      through: true
+              条目9:
+                type: Canvas
+                attribute:
+                  width: 440
+                  height: 38
+                  visible: var.item9Visible
+                  through: false
+                action:
+                  clickLeft: |-
+                    if(!var.busy && var.actionToken != ''){ Packet.send('pickup', 'pick', var.actionToken, var.item9Uuid) }
+                children:
+                  背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: "var.selectedIndex == 9 ? '140,118,78,210' : '30,30,38,190'"
+                      shape: ~round_rect
+                      radius: 6
+                      through: true
+                  图标:
+                    val: loot_slot_9
+                    type: Slot
+                    attribute:
+                      point: ~middle_left
+                      x: 6
+                      width: 30
+                      height: 30
+                      slotType: ~Icon
+                      normal: ~0,0,0,0
+                      hover: ~0,0,0,0
+                      through: true
+                  名称:
+                    type: Text
+                    attribute:
+                      point: ~middle_left
+                      x: 46
+                      fontSize: 24
+                      texts: "var.item9Name + ' &7×' + var.item9Amount.round()"
+                      through: true
+              条目10:
+                type: Canvas
+                attribute:
+                  width: 440
+                  height: 38
+                  visible: var.item10Visible
+                  through: false
+                action:
+                  clickLeft: |-
+                    if(!var.busy && var.actionToken != ''){ Packet.send('pickup', 'pick', var.actionToken, var.item10Uuid) }
+                children:
+                  背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: "var.selectedIndex == 10 ? '140,118,78,210' : '30,30,38,190'"
+                      shape: ~round_rect
+                      radius: 6
+                      through: true
+                  图标:
+                    val: loot_slot_10
+                    type: Slot
+                    attribute:
+                      point: ~middle_left
+                      x: 6
+                      width: 30
+                      height: 30
+                      slotType: ~Icon
+                      normal: ~0,0,0,0
+                      hover: ~0,0,0,0
+                      through: true
+                  名称:
+                    type: Text
+                    attribute:
+                      point: ~middle_left
+                      x: 46
+                      fontSize: 24
+                      texts: "var.item10Name + ' &7×' + var.item10Amount.round()"
+                      through: true
+              条目11:
+                type: Canvas
+                attribute:
+                  width: 440
+                  height: 38
+                  visible: var.item11Visible
+                  through: false
+                action:
+                  clickLeft: |-
+                    if(!var.busy && var.actionToken != ''){ Packet.send('pickup', 'pick', var.actionToken, var.item11Uuid) }
+                children:
+                  背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: "var.selectedIndex == 11 ? '140,118,78,210' : '30,30,38,190'"
+                      shape: ~round_rect
+                      radius: 6
+                      through: true
+                  图标:
+                    val: loot_slot_11
+                    type: Slot
+                    attribute:
+                      point: ~middle_left
+                      x: 6
+                      width: 30
+                      height: 30
+                      slotType: ~Icon
+                      normal: ~0,0,0,0
+                      hover: ~0,0,0,0
+                      through: true
+                  名称:
+                    type: Text
+                    attribute:
+                      point: ~middle_left
+                      x: 46
+                      fontSize: 24
+                      texts: "var.item11Name + ' &7×' + var.item11Amount.round()"
+                      through: true
+              条目12:
+                type: Canvas
+                attribute:
+                  width: 440
+                  height: 38
+                  visible: var.item12Visible
+                  through: false
+                action:
+                  clickLeft: |-
+                    if(!var.busy && var.actionToken != ''){ Packet.send('pickup', 'pick', var.actionToken, var.item12Uuid) }
+                children:
+                  背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: "var.selectedIndex == 12 ? '140,118,78,210' : '30,30,38,190'"
+                      shape: ~round_rect
+                      radius: 6
+                      through: true
+                  图标:
+                    val: loot_slot_12
+                    type: Slot
+                    attribute:
+                      point: ~middle_left
+                      x: 6
+                      width: 30
+                      height: 30
+                      slotType: ~Icon
+                      normal: ~0,0,0,0
+                      hover: ~0,0,0,0
+                      through: true
+                  名称:
+                    type: Text
+                    attribute:
+                      point: ~middle_left
+                      x: 46
+                      fontSize: 24
+                      texts: "var.item12Name + ' &7×' + var.item12Amount.round()"
+                      through: true
+              条目13:
+                type: Canvas
+                attribute:
+                  width: 440
+                  height: 38
+                  visible: var.item13Visible
+                  through: false
+                action:
+                  clickLeft: |-
+                    if(!var.busy && var.actionToken != ''){ Packet.send('pickup', 'pick', var.actionToken, var.item13Uuid) }
+                children:
+                  背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: "var.selectedIndex == 13 ? '140,118,78,210' : '30,30,38,190'"
+                      shape: ~round_rect
+                      radius: 6
+                      through: true
+                  图标:
+                    val: loot_slot_13
+                    type: Slot
+                    attribute:
+                      point: ~middle_left
+                      x: 6
+                      width: 30
+                      height: 30
+                      slotType: ~Icon
+                      normal: ~0,0,0,0
+                      hover: ~0,0,0,0
+                      through: true
+                  名称:
+                    type: Text
+                    attribute:
+                      point: ~middle_left
+                      x: 46
+                      fontSize: 24
+                      texts: "var.item13Name + ' &7×' + var.item13Amount.round()"
+                      through: true
+              条目14:
+                type: Canvas
+                attribute:
+                  width: 440
+                  height: 38
+                  visible: var.item14Visible
+                  through: false
+                action:
+                  clickLeft: |-
+                    if(!var.busy && var.actionToken != ''){ Packet.send('pickup', 'pick', var.actionToken, var.item14Uuid) }
+                children:
+                  背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: "var.selectedIndex == 14 ? '140,118,78,210' : '30,30,38,190'"
+                      shape: ~round_rect
+                      radius: 6
+                      through: true
+                  图标:
+                    val: loot_slot_14
+                    type: Slot
+                    attribute:
+                      point: ~middle_left
+                      x: 6
+                      width: 30
+                      height: 30
+                      slotType: ~Icon
+                      normal: ~0,0,0,0
+                      hover: ~0,0,0,0
+                      through: true
+                  名称:
+                    type: Text
+                    attribute:
+                      point: ~middle_left
+                      x: 46
+                      fontSize: 24
+                      texts: "var.item14Name + ' &7×' + var.item14Amount.round()"
+                      through: true
+              条目15:
+                type: Canvas
+                attribute:
+                  width: 440
+                  height: 38
+                  visible: var.item15Visible
+                  through: false
+                action:
+                  clickLeft: |-
+                    if(!var.busy && var.actionToken != ''){ Packet.send('pickup', 'pick', var.actionToken, var.item15Uuid) }
+                children:
+                  背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: "var.selectedIndex == 15 ? '140,118,78,210' : '30,30,38,190'"
+                      shape: ~round_rect
+                      radius: 6
+                      through: true
+                  图标:
+                    val: loot_slot_15
+                    type: Slot
+                    attribute:
+                      point: ~middle_left
+                      x: 6
+                      width: 30
+                      height: 30
+                      slotType: ~Icon
+                      normal: ~0,0,0,0
+                      hover: ~0,0,0,0
+                      through: true
+                  名称:
+                    type: Text
+                    attribute:
+                      point: ~middle_left
+                      x: 46
+                      fontSize: 24
+                      texts: "var.item15Name + ' &7×' + var.item15Amount.round()"
+                      through: true

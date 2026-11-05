@@ -1,6 +1,7 @@
 package xuanmo.arcartxsuite.pickup.config;
 
 import java.util.logging.Logger;
+import java.util.List;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import xuanmo.arcartxsuite.api.item.ItemMatcher;
@@ -71,7 +72,7 @@ public record PickupModuleConfiguration(
      *
      * @param scanRadius          扫描附近掉落物的半径（格）
      * @param scanIntervalTicks   扫描间隔（ticks）
-     * @param maxDisplay          面板最多显示的物品数
+     * @param displayRows         HUD 每页显示行数，不限制清单总长度
      * @param disableAutoPickup   是否禁用自动拾取
      * @param warehouseAutoDeposit 拾取后是否自动存入仓库
      * @param pickupDelayTicks    掉落物落地后多久开始显示（ticks）
@@ -81,12 +82,23 @@ public record PickupModuleConfiguration(
     public record ScannerConfig(
         double scanRadius,
         int scanIntervalTicks,
-        int maxDisplay,
+        int displayRows,
         boolean disableAutoPickup,
         boolean warehouseAutoDeposit,
         int pickupDelayTicks,
         boolean mergeSameItems,
-        String keybindName
+        String keybindName,
+        String previousKey,
+        String nextKey,
+        String collectAllKey,
+        String detailsKey,
+        int maxCandidates,
+        boolean batchEnabled,
+        boolean batchMatchingOnly,
+        ItemMatcher batchMatcher,
+        int entitiesPerTick,
+        int timeBudgetMs,
+        boolean chatSummary
     ) {
     }
 
@@ -141,22 +153,39 @@ public record PickupModuleConfiguration(
         );
 
         NotificationConfig notification = new NotificationConfig(
-            Math.max(1, config.getInt("notification.max-visible", 4)),
-            Math.max(500L, config.getLong("notification.entry-ttl-ms", 3000L))
+            Math.min(16, Math.max(1, config.getInt("notification.max-visible", 4))),
+            Math.min(30000L, Math.max(500L, config.getLong("notification.entry-ttl-ms", 3000L)))
         );
 
         ScannerConfig scanner = new ScannerConfig(
-            Math.max(1.0, config.getDouble("scanner.scan-radius", 5.0)),
-            Math.max(1, config.getInt("scanner.scan-interval-ticks", 5)),
-            Math.max(1, config.getInt("scanner.max-display", 8)),
+            boundedRadius(config.getDouble("scanner.scan-radius", 5.0)),
+            Math.min(100, Math.max(1, config.getInt("scanner.scan-interval-ticks", 5))),
+            Math.min(16, Math.max(1, config.getInt("scanner.display-rows", 5))),
             config.getBoolean("scanner.disable-auto-pickup", true),
             config.getBoolean("scanner.warehouse-auto-deposit", false),
             Math.max(0, config.getInt("scanner.pickup-delay-ticks", 40)),
             config.getBoolean("scanner.merge-same-items", true),
-            readString(config, "scanner.keybind.name", "AXS_INTERACT")
+            readString(config, "scanner.keybind.name", "AXS_PICKUP_PICK"),
+            readString(config, "scanner.keybind.previous", "AXS_PICKUP_PREVIOUS"),
+            readString(config, "scanner.keybind.next", "AXS_PICKUP_NEXT"),
+            readString(config, "scanner.keybind.collect-all", "AXS_PICKUP_ALL"),
+            readString(config, "scanner.keybind.details", "AXS_PICKUP_DETAILS"),
+            Math.min(4096, Math.max(32, config.getInt("scanner.max-candidates", 512))),
+            config.getBoolean("scanner.batch.enabled", true),
+            batchMatchingOnly(config),
+            ItemMatcherLoader.load(config.getConfigurationSection("scanner.batch.matcher"), logger, "scanner.batch.matcher"),
+            Math.min(64, Math.max(1, config.getInt("scanner.batch.entities-per-tick", 8))),
+            Math.min(10, Math.max(1, config.getInt("scanner.batch.time-budget-ms", 4))),
+            config.getBoolean("scanner.batch.chat-summary", false)
         );
 
         FilterConfig filter = loadFilter(config, logger);
+
+        if (mode == PickupMode.SCANNER && List.of(scanner.keybindName(), scanner.previousKey(),
+            scanner.nextKey(), scanner.collectAllKey(), scanner.detailsKey()).stream()
+            .map(key -> key.toUpperCase(java.util.Locale.ROOT)).distinct().count() != 5) {
+            throw new IllegalArgumentException("scanner.keybind 的五个按键 ID 必须互不相同");
+        }
 
         return new PickupModuleConfiguration(debug, mode, ui, notification, scanner, filter);
     }
@@ -211,5 +240,17 @@ public record PickupModuleConfiguration(
             return defaultValue;
         }
         return value.trim();
+    }
+
+    private static double boundedRadius(double value) {
+        return Double.isFinite(value) ? Math.min(32, Math.max(1, value)) : 5;
+    }
+
+    private static boolean batchMatchingOnly(FileConfiguration config) {
+        return switch (readString(config, "scanner.batch.mode", "all").toLowerCase(java.util.Locale.ROOT)) {
+            case "all" -> false;
+            case "matching" -> true;
+            default -> throw new IllegalArgumentException("scanner.batch.mode 只允许 all 或 matching");
+        };
     }
 }

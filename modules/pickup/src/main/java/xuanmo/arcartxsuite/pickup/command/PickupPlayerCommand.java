@@ -30,7 +30,7 @@ import xuanmo.arcartxsuite.pickup.service.PickupService;
 public final class PickupPlayerCommand implements TabExecutor {
 
     private static final String PERMISSION = "arcartxsuite.pickup.use";
-    private static final List<String> ACTIONS = List.of("help", "on", "off", "status");
+    private static final List<String> ACTIONS = List.of("help", "on", "off", "status", "collect", "all", "previous", "next", "details");
 
     private final Supplier<PickupService> notificationServiceSupplier;
     private final Supplier<LootScannerService> scannerServiceSupplier;
@@ -73,14 +73,17 @@ public final class PickupPlayerCommand implements TabExecutor {
             case "off" -> handleToggle(player, Boolean.FALSE);
             case "toggle" -> handleToggle(player, null);
             case "status" -> handleStatus(player);
-            default -> handleToggle(player, null);
+            case "collect" -> handleScannerAction(player, "pick");
+            case "all" -> handleScannerAction(player, "collect_all");
+            case "previous", "next", "details" -> handleScannerAction(player, action);
+            default -> showHelp(player);
         }
         return true;
     }
 
     @Override
     public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command, @NotNull String alias, @NotNull String[] args) {
-        if (!(sender instanceof Player) || args.length != 1) {
+        if (!(sender instanceof Player) || !sender.hasPermission(PERMISSION) || args.length != 1) {
             return List.of();
         }
         return filter(ACTIONS, args[0]);
@@ -91,6 +94,15 @@ public final class PickupPlayerCommand implements TabExecutor {
         player.sendMessage(msg("player.help.on"));
         player.sendMessage(msg("player.help.off"));
         player.sendMessage(msg("player.help.status"));
+        player.sendMessage(msg("player.help.collect"));
+        player.sendMessage(msg("player.help.selection"));
+        player.sendMessage(msg("player.help.details"));
+    }
+
+    private void handleScannerAction(Player player, String action) {
+        LootScannerService service = scannerServiceSupplier.get();
+        if (service == null) player.sendMessage(msg("hints.scanner-only"));
+        else if (!service.handleHostAction(player, action)) player.sendMessage(msg("hints.no-items"));
     }
 
     private void handleToggle(Player player, Boolean enabled) {

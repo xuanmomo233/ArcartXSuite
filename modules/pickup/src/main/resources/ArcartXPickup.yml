@@ -1,4 +1,4 @@
-config-version: 3
+config-version: 4
 # AXS Pickup
 # 作用: 拾取提示 HUD（通知模式）或掉落物交互拾取面板（扫描模式）。
 # 依赖: ArcartX。
@@ -22,7 +22,7 @@ ui:
   notification-ui-id: "AXS:pickup_hud"
   # 扫描模式目标 HUD 的 UI ID
   scanner-ui-id: "AXS:loot_panel"
-  # 扫描模式交互 Menu 的 UI ID（按自定义交互键打开的透明菜单，用于捕获滚轮/按键输入）
+  # 可选详细面板的 UI ID（只在按详情键时打开，普通收取不打开菜单）
   interact-ui-id: "AXS:loot_interact"
   # 插件启动/重载时是否自动注册 UI
   register-ui-on-enable: true
@@ -42,22 +42,36 @@ scanner:
   scan-radius: 5.0
   # 扫描间隔（ticks，5 = 250ms）
   scan-interval-ticks: 5
-  # 面板最多显示的物品数
-  max-display: 8
+  # HUD 每页显示的行数（1~16）；不限制实际清单长度，切换选择会自动翻页
+  display-rows: 5
+  # 一次扫描最多纳入的可拾取实体；达到上限时界面会提示，收取后再扫描
+  max-candidates: 512
   # 是否禁用自动拾取（玩家靠近掉落物时不会自动吸入背包）
   disable-auto-pickup: true
   # 拾取后是否尝试存入仓库（需要 warehouse 模块启用并配置自动入库）
   warehouse-auto-deposit: false
-  # 物品落地后多久开始显示在面板（ticks，防止刚扔出的物品立即被扫描）
+  # 实体生成后至少存活多少 tick 才显示；同时要求原版拾取冷却结束且归属允许
   pickup-delay-ticks: 40
-  # 同类物品是否合并显示（SuperStack）
+  # 完整物品信息一致时合并显示；单击会逐个尝试拾取该组实体，未能拾取的留在地面
   merge-same-items: true
   # 拾取按键绑定：声明扫描模式订阅的客户端按键 ID。
-  # 留空或不配置时默认使用 AXS_INTERACT（宿主全局交互键，与对话模块共享，拾取优先级更高）。
-  # 若想用独立按键，填 AXS_PICKUP_PICK（宿主 config.yml keybinds.pickup-pick 注册的专用键）。
-  # 无论填哪个，对应的按键都必须在宿主 config.yml 的 keybinds 节中注册，否则按键无法触发。
+  # 默认使用 AXS_PICKUP_PICK；name 直接收取当前类，其余键切换、批量收取或打开详情。
+  # 五个 ID 必须不同，且在宿主 config.yml 的 keybinds 节注册。
   keybind:
     name: AXS_PICKUP_PICK
+    previous: AXS_PICKUP_PREVIOUS
+    next: AXS_PICKUP_NEXT
+    collect-all: AXS_PICKUP_ALL
+    details: AXS_PICKUP_DETAILS
+  # 当前类收取和全部收取都按固定快照分批执行，不持续吸取新增掉落物
+  batch:
+    enabled: true             # 是否允许“收取全部”；不影响单类收取
+    mode: all                 # all：全部通过过滤的物品；matching：只收取下方匹配规则命中的物品
+    matcher:                  # matching 模式留空时不收取任何物品；规则写法同通用物品匹配器
+      material-ids: []         # 例如 [IRON_INGOT, GOLD_INGOT]，不要填中文物品名
+    entities-per-tick: 8       # 全模块每 tick 最多处理的实体数，多个玩家轮流执行
+    time-budget-ms: 4          # 每 tick 的软时间预算；单次仓库调用无法中途打断
+    chat-summary: false        # 默认只在 HUD 汇总；开启后聊天栏也发送一次汇总
 
 # ========== 过滤系统（仅 scanner 模式生效）==========
 filter:

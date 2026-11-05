@@ -338,10 +338,9 @@ moderation:
 #   trigger: keybind 匹配的自定义键）。
 keybinds:
   # 全局交互键，多模块按优先级订阅（数字越小越优先）：
-  #   - Pickup 扫描模式（优先级 10）：按下打开拾取交互菜单
+  #   - Pickup（仅在模块明确配置订阅此键时，优先级 10）：直接收取当前类
   #   - Conversation 对话（优先级 50）：按下确认/推进对话
-  # 拾取优先于对话，故扫描模式开启时此键归拾取。
-  # Pickup 模块会在 pickup-pick 留空时默认订阅此键。
+  # Pickup 默认使用独立的 AXS_PICKUP_PICK，不订阅此键。
   # 共享键：pickup 与 conversation 任一启用即注册，都禁用才不注册。
   interact:
     name: AXS_INTERACT
@@ -362,12 +361,31 @@ keybinds:
     default-key: DOWN
     category: ArcartXSuite
     module: conversation
-  # Pickup 扫描模式专用拾取键（按键打开 loot_interact 交互菜单）。
-  # 仅当配置 pickup-pick 时才订阅此键；
-  # 若 pickup-pick 留空则 pickup 默认订阅上面的 AXS_INTERACT，此键不启用。
+  # Pickup：直接收取清单当前类，不打开菜单。
+  # 与模块 scanner.keybind.name 对应；其他四个清单按键同理。
   pickup-pick:
     name: AXS_PICKUP_PICK
     default-key: F
+    category: ArcartXSuite
+    module: pickup
+  pickup-previous:
+    name: AXS_PICKUP_PREVIOUS
+    default-key: LEFT
+    category: ArcartXSuite
+    module: pickup
+  pickup-next:
+    name: AXS_PICKUP_NEXT
+    default-key: RIGHT
+    category: ArcartXSuite
+    module: pickup
+  pickup-all:
+    name: AXS_PICKUP_ALL
+    default-key: J
+    category: ArcartXSuite
+    module: pickup
+  pickup-details:
+    name: AXS_PICKUP_DETAILS
+    default-key: K
     category: ArcartXSuite
     module: pickup
   # Map 模块打开全屏地图键。

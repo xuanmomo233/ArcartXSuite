@@ -14,7 +14,6 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.AbstractAXSModule;
 import xuanmo.arcartxsuite.api.ClientInitializedHandler;
-import xuanmo.arcartxsuite.api.ClientPacketHandler;
 import xuanmo.arcartxsuite.api.config.ValidationRule;
 import xuanmo.arcartxsuite.api.config.ValueType;
 import xuanmo.arcartxsuite.api.ModuleDescriptor;
@@ -55,7 +54,7 @@ public final class PickupModule extends AbstractAXSModule {
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("pickup")
             .name("Pickup")
-            .version("1.4.4")
+            .version("1.5.0")
             .mainClass(getClass().getName())
             .build();
     }
@@ -65,7 +64,7 @@ public final class PickupModule extends AbstractAXSModule {
         return ModuleConfig.builder()
             .configFileName("ArcartXPickup.yml")
             .messagesFileName("messages.yml")
-            .currentVersion(3)
+            .currentVersion(4)
             .validations(List.of(
                     ValidationRule.of("notification.max-visible", ValueType.INT)
                         .withRange(1, 16),
@@ -75,7 +74,7 @@ public final class PickupModule extends AbstractAXSModule {
                         .withRange(1.0, 32.0),
                     ValidationRule.of("scanner.scan-interval-ticks", ValueType.INT)
                         .withRange(1, 100),
-                    ValidationRule.of("scanner.max-display", ValueType.INT)
+                    ValidationRule.of("scanner.display-rows", ValueType.INT)
                         .withRange(1, 16)
             ))
             .build();
@@ -95,11 +94,11 @@ public final class PickupModule extends AbstractAXSModule {
             if (scannerService == null || !"pickup".equalsIgnoreCase(packetId)) {
                 return false;
             }
-            String action = (data == null || data.isEmpty()) ? "pick" : data.get(0).toLowerCase();
+            String action = (data == null || data.isEmpty() || data.get(0) == null) ? "pick" : data.get(0).trim().toLowerCase(java.util.Locale.ROOT);
             // 剥离 action 段：handleClientPacket 的 data 语义是参数列表，token 在首位
             List<String> params = (data == null || data.size() <= 1) ? List.of() : data.subList(1, data.size());
             return scannerService.handleClientPacket(player, action, params);
-        }, 0, null, null);
+        }, 0, "pickup", "pickup");
     }
 
     @Override
@@ -128,8 +127,15 @@ public final class PickupModule extends AbstractAXSModule {
 
     private void startNotificationMode(PacketBridgeAPI packetBridge, ItemBridgeAPI itemStackBridge) throws IOException {
         File uiFile = exportPickupUiFile(configuration);
-        xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI.UiRegistrationResult reg =
-            packetBridge.registerOrReloadUi(configuration.uiId(), uiFile);
+        if (!configuration.ui().registerUiOnEnable()) {
+            notificationService = new PickupService(plugin, logger, configuration, packetBridge, itemStackBridge, configuration.uiId());
+            notificationService.setEventBusProvider(() -> getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
+            notificationService.setItemNameResolver(vanillaItemNameBridge::resolveDisplayName);
+            notificationService.start();
+            registerNotificationCapability();
+            return;
+        }
+        xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI.UiRegistrationResult reg = packetBridge.registerOrReloadUi(configuration.uiId(), uiFile);
         if (!reg.success()) {
             throw new IOException("Pickup 通知模式 UI 注册失败: " + reg.message());
         }
@@ -141,10 +147,17 @@ public final class PickupModule extends AbstractAXSModule {
             uiBinding.runtimeUiId()
         );
         notificationService.setEventBusProvider(() -> getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
+        notificationService.setItemNameResolver(vanillaItemNameBridge::resolveDisplayName);
         notificationService.start();
 
         // 注册通知能力，让 warehouse 等模块知道该玩家已有 HUD 拾取通知
         // 并可通过 notifyPickup 主动推送 HUD 提示（仓库自动入库后补发）
+        registerNotificationCapability();
+
+        logger.fine("Pickup 通知模式已载入，UI=" + uiBinding.runtimeUiId());
+    }
+
+    private void registerNotificationCapability() {
         registerCapability(PickupNotifiable.class, new PickupNotifiable() {
             @Override
             public boolean isNotificationActive(UUID playerId) {
@@ -156,11 +169,6 @@ public final class PickupModule extends AbstractAXSModule {
             }
         });
 
-        logger.fine(
-            "Pickup 通知模式已载入，max-visible=" + configuration.maxVisible()
-                + " | ttl=" + configuration.entryTtlMs()
-                + "ms | UI=" + uiBinding.runtimeUiId()
-        );
     }
 
     private void startScannerMode(PacketBridgeAPI packetBridge, ItemBridgeAPI itemStackBridge) throws IOException {
@@ -170,7 +178,7 @@ public final class PickupModule extends AbstractAXSModule {
             configuration.ui().scannerUiId(),
             configuration.ui().registerUiOnEnable()
         );
-        if (uiBinding.registeredUiId() == null) {
+        if (configuration.ui().registerUiOnEnable() && uiBinding.registeredUiId() == null) {
             throw new IOException("Pickup 扫描模式 HUD UI 注册失败");
         }
 
@@ -180,7 +188,7 @@ public final class PickupModule extends AbstractAXSModule {
             configuration.ui().interactUiId(),
             configuration.ui().registerUiOnEnable()
         );
-        if (interactBinding.registeredUiId() == null) {
+        if (configuration.ui().registerUiOnEnable() && interactBinding.registeredUiId() == null) {
             throw new IOException("Pickup 扫描模式 Interact Menu UI 注册失败");
         }
 
@@ -191,21 +199,29 @@ public final class PickupModule extends AbstractAXSModule {
             () -> getCapability(WarehouseAutoDepositable.class),
             messages()
         );
+        scannerService.setEventBusProvider(() -> getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
         scannerService.start();
 
         // 注册拾取拦截能力，让 Warehouse 等模块知道扫描模式已接管拾取流程
         registerCapability(PickupInterceptor.class,
-            playerId -> scannerService != null && scannerService.isEnabled(playerId));
+            playerId -> scannerService != null && scannerService.isAutoPickupIntercepted(playerId));
 
-        // 注册宿主全局按键回调（优先级 10，拾取优先于对话）
-        // keybindName 由 PickupModuleConfiguration 保证非空，默认 AXS_INTERACT（宿主全局交互键）
+        // 独立快捷键只改变清单选择或发起服务端收取；普通收取不打开菜单。
         registerKeybindHandler(configuration.scanner().keybindName(), 10, (player, keyName) ->
             scannerService != null && scannerService.handleInteractKeyFromHost(player)
         );
+        registerKeybindHandler(configuration.scanner().previousKey(), 10, (player, keyName) ->
+            scannerService != null && scannerService.handleHostAction(player, "previous"));
+        registerKeybindHandler(configuration.scanner().nextKey(), 10, (player, keyName) ->
+            scannerService != null && scannerService.handleHostAction(player, "next"));
+        registerKeybindHandler(configuration.scanner().collectAllKey(), 10, (player, keyName) ->
+            scannerService != null && scannerService.handleHostAction(player, "collect_all"));
+        registerKeybindHandler(configuration.scanner().detailsKey(), 10, (player, keyName) ->
+            scannerService != null && scannerService.handleHostAction(player, "details"));
 
         logger.fine(
             "Pickup 扫描模式已载入，radius=" + configuration.scanner().scanRadius()
-                + " | maxDisplay=" + configuration.scanner().maxDisplay()
+                + " | displayRows=" + configuration.scanner().displayRows()
                 + " | HUD=" + uiBinding.runtimeUiId()
                 + " | Menu=" + interactBinding.runtimeUiId()
         );
