@@ -158,6 +158,10 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
     private final ConcurrentMap<UUID, Integer> hudSessions = new ConcurrentHashMap<>();
     private final Set<UUID> defaultUnlocksEnsured = ConcurrentHashMap.newKeySet();
     private final ConcurrentMap<UUID, CachedPlayerMapData> playerDataCache = new ConcurrentHashMap<>();
+    private final Map<UUID, MapBrowseFilter.Options> browseOptions = new HashMap<>();
+    private final Set<UUID> playerLoadErrors = new HashSet<>();
+    private final Map<UUID, Long> actionRevisions = new HashMap<>();
+    private final Map<UUID, String> actionMessages = new HashMap<>();
     private final ConcurrentMap<UUID, String> actionTokens = new ConcurrentHashMap<>();
     private final Set<UUID> actionTokensInFlight = ConcurrentHashMap.newKeySet();
     /** 玩家 → 上次 axsmap:request 受理时间（节流，超出间隔的请求直接丢弃）。 */
@@ -242,6 +246,8 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         if (messages == null || !messages.has(key)) {
             if (key.equals("player.action-busy")) return ChatColor.YELLOW + "上一项地图操作仍在处理中，请稍候。";
             if (key.equals("player.storage-failed")) return ChatColor.RED + "地图数据操作失败，请稍后重试。";
+            if (key.equals("player.cross-server-arriving")) return ChatColor.AQUA + "已进入目标服务器，正在确认落点；费用由目标服结算。";
+            if (key.equals("player.cross-server-arrive-cancelled")) return ChatColor.RED + "跨服落地传送被取消，未收取传送费用。";
         }
         return messages == null ? "" : messages.get(key, args);
     }
@@ -358,6 +364,10 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         hudSessions.clear();
         defaultUnlocksEnsured.clear();
         playerDataCache.clear();
+        browseOptions.clear();
+        playerLoadErrors.clear();
+        actionRevisions.clear();
+        actionMessages.clear();
         share.clearAll();
     }
 
@@ -1227,6 +1237,29 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         sync(player, false);
     }
 
+    @Override public void browseOptions(Player player, String query, boolean unlockedOnly, boolean distanceOrder) {
+        browseOptions.put(player.getUniqueId(), new MapBrowseFilter.Options(query, unlockedOnly, distanceOrder));
+        syncMenu(player, false);
+    }
+
+    @Override public void retryData(Player player) {
+        playerLoadErrors.remove(player.getUniqueId());
+        ensureLoaded(player);
+        sync(player, false);
+    }
+
+    @Override public void actionStatus(Player player) {
+        // Reconcile a dropped/stale request without ever replaying the write or releasing a live transaction.
+        if (!storageActions.containsKey(player.getUniqueId())) actionRevisions.merge(player.getUniqueId(), 1L, Long::sum);
+        syncMenu(player, false);
+    }
+
+    void crossServerFeedback(Player player, MapOperationResult result) {
+        actionMessages.put(player.getUniqueId(), (result.success() ? "&b" : "&c") + result.message());
+        syncMenu(player, false);
+        sendPlayerResult(player, result);
+    }
+
     /**
      * HUD UI 加载/重载完成后主动上报（load/open 触发器发 {@code hud_ready}）。
      * 换发新会话号并重推状态：新 UI 副本立即获得有效会话，旧副本的锚点随
@@ -1540,6 +1573,10 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         openedHudPlayers.remove(uuid);
         hudSessions.remove(uuid);
         playerDataCache.remove(uuid);
+        browseOptions.remove(uuid);
+        playerLoadErrors.remove(uuid);
+        actionRevisions.remove(uuid);
+        actionMessages.remove(uuid);
         playerLoads.remove(uuid);
         actionTokens.remove(uuid);
         actionTokensInFlight.remove(uuid);
@@ -2243,8 +2280,13 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
             return;
         }
         if (initPacket) actionTokens.put(player.getUniqueId(), UUID.randomUUID().toString());
-        Map<String, Object> payload = buildMenuPayload(snapshot.menu());
+        Map<String, Object> payload = buildMenuPayload(snapshot.menu(), player);
         payload.put("action_token", actionTokens.getOrDefault(player.getUniqueId(), ""));
+        payload.put("actionBusy", storageActions.containsKey(player.getUniqueId()));
+        payload.put("actionRevision", actionRevisions.getOrDefault(player.getUniqueId(), 0L));
+        payload.put("actionMessage", actionMessages.getOrDefault(player.getUniqueId(), ""));
+        payload.put("dataState", playerDataCache.containsKey(player.getUniqueId()) ? "ready"
+            : playerLoadErrors.contains(player.getUniqueId()) ? "error" : "loading");
         payload.put("serverId", serverId());
         bridge.sendPacket(player, menuUiId, initPacket ? "init" : "update", payload);
     }
@@ -2550,7 +2592,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         return worldId;
     }
 
-    private Map<String, Object> buildMenuPayload(MapSnapshotBuilder.MenuSnapshot snapshot) {
+    private Map<String, Object> buildMenuPayload(MapSnapshotBuilder.MenuSnapshot snapshot, Player player) {
         LinkedHashMap<String, Object> payload = new LinkedHashMap<>();
         payload.put("packetId", snapshot.packetId());
         payload.put("selectedWorldId", snapshot.selectedWorldId());
@@ -2643,6 +2685,26 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
             pinRows.put(Integer.toString(i), entry);
         }
         payload.put("pinRows", pinRows);
+
+        MapBrowseFilter.Options options = browseOptions.getOrDefault(player.getUniqueId(), MapBrowseFilter.Options.DEFAULT);
+        var location = player.getLocation();
+        boolean sameWorld = snapshot.selectedWorldId().equals(snapshot.playerWorldId());
+        var browseAnchors = MapBrowseFilter.apply(anchorRows, options, location.getX(), location.getZ(), sameWorld, true);
+        var browseWaypoints = MapBrowseFilter.apply(waypointRows, options, location.getX(), location.getZ(), sameWorld, false);
+        var browsePins = MapBrowseFilter.apply(pinRows, options, location.getX(), location.getZ(), sameWorld, false);
+        var browseExternal = MapBrowseFilter.apply(externalRows, options, location.getX(), location.getZ(), sameWorld, false);
+        payload.put("browseAnchorRows", browseAnchors);
+        payload.put("browseWaypointRows", browseWaypoints);
+        payload.put("browsePinRows", browsePins);
+        payload.put("browseExternalRows", browseExternal);
+        payload.put("browseAnchorCount", browseAnchors.size());
+        payload.put("browseWaypointCount", browseWaypoints.size());
+        payload.put("browsePinCount", browsePins.size());
+        payload.put("browseExternalCount", browseExternal.size());
+        payload.put("browseSameWorld", sameWorld);
+        payload.put("browseQuery", options.query());
+        payload.put("browseUnlockedOnly", options.unlockedOnly());
+        payload.put("browseDistanceOrder", options.distanceOrder());
 
         payload.put("waypointLimit", snapshot.waypointLimit());
         payload.put("waypointCount", snapshot.waypointCount());
@@ -2809,6 +2871,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         UUID uuid = player.getUniqueId();
         CachedPlayerMapData cached = playerDataCache.get(uuid);
         if (cached != null) return java.util.concurrent.CompletableFuture.completedFuture(cached);
+        if (playerLoadErrors.contains(uuid)) return java.util.concurrent.CompletableFuture.failedFuture(new IllegalStateException("Player data load failed; retry required"));
         if (!sessionCurrent(player)) return java.util.concurrent.CompletableFuture.failedFuture(new IllegalStateException("Player session ended"));
         var existing = playerLoads.get(uuid);
         if (existing != null) return existing;
@@ -2831,12 +2894,15 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         }).whenComplete((loaded, error) -> {
             playerLoads.remove(uuid, ready);
             if (error != null) {
+                if (sessionCurrent(player)) playerLoadErrors.add(uuid);
                 ready.completeExceptionally(error);
                 if (sessionCurrent(player)) logger.warning("[Map] 玩家数据异步加载失败 uuid=" + uuid + ": " + error.getMessage());
+                if (sessionCurrent(player)) syncMenu(player, false);
                 return;
             }
             if (sessionCurrent(player)) {
                 playerDataCache.put(uuid, loaded.data());
+                playerLoadErrors.remove(uuid);
                 defaultUnlocksEnsured.add(uuid);
                 for (String id : loaded.granted()) {
                     AnchorDefinition anchor = configuration.anchor(id);
@@ -2865,11 +2931,16 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
             return java.util.concurrent.CompletableFuture.completedFuture(busy);
         }
         var settled = new java.util.concurrent.CompletableFuture<MapOperationResult>();
+        syncMenu(player, false);
         ensureLoaded(player).thenCompose(data -> sessionCurrent(player) ? action.get()
             : java.util.concurrent.CompletableFuture.completedFuture(MapOperationResult.failure(message("player.offline"))))
             .whenComplete((result, error) -> {
                 storageActions.remove(uuid, ticket);
+                if (Bukkit.getPlayer(uuid) == player) actionRevisions.merge(uuid, 1L, Long::sum);
                 MapOperationResult finalResult = error == null ? result : MapOperationResult.failure(message("player.storage-failed"));
+                if (Bukkit.getPlayer(uuid) == player) actionMessages.put(uuid,
+                    (finalResult.success() ? "&a" : "&c") + (finalResult.message().isBlank()
+                        ? "请求已处理，请查看操作结果" : finalResult.message()));
                 if (error != null) logger.severe("[Map] 异步操作或补偿失败 uuid=" + uuid + ": " + error);
                 if (Bukkit.getPlayer(uuid) == player && tokenized) {
                     actionTokensInFlight.remove(uuid);

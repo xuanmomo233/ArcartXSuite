@@ -145,4 +145,6 @@ player:
   cross-server-timeout: "跨服传送请求超时，请稍后重试。"
   cross-server-rate-limited: "传送请求过于频繁，请稍后重试。"
   cross-server-arrived: "已跨服传送到世界: {0}"
+  cross-server-arriving: "已进入目标服务器，正在确认落点；费用由目标服结算。"
+  cross-server-arrive-cancelled: "跨服落地传送被取消，未收取传送费用。"
   cross-server-arrive-failed: "跨服落地失败，目标世界不可用: {0}"

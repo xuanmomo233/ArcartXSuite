@@ -1,0 +1,77 @@
+name: Map checks and package
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['codex/map-*']
+    paths:
+      - 'modules/map/**'
+      - '.github/workflows/map-check.yml'
+  pull_request:
+    paths:
+      - 'modules/map/**'
+      - '.github/workflows/map-check.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: map-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  map:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          java-version: '17'
+          distribution: temurin
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: '8.10.2'
+          cache-read-only: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install UI check dependency
+        run: python -m pip install PyYAML==6.0.2
+      - name: Check Map UI contracts
+        run: python modules/map/src/test/ui/verify_map_ui.py
+      - name: Test and build protected Map Jar
+        run: gradle :modules:map:build -PskipNativeCheck=true --no-daemon --no-configuration-cache
+      - name: Summarize tests
+        if: always()
+        run: |
+          python - <<'PY'
+          import glob, os, xml.etree.ElementTree as ET
+          totals = dict(tests=0, failures=0, errors=0)
+          for file in glob.glob('modules/map/build/test-results/test/TEST-*.xml'):
+              root = ET.parse(file).getroot()
+              for key in totals:
+                  totals[key] += int(root.get(key, 0))
+          summary = 'JUnit: {tests} tests, {failures} failures, {errors} errors'.format(**totals)
+          print(summary)
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as out:
+              out.write(summary + '\n')
+          PY
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: map-test-reports
+          path: |
+            modules/map/build/test-results/test/
+            modules/map/build/reports/tests/test/
+          if-no-files-found: warn
+      - name: Upload protected module
+        uses: actions/upload-artifact@v5
+        with:
+          name: map-protected-package
+          path: build/ArcartX-Suite/modules/ArcartXSuite-Map-*.jar
+          if-no-files-found: error

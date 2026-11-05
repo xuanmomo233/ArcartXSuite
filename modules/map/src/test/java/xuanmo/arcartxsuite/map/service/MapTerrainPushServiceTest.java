@@ -2,7 +2,6 @@ package xuanmo.arcartxsuite.map.service;
 
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
-import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -19,9 +18,21 @@ import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitScheduler;
 import org.bukkit.scheduler.BukkitTask;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
+import static org.mockito.Mockito.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 class MapTerrainPushServiceTest {
+    private Server previousServer;
+
+    @BeforeEach void rememberServer() { previousServer = Bukkit.getServer(); }
+
+    @AfterEach void restoreServer() throws Exception {
+        var field = Bukkit.class.getDeclaredField("server");
+        field.setAccessible(true);
+        field.set(null, previousServer);
+    }
     private final UUID worldId = UUID.randomUUID();
     private final World world = proxy(World.class, (method, args) -> switch (method) {
         case "getUID" -> worldId;
@@ -143,7 +154,12 @@ class MapTerrainPushServiceTest {
 
     interface Call { Object invoke(String method, Object[] args); }
     private static <T> T proxy(Class<T> type, Call call) {
-        return type.cast(Proxy.newProxyInstance(type.getClassLoader(), new Class<?>[]{type},
-            (proxy, method, args) -> call.invoke(method.getName(), args)));
+        // JDK Proxy eagerly initializes World method parameter types such as StructureType,
+        // which requires a running Bukkit registry on newer 1.20.1 API snapshots.
+        return mock(type, withSettings().mockMaker(org.mockito.MockMakers.SUBCLASS).defaultAnswer(invocation -> {
+            Object value = call.invoke(invocation.getMethod().getName(), invocation.getArguments());
+            return value != null || !invocation.getMethod().getReturnType().isPrimitive()
+                ? value : org.mockito.Answers.RETURNS_DEFAULTS.answer(invocation);
+        }));
     }
 }

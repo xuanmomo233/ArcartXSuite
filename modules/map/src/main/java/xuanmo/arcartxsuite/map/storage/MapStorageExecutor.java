@@ -24,6 +24,17 @@ public final class MapStorageExecutor implements AutoCloseable {
     private final Set<CompletableFuture<?>> pending = ConcurrentHashMap.newKeySet();
     private final java.util.concurrent.Semaphore normalSlots = new java.util.concurrent.Semaphore(128);
     private volatile boolean closing;
+    private final java.util.concurrent.atomic.LongAdder completedJobs = new java.util.concurrent.atomic.LongAdder();
+    private final java.util.concurrent.atomic.LongAdder queueWaitNanos = new java.util.concurrent.atomic.LongAdder();
+    private final java.util.concurrent.atomic.LongAdder sqlNanos = new java.util.concurrent.atomic.LongAdder();
+    private final java.util.concurrent.atomic.AtomicLong longestQueueWaitNanos = new java.util.concurrent.atomic.AtomicLong();
+
+    public record Diagnostics(long completedJobs, int queuedJobs, int pendingJobs,
+                              long totalQueueWaitNanos, long totalWorkNanos, long maxQueueWaitNanos) { }
+    public Diagnostics diagnostics() {
+        return new Diagnostics(completedJobs.sum(), worker.getQueue().size(), pending.size(),
+            queueWaitNanos.sum(), sqlNanos.sum(), longestQueueWaitNanos.get());
+    }
 
     public boolean isClosing() { return closing; }
 
@@ -44,13 +55,20 @@ public final class MapStorageExecutor implements AutoCloseable {
             return result;
         }
         pending.add(result);
+        long queuedAt = System.nanoTime();
         try {
             worker.execute(() -> {
+                long startedAt = System.nanoTime();
+                long wait = startedAt - queuedAt;
+                queueWaitNanos.add(wait);
+                longestQueueWaitNanos.accumulateAndGet(wait, Math::max);
                 try {
                     if (closing && !compensation) throw new CancellationException("Map storage is stopping");
                     T value = work.call();
+                    recordWork(startedAt);
                     completions.offer(() -> finish(result, value, null, compensation));
                 } catch (Throwable error) {
+                    recordWork(startedAt);
                     completions.offer(() -> finish(result, null, error, compensation));
                 }
             });
@@ -58,6 +76,11 @@ public final class MapStorageExecutor implements AutoCloseable {
             completions.offer(() -> finish(result, null, error, compensation));
         }
         return result;
+    }
+
+    private void recordWork(long startedAt) {
+        sqlNanos.add(System.nanoTime() - startedAt);
+        completedJobs.increment();
     }
 
     private <T> void finish(CompletableFuture<T> result, T value, Throwable error, boolean compensation) {
