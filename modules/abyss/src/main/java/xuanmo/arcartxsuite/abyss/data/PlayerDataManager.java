@@ -226,11 +226,16 @@ public final class PlayerDataManager {
     // ═══ 断线待恢复位置 ═══
 
     public void savePendingLocation(UUID player, Location loc) {
+        savePendingLocation(player, loc, null, null);
+    }
+
+    public void savePendingLocation(UUID player, Location loc, String owner, UUID request) {
         if (loc == null || loc.getWorld() == null) return;
+        String world = loc.getWorld().getName();
         dbExecutor.submit(() -> {
             try {
-                repository.savePendingLocation(player, loc.getWorld().getName(),
-                    loc.getX(), loc.getY(), loc.getZ(), loc.getYaw(), loc.getPitch());
+                repository.savePendingLocation(player, world,
+                    loc.getX(), loc.getY(), loc.getZ(), loc.getYaw(), loc.getPitch(), owner, request);
             } catch (Exception e) {
                 logger.warning("[abyss] 待恢复位置保存失败 " + player + ": " + e.getMessage());
             }

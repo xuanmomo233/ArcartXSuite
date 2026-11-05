@@ -22,6 +22,7 @@ public final class ScriptContext {
     private final @Nullable String mobGroup;     // 怪物组回调时的组名
     private final Map<String, String> extraVars; // 运行时额外变量（如 {task_time}）
     private boolean settlement;
+    private int preparationDepth;
     private List<Player> settlementPlayers=List.of();
     private java.util.Set<java.util.UUID> settlementDead=java.util.Set.of();
 
@@ -36,6 +37,12 @@ public final class ScriptContext {
     public static ScriptContext of(AbyssInstance instance, @Nullable Player trigger) {
         return new ScriptContext(instance, trigger, null, null);
     }
+    public static ScriptContext preparation(AbyssInstance instance) {
+        var context = of(instance, null);
+        context.preparationDepth = 1;
+        return context;
+    }
+    public int preparationDepth() { return preparationDepth; }
     public static ScriptContext settlement(AbyssInstance instance, @Nullable Player trigger) {
         ScriptContext context = of(instance, trigger);
         context.settlement = true;
@@ -51,6 +58,7 @@ public final class ScriptContext {
     public ScriptContext child() {
         ScriptContext child=new ScriptContext(instance,trigger,mobGroup,extraVars);
         child.settlement=settlement;child.settlementPlayers=settlementPlayers;child.settlementDead=settlementDead;
+        child.preparationDepth = preparationDepth == 0 ? 0 : preparationDepth + 1;
         return child;
     }
 

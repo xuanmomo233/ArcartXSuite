@@ -1729,7 +1729,7 @@ public final class AbyssService {
 
     private void afterAdmissionScript(AbyssInstance instance, List<String> lines, String failure, Runnable next) {
         try {
-            var session = runScript(instance, lines, ScriptContext.of(instance, null));
+            var session = runScript(instance, lines, ScriptContext.preparation(instance));
             if (session == null) advanceAdmission(instance, true, failure, next);
             else session.completion().whenComplete((ok, error) ->
                 runOnMain(() -> advanceAdmission(instance, error == null && Boolean.TRUE.equals(ok), failure, next)));
@@ -1759,7 +1759,7 @@ public final class AbyssService {
         if (instance.getStatus() != AbyssStatus.PREPARING) return;
         AbyssTemplate t = instance.getTemplate();
         // 怪物组（AUTO_START/DELAYED 自动调度）
-        mobGroups.initInstance(instance);
+        mobGroups.initializeGroups(instance);
         if (instance.isFinished()) return;
         // floors 模式：物化楼层房间链（pool 粘贴/组注册，须在怪组表建好后）
         if (t.mode() == AbyssTemplate.Mode.FLOORS && roomManager != null) {
@@ -1767,7 +1767,10 @@ public final class AbyssService {
                 roomManager.initInstance(instance);
                 // 物化完成后对齐到首层入口（进图时房间尚未生成，落点是模板 spawn）
                 Location entry = roomManager.currentSpawn(instance);
-                if (entry != null) {
+                if (entry == null) {
+                    abortAdmission(instance, "FINAL_SPAWN_UNAVAILABLE");
+                    return;
+                } else {
                     for (Player p : players) {
                         if (!p.isOnline() || !teleportWithRetry(p, entry, 3) || p.getWorld() != instance.getWorld()) {
                             rollbackAdmission(instance, admission.operation(instance), p, null, "FINAL_TELEPORT_FAILED");
@@ -1802,8 +1805,16 @@ public final class AbyssService {
         }
         if (operation != null && (!entryCosts.authorized(operation) || !admission.policyUnchanged(operation)
             || (operation.externalRoster != null && !operation.externalRoster.equals(externalParties.verify(operation.intent)))
+            || (operation.externalRoster == null && players.stream().anyMatch(player ->
+                partyManager.partyOf(player) != instance.getParty()))
             || !admission.policies(operation.intent, t).isEmpty())) {
             abortAdmission(instance, "FINAL_ADMISSION_CHANGED");
+            return;
+        }
+        if (instances.getTemplate(t.id()) != t || (instance.getParty() != null
+            && (!instance.getParty().allReady() || !java.util.Objects.equals(
+                instance.getVariables().get("admission_party_revision"), instance.getParty().revision())))) {
+            abortAdmission(instance, "FINAL_ROSTER_CHANGED");
             return;
         }
         var finalCheck = requirementChecker.check(t, players, instance.getParty());
@@ -1840,6 +1851,9 @@ public final class AbyssService {
         publishAdmission(instance, players);
         if (instance.getParty() != null) instance.getParty().resetReadiness();
         runResults.started(instance);
+        if (instance.isFinished()) return;
+        mobGroups.startConfiguredGroups(instance);
+        if (instance.isFinished()) return;
         // start 脚本
         runLifecycleScript(instance, "start", null);
         // 阶段机启动（stages.yml 配置的副本从入口阶段开始推进）
@@ -2190,12 +2204,14 @@ public final class AbyssService {
                 saved != null ? saved.name() : null);
         }
         Location back = instance.getOriginalLocation(player.getUniqueId());
+        var pendingAdmission = admission.operation(instance);
         if (back != null) {
-            playerData.savePendingLocation(player.getUniqueId(), back);
+            if (!instance.admitted() && pendingAdmission != null && pendingAdmission.persisted)
+                playerData.savePendingLocation(player.getUniqueId(), back, pendingAdmission.intent.owner(), pendingAdmission.intent.requestId());
+            else playerData.savePendingLocation(player.getUniqueId(), back);
         }
         instance.removePlayer(player.getUniqueId());
         runResults.member(instance, player.getUniqueId(), AbyssRunResultAccess.MemberState.DISCONNECTED, "DISCONNECT", null);
-        var pendingAdmission = admission.operation(instance);
         if (!instance.admitted() && !instance.isFinished() && pendingAdmission != null) {
             pendingAdmission.outcomes.put(player.getUniqueId(), back != null ? "RETURN_PENDING" : "DISCONNECTED");
             admission.changed(pendingAdmission);

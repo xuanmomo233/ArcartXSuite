@@ -366,7 +366,10 @@ final class BuiltinActions {
                 case "<=" -> numeric && a <= b;
                 default -> false;
             };
-            if (!ok) s.cancel();
+            if (!ok) {
+                if (ctx.preparationDepth() > 0) s.completeBranch();
+                else s.cancel();
+            }
         });
 
         // ═══ 条件守卫 ═══

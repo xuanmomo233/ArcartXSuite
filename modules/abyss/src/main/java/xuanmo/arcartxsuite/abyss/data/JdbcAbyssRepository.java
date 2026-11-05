@@ -36,7 +36,7 @@ public final class JdbcAbyssRepository extends AbstractModuleRepository {
 
     private boolean sqlite = true;
     private String tPlayer, tCooldowns, tRecords, tPending, tGlobals, tAdmission, tRunResults;
-    private String tResultSequence, tResultFeed, tAdmissionArchive;
+    private String tResultSequence, tResultFeed, tAdmissionArchive, tAdmissionReturns;
 
     public JdbcAbyssRepository(DataSource dataSource, StorageDescriptor descriptor,
                              File dataFolder, Logger logger) {
@@ -57,6 +57,7 @@ public final class JdbcAbyssRepository extends AbstractModuleRepository {
         tResultSequence = p + "result_sequence";
         tResultFeed = p + "result_feed";
         tAdmissionArchive = p + "admission_archive";
+        tAdmissionReturns = p + "admission_returns";
 
         try (Statement st = conn.createStatement()) {
             st.executeUpdate("CREATE TABLE IF NOT EXISTS " + tAdmission
@@ -71,6 +72,9 @@ public final class JdbcAbyssRepository extends AbstractModuleRepository {
             st.executeUpdate("CREATE TABLE IF NOT EXISTS " + tAdmissionArchive
                 + " (owner VARCHAR(96) NOT NULL, request_id VARCHAR(36) NOT NULL, snapshot TEXT NOT NULL,"
                 + " archived_at BIGINT NOT NULL, PRIMARY KEY (owner, request_id))");
+            st.executeUpdate("CREATE TABLE IF NOT EXISTS " + tAdmissionReturns
+                + " (owner VARCHAR(96) NOT NULL, request_id VARCHAR(36) NOT NULL, player_uuid VARCHAR(36) NOT NULL,"
+                + " saved_at BIGINT NOT NULL, confirmed INTEGER NOT NULL, PRIMARY KEY (owner, request_id, player_uuid))");
             st.executeUpdate(sqlite ? "INSERT INTO " + tResultSequence + " VALUES (1,0) ON CONFLICT(id) DO NOTHING"
                 : "INSERT INTO " + tResultSequence + " VALUES (1,0) ON DUPLICATE KEY UPDATE id=id");
             if (sqlite) {
@@ -146,6 +150,7 @@ public final class JdbcAbyssRepository extends AbstractModuleRepository {
         all.add(tResultSequence);
         all.add(tResultFeed);
         all.add(tAdmissionArchive);
+        all.add(tAdmissionReturns);
         return all;
     }
 
@@ -271,6 +276,18 @@ public final class JdbcAbyssRepository extends AbstractModuleRepository {
                 return rs.next() ? new AdmissionReceipt(owner, request.toString(), rs.getString(1), rs.getString(2)) : null;
             }
         }
+    }
+
+    public List<UUID> confirmedAdmissionReturns(String owner, UUID request) throws SQLException {
+        var players = new ArrayList<UUID>();
+        try (Connection c = getConnection(); PreparedStatement ps = c.prepareStatement(
+                "SELECT player_uuid FROM " + tAdmissionReturns + " WHERE owner=? AND request_id=? AND confirmed=1")) {
+            ps.setString(1, owner); ps.setString(2, request.toString());
+            try (ResultSet rows = ps.executeQuery()) {
+                while (rows.next()) players.add(UUID.fromString(rows.getString(1)));
+            }
+        }
+        return players;
     }
 
     public boolean archiveAdmission(AdmissionReceipt receipt) throws SQLException {
@@ -456,16 +473,24 @@ public final class JdbcAbyssRepository extends AbstractModuleRepository {
     public void savePendingLocation(UUID player, String world,
                                     double x, double y, double z,
                                     float yaw, float pitch) throws SQLException {
+        savePendingLocation(player, world, x, y, z, yaw, pitch, null, null);
+    }
+
+    public void savePendingLocation(UUID player, String world, double x, double y, double z,
+                                    float yaw, float pitch, @Nullable String owner, @Nullable UUID request) throws SQLException {
         String sql = sqlite
             ? "INSERT INTO " + tPending + " (player_uuid, world, x, y, z, yaw, pitch, saved_at)"
               + " VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(player_uuid) DO UPDATE SET"
               + " world=excluded.world, x=excluded.x, y=excluded.y, z=excluded.z,"
-              + " yaw=excluded.yaw, pitch=excluded.pitch, saved_at=excluded.saved_at"
+              + " yaw=excluded.yaw, pitch=excluded.pitch, saved_at=MAX(saved_at+1,excluded.saved_at)"
             : "INSERT INTO " + tPending + " (player_uuid, world, x, y, z, yaw, pitch, saved_at)"
               + " VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE"
               + " world=VALUES(world), x=VALUES(x), y=VALUES(y), z=VALUES(z),"
-              + " yaw=VALUES(yaw), pitch=VALUES(pitch), saved_at=VALUES(saved_at)";
-        try (Connection c = getConnection(); PreparedStatement ps = c.prepareStatement(sql)) {
+              + " yaw=VALUES(yaw), pitch=VALUES(pitch), saved_at=GREATEST(saved_at+1,VALUES(saved_at))";
+        try (Connection c = getConnection()) {
+            c.setAutoCommit(false);
+            long savedAt = System.currentTimeMillis();
+            try (PreparedStatement ps = c.prepareStatement(sql)) {
             ps.setString(1, player.toString());
             ps.setString(2, world);
             ps.setDouble(3, x);
@@ -473,8 +498,31 @@ public final class JdbcAbyssRepository extends AbstractModuleRepository {
             ps.setDouble(5, z);
             ps.setFloat(6, yaw);
             ps.setFloat(7, pitch);
-            ps.setLong(8, System.currentTimeMillis());
+            ps.setLong(8, savedAt);
             ps.executeUpdate();
+            if (owner != null && request != null) {
+                try (PreparedStatement stamp = c.prepareStatement("SELECT saved_at FROM " + tPending + " WHERE player_uuid=?")) {
+                    stamp.setString(1, player.toString());
+                    try (ResultSet result = stamp.executeQuery()) {
+                        if (!result.next()) throw new SQLException("Pending return location disappeared");
+                        savedAt = result.getLong(1);
+                    }
+                }
+                String upsert = sqlite
+                    ? " ON CONFLICT(owner,request_id,player_uuid) DO UPDATE SET saved_at=excluded.saved_at,confirmed=0"
+                    : " ON DUPLICATE KEY UPDATE saved_at=VALUES(saved_at),confirmed=0";
+                try (PreparedStatement receipt = c.prepareStatement("INSERT INTO " + tAdmissionReturns
+                        + " (owner,request_id,player_uuid,saved_at,confirmed) VALUES (?,?,?,?,0)" + upsert)) {
+                    receipt.setString(1, owner); receipt.setString(2, request.toString());
+                    receipt.setString(3, player.toString()); receipt.setLong(4, savedAt);
+                    receipt.executeUpdate();
+                }
+            }
+            c.commit();
+            } catch (SQLException failure) {
+                c.rollback();
+                throw failure;
+            }
         }
     }
 
@@ -496,11 +544,25 @@ public final class JdbcAbyssRepository extends AbstractModuleRepository {
     }
 
     public boolean confirmPendingLocation(UUID player,PendingLocation expected)throws SQLException {
-        try(Connection c=getConnection();PreparedStatement ps=c.prepareStatement("DELETE FROM "+tPending
-            +" WHERE player_uuid=? AND saved_at=? AND world=? AND x=? AND y=? AND z=? AND yaw=? AND pitch=?")) {
+        try(Connection c=getConnection()) {
+            c.setAutoCommit(false);
+            try (PreparedStatement ps=c.prepareStatement("DELETE FROM "+tPending
+                +" WHERE player_uuid=? AND saved_at=? AND world=? AND x=? AND y=? AND z=? AND yaw=? AND pitch=?")) {
             ps.setString(1,player.toString());ps.setLong(2,expected.savedAt());ps.setString(3,expected.world());
             ps.setDouble(4,expected.x());ps.setDouble(5,expected.y());ps.setDouble(6,expected.z());
-            ps.setFloat(7,expected.yaw());ps.setFloat(8,expected.pitch());return ps.executeUpdate()==1;
+            ps.setFloat(7,expected.yaw());ps.setFloat(8,expected.pitch());
+            if (ps.executeUpdate() != 1) { c.rollback(); return false; }
+            try (PreparedStatement receipt = c.prepareStatement("UPDATE " + tAdmissionReturns
+                    + " SET confirmed=1 WHERE player_uuid=? AND saved_at=?")) {
+                receipt.setString(1, player.toString()); receipt.setLong(2, expected.savedAt());
+                receipt.executeUpdate();
+            }
+            c.commit();
+            return true;
+            } catch (SQLException failure) {
+                c.rollback();
+                throw failure;
+            }
         }
     }
 

@@ -95,13 +95,22 @@ public final class MonsterGroupManager {
 
     /** 初始化实例的组表（副本 start 时调用）。 */
     public void initInstance(AbyssInstance instance) {
+        initializeGroups(instance);
+        startConfiguredGroups(instance);
+    }
+
+    public void initializeGroups(AbyssInstance instance) {
         Map<String, GroupRuntime> groups = new ConcurrentHashMap<>();
         for (MonsterGroup g : instance.getTemplate().monsters().groups().values()) {
             if (!planAllowed(instance, g)) continue;
             groups.put(g.name(), new GroupRuntime(g));
         }
         instanceGroups.put(instance.getInstanceId(), groups);
+    }
 
+    public void startConfiguredGroups(AbyssInstance instance) {
+        var groups = instanceGroups.get(instance.getInstanceId());
+        if (groups == null) return;
         // AUTO_START 立即刷；DELAYED 排延迟
         for (GroupRuntime rt : groups.values()) {
             switch (rt.group.spawnTiming()) {

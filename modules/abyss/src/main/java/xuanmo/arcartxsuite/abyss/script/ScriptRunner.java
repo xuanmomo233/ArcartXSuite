@@ -26,6 +26,10 @@ import xuanmo.arcartxsuite.api.scheduler.ScheduledTask;
  * </pre>
  */
 public final class ScriptRunner {
+    private static final java.util.Set<String> PREPARATION_ACTIONS = java.util.Set.of(
+        "wait", "setvar", "delvar", "addvar", "random", "if_var", "run_script",
+        "setblock", "fillblocks", "paste_region", "time", "weather",
+        "message", "title", "actionbar", "sound");
 
     private final Plugin plugin;
     private final SchedulerAPI scheduler;
@@ -83,6 +87,16 @@ public final class ScriptRunner {
         }
         // ── 行内宿主脚本 ──
         String lower = line.toLowerCase();
+        if (context.preparationDepth() > 0) {
+            int split = lower.indexOf(' ');
+            String command = split < 0 ? lower : lower.substring(0, split);
+            if (!PREPARATION_ACTIONS.contains(command)) {
+                logger.warning("[abyss] 开局前动作不受支持，请移至 start: " + command);
+                session.cancel();
+                return false;
+            }
+            if (command.equals("run_script")) return awaitPreparationSection(line, context, session);
+        }
         if (trial != null) {
             int split = line.indexOf(' ');
             String action = split < 0 ? lower : lower.substring(0, split);
@@ -154,6 +168,25 @@ public final class ScriptRunner {
         } catch (Throwable t) {
             logger.warning("[abyss] " + kind + " 行内脚本异常: " + t.getMessage());
         }
+    }
+
+    private boolean awaitPreparationSection(String line, ScriptContext context, ScriptSession parent) {
+        String name = context.replace(line.substring("run_script".length()).trim()).toLowerCase(java.util.Locale.ROOT);
+        var lines = context.getInstance().getTemplate().scripts().customs().get(name);
+        if (lines == null || context.preparationDepth() >= 16) {
+            parent.cancel();
+            return false;
+        }
+        var child = run(name, lines, context.child(), context.getInstance());
+        if (child.completion().isDone()) {
+            if (!Boolean.TRUE.equals(child.completion().getNow(false))) parent.cancel();
+            return false;
+        }
+        child.completion().thenAccept(success -> runOnMain(() -> {
+            if (success) parent.resume();
+            else parent.cancel();
+        }));
+        return true;
     }
 
     /**

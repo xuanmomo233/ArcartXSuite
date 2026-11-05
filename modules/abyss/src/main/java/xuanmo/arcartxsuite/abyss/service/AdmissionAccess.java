@@ -300,7 +300,14 @@ final class AdmissionAccess implements AbyssAdmissionAccess {
         if (storage == null) return java.util.concurrent.CompletableFuture.failedFuture(new IllegalStateException("Abyss journal unavailable"));
         return storage.submitDatabase(() -> {
             var receipt = repository.loadAdmission(key.owner(), key.id());
-            return receipt == null ? null : restore(receipt);
+            if (receipt == null) return null;
+            var entry = restore(receipt);
+            if (entry.outcomes.containsValue("RETURN_PENDING")) {
+                for (UUID member : repository.confirmedAdmissionReturns(key.owner(), key.id()))
+                    entry.outcomes.replace(member, "RETURN_PENDING", "RETURNED");
+                entry.storedSnapshot = entry.snapshot();
+            }
+            return entry;
         });
     }
 
@@ -319,7 +326,8 @@ final class AdmissionAccess implements AbyssAdmissionAccess {
         requireMain();
         var key = new Key(owner, requestId);
         var cached = journal.get(key);
-        return cached != null ? java.util.concurrent.CompletableFuture.completedFuture(cached.snapshot())
+        return cached != null && (!cached.persisted || !cached.outcomes.containsValue("RETURN_PENDING"))
+            ? java.util.concurrent.CompletableFuture.completedFuture(cached.snapshot())
             : read(key).thenApply(entry -> entry == null ? null : entry.snapshot());
     }
 

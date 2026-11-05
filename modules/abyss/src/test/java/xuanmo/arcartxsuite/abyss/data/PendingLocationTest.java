@@ -42,6 +42,24 @@ class PendingLocationTest {
         assertEquals(receipt, repository.loadAdmission("xc", id));
         assertThrows(java.sql.SQLException.class, () -> repository.insertAdmission(receipt));
     }
+
+    @Test void offlineReturnConfirmationIsDurableAndCannotConfirmAnOlderLocation() throws Exception {
+        var ds = mock(DataSource.class);
+        when(ds.getConnection()).thenAnswer(call -> DriverManager.getConnection("jdbc:sqlite:" + dir.resolve("returns.db")));
+        var descriptor = StorageDescriptor.sqlite("returns.db");
+        var repository = new JdbcAbyssRepository(ds, descriptor, dir.toFile(), Logger.getAnonymousLogger());
+        repository.initialize();
+        UUID request = UUID.randomUUID(), player = UUID.randomUUID();
+        repository.savePendingLocation(player, "home", 1, 64, 1, 0, 0, "xc", request);
+        var old = repository.loadPendingLocation(player);
+        repository.savePendingLocation(player, "home", 2, 64, 2, 0, 0, "xc", request);
+        assertFalse(repository.confirmPendingLocation(player, old));
+        assertTrue(repository.confirmedAdmissionReturns("xc", request).isEmpty());
+        assertTrue(repository.confirmPendingLocation(player, repository.loadPendingLocation(player)));
+        var reopened = new JdbcAbyssRepository(ds, descriptor, dir.toFile(), Logger.getAnonymousLogger());
+        reopened.initialize();
+        assertEquals(java.util.List.of(player), reopened.confirmedAdmissionReturns("xc", request));
+    }
     @Test void finalResultsAreImmutableAndHistoryPagingIsScopedByOwner() throws Exception {
         var ds = mock(DataSource.class);
         when(ds.getConnection()).thenAnswer(call -> DriverManager.getConnection("jdbc:sqlite:" + dir.resolve("results.db")));
