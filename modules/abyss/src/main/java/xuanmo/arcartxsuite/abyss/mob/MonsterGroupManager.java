@@ -173,7 +173,7 @@ public final class MonsterGroupManager {
         int spawned = 0;
         for (MonsterConfig.MonsterSpawn ms : rt.group.monsters()) {
             Location loc = callback.parseLocation(instance, ms.location());
-            if (loc == null) continue;
+            if (loc == null || loc.getWorld() != world) continue;
             // 区块票据：防怪被区块卸载
             try {
                 if (!chunkTickets.acquire(instance.getInstanceId(), groupName, world,

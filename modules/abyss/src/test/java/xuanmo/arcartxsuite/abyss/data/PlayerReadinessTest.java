@@ -8,6 +8,52 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class PlayerReadinessTest {
+    @Test void recordCacheMissNeverWaitsForDatabaseAndMissingRowsAreCached() throws Exception {
+        var repository = mock(JdbcAbyssRepository.class, withSettings().mockMaker(org.mockito.MockMakers.INLINE));
+        UUID player = UUID.randomUUID();
+        var entered = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        when(repository.loadRecord(player, "test")).thenAnswer(call -> {
+            entered.countDown();
+            assertTrue(release.await(5, TimeUnit.SECONDS));
+            return null;
+        });
+        var data = new PlayerDataManager(repository, Logger.getAnonymousLogger());
+        try {
+            assertNull(data.loadRecord(player, "test"));
+            assertTrue(entered.await(5, TimeUnit.SECONDS));
+            for (int i = 0; i < 100; i++) assertNull(data.loadRecord(player, "test"));
+            verify(repository, times(1)).loadRecord(player, "test");
+            release.countDown();
+            data.submitDatabase(() -> null).get(5, TimeUnit.SECONDS);
+            assertArrayEquals(new long[]{0, 0}, data.loadRecord(player, "test"));
+            verify(repository, times(1)).loadRecord(player, "test");
+        } finally { release.countDown(); data.shutdown(); }
+    }
+
+    @Test void aLateRecordReadCannotOverwriteACompletionInvalidation() throws Exception {
+        var repository = mock(JdbcAbyssRepository.class, withSettings().mockMaker(org.mockito.MockMakers.INLINE));
+        UUID player = UUID.randomUUID();
+        var entered = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        when(repository.loadRecord(player, "test")).thenAnswer(call -> {
+            entered.countDown();
+            assertTrue(release.await(5, TimeUnit.SECONDS));
+            return new long[]{1, 30};
+        }).thenReturn(new long[]{2, 20});
+        var data = new PlayerDataManager(repository, Logger.getAnonymousLogger());
+        try {
+            data.loadRecord(player, "test");
+            assertTrue(entered.await(5, TimeUnit.SECONDS));
+            data.saveRecord(player, "test", 20);
+            release.countDown();
+            data.submitDatabase(() -> null).get(5, TimeUnit.SECONDS);
+            assertNull(data.loadRecord(player, "test"));
+            data.submitDatabase(() -> null).get(5, TimeUnit.SECONDS);
+            assertArrayEquals(new long[]{2, 20}, data.loadRecord(player, "test"));
+        } finally { release.countDown(); data.shutdown(); }
+    }
+
     @Test void recoveryReadsAreAsyncAndDoNotConsumeUntilExplicitConfirmation()throws Exception {
         var repository=mock(JdbcAbyssRepository.class,withSettings().mockMaker(org.mockito.MockMakers.INLINE));
         UUID player=UUID.randomUUID();var location=new JdbcAbyssRepository.PendingLocation("home",1,64,1,0,0,123);

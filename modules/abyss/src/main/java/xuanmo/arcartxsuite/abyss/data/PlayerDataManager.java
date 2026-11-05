@@ -66,6 +66,11 @@ public final class PlayerDataManager {
     private static final long RECORD_CACHE_TTL_MS = 30_000;
 
     private record RecordEntry(long completions, long bestTime, long expiry) { }
+    private record LeaderboardKey(String dungeon, int limit) { }
+    private record LeaderboardPage(java.util.List<JdbcAbyssRepository.LeaderboardEntry> rows, long expiry) { }
+    private final Map<LeaderboardKey, LeaderboardPage> leaderboards = new ConcurrentHashMap<>();
+    private final Map<LeaderboardKey, java.util.concurrent.CompletableFuture<java.util.List<JdbcAbyssRepository.LeaderboardEntry>>>
+        leaderboardReads = new ConcurrentHashMap<>();
 
     public PlayerDataManager(JdbcAbyssRepository repository, Logger logger) {
         this(repository, logger, 100);
@@ -165,10 +170,12 @@ public final class PlayerDataManager {
 
     // ═══ 通关记录 ═══
 
-    public void saveRecord(UUID player, String dungeonId, long timeSeconds) {
+    public synchronized void saveRecord(UUID player, String dungeonId, long timeSeconds) {
         // 失效记录缓存：新通关成绩立即可见
         recordCache.remove(player + ":" + dungeonId);
         recordReads.remove(player + ":" + dungeonId);
+        leaderboards.keySet().removeIf(key -> key.dungeon().equals(dungeonId));
+        leaderboardReads.keySet().removeIf(key -> key.dungeon().equals(dungeonId));
         write(() -> {
             try {
                 repository.saveRecord(player, dungeonId, timeSeconds);
@@ -198,12 +205,14 @@ public final class PlayerDataManager {
             var request = new java.util.concurrent.CompletableFuture<long[]>();
             if (recordReads.putIfAbsent(key, request) == null) {
                 queue.write(() -> repository.loadRecord(player, dungeonId)).whenComplete((row, error) -> {
+                    synchronized (this) {
                     if (recordReads.get(key) == request) {
                         if (error == null) recordCache.put(key, new RecordEntry(row == null ? 0 : row[0],
                             row == null ? 0 : row[1], System.currentTimeMillis() + RECORD_CACHE_TTL_MS));
                         else if (c != null) recordCache.replace(key, c,
                             new RecordEntry(c.completions(), c.bestTime(), System.currentTimeMillis() + 5000));
                         recordReads.remove(key, request);
+                    }
                     }
                     if (error == null) request.complete(row);
                     else request.completeExceptionally(error);
@@ -215,15 +224,33 @@ public final class PlayerDataManager {
 
     public java.util.List<JdbcAbyssRepository.LeaderboardEntry> loadLeaderboard(
             String dungeonId, int limit) {
-        try {
-            return repository.loadLeaderboard(dungeonId, limit);
-        } catch (Exception e) {
-            logger.warning("[abyss] 排行榜加载失败 " + dungeonId + ": " + e.getMessage());
-            return java.util.List.of();
-        }
+        var key = new LeaderboardKey(dungeonId, Math.max(1, Math.min(200, limit)));
+        var page = leaderboards.get(key);
+        if (page == null || page.expiry() <= System.currentTimeMillis()) loadLeaderboardAsync(dungeonId, limit);
+        return page == null ? java.util.List.of() : page.rows();
     }
     public java.util.concurrent.CompletableFuture<java.util.List<JdbcAbyssRepository.LeaderboardEntry>> loadLeaderboardAsync(String dungeonId,int limit) {
-        return queue.read(() -> repository.loadLeaderboard(dungeonId,Math.max(1,Math.min(200,limit))));
+        var key = new LeaderboardKey(dungeonId, Math.max(1, Math.min(200, limit)));
+        var request = new java.util.concurrent.CompletableFuture<java.util.List<JdbcAbyssRepository.LeaderboardEntry>>();
+        var existing = leaderboardReads.putIfAbsent(key, request);
+        if (existing != null) return existing.thenApply(java.util.List::copyOf);
+        queue.read(() -> java.util.List.copyOf(repository.loadLeaderboard(dungeonId, key.limit())))
+            .whenComplete((rows, error) -> {
+                synchronized (this) {
+                    if (leaderboardReads.get(key) == request) {
+                        if (error == null) {
+                            if (leaderboards.size() >= 128) leaderboards.entrySet().removeIf(entry ->
+                                entry.getValue().expiry() <= System.currentTimeMillis());
+                            if (leaderboards.size() < 128 || leaderboards.containsKey(key))
+                                leaderboards.put(key, new LeaderboardPage(rows, System.currentTimeMillis() + 30000));
+                        }
+                        leaderboardReads.remove(key, request);
+                    }
+                }
+                if (error == null) request.complete(rows);
+                else request.completeExceptionally(error);
+            });
+        return request.thenApply(java.util.List::copyOf);
     }
 
     // ═══ 断线待恢复位置 ═══

@@ -13,6 +13,24 @@ import static org.mockito.Mockito.*;
 
 class PendingLocationTest {
     @TempDir Path dir;
+    @Test void historicalFeedRecoveryPublishesAtMostOneBatchPerPass() throws Exception {
+        var ds = mock(DataSource.class);
+        when(ds.getConnection()).thenAnswer(call -> DriverManager.getConnection("jdbc:sqlite:" + dir.resolve("batch.db")));
+        var repository = new JdbcAbyssRepository(ds, StorageDescriptor.sqlite("batch.db"), dir.toFile(), Logger.getAnonymousLogger());
+        repository.initialize();
+        try (var connection = ds.getConnection();
+             var insert = connection.prepareStatement("INSERT INTO run_results(run_id,owner,ended_at,snapshot) VALUES (?,'xc',1,?)")) {
+            for (int i = 0; i < 101; i++) {
+                insert.setString(1, UUID.randomUUID().toString()); insert.setString(2, Integer.toString(i));
+                insert.addBatch();
+            }
+            insert.executeBatch();
+        }
+        repository.backfillResultFeed();
+        assertEquals(100, repository.committedResults("xc", 0, 200).size());
+        repository.backfillResultFeed();
+        assertEquals(101, repository.committedResults("xc", 0, 200).size());
+    }
     @Test void lateResultsFollowCommitOrderAndDuplicateResultsDoNotCreateFeedEntries() throws Exception {
         var ds = mock(DataSource.class);
         when(ds.getConnection()).thenAnswer(call -> DriverManager.getConnection("jdbc:sqlite:" + dir.resolve("feed.db")));

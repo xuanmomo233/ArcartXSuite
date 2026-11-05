@@ -65,4 +65,29 @@ class MonsterSpawnFailureTest {
         assertNull(manager.entityContext(id));
         assertTrue(manager.entityContexts(instance.getInstanceId()).isEmpty());
     }
+
+    @Test void vanishedEntitySweepIsBoundedAndEventuallyCompletesTheGroup() throws Exception {
+        when(callback.provider().spawn(anyString(), any(), anyDouble())).thenAnswer(call -> {
+            var entity = mock(org.bukkit.entity.Entity.class);
+            when(entity.getUniqueId()).thenReturn(UUID.randomUUID());
+            when(entity.getWorld()).thenReturn(instance.getWorld());
+            return entity;
+        });
+        manager.registerRuntimeGroup(instance, group(List.of(new MonsterConfig.MonsterSpawn("vanilla:zombie", "0,65,0", 150, 1))));
+        assertTrue(manager.spawnGroup(instance, "wave", null));
+        var serverField = Bukkit.class.getDeclaredField("server");
+        serverField.setAccessible(true);
+        Object previous = serverField.get(null);
+        var server = mock(Server.class);
+        try {
+            serverField.set(null, server);
+            manager.sweepVanished(instance);
+            verify(server, times(128)).getEntity(any(UUID.class));
+            assertFalse(manager.isGroupComplete(instance, "wave"));
+            manager.sweepVanished(instance);
+            verify(server, times(150)).getEntity(any(UUID.class));
+            assertTrue(manager.isGroupComplete(instance, "wave"));
+            assertTrue(manager.entityContexts(instance.getInstanceId()).isEmpty());
+        } finally { serverField.set(null, previous); }
+    }
 }

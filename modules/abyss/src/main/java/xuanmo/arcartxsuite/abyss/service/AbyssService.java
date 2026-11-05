@@ -1442,8 +1442,6 @@ public final class AbyssService {
         instance.setWorld(world);
         worldIndex.put(world.getName(), instance.getInstanceId());
         broadcast(instance, msg("dungeon.world-ready"));
-        scheduleOnce(instance, () -> abortAdmission(instance, "PREPARATION_TIMEOUT"),
-            Math.max(20L, config.abyss().worldLoadTimeout() / 50L));
 
         Location spawn = spawnLocation(instance);
         if (spawn == null) {
@@ -1461,6 +1459,8 @@ public final class AbyssService {
                 return;
             }
             if (instance.isFinished()) return;
+            scheduleOnce(instance, () -> abortAdmission(instance, "PREPARATION_TIMEOUT"),
+                Math.max(20L, config.abyss().worldLoadTimeout() / 50L));
             continueWorldReady(instance, world, spawn, players);
         }));
     }
