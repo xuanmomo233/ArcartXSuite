@@ -47,8 +47,12 @@ public interface AbyssAdmissionAccess {
     record Cost(String owner, UUID transactionId, AbyssEntryCostAccess.State lastKnownState) { }
     record Review(Entry entry, AbyssEntryCostAccess.State observedCost) { }
     record ReviewItem(UUID requestId, Entry entry) { }
-    record Entry(Phase phase, UUID runId, String reason, Map<UUID, String> members, Cost cost) {
-        public Entry { members = Map.copyOf(members); }
+    record Entry(Phase phase, UUID runId, String reason, Map<UUID, String> members, Cost cost,
+                 Map<UUID, String> nativeCosts) {
+        public Entry { members = Map.copyOf(members); nativeCosts = Map.copyOf(nativeCosts); }
+        public Entry(Phase phase, UUID runId, String reason, Map<UUID, String> members, Cost cost) {
+            this(phase, runId, reason, members, cost, Map.of());
+        }
         public Entry(Phase phase, UUID runId, String reason, Map<UUID, String> members) {
             this(phase, runId, reason, members, null);
         }

@@ -177,23 +177,35 @@ public final class RequirementChecker {
         private final boolean ok; private final String reason;
         private final Runnable rollback, commit; private boolean closed;
         private boolean reviewRequired;
+        private java.util.Map<java.util.UUID, String> memberCosts = java.util.Map.of();
         Charge(boolean ok, String reason, Runnable rollback, Runnable commit) {
             this.ok=ok; this.reason=reason; this.rollback=rollback; this.commit=commit;
         }
         public boolean ok() { return ok; }
         public String reason() { return reason; }
         public boolean reviewRequired() { return reviewRequired; }
+        public java.util.Map<java.util.UUID, String> memberCosts() { return java.util.Map.copyOf(memberCosts); }
         public void rollback() { if (!closed && ok) { closed=true; rollback.run(); } }
         public void commit() { if (!closed && ok) { closed=true; commit.run(); } }
     }
 
     public Charge charge(AbyssTemplate template, List<Player> members) {
         EntryRequirements r = template.requirements();
-        java.util.List<Runnable> undo = new java.util.ArrayList<>();
+        record Undo(java.util.UUID member, Runnable action) { }
+        java.util.List<Undo> undo = new java.util.ArrayList<>();
+        var memberCosts = new java.util.LinkedHashMap<java.util.UUID, String>();
+        members.forEach(player -> memberCosts.put(player.getUniqueId(), "NO_NATIVE_CHARGE"));
         Runnable rollback = () -> {
             RuntimeException failure=null;
-            for (int i=undo.size()-1;i>=0;i--) try { undo.get(i).run(); }
-            catch(RuntimeException error) { if(failure==null)failure=error; else failure.addSuppressed(error); }
+            for (int i=undo.size()-1;i>=0;i--) {
+                var step = undo.get(i);
+                try { step.action().run(); }
+                catch(RuntimeException error) {
+                    memberCosts.put(step.member(), "NATIVE_REVIEW_REQUIRED");
+                    if(failure==null)failure=error; else failure.addSuppressed(error);
+                }
+            }
+            memberCosts.replaceAll((id, state) -> state.equals("NATIVE_DEBITED") ? "NATIVE_COMPENSATED" : state);
             if(failure!=null)throw failure;
         };
         try {
@@ -214,37 +226,45 @@ public final class RequirementChecker {
                     if (bridge==null || !bridge.available() || !bridge.withdraw(p,BigDecimal.valueOf(r.moneyCost())).success())
                         throw new IllegalStateException("门票扣款失败: "+p.getName());
                     String key="entry-refund:"+java.util.UUID.randomUUID();
-                    undo.add(() -> { if(!rewards.refundMoney(p,r.moneyCost(),r.currencyId(),key))
-                        throw new IllegalStateException("门票退款未完成: "+p.getName()); });
+                    undo.add(new Undo(p.getUniqueId(), () -> { if(!rewards.refundMoney(p,r.moneyCost(),r.currencyId(),key))
+                        throw new IllegalStateException("门票退款未完成: "+p.getName()); }));
+                    memberCosts.put(p.getUniqueId(), "NATIVE_DEBITED");
                 }
                 if (r.staminaCost()>0) {
                     if (!stamina.consume(p.getUniqueId(),r.staminaCost())) throw new IllegalStateException("体力扣除失败");
-                    undo.add(() -> stamina.add(p.getUniqueId(),r.staminaCost()));
+                    undo.add(new Undo(p.getUniqueId(), () -> stamina.add(p.getUniqueId(),r.staminaCost())));
+                    memberCosts.put(p.getUniqueId(), "NATIVE_DEBITED");
                 }
                 if (!r.requiredItems().isEmpty()) {
                     if(!java.util.Arrays.equals(p.getInventory().getContents(),originals.get(p)))
                         throw new IllegalStateException("门票物品在扣费时发生变化");
                     var original = cloneContents(p.getInventory().getContents());
                     var expected = cloneContents(plans.get(p));
-                    undo.add(() -> {
+                    undo.add(new Undo(p.getUniqueId(), () -> {
                         if (!java.util.Arrays.equals(p.getInventory().getContents(), expected))
                             throw new IllegalStateException("背包在扣票后发生变化，退款需核对: " + p.getName());
                         p.getInventory().setContents(original);
-                    });
+                    }));
+                    memberCosts.put(p.getUniqueId(), "NATIVE_DEBITED");
                     p.getInventory().setContents(plans.get(p));
                 }
             }
-            return new Charge(true,null,rollback,()->{
+            var charge = new Charge(true,null,rollback,()->{
                 for(Player p:members) cooldown.setCooldown(p.getUniqueId(),template.id(),r.cooldownSeconds());
             });
+            charge.memberCosts = memberCosts;
+            return charge;
         } catch (RuntimeException failure) {
             try { rollback.run(); } catch(RuntimeException refund) {
                 failure.addSuppressed(refund);
                 var uncertain = new Charge(false,failure.getMessage()+"；退款需核对: "+refund.getMessage(),()->{},()->{});
                 uncertain.reviewRequired = true;
+                uncertain.memberCosts = memberCosts;
                 return uncertain;
             }
-            return new Charge(false,failure.getMessage(),()->{},()->{});
+            var rejected = new Charge(false,failure.getMessage(),()->{},()->{});
+            rejected.memberCosts = memberCosts;
+            return rejected;
         }
     }
 }

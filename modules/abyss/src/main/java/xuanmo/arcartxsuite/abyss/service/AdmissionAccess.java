@@ -44,6 +44,7 @@ final class AdmissionAccess implements AbyssAdmissionAccess {
     static final class Operation {
         final Intent intent;
         final Map<UUID, String> outcomes = new LinkedHashMap<>();
+        final Map<UUID, String> nativeCosts = new LinkedHashMap<>();
         Phase phase = Phase.PREPARING;
         UUID runId;
         String reason;
@@ -65,10 +66,13 @@ final class AdmissionAccess implements AbyssAdmissionAccess {
         Operation(Intent intent) {
             this.intent = intent;
             this.fingerprint = fingerprint(intent);
-            intent.members().forEach(id -> outcomes.put(id, "PENDING"));
+            intent.members().forEach(id -> {
+                outcomes.put(id, "PENDING");
+                nativeCosts.put(id, "NO_NATIVE_CHARGE");
+            });
         }
         Entry snapshot() { return new Entry(phase, runId, reason, outcomes,
-            costId == null ? null : new Cost(costOwner, costId, costState)); }
+            costId == null ? null : new Cost(costOwner, costId, costState), nativeCosts); }
     }
 
     AdmissionAccess(AbyssService service) { this.service = service; }
@@ -97,6 +101,9 @@ final class AdmissionAccess implements AbyssAdmissionAccess {
             if (outcomes != null) for (String member : outcomes.getKeys(false)) {
                 op.outcomes.put(UUID.fromString(member), outcomes.getString(member));
             }
+            var costs = yaml.getConfigurationSection("native-costs");
+            if (costs != null) for (String member : costs.getKeys(false))
+                op.nativeCosts.put(UUID.fromString(member), costs.getString(member));
             if (op.phase == Phase.PREPARING || op.phase == Phase.TELEPORTING
                 || op.phase == Phase.RESERVING_COST || op.phase == Phase.COMMITTING_COST || op.phase == Phase.COMPENSATING_COST) {
                 op.phase = Phase.REVIEW_REQUIRED;
@@ -522,6 +529,7 @@ final class AdmissionAccess implements AbyssAdmissionAccess {
             yaml.set("cost.state", op.costState.name());
         }
         op.outcomes.forEach((id, status) -> yaml.set("members." + id, status));
+        op.nativeCosts.forEach((id, status) -> yaml.set("native-costs." + id, status));
         return new AdmissionReceipt(op.intent.owner(), op.intent.requestId().toString(), op.fingerprint, yaml.saveToString());
     }
 

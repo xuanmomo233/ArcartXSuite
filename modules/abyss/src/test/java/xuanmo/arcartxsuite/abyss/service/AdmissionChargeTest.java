@@ -41,6 +41,8 @@ class AdmissionChargeTest {
     @Test void secondMembersPaymentFailureRefundsEarlierMemberAndNeverStartsCooldown() {
         Player first=player(),second=player();when(money.withdraw(eq(second),any())).thenReturn(CurrencyTransactionResult.failure("denied"));
         var charge=checker.charge(template,List.of(first,second));assertFalse(charge.ok());
+        assertEquals("NATIVE_COMPENSATED", charge.memberCosts().get(first.getUniqueId()));
+        assertEquals("NO_NATIVE_CHARGE", charge.memberCosts().get(second.getUniqueId()));
         verify(rewards).refundMoney(eq(first),eq(5d),eq("money"),anyString());
         verify(stamina).add(first.getUniqueId(),10);verifyNoInteractions(cooldown);
     }
@@ -81,6 +83,7 @@ class AdmissionChargeTest {
             assertTrue(charge.ok(), charge::reason);
             player.getInventory().setContents(new ItemStack[]{new ItemStack(Material.STONE)});
             assertThrows(IllegalStateException.class, charge::rollback);
+            assertEquals("NATIVE_REVIEW_REQUIRED", charge.memberCosts().get(player.getUniqueId()));
             assertEquals(Material.STONE, player.getInventory().getContents()[0].getType());
             verify(rewards).refundMoney(eq(player), eq(5d), eq("money"), anyString());
             verifyNoInteractions(cooldown);

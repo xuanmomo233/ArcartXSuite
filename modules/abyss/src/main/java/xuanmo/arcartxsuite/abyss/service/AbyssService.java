@@ -1753,6 +1753,10 @@ public final class AbyssService {
 
     private void abortAdmission(AbyssInstance instance, String reason) {
         if (instances.getInstance(instance.getInstanceId()) != instance || instance.admitted() || instance.isFinished()) return;
+        if (transferringInstances.contains(instance.getInstanceId())) {
+            scheduleDelayedRaw(() -> abortAdmission(instance, reason), 1L);
+            return;
+        }
         var operation = admission.operation(instance);
         rollbackAdmission(instance, operation, null, null, reason);
     }
@@ -1826,7 +1830,11 @@ public final class AbyssService {
             abortAdmission(instance, "FINAL_REQUIREMENTS_FAILED");
             return;
         }
-        var charge = requirementChecker.charge(t, players);
+        RequirementChecker.Charge charge;
+        transferringInstances.add(instance.getInstanceId());
+        try { charge = requirementChecker.charge(t, players); }
+        finally { transferringInstances.remove(instance.getInstanceId()); }
+        if (operation != null) operation.nativeCosts.putAll(charge.memberCosts());
         if (!charge.ok()) {
             if (operation != null) operation.costUncertain = charge.reviewRequired();
             abortAdmission(instance, "CHARGE_FAILED");
@@ -1840,9 +1848,13 @@ public final class AbyssService {
         try {
             charge.commit();
         } catch (RuntimeException failure) {
-            if (operation != null) operation.costUncertain = true;
+            if (operation != null) {
+                operation.costUncertain = true;
+                operation.nativeCosts.replaceAll((id, state) ->
+                    state.equals("NATIVE_DEBITED") ? "NATIVE_REVIEW_REQUIRED" : state);
+            }
             instance.transitionTo(AbyssStatus.ACTIVE, AbyssStatus.PREPARING);
-            rollbackAdmission(instance, operation, null, charge, "COOLDOWN_COMMIT_UNKNOWN");
+            rollbackAdmission(instance, operation, null, null, "COOLDOWN_COMMIT_UNKNOWN");
             return;
         }
         instance.confirmAdmission();
@@ -2774,6 +2786,7 @@ public final class AbyssService {
                 op.outcomes.put(id, returned ? "RETURNED" : "RETURN_PENDING");
         }
         if (op != null) {
+            if (charge != null) op.nativeCosts.putAll(charge.memberCosts());
             op.outcomes.replaceAll((id, state) -> state.equals("ARRIVED") ? "RETURN_PENDING" : state);
             review |= op.outcomes.containsValue("RETURN_PENDING");
             op.phase = review ? Phase.REVIEW_REQUIRED : Phase.COMPENSATED;
