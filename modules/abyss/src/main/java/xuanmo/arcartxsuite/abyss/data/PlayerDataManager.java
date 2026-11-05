@@ -191,7 +191,7 @@ public final class PlayerDataManager {
      * 走此缓存，防止计分板/TAB 每 tick 刷新打穿 DB。
      * 缓存未命中或到期时异步刷新，主线程调用返回最近快照。</p>
      */
-    public long[] loadRecord(UUID player, String dungeonId) {
+    public synchronized long[] loadRecord(UUID player, String dungeonId) {
         String key = player + ":" + dungeonId;
         RecordEntry c = recordCache.get(key);
         if (c != null && System.currentTimeMillis() < c.expiry()) {
@@ -229,7 +229,7 @@ public final class PlayerDataManager {
         if (page == null || page.expiry() <= System.currentTimeMillis()) loadLeaderboardAsync(dungeonId, limit);
         return page == null ? java.util.List.of() : page.rows();
     }
-    public java.util.concurrent.CompletableFuture<java.util.List<JdbcAbyssRepository.LeaderboardEntry>> loadLeaderboardAsync(String dungeonId,int limit) {
+    public synchronized java.util.concurrent.CompletableFuture<java.util.List<JdbcAbyssRepository.LeaderboardEntry>> loadLeaderboardAsync(String dungeonId,int limit) {
         var key = new LeaderboardKey(dungeonId, Math.max(1, Math.min(200, limit)));
         var request = new java.util.concurrent.CompletableFuture<java.util.List<JdbcAbyssRepository.LeaderboardEntry>>();
         var existing = leaderboardReads.putIfAbsent(key, request);

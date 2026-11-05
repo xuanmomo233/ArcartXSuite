@@ -34,6 +34,33 @@ class MonsterSpawnFailureTest {
         assertFalse(manager.spawnGroup(instance,"wave",null));
         verify(callback).onSpawnFailed(instance,"wave");verify(callback,never()).onGroupComplete(any(),anyString());
     }
+    @Test void groupDeathAndSpawnFailureReleaseTheirOwnedTickets() {
+        var plugin = mock(org.bukkit.plugin.Plugin.class);
+        var world = instance.getWorld();
+        when(world.addPluginChunkTicket(0, 0, plugin)).thenReturn(true);
+        when(world.removePluginChunkTicket(0, 0, plugin)).thenReturn(true);
+        manager = new MonsterGroupManager(plugin, null, java.util.logging.Logger.getAnonymousLogger());
+        manager.setCallback(callback);
+        var mob = mock(org.bukkit.entity.Entity.class);
+        UUID id = UUID.randomUUID();
+        when(mob.getUniqueId()).thenReturn(id);
+        when(mob.getWorld()).thenReturn(world);
+        when(callback.provider().spawn(anyString(), any(), anyDouble())).thenReturn(mob);
+        manager.registerRuntimeGroup(instance, group(List.of(new MonsterConfig.MonsterSpawn("vanilla:zombie", "0,65,0", 1, 1))));
+        assertTrue(manager.spawnGroup(instance, "wave", null));
+        manager.onEntityDeath(id, instance, null);
+        verify(world, times(1)).removePluginChunkTicket(0, 0, plugin);
+        manager.cleanup(instance);
+        verify(world, times(1)).removePluginChunkTicket(0, 0, plugin);
+
+        var next = new AbyssInstance(UUID.randomUUID(), instance.getTemplate(), null);
+        next.setWorld(world);
+        when(callback.parseLocation(eq(next), anyString())).thenReturn(new Location(world, 0, 65, 0));
+        when(callback.provider().spawn(anyString(), any(), anyDouble())).thenReturn(null);
+        manager.registerRuntimeGroup(next, group(List.of(new MonsterConfig.MonsterSpawn("missing", "0,65,0", 1, 1))));
+        assertFalse(manager.spawnGroup(next, "wave", null));
+        verify(world, times(2)).removePluginChunkTicket(0, 0, plugin);
+    }
     @Test void intentionallyEmptyGroupCompletesAndDoesNotSoftLock() {
         manager.registerRuntimeGroup(instance,group(List.of()));
         assertTrue(manager.spawnGroup(instance,"wave",null));

@@ -31,6 +31,20 @@ class PlayerReadinessTest {
         } finally { release.countDown(); data.shutdown(); }
     }
 
+    @Test void cooldownLookupsUseTheCompletePreloadSnapshotWithoutSynchronousMissQueries() throws Exception {
+        var repository = mock(JdbcAbyssRepository.class, withSettings().mockMaker(org.mockito.MockMakers.INLINE));
+        UUID player = UUID.randomUUID();
+        when(repository.loadStamina(player)).thenReturn(new long[]{10, 0});
+        when(repository.loadAllCooldowns(player)).thenReturn(Map.of("known", 123L));
+        var data = new PlayerDataManager(repository, Logger.getAnonymousLogger());
+        try {
+            data.preload(player).get(5, TimeUnit.SECONDS);
+            assertEquals(123, data.getCooldown(player, "known"));
+            assertEquals(0, data.getCooldown(player, "unknown"));
+            verify(repository, never()).loadCooldown(any(), anyString());
+        } finally { data.shutdown(); }
+    }
+
     @Test void aLateRecordReadCannotOverwriteACompletionInvalidation() throws Exception {
         var repository = mock(JdbcAbyssRepository.class, withSettings().mockMaker(org.mockito.MockMakers.INLINE));
         UUID player = UUID.randomUUID();

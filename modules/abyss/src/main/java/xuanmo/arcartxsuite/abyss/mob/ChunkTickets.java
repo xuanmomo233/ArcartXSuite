@@ -17,6 +17,8 @@ final class ChunkTickets {
     private final java.util.logging.Logger logger;
     private final Map<Key, Ticket> tickets = new HashMap<>();
     private final Map<Owner, Set<Key>> groups = new HashMap<>();
+    private final Map<UUID, Set<Owner>> runs = new HashMap<>();
+    private final Set<Key> pendingRemoval = new HashSet<>();
 
     ChunkTickets(Plugin plugin) { this(plugin, java.util.logging.Logger.getLogger("Abyss")); }
     ChunkTickets(Plugin plugin, java.util.logging.Logger logger) { this.plugin = plugin; this.logger = logger; }
@@ -34,7 +36,9 @@ final class ChunkTickets {
             tickets.put(key, ticket);
         }
         ticket.owners().add(owner);
+        pendingRemoval.remove(key);
         groups.computeIfAbsent(owner, ignored -> new HashSet<>()).add(key);
+        runs.computeIfAbsent(run, ignored -> new HashSet<>()).add(owner);
         return true;
     }
 
@@ -42,19 +46,29 @@ final class ChunkTickets {
         var owner = new Owner(run, group);
         var keys = groups.remove(owner);
         if (keys == null) return;
+        var owners = runs.get(run);
+        if (owners != null) {
+            owners.remove(owner);
+            if (owners.isEmpty()) runs.remove(run);
+        }
         for (var key : keys) {
             var ticket = tickets.get(key);
             if (ticket == null || !ticket.owners().remove(owner) || !ticket.owners().isEmpty()) continue;
             if (ticket.owned()) {
                 // Keep a failed removal registered so shutdown can retry it.
-                if (!remove(key)) continue;
+                if (!remove(key)) {
+                    pendingRemoval.add(key);
+                    continue;
+                }
             }
             tickets.remove(key);
+            pendingRemoval.remove(key);
         }
     }
 
     void releaseRun(UUID run) {
-        for (var owner : Set.copyOf(groups.keySet())) if (owner.run().equals(run)) release(run, owner.group());
+        var owners = runs.get(run);
+        if (owners != null) for (var owner : Set.copyOf(owners)) release(run, owner.group());
         retryEmpty();
     }
 
@@ -64,10 +78,14 @@ final class ChunkTickets {
     }
 
     private void retryEmpty() {
-        for (var entry : Map.copyOf(tickets).entrySet()) {
-            var ticket = entry.getValue();
-            var key = entry.getKey();
-            if (ticket.owners().isEmpty() && (!ticket.owned() || remove(key))) tickets.remove(key);
+        for (var key : Set.copyOf(pendingRemoval)) {
+            var ticket = tickets.get(key);
+            if (ticket == null || !ticket.owners().isEmpty()) {
+                pendingRemoval.remove(key);
+            } else if (!ticket.owned() || remove(key)) {
+                tickets.remove(key);
+                pendingRemoval.remove(key);
+            }
         }
     }
 
