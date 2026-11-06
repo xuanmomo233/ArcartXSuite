@@ -220,6 +220,7 @@ public final class AfkRewardService {
         if (config.performance().pauseOnLowTps()
             && TpsProvider.currentTps() < config.performance().minTps()) return;
         for (Player player : Bukkit.getOnlinePlayers()) {
+            if (!xuanmo.arcartxsuite.api.auth.AuthAccess.admitted(player.getUniqueId())) continue;
             processPlayer(player);
             pushHud(player);
         }

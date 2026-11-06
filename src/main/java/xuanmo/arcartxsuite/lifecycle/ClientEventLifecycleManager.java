@@ -69,4 +69,10 @@ public final class ClientEventLifecycleManager implements Listener {
             Bukkit.getScheduler().runTask(plugin, route);
         }
     }
+    @EventHandler
+    public void onAdmission(xuanmo.arcartxsuite.api.auth.AuthAdmissionEvent event) {
+        ModuleRegistry registry=registrySupplier.get();
+        Player player=Bukkit.getPlayer(event.snapshot().playerId());
+        if(registry!=null && player!=null) registry.routeClientInitialized(player);
+    }
 }

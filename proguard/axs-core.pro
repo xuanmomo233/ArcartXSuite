@@ -4,10 +4,13 @@
 
 # ─── 混合认证代理（独立进程入口，必须保留类名/包名/成员） ──────
 # 该类由 start-mixed-auth 脚本以 `java -cp ArcartX-Suite.jar
-# xuanmo.arcartxsuite.auth.MixedYggdrasilProxy <port>` 独立启动，
+# xuanmo.arcartxsuite.auth.minecraft.MixedYggdrasilGateway <port>` 独立启动，
 # 插件内不再直接 new 它，故必须 keep，否则会被混淆删除或 repackage 而无法定位。
--keep class xuanmo.arcartxsuite.auth.MixedYggdrasilProxy { *; }
--keep class xuanmo.arcartxsuite.auth.MixedYggdrasilProxy$* { *; }
+-keep class xuanmo.arcartxsuite.auth.minecraft.** { *; }
+
+# 中心传输 DTO 由 Gson 按记录字段名序列化，必须保持协议字段。
+-keep class xuanmo.arcartxsuite.auth.protocol.AuthWire$* { *; }
+-keepattributes Record
 
 # ─── JAR 保护引导类（方案 ②：必须保留原始类名，且含其全部内部类） ──
 # encrypt-jar.py 以全限定名识别引导类（保持明文、不加密），ProtectionInit 运行时
@@ -64,6 +67,7 @@
 -keep class redis.clients.** { *; }
 -keep class com.mysql.** { *; }
 -keep class org.sqlite.** { *; }
+-keep class org.bouncycastle.** { *; }
 -keep class at.favre.lib.** { *; }
 -keep class net.sourceforge.pinyin4j.** { *; }
 -keep class com.google.gson.** { *; }

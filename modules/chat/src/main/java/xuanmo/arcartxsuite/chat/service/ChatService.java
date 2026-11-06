@@ -30,7 +30,6 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
-import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
@@ -198,6 +197,7 @@ public final class ChatService implements Listener {
         registerPaperChatEventIfAvailable();
         initMentionCompletionReflection();
         for (Player player : Bukkit.getOnlinePlayers()) {
+            if (!xuanmo.arcartxsuite.api.auth.AuthAccess.admitted(player.getUniqueId())) continue;
             touchProfile(player, true);
             state(player.getUniqueId());
             currentMute(player.getUniqueId());
@@ -322,6 +322,7 @@ public final class ChatService implements Listener {
     public Collection<String> onlinePlayerNames() {
         List<String> names = new ArrayList<>();
         for (Player player : Bukkit.getOnlinePlayers()) {
+            if (!xuanmo.arcartxsuite.api.auth.AuthAccess.admitted(player.getUniqueId())) continue;
             names.add(player.getName());
         }
         return names;
@@ -331,6 +332,8 @@ public final class ChatService implements Listener {
         if (sender == null || !sender.isOnline()) {
             return ChatOperationResult.failure(message("result.player-offline"));
         }
+        if (!xuanmo.arcartxsuite.api.auth.AuthAccess.admitted(sender.getUniqueId()))
+            return ChatOperationResult.failure("请先完成登录验证。");
         ChatPlayerState state = state(sender.getUniqueId());
         ChatChannelDefinition channel = channel(state.currentChannelId());
         if (channel == null) {
@@ -562,6 +565,7 @@ public final class ChatService implements Listener {
     }
 
     private void dispatchOrDeferToPaper(Player player, String message) {
+        if (!xuanmo.arcartxsuite.api.auth.AuthAccess.admitted(player.getUniqueId())) return;
         if (paperChatEventRegistered) {
             if (!paperChatEventObserved) {
                 Bukkit.getScheduler().runTaskLater(plugin, () -> {
@@ -576,21 +580,32 @@ public final class ChatService implements Listener {
     }
 
     @EventHandler
-    public void onPlayerJoin(PlayerJoinEvent event) {
-        touchProfile(event.getPlayer(), true);
-        state(event.getPlayer().getUniqueId());
-        currentMute(event.getPlayer().getUniqueId());
-        updateMentionCompletions(event.getPlayer(), true);
+    public void onAdmission(xuanmo.arcartxsuite.api.auth.AuthAdmissionEvent event) {
+        Player player=Bukkit.getPlayer(event.snapshot().playerId());
+        if(player==null) return;
+        touchProfile(player, true);
+        state(player.getUniqueId());
+        currentMute(player.getUniqueId());
+        updateMentionCompletions(player, true);
         broadcastCompletionPlayerList();
         RedPacketService service = redPacketService;
         if (service != null) {
-            service.onPlayerJoin(event.getPlayer());
+            service.onPlayerJoin(player);
         }
     }
 
     @EventHandler
+    public void onRestriction(xuanmo.arcartxsuite.api.auth.AuthRestrictionEvent event) {
+        UUID uuid=event.previous().playerId();
+        replyTargets.remove(uuid);
+        Player player=Bukkit.getPlayer(uuid);
+        if(player!=null) updateMentionCompletions(player,false);
+        broadcastCompletionPlayerList();
+    }
+
+    @EventHandler
     public void onPlayerQuit(PlayerQuitEvent event) {
-        touchProfile(event.getPlayer(), true);
+        if(xuanmo.arcartxsuite.api.auth.AuthAccess.admitted(event.getPlayer().getUniqueId())) touchProfile(event.getPlayer(), true);
         UUID uuid = event.getPlayer().getUniqueId();
         states.remove(uuid);
         replyTargets.remove(uuid);
@@ -692,6 +707,8 @@ public final class ChatService implements Listener {
 
         Player localTarget = Bukkit.getPlayer(targetProfile.playerUuid());
         if (localTarget != null) {
+            if(!xuanmo.arcartxsuite.api.auth.AuthAccess.admitted(localTarget.getUniqueId()))
+                return ChatOperationResult.failure(message("result.target-offline"));
             ChatPlayerState targetState = state(localTarget.getUniqueId());
             if (!targetState.acceptsPrivateMessages()) {
                 return ChatOperationResult.failure(message("result.target-rejects"));
@@ -779,6 +796,8 @@ public final class ChatService implements Listener {
         if (sender == null || !sender.isOnline()) {
             return ChatOperationResult.failure(message("result.player-offline"));
         }
+        if (!xuanmo.arcartxsuite.api.auth.AuthAccess.admitted(sender.getUniqueId()))
+            return ChatOperationResult.failure("请先完成登录验证。");
         if (!channel.sendPermission().isBlank() && !sender.hasPermission(channel.sendPermission())) {
             return ChatOperationResult.failure(message("result.channel-speak-no-permission"));
         }
@@ -917,7 +936,7 @@ public final class ChatService implements Listener {
     }
 
     private void deliverPrivateEnvelope(ChatEnvelope envelope, Player localSender, Player localTarget) {
-        if (localSender != null && localSender.isOnline()) {
+        if (localSender != null && localSender.isOnline() && xuanmo.arcartxsuite.api.auth.AuthAccess.admitted(localSender.getUniqueId())) {
             boolean cardSent = sendPrivateCard(localSender, envelope, true);
             if (!cardSent) {
                 if (!sendItemPreviewCard(localSender, envelope, privateChannel())) {
@@ -926,7 +945,7 @@ public final class ChatService implements Listener {
             }
         }
 
-        if (localTarget != null && localTarget.isOnline()) {
+        if (localTarget != null && localTarget.isOnline() && xuanmo.arcartxsuite.api.auth.AuthAccess.admitted(localTarget.getUniqueId())) {
             boolean cardSent = sendPrivateCard(localTarget, envelope, false);
             if (!cardSent) {
                 if (!sendItemPreviewCard(localTarget, envelope, privateChannel())) {
@@ -938,6 +957,7 @@ public final class ChatService implements Listener {
         UUID senderUuid = parseUuid(envelope.senderUuid());
         UUID targetUuid = parseUuid(envelope.targetUuid());
         for (Player viewer : Bukkit.getOnlinePlayers()) {
+            if (!xuanmo.arcartxsuite.api.auth.AuthAccess.admitted(viewer.getUniqueId())) continue;
             if (senderUuid != null && senderUuid.equals(viewer.getUniqueId())) {
                 continue;
             }
@@ -1243,15 +1263,17 @@ public final class ChatService implements Listener {
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
             try {
                 if (join) {
-                    if (!player.isOnline()) return;
+                    if (!player.isOnline() || !xuanmo.arcartxsuite.api.auth.AuthAccess.admitted(player.getUniqueId())) return;
                     Collection<String> newEntry = List.of("@" + player.getName());
                     for (Player online : Bukkit.getOnlinePlayers()) {
+                        if (!xuanmo.arcartxsuite.api.auth.AuthAccess.admitted(online.getUniqueId())) continue;
                         if (!online.getUniqueId().equals(player.getUniqueId())) {
                             completionAdder.accept(online, newEntry);
                         }
                     }
                     List<String> existing = new ArrayList<>();
                     for (Player online : Bukkit.getOnlinePlayers()) {
+                        if (!xuanmo.arcartxsuite.api.auth.AuthAccess.admitted(online.getUniqueId())) continue;
                         if (!online.getUniqueId().equals(player.getUniqueId())) {
                             existing.add("@" + online.getName());
                         }
@@ -1286,9 +1308,11 @@ public final class ChatService implements Listener {
             try {
                 List<String> names = new ArrayList<>();
                 for (Player online : Bukkit.getOnlinePlayers()) {
+                    if (!xuanmo.arcartxsuite.api.auth.AuthAccess.admitted(online.getUniqueId())) continue;
                     names.add(online.getName());
                 }
                 for (Player online : Bukkit.getOnlinePlayers()) {
+                    if (!xuanmo.arcartxsuite.api.auth.AuthAccess.admitted(online.getUniqueId())) continue;
                     packetBridge.sendPacket(online, completionUiId, "updatePlayers", names);
                 }
             } catch (Exception ex) {
@@ -1300,7 +1324,12 @@ public final class ChatService implements Listener {
     }
 
     private void scheduleChatMessage(Player player, String message) {
+        var admission=xuanmo.arcartxsuite.api.auth.AuthAccess.snapshot(player.getUniqueId());
+        if(!admission.admitted()) return;
         Bukkit.getScheduler().runTask(plugin, () -> {
+            var current=xuanmo.arcartxsuite.api.auth.AuthAccess.snapshot(player.getUniqueId());
+            if(!player.isOnline() || !current.admitted() || !java.util.Objects.equals(current.connectionId(),admission.connectionId())
+                    || current.generation()!=admission.generation()) return;
             ChatOperationResult result = handleChatMessage(player, message);
             if (!result.success() && !result.cardNotified()) {
                 player.sendMessage(PREFIX + ChatColor.RED + result.message());
@@ -1312,6 +1341,7 @@ public final class ChatService implements Listener {
         if (recipient == null || !recipient.isOnline()) {
             return false;
         }
+        if (!xuanmo.arcartxsuite.api.auth.AuthAccess.admitted(recipient.getUniqueId())) return false;
         if (senderUuid != null && senderUuid.equals(recipient.getUniqueId())) {
             return true;
         }

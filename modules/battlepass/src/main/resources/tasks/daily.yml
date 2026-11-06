@@ -48,9 +48,7 @@ daily-login:
   display-name: "每日登录"
   description: "每天登录游戏即可获得奖励"
   difficulty: easy
-  event-topic: "axs.loginview.login_success"
-  bukkit-event:
-    event-class: "org.bukkit.event.player.PlayerJoinEvent"
+  event-topic: "axs.auth.presence_day_started"
   required-count: 1
   base-xp-reward: 100
   conditions: []

@@ -36,7 +36,7 @@ public final class AuthlibInjectorManager {
         + "--add-opens java.base/sun.net.util=ALL-UNNAMED";
 
     /** 混合代理独立进程入口类（必须与 proguard -keep 保持一致）。 */
-    private static final String PROXY_MAIN_CLASS = "xuanmo.arcartxsuite.auth.MixedYggdrasilProxy";
+    private static final String PROXY_MAIN_CLASS = "xuanmo.arcartxsuite.auth.minecraft.MixedYggdrasilGateway";
 
     private static final int DEFAULT_PROXY_PORT = 25599;
 

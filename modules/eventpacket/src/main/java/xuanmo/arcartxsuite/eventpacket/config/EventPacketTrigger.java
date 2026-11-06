@@ -7,8 +7,8 @@ package xuanmo.arcartxsuite.eventpacket.config;
  * 击杀计数、命令信号、客户端回包、Chemdah 任务事件以及脚本触发等。
  */
 public enum EventPacketTrigger {
-    JOIN("join"),
-    FIRST_JOIN("first-join"),
+    ADMITTED("admitted"),
+    FIRST_ADMITTED("first-admitted"),
     QUIT("quit"),
     PAPI_INCREASE("papi-increase"),
     PAPI_DECREASE("papi-decrease"),

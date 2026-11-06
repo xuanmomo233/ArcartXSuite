@@ -37,8 +37,6 @@ import xuanmo.arcartxsuite.api.currency.CurrencyDefinition;
 import xuanmo.arcartxsuite.api.item.ItemMatcherAPI;
 import xuanmo.arcartxsuite.api.item.ItemMatcherSupport;
 import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
-import xuanmo.arcartxsuite.api.account.AccountTypeService;
-import xuanmo.arcartxsuite.account.AccountTypeServiceImpl;
 import xuanmo.arcartxsuite.api.bridge.ClientBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.ItemBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
@@ -91,6 +89,29 @@ public final class ModuleRegistry {
     private final CapabilityRegistry capabilityRegistry;
     private final ClientPacketRouter clientPacketRouter;
     private GlobalBridgeFactory globalBridgeFactory;
+    private xuanmo.arcartxsuite.auth.runtime.HostAuthentication authenticationRuntime;
+    private xuanmo.arcartxsuite.auth.runtime.AdmissionGuard admissionGuard;
+    private boolean shuttingDown;
+
+    public void shutdown() {
+        shuttingDown = true;
+        unloadAll();
+    }
+
+    synchronized xuanmo.arcartxsuite.auth.runtime.HostAuthentication authenticationRuntime() {
+        if (authenticationRuntime == null) {
+            xuanmo.arcartxsuite.api.auth.AuthAccess.install(() -> authenticationRuntime);
+            if(admissionGuard==null) {
+                admissionGuard = new xuanmo.arcartxsuite.auth.runtime.AdmissionGuard();
+                org.bukkit.Bukkit.getPluginManager().registerEvents(admissionGuard, plugin);
+                admissionGuard.registerPaperChat(plugin);
+            }
+            authenticationRuntime = xuanmo.arcartxsuite.auth.runtime.HostAuthentication.create(
+                plugin, storageManager, () -> getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
+            authenticationRuntime.start();
+        }
+        return authenticationRuntime;
+    }
 
     /** 按 id 排列的已加载模块，保持加载顺序 */
     private final LinkedHashMap<String, LoadedModule> modules = new LinkedHashMap<>();
@@ -303,11 +324,18 @@ public final class ModuleRegistry {
         }
         modules.clear();
         clearAllRegistrations();
+        if ((shuttingDown || !plugin.isEnabled()) && authenticationRuntime != null) {
+            authenticationRuntime.close();
+            authenticationRuntime = null;
+            if (admissionGuard != null) org.bukkit.event.HandlerList.unregisterAll(admissionGuard);
+            admissionGuard = null;
+        }
         // 全局桥接单例的生命周期由 GlobalBridgeFactory 管理，此处重建并立即初始化，
         // 保证卸载后桥接对象始终就绪，支持「卸载全部 → 重新加载」场景。
         // 服务器关停路径（onDisable）中插件已被标记禁用，initialize() 内的
         // registerEvents/调度注册会抛 IllegalPluginAccessException，故仅在插件仍启用时重建。
-        if (plugin.isEnabled()) {
+        if (!shuttingDown && plugin.isEnabled()) {
+            globalBridgeFactory.detachGlobalListeners();
             globalBridgeFactory = new GlobalBridgeFactory(plugin, placeholderResolver, storageManager, this, capabilityRegistry);
             globalBridgeFactory.initialize();
         }
@@ -1014,11 +1042,6 @@ public final class ModuleRegistry {
     /** 获取统一条件评估器 */
     public ScriptConditionEvaluator scriptConditionEvaluator() {
         return globalBridgeFactory.scriptConditionEvaluator();
-    }
-
-    /** 获取宿主统一账号识别服务（永不为 null） */
-    public AccountTypeService accountTypeService() {
-        return globalBridgeFactory.accountTypeService();
     }
 
     private YamlConfiguration loadRootConfig() {

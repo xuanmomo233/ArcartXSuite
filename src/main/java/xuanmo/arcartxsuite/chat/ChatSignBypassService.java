@@ -5,10 +5,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
-import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.plugin.java.JavaPlugin;
-import xuanmo.arcartxsuite.api.account.AccountType;
-import xuanmo.arcartxsuite.api.account.AccountTypeService;
 import xuanmo.arcartxsuite.bridge.ServerPlatform;
 import xuanmo.arcartxsuite.util.ReflectionCache;
 
@@ -48,22 +45,16 @@ public final class ChatSignBypassService implements Listener {
     private final JavaPlugin plugin;
     private final Logger logger;
     private final boolean enabled;
-    private final boolean onlyForNonPremium;
-    private final AccountTypeService accountTypeService;
     private final ReflectionCache reflectionCache;
     private boolean paperDetected;
     private boolean hybridServer;
     private volatile boolean reflectionSuccessLogged;
-    private volatile boolean skipLogged;
     private volatile boolean hybridWarningLogged;
 
-    public ChatSignBypassService(JavaPlugin plugin, boolean enabled,
-                                 boolean onlyForNonPremium, AccountTypeService accountTypeService) {
+    public ChatSignBypassService(JavaPlugin plugin, boolean enabled) {
         this.plugin = plugin;
         this.logger = xuanmo.arcartxsuite.module.AxsLog.logger();
         this.enabled = enabled;
-        this.onlyForNonPremium = onlyForNonPremium;
-        this.accountTypeService = accountTypeService;
         this.reflectionCache = new ReflectionCache(plugin.getClass().getClassLoader());
     }
 
@@ -91,9 +82,10 @@ public final class ChatSignBypassService implements Listener {
     }
 
     @EventHandler(priority = EventPriority.LOWEST)
-    public void onPlayerJoin(PlayerJoinEvent event) {
-        if (enabled) {
-            applyBypass(event.getPlayer());
+    public void onAdmission(xuanmo.arcartxsuite.api.auth.AuthAdmissionEvent event) {
+        Player player=Bukkit.getPlayer(event.snapshot().playerId());
+        if (enabled && player!=null) {
+            applyBypass(player);
         }
     }
 
@@ -146,27 +138,22 @@ public final class ChatSignBypassService implements Listener {
     }
 
     private void applyBypass(Player player) {
-        if (!paperDetected) {
+        if (!paperDetected || !xuanmo.arcartxsuite.api.auth.AuthAccess.admitted(player.getUniqueId())) {
             return;
-        }
-
-        // 智能模式：利用 AccountTypeService 仅对非正版玩家绕过签名验证
-        if (onlyForNonPremium && accountTypeService != null) {
-            AccountType type = accountTypeService.resolve(player.getUniqueId(), player.getName());
-            if (type == AccountType.MICROSOFT) {
-                if (!skipLogged) {
-                    skipLogged = true;
-                    logger.fine("聊天签名绕过：跳过正版玩家 " + player.getName()
-                        + "（保留 Mojang 签名验证，后续同类日志将抑制）。");
-                }
-                return;
-            }
         }
 
         try {
             // CraftPlayer -> getHandle() -> ServerPlayer (NMS)
             Method getHandle = reflectionCache.method(player.getClass(), "getHandle");
             Object handle = getHandle.invoke(player);
+            boolean inspected=false;
+            for(String fieldName: new String[]{"chatSession","remoteChatSession","f_244316_","f_244317_"}) {
+                Field session=reflectionCache.findFieldInHierarchy(handle.getClass(),fieldName);
+                if(session==null || !session.trySetAccessible()) continue;
+                inspected=true;
+                if(session.get(handle)!=null) return; // Preserve the platform's existing signed chat session.
+            }
+            if(!inspected) return; // Unknown platform layout must not weaken signature validation.
 
             // 1. 尝试清除 ServerPlayer 上的聊天会话字段
             boolean playerFieldCleared = tryClearFields(handle, SERVER_PLAYER_FIELDS)

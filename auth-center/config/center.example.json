@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "port": 25600,
+  "database": "data/auth-center.sqlite",
+  "external": null,
+  "realms": [
+    {
+      "id": "network",
+      "minLength": 8,
+      "gamePasswordEnabled": false,
+      "maxLength": 128,
+      "requireTerms": true,
+      "termsVersion": "1",
+      "termsLines": ["请遵守服务器规则，保护账号凭据。"],
+      "requireBinding": false,
+      "timezone": "Asia/Shanghai",
+      "loginTimeoutSeconds": 300
+    }
+  ],
+  "nodes": [
+    {
+      "id": "lobby",
+      "realm": "network",
+      "audience": "lobby-node",
+      "keyEnvironment": "AXS_AUTH_LOBBY_KEY",
+      "scopes": ["auth"]
+    }
+  ]
+}

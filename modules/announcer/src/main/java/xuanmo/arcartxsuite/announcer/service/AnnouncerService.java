@@ -394,6 +394,7 @@ public final class AnnouncerService implements Listener {
     }
 
     private boolean ensureUiOpen(Player player) {
+        if(player==null || !xuanmo.arcartxsuite.api.auth.AuthAccess.admitted(player.getUniqueId())) return false;
         if (player == null || !player.isOnline() || !bridge.isAvailable()) {
             return false;
         }
@@ -409,6 +410,7 @@ public final class AnnouncerService implements Listener {
     }
 
     private void sendDisplay(Player player, AnnouncerDisplay display, String reason) {
+        if(player==null || !xuanmo.arcartxsuite.api.auth.AuthAccess.admitted(player.getUniqueId())) return;
         if (player == null || !player.isOnline() || !bridge.isAvailable()) {
             return;
         }

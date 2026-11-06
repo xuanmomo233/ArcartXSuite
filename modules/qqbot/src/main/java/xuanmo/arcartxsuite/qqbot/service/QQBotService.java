@@ -103,7 +103,6 @@ public final class QQBotService implements Listener {
         Bukkit.getPluginManager().registerEvents(this, plugin);
         // 定时清理过期验证码
         cleanupTask = Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, () -> {
-            bindService.cleanupExpiredCodes();
             // 清理已处理消息 ID 缓存
             processedMessageIds.clear();
         }, 6000L, 6000L); // 每5分钟

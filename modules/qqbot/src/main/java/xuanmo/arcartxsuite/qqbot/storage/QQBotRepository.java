@@ -10,11 +10,8 @@ public interface QQBotRepository {
 
     void close();
 
-    void insertBinding(long qqId, UUID playerUuid, String playerName);
 
-    void deleteBindingByQq(long qqId);
 
-    void deleteBindingByPlayer(UUID playerUuid);
 
     @Nullable
     QQBotBinding findByQq(long qqId);

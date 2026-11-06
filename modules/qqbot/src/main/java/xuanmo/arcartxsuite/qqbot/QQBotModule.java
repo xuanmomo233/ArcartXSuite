@@ -30,7 +30,7 @@ import xuanmo.arcartxsuite.qqbot.onebot.OneBotClient;
 import xuanmo.arcartxsuite.qqbot.placeholder.QQBotPlaceholderExpansion;
 import xuanmo.arcartxsuite.qqbot.process.SnowLumaProcessManager;
 import xuanmo.arcartxsuite.qqbot.service.QQBotBindService;
-import xuanmo.arcartxsuite.qqbot.service.QQBotLoginGateListener;
+import xuanmo.arcartxsuite.qqbot.service.QQBotLoginAuditListener;
 import xuanmo.arcartxsuite.qqbot.service.QQBotService;
 import xuanmo.arcartxsuite.qqbot.service.QQBotUiService;
 import xuanmo.arcartxsuite.qqbot.service.QQBotWeeklyRankService;
@@ -51,7 +51,7 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
     private QQBotAdminCommand adminCommand;
     // 会被异步线程读取（断开提示回调 / 异步启动块），需保证可见性
     private volatile SnowLumaProcessManager snowLumaManager;
-    private QQBotLoginGateListener loginGateListener;
+    private QQBotLoginAuditListener loginAuditListener;
     // 红包过期退款定时任务引用：stopService 时需取消，避免 reload 后定时器仍触发已置 null 的 signInService
     private BukkitTask redPacketRefundTask;
     // 异步启动守卫：startService 后台拉起 SnowLuma 期间若模块被关闭，置位以阻止/回收启动，避免孤儿进程。
@@ -276,38 +276,6 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
                 }
             });
 
-        // 11. 注册 QQ 绑定能力。
-        QQBotBindService bindSvc = bindService;
-        registerCapability(xuanmo.arcartxsuite.api.capability.QQBindCapable.class,
-            new xuanmo.arcartxsuite.api.capability.QQBindCapable() {
-                @Override public boolean isBound(@NotNull java.util.UUID playerUuid) {
-                    return bindSvc.findByPlayer(playerUuid) != null;
-                }
-                @Override public @Nullable Long getBoundQqId(@NotNull java.util.UUID playerUuid) {
-                    var binding = bindSvc.findByPlayer(playerUuid);
-                    return binding != null ? binding.qqId() : null;
-                }
-                @Override public @NotNull BindResult confirmBind(@NotNull org.bukkit.entity.Player player, @NotNull String code) {
-                    var result = bindSvc.confirmBind(player, code);
-                    if (result.success()) {
-                        // 自动加白名单（保持与原有 /qqbot bind 行为一致）
-                        if (configuration.whitelist().enabled() && configuration.whitelist().autoAddOnBind()) {
-                            try {
-                                String wlCmd = xuanmo.arcartxsuite.api.command.SafeCommandExecutor.builder(configuration.whitelist().addCommand())
-                                    .bindPlayerName("name", player.getName())
-                                    .build();
-                                org.bukkit.Bukkit.dispatchCommand(org.bukkit.Bukkit.getConsoleSender(), wlCmd);
-                            } catch (IllegalArgumentException ignored) {
-                                // 玩家名不合法时跳过白名单添加
-                            }
-                        }
-                        try { return new BindResult(true, Long.parseLong(result.message()), "绑定成功！QQ: " + result.message()); }
-                        catch (NumberFormatException e) { return new BindResult(true, null, "绑定成功！"); }
-                    }
-                    return new BindResult(false, null, result.message());
-                }
-            });
-
         // 12. 注册 QQBotBroadcastable capability
         QQBotService svc = service;
         registerCapability(QQBotBroadcastable.class, new QQBotBroadcastable() {
@@ -336,10 +304,10 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
             });
 
         // 14. 审计日志：玩家账号类型与绑定状态（仅 debug 输出，不拦截登录）
-        loginGateListener = new QQBotLoginGateListener(
-            plugin, configuration, repository, accountTypeService, logger
+        loginAuditListener = new QQBotLoginAuditListener(
+            plugin, configuration, repository, logger
         );
-        loginGateListener.register();
+        loginAuditListener.register();
 
         // 15. UI 服务
         uiService = new QQBotUiService(
@@ -482,9 +450,9 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
             redPacketRefundTask = null;
         }
         signInService = null;
-        if (loginGateListener != null) {
-            loginGateListener.unregister();
-            loginGateListener = null;
+        if (loginAuditListener != null) {
+            loginAuditListener.unregister();
+            loginAuditListener = null;
         }
         if (snowLumaManager != null) {
             snowLumaManager.shutdown();

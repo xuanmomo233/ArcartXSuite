@@ -87,6 +87,8 @@ public interface EventBusCapability {
      */
     @ApiStability.Stable
     boolean hasPublisher(@NotNull String topic);
+    /** Whether at least one current exact or wildcard subscriber accepts this topic. Not a delivery acknowledgement. */
+    boolean hasSubscribers(@NotNull String topic);
 
     /**
      * 订阅一个事件主题。

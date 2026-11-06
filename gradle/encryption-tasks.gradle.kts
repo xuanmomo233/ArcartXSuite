@@ -63,7 +63,7 @@ tasks.register<Exec>("encryptCoreJar") {
             "xuanmo.arcartxsuite.util.HashUtils",
         // 仅加密插件自身代码；shaded 第三方库保持明文，api/auth 排除（模块依赖 / 独立进程入口）
         "--encrypt-prefixes", "xuanmo.arcartxsuite.",
-        "--keep-prefixes", "xuanmo.arcartxsuite.api.,xuanmo.arcartxsuite.auth.",
+        "--keep-prefixes", "xuanmo.arcartxsuite.api.,xuanmo.arcartxsuite.auth.minecraft.",
         "--fake-classes-count", "20"
     )
 

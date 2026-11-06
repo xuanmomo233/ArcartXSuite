@@ -295,9 +295,9 @@ def main():
                        help="仅加密 FQN 以这些前缀开头的类（逗号分隔）。默认仅加密插件自身代码，"
                             "shaded 第三方库保持明文（由 ProtectedClassLoader 明文分支加载）。传空串表示加密全部。")
     parser.add_argument("--keep-prefixes",
-                       default="xuanmo.arcartxsuite.api.,xuanmo.arcartxsuite.auth.",
+                       default="xuanmo.arcartxsuite.api.,xuanmo.arcartxsuite.auth.minecraft.",
                        help="即使匹配 encrypt-prefixes 也保持明文的前缀（逗号分隔）。"
-                            "默认排除 api（模块编译/运行依赖）与 auth（MixedYggdrasilProxy 以独立进程启动，无法解密）。")
+                            "默认排除 api 与独立网关 auth.minecraft；插件内 auth.runtime 仍受保护。")
     parser.add_argument("--encrypt-mode", default="prefix", choices=["prefix", "default-package"],
                        help="加密选择策略。prefix（默认，core 用）按 encrypt-prefixes 匹配；"
                             "default-package（模块用）仅加密默认包（无点分包名）的类，"

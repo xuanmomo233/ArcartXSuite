@@ -10,14 +10,13 @@ import com.velocitypowered.api.proxy.Player;
 import com.velocitypowered.api.proxy.ProxyServer;
 
 import xuanmo.arcartxsuite.proxy.common.config.ProxyConfig;
-import xuanmo.arcartxsuite.proxy.common.model.AccountType;
 
 /**
  * Velocity 认证事件监听器。
  * <p>
  * 代理端本身不直接处理 Yggdrasil 握手（由 authlib-injector 或 Velocity 内置完成），
- * 但在此层做离线玩家拦截（根据 UUID 版本判定）。
- * 账号类型的精确判定由后端 {@code AccountTypeServiceImpl} 完成，代理端不重复处理。
+ * 但在此层做离线玩家拦截（根据代理平台在线握手状态判断）。
+ * 游戏准入由后端认证运行时管理，代理平台状态不代替连接证明传递。
  */
 public class VelocityAuthListener {
 
@@ -48,7 +47,7 @@ public class VelocityAuthListener {
     /**
      * LoginEvent：Velocity 已完成全部验证，玩家即将进入代理端。
      * 在此阶段：
-     * 1. 根据 UUID 版本判定账号类型
+     * 1. 根据代理平台在线握手状态判断账号类型
      * 2. 若为离线且配置拒绝，踢出
      */
     @Subscribe
@@ -57,21 +56,21 @@ public class VelocityAuthListener {
         UUID uuid = player.getUniqueId();
         String username = player.getUsername();
 
-        AccountType type = AccountType.fromUuid(uuid);
+        boolean verifiedTransport = player.isOnlineMode();
 
         if (config.debug()) {
-            logger.info("[Auth] " + username + " 登录代理端，账号类型判定: " + type.displayName() + " (UUID: " + uuid + ")");
+            logger.info("[Auth] " + username + " verifiedTransport=" + verifiedTransport + " (UUID: " + uuid + ")");
         }
 
         // 离线拦截
-        if (type == AccountType.OFFLINE && config.denyOffline()) {
+        if (!verifiedTransport && config.denyOffline()) {
             player.disconnect(net.kyori.adventure.text.minimessage.MiniMessage.miniMessage()
                 .deserialize(legacyToMiniMessage(config.kickOfflineMessage())));
             logger.info("[Auth] 拒绝离线玩家: " + username);
             return;
         }
 
-        // 账号类型的精确判定由后端 AccountTypeServiceImpl 通过 Mojang API / 本地混合代理完成，
+        // 连接证明需要由可信入口适配器传递给后端，
         // 代理端不需要通过 Plugin Message 透传账号类型。
     }
 

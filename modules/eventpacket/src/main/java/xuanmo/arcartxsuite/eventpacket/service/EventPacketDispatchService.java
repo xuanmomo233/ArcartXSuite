@@ -88,6 +88,8 @@ public final class EventPacketDispatchService {
     }
 
     public void dispatchAll(EventPacketTrigger trigger, Player subject, EventPacketContext context) {
+        if (subject != null && trigger != EventPacketTrigger.QUIT
+                && !xuanmo.arcartxsuite.api.auth.AuthAccess.admitted(subject.getUniqueId())) return;
         PluginConfiguration configuration = configurationProvider.get();
         if (configuration == null || context == null) {
             return;
@@ -206,6 +208,7 @@ public final class EventPacketDispatchService {
     }
 
     public void dispatchRule(EventPacketRule rule, EventPacketTrigger trigger, Player subject, EventPacketContext context) {
+        if(subject!=null && trigger!=EventPacketTrigger.QUIT && !xuanmo.arcartxsuite.api.auth.AuthAccess.admitted(subject.getUniqueId())) return;
         PluginConfiguration configuration = configurationProvider.get();
         if (configuration == null || rule == null || context == null || !rule.enabled() || rule.trigger() != trigger) {
             return;

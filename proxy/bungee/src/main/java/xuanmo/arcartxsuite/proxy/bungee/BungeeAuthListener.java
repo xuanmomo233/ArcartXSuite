@@ -12,12 +12,11 @@ import net.md_5.bungee.event.EventHandler;
 import net.md_5.bungee.event.EventPriority;
 
 import xuanmo.arcartxsuite.proxy.common.config.ProxyConfig;
-import xuanmo.arcartxsuite.proxy.common.model.AccountType;
 
 /**
- * BungeeCord 代理端登录鉴权监听器，在 Login 阶段根据 UUID 版本做账号类型粗略判定，
+ * BungeeCord 代理端登录鉴权监听器，在 Login 阶段读取代理平台连接状态，
  * 并按 {@link ProxyConfig} 的策略拒绝或放行离线玩家。
- * 账号类型的精确判定由后端 {@code AccountTypeServiceImpl} 完成。
+ * 游戏准入由后端认证运行时管理。
  */
 public class BungeeAuthListener implements Listener {
 
@@ -42,13 +41,13 @@ public class BungeeAuthListener implements Listener {
         UUID uuid = connection.getUniqueId();
         String username = connection.getName();
 
-        AccountType type = AccountType.fromUuid(uuid);
+        boolean onlineHandshakeRequired = connection.isOnlineMode();
 
         if (config.debug()) {
-            logger.info("[Auth] " + username + " 登录 BungeeCord，账号类型: " + type.displayName() + " (UUID: " + uuid + ")");
+            logger.info("[Auth] " + username + " onlineHandshakeRequired=" + onlineHandshakeRequired + " (UUID: " + uuid + ")");
         }
 
-        if (type == AccountType.OFFLINE && config.denyOffline()) {
+        if (!onlineHandshakeRequired && config.denyOffline()) {
             event.setCancelled(true);
             event.setCancelReason(ChatColor.translateAlternateColorCodes('&', config.kickOfflineMessage()));
             logger.info("[Auth] 拒绝离线玩家: " + username);

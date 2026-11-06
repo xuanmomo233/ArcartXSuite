@@ -2,7 +2,7 @@ id: prop
 name: Prop
 version: 1.5.0
 main: xuanmo.arcartxsuite.prop.PropModule
-api-version: 1.0
+api-version: 2.0
 
 depends: []
 softdepends: []

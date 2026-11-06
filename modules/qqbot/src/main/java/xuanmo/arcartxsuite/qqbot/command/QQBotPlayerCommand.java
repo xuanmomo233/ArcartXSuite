@@ -87,53 +87,14 @@ public final class QQBotPlayerCommand implements TabExecutor {
         QQBotBindService bindService = service.bindService();
         switch (args[0].toLowerCase()) {
             case "bind" -> {
-                if (args.length < 2) {
-                    player.sendMessage(fullMsg("player.bind.usage", label));
-                    return true;
-                }
-                QQBotBindService.BindResult result = bindService.confirmBind(player, args[1]);
-                if (result.success()) {
-                    String msg = service.configuration().messages().bindSuccessGame()
-                        .replace("{qq}", result.message())
-                        .replace("{name}", player.getName());
-                    player.sendMessage((messages != null ? messages.get("prefix") : "") + ChatColor.translateAlternateColorCodes('&', msg));
-
-                    // 自动加白名单
-                    if (service.configuration().whitelist().enabled()
-                        && service.configuration().whitelist().autoAddOnBind()) {
-                        try {
-                            String wlCmd = xuanmo.arcartxsuite.api.command.SafeCommandExecutor.builder(service.configuration().whitelist().addCommand())
-                                .bindPlayerName("name", player.getName())
-                                .build();
-                            org.bukkit.Bukkit.dispatchCommand(org.bukkit.Bukkit.getConsoleSender(), wlCmd);
-                        } catch (IllegalArgumentException ignored) {}
-                    }
-                } else {
-                    String msg = service.configuration().messages().codeInvalid();
-                    player.sendMessage((messages != null ? messages.get("prefix") : "") + ChatColor.translateAlternateColorCodes('&', msg));
-                }
+                if(args.length<2) { player.sendMessage("请在QQ群申请验证码，然后 /qqbot bind <验证码>"); return true; }
+                bindService.confirmBind(player,args[1]).thenAccept(result -> {
+                    if(player.isOnline()) player.sendMessage(result.success()?"绑定成功。":result.message());
+                });
             }
-            case "unbind" -> {
-                QQBotBindService.BindResult result = bindService.unbindByPlayer(player.getUniqueId());
-                if (result.success()) {
-                    String msg = service.configuration().messages().unbindSuccessGame()
-                        .replace("{qq}", result.message());
-                    player.sendMessage((messages != null ? messages.get("prefix") : "") + ChatColor.translateAlternateColorCodes('&', msg));
-
-                    // 自动移除白名单
-                    if (service.configuration().whitelist().enabled()
-                        && service.configuration().whitelist().autoRemoveOnUnbind()) {
-                        try {
-                            String wlCmd = xuanmo.arcartxsuite.api.command.SafeCommandExecutor.builder(service.configuration().whitelist().removeCommand())
-                                .bindPlayerName("name", player.getName())
-                                .build();
-                            org.bukkit.Bukkit.dispatchCommand(org.bukkit.Bukkit.getConsoleSender(), wlCmd);
-                        } catch (IllegalArgumentException ignored) {}
-                    }
-                } else {
-                    player.sendMessage((messages != null ? messages.get("prefix") : "") + ChatColor.RED + result.message());
-                }
-            }
+            case "unbind" -> bindService.unbindByPlayer(player.getUniqueId()).thenAccept(result -> {
+                if(player.isOnline()) player.sendMessage(result.success()?"已解绑，认证要求已重新评估。":result.message());
+            });
             case "info" -> {
                 QQBotBinding binding = bindService.findByPlayer(player.getUniqueId());
                 if (binding != null) {

@@ -8,7 +8,7 @@ import java.util.logging.Logger;
 /**
  * JSON 字段提取工具：基于 Gson 解析，替代手写字符串扫描。
  * <p>
- * 统一 {@link MixedYggdrasilProxy} 和 {@link AuthlibInjectorManager} 的 JSON 解析逻辑，
+ * 用于 {@link AuthlibInjectorManager} 的元数据解析，
  * 消除原 {@code extractJsonString} 手写实现的边缘 case 隐患：
  * <ul>
  *   <li>同名字段误匹配（嵌套对象/数组中出现相同 key）</li>

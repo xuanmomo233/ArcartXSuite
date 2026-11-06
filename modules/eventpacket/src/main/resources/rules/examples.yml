@@ -2,8 +2,8 @@
 # 目录下每个 *.yml 文件可包含多个规则定义，根键即为规则 ID。
 # 同名规则以最后加载的文件为准；目录文件按文件名排序加载。
 # trigger 可选值:
-# - join 玩家加入服务器。
-# - first-join 玩家首次加入服务器。
+# - admitted 玩家加入服务器。
+# - first-admitted 玩家首次加入服务器。
 # - quit 玩家退出服务器。
 # - placeholder-increase / papi-increase 指定 PAPI 数值增加时触发。
 # - placeholder-decrease / papi-decrease 指定 PAPI 数值减少时触发。
@@ -43,7 +43,7 @@
 #   {receiver_role}        接收者角色（self/all/world 等，对应 recipients 配置值）
 #
 # ── 触发上下文 ──
-#   {trigger} / {trigger_type}  触发类型（join/first-join/quit/papi-increase/...）
+#   {trigger} / {trigger_type}  触发类型（admitted/first-admitted/quit/papi-increase/...）
 #   {world}                玩家所在世界（同 {player_world}）
 #   {placeholder}          PAPI 占位符（仅 papi-increase/decrease/threshold 触发）
 #   {old_value}            占位符旧值（字符串形式）
@@ -55,9 +55,9 @@
 #   {signal} / {command_signal}  信号名（command-signal / quest-* / objective-* / chemdah-level-change 触发）
 #
 # ── 账号信息（由宿主统一账号识别服务解析，未注入时为空）──
-#   {account_type}         账号类型：microsoft / littleskin / offline
-#   {account_type_display} 账号类型显示名
-#   {account_premium}      是否正版（true/false）
+#   {auth_provider}         账号类型：microsoft / littleskin / offline
+#   {auth_provider_display} 账号类型显示名
+#   {auth_verified}      是否正版（true/false）
 #
 # ── 时间 ──
 #   {timestamp_unix}       Unix 时间戳（秒）
@@ -77,7 +77,7 @@
 # 首次加入服务器时播放字幕、发送聊天卡片并推送主线任务
 first_join_offer_mainline:
   enabled: false                 # 是否启用该规则
-  trigger: first-join            # 触发类型: 玩家首次加入服务器
+  trigger: first-admitted            # 触发类型: 玩家首次加入服务器
   repeatable: false              # 是否可重复触发
   actions:                       # 动作链，按顺序执行
     - type: subtitle.play        # 播放字幕组
@@ -198,10 +198,9 @@ signin_streak_milestone:
 # 微软正版玩家首次注册后: 播放欢迎字幕、推送教程任务、发送欢迎邮件
 welcome_after_register:
   enabled: false
-  trigger: command-signal
-  signal: "first_register"
+  trigger: first-admitted
   conditions:                    # 触发条件列表，全部满足才执行动作
-    - "%axsloginview_account_type% == microsoft"  # 仅微软正版账号
+    - "%axsauth_provider% == microsoft"  # 仅微软正版账号
   repeatable: false
   actions:
     - type: subtitle.play
@@ -215,10 +214,9 @@ welcome_after_register:
 # LittleSkin 玩家首次注册后: 播放欢迎字幕并发送聊天卡片
 welcome_littleskin_after_register:
   enabled: false
-  trigger: command-signal
-  signal: "first_register"
+  trigger: first-admitted
   conditions:
-    - "%axsloginview_account_type% == littleskin"  # 仅 LittleSkin 账号
+    - "%axsauth_provider% == littleskin"  # 仅 LittleSkin 账号
   repeatable: false
   actions:
     - type: subtitle.play
@@ -227,7 +225,7 @@ welcome_littleskin_after_register:
       card-id: "quest_offer"
       data:
         title: "LittleSkin 登录奖励"
-        source: "{account_type_display}"
+        source: "{auth_provider_display}"
 
 # CDK 兑换成功: 播放战斗特效和字幕
 cdk_redeemed_effect:

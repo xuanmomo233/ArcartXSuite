@@ -266,43 +266,17 @@ public final class QQBotCommandRouter {
         return false;
     }
 
-    private void handleBindCommand(OneBotEvent event, String playerName) {
-        if (playerName.isEmpty()) {
-            reply(event, "用法: " + config.binding().bindPrefix() + " <游戏名>");
-            return;
-        }
-        QQBotBindService.BindResult result = bindService.requestBind(event.userId(), playerName);
-        if (result.success()) {
-            String msg = config.messages().bindCodeSent()
-                .replace("{code}", result.message())
-                .replace("{expire}", String.valueOf(config.binding().codeExpireSeconds()));
-            reply(event, msg);
-        } else {
-            reply(event, result.message());
-        }
+    private void handleBindCommand(OneBotEvent event,String playerName) {
+        if(playerName.isBlank()) { reply(event,"用法: "+config.binding().bindPrefix()+" <游戏名>"); return; }
+        bindService.requestBind(event.userId(),playerName).thenAccept(result -> {
+            if(result.success()) reply(event,config.messages().bindCodeSent().replace("{code}",result.message()).replace("{expire}","300"));
+            else reply(event,result.message());
+        });
     }
 
     private void handleUnbindCommand(OneBotEvent event) {
-        QQBotBindService.BindResult result = bindService.unbindByQq(event.userId());
-        if (result.success()) {
-            String msg = config.messages().unbindSuccess().replace("{name}", result.message());
-            reply(event, msg);
-
-            // 解绑后自动移除白名单
-            if (config.whitelist().enabled() && config.whitelist().autoRemoveOnUnbind()) {
-                try {
-                    String wlCmd = xuanmo.arcartxsuite.api.command.SafeCommandExecutor.builder(config.whitelist().removeCommand())
-                        .bindPlayerName("name", result.message())
-                        .build();
-                    Bukkit.getScheduler().runTask(plugin, () ->
-                        Bukkit.dispatchCommand(Bukkit.getConsoleSender(), wlCmd));
-                } catch (IllegalArgumentException ignored) {
-                    // 玩家名不合法时跳过白名单移除
-                }
-            }
-        } else {
-            reply(event, result.message());
-        }
+        bindService.unbindByQq(event.userId()).thenAccept(result -> reply(event,
+            result.success()?"已解绑 "+result.message()+"，游戏准入要求将重新评估。":result.message()));
     }
 
     private void handleQueryBindCommand(OneBotEvent event, String args) {

@@ -370,6 +370,14 @@ public final class TabSyncService implements Listener, TabRefreshRequester, xuan
         leaveGraceCache.remove(event.getPlayer().getUniqueId());
         requestGlobalRefresh("player-join");
     }
+    @EventHandler
+    public void onAdmission(xuanmo.arcartxsuite.api.auth.AuthAdmissionEvent event) {
+        requestGlobalRefresh("admission");
+    }
+    @EventHandler
+    public void onRestriction(xuanmo.arcartxsuite.api.auth.AuthRestrictionEvent event) {
+        requestGlobalRefresh("admission-restricted");
+    }
 
     @EventHandler
     public void onPlayerQuit(PlayerQuitEvent event) {
@@ -633,6 +641,7 @@ public final class TabSyncService implements Listener, TabRefreshRequester, xuan
 
     private List<Player> onlinePlayers() {
         List<Player> onlinePlayers = new ArrayList<>(Bukkit.getOnlinePlayers());
+        onlinePlayers.removeIf(player -> !xuanmo.arcartxsuite.api.auth.AuthAccess.admitted(player.getUniqueId()));
         onlinePlayers.sort(Comparator.comparing(Player::getName, String.CASE_INSENSITIVE_ORDER));
         return onlinePlayers;
     }

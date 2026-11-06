@@ -23,7 +23,12 @@ import xuanmo.arcartxsuite.api.storage.StorageDescriptor;
  */
 public final class JdbcQQBotRepository extends AbstractModuleRepository implements QQBotRepository {
 
-    private final String tableBindings;
+    private List<QQBotBinding> bindingRows() {
+        var service=xuanmo.arcartxsuite.api.AxsCapabilities.get(xuanmo.arcartxsuite.api.capability.BindingService.class);
+        if(service==null) return List.of();
+        return service.snapshot().stream().map(b -> new QQBotBinding(b.qqId(),b.profileId(),b.profileName(),b.boundAt())).toList();
+    }
+
     private final String tablePoints;
     private final String tableSignin;
     private final String tableRedeemLog;
@@ -36,7 +41,6 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
                                File dataFolder, Logger logger) {
         super("AXS-QQBot", dataSource, descriptor, dataFolder, logger);
         String prefix = isMysql() ? tablePrefix() : "axs_qqbot_";
-        this.tableBindings = prefix + "bindings";
         this.tablePoints = prefix + "points";
         this.tableSignin = prefix + "signin";
         this.tableRedeemLog = prefix + "redeem_log";
@@ -48,23 +52,6 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
 
     @Override
     protected void onInitialize(Connection conn) throws SQLException {
-        String sql = "CREATE TABLE IF NOT EXISTS " + tableBindings + """
-             (
-                id INTEGER PRIMARY KEY""" + " " + autoIncrement() + """
-                , qq_id BIGINT NOT NULL,
-                player_uuid VARCHAR(36) NOT NULL,
-                player_name VARCHAR(64) NOT NULL,
-                bound_at BIGINT NOT NULL DEFAULT 0,
-                UNIQUE(qq_id, player_uuid)
-            )
-            """;
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.executeUpdate();
-        }
-        tryExecute(conn, "CREATE INDEX IF NOT EXISTS idx_qqbot_qq ON " + tableBindings + " (qq_id)");
-        tryExecute(conn, "CREATE INDEX IF NOT EXISTS idx_qqbot_uuid ON " + tableBindings + " (player_uuid)");
-        tryExecute(conn, "CREATE INDEX IF NOT EXISTS idx_qqbot_name ON " + tableBindings + " (player_name)");
-
         // 积分账户表
         String pointsSql = "CREATE TABLE IF NOT EXISTS " + tablePoints + """
              (
@@ -174,12 +161,12 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
 
     @Override
     protected List<String> playerDataTables() {
-        return List.of(tableBindings);
+        return List.of();
     }
 
     @Override
     protected List<String> allTables() {
-        return List.of(tableBindings, tablePoints, tableSignin, tableRedeemLog, tableBlacklist,
+        return List.of(tablePoints, tableSignin, tableRedeemLog, tableBlacklist,
             tableRedPackets, tableRedPacketClaims, tableActivity);
     }
 
@@ -198,73 +185,21 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
      * @param playerUuid 玩家 UUID
      * @param playerName 玩家名称
      */
-    @Override
-    public void insertBinding(long qqId, UUID playerUuid, String playerName) {
-        // 一号一绑/一人一号：事务内先删除该 QQ 或该玩家的既有绑定再插入，
-        // 老表无单列 UNIQUE 约束（复合 UNIQUE(qq_id,player_uuid) 不阻止重复绑定），由本事务保证唯一
-        String deleteSql = "DELETE FROM " + tableBindings + " WHERE qq_id = ? OR player_uuid = ?";
-        String insertSql = "INSERT INTO " + tableBindings
-            + " (qq_id, player_uuid, player_name, bound_at) VALUES (?, ?, ?, ?)";
-        try (Connection conn = getConnection()) {
-            conn.setAutoCommit(false);
-            try {
-                try (PreparedStatement del = conn.prepareStatement(deleteSql)) {
-                    del.setLong(1, qqId);
-                    del.setString(2, playerUuid.toString());
-                    del.executeUpdate();
-                }
-                try (PreparedStatement ps = conn.prepareStatement(insertSql)) {
-                    ps.setLong(1, qqId);
-                    ps.setString(2, playerUuid.toString());
-                    ps.setString(3, playerName);
-                    ps.setLong(4, System.currentTimeMillis());
-                    ps.executeUpdate();
-                }
-                conn.commit();
-            } catch (SQLException e) {
-                conn.rollback();
-                throw e;
-            } finally {
-                conn.setAutoCommit(true);
-            }
-        } catch (SQLException e) {
-            logger.warning("QQBot 插入绑定失败: " + e.getMessage());
-        }
-    }
+
 
     /**
      * 按 QQ 号删除绑定记录。
      *
      * @param qqId 待解绑的 QQ 号
      */
-    @Override
-    public void deleteBindingByQq(long qqId) {
-        String sql = "DELETE FROM " + tableBindings + " WHERE qq_id = ?";
-        try (Connection conn = getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setLong(1, qqId);
-            ps.executeUpdate();
-        } catch (SQLException e) {
-            logger.warning("QQBot 删除绑定失败(QQ): " + e.getMessage());
-        }
-    }
+
 
     /**
      * 按玩家 UUID 删除绑定记录。
      *
      * @param playerUuid 待解绑的玩家 UUID
      */
-    @Override
-    public void deleteBindingByPlayer(UUID playerUuid) {
-        String sql = "DELETE FROM " + tableBindings + " WHERE player_uuid = ?";
-        try (Connection conn = getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, playerUuid.toString());
-            ps.executeUpdate();
-        } catch (SQLException e) {
-            logger.warning("QQBot 删除绑定失败(Player): " + e.getMessage());
-        }
-    }
+
 
     /**
      * 按 QQ 号查询绑定记录（取第一条）。
@@ -275,18 +210,7 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
     @Override
     @Nullable
     public QQBotBinding findByQq(long qqId) {
-        String sql = "SELECT qq_id, player_uuid, player_name, bound_at FROM " + tableBindings
-            + " WHERE qq_id = ? LIMIT 1";
-        try (Connection conn = getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setLong(1, qqId);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) return mapRow(rs);
-            }
-        } catch (SQLException e) {
-            logger.warning("QQBot 查询绑定失败(QQ): " + e.getMessage());
-        }
-        return null;
+        return findAllByQq(qqId).stream().findFirst().orElse(null);
     }
 
     /**
@@ -298,18 +222,7 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
     @Override
     @Nullable
     public QQBotBinding findByPlayer(UUID playerUuid) {
-        String sql = "SELECT qq_id, player_uuid, player_name, bound_at FROM " + tableBindings
-            + " WHERE player_uuid = ? LIMIT 1";
-        try (Connection conn = getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, playerUuid.toString());
-            try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) return mapRow(rs);
-            }
-        } catch (SQLException e) {
-            logger.warning("QQBot 查询绑定失败(Player): " + e.getMessage());
-        }
-        return null;
+        return bindingRows().stream().filter(b -> b.playerUuid().equals(playerUuid)).findFirst().orElse(null);
     }
 
     /**
@@ -321,18 +234,7 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
     @Override
     @Nullable
     public QQBotBinding findByPlayerName(String playerName) {
-        String sql = "SELECT qq_id, player_uuid, player_name, bound_at FROM " + tableBindings
-            + " WHERE player_name = ? LIMIT 1";
-        try (Connection conn = getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, playerName);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) return mapRow(rs);
-            }
-        } catch (SQLException e) {
-            logger.warning("QQBot 查询绑定失败(Name): " + e.getMessage());
-        }
-        return null;
+        return bindingRows().stream().filter(b -> b.playerName().equalsIgnoreCase(playerName)).findFirst().orElse(null);
     }
 
     /**
@@ -343,19 +245,7 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
      */
     @Override
     public List<QQBotBinding> findAllByQq(long qqId) {
-        String sql = "SELECT qq_id, player_uuid, player_name, bound_at FROM " + tableBindings
-            + " WHERE qq_id = ?";
-        List<QQBotBinding> list = new ArrayList<>();
-        try (Connection conn = getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setLong(1, qqId);
-            try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) list.add(mapRow(rs));
-            }
-        } catch (SQLException e) {
-            logger.warning("QQBot 查询所有绑定失败(QQ): " + e.getMessage());
-        }
-        return list;
+        return bindingRows().stream().filter(b -> b.qqId()==qqId).toList();
     }
 
     /**
@@ -366,17 +256,7 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
      */
     @Override
     public int countByQq(long qqId) {
-        String sql = "SELECT COUNT(*) FROM " + tableBindings + " WHERE qq_id = ?";
-        try (Connection conn = getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setLong(1, qqId);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) return rs.getInt(1);
-            }
-        } catch (SQLException e) {
-            logger.warning("QQBot 统计绑定数失败: " + e.getMessage());
-        }
-        return 0;
+        return findAllByQq(qqId).size();
     }
 
     /**
@@ -386,15 +266,7 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
      */
     @Override
     public int countBindings() {
-        String sql = "SELECT COUNT(*) FROM " + tableBindings;
-        try (Connection conn = getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql);
-             ResultSet rs = ps.executeQuery()) {
-            if (rs.next()) return rs.getInt(1);
-        } catch (SQLException e) {
-            logger.warning("QQBot 统计总绑定数失败: " + e.getMessage());
-        }
-        return 0;
+        return bindingRows().size();
     }
 
     /**
@@ -406,20 +278,8 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
      */
     @Override
     public List<QQBotBinding> getBindingsPage(int page, int pageSize) {
-        String sql = "SELECT qq_id, player_uuid, player_name, bound_at FROM " + tableBindings
-            + " ORDER BY bound_at DESC LIMIT ? OFFSET ?";
-        List<QQBotBinding> list = new ArrayList<>();
-        try (Connection conn = getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setInt(1, pageSize);
-            ps.setInt(2, page * pageSize);
-            try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) list.add(mapRow(rs));
-            }
-        } catch (SQLException e) {
-            logger.warning("QQBot 分页查询绑定失败: " + e.getMessage());
-        }
-        return list;
+        if(page<0 || pageSize<1 || pageSize>1000) return List.of();
+        return bindingRows().stream().sorted(java.util.Comparator.comparingLong(QQBotBinding::boundAt).reversed()).skip((long)page*pageSize).limit(pageSize).toList();
     }
 
     /**
@@ -431,32 +291,12 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
      */
     @Override
     public List<QQBotBinding> searchBindings(String keyword, int limit) {
-        String sql = "SELECT qq_id, player_uuid, player_name, bound_at FROM " + tableBindings
-            + " WHERE player_name LIKE ? OR CAST(qq_id AS TEXT) LIKE ? LIMIT ?";
-        List<QQBotBinding> list = new ArrayList<>();
-        try (Connection conn = getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-            String pattern = "%" + keyword + "%";
-            ps.setString(1, pattern);
-            ps.setString(2, pattern);
-            ps.setInt(3, limit);
-            try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) list.add(mapRow(rs));
-            }
-        } catch (SQLException e) {
-            logger.warning("QQBot 搜索绑定失败: " + e.getMessage());
-        }
-        return list;
+        if(keyword==null || limit<1 || limit>1000) return List.of();
+        String key=keyword.toLowerCase(java.util.Locale.ROOT);
+        return bindingRows().stream().filter(b -> b.playerName().toLowerCase(java.util.Locale.ROOT).contains(key) || Long.toString(b.qqId()).contains(key)).limit(limit).toList();
     }
 
-    private QQBotBinding mapRow(ResultSet rs) throws SQLException {
-        return new QQBotBinding(
-            rs.getLong("qq_id"),
-            UUID.fromString(rs.getString("player_uuid")),
-            rs.getString("player_name"),
-            rs.getLong("bound_at")
-        );
-    }
+
 
     // ─── 签到积分实现 ────────────────────────────────────
 

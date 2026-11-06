@@ -39,7 +39,7 @@ public final class AuthlibInjectorManager {
 
     /** 混合代理独立进程入口类（proxy:common 版本）。 */
     private static final String PROXY_MAIN_CLASS =
-        "xuanmo.arcartxsuite.proxy.common.auth.MixedYggdrasilProxy";
+        "xuanmo.arcartxsuite.auth.minecraft.MixedYggdrasilGateway";
 
     private static final int DEFAULT_PROXY_PORT = 25599;
 
@@ -60,9 +60,9 @@ public final class AuthlibInjectorManager {
     private final Platform platform;
     /** 混合代理绑定地址（单机 127.0.0.1，跨机由配置指定）。 */
     private final String mixedProxyBindHost;
-    /** account-source 接口鉴权 token（空表示不校验）。 */
+    /** health 接口鉴权 token（空表示不校验）。 */
     private final String mixedProxyToken;
-    /** 允许访问 account-source 的客户端 IP 白名单。 */
+    /** 允许访问 health 的客户端 IP 白名单。 */
     private final java.util.List<String> mixedProxyAllowIps;
 
     public AuthlibInjectorManager(Logger logger, File dataFolder, Platform platform) {
@@ -188,7 +188,7 @@ public final class AuthlibInjectorManager {
     }
 
     /**
-     * 构造 MixedYggdrasilProxy 独立进程启动参数片段（--bind / --token / --allow-ips）。
+     * 构造 MixedYggdrasilGateway 独立进程启动参数片段（--bind / --token / --allow-ips）。
      * 仅跨机模式（bindHost 非 127.0.0.1）时附加 token / allow-ips。
      */
     private String buildProxyArgs() {
@@ -270,10 +270,10 @@ public final class AuthlibInjectorManager {
             if (!"127.0.0.1".equals(mixedProxyBindHost)) {
                 sb.append("  [跨机模式] 代理监听 ").append(mixedProxyBindHost).append("，后端子服可跨机连接\n");
                 if (mixedProxyToken != null) {
-                    sb.append("  [鉴权] account-source 已启用 token 鉴权\n");
+                    sb.append("  [鉴权] health 已启用 token 鉴权\n");
                 }
                 if (!mixedProxyAllowIps.isEmpty()) {
-                    sb.append("  [鉴权] account-source IP 白名单: ").append(String.join(",", mixedProxyAllowIps)).append("\n");
+                    sb.append("  [鉴权] health IP 白名单: ").append(String.join(",", mixedProxyAllowIps)).append("\n");
                 }
             }
         }
@@ -281,20 +281,10 @@ public final class AuthlibInjectorManager {
         sb.append("  1. 关闭 ").append(platform.displayName).append(" 代理端\n");
         sb.append("  2. 使用 start-mixed-auth.bat (Windows) 或 start-mixed-auth.sh (Linux) 启动\n");
         if (useLocalMixed) {
-            sb.append("\n  [后端子服配置]\n");
-            sb.append("  后端 Paper 子服的 AXS config.yml 中设置：\n");
-            sb.append("    auth.enabled: true\n");
-            sb.append("    auth.yggdrasil-source: \"https://littleskin.cn/api/yggdrasil?mixed\"\n");
-            sb.append("    auth.mixed-proxy-host: ").append(mixedProxyBindHost).append("\n");
-            sb.append("    auth.mixed-proxy-port: ").append(mixedProxyPort).append("\n");
-            if (mixedProxyToken != null) {
-                sb.append("    auth.mixed-proxy-token: \"").append(mixedProxyToken).append("\"\n");
-            }
-            sb.append("  后端 AccountTypeServiceImpl 会自动查询本代理获取权威账号类型。\n");
-            if ("127.0.0.1".equals(mixedProxyBindHost)) {
-                sb.append("  注意：后端子服必须与本代理端在同一台机器（127.0.0.1）。\n");
-                sb.append("  跨机部署请在 proxy-config.yml 配置 mixed-proxy-bind-host / token / allow-ips。\n");
-            }
+            sb.append("\n  [后端认证配置]\n");
+            sb.append("  使用 authentication.yml 管理账号与准入，限制后端直连并正确配置可信转发。\n");
+            sb.append("  网关仅验证 Minecraft 握手；不能通过 UUID 资料查询授予免密。\n");
+            sb.append("  同机直连可显式选择 local-mixed；跨机器代理证明须使用签名转发适配器。\n");
         }
         return sb.toString();
     }

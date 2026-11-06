@@ -19,7 +19,6 @@ softdepend:
   - PlayerPoints
   - Rondo
   - NeigeItems
-  - AuthMe
   - Symphony
   - Overture
 # 模块命令不在此声明：plugin.yml 声明的命令在插件加载时即注册进 CommandMap，

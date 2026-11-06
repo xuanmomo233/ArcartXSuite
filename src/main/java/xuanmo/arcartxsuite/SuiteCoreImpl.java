@@ -325,12 +325,10 @@ public final class SuiteCoreImpl implements SuiteCore {
         keybindService.reportDeferred();
 
         // 9. 聊天签名绕过（Paper 1.21+ 混合登录兼容）
-        // 放在 ModuleRegistry 之后，确保 AccountTypeService 已就绪，实现按玩家类型精准 bypass
+        // 在宿主准入运行时就绪后处理聊天会话，账号分类不能代替签名状态。
         boolean chatSignBypassEnabled = getConfig().getBoolean("chat-sign-bypass.enabled", true);
-        boolean chatSignBypassOnlyNonPremium = getConfig().getBoolean("chat-sign-bypass.only-for-non-premium", true);
         chatSignBypassService = new ChatSignBypassService(
-            host, chatSignBypassEnabled, chatSignBypassOnlyNonPremium,
-            moduleRegistry.accountTypeService()
+            host, chatSignBypassEnabled
         );
         chatSignBypassService.initialize();
 
@@ -543,7 +541,7 @@ public final class SuiteCoreImpl implements SuiteCore {
             cloudModuleService.stopHeartbeat();
         }
         if (moduleRegistry != null) {
-            moduleRegistry.unloadAll();
+            moduleRegistry.shutdown();
             // Mod 属性修饰器挂在实体上不会像药水效果那样自行衰减，停用时主动移除
             moduleRegistry.modAttributes().shutdown();
             moduleRegistry = null;

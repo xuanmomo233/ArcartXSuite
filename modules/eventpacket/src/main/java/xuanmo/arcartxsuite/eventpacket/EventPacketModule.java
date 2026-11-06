@@ -10,8 +10,6 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.NotNull;
 import xuanmo.arcartxsuite.api.AbstractAXSModule;
-import xuanmo.arcartxsuite.api.account.AccountType;
-import xuanmo.arcartxsuite.api.account.AccountTypeService;
 import xuanmo.arcartxsuite.api.config.SyncPolicy;
 import xuanmo.arcartxsuite.api.config.ValidationRule;
 import xuanmo.arcartxsuite.api.config.ValueType;
@@ -188,8 +186,9 @@ public final class EventPacketModule extends AbstractAXSModule implements Module
                     // uuid 字符串非法时仅按玩家名解析
                 }
             }
-            AccountType type = accountTypeService.resolve(uuid, name);
-            return new String[]{type.id(), type.displayName(), Boolean.toString(type.premium())};
+            var identity = uuid == null ? null : xuanmo.arcartxsuite.api.auth.AuthAccess.snapshot(uuid);
+            return identity == null ? new String[]{"unknown","未知","false"}
+                : new String[]{identity.provider(),identity.provider(),Boolean.toString(identity.identityVerified())};
         });
 
         boolean placeholderApiAvailable = Bukkit.getPluginManager().isPluginEnabled("PlaceholderAPI");

@@ -3,6 +3,7 @@ plugins {
 }
 
 dependencies {
+    implementation(project(":auth-minecraft"))
     compileOnly("org.jetbrains:annotations:24.1.0")
     implementation("com.google.code.gson:gson:2.11.0")
     implementation("org.yaml:snakeyaml:2.2")

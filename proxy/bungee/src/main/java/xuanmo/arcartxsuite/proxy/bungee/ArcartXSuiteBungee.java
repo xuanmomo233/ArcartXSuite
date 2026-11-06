@@ -32,6 +32,8 @@ public class ArcartXSuiteBungee extends Plugin {
         // 加载配置
         config = new ProxyConfig(logger, getDataFolder());
         config.load("proxy-config.yml");
+        if(Boolean.TRUE.equals(config.authForwarding().get("enabled")))
+            throw new IllegalArgumentException("首批签名转发仅支持 Velocity；Bungee 请勿启用 auth-forwarding");
 
         // 注册事件监听器
         authListener = new BungeeAuthListener(this, config, logger);

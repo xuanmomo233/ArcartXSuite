@@ -78,7 +78,6 @@ public abstract class AbstractAXSModule implements AXSModule {
     protected @NotNull xuanmo.arcartxsuite.api.script.AriaBridge ariaBridge;
     protected @NotNull xuanmo.arcartxsuite.api.condition.ScriptConditionEvaluator scriptConditionEvaluator;
     protected @Nullable xuanmo.arcartxsuite.api.security.PacketGuardAPI packetGuard;
-    protected @NotNull xuanmo.arcartxsuite.api.account.AccountTypeService accountTypeService;
     protected @NotNull xuanmo.arcartxsuite.api.crossserver.CrossServerAPI crossServer;
     protected @Nullable xuanmo.arcartxsuite.api.bridge.WorldTextureBridgeAPI worldTextureBridge;
     protected @NotNull xuanmo.arcartxsuite.api.placeholder.PlaceholderResolverAPI placeholderResolver;
@@ -267,7 +266,6 @@ public abstract class AbstractAXSModule implements AXSModule {
         this.ariaBridge = context.ariaBridge();
         this.scriptConditionEvaluator = context.scriptConditionEvaluator();
         this.packetGuard = context.packetGuard();
-        this.accountTypeService = context.accountTypeService();
         this.crossServer = context.crossServer();
         this.worldTextureBridge = context.worldTextureBridge();
         this.placeholderResolver = context.placeholderResolver();

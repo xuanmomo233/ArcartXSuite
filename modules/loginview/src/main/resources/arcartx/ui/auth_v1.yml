@@ -1,0 +1,269 @@
+ui:
+  isHud: false
+  through: false
+  escClose: false
+  closeDied: false
+  background: true
+  level: 20
+  screenScale: true
+  action:
+    load: |-
+      var.connection = ''
+      var.mode = 'login'
+      var.stage = 'LOADING'
+      var.ready = false
+      var.busy = false
+      var.password = ''
+      var.confirm = ''
+      var.newPassword = ''
+      var.code = ''
+      var.agreed = false
+      var.message = '正在读取认证状态'
+      var.terms = []
+      var.termsEnabled = false
+      var.termsVersion = ''
+      var.needTerms = false
+      var.needBinding = false
+      var.externalId = ''
+      var.externalCode = ''
+      var.externalUrl = ''
+      var.externalConfirmation = ''
+      var.canLink = false
+  packetHandler:
+    state: |-
+      var.connection = packet['connection']
+      var.mode = packet['mode']
+      var.stage = packet['stage']
+      var.ready = packet['ready']
+      var.terms = packet['terms']
+      var.termsEnabled = packet['termsEnabled']
+      if (var.termsVersion != packet['termsVersion']) {
+        var.agreed = false
+      }
+      var.termsVersion = packet['termsVersion']
+      var.needTerms = packet['needTerms']
+      var.needBinding = packet['needBinding']
+      var.externalId = packet['externalId']
+      var.externalCode = packet['externalCode']
+      var.externalUrl = packet['externalUrl']
+      var.externalConfirmation = packet['externalConfirmation']
+      var.canLink = packet['canLink']
+      var.message = packet['message']
+      var.busy = false
+    result: |-
+      var.message = packet['message']
+      var.busy = false
+controls:
+  布局:
+    type: Adaptive
+    attribute:
+      point: ~stretch_all
+      width: 1920
+      height: 1080
+    children:
+      面板:
+        type: Canvas
+        attribute:
+          point: ~middle_center
+          width: 640
+          height: 730
+        children:
+          背景:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~20,26,36,245
+              through: true
+          标题:
+            type: Text
+            attribute:
+              x: 40
+              y: 28
+              texts: "var.mode == 'register' ? '创建本地账号' : '账号验证'"
+              fontSize: 49
+          密码:
+            type: TextBox
+            attribute:
+              x: 40
+              y: 100
+              width: 560
+              height: 42
+              length: 128
+              emptyText: ~密码或旧密码
+              passwordChar: ~※
+              fontSize: 38
+              background: ~35,42,54,255
+              visible: "var.mode != 'requirements' && var.mode != 'verify'"
+            action:
+              textChange: var.password = self.getContent()
+          新密码:
+            type: TextBox
+            attribute:
+              x: 40
+              y: 158
+              width: 560
+              height: 42
+              length: 128
+              emptyText: ~新密码
+              passwordChar: ~※
+              background: ~35,42,54,255
+              visible: "var.mode == 'change'"
+            action:
+              textChange: var.newPassword = self.getContent()
+          确认密码:
+            type: TextBox
+            attribute:
+              x: 40
+              y: 216
+              width: 560
+              height: 42
+              length: 128
+              emptyText: ~再次输入密码
+              passwordChar: ~※
+              background: ~35,42,54,255
+              visible: "var.mode == 'register' || var.mode == 'change'"
+            action:
+              textChange: var.confirm = self.getContent()
+          条款内容:
+            type: Text
+            attribute:
+              x: 40
+              y: 280
+              texts: var.terms
+              fontSize: 21
+              visible: "var.termsEnabled && var.mode != 'change' && var.mode != 'verify' && (var.mode != 'requirements' || var.needTerms)"
+          条款确认:
+            type: Text
+            attribute:
+              x: 40
+              y: 360
+              texts: "var.agreed ? '&a已确认服务器条款' : '&e点击确认已阅读服务器条款'"
+              fontSize: 28
+              visible: "var.termsEnabled && var.mode != 'change' && var.mode != 'verify' && (var.mode != 'requirements' || var.needTerms)"
+            action:
+              clickLeft: var.agreed = !var.agreed
+          绑定码:
+            type: TextBox
+            attribute:
+              x: 40
+              y: 100
+              width: 560
+              height: 42
+              length: 64
+              emptyText: ~在QQ群申请的绑定验证码
+              background: ~35,42,54,255
+              visible: "var.mode == 'requirements' && var.needBinding"
+            action:
+              textChange: var.code = self.getContent()
+          确认绑定:
+            type: Text
+            attribute:
+              x: 40
+              y: 180
+              texts: ~确认绑定
+              fontSize: 28
+              visible: "var.mode == 'requirements' && var.needBinding && !var.busy"
+            action:
+              clickLeft: |-
+                var.busy = true
+                Packet.send('AXS_auth_v1', 'bind', var.connection, var.code)
+          确认条款:
+            type: Text
+            attribute:
+              x: 40
+              y: 410
+              texts: ~确认条款并继续
+              fontSize: 28
+              visible: "var.mode == 'requirements' && var.needTerms && var.agreed && !var.busy"
+            action:
+              clickLeft: |-
+                var.busy = true
+                Packet.send('AXS_auth_v1', 'terms', var.connection, var.termsVersion)
+          提交:
+            type: Texture
+            attribute:
+              x: 40
+              y: 410
+              width: 560
+              height: 48
+              normal: ~64,142,106,255
+              hover: ~82,169,129,255
+              visible: "var.ready && !var.busy && var.mode != 'requirements' && var.mode != 'verify'"
+            action:
+              clickLeft: |-
+                var.busy = true
+                if (var.mode == 'change') {
+                  Packet.send('AXS_auth_v1', 'change', var.connection, var.password, var.newPassword, var.confirm)
+                } else {
+                  Packet.send('AXS_auth_v1', var.mode, var.connection, var.password, var.confirm, var.agreed, '1', var.termsVersion)
+                }
+          提交文字:
+            type: Text
+            attribute:
+              x: 260
+              y: 418
+              texts: ~确认验证
+              fontSize: 28
+              through: true
+              visible: "var.ready && !var.busy && var.mode != 'requirements' && var.mode != 'verify'"
+          状态:
+            type: Text
+            attribute:
+              x: 40
+              y: 480
+              texts: var.message
+              fontSize: 21
+          刷新:
+            type: Text
+            attribute:
+              x: 40
+              y: 540
+              texts: ~刷新状态
+              fontSize: 21
+            action:
+              clickLeft: "Packet.send('AXS_auth_v1', 'refresh', var.connection)"
+          退出:
+            type: Text
+            attribute:
+              x: 450
+              y: 540
+              texts: ~退出服务器
+              fontSize: 21
+            action:
+              clickLeft: "Packet.send('AXS_auth_v1', 'exit', var.connection)"
+          关联官网:
+            type: Text
+            attribute:
+              x: 190
+              y: 540
+              texts: ~关联官网账号
+              fontSize: 21
+              visible: "var.canLink && var.externalId == '' && !var.busy"
+            action:
+              clickLeft: "Packet.send('AXS_auth_v1', 'external_link', var.connection)"
+          官网地址:
+            type: Text
+            attribute:
+              x: 40
+              y: 582
+              texts: var.externalUrl
+              fontSize: 17
+              visible: "var.externalId != ''"
+          游戏授权码:
+            type: Text
+            attribute:
+              x: 40
+              y: 614
+              texts: "'授权码 ' + var.externalCode"
+              fontSize: 23
+              visible: "var.externalId != ''"
+          确认官网授权:
+            type: Text
+            attribute:
+              x: 40
+              y: 654
+              texts: "'核对码 ' + var.externalConfirmation + ' · 确认授权'"
+              fontSize: 23
+              visible: "var.externalConfirmation != '' && !var.busy"
+            action:
+              clickLeft: "Packet.send('AXS_auth_v1', 'external_confirm', var.connection, var.externalId)"

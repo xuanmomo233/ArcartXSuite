@@ -59,6 +59,13 @@ public final class SimpleEventBus implements EventBusCapability {
     public boolean hasPublisher(@NotNull String topic) {
         return publisherTopics.contains(topic);
     }
+    @Override
+    public boolean hasSubscribers(@NotNull String topic) {
+        var exact=subscriptions.get(topic);
+        if(exact!=null && !exact.isEmpty()) return true;
+        return subscriptions.entrySet().stream().anyMatch(entry -> entry.getKey().endsWith(".*")
+            && !entry.getValue().isEmpty() && topic.startsWith(entry.getKey().substring(0,entry.getKey().length()-1)));
+    }
 
     @Override
     public String subscribe(@NotNull String topic, @NotNull EventHandler handler) {

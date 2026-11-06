@@ -13,6 +13,9 @@ repositories {
 
 dependencies {
     implementation(project(":axs-api"))
+    implementation(project(":auth-minecraft"))
+    implementation(project(":auth-engine"))
+    implementation(project(":auth-protocol"))
     implementation(project(":axs-placeholder"))
     compileOnly("org.spigotmc:spigot-api:1.20.1-R0.1-SNAPSHOT")
     compileOnly("org.jetbrains:annotations:24.1.0")
@@ -33,7 +36,6 @@ dependencies {
     implementation("com.zaxxer:HikariCP:5.1.0")
     implementation("org.xerial:sqlite-jdbc:3.46.0.0")
     implementation("com.mysql:mysql-connector-j:8.4.0")
-    implementation("at.favre.lib:bcrypt:0.10.2")
     implementation("redis.clients:jedis:5.2.0")
     implementation("com.belerweb:pinyin4j:2.5.1")
     implementation("com.google.code.gson:gson:2.11.0")

@@ -2,7 +2,7 @@ id: qqbot
 name: QQBot
 version: 1.5.0
 main: xuanmo.arcartxsuite.qqbot.QQBotModule
-api-version: 1.0
+api-version: 2.0
 
 depends: []
 softdepends:

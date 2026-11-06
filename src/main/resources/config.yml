@@ -422,42 +422,7 @@ tacz-compat:
 # 若服务器仅使用微软正版账号（无 LittleSkin / 离线），可关闭此选项。
 chat-sign-bypass:
   enabled: true
-  # 智能模式：仅对非正版玩家（LittleSkin / 离线）绕过签名验证。
-  # 微软正版玩家保留 Mojang 签名验证，确保其聊天消息仍能被其他正版客户端正确验证。
-  # 若设为 false，则对所有玩家统一绕过（旧行为，纯离线服可用）。
-  only-for-non-premium: true
-
-# ========== 账号识别（统一服务）==========
-# 微软正版 / LittleSkin / 离线账号判定，由本体统一提供，供 loginview、qqbot、eventpacket 共享。
-# 该服务在玩家预登录（AsyncPlayerPreLogin）阶段于异步线程预热缓存，避免主线程阻塞网络请求。
-# 【重要前提】若同时使用 LittleSkin + 微软正版（混合登录 Mixed Auth Mode）：
-#   1. 必须用 AXS 生成的 start-mixed-auth 脚本启动服务器（执行 /axs auth setup 生成）。
-#      该脚本会先独立启动 AXS 本地混合代理，再启动服务器，authlib-injector 指向本地代理。
-#      （authlib-injector 原生不支持单端正版+外置混合，?mixed 也不是其有效参数）
-#   2. server.properties 必须设置 online-mode=true
-#      否则 LittleSkin 账号会被分配 v3 UUID，无法与离线玩家区分
-#   3. 离线玩家需在 qqbot/loginview 白名单登录配置中设置 deny-offline: false
-#      注意：启用 online-mode=true 后，离线玩家无法直接连接服务器
-#
-# 判定规则：
-#   - 查 Mojang API，玩家名在正版数据库存在：
-#     - 当前 UUID 与 Mojang 官方 UUID 一致          -> 微软正版
-#     - 当前 UUID 与 Mojang 官方 UUID 不同          -> LittleSkin（名字恰好与正版相同）
-#   - 玩家名不在 Mojang：
-#     - UUID 为 v4                                  -> LittleSkin
-#     - UUID 为 v3                                  -> 离线
-account-type:
-  # 是否查询 Mojang API 识别微软正版账号。
-  # 关闭后仅按 UUID 版本判定（v4=LittleSkin，v3=离线），将无法识别微软正版账号。
-  enable-mojang-lookup: false
-  # Mojang API 请求超时（毫秒）。
-  mojang-timeout-ms: 10000
-  # Mojang API 代理配置（中国大陆网络环境建议配置）。
-  # 例如：mojang-proxy-host: "127.0.0.1"  mojang-proxy-port: 10809
-  mojang-proxy-host: ""
-  mojang-proxy-port: 0
-  # 是否输出账号判定调试日志。
-  debug: false
+  # 已存在的签名聊天会话始终保留；未知平台布局不修改验证状态。
 
 # ========== 多方认证（authlib-injector 管理）==========
 # 仅在单端服务器有效。群组服请使用 ArcartXSuite-Proxy 插件。
@@ -474,7 +439,7 @@ auth:
   #   1. 生成的 start-mixed-auth 脚本会【先独立启动】本地 Yggdrasil 混合代理（见下方 mixed-proxy-port），
   #      再启动服务器，authlib-injector 指向该本地代理。
   #      这样才能解决 authlib-injector premain 时序问题（代理必须先于服务器存在）。
-  #   2. 代理行为：hasJoined 先查 LittleSkin，未命中再 fallback 到 Mojang 官方，
+  #   2. 代理行为：hasJoined 先查 Mojang，未命中再尝试受信 LittleSkin，
   #      让 LittleSkin 玩家与微软正版玩家都能进服。
   # 注意：?mixed 并非 authlib-injector/LittleSkin 的有效参数，仅是 AXS 的“启用混合代理”开关。
   # 若只需外置登录，改为纯 LittleSkin："https://littleskin.cn/api/yggdrasil"
@@ -487,7 +452,7 @@ auth:
   # 【单机群组服】127.0.0.1（代理端插件与后端子服在同一台机器）
   # 【跨机群组服】代理端机器的 IP（如 10.0.0.5），需与 proxy-config.yml 的 mixed-proxy-bind-host 一致
   mixed-proxy-host: "127.0.0.1"
-  # 混合代理 account-source 接口鉴权 token（跨机群组服必配）。
+  # 混合代理 内部健康接口鉴权 token（跨机群组服必配）。
   # 必须与代理端 proxy-config.yml 的 mixed-proxy-token 完全一致。
   # 单机模式（127.0.0.1）留空即可。
   mixed-proxy-token: ""
@@ -814,7 +779,7 @@ modules:
     enabled: true
     # LoginView 登录界面
     # 功能：自定义登录 / 注册 / 改密 UI，支持密码强度验证、验证码、皮肤头像显示。
-    # 账号类型判定依赖 account-type 配置（微软正版 / LittleSkin / 离线）。
+    # 认证策略由宿主 authentication.yml 管理，LoginView 只负责交互。
 
   warehouse:
     enabled: true

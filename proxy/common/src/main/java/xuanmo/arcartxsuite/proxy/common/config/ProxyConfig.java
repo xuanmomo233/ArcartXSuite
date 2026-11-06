@@ -29,6 +29,8 @@ public class ProxyConfig {
     private String kickOfflineMessage = "&c本服务器仅支持正版/LittleSkin 账号登录";
     private boolean autoAssignUuid = true;
     private final List<YggdrasilSource> sources = new ArrayList<>();
+    private Map<String,Object> authForwarding = Map.of();
+    public Map<String,Object> authForwarding() { return authForwarding; }
 
     // auth 配置节（混合登录）
     private boolean authEnabled = false;
@@ -95,6 +97,11 @@ public class ProxyConfig {
         }
 
         debug = readBoolean(root, "debug", debug);
+        Object forwarding=root.get("auth-forwarding");
+        if(forwarding instanceof Map<?,?> value) authForwarding=Map.copyOf((Map<String,Object>)value);
+        else if(forwarding!=null) throw new IllegalArgumentException("auth-forwarding 必须为字典");
+        if(authForwarding.containsKey("enabled") && !(authForwarding.get("enabled") instanceof Boolean))
+            throw new IllegalArgumentException("auth-forwarding.enabled 必须为布尔值");
         denyOffline = readBoolean(root, "deny-offline", denyOffline);
         kickOfflineMessage = readString(root, "kick-offline-message", kickOfflineMessage);
         autoAssignUuid = readBoolean(root, "auto-assign-uuid", autoAssignUuid);

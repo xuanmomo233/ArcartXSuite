@@ -30,8 +30,14 @@ public final class PlayerTitleListener implements Listener {
      * @param event 玩家加入事件
      */
     @EventHandler(priority = EventPriority.MONITOR)
-    public void onJoin(PlayerJoinEvent event) {
-        titleService.preloadPlayer(event.getPlayer());
+    public void onAdmission(xuanmo.arcartxsuite.api.auth.AuthAdmissionEvent event) {
+        var player=org.bukkit.Bukkit.getPlayer(event.snapshot().playerId());
+        if(player!=null) titleService.preloadPlayer(player);
+    }
+    @EventHandler
+    public void onRestriction(xuanmo.arcartxsuite.api.auth.AuthRestrictionEvent event) {
+        var player=org.bukkit.Bukkit.getPlayer(event.previous().playerId());
+        if(player!=null) titleService.clearPlayer(player);
     }
 
     /**

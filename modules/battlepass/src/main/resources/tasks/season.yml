@@ -157,9 +157,7 @@ season-login-30:
   display-name: "坚持不懈"
   description: "本赛季累计登录30天"
   difficulty: normal
-  event-topic: "axs.loginview.login_success"
-  bukkit-event:
-    event-class: "org.bukkit.event.player.PlayerJoinEvent"
+  event-topic: "axs.auth.presence_day_started"
   required-count: 30
   base-xp-reward: 3000
   conditions: []

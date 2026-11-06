@@ -204,6 +204,7 @@ public final class RedPacketService {
      * @return 操作结果
      */
     public ChatOperationResult sendPlayerPacket(Player sender, RedPacketType type, BigDecimal total, int count, String wish) {
+        if(!xuanmo.arcartxsuite.api.auth.AuthAccess.admitted(sender.getUniqueId())) return ChatOperationResult.failure("请先完成登录验证。");
         if (!config().enabled()) {
             return ChatOperationResult.failure(message("redpacket.disabled"));
         }
@@ -259,6 +260,7 @@ public final class RedPacketService {
      * 管理员/控制台发送免扣款货币红包。
      */
     public ChatOperationResult sendAdminPacket(CommandSender sender, RedPacketType type, BigDecimal total, int count, String wish) {
+        if(sender instanceof Player player && !xuanmo.arcartxsuite.api.auth.AuthAccess.admitted(player.getUniqueId())) return ChatOperationResult.failure("请先完成登录验证。");
         if (!config().enabled()) {
             return ChatOperationResult.failure(message("redpacket.disabled"));
         }
@@ -303,6 +305,7 @@ public final class RedPacketService {
      * @param countOverride 份数覆盖，{@code null} 用预设值
      */
     public ChatOperationResult sendPresetPacket(CommandSender sender, String presetId, @Nullable Integer countOverride) {
+        if(sender instanceof Player player && !xuanmo.arcartxsuite.api.auth.AuthAccess.admitted(player.getUniqueId())) return ChatOperationResult.failure("请先完成登录验证。");
         if (!config().enabled()) {
             return ChatOperationResult.failure(message("redpacket.disabled"));
         }
@@ -355,6 +358,8 @@ public final class RedPacketService {
      * 玩家领取红包。DB 事务异步执行，结果回主线程发放奖励并播报。
      */
     public void claimPacket(Player player, String packetId) {
+        var admission=xuanmo.arcartxsuite.api.auth.AuthAccess.snapshot(player.getUniqueId());
+        if(!admission.admitted()) return;
         if (!config().enabled()) {
             player.sendMessage(prefix() + ChatColor.RED + message("redpacket.disabled"));
             return;
@@ -368,27 +373,34 @@ public final class RedPacketService {
             player.sendMessage(prefix() + ChatColor.RED + message("redpacket.not-found"));
             return;
         }
+        UUID playerId=player.getUniqueId(); String playerName=player.getName();
         ioExecutor.execute(() -> {
             RedPacketClaimOutcome outcome;
             try {
-                outcome = repository.claimRedPacket(normalized, player.getUniqueId(), player.getName(),
+                outcome = repository.claimRedPacket(normalized, playerId, playerName,
                     config().senderCanClaim(), Instant.now());
             } catch (SQLException exception) {
                 logger.warning("红包领取失败: " + exception.getMessage());
-                notifyClaimFailure(player, RedPacketClaimOutcome.Status.NOT_FOUND, null);
+                Bukkit.getScheduler().runTask(plugin,()->handleClaimResult(player,
+                    RedPacketClaimOutcome.of(RedPacketClaimOutcome.Status.NOT_FOUND,null),admission));
                 return;
             }
             RedPacketClaimOutcome finalOutcome = outcome;
-            Bukkit.getScheduler().runTask(plugin, () -> handleClaimResult(player, finalOutcome));
+            Bukkit.getScheduler().runTask(plugin, () -> handleClaimResult(player, finalOutcome,admission));
         });
     }
 
-    private void handleClaimResult(Player player, RedPacketClaimOutcome outcome) {
+    private void handleClaimResult(Player player, RedPacketClaimOutcome outcome,xuanmo.arcartxsuite.api.auth.AuthSnapshot admission) {
+        var current=xuanmo.arcartxsuite.api.auth.AuthAccess.snapshot(player.getUniqueId());
+        boolean eligible=admission!=null && player.isOnline() && current.admitted()
+            && java.util.Objects.equals(current.connectionId(),admission.connectionId()) && current.generation()==admission.generation();
+        if(!eligible && outcome.status()!=RedPacketClaimOutcome.Status.SUCCESS) return;
         RedPacket packet = outcome.packet();
         switch (outcome.status()) {
             case SUCCESS -> {
                 RedPacketReward reward = outcome.reward();
-                grantReward(player, reward);
+                grantReward(player, reward,eligible);
+                if(!eligible) return;
                 player.sendMessage(prefix() + ChatColor.GREEN
                     + message("redpacket.claimed", describeReward(reward)));
                 if (config().announceClaims() && packet != null) {
@@ -408,13 +420,8 @@ public final class RedPacketService {
         }
     }
 
-    private void notifyClaimFailure(Player player, RedPacketClaimOutcome.Status status, @Nullable RedPacket packet) {
-        Bukkit.getScheduler().runTask(plugin, () ->
-            handleClaimResult(player, RedPacketClaimOutcome.of(status, packet)));
-    }
-
     /** 发放奖励：货币入账 / 物品发放（含兜底）/ 控制台指令。发放失败统一走 PendingRewardService。 */
-    private void grantReward(Player player, RedPacketReward reward) {
+    private void grantReward(Player player, RedPacketReward reward,boolean eligible) {
         if (reward == null || player == null) {
             return;
         }
@@ -423,7 +430,7 @@ public final class RedPacketService {
                 CurrencyBridgeAPI.CurrencyBridge bridge = currencyManager.bridge(reward.currencyId());
                 BigDecimal amount = reward.amount() == null ? BigDecimal.ZERO : reward.amount();
                 boolean ok = false;
-                if (bridge != null && bridge.available() && player.isOnline()) {
+                if (eligible && bridge != null && bridge.available() && player.isOnline()) {
                     try {
                         ok = bridge.deposit(player, amount).success();
                     } catch (Exception exception) {
@@ -447,7 +454,7 @@ public final class RedPacketService {
                 if (itemStack == null) {
                     return;
                 }
-                if (player.isOnline() && itemRewardDispatcher != null) {
+                if (eligible && player.isOnline() && itemRewardDispatcher != null) {
                     itemRewardDispatcher.dispatchItem(player, itemStack,
                         ItemRewardDispatcher.DispatchOptions.builder(MODULE_ID)
                             .sourceDetail("redpacket")
@@ -458,7 +465,7 @@ public final class RedPacketService {
                 }
             }
             case COMMAND -> {
-                if (player.isOnline()) {
+                if (eligible && player.isOnline()) {
                     String command = reward.command().replace("{player}",
                         xuanmo.arcartxsuite.api.command.CommandSanitizer.validatePlayerName(player.getName()));
                     String normalized = command.startsWith("/") ? command.substring(1) : command;

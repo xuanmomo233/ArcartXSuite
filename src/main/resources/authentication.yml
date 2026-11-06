@@ -1,0 +1,35 @@
+schema-version: 1
+# 宿主认证策略修改后需重启；重载 LoginView 只更新界面。
+backend: standalone
+# 中心节点使用 auth-center/config/node.example.yml 的完整配置；策略由中心统一提供。
+realm-id: local
+timezone: Asia/Shanghai
+login-timeout-seconds: 300
+ingress:
+  # password、local-mixed 或 signed-proxy。
+  # local-mixed 要求本机直连 online-mode=true；signed-proxy 要求正确配置可信玩家信息转发。
+  type: password
+  gateway-url: http://127.0.0.1:25599
+  # 非 password 入口默认禁止密码登录；如确需并用，显式设置 password-login: true。
+  audience: local-node
+  # signed-proxy 必须填入代理启动日志中的公钥。可以为轮换期配置多个公钥，最多8项。
+  # - issuer: proxy-main
+  #   public-key: BASE64_X509_PUBLIC_KEY
+  #   providers: [microsoft, littleskin]
+  trusted-proxies: []
+password:
+  min-length: 8
+  max-length: 128
+  max-attempts: 5
+  cooldown-seconds: 300
+requirements:
+  terms: true
+  qq-binding: false
+terms:
+  version: '1'
+  lines:
+    - '请遵守服务器规则，禁止利用漏洞或破坏他人游戏体验。'
+    - '请保护账号凭据，不向他人提供密码和验证码。'
+performance:
+  workers: 2
+  queue-capacity: 128

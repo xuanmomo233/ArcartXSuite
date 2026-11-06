@@ -2,7 +2,6 @@ package xuanmo.arcartxsuite.api;
 
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import xuanmo.arcartxsuite.api.account.AccountTypeService;
 import xuanmo.arcartxsuite.api.bridge.ApiStability;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerAPI;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
@@ -16,9 +15,6 @@ public interface SecurityContext {
 
     @ApiStability.Stable
     @Nullable PacketGuardAPI packetGuard();
-
-    @ApiStability.Stable
-    @NotNull AccountTypeService accountTypeService();
 
     @ApiStability.Stable
     @NotNull CrossServerAPI crossServer();

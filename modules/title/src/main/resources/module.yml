@@ -2,7 +2,7 @@ id: title
 name: Title
 version: 1.5.0
 main: xuanmo.arcartxsuite.title.TitleModule
-api-version: 1.0
+api-version: 2.0
 
 depends: []
 softdepends: []

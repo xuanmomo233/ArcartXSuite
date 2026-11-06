@@ -1,0 +1,169 @@
+{
+  "schemaVersion": 1,
+  "updated": "2026-11-06",
+  "overallStatus": "in_progress",
+  "architecturePage": "https://chatgpt.com/space/page_e8b8ae27f65c8191afa9193a95540d67",
+  "constraints": {
+    "legacyCompatibility": false,
+    "standaloneRequired": true,
+    "buildExecuted": false,
+    "javaCompilationExecuted": false,
+    "applicationTestsExecuted": false,
+    "runtimeAcceptanceExecuted": false
+  },
+  "statusLegend": {
+    "source_implemented": "源码已有实现；不表示编译、测试或真实环境验收通过",
+    "partial": "部分落地，仍有实现或验收缺口",
+    "not_started": "尚未实现"
+  },
+  "phases": [
+    {
+      "id": "P0",
+      "name": "契约、库存与部署边界",
+      "status": "partial",
+      "source": [
+        "公开认证/绑定能力与会话快照",
+        "模块 API 2.0 元数据门禁",
+        "新认证配置与旧契约清理",
+        "源码检查脚本"
+      ],
+      "remaining": [
+        "实际服务器、代理、官网、启动器及客户端版本矩阵",
+        "真实数据备份与重建演练；不做旧版运行时兼容"
+      ]
+    },
+    {
+      "id": "P1",
+      "name": "宿主认证与 standalone",
+      "status": "source_implemented",
+      "source": [
+        "宿主持有会话、连接代次、撤销和准入门禁",
+        "新账户、条款、QQ绑定事实与Argon2id密码",
+        "LoginView仅负责认证界面与意图提交",
+        "奖励、事件包、战令、挂机、称号、Tab、公告等改用准入状态",
+        "独立不可变配置解析；启动时拒绝未知配置和隐式类型转换",
+        "Chat强制接管、私聊、补全列表与红包回调校验准入；撤销后的领取结果延后发放"
+      ],
+      "remaining": [
+        "编译与单元测试",
+        "SQLite/MySQL真实数据库验收",
+        "模块重载、撤销、重连及UI交互验收",
+        "QQ成员资格及外部白名单策略需纳入后续中心策略；不能视为已完成"
+      ]
+    },
+    {
+      "id": "P2",
+      "name": "混合验证与可信入口",
+      "status": "partial",
+      "source": [
+        "共享Yggdrasil验证网关；仅成功hasJoined产生身份回执",
+        "local-mixed绑定实际启动注入器和同机网关",
+        "Velocity固定Ed25519签名证明；绑定玩家、realm、audience、连接和随机挑战",
+        "代理密钥创建保护、后端公钥固定、限流与短期证明",
+        "Bungee显式拒绝尚未支持的签名转发模式"
+      ],
+      "remaining": [
+        "验证真实authlib-injector、Microsoft及LittleSkin握手行为",
+        "Velocity实际插件消息转发及跨后端切换验收",
+        "断连、撤销、证明过期、重放及密钥轮换验收",
+        "Bungee签名桥接不属于当前已实现的入口"
+      ]
+    },
+    {
+      "id": "P3",
+      "name": "独立认证中心与单节点接入",
+      "status": "source_implemented",
+      "remaining": [
+        "编译与单元测试尚未执行",
+        "一台真实服务器验证注册、登录、QQ 绑定、撤销、断网、重启及 Outbox 补读",
+        "确认服务端和客户端版本矩阵、在线模式及部署传输",
+        "中心模式尚未接入 mixed/Yggdrasil 或 Velocity 签名入口；standalone 已有对应入口源码"
+      ],
+      "source": [
+        "auth-engine 复用无 Bukkit 依赖的 JDBC 账号存储与 Argon2id；standalone 保留",
+        "auth-protocol 共享节点请求/响应契约和 HMAC 鉴权；持久 nonce 防重放",
+        "auth-center 独立进程、私有 SQLite 状态目录、Realm/节点/权限范围与审计",
+        "中心权威的注册、登录、条款版本、QQ 绑定、密码修改与撤销",
+        "30 秒一次性票据绑定节点、Realm、audience、档案与物理连接；原子兑换",
+        "15 秒准入租约、5 秒检查；服务不可用或到期时关闭准入和在线计时",
+        "账号/绑定/撤销/票据/准入事实事务内写 Outbox；节点按持久游标补读、用安全版本去重，缺口时暂停准入并重新确认",
+        "游戏内密码入口中心默认关闭；P3 仅支持显式启用后的直连 online-mode=true 节点"
+      ],
+      "contract": "docs/auth-refactor/p3-contract.json"
+    },
+    {
+      "id": "P4",
+      "name": "官网与启动器的认证接口",
+      "status": "source_implemented",
+      "scope": "中心接口、身份与游戏准入验证、接入样例和独立验证方法。官网和启动器项目建设、接线及部署不纳入本阶段。",
+      "remaining": [
+        "按接入契约用测试 OIDC 提供方、通用 HTTP 客户端和测试游戏服验证协议",
+        "Java 编译、用例和真实服验收"
+      ],
+      "source": [
+        "既有官网 OIDC 授权码、S256、签名与固定 issuer/audience/nonce 验证",
+        "启动器系统浏览器 PKCE、设备授权及 Java 客户端封装",
+        "原游戏连接核对确认后沿用 P3 票据、要求和租约",
+        "既有账号近期密码双重所有权关联、禁止同名自动合并、事务版本与 Outbox"
+      ],
+      "contract": "docs/auth-refactor/p4-contract.json"
+    },
+    {
+      "id": "P5",
+      "name": "客户端与发行物校验",
+      "status": "not_started",
+      "remaining": [
+        "发行清单、签名、版本和撤销策略",
+        "启动器与客户端mod证明协议及服务端挑战绑定",
+        "规则版本、超时与降级策略",
+        "明确完整性证明不能单独证明无外挂"
+      ]
+    },
+    {
+      "id": "P6",
+      "name": "多服共享与一致性",
+      "status": "not_started",
+      "remaining": [
+        "中心会话租约与跨服转移",
+        "共享撤销和安全版本",
+        "业务事件持久化、消费幂等与恢复",
+        "跨节点数据库/缓存故障和时钟偏差验收"
+      ]
+    },
+    {
+      "id": "P7",
+      "name": "运维、管理与最终验收",
+      "status": "not_started",
+      "remaining": [
+        "管理、恢复、密钥轮换与审计工具",
+        "新系统初始化及备份恢复",
+        "完整联调、容量和故障演练",
+        "上线检查和部署"
+      ]
+    }
+  ],
+  "nextImplementationOrder": [
+    "按接口验证方法完成 P1–P4 单服验收",
+    "P5 客户端完整性策略",
+    "P6 多服占用、会话转移和业务消费者一致性",
+    "P7 运维与验收"
+  ],
+  "verification": {
+    "sourceAudit": {
+      "command": "python.exe -B scripts/check_auth_refactor.py",
+      "scope": "Java 词法括号、YAML/JSON 重复键、内部导入、旧契约、模块元数据、独立中心依赖、协议打包边界及内存 SQLite 语句预解析",
+      "lastResult": "pass: 84 Java files, 10 YAML files, 5 JSON files, 87 SQLite statements; source only"
+    },
+    "whitespace": {
+      "command": "git -c core.safecrlf=false diff --check",
+      "lastResult": "pass"
+    },
+    "authoredJavaTests": "未执行；不能以源码检查替代编译和测试"
+  },
+  "knownLimits": [
+    "backend=center 已有单中心、单节点源码；尚未编译、构建、启动或联调",
+    "中心源码支持直连 online-mode=true 节点的密码或 OIDC 端外入口。中心混合登录和客户端完整性待后续。",
+    "短租约和 Outbox 用于 P3 单服准入；跨服独占、转移和业务消费者的持久去重仍属 P6",
+    "待发放命令奖励结果不明时保留核对，不能承诺所有奖励恰好执行一次"
+  ]
+}

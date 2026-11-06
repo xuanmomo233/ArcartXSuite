@@ -230,9 +230,9 @@ public final class EventPacketContext {
         values.put("signal", signal);
         values.put("command_signal", signal);
         String[] account = resolveAccountInfo(subject.uuid, subject.name);
-        values.put("account_type", account[0]);
-        values.put("account_type_display", account[1]);
-        values.put("account_premium", account[2]);
+        values.put("auth_provider", account[0]);
+        values.put("auth_provider_display", account[1]);
+        values.put("auth_verified", account[2]);
         for (Map.Entry<String, String> entry : variables.entrySet()) {
             values.put(entry.getKey(), nullToEmpty(entry.getValue()));
         }

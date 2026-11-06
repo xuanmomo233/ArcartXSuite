@@ -1,0 +1,104 @@
+{
+  "schemaVersion": 1,
+  "phase": "P3",
+  "laterContract": "P4 官网和启动器入口见 docs/auth-refactor/p4-contract.json",
+  "status": "源码已落地；未构建、未运行、未联调",
+  "architecture": "https://chatgpt.com/space/page_e8b8ae27f65c8191afa9193a95540d67",
+  "projects": {
+    "auth-engine": "独立账号存储与 Argon2id；standalone 和中心共用，无 Bukkit 依赖",
+    "auth-protocol": "节点契约、签名和有界客户端；游戏服不依赖中心服务实现",
+    "auth-center": "独立 Java 17 应用；Realm 策略、SQLite 权威、节点鉴权、票据租约、审计与 Outbox",
+    "axs-core": "按 backend 选择 standalone 或 center；LoginView 和 QQBot 继续使用宿主公开能力"
+  },
+  "setup": [
+    "中心配置参照 auth-center/config/center.example.json。应用入口接收一个绝对配置文件路径；本次没有生成或运行发行包。",
+    "每个节点单独使用 32 随机字节的 Base64 环境变量密钥。中心的 keyEnvironment 与节点的 key-environment 指向各自进程注入的同一节点密钥；配置文件只写变量名。",
+    "中心 SQLite 必须独占，数据目录只允许其运行账号访问。新目录由服务设置权限；已有目录需满足权限要求。中心不读取旧版表或游戏服数据库。",
+    "节点的 authentication.yml 使用 auth-center/config/node.example.yml 的完整结构；realm-id、node-id、audience 必须匹配中心注册记录。",
+    "P3 游戏内密码默认关闭。要验证密码链路，显式设置中心 Realm 的 gamePasswordEnabled=true，并使用直连且 online-mode=true 的游戏节点。",
+    "中心只监听 127.0.0.1。异机节点通过 HTTPS 反向代理转发原路径、请求体和 X-AXS-* 标头；禁止记录密码、票据、密钥、请求体和响应体。",
+    "需要 QQBot 时，仅给负责该适配的可信节点 binding-read/binding-write。account-revoke 只授予执行管理撤销的节点。",
+    "中心和节点保持时钟同步。改动条款正文要同时递增 termsVersion；密码表单携带实际展示的条款版本。"
+  ],
+  "rpc": {
+    "path": "POST /v1/node/rpc",
+    "request": [
+      "version: 1",
+      "requestId: UUID",
+      "operation",
+      "context: realm, audience, profile, name, connection",
+      "data: 操作专用字段"
+    ],
+    "authentication": [
+      "X-AXS-Node",
+      "X-AXS-Time",
+      "X-AXS-Nonce",
+      "X-AXS-Signature"
+    ],
+    "response": "业务结果为绑定请求 nonce 的签名 JSON；非 200、签名错误、超时或协议错误不会放行",
+    "scopes": {
+      "auth": [
+        "OPEN",
+        "PASSWORD",
+        "TERMS",
+        "BIND",
+        "EXCHANGE",
+        "CHECK",
+        "CLOSE",
+        "CHANGE_PASSWORD",
+        "PRESENCE",
+        "ACK_PRESENCE",
+        "ACK_FIRST",
+        "OUTBOX"
+      ],
+      "binding-read": [
+        "BINDINGS"
+      ],
+      "binding-write": [
+        "REQUEST_BINDING",
+        "UNBIND_QQ",
+        "UNBIND_PROFILE"
+      ],
+      "account-revoke": [
+        "REVOKE"
+      ]
+    },
+    "sizeLimits": {
+      "requestBytes": 32768,
+      "responseBytes": 262144,
+      "outboxPage": 128
+    },
+    "replay": "请求时钟窗口 30 秒，nonce 持久去重 60 秒。变更请求先写 24 小时日志，重复 requestId 不重做；未知结果用 OPEN 或权威状态核对。"
+  },
+  "admission": {
+    "flow": [
+      "OPEN 获取中心策略及注册状态",
+      "PASSWORD 校验凭据与版本化条款，可能返回待绑定",
+      "BIND/TERMS 完成准入要求",
+      "EXCHANGE 原子消费票据并创建租约、记录准入事实",
+      "节点将中心结果绑定本地连接代次并发布 Bukkit 准入事件"
+    ],
+    "ticket": "随机票据只存 SHA-256 摘要，30 秒有效。绑定节点、Realm、audience、玩家档案和物理连接；同一兑换 requestId 可读回仍有效的原租约，其他请求不能重复消费。",
+    "lease": "最长 15 秒，本地约每 5 秒重新检查；失败、撤销或到期即暂停准入，在线计时最晚截在租约截止时刻。不可用时没有本地密码或旧身份回退。",
+    "outbox": "账号创建、条款、绑定、密码修改、撤销、票据消费及准入事实随事务写入 Outbox。节点读取时确认已应用游标；保留期 7 天，游标缺口触发本地限制及权威重读。Outbox 版本检查不会重复执行游戏奖励。",
+    "projections": "绑定列表只是节点读模型。绑定准入要求与账号安全版本始终以中心存储为准。"
+  },
+  "deferred": [
+    "中心混合/Velocity 签名入口",
+    "官网、启动器、OIDC 与设备授权",
+    "客户端完整性",
+    "跨服独占租约和会话转移",
+    "业务消费者持久 Inbox、容量及灾备验收"
+  ],
+  "acceptanceNotRun": [
+    "注册及正确/错误密码",
+    "条款旧版本拒绝",
+    "绑定、解绑和权限边界",
+    "不同连接/节点兑换、票据重放",
+    "中心断网与租约到期",
+    "撤销旧票据和会话",
+    "中心重启、持久游标与缺口重读",
+    "事务故障后票据和会话一致",
+    "真实客户端及游戏业务联动"
+  ]
+}

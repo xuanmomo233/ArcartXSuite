@@ -31,6 +31,7 @@ public class ArcartXSuiteVelocity {
 
     private ProxyConfig config;
     private VelocityAuthListener authListener;
+    private VelocityProofForwarder proofForwarder;
 
     @Inject
     public ArcartXSuiteVelocity(ProxyServer server, Logger logger, @DataDirectory Path dataDirectory) {
@@ -52,6 +53,8 @@ public class ArcartXSuiteVelocity {
         // 注册事件监听器
         authListener = new VelocityAuthListener(this, server, config, logger);
         server.getEventManager().register(this, authListener);
+        try { proofForwarder=new VelocityProofForwarder(this,server,dataFolder.toPath(),config.authForwarding(),logger); }
+        catch(Exception e) { throw new IllegalStateException("可信代理转发初始化失败，请检查节点密钥与网关配置",e); }
 
         // 注册命令
         server.getCommandManager().register(
@@ -67,6 +70,7 @@ public class ArcartXSuiteVelocity {
 
     @Subscribe
     public void onProxyShutdown(ProxyShutdownEvent event) {
+        if(proofForwarder!=null) proofForwarder.close();
         logger.info("ArcartXSuite Proxy (Velocity) 已关闭。");
     }
 

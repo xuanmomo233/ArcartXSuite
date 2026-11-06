@@ -902,6 +902,7 @@ public class TitleService {
         if (player == null || !player.isOnline() || state == null) {
             return;
         }
+        if (!xuanmo.arcartxsuite.api.auth.AuthAccess.admitted(player.getUniqueId())) return;
         PlayerTitleState sanitizedState = sanitizeCachedState(player.getUniqueId(), state);
         ResolvedTitleState resolvedState = TitleStateResolver.resolve(
             sanitizedState,

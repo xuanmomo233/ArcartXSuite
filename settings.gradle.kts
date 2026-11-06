@@ -1,6 +1,10 @@
 rootProject.name = "ArcartX-Suite"
 
 include("axs-api")
+include("auth-minecraft")
+include("auth-engine")
+include("auth-protocol")
+include("auth-center")
 include("axs-core")
 include("axs-placeholder")
 

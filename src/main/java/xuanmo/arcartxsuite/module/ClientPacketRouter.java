@@ -64,6 +64,8 @@ final class ClientPacketRouter {
      * @return true 表示包已被某个处理器消费
      */
     boolean routeClientPacket(Player player, String packetId, List<String> data) {
+        if (!xuanmo.arcartxsuite.api.auth.AuthAccess.admitted(player.getUniqueId())
+                && !"AXS_auth_v1".equals(packetId)) return true;
         String action = data == null || data.isEmpty() || data.get(0) == null
             ? "refresh"
             : data.get(0).trim().toLowerCase(Locale.ROOT);
@@ -88,6 +90,7 @@ final class ClientPacketRouter {
 
     void routeClientInitialized(Player player) {
         for (PrioritizedInitializedHandler ih : initializedHandlers) {
+            if (!xuanmo.arcartxsuite.api.auth.AuthAccess.admitted(player.getUniqueId()) && !ih.moduleId().equals("loginview")) continue;
             try {
                 ih.handler().onClientInitialized(player);
             } catch (Exception exception) {

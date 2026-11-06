@@ -1,0 +1,15 @@
+schema-version: 1
+backend: center
+realm-id: network
+ingress:
+  # P3 中心密码入口仅支持直连且 online-mode=true；还须在中心显式启用。
+  type: password
+  audience: lobby-node
+performance:
+  workers: 2
+  queue-capacity: 128
+center:
+  # 远程地址必须为 HTTPS；仅同机 127.0.0.1 允许 HTTP。
+  url: http://127.0.0.1:25600
+  node-id: lobby
+  key-environment: AXS_AUTH_LOBBY_KEY

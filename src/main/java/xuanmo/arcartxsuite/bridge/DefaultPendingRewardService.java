@@ -204,30 +204,33 @@ public final class DefaultPendingRewardService implements PendingRewardService, 
     // ─── 上线自动补发 ──────────────────────────────────────────
 
     @EventHandler(priority = EventPriority.NORMAL)
-    public void onPlayerJoin(PlayerJoinEvent event) {
-        flushPlayer(event.getPlayer());
+    public void onAdmission(xuanmo.arcartxsuite.api.auth.AuthAdmissionEvent event) {
+        Player player = Bukkit.getPlayer(event.snapshot().playerId());
+        if (player != null) flushPlayer(player);
     }
 
     @Override
     public void flushPlayer(Player player) {
+        if (!xuanmo.arcartxsuite.api.auth.AuthAccess.admitted(player.getUniqueId())) return;
         UUID uuid = player.getUniqueId();
+        var admission=xuanmo.arcartxsuite.api.auth.AuthAccess.snapshot(uuid);
         // 延迟 40 tick 补发，确保玩家数据加载完成
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
-            if (!player.isOnline()) return;
+            if (!player.isOnline() || !xuanmo.arcartxsuite.api.auth.AuthAccess.admitted(uuid)) return;
             // 异步认领+加载 pending 数据，避免主线程 DB 查询；
             // 原子认领保证多节点部署下同一条目只被一个节点补发
             Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
                 importOutbox(uuid);
-                List<PendingReward> pendingList = claimAndLoadPending(uuid);
-                if (pendingList.isEmpty()) return;
+                ClaimedBatch batch = claimAndLoadPending(uuid);
+                if (batch.rewards().isEmpty()) return;
                 // 物品发放等操作需在主线程执行
                 Bukkit.getScheduler().runTask(plugin, () -> {
-                    if (!player.isOnline()) {
+                    if (!player.isOnline() || !xuanmo.arcartxsuite.api.auth.AuthAccess.admitted(uuid)) {
                         // 玩家在主线程切换前离线：释放认领，等待下次上线重试
-                        releaseClaimsAsync(pendingList);
+                        releaseClaimsAsync(batch);
                         return;
                     }
-                    flushPending(player, pendingList);
+                    flushPending(player, batch, admission);
                 });
             });
         }, 40L);
@@ -347,65 +350,62 @@ public final class DefaultPendingRewardService implements PendingRewardService, 
      * 后到者的 UPDATE 不影响已被认领且未过期的行。
      * 节点崩溃时其 claimed 行在 {@link #CLAIM_TTL_MS} 后被其他节点回收。
      */
-    private @NotNull List<PendingReward> claimAndLoadPending(@NotNull UUID playerUuid) {
-        long claimStamp = System.currentTimeMillis();
-        long expiredBefore = claimStamp - CLAIM_TTL_MS;
-        String owner = UUID.randomUUID().toString();
-        try (Connection conn = storageManager.getHostConnection()) {
-            try (PreparedStatement ps = conn.prepareStatement(
-                "UPDATE axs_pending_rewards SET claimed_at = ?, claimed_by = ? "
-                + "WHERE player_uuid = ? AND (claimed_at IS NULL OR claimed_at < ?)")) {
-                ps.setLong(1, claimStamp);
-                ps.setString(2, owner);
-                ps.setString(3, playerUuid.toString());
-                ps.setLong(4, expiredBefore);
-                ps.executeUpdate();
-            }
-            // 只取本次认领的行（claimed_by+claimed_at 精确匹配，不拿其他节点历史的行）
-            try (PreparedStatement ps = conn.prepareStatement(
-                "SELECT * FROM axs_pending_rewards WHERE player_uuid = ? AND claimed_by = ? AND claimed_at = ? "
-                + "ORDER BY created_at ASC")) {
-                ps.setString(1, playerUuid.toString());
-                ps.setString(2, owner);
-                ps.setLong(3, claimStamp);
-                try (ResultSet rs = ps.executeQuery()) {
-                    List<PendingReward> result = new ArrayList<>();
-                    while (rs.next()) {
-                        result.add(new PendingReward(
-                            rs.getLong("id"),
-                            UUID.fromString(rs.getString("player_uuid")),
-                            rs.getString("source_module"),
-                            PendingReward.Type.valueOf(rs.getString("reward_type")),
-                            rs.getString("payload"),
-                            rs.getString("description"),
-                            rs.getLong("created_at"),
-                            rs.getInt("attempts")
-                        ));
-                    }
-                    return result;
+    private record ClaimedBatch(String owner,long stamp,List<PendingReward> rewards,java.util.Set<Long> preparedCommands) {
+        ClaimedBatch subset(List<PendingReward> remaining) { return new ClaimedBatch(owner,stamp,List.copyOf(remaining),preparedCommands); }
+    }
+    private ClaimedBatch claimAndLoadPending(@NotNull UUID playerUuid) {
+        long stamp=System.currentTimeMillis();
+        String owner=UUID.randomUUID().toString();
+        try(Connection conn=storageManager.getHostConnection()) {
+            boolean auto=conn.getAutoCommit(); conn.setAutoCommit(false);
+            try {
+                try(PreparedStatement s=conn.prepareStatement(
+                    "UPDATE axs_pending_rewards SET claimed_at=?,claimed_by=? WHERE player_uuid=?"
+                    +" AND (claimed_at IS NULL OR claimed_at<?) AND (reward_type<>'COMMAND' OR attempts=0)")) {
+                    s.setLong(1,stamp); s.setString(2,owner); s.setString(3,playerUuid.toString()); s.setLong(4,stamp-CLAIM_TTL_MS);
+                    s.executeUpdate();
                 }
-            }
-        } catch (SQLException e) {
-            logger.log(Level.WARNING, "认领待发放奖励失败: player=" + playerUuid, e);
-            return List.of();
+                List<PendingReward> rewards=new ArrayList<>();
+                try(PreparedStatement s=conn.prepareStatement(
+                    "SELECT * FROM axs_pending_rewards WHERE player_uuid=? AND claimed_by=? AND claimed_at=? ORDER BY created_at ASC")) {
+                    s.setString(1,playerUuid.toString()); s.setString(2,owner); s.setLong(3,stamp);
+                    try(ResultSet r=s.executeQuery()) {
+                        while(r.next()) rewards.add(new PendingReward(r.getLong("id"),UUID.fromString(r.getString("player_uuid")),
+                            r.getString("source_module"),PendingReward.Type.valueOf(r.getString("reward_type")),r.getString("payload"),
+                            r.getString("description"),r.getLong("created_at"),r.getInt("attempts")));
+                    }
+                }
+                java.util.Set<Long> prepared=new java.util.HashSet<>();
+                try(PreparedStatement s=conn.prepareStatement(
+                    "UPDATE axs_pending_rewards SET attempts=1 WHERE id=? AND claimed_by=? AND claimed_at=? AND attempts=0 AND reward_type='COMMAND'")) {
+                    for(PendingReward reward:rewards) {
+                        if(reward.type()!=PendingReward.Type.COMMAND) continue;
+                        s.setLong(1,reward.id()); s.setString(2,owner); s.setLong(3,stamp);
+                        if(s.executeUpdate()==1) prepared.add(reward.id());
+                    }
+                }
+                conn.commit();
+                return new ClaimedBatch(owner,stamp,List.copyOf(rewards),java.util.Set.copyOf(prepared));
+            } catch(SQLException e) { conn.rollback(); throw e; }
+            finally { conn.setAutoCommit(auto); }
+        } catch(SQLException e) {
+            logger.log(Level.WARNING,"认领奖励失败: "+playerUuid,e);
+            return new ClaimedBatch(owner,stamp,List.of(),java.util.Set.of());
         }
     }
 
     /** 释放一组奖励的认领（玩家离线/不补发时调用，使其可被后续认领）。 */
-    private void releaseClaimsAsync(List<PendingReward> pendingList) {
-        if (pendingList.isEmpty()) return;
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            try (Connection conn = storageManager.getHostConnection();
-                 PreparedStatement ps = conn.prepareStatement(
-                     "UPDATE axs_pending_rewards SET claimed_at = NULL, claimed_by = NULL WHERE id = ?")) {
-                for (PendingReward p : pendingList) {
-                    ps.setLong(1, p.id());
-                    ps.addBatch();
+    private void releaseClaimsAsync(ClaimedBatch batch) {
+        if(batch.rewards().isEmpty()) return;
+        Bukkit.getScheduler().runTaskAsynchronously(plugin,()->{
+            try(Connection c=storageManager.getHostConnection(); PreparedStatement s=c.prepareStatement(
+                "UPDATE axs_pending_rewards SET claimed_at=NULL,claimed_by=NULL,"
+                +"attempts=CASE WHEN reward_type='COMMAND' THEN 0 ELSE attempts END WHERE id=? AND claimed_by=? AND claimed_at=?")) {
+                for(PendingReward reward:batch.rewards()) {
+                    s.setLong(1,reward.id()); s.setString(2,batch.owner()); s.setLong(3,batch.stamp()); s.addBatch();
                 }
-                ps.executeBatch();
-            } catch (SQLException e) {
-                logger.log(Level.WARNING, "释放待发放奖励认领失败", e);
-            }
+                s.executeBatch();
+            } catch(SQLException e) { logger.log(Level.WARNING,"释放奖励认领失败",e); }
         });
     }
 
@@ -419,83 +419,52 @@ public final class DefaultPendingRewardService implements PendingRewardService, 
      * @param player      在线玩家
      * @param pendingList 已加载的待发放奖励列表
      */
-    private void flushPending(Player player, List<PendingReward> pendingList) {
-        List<Long> toDelete = new ArrayList<>();
-        List<Long> toIncrement = new ArrayList<>();
-        int successCount = 0;
-        int failCount = 0;
-        for (PendingReward pending : pendingList) {
-            if (pending.attempts() >= MAX_ATTEMPTS) {
-                logger.warning("待发放奖励多次补发失败，继续保留并重试: id=" + pending.id()
-                    + " module=" + pending.sourceModule() + " player=" + player.getName());
+    private void flushPending(Player player,ClaimedBatch batch,xuanmo.arcartxsuite.api.auth.AuthSnapshot admission) {
+        List<Long> success=new ArrayList<>(),failed=new ArrayList<>();
+        List<PendingReward> rewards=batch.rewards();
+        for(int index=0;index<rewards.size();index++) {
+            var current=xuanmo.arcartxsuite.api.auth.AuthAccess.snapshot(player.getUniqueId());
+            long age=System.currentTimeMillis()-batch.stamp();
+            if(!player.isOnline() || !current.admitted() || !java.util.Objects.equals(current.connectionId(),admission.connectionId())
+                    || current.generation()!=admission.generation() || age<0 || age>=CLAIM_TTL_MS) {
+                releaseClaimsAsync(batch.subset(rewards.subList(index,rewards.size())));
+                break;
             }
+            PendingReward reward=rewards.get(index);
+            if(reward.type()==PendingReward.Type.COMMAND && !batch.preparedCommands().contains(reward.id())) continue;
             try {
-                boolean success = dispatchPending(player, pending);
-                if (success) {
-                    toDelete.add(pending.id());
-                    successCount++;
-                } else {
-                    toIncrement.add(pending.id());
-                    failCount++;
-                }
-            } catch (Exception e) {
-                logger.log(Level.WARNING, "补发待发放奖励异常: id=" + pending.id()
-                    + " module=" + pending.sourceModule(), e);
-                toIncrement.add(pending.id());
-                failCount++;
+                if(dispatchPending(player,reward)) success.add(reward.id()); else failed.add(reward.id());
+            } catch(Exception e) {
+                failed.add(reward.id());
+                logger.log(Level.WARNING,"奖励发放结果不明: id="+reward.id(),e);
             }
+            if(failed.contains(reward.id()) && reward.type()==PendingReward.Type.COMMAND)
+                logger.warning("命令奖励保留待核对，禁止自动重放: id="+reward.id());
         }
-        // 批量提交结果（异步执行，避免主线程 DB 操作）
-        List<Long> finalToDelete = toDelete;
-        List<Long> finalToIncrement = toIncrement;
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () ->
-            batchUpdate(finalToDelete, finalToIncrement));
-        if (successCount > 0) {
-            logger.info("待发放奖励补发完成: player=" + player.getName()
-                + " success=" + successCount + " fail=" + failCount);
-        }
+        Bukkit.getScheduler().runTaskAsynchronously(plugin,()->batchUpdate(batch,success,failed));
     }
 
     /**
      * 批量执行删除和递增操作，在单个事务中提交以减少 DB 往返。
      */
-    private void batchUpdate(List<Long> toDelete, List<Long> toIncrement) {
-        if (toDelete.isEmpty() && toIncrement.isEmpty()) return;
-        try (Connection conn = storageManager.getHostConnection()) {
-            conn.setAutoCommit(false);
+    private void batchUpdate(ClaimedBatch batch,List<Long> success,List<Long> failed) {
+        if(success.isEmpty() && failed.isEmpty()) return;
+        try(Connection c=storageManager.getHostConnection()) {
+            boolean auto=c.getAutoCommit(); c.setAutoCommit(false);
             try {
-                if (!toDelete.isEmpty()) {
-                    try (PreparedStatement ps = conn.prepareStatement(
-                        "DELETE FROM axs_pending_rewards WHERE id = ?")) {
-                        for (Long id : toDelete) {
-                            ps.setLong(1, id);
-                            ps.addBatch();
-                        }
-                        ps.executeBatch();
-                    }
+                try(PreparedStatement s=c.prepareStatement("DELETE FROM axs_pending_rewards WHERE id=? AND claimed_by=? AND claimed_at=?")) {
+                    for(Long id:success) { s.setLong(1,id); s.setString(2,batch.owner()); s.setLong(3,batch.stamp()); s.addBatch(); }
+                    s.executeBatch();
                 }
-                if (!toIncrement.isEmpty()) {
-                    // 失败行递增 attempts 并清认领：本节点下次上线或其他节点（TTL 后）可重试
-                    try (PreparedStatement ps = conn.prepareStatement(
-                        "UPDATE axs_pending_rewards SET attempts = attempts + 1, "
-                        + "claimed_at = NULL, claimed_by = NULL WHERE id = ?")) {
-                        for (Long id : toIncrement) {
-                            ps.setLong(1, id);
-                            ps.addBatch();
-                        }
-                        ps.executeBatch();
-                    }
+                try(PreparedStatement s=c.prepareStatement("UPDATE axs_pending_rewards SET attempts=attempts+1,claimed_at=NULL,claimed_by=NULL"
+                    +" WHERE id=? AND claimed_by=? AND claimed_at=?")) {
+                    for(Long id:failed) { s.setLong(1,id); s.setString(2,batch.owner()); s.setLong(3,batch.stamp()); s.addBatch(); }
+                    s.executeBatch();
                 }
-                conn.commit();
-            } catch (SQLException e) {
-                conn.rollback();
-                throw e;
-            } finally {
-                conn.setAutoCommit(true);
-            }
-        } catch (SQLException e) {
-            logger.log(Level.WARNING, "批量更新待发放奖励失败", e);
-        }
+                c.commit();
+            } catch(SQLException e) { c.rollback(); throw e; }
+            finally { c.setAutoCommit(auto); }
+        } catch(SQLException e) { logger.log(Level.WARNING,"奖励结果回写失败；命令项保持待核对",e); }
     }
 
     /**

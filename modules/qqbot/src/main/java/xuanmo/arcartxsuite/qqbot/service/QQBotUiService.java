@@ -250,31 +250,14 @@ public final class QQBotUiService {
     // ─── 内部处理方法 ──────────────────────────────────
 
     private void handleRequestCode(Player player) {
-        // 生成验证码，向 QQ 群发送或直接缓存
-        QQBotBindService.BindResult result = bindService.requestBindFromGame(player.getName());
-        Map<String, Object> payload = new HashMap<>();
-        if (result.success()) {
-            payload.put("code", result.message());
-            payload.put("expire", config.binding().codeExpireSeconds());
-            packetBridge.sendPacket(player, bindUiId, "code", payload);
-        } else {
-            sendBindResult(player, result.message(), "error");
-        }
+        sendBindResult(player,"请在QQ群发送 "+config.binding().bindPrefix()+" "+player.getName()+" 获取验证码，再在认证界面确认。","info");
     }
 
     private void handleUnbind(Player player) {
-        QQBotBindService.BindResult result = bindService.unbindByPlayer(player.getName());
-        if (result.success()) {
-            Map<String, Object> update = new HashMap<>();
-            update.put("bound", false);
-            update.put("qqId", "");
-            update.put("bindTime", "");
-            update.put("message", "解绑成功");
-            update.put("type", "success");
-            packetBridge.sendPacket(player, bindUiId, "update", update);
-        } else {
-            sendBindResult(player, result.message(), "error");
-        }
+        bindService.unbindByPlayer(player.getUniqueId()).thenAccept(result -> {
+            if(!player.isOnline()) return;
+            sendBindResult(player,result.success()?"解绑成功，准入要求已重新评估。":result.message(),result.success()?"success":"error");
+        });
     }
 
     private void sendMessages(Player player) {
@@ -341,11 +324,13 @@ public final class QQBotUiService {
         packetBridge.sendPacket(player, adminUiId, "bindings", payload);
     }
 
-    private void handleAdminUnbind(Player player, String playerName) {
-        if (playerName == null || playerName.isBlank()) return;
-        QQBotBindService.BindResult result = bindService.unbindByPlayer(playerName);
-        refreshAdmin(player);
-        sendBindingsPage(player, 0);
+    private void handleAdminUnbind(Player player,String playerName) {
+        if(playerName==null || playerName.isBlank()) return;
+        bindService.unbindByPlayer(playerName).thenAccept(result -> {
+            if(!player.isOnline()) return;
+            refreshAdmin(player); sendBindingsPage(player,0);
+            sendBindResult(player,result.success()?"解绑成功":result.message(),result.success()?"success":"error");
+        });
     }
 
     private void handleExecCommand(Player player, String command) {

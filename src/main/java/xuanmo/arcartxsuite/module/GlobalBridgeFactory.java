@@ -15,7 +15,6 @@ import xuanmo.arcartxsuite.api.currency.CurrencyDefinition;
 import xuanmo.arcartxsuite.api.item.PendingRewardService;
 import xuanmo.arcartxsuite.api.placeholder.PlaceholderResolverAPI;
 import xuanmo.arcartxsuite.api.storage.StorageManager;
-import xuanmo.arcartxsuite.account.AccountTypeServiceImpl;
 import xuanmo.arcartxsuite.bridge.DefaultAriaBridge;
 import xuanmo.arcartxsuite.bridge.DefaultAttributeBridgeRegistry;
 import xuanmo.arcartxsuite.bridge.DefaultItemRewardDispatcher;
@@ -59,7 +58,6 @@ final class GlobalBridgeFactory {
     private ScriptConditionEvaluator scriptConditionEvaluator;
     private DefaultVanillaItemNameBridge vanillaItemNameBridge;
     private ContentModeratorImpl contentModerator;
-    private AccountTypeServiceImpl accountTypeService;
 
     GlobalBridgeFactory(
         org.bukkit.plugin.java.JavaPlugin plugin,
@@ -85,7 +83,12 @@ final class GlobalBridgeFactory {
         initCurrencyAndAttributes();
         initScripting();
         initEventBus();
-        initAccountTypeService();
+        capabilityRegistry.registerCore(xuanmo.arcartxsuite.api.capability.AuthRuntimeCapability.class, registry.authenticationRuntime());
+        capabilityRegistry.registerCore(xuanmo.arcartxsuite.api.capability.BindingService.class, registry.authenticationRuntime());
+        EventBusCapability authBus = capabilityRegistry.get(EventBusCapability.class);
+        for (String topic : java.util.List.of("axs.auth.admission_granted", "axs.auth.profile_first_admitted", "axs.auth.presence_day_started", "axs.auth.binding_changed")) {
+            authBus.registerPublisher(topic);
+        }
         initContentModerator();
     }
 
@@ -215,29 +218,6 @@ final class GlobalBridgeFactory {
             });
     }
 
-    private void initAccountTypeService() {
-        if (accountTypeService != null) {
-            return;
-        }
-        YamlConfiguration rootConfig = loadRootConfig();
-        ConfigurationSection section = rootConfig.getConfigurationSection("account-type");
-        boolean enableLookup = section == null || section.getBoolean("enable-mojang-lookup", true);
-        int timeoutMs = section == null ? 10000 : section.getInt("mojang-timeout-ms", 10000);
-        boolean debug = section != null && section.getBoolean("debug", false);
-        String proxyHost = section == null ? null : section.getString("mojang-proxy-host", null);
-        int proxyPort = section == null ? 0 : section.getInt("mojang-proxy-port", 0);
-        String yggdrasilSource = rootConfig.getString("auth.yggdrasil-source", "");
-        int mixedProxyPort = (yggdrasilSource != null && yggdrasilSource.contains("?mixed"))
-            ? rootConfig.getInt("auth.mixed-proxy-port", 25599)
-            : 0;
-        String mixedProxyHost = rootConfig.getString("auth.mixed-proxy-host", "127.0.0.1");
-        String mixedProxyToken = rootConfig.getString("auth.mixed-proxy-token", null);
-        accountTypeService = new AccountTypeServiceImpl(xuanmo.arcartxsuite.module.AxsLog.logger(),
-            enableLookup, timeoutMs, debug, proxyHost, proxyPort,
-            mixedProxyHost, mixedProxyPort, mixedProxyToken);
-        Bukkit.getPluginManager().registerEvents(accountTypeService, plugin);
-    }
-
     private YamlConfiguration loadRootConfig() {
         File configFile = new File(plugin.getDataFolder(), "config.yml");
         if (!configFile.exists()) {
@@ -277,6 +257,9 @@ final class GlobalBridgeFactory {
     }
 
     // ─── 桥接 getter（供 ModuleRegistry 委托） ─────────────────
+    void detachGlobalListeners() {
+        if(pendingRewardService!=null) org.bukkit.event.HandlerList.unregisterAll(pendingRewardService);
+    }
 
     DefaultItemSourceRegistry itemSourceRegistry() { return itemSourceRegistry; }
     DefaultItemRewardDispatcher itemRewardDispatcher() { return itemRewardDispatcher; }
@@ -305,11 +288,5 @@ final class GlobalBridgeFactory {
             initContentModerator();
         }
         return contentModerator;
-    }
-    AccountTypeServiceImpl accountTypeService() {
-        if (accountTypeService == null) {
-            initAccountTypeService();
-        }
-        return accountTypeService;
     }
 }

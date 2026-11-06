@@ -42,17 +42,19 @@ public final class PlayerEventPacketListener implements Listener {
      * @param event 玩家进服事件
      */
     @EventHandler(priority = EventPriority.MONITOR)
-    public void onPlayerJoin(PlayerJoinEvent event) {
+    public void onAdmission(xuanmo.arcartxsuite.api.auth.AuthAdmissionEvent event) {
+        Player player = org.bukkit.Bukkit.getPlayer(event.snapshot().playerId());
+        if (player == null || !xuanmo.arcartxsuite.api.auth.AuthAccess.admitted(player.getUniqueId())) return;
         dispatchService.dispatchAll(
-            EventPacketTrigger.JOIN,
-            event.getPlayer(),
-            EventPacketContext.fromSubjectTrigger(EventPacketTrigger.JOIN, event.getPlayer())
+            EventPacketTrigger.ADMITTED,
+            player,
+            EventPacketContext.fromSubjectTrigger(EventPacketTrigger.ADMITTED, player)
         );
-        if (!event.getPlayer().hasPlayedBefore()) {
+        if (event.firstAdmission()) {
             dispatchService.dispatchAll(
-                EventPacketTrigger.FIRST_JOIN,
-                event.getPlayer(),
-                EventPacketContext.fromSubjectTrigger(EventPacketTrigger.FIRST_JOIN, event.getPlayer())
+                EventPacketTrigger.FIRST_ADMITTED,
+                player,
+                EventPacketContext.fromSubjectTrigger(EventPacketTrigger.FIRST_ADMITTED, player)
             );
         }
     }

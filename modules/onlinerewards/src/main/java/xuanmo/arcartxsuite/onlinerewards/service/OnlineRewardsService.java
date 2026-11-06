@@ -823,6 +823,7 @@ public class OnlineRewardsService implements Listener {
 
     @EventHandler
     public void onPlayerQuit(PlayerQuitEvent event) {
+        qualifiedClocks.remove(event.getPlayer().getUniqueId());
         Player player = event.getPlayer();
         UUID playerUuid = player.getUniqueId();
         OnlineRewardsPlayerState state = cachedStates.get(playerUuid);
@@ -867,6 +868,7 @@ public class OnlineRewardsService implements Listener {
         OnlineRewardsPeriodContext context = currentPeriodContext();
         boolean dirty = false;
         for (Player player : Bukkit.getOnlinePlayers()) {
+            if (!xuanmo.arcartxsuite.api.auth.AuthAccess.admitted(player.getUniqueId())) continue;
             OnlineRewardsPlayerState state = cachedStates.get(player.getUniqueId());
             if (state == null) {
                 continue;
@@ -882,7 +884,9 @@ public class OnlineRewardsService implements Listener {
                 dirty = true;
             }
 
-            int gainedMinutes = resolveOnlineMinuteGain(player, state);
+            long qualifiedMinutes = qualifiedMinutes(player);
+            if (qualifiedMinutes == 0) continue;
+            int gainedMinutes = resolveOnlineMinuteGain(player, state, qualifiedMinutes);
             OnlineRewardsTickResult result = stateEngine.advanceMinutes(state, context, gainedMinutes);
             if (result.stateChanged()) {
                 dirtyStates.put(player.getUniqueId(), state.copy());
@@ -1149,6 +1153,7 @@ public class OnlineRewardsService implements Listener {
     private void executeTimeBasedReward(OnlineRewardsTimeBasedReward reward) {
         OnlineRewardsPeriodContext context = currentPeriodContext();
         for (Player player : Bukkit.getOnlinePlayers()) {
+            if (!xuanmo.arcartxsuite.api.auth.AuthAccess.admitted(player.getUniqueId())) continue;
             for (String rawCommand : reward.commands()) {
                 String command = renderCommand(rawCommand, player, new OnlineRewardsSignInResult(
                     false, false, 0, 0, context.rewardDate(), context.date().getDayOfMonth()
@@ -1519,9 +1524,18 @@ public class OnlineRewardsService implements Listener {
         }
     }
 
-    private int resolveOnlineMinuteGain(Player player, OnlineRewardsPlayerState state) {
+    private final java.util.Map<java.util.UUID, QualifiedClock> qualifiedClocks = new java.util.HashMap<>();
+    private record QualifiedClock(java.util.UUID connection, long minutes) {}
+    private long qualifiedMinutes(Player player) {
+        var snapshot = xuanmo.arcartxsuite.api.auth.AuthAccess.snapshot(player.getUniqueId());
+        long current = xuanmo.arcartxsuite.api.auth.AuthAccess.eligibleNanos(player.getUniqueId()) / 60_000_000_000L;
+        var previous = qualifiedClocks.put(player.getUniqueId(), new QualifiedClock(snapshot.connectionId(), current));
+        return previous != null && java.util.Objects.equals(previous.connection(), snapshot.connectionId())
+            ? Math.max(0, current - previous.minutes()) : current;
+    }
+    private int resolveOnlineMinuteGain(Player player, OnlineRewardsPlayerState state, long qualifiedMinutes) {
         double multiplier = selectedTimeMultiplier(player);
-        double rawGain = multiplier + state.timeBonusRemainder();
+        double rawGain = multiplier * qualifiedMinutes + state.timeBonusRemainder();
         int minutes = Math.max(1, (int) Math.floor(rawGain));
         state.setTimeBonusRemainder(rawGain - minutes);
         return minutes;

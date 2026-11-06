@@ -68,6 +68,9 @@ final class ModuleDescriptorParser {
     }
 
     private static ModuleDescriptor buildDescriptor(YamlConfiguration yaml, String sourceName) throws ModuleLoadException {
+        if(!"2.0".equals(yaml.getString("api-version"))) {
+            throw new ModuleLoadException("模块必须使用 API 2.0；旧版认证与联动契约不受支持: "+sourceName);
+        }
         String id = yaml.getString("id");
         if (id == null || id.isBlank()) {
             throw new ModuleLoadException(MODULE_YML + " 缺少 id 字段: " + sourceName);

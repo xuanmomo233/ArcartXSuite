@@ -31,7 +31,6 @@ import xuanmo.arcartxsuite.api.bridge.ContentModerator;
 import xuanmo.arcartxsuite.api.bridge.ItemBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.PropBridgeAPI;
-import xuanmo.arcartxsuite.api.account.AccountTypeService;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerAPI;
 import xuanmo.arcartxsuite.api.attribute.AttributeBridgeRegistry;
 import xuanmo.arcartxsuite.api.condition.ScriptConditionEvaluator;
@@ -248,10 +247,6 @@ final class DefaultModuleContext implements ModuleContext {
         return taczCombatBridge != null && taczCombatBridge.isActive();
     }
 
-    @Override
-    public AccountTypeService accountTypeService() {
-        return registry.accountTypeService();
-    }
 
     @Override
     public CrossServerAPI crossServer() {

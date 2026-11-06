@@ -3,12 +3,25 @@
 
 debug: false
 
-# 是否拒绝离线模式玩家登录（基于 UUID 版本粗略判定，后端 AccountTypeServiceImpl 会精确判定）
+# 是否拒绝未走代理平台在线握手的连接；不按 UUID 版本推断身份。
 deny-offline: true
 kick-offline-message: "&c本服务器仅支持正版/LittleSkin 账号登录"
 
 # 是否为离线玩家自动分配 UUID（通常保持 true）
 auto-assign-uuid: true
+
+# 首批签名桥接支持 Velocity。代理私钥只保存在代理数据目录，不下发给客户端或后端。
+# 后端使用 authentication.yml 的 signed-proxy、相同 realm/audience 与代理公钥。
+# 仍须限制后端直连；跨机游戏链路应通过私网或加密隧道保护。
+auth-forwarding:
+  enabled: false
+  issuer: proxy-main
+  gateway-url: http://127.0.0.1:25599
+  # 键必须与 Velocity 注册的后端名称一致。
+  targets:
+    lobby:
+      realm: network
+      audience: lobby-node
 
 # ========== 多方认证（authlib-injector 混合登录）==========
 # 群组服混合登录（正版 + LittleSkin）配置。
@@ -18,15 +31,11 @@ auto-assign-uuid: true
 #   1. start-mixed-auth 脚本先独立启动本地 Yggdrasil 混合代理（端口见下方 mixed-proxy-port）
 #   2. 脚本再启动 BungeeCord/Velocity，带 -javaagent:authlib-injector.jar=http://127.0.0.1:<端口>
 #   3. 玩家连接时，authlib-injector 向本地代理发 hasJoined 请求
-#      代理先查 Mojang → 未命中查 LittleSkin，记录每个 UUID 的认证来源
-#   4. 玩家进入后端子服时，后端 AXS 的 AccountTypeServiceImpl 查询本地代理获取权威账号类型
-#
-# 【后端子服配置】
-#   后端 Paper 子服的 AXS config.yml 中设置：
-#     auth.enabled: true
-#     auth.yggdrasil-source: "https://littleskin.cn/api/yggdrasil?mixed"
-#     auth.mixed-proxy-port: <与下方相同的端口>
-#   注意：后端子服必须与代理端在同一台机器（127.0.0.1）。
+#      网关验证本次 hasJoined 请求；profile 查询不产生登录证明。
+#   4. 后端使用 authentication.yml 管理准入，不能查询 UUID 来源缓存授予免密。
+#      代理证明的端到端传递仍需接入对应的可信连接适配器。
+#   后端应限制直连并正确配置可信玩家信息转发。
+
 auth:
   # 是否启用 authlib-injector 相关功能（混合登录 / 外置登录）。默认禁用。
   enabled: false
@@ -44,12 +53,12 @@ auth:
   # 【跨机群组服】改为代理端机器的内网 IP（如 10.0.0.5）或 0.0.0.0（全部网卡）。
   #   跨机模式下强烈建议同时配置 mixed-proxy-token 和 mixed-proxy-allow-ips 防止未授权访问。
   mixed-proxy-bind-host: "127.0.0.1"
-  # account-source 接口鉴权 token（跨机模式必配）。
+  # 内部健康 接口鉴权 token（跨机模式必配）。
   # 后端子服 config.yml 的 auth.mixed-proxy-token 必须与此处一致。
   # 单机模式（127.0.0.1）无需配置，留空即可。
   mixed-proxy-token: ""
-  # 允许访问 account-source 接口的客户端 IP 白名单（跨机模式推荐配置）。
-  # 仅列出的 IP 可查询账号类型。单机模式留空即可。
+  # 允许访问 内部健康 接口的客户端 IP 白名单（跨机模式推荐配置）。
+  # 仅列出的 IP 可访问内部健康接口。单机模式留空即可。
   # 示例：["10.0.0.6", "10.0.0.7"]
   mixed-proxy-allow-ips: []
 

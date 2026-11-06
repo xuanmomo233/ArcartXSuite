@@ -1,17 +1,13 @@
 id: loginview
 name: LoginView
-version: 1.4.4
+version: 2.0.0
 main: xuanmo.arcartxsuite.loginview.LoginViewModule
-api-version: 1.0
+api-version: 2.0
 
 depends: []
 softdepends: []
 external-depends: []
 
-# AuthMe 与 PlaceholderAPI 均为可选依赖：
-# - AuthMe 仅在 auth.mode=authme 或 migrate-authme 命令中使用，standalone 模式不需要
-# - PlaceholderAPI 仅用于占位符扩展，缺失时自动跳过注册（AbstractAXSModule 已做防御）
 external-softdepends:
-  - AuthMe
   - PlaceholderAPI
 

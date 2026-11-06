@@ -111,7 +111,7 @@ public final class BattlePassTaskEngine {
                     eventBusCount++;
                     logger.fine("TaskEngine 订阅 EventBus: topic=" + topic + " task=" + task.taskId());
                 }
-            } else if (task.bukkitEvent() != null) {
+            } else if (task.bukkitEvent() != null && (!hasTopic || !topic.startsWith("axs.auth."))) {
                 // 使用 Bukkit 事件（支持多个事件类）
                 for (String bukkitClass : task.bukkitEvent().eventClasses()) {
                     if (!BukkitEventSourceListener.isSupportedBukkitEvent(bukkitClass)) {
@@ -295,6 +295,7 @@ public final class BattlePassTaskEngine {
 
     private void handleEvent(Player player, BattlePassTask task, Map<String, String> payload) {
         if (!active) return;
+        if (!xuanmo.arcartxsuite.api.auth.AuthAccess.admitted(player.getUniqueId())) return;
         if (!task.matchesConditions(player, payload)) return;
         int increment = task.calculateIncrement(player, payload);
         if (increment > 0
