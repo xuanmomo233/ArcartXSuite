@@ -41,8 +41,23 @@ import org.bukkit.configuration.MemoryConfiguration;
  */
 public record RewardConfig(
     Map<String, RewardSet> rewards,
-    Map<String, ChestReward> chestRewards
+    Map<String, ChestReward> chestRewards,
+    Map<String, RewardGame> games
 ) {
+    public RewardConfig(Map<String, RewardSet> rewards, Map<String, ChestReward> chestRewards) {
+        this(rewards, chestRewards, Map.of());
+    }
+
+    public record RewardGame(String strategy, String title, String pool, int slots, int picks,
+                             boolean repeat, int autoAfterSeconds) {
+        static RewardGame load(String id, ConfigurationSection section) {
+            String strategy = section.getString("strategy", "flip");
+            int slots = section.getInt("slots", strategy.equals("choose-three") ? 3 : strategy.equals("wheel") ? 1 : 6);
+            return new RewardGame(strategy, section.getString("title", id), section.getString("pool", ""),
+                slots, section.getInt("picks", 1), section.getBoolean("allow-repeat", true),
+                section.getInt("auto-after-seconds", 0));
+        }
+    }
 
     public record RewardEntry(String rewardId, int weight) { }
 
@@ -138,7 +153,7 @@ public record RewardConfig(
         // 兼容：根级直接写奖励名（无 rewards: 包裹）
         if (r == null) {
             for (String key : root.getKeys(false)) {
-                if ("chest-rewards".equals(key) || "chest_rewards".equals(key)) continue;
+                if ("chest-rewards".equals(key) || "chest_rewards".equals(key) || "reward-games".equals(key)) continue;
                 ConfigurationSection s = root.getConfigurationSection(key);
                 if (s != null) rewards.put(key, RewardSet.load(key, s));
             }
@@ -151,7 +166,14 @@ public record RewardConfig(
                 if (s != null) chests.put(key, ChestReward.load(key, s));
             }
         }
-        return new RewardConfig(rewards, chests);
+        Map<String, RewardGame> games = new LinkedHashMap<>();
+        var gameRoot = root.getConfigurationSection("reward-games");
+        if (gameRoot != null) for (String id : gameRoot.getKeys(false)) {
+            var game = gameRoot.getConfigurationSection(id);
+            if (game == null) throw new IllegalArgumentException("无效的奖励玩法: " + id);
+            games.put(id, RewardGame.load(id, game));
+        }
+        return new RewardConfig(rewards, chests, games);
     }
 
     /** 单独的 chest_rewards.yml 文件加载入口。 */

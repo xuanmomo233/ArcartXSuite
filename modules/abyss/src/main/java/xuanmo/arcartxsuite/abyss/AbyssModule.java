@@ -54,7 +54,8 @@ public final class AbyssModule extends AbstractAXSModule implements ModuleComman
         new UiEntry("ui/abyss_design.yml", AbyssModuleConfiguration.UiSection::designId),
         new UiEntry("ui/abyss_design_pick.yml", AbyssModuleConfiguration.UiSection::designPickId),
         new UiEntry("ui/abyss_design_edit.yml", AbyssModuleConfiguration.UiSection::designEditId),
-        new UiEntry("ui/abyss_shop.yml", AbyssModuleConfiguration.UiSection::shopId)
+        new UiEntry("ui/abyss_shop.yml", AbyssModuleConfiguration.UiSection::shopId),
+        new UiEntry("ui/abyss_reward_game.yml", ignored -> "abyss_reward_game")
     );
 
     @Override
@@ -123,6 +124,7 @@ public final class AbyssModule extends AbstractAXSModule implements ModuleComman
         registerCapability(xuanmo.arcartxsuite.api.capability.AbyssRunAccess.class, service.runAccess());
         registerCapability(xuanmo.arcartxsuite.api.capability.AbyssExternalPartyAccess.class, service.externalPartyAccess());
         registerCapability(xuanmo.arcartxsuite.api.capability.AbyssReconnectAccess.class, service.reconnectAccess());
+        registerCapability(xuanmo.arcartxsuite.api.capability.AbyssRewardGameAccess.class, service.rewardGames());
         registerCapability(xuanmo.arcartxsuite.api.capability.AbyssEntryCostAccess.class, service.entryCostAccess());
         registerCapability(xuanmo.arcartxsuite.api.capability.AbyssPartyAccess.class,
             new xuanmo.arcartxsuite.abyss.capability.AbyssPartyAccessImpl(service));

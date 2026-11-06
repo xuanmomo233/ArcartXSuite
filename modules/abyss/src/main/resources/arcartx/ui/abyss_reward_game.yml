@@ -1,0 +1,551 @@
+# Abyss reward presentation. The server sends labels only for visible cards.
+ui:
+  isHud: false
+  defaultOpen: false
+  background: false
+  escClose: true
+  through: false
+  screenScale: true
+  show: true
+  level: 8
+  packetHandler:
+    init: |-
+      if(packet['view_nonce'] != none){ var.viewNonce = packet['view_nonce'] }
+      var.packetId = packet['packetId']
+      var.actionToken = packet['action_token']
+      var.offer = packet['offer']
+      var.mode = packet['mode']
+      var.title = packet['title']
+      var.remaining = packet['remaining']
+      var.revision = packet['revision']
+      var.count = packet['count']
+      var.cards = packet['cards']
+  action:
+    load: |-
+      var.actionToken = ''
+      var.viewNonce = ''
+      var.packetId = 'abyss'
+      var.offer = ''
+      var.mode = ''
+      var.title = ''
+      var.remaining = 0
+      var.revision = 0
+      var.count = 0
+      var.cards = {}
+      var.spin = 0
+    open: |-
+      Packet.send('abyss', 'view_ready', 'reward_game')
+    close: |-
+      if(var.actionToken != '' && var.viewNonce != ''){
+        Packet.send(var.packetId, 'close_view', 'reward_game', var.actionToken, var.viewNonce)
+      }
+    tick: |-
+      if(var.spin > 0){
+        var.spin = var.spin + 1
+        if(var.spin >= 20){ var.spin = 0 }
+      }
+controls:
+  布局:
+    type: Adaptive
+    attribute:
+      point: ~middle_center
+      width: 1920
+      height: 1080
+    children:
+      奖励:
+        type: Canvas
+        attribute:
+          point: ~middle_center
+          width: 900
+          height: 640
+          visible: "var.actionToken != ''"
+        children:
+          底:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~28,22,44,248
+              shape: ~round_rect
+              radius: 14
+              through: true
+          标题:
+            type: Text
+            attribute:
+              point: ~top_center
+              y: 40
+              texts: "var.title"
+              limit: 22
+              fontSize: 48
+              through: true
+          提示:
+            type: Text
+            attribute:
+              point: ~top_center
+              y: 112
+              texts: "var.spin > 0 ? '&e转动中…' : (var.remaining > 0 ? '&f剩余选择：' + var.remaining.round() : '&7已完成选择')"
+              fontSize: 34
+              through: true
+          退出:
+            type: Canvas
+            attribute:
+              point: ~bottom_center
+              y: -32
+              width: 240
+              height: 46
+            action:
+              clickLeft: "Screen.close()"
+            children:
+              字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: ~&7关闭 · 可稍后补领
+                  fontSize: 30
+                  through: true
+          牌0:
+            type: Canvas
+            attribute:
+              x: "var.mode == 'wheel' ? 340 : 90"
+              y: "var.mode == 'wheel' ? 295 : 180"
+              width: 220
+              height: 90
+              visible: "var.count > 0"
+            action:
+              clickLeft: |-
+                if(var.remaining > 0 && var.spin == 0 && !var.cards['0']['selected']){
+                  if(var.mode == 'wheel'){ var.spin = 1 }
+                  Packet.send(var.packetId, 'reward_game_pick', var.offer, 0.round(), var.revision.round(), var.actionToken)
+                }
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: "var.cards['0']['selected'] ? '105,82,50,245' : '80,57,129,245'"
+                  shape: ~round_rect
+                  radius: 10
+                  through: true
+              字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "var.spin > 0 ? '…' : (var.mode == 'wheel' && !var.cards['0']['selected'] ? '旋转' : var.cards['0']['label'])"
+                  fontSize: 30
+                  limit: 10
+                  through: true
+              状态:
+                type: Text
+                attribute:
+                  point: ~bottom_center
+                  y: -4
+                  texts: "var.spin > 0 ? '' : (var.cards['0']['accepted'] ? '&a已登记' : (var.cards['0']['selected'] ? '&e待确认' : ''))"
+                  fontSize: 19
+                  through: true
+          牌1:
+            type: Canvas
+            attribute:
+              x: 340
+              y: 180
+              width: 220
+              height: 90
+              visible: "var.count > 1"
+            action:
+              clickLeft: |-
+                if(var.remaining > 0 && var.spin == 0 && !var.cards['1']['selected']){
+                  if(var.mode == 'wheel'){ var.spin = 1 }
+                  Packet.send(var.packetId, 'reward_game_pick', var.offer, 1.round(), var.revision.round(), var.actionToken)
+                }
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: "var.cards['1']['selected'] ? '105,82,50,245' : '80,57,129,245'"
+                  shape: ~round_rect
+                  radius: 10
+                  through: true
+              字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "var.spin > 0 ? '…' : (var.mode == 'wheel' && !var.cards['1']['selected'] ? '旋转' : var.cards['1']['label'])"
+                  fontSize: 30
+                  limit: 10
+                  through: true
+              状态:
+                type: Text
+                attribute:
+                  point: ~bottom_center
+                  y: -4
+                  texts: "var.spin > 0 ? '' : (var.cards['1']['accepted'] ? '&a已登记' : (var.cards['1']['selected'] ? '&e待确认' : ''))"
+                  fontSize: 19
+                  through: true
+          牌2:
+            type: Canvas
+            attribute:
+              x: 590
+              y: 180
+              width: 220
+              height: 90
+              visible: "var.count > 2"
+            action:
+              clickLeft: |-
+                if(var.remaining > 0 && var.spin == 0 && !var.cards['2']['selected']){
+                  if(var.mode == 'wheel'){ var.spin = 1 }
+                  Packet.send(var.packetId, 'reward_game_pick', var.offer, 2.round(), var.revision.round(), var.actionToken)
+                }
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: "var.cards['2']['selected'] ? '105,82,50,245' : '80,57,129,245'"
+                  shape: ~round_rect
+                  radius: 10
+                  through: true
+              字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "var.spin > 0 ? '…' : (var.mode == 'wheel' && !var.cards['2']['selected'] ? '旋转' : var.cards['2']['label'])"
+                  fontSize: 30
+                  limit: 10
+                  through: true
+              状态:
+                type: Text
+                attribute:
+                  point: ~bottom_center
+                  y: -4
+                  texts: "var.spin > 0 ? '' : (var.cards['2']['accepted'] ? '&a已登记' : (var.cards['2']['selected'] ? '&e待确认' : ''))"
+                  fontSize: 19
+                  through: true
+          牌3:
+            type: Canvas
+            attribute:
+              x: 90
+              y: 290
+              width: 220
+              height: 90
+              visible: "var.count > 3"
+            action:
+              clickLeft: |-
+                if(var.remaining > 0 && var.spin == 0 && !var.cards['3']['selected']){
+                  if(var.mode == 'wheel'){ var.spin = 1 }
+                  Packet.send(var.packetId, 'reward_game_pick', var.offer, 3.round(), var.revision.round(), var.actionToken)
+                }
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: "var.cards['3']['selected'] ? '105,82,50,245' : '80,57,129,245'"
+                  shape: ~round_rect
+                  radius: 10
+                  through: true
+              字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "var.spin > 0 ? '…' : (var.mode == 'wheel' && !var.cards['3']['selected'] ? '旋转' : var.cards['3']['label'])"
+                  fontSize: 30
+                  limit: 10
+                  through: true
+              状态:
+                type: Text
+                attribute:
+                  point: ~bottom_center
+                  y: -4
+                  texts: "var.spin > 0 ? '' : (var.cards['3']['accepted'] ? '&a已登记' : (var.cards['3']['selected'] ? '&e待确认' : ''))"
+                  fontSize: 19
+                  through: true
+          牌4:
+            type: Canvas
+            attribute:
+              x: 340
+              y: 290
+              width: 220
+              height: 90
+              visible: "var.count > 4"
+            action:
+              clickLeft: |-
+                if(var.remaining > 0 && var.spin == 0 && !var.cards['4']['selected']){
+                  if(var.mode == 'wheel'){ var.spin = 1 }
+                  Packet.send(var.packetId, 'reward_game_pick', var.offer, 4.round(), var.revision.round(), var.actionToken)
+                }
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: "var.cards['4']['selected'] ? '105,82,50,245' : '80,57,129,245'"
+                  shape: ~round_rect
+                  radius: 10
+                  through: true
+              字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "var.spin > 0 ? '…' : (var.mode == 'wheel' && !var.cards['4']['selected'] ? '旋转' : var.cards['4']['label'])"
+                  fontSize: 30
+                  limit: 10
+                  through: true
+              状态:
+                type: Text
+                attribute:
+                  point: ~bottom_center
+                  y: -4
+                  texts: "var.spin > 0 ? '' : (var.cards['4']['accepted'] ? '&a已登记' : (var.cards['4']['selected'] ? '&e待确认' : ''))"
+                  fontSize: 19
+                  through: true
+          牌5:
+            type: Canvas
+            attribute:
+              x: 590
+              y: 290
+              width: 220
+              height: 90
+              visible: "var.count > 5"
+            action:
+              clickLeft: |-
+                if(var.remaining > 0 && var.spin == 0 && !var.cards['5']['selected']){
+                  if(var.mode == 'wheel'){ var.spin = 1 }
+                  Packet.send(var.packetId, 'reward_game_pick', var.offer, 5.round(), var.revision.round(), var.actionToken)
+                }
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: "var.cards['5']['selected'] ? '105,82,50,245' : '80,57,129,245'"
+                  shape: ~round_rect
+                  radius: 10
+                  through: true
+              字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "var.spin > 0 ? '…' : (var.mode == 'wheel' && !var.cards['5']['selected'] ? '旋转' : var.cards['5']['label'])"
+                  fontSize: 30
+                  limit: 10
+                  through: true
+              状态:
+                type: Text
+                attribute:
+                  point: ~bottom_center
+                  y: -4
+                  texts: "var.spin > 0 ? '' : (var.cards['5']['accepted'] ? '&a已登记' : (var.cards['5']['selected'] ? '&e待确认' : ''))"
+                  fontSize: 19
+                  through: true
+          牌6:
+            type: Canvas
+            attribute:
+              x: 90
+              y: 400
+              width: 220
+              height: 90
+              visible: "var.count > 6"
+            action:
+              clickLeft: |-
+                if(var.remaining > 0 && var.spin == 0 && !var.cards['6']['selected']){
+                  if(var.mode == 'wheel'){ var.spin = 1 }
+                  Packet.send(var.packetId, 'reward_game_pick', var.offer, 6.round(), var.revision.round(), var.actionToken)
+                }
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: "var.cards['6']['selected'] ? '105,82,50,245' : '80,57,129,245'"
+                  shape: ~round_rect
+                  radius: 10
+                  through: true
+              字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "var.spin > 0 ? '…' : (var.mode == 'wheel' && !var.cards['6']['selected'] ? '旋转' : var.cards['6']['label'])"
+                  fontSize: 30
+                  limit: 10
+                  through: true
+              状态:
+                type: Text
+                attribute:
+                  point: ~bottom_center
+                  y: -4
+                  texts: "var.spin > 0 ? '' : (var.cards['6']['accepted'] ? '&a已登记' : (var.cards['6']['selected'] ? '&e待确认' : ''))"
+                  fontSize: 19
+                  through: true
+          牌7:
+            type: Canvas
+            attribute:
+              x: 340
+              y: 400
+              width: 220
+              height: 90
+              visible: "var.count > 7"
+            action:
+              clickLeft: |-
+                if(var.remaining > 0 && var.spin == 0 && !var.cards['7']['selected']){
+                  if(var.mode == 'wheel'){ var.spin = 1 }
+                  Packet.send(var.packetId, 'reward_game_pick', var.offer, 7.round(), var.revision.round(), var.actionToken)
+                }
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: "var.cards['7']['selected'] ? '105,82,50,245' : '80,57,129,245'"
+                  shape: ~round_rect
+                  radius: 10
+                  through: true
+              字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "var.spin > 0 ? '…' : (var.mode == 'wheel' && !var.cards['7']['selected'] ? '旋转' : var.cards['7']['label'])"
+                  fontSize: 30
+                  limit: 10
+                  through: true
+              状态:
+                type: Text
+                attribute:
+                  point: ~bottom_center
+                  y: -4
+                  texts: "var.spin > 0 ? '' : (var.cards['7']['accepted'] ? '&a已登记' : (var.cards['7']['selected'] ? '&e待确认' : ''))"
+                  fontSize: 19
+                  through: true
+          牌8:
+            type: Canvas
+            attribute:
+              x: 590
+              y: 400
+              width: 220
+              height: 90
+              visible: "var.count > 8"
+            action:
+              clickLeft: |-
+                if(var.remaining > 0 && var.spin == 0 && !var.cards['8']['selected']){
+                  if(var.mode == 'wheel'){ var.spin = 1 }
+                  Packet.send(var.packetId, 'reward_game_pick', var.offer, 8.round(), var.revision.round(), var.actionToken)
+                }
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: "var.cards['8']['selected'] ? '105,82,50,245' : '80,57,129,245'"
+                  shape: ~round_rect
+                  radius: 10
+                  through: true
+              字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "var.spin > 0 ? '…' : (var.mode == 'wheel' && !var.cards['8']['selected'] ? '旋转' : var.cards['8']['label'])"
+                  fontSize: 30
+                  limit: 10
+                  through: true
+              状态:
+                type: Text
+                attribute:
+                  point: ~bottom_center
+                  y: -4
+                  texts: "var.spin > 0 ? '' : (var.cards['8']['accepted'] ? '&a已登记' : (var.cards['8']['selected'] ? '&e待确认' : ''))"
+                  fontSize: 19
+                  through: true
+          转盘灯0:
+            type: Texture
+            attribute:
+              x: 434
+              y: 188
+              width: 30
+              height: 30
+              visible: "var.mode == 'wheel'"
+              normal: "var.spin > 0 && var.spin <= 2 ? '255,209,96,255' : '116,81,173,245'"
+              shape: ~round_rect
+              radius: 14
+              through: true
+          转盘灯1:
+            type: Texture
+            attribute:
+              x: 562
+              y: 211
+              width: 30
+              height: 30
+              visible: "var.mode == 'wheel'"
+              normal: "var.spin > 2 && var.spin <= 4 ? '255,209,96,255' : '116,81,173,245'"
+              shape: ~round_rect
+              radius: 14
+              through: true
+          转盘灯2:
+            type: Texture
+            attribute:
+              x: 630
+              y: 316
+              width: 30
+              height: 30
+              visible: "var.mode == 'wheel'"
+              normal: "var.spin > 4 && var.spin <= 6 ? '255,209,96,255' : '116,81,173,245'"
+              shape: ~round_rect
+              radius: 14
+              through: true
+          转盘灯3:
+            type: Texture
+            attribute:
+              x: 562
+              y: 427
+              width: 30
+              height: 30
+              visible: "var.mode == 'wheel'"
+              normal: "var.spin > 6 && var.spin <= 8 ? '255,209,96,255' : '116,81,173,245'"
+              shape: ~round_rect
+              radius: 14
+              through: true
+          转盘灯4:
+            type: Texture
+            attribute:
+              x: 434
+              y: 455
+              width: 30
+              height: 30
+              visible: "var.mode == 'wheel'"
+              normal: "var.spin > 8 && var.spin <= 10 ? '255,209,96,255' : '116,81,173,245'"
+              shape: ~round_rect
+              radius: 14
+              through: true
+          转盘灯5:
+            type: Texture
+            attribute:
+              x: 305
+              y: 427
+              width: 30
+              height: 30
+              visible: "var.mode == 'wheel'"
+              normal: "var.spin > 10 && var.spin <= 12 ? '255,209,96,255' : '116,81,173,245'"
+              shape: ~round_rect
+              radius: 14
+              through: true
+          转盘灯6:
+            type: Texture
+            attribute:
+              x: 238
+              y: 316
+              width: 30
+              height: 30
+              visible: "var.mode == 'wheel'"
+              normal: "var.spin > 12 && var.spin <= 14 ? '255,209,96,255' : '116,81,173,245'"
+              shape: ~round_rect
+              radius: 14
+              through: true
+          转盘灯7:
+            type: Texture
+            attribute:
+              x: 305
+              y: 211
+              width: 30
+              height: 30
+              visible: "var.mode == 'wheel'"
+              normal: "var.spin > 14 && var.spin <= 16 ? '255,209,96,255' : '116,81,173,245'"
+              shape: ~round_rect
+              radius: 14
+              through: true

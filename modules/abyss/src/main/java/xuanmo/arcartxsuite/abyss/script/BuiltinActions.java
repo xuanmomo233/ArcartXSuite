@@ -677,6 +677,11 @@ final class BuiltinActions {
             forEach(ctx, parts[0], p ->
                 service.get().rewards().grant(p, rewardName, ctx.getInstance()));
         });
+        reg.register("open_reward_game", (ctx, args, s) -> {
+            String[] parts = splitFirst(args, 1);
+            String game = ctx.replace(rest(parts, 1));
+            forEach(ctx, parts[0], player -> service.get().rewardGames().open(player, ctx.getInstance(), game));
+        });
         reg.register("open_chest_ui", (ctx, args, s) -> {
             String[] parts = splitFirst(args, 1);
             String chest = ctx.replace(rest(parts, 1));

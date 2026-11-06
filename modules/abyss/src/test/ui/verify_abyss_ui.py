@@ -15,7 +15,7 @@ def unique_mapping(loader, node, deep=False):
 UniqueKeysLoader.add_constructor(yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, unique_mapping)
 documents = {p.stem.removeprefix("abyss_"): yaml.load(p.read_text(encoding="utf-8-sig"), Loader=UniqueKeysLoader)
              for p in sorted(ui.glob("abyss_*.yml"))}
-assert len(documents) == 14, f"Expected all 14 bundled UIs, found {len(documents)}"
+assert len(documents) == 15, f"Expected all 15 bundled UIs, found {len(documents)}"
 def validate_controls(name, document):
     nodes, aliases = [], {}
     def walk(children, parent=None, path=''):

@@ -120,7 +120,7 @@ public final class AbyssTemplateLoader {
         Map<String, RewardConfig.ChestReward> chests =
             new LinkedHashMap<>(rewards.chestRewards());
         chests.putAll(RewardConfig.loadChestOnly(validated.get("chest_rewards.yml")));
-        rewards = new RewardConfig(rewards.rewards(), chests);
+        rewards = new RewardConfig(rewards.rewards(), chests, rewards.games());
 
         String functions = readText(new File(dir, "functions.js"));
         if (functions == null) functions = readText(new File(dir, "functions.aria"));

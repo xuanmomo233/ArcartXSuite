@@ -18,6 +18,7 @@ ui:
       var.rows = packet['statRows']
       var.count = packet['statCount']
       var.hasChest = packet['hasChest']
+      var.hasRewardGame = packet['hasRewardGame'] == true
       var.settling = packet['settling'] == true
       var.canLeave = packet['canLeave'] == true
       var.settlementHint = packet['settlementHint'] != none ? packet['settlementHint'] : ''
@@ -37,6 +38,7 @@ ui:
       var.rows = {}
       var.count = 0
       var.hasChest = false
+      var.hasRewardGame = false
       var.settling = false
       var.canLeave = false
       var.settlementHint = ''
@@ -473,6 +475,33 @@ controls:
                   point: ~middle_center
                   texts: ~&f领取奖励
                   fontSize: 38
+                  through: true
+          奖励玩法:
+            type: Canvas
+            attribute:
+              point: ~bottom_center
+              x: -400
+              y: -28
+              width: 160
+              height: 48
+              visible: "var.hasRewardGame"
+            action:
+              clickLeft: "Packet.send(var.packetId, 'reward_game_pending', var.actionToken)"
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~97,72,147,245
+                  shape: ~round_rect
+                  radius: 8
+                  through: true
+              字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: ~&f奖励玩法
+                  fontSize: 34
                   through: true
           离开副本:
             type: Canvas

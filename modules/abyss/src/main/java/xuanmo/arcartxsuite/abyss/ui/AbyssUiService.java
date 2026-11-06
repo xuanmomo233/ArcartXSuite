@@ -93,6 +93,43 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
     private String lobbyUi() { return axsUiId(service.config().ui().lobbyId()); }
     private String chestUi() { return axsUiId(service.config().ui().chestId()); }
     private String statsUi() { return axsUiId(service.config().ui().statsId()); }
+    private String rewardGameUi() { return axsUiId("abyss_reward_game"); }
+    private record RewardAction(UUID offer, int revision, java.util.function.IntConsumer pick) { }
+    private final Map<UUID, RewardAction> rewardActions = new ConcurrentHashMap<>();
+
+    public void openRewardGame(Player player, xuanmo.arcartxsuite.api.capability.AbyssRewardGameAccess.Offer offer,
+                               java.util.function.IntConsumer pick, boolean update) {
+        if (!available()) {
+            player.sendMessage("§e奖励玩法需要 ArcartX 界面，领取资格已保留。");
+            return;
+        }
+        var cards = new LinkedHashMap<String, Object>();
+        for (var card : offer.cards()) cards.put(Integer.toString(card.slot()), Map.of(
+            "label", card.label() == null ? "?" : card.label(),
+            "selected", card.selected(), "accepted", card.accepted()));
+        var payload = new LinkedHashMap<String, Object>();
+        payload.put("packetId", CHANNEL);
+        payload.put("offer", offer.id().toString());
+        payload.put("mode", offer.strategy());
+        payload.put("title", offer.title());
+        payload.put("remaining", offer.remaining());
+        payload.put("revision", offer.revision());
+        payload.put("count", offer.cards().size());
+        payload.put("cards", cards);
+        UUID id = player.getUniqueId();
+        if (update) {
+            var previous = rewardActions.get(id);
+            if (previous == null || !previous.offer().equals(offer.id()) || !rewardGameUi().equals(foregroundUis.get(id))
+                || !views.isOpen(player, rewardGameUi())) return;
+            if ((previous.revision() & offer.revision()) != previous.revision()) return;
+            rewardActions.put(id, new RewardAction(offer.id(), offer.revision(), pick));
+            payload.put("action_token", token(player));
+            views.send(player, rewardGameUi(), "init", payload);
+        } else {
+            rewardActions.put(id, new RewardAction(offer.id(), offer.revision(), pick));
+            openView(player, rewardGameUi(), payload);
+        }
+    }
     private String leaderboardUi() { return axsUiId(service.config().ui().leaderboardId()); }
     private String hudUi() { return axsUiId(service.config().ui().hudId()); }
     private String inputUi() { return axsUiId(service.config().ui().inputId()); }
@@ -123,11 +160,14 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         if(action.startsWith("buff_"))return ui.equals(buffUi());
         if(action.startsWith("chest_"))return ui.equals(chestUi());
         if(action.startsWith("settlement_"))return ui.equals(statsUi());
+        if(action.equals("reward_game_pick"))return ui.equals(rewardGameUi());
+        if(action.equals("reward_game_pending"))return ui.equals(statsUi());
         if(action.equals("reopen_chest"))return ui.equals(statsUi());
         return true;
     }
 
     private void openView(Player player, String uiId, Map<String, Object> payload) {
+        if (!uiId.equals(rewardGameUi())) rewardActions.remove(player.getUniqueId());
         boardRequests.remove(player.getUniqueId());
         var previousQuery=boardQueries.remove(player.getUniqueId());if(previousQuery!=null)previousQuery.cancel(false);
         if(uiId.equals(statsUi())) {
@@ -151,6 +191,7 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
             case "stats" -> statsUi(); case "leaderboard" -> leaderboardUi(); case "input" -> inputUi(); case "hud" -> hudUi();
             case "buff" -> buffUi(); case "shop" -> shopUi(); case "design" -> designUi();
             case "design_pick" -> designPickUi(); case "design_edit" -> designEditUi();
+            case "reward_game" -> rewardGameUi();
             default -> null;
         };
     }
@@ -601,6 +642,8 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         payload.put("statCount", rows.size());
         PendingChest pending = pendingChests.get(player.getUniqueId());
         payload.put("hasChest", pending != null && pending.instance() == instance);
+        payload.put("hasRewardGame", instance.isFinished() && instance.getTemplate().rewards() != null
+            && !instance.getTemplate().rewards().games().isEmpty());
         payload.put("settling",instance!=null && instance.isFinished());
         payload.put("canLeave",false);
         payload.put("settlementHint","");
@@ -1554,6 +1597,20 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
                 }
                 return true;
             }
+            case "reward_game_pending" -> {
+                if (checkToken(player, data, 1)) service.rewardGames().openPending(player);
+                return true;
+            }
+            case "reward_game_pick" -> {
+                if (checkToken(player, data, 4)) {
+                    var action = rewardActions.get(player.getUniqueId());
+                    int slot = parseInt(data.get(2), -1);
+                    if (action != null && action.offer().toString().equals(data.get(1)) && slot >= 0 && slot < 9
+                        && action.revision() == parseInt(data.get(3), -1))
+                        action.pick().accept(slot);
+                }
+                return true;
+            }
             case "settlement_leave" -> {
                 if(checkToken(player, data, 1)) {
                     AbyssInstance instance=service.instances().getInstance(player);
@@ -1960,6 +2017,7 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
 
     /** 玩家完全离开服务时清理会话态（token/HUD 标记/待领宝箱已先发放）。 */
     public void onPlayerGone(Player player) {
+        rewardActions.remove(player.getUniqueId());
         UUID uid = player.getUniqueId();
         tokens.remove(uid);
         foregroundUis.remove(uid);

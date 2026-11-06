@@ -70,6 +70,28 @@ public final class RewardResolver {
             throw new IllegalStateException("奖励未确认保存，请保留结算记录并重试: " + rewardName);
     }
 
+    public record GamePrize(String label, List<PendingReward> rewards) {
+        public GamePrize { rewards = List.copyOf(rewards); }
+    }
+
+    public List<GamePrize> rollGame(Player player, AbyssInstance instance, RewardConfig.RewardGame game) {
+        var sets = instance.getTemplate().rewards().rewards();
+        var pool = new ArrayList<>(sets.get(game.pool()).pool());
+        var deck = new ArrayList<GamePrize>();
+        int totalEntries = 0;
+        for (int slot = 0; slot < game.slots(); slot++) {
+            String picked = pickWeighted(pool);
+            if (picked == null) throw new IllegalArgumentException("奖励玩法池为空");
+            var batch = new ArrayList<PendingReward>();
+            collectSet(player, sets.get(picked), instance, 0, batch);
+            totalEntries += batch.size();
+            if (batch.isEmpty() || totalEntries > 1024) throw new IllegalArgumentException("奖励玩法内容为空或过大");
+            deck.add(new GamePrize(picked, batch));
+            if (!game.repeat()) pool.removeIf(entry -> entry.rewardId().equals(picked));
+        }
+        return List.copyOf(deck);
+    }
+
     private void collectSet(Player player, RewardSet set, AbyssInstance instance, int depth, List<PendingReward> batch) {
         if(batch.size()>4096)throw new IllegalArgumentException("单次奖励条目超过4096");
         if (depth > 8) throw new IllegalArgumentException("奖励池循环或嵌套过深");

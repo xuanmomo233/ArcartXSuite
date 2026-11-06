@@ -27,11 +27,12 @@ function row(i,version) {return {id:'id_'+version+'_'+i,key:'object_'+i,name:'Lo
  online:true,ready:true,sender:'玩家',text:'消息'+version+'-'+i,display:'&6玩家 &7: &f消息'+version+'-'+i,depth:0,count:1,dirty:false,
  rank:i+1,time:'10:20',completions:123456,kills:0,damage:123456789,taken:20,heal:30,killsText:'0',
  damageText:'1.2亿',takenText:'20',healText:'30',completionsText:'12.3万',rarity:'rare',rarityColor:'80,150,235,255',
- price:i+1,priceText:''+(i+1)};}
+ price:i+1,priceText:''+(i+1),selected:false,accepted:false};}
 function fixture(n,version=0) {
  const rows=Object.fromEntries(Array.from({length:n},(_,i)=>[''+i,row(i,version)]));
  const p={...row(0,version),packetId:'abyss',action_token:'token',view_nonce:'nonce',title:'深渊回廊',dungeonName:'测试副本',dungeonId:'test',
- hasParty:true,hasChest:true,isLeader:true,partyName:'编队',partyText:'四人小队',myUuid:'me',maxMembers:8,
+ hasParty:true,hasChest:true,hasRewardGame:true,isLeader:true,partyName:'编队',partyText:'四人小队',myUuid:'me',maxMembers:8,
+ offer:'offer',mode:'flip',remaining:2,revision:0,
  hasDungeon:true,dungeon:row(0,version),allowInvite:true,keyword:'',dungeonFilter:'',listed:true,joinMode:'OPEN',allReady:true,
  myReady:true,feedRevision:''+version,puzzleId:'puzzle',hint:'请阅读线索后输入答案',length:24,pattern:'',masked:n%2?'1':'0',
  attemptsText:'剩余3次',attemptsLeft:3,poolId:'buff',poolName:'祝福',timeout:20,timeoutText:'超时自动选择',
@@ -323,6 +324,22 @@ for(const [name,doc]of Object.entries(documents)) {
   engine.invoke(good,'clickLeft');
   assert.equal(engine.packets.filter(p=>p[1]==='shop_buy').length,before,'unaffordable goods must not submit a purchase');
   assert.equal(engine.state.coinsText,'0','balance text must update with the numeric balance');
+ }
+ if(name==='reward_game'){
+  engine.receive({...fixture(1),mode:'wheel',remaining:1});engine.render();
+  const wheel=engine.nodes.find(n=>n.name==='牌0');
+  const before=engine.packets.length;
+  engine.run(wheel.definition.action.clickLeft,wheel);
+  engine.run(wheel.definition.action.clickLeft,wheel);
+  assert.equal(engine.packets.length,before+1,'wheel must ignore clicks during spin');
+  assert.deepEqual(engine.packets.at(-1),['abyss','reward_game_pick','offer',0,0,'token']);
+  const revealed=fixture(1);revealed.cards['0'].selected=true;revealed.cards['0'].accepted=true;
+  engine.receive({...revealed,mode:'wheel',remaining:0,revision:1});
+  for(let i=0;i<20;i++)engine.tick();
+  assert.equal(engine.state.spin,0);
+  engine.checkGeometry();
+  engine.receive({...fixture(3),mode:'choose-three',remaining:1});
+  engine.render();engine.checkGeometry();
  }
  if(name==='party'){
   engine.state.chatMsg='hello';engine.refs.party_chat_input.setContent('hello');

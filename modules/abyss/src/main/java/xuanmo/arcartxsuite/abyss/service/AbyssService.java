@@ -111,6 +111,8 @@ public final class AbyssService {
     public xuanmo.arcartxsuite.api.capability.AbyssRunAccess runAccess() { return runIntegration; }
     public xuanmo.arcartxsuite.api.capability.AbyssExternalPartyAccess externalPartyAccess() { return externalParties; }
     public xuanmo.arcartxsuite.api.capability.AbyssReconnectAccess reconnectAccess() { return reconnects; }
+    private xuanmo.arcartxsuite.abyss.reward.RewardGames rewardGames;
+    public xuanmo.arcartxsuite.abyss.reward.RewardGames rewardGames() { return rewardGames; }
     AdmissionAccess.Operation admissionOperation(AbyssInstance instance) { return admission.operation(instance); }
     public xuanmo.arcartxsuite.api.capability.AbyssEntryCostAccess entryCostAccess() { return entryCosts; }
     EntryCosts entryCosts() { return entryCosts; }
@@ -365,6 +367,7 @@ public final class AbyssService {
         // 7) 奖励/体力/统计/排行/冷却/条件
         rewards = new RewardResolver(itemSourceRegistry, itemRewardDispatcher,
             pendingRewardService, currencyManager, logger, itemMatcher);
+        rewardGames = new xuanmo.arcartxsuite.abyss.reward.RewardGames(this, repository, playerData, pendingRewardService);
         quests = new QuestManager(this::links, plugin, scheduler);
         stamina = new StaminaManager(config.stamina(), playerData);
         stats = new CombatStatisticsService(config.statistics());
@@ -2282,6 +2285,7 @@ public final class AbyssService {
             player.sendMessage("§e原副本仍可返回，使用 /abyss rejoin。");
         }
         recoveringPlayers.remove(player.getUniqueId(),player);
+        if (rewardGames != null) rewardGames.remind(player);
         scheduleDelayedRaw(()->{
             if(crossDungeon!=null && player.isOnline() && org.bukkit.Bukkit.getPlayer(player.getUniqueId())==player)
                 crossDungeon.onPlayerJoin(player);
@@ -2917,6 +2921,7 @@ public final class AbyssService {
     // ═══ 周期看守 ═══
 
     private void watchdog() {
+        if (rewardGames != null && running()) rewardGames.expire();
         runResults.replay();
         if (!started) return;
         for (AbyssInstance i : new ArrayList<>(instances.getAllInstances())) {

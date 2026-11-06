@@ -79,6 +79,22 @@ public final class AbyssValidation {
             for(String item:reward.mmoItems())item("mmoitems:"+item);
         }
         acyclic(rewardEdges,"rewards.yml: 奖励循环引用");
+        for (var entry : rewards.games().entrySet()) {
+            var game = entry.getValue();
+            var pool = rewards.rewards().get(game.pool());
+            require(entry.getKey().matches("[\\p{L}\\p{N}_-]{1,64}") && game.strategy().matches("[a-z0-9_-]{1,64}")
+                && game.title().length() <= 128, "rewards.yml: 奖励玩法标识或标题无效 " + entry.getKey());
+            require(game.slots() >= 1 && game.slots() <= 9 && game.picks() >= 1 && game.picks() <= game.slots()
+                && game.autoAfterSeconds() >= 0 && game.autoAfterSeconds() <= 604800,
+                "rewards.yml: 奖励玩法牌数、领取次数或期限无效 " + entry.getKey());
+            require(!game.strategy().equals("wheel") || game.slots() == 1 && game.picks() == 1,
+                "rewards.yml: wheel 固定为一次旋转");
+            require(!game.strategy().equals("choose-three") || game.slots() == 3 && game.picks() == 1,
+                "rewards.yml: choose-three 固定为三选一");
+            require(pool != null && pool.random(), "rewards.yml: 奖励玩法必须引用随机奖励集 " + entry.getKey());
+            require(game.repeat() || pool.pool().stream().map(RewardConfig.RewardEntry::rewardId).distinct().count() >= game.slots(),
+                "rewards.yml: 不重复抽取需要足够多的不同奖励集 " + entry.getKey());
+        }
         var chests=new LinkedHashMap<>(rewards.chestRewards());chests.putAll(RewardConfig.loadChestOnly(files.get("chest_rewards.yml")));
         for(var chest:chests.values()) {
             require(!chest.options().isEmpty() && chest.rows()>0 && chest.rows()<=6,"rewards.yml: 宝箱没有选项或rows越界 "+chest.name());

@@ -37,6 +37,7 @@ public final class JdbcAbyssRepository extends AbstractModuleRepository {
     private boolean sqlite = true;
     private String tPlayer, tCooldowns, tRecords, tPending, tGlobals, tAdmission, tRunResults;
     private String tResultSequence, tResultFeed, tAdmissionArchive, tAdmissionReturns, tAdmissionAudit;
+    private String tRewardGames;
 
     public JdbcAbyssRepository(DataSource dataSource, StorageDescriptor descriptor,
                              File dataFolder, Logger logger) {
@@ -59,6 +60,7 @@ public final class JdbcAbyssRepository extends AbstractModuleRepository {
         tAdmissionArchive = p + "admission_archive";
         tAdmissionReturns = p + "admission_returns";
         tAdmissionAudit = p + "admission_audit";
+        tRewardGames = p + "reward_games";
 
         try (Statement st = conn.createStatement()) {
             st.executeUpdate("CREATE TABLE IF NOT EXISTS " + tAdmission
@@ -79,6 +81,11 @@ public final class JdbcAbyssRepository extends AbstractModuleRepository {
             st.executeUpdate("CREATE TABLE IF NOT EXISTS " + tAdmissionAudit
                 + " (id VARCHAR(36) PRIMARY KEY, owner VARCHAR(96) NOT NULL, request_id VARCHAR(36) NOT NULL,"
                 + " transaction_id VARCHAR(36), observed_state VARCHAR(32), observed_at BIGINT NOT NULL)");
+            st.executeUpdate("CREATE TABLE IF NOT EXISTS " + tRewardGames
+                + " (offer_id VARCHAR(36) PRIMARY KEY, player_uuid VARCHAR(36) NOT NULL,"
+                + " strategy VARCHAR(64) NOT NULL, title VARCHAR(128) NOT NULL, deck " + (sqlite ? "TEXT" : "LONGTEXT")
+                + " NOT NULL, pick_limit INTEGER NOT NULL, expires_at BIGINT NOT NULL,"
+                + " picked INTEGER NOT NULL, accepted INTEGER NOT NULL, closed INTEGER NOT NULL, touched_at BIGINT NOT NULL)");
             st.executeUpdate(sqlite ? "INSERT INTO " + tResultSequence + " VALUES (1,0) ON CONFLICT(id) DO NOTHING"
                 : "INSERT INTO " + tResultSequence + " VALUES (1,0) ON DUPLICATE KEY UPDATE id=id");
             if (sqlite) {
@@ -137,11 +144,15 @@ public final class JdbcAbyssRepository extends AbstractModuleRepository {
         }
         tryExecute(conn, "CREATE INDEX IF NOT EXISTS idx_abyss_records_dungeon ON "
             + tRecords + "(dungeon_id, best_time_seconds)");
+        tryExecute(conn, "CREATE INDEX " + (sqlite ? "IF NOT EXISTS " : "") + "idx_abyss_game_player ON "
+            + tRewardGames + "(player_uuid, closed, touched_at)");
+        tryExecute(conn, "CREATE INDEX " + (sqlite ? "IF NOT EXISTS " : "") + "idx_abyss_game_expiry ON "
+            + tRewardGames + "(closed, expires_at, touched_at)");
     }
 
     @Override
     protected List<String> playerDataTables() {
-        return List.of(tPlayer, tCooldowns, tRecords, tPending);
+        return List.of(tPlayer, tCooldowns, tRecords, tPending, tRewardGames);
     }
 
     @Override
@@ -160,6 +171,80 @@ public final class JdbcAbyssRepository extends AbstractModuleRepository {
     }
 
     public record AdmissionReceipt(String owner, String requestId, String fingerprint, String snapshot) { }
+
+    public record RewardOffer(UUID id, UUID player, String strategy, String title, String deck, int limit,
+                              long expiresAt, int picked, int accepted, boolean closed) { }
+
+    public void insertRewardOffer(RewardOffer offer) throws SQLException {
+        String sql = "INSERT INTO " + tRewardGames
+            + " (offer_id,player_uuid,strategy,title,deck,pick_limit,expires_at,picked,accepted,closed,touched_at)"
+            + " VALUES (?,?,?,?,?,?,?,0,0,0,?)" + (sqlite ? " ON CONFLICT(offer_id) DO NOTHING" : "");
+        try (Connection c = getConnection(); PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setString(1, offer.id().toString()); ps.setString(2, offer.player().toString());
+            ps.setString(3, offer.strategy()); ps.setString(4, offer.title()); ps.setString(5, offer.deck());
+            ps.setInt(6, offer.limit()); ps.setLong(7, offer.expiresAt()); ps.setLong(8, System.currentTimeMillis());
+            ps.executeUpdate();
+        } catch (SQLException failure) {
+            if (sqlite || failure.getErrorCode() != 1062) throw failure;
+        }
+    }
+
+    public @Nullable RewardOffer loadRewardOffer(UUID id, UUID player) throws SQLException {
+        try (Connection c = getConnection(); PreparedStatement ps = c.prepareStatement("SELECT * FROM "
+                + tRewardGames + " WHERE offer_id=? AND player_uuid=?")) {
+            ps.setString(1, id.toString()); ps.setString(2, player.toString());
+            try (ResultSet rs = ps.executeQuery()) { return rs.next() ? rewardOffer(rs) : null; }
+        }
+    }
+
+    public List<RewardOffer> pendingRewardOffers(UUID player, int limit) throws SQLException {
+        try (Connection c = getConnection(); PreparedStatement ps = c.prepareStatement("SELECT * FROM "
+                + tRewardGames + " WHERE player_uuid=? AND closed=0 ORDER BY touched_at,offer_id LIMIT ?")) {
+            ps.setString(1, player.toString()); ps.setInt(2, limit);
+            return rewardOffers(ps);
+        }
+    }
+
+    public List<RewardOffer> expiredRewardOffers(long now, int limit) throws SQLException {
+        try (Connection c = getConnection(); PreparedStatement ps = c.prepareStatement("SELECT * FROM "
+                + tRewardGames + " WHERE closed=0 AND expires_at>0 AND expires_at<=? ORDER BY touched_at,offer_id LIMIT ?")) {
+            ps.setLong(1, now); ps.setInt(2, limit);
+            return rewardOffers(ps);
+        }
+    }
+
+    private static List<RewardOffer> rewardOffers(PreparedStatement ps) throws SQLException {
+        var rows = new ArrayList<RewardOffer>();
+        try (ResultSet rs = ps.executeQuery()) { while (rs.next()) rows.add(rewardOffer(rs)); }
+        return rows;
+    }
+
+    private static RewardOffer rewardOffer(ResultSet row) throws SQLException {
+        return new RewardOffer(UUID.fromString(row.getString("offer_id")), UUID.fromString(row.getString("player_uuid")),
+            row.getString("strategy"), row.getString("title"), row.getString("deck"), row.getInt("pick_limit"),
+            row.getLong("expires_at"), row.getInt("picked"), row.getInt("accepted"), row.getInt("closed") != 0);
+    }
+
+    public boolean selectRewardSlots(RewardOffer offer, int picked, long now, boolean expired) throws SQLException {
+        String deadline = expired ? "expires_at>0 AND expires_at<=?" : "(expires_at=0 OR expires_at>?)";
+        try (Connection c = getConnection(); PreparedStatement ps = c.prepareStatement("UPDATE " + tRewardGames
+                + " SET picked=?,touched_at=? WHERE offer_id=? AND player_uuid=? AND picked=? AND closed=0 AND " + deadline)) {
+            ps.setInt(1, picked); ps.setLong(2, now); ps.setString(3, offer.id().toString());
+            ps.setString(4, offer.player().toString()); ps.setInt(5, offer.picked()); ps.setLong(6, now);
+            return ps.executeUpdate() == 1;
+        }
+    }
+
+    public void acceptRewardSlots(RewardOffer offer, int accepted) throws SQLException {
+        try (Connection c = getConnection(); PreparedStatement ps = c.prepareStatement("UPDATE " + tRewardGames
+                + " SET accepted=?,closed=?,touched_at=? WHERE offer_id=? AND player_uuid=? AND picked=? AND accepted=?")) {
+            ps.setInt(1, accepted);
+            ps.setInt(2, accepted == offer.picked() && Integer.bitCount(accepted) == offer.limit() ? 1 : 0);
+            ps.setLong(3, System.currentTimeMillis()); ps.setString(4, offer.id().toString());
+            ps.setString(5, offer.player().toString()); ps.setInt(6, offer.picked()); ps.setInt(7, offer.accepted());
+            ps.executeUpdate();
+        }
+    }
     public record CommittedSnapshot(long sequence, String snapshot) { }
 
     public boolean insertRunResult(UUID run, String owner, long endedAt, String snapshot) throws SQLException {

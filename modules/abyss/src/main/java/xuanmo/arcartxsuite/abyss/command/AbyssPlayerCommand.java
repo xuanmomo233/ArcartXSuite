@@ -108,6 +108,7 @@ public final class AbyssPlayerCommand implements TabExecutor {
             case "stamina" -> player.sendMessage(service.msg("stamina.view",
                 "current", String.valueOf(service.stamina().getStamina(player.getUniqueId())),
                 "max", String.valueOf(service.stamina().max())));
+            case "rewards" -> service.rewardGames().openPending(player);
             case "stats", "result" -> {
                 AbyssInstance instance=service.instances().getInstance(player);
                 if(service.uiFacade() instanceof xuanmo.arcartxsuite.abyss.ui.AbyssUiService ui) {
@@ -492,7 +493,7 @@ public final class AbyssPlayerCommand implements TabExecutor {
         }
         // /abyss ...
         if (args.length == 1) {
-            return filter(List.of("enter", "rejoin", "leave", "list", "info", "stamina",
+            return filter(List.of("enter", "rejoin", "leave", "list", "info", "stamina", "rewards",
                 "rank", "party", "ui", "stats"), args[0]);
         }
         if (args.length == 2 && ("enter".equalsIgnoreCase(args[0])
