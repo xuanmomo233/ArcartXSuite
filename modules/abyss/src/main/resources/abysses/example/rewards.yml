@@ -28,9 +28,56 @@ rewards:
       - reward: quest_pack
         weight: 20
 
+  铁锭补给:
+    items: ["material:IRON_INGOT:6"]
+  钻石珍藏:
+    items: ["material:DIAMOND:2"]
+  金苹果:
+    items: ["material:GOLDEN_APPLE:1"]
+  下界合金碎片:
+    items: ["material:NETHERITE_SCRAP:1"]
+
+  # 保留一层原宝箱的四档奖品与权重
+  example_wheel_pool:
+    type: random
+    pool:
+      - reward: 铁锭补给
+        weight: 50
+      - reward: 钻石珍藏
+        weight: 25
+      - reward: 金苹果
+        weight: 20
+      - reward: 下界合金碎片
+        weight: 5
+  example_flip_pool:
+    type: random
+    pool:
+      - reward: 铁锭补给
+        weight: 65
+      - reward: 金苹果
+        weight: 25
+      - reward: 钻石珍藏
+        weight: 10
+
+# 玩家可离开后用 /abyss rewards 补领，重复打开同一局的玩法不会重抽
+reward-games:
+  example_clear_flip:
+    strategy: flip
+    title: "领主秘藏 · 六翻二"
+    pool: example_flip_pool
+    slots: 6
+    picks: 2
+    allow-repeat: true
+    auto-after-seconds: 0
+  example_side_wheel:
+    strategy: wheel
+    title: "一层战利品 · 幸运转盘"
+    pool: example_wheel_pool
+    auto-after-seconds: 0
+
 # 宝箱奖励（open_chest_ui <名>）
 chest-rewards:
-  # f1_chest 战利品宝箱
+  # 保留旧奖励名供引用兼容；示例的一层宝箱现在打开转盘
   abyss_chest:
     title: "战利品宝箱"
     rows: 3

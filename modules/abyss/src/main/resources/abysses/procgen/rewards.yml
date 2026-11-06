@@ -17,6 +17,30 @@ rewards:
       - "material:EMERALD:8"
     money: 200
 
+  探索补给:
+    items: ["material:COOKED_BEEF:8", "material:ARROW:16"]
+  深渊货币:
+    items: ["material:EMERALD:6"]
+  探索珍藏:
+    items: ["material:DIAMOND:1"]
+  procgen_choice_pool:
+    type: random
+    pool:
+      - reward: 探索补给
+        weight: 1
+      - reward: 深渊货币
+        weight: 1
+      - reward: 探索珍藏
+        weight: 1
+
+reward-games:
+  procgen_clear_choice:
+    strategy: choose-three
+    title: "探索者嘉奖 · 三选一"
+    pool: procgen_choice_pool
+    allow-repeat: false
+    auto-after-seconds: 0
+
 # 宝箱奖励（chests 锚点/宝箱交互点开箱）
 #   · 每个玩家独立 roll 一份，互不干扰；领完该箱标记"已领取"
 #   · 清房后潜行右键宝箱 → 连战加赏（重打一波+挑战奖励，procgen.yml encore 开关）

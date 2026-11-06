@@ -714,8 +714,10 @@ complete:
   - "title @all 10 60 10 &a&l通关|&e请先拾取掉落物，奖励自动到账"
   - "grant_reward @all clear_pack"
   - "open_chest_ui @all final_chest"
+  - "open_reward_game @all example_clear_flip"
   - "firework @all BURST GOLD"
-  - "message @all &e可关闭结算面板继续拾取，或点击离开副本。/abyss stats 可重新查看结算。"
+  - "message @all &e点击结算面板的「奖励玩法」领取翻牌奖励，离开后也可用 /abyss rewards 补领。"
+  - "message @all &e可关闭结算面板继续拾取，/abyss stats 可重新查看结算。"
 
 fail:
   - "message @all &c试炼结束。&e请查看结算并拾取已有掉落物，退出时间由 settlement.failure 设置。"

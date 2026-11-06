@@ -51,7 +51,7 @@ abyss_chest:
   location: "131,61,75"
   required-block: CHEST
   script:
-    - "open_chest_ui @trigger abyss_chest"
+    - "open_reward_game @trigger example_side_wheel"
     - "sound @trigger BLOCK_CHEST_OPEN 1 1"
 
 abyss_chest3:

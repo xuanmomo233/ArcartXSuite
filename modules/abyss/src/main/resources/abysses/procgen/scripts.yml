@@ -7,6 +7,8 @@ start:
 complete:
   - "title @all 10 60 10 &a&l深渊通关|&e拾取掉落物后主动离开，或等待结算倒计时"
   - "grant_reward @all 通关补给"
+  - "open_reward_game @all procgen_clear_choice"
+  - "message @all &e点击结算面板的「奖励玩法」领取三选一奖励，离开后也可用 /abyss rewards 补领。"
   - "message @all &e奖励已登记自动到账。关闭面板可继续拾取，/abyss stats 可重看结算。"
 fail:
   - "message @all &c挑战结束。&e结算期间可拾取已有掉落物，随后按配置退出。"

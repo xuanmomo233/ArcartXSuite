@@ -28,6 +28,36 @@ class ExampleActionContractTest {
             }
         }
     }
+    @Test
+    void bundledRewardGamesAreReachableFromCompletionAndSideChest() {
+        Path abysses = Path.of("src/main/resources/abysses");
+        Path example = abysses.resolve("example");
+        Path procgen = abysses.resolve("procgen");
+        assertRewardGame(example, "example_clear_flip", "flip", "scripts.yml", "complete", "@all");
+        assertRewardGame(example, "example_side_wheel", "wheel", "interacts.yml", "abyss_chest.script", "@trigger");
+        assertRewardGame(procgen, "procgen_clear_choice", "choose-three", "scripts.yml", "complete", "@all");
+    }
+
+    private void assertRewardGame(Path dungeon, String id, String strategy, String scriptFile, String hook, String target) {
+        var scripts = YamlConfiguration.loadConfiguration(dungeon.resolve(scriptFile).toFile());
+        assertTrue(scripts.getStringList(hook).contains("open_reward_game " + target + " " + id));
+
+        var config = RewardConfig.load(YamlConfiguration.loadConfiguration(dungeon.resolve("rewards.yml").toFile()));
+        var game = config.games().get(id);
+        assertNotNull(game, id);
+        assertEquals(strategy, game.strategy());
+        assertEquals(0, game.autoAfterSeconds());
+        var pool = config.rewards().get(game.pool());
+        assertNotNull(pool, game.pool());
+        assertTrue(pool.random());
+        assertFalse(pool.pool().isEmpty());
+        assertTrue(pool.pool().stream().allMatch(entry ->
+            entry.weight() > 0 && config.rewards().containsKey(entry.rewardId())));
+        if (!game.repeat()) {
+            assertTrue(pool.pool().stream().map(RewardConfig.RewardEntry::rewardId).distinct().count() >= game.slots());
+        }
+    }
+
     private void check(List<String> lines,ScriptRunner runner,String source) {
         for(String line:lines) {
             String text=line.trim();if(text.isEmpty()||text.startsWith("#")||text.startsWith("aria:")||text.startsWith("js:")||text.startsWith("wait "))continue;
