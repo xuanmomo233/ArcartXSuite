@@ -98,6 +98,67 @@ class RewardGameClaimsTest {
         assertTrue(reopened.pendingRewardOffers(player, 16).isEmpty());
     }
 
+    @Test void hostAcceptanceBeforeLocalAcknowledgementIsNotGrantedTwice() throws Exception {
+        var repository = repository();
+        UUID player = UUID.randomUUID(), id = UUID.randomUUID();
+        var original = offer(id, player, 0, "fixed");
+        repository.insertRewardOffer(original);
+        assertTrue(repository.selectRewardSlots(original, 1, 1, false));
+        var ledger = new java.util.HashMap<String, List<PendingReward>>();
+        var host = mock(PendingRewardService.class);
+        when(host.savePendingBatchConfirmed(anyString(), anyList())).thenAnswer(call -> {
+            String key = call.getArgument(0);
+            List<PendingReward> batch = call.getArgument(1);
+            var accepted = ledger.putIfAbsent(key, batch);
+            return accepted == null || accepted.equals(batch);
+        });
+        var batch = RewardGameClaims.decode(original).get(0).rewards();
+        assertTrue(host.savePendingBatchConfirmed("reward-game:" + id + ":0", batch));
+        // Simulate termination after host acceptance and before the offer acknowledgement.
+        var reopened = repository();
+        var recovered = new RewardGameClaims(reopened, host).process(reopened.loadRewardOffer(id, player), 2);
+        assertTrue(recovered.closed());
+        assertEquals(1, ledger.size());
+        assertEquals(batch, ledger.get("reward-game:" + id + ":0"));
+        verify(host, times(2)).savePendingBatchConfirmed("reward-game:" + id + ":0", batch);
+    }
+
+    @Test void documentedThreeChoiceConfigurationReusesThePoolWithoutRepeatingPackIds() throws Exception {
+        var yaml = new org.bukkit.configuration.file.YamlConfiguration();
+        yaml.loadFromString("""
+            rewards:
+              first: {money: 10}
+              second: {money: 20}
+              third: {money: 30}
+              pool:
+                type: random
+                pool:
+                  - {reward: first, weight: 10}
+                  - {reward: second, weight: 60}
+                  - {reward: third, weight: 30}
+            reward-games:
+              clear_choice:
+                strategy: choose-three
+                pool: pool
+                allow-repeat: false
+            """);
+        var config = xuanmo.arcartxsuite.abyss.template.RewardConfig.load(yaml);
+        var game = config.games().get("clear_choice");
+        assertEquals(3, game.slots());
+        assertEquals(1, game.picks());
+        var template = mock(xuanmo.arcartxsuite.abyss.template.AbyssTemplate.class,
+            withSettings().mockMaker(org.mockito.MockMakers.INLINE));
+        when(template.rewards()).thenReturn(config);
+        var instance = new xuanmo.arcartxsuite.abyss.instance.AbyssInstance(UUID.randomUUID(), template, null);
+        var player = mock(org.bukkit.entity.Player.class);
+        when(player.getUniqueId()).thenReturn(UUID.randomUUID());
+        var resolver = new RewardResolver(null, null, null, null, Logger.getAnonymousLogger(), null);
+        var deck = resolver.rollGame(player, instance, game);
+        assertEquals(java.util.Set.of("first", "second", "third"),
+            deck.stream().map(RewardResolver.GamePrize::label).collect(java.util.stream.Collectors.toSet()));
+        assertTrue(deck.stream().allMatch(prize -> prize.rewards().size() == 1));
+    }
+
     @Test void deadlineAutoSelectsTheStoredFirstCardInsteadOfHonoringALateClick() throws Exception {
         var repository = repository();
         UUID player = UUID.randomUUID(), id = UUID.randomUUID();
