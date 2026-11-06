@@ -26,7 +26,7 @@ import xuanmo.arcartxsuite.api.item.PendingRewardService;
 
 public final class RewardGames implements AbyssRewardGameAccess {
     private static final Set<String> BUILT_INS = Set.of("flip", "wheel", "choose-three");
-    private record Registered(boolean reveal, Strategy strategy) { }
+    private record Registered(UUID registration, boolean reveal, Strategy strategy) { }
     private record Display(RewardOffer offer, List<String> labels) { }
     private final AbyssService service;
     private final JdbcAbyssRepository repository;
@@ -35,6 +35,8 @@ public final class RewardGames implements AbyssRewardGameAccess {
     private final RewardGameClaims claims;
     private final Map<String, Registered> strategies = new LinkedHashMap<>();
     private final Set<UUID> opening = new HashSet<>();
+    private final Map<UUID, Boolean> browsing = new LinkedHashMap<>();
+    private final Set<UUID> selecting = new HashSet<>();
     private final AtomicBoolean maintenance = new AtomicBoolean();
     private long nextExpiry;
 
@@ -51,7 +53,7 @@ public final class RewardGames implements AbyssRewardGameAccess {
         if (!service.running()) throw new IllegalStateException("Abyss unavailable");
         if (id == null || !id.matches("[a-z0-9_-]{1,64}") || BUILT_INS.contains(id))
             throw new IllegalArgumentException("Invalid or reserved reward strategy ID");
-        var registration = new Registered(revealUnpicked, Objects.requireNonNull(strategy));
+        var registration = new Registered(UUID.randomUUID(), revealUnpicked, Objects.requireNonNull(strategy));
         if (strategies.putIfAbsent(id, registration) != null) throw new IllegalStateException("Reward strategy already registered");
         return () -> { requireMain(); strategies.remove(id, registration); };
     }
@@ -107,6 +109,11 @@ public final class RewardGames implements AbyssRewardGameAccess {
 
     private void pending(Player player, boolean open) {
         UUID id = player.getUniqueId();
+        if (!service.running()) return;
+        if (browsing.putIfAbsent(id, open) != null) {
+            if (open) browsing.put(id, true);
+            return;
+        }
         database.submitDatabase(() -> {
             Display first = null;
             for (var row : repository.pendingRewardOffers(id, 16)) {
@@ -115,14 +122,15 @@ public final class RewardGames implements AbyssRewardGameAccess {
             }
             return first;
         }).whenComplete((view, error) -> service.runOnMain(() -> {
+            boolean show = Boolean.TRUE.equals(browsing.remove(id));
             if (!service.running() || !player.isOnline()) return;
             flush(player);
             if (error != null) {
-                if (open) message(player, "§c奖励读取失败，请稍后重试。");
+                if (show) message(player, "§c奖励读取失败，请稍后重试。");
             } else if (view != null) {
-                if (open) present(player, view, false);
+                if (show) present(player, view, false);
                 else message(player, "§e你有待领取的副本奖励，使用 /abyss rewards。");
-            } else if (open) message(player, "§e没有待领取的奖励玩法。");
+            } else if (show) message(player, "§e没有待领取的奖励玩法。");
         }));
     }
 
@@ -153,28 +161,33 @@ public final class RewardGames implements AbyssRewardGameAccess {
             return;
         }
         boolean reveal = builtIn ? row.strategy().equals("choose-three") : registered.reveal();
-        var cards = new ArrayList<Card>();
-        for (int slot = 0; slot < display.labels().size(); slot++) {
-            int bit = 1 << slot;
-            boolean selected = (row.picked() & bit) != 0;
-            cards.add(new Card(slot, reveal || selected ? display.labels().get(slot) : null,
-                selected, (row.accepted() & bit) != 0));
-        }
+        var cards = cardViews(row, display.labels(), reveal);
         var offer = new Offer(row.id(), row.strategy(), row.title(), row.limit() - Integer.bitCount(row.picked()),
             row.picked(), row.expiresAt(), cards);
         IntConsumer pick = slot -> {
             requireMain();
-            if (!service.running() || !player.isOnline() || (!builtIn && strategies.get(row.strategy()) != registered)) return;
+            if (!service.running() || !player.isOnline() || (!builtIn && strategies.get(row.strategy()) != registered)
+                || !selecting.add(row.id())) return;
             complete(player, database.submitDatabase(() -> {
                 var current = repository.loadRewardOffer(row.id(), row.player());
                 return current == null ? null : display(claims.choose(current, row.picked(), slot, System.currentTimeMillis()));
-            }), true);
+            }).whenComplete((ignored, failure) -> service.runOnMain(() -> selecting.remove(row.id()))), true);
         };
         if (builtIn && service.uiFacade() instanceof AbyssUiService ui) ui.openRewardGame(player, offer, pick, update);
         else if (!builtIn) {
             try { registered.strategy().present(player, offer, pick); }
             catch (RuntimeException failure) { message(player, "§c奖励界面打开失败，领取资格已保留。"); }
         } else message(player, "§e奖励玩法界面暂不可用，领取资格已保留。");
+    }
+
+    static List<Card> cardViews(RewardOffer row, List<String> labels, boolean reveal) {
+        var cards = new ArrayList<Card>();
+        for (int slot = 0; slot < labels.size(); slot++) {
+            int bit = 1 << slot;
+            boolean selected = (row.picked() & bit) != 0;
+            cards.add(new Card(slot, reveal || selected ? labels.get(slot) : null, selected, (row.accepted() & bit) != 0));
+        }
+        return List.copyOf(cards);
     }
 
     private static Display display(RewardOffer offer) throws Exception {
@@ -194,6 +207,7 @@ public final class RewardGames implements AbyssRewardGameAccess {
                     if (updated != null && updated.accepted() != offer.accepted()) onlineRecipients.add(offer.player());
                 } catch (Exception failure) {
                     java.util.logging.Logger.getLogger("Abyss").warning("Reward game expiry deferred: " + offer.id());
+                    repository.touchRewardOffer(offer);
                 }
             }
             return onlineRecipients;

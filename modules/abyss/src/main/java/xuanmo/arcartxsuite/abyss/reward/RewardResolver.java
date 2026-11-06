@@ -16,6 +16,7 @@ import xuanmo.arcartxsuite.abyss.template.RewardConfig.ChestReward;
 import xuanmo.arcartxsuite.abyss.template.RewardConfig.ChestOption;
 import xuanmo.arcartxsuite.abyss.template.RewardConfig.RewardEntry;
 import xuanmo.arcartxsuite.abyss.template.RewardConfig.RewardSet;
+import xuanmo.arcartxsuite.abyss.template.RewardConfig;
 import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI;
 import xuanmo.arcartxsuite.api.item.ItemRewardDispatcher;
 import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;

@@ -1603,11 +1603,11 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
             }
             case "reward_game_pick" -> {
                 if (checkToken(player, data, 4)) {
-                    var action = rewardActions.get(player.getUniqueId());
+                    var rewardAction = rewardActions.get(player.getUniqueId());
                     int slot = parseInt(data.get(2), -1);
-                    if (action != null && action.offer().toString().equals(data.get(1)) && slot >= 0 && slot < 9
-                        && action.revision() == parseInt(data.get(3), -1))
-                        action.pick().accept(slot);
+                    if (rewardAction != null && rewardAction.offer().toString().equals(data.get(1)) && slot >= 0 && slot < 9
+                        && rewardAction.revision() == parseInt(data.get(3), -1))
+                        rewardAction.pick().accept(slot);
                 }
                 return true;
             }

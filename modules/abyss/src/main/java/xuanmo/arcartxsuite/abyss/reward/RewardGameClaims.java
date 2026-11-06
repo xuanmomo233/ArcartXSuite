@@ -91,6 +91,10 @@ final class RewardGameClaims {
         }
         if (deck.size() < offer.limit() || deck.size() > 9 || offer.limit() <= 0)
             throw new IllegalStateException("Invalid reward offer snapshot");
+        int validMask = (1 << deck.size()) - 1;
+        if ((offer.picked() & ~validMask) != 0 || (offer.accepted() & ~offer.picked()) != 0
+            || Integer.bitCount(offer.picked()) > offer.limit())
+            throw new IllegalStateException("Invalid reward selection snapshot");
         return List.copyOf(deck);
     }
 }

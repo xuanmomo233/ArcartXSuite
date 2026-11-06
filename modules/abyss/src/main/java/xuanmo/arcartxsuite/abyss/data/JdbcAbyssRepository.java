@@ -245,6 +245,14 @@ public final class JdbcAbyssRepository extends AbstractModuleRepository {
             ps.executeUpdate();
         }
     }
+
+    public void touchRewardOffer(RewardOffer offer) throws SQLException {
+        try (Connection c = getConnection(); PreparedStatement ps = c.prepareStatement("UPDATE " + tRewardGames
+                + " SET touched_at=? WHERE offer_id=? AND player_uuid=? AND closed=0")) {
+            ps.setLong(1, System.currentTimeMillis()); ps.setString(2, offer.id().toString());
+            ps.setString(3, offer.player().toString()); ps.executeUpdate();
+        }
+    }
     public record CommittedSnapshot(long sequence, String snapshot) { }
 
     public boolean insertRunResult(UUID run, String owner, long endedAt, String snapshot) throws SQLException {
