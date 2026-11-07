@@ -87,7 +87,7 @@ jobs:
           echo "=== Changed files ==="
           cat /tmp/changed_files.txt
 
-          # 工作流自身的调整由 Regression checks 验证，不产生新的产品版本。
+          # 仅调整工作流时不产生新的产品版本，生产链路可手动选择 skip_upload 验证。
           CORE_CHANGED=false
           if grep -Eq '^(src/main/|axs-core/|axs-api/|axs-placeholder/|buildSrc/|proguard/|native/|scripts/|gradle/|keys/|gradle\.properties|settings\.gradle\.kts|build\.gradle\.kts)' /tmp/changed_files.txt; then
             CORE_CHANGED=true
