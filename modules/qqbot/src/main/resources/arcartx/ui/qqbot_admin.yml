@@ -1,6 +1,4 @@
-# AXS QQBot 管理后台
-# 管理员可在此查看机器人状态、管理绑定、执行远程命令
-
+# QQBot UI：服务端验证会话、权限和全部写操作；row0..row9 为明确复制的固定模板。
 ui:
   isHud: false
   defaultOpen: false
@@ -8,75 +6,88 @@ ui:
   background: true
   escClose: true
   closeDied: true
-  show: true
-  jei: false
-  level: 15
   screenScale: true
-  packetHandler:
-    # packetHandler: init
-    # 包字段:
-    #   - packetId: 通信标识，用于后续 Packet.send 回包
-    #   - botConnected: 机器人是否已连接
-    #   - totalBindings: 总绑定数量
-    #   - onlinePlayers: 当前在线玩家数
-    #   - maxPlayers: 服务器最大玩家数
-    #   - groups: 监听的 QQ 群列表
-    #   - bindings: 绑定列表数据
-    #   - bindTotal: 绑定总条数（用于分页）
-    init: |-
+  show: true
+  level: 15
+  action:
+    load: |-
+      var.busy = true
+      var.tab = 'dashboard'
+      var.bindings = {}
       var.bindPage = 0
+      var.bindPages = 1
+      var.bindTotal = 0
+      var.totalBindings = 0
+      var.onlinePlayers = 0
+      var.maxPlayers = 0
+      var.groupCount = 0
+      var.confirmCommand = false
+  packetHandler:
+    init: |-
+      var.busy = packet['busy']
       var.packetId = packet['packetId']
       var.actionToken = packet['action_token']
       var.botConnected = packet['botConnected']
       var.totalBindings = packet['totalBindings']
       var.onlinePlayers = packet['onlinePlayers']
       var.maxPlayers = packet['maxPlayers']
-      var.groups = packet['groups']
+      var.groupCount = packet['groupCount']
       var.bindings = packet['bindings']
-      var.bindTotal = packet['bindTotal']
-      var.cmdHistory = []
-      var.tab = 'dashboard'
-    # packetHandler: update
-    # 包字段:
-    #   - botConnected: 机器人是否已连接
-    #   - totalBindings: 总绑定数量
-    #   - onlinePlayers: 当前在线玩家数
-    #   - maxPlayers: 服务器最大玩家数
+      var.bindPage = packet['page']
+      var.bindPages = packet['pages']
+      var.bindTotal = packet['total']
+      var.query = packet['query']
+      var.canExecute = packet['canExecute']
+      var.result = packet['message']
+      var.resultType = packet['type']
+      var.unbindName = none
+      while(val.bindingList.childrenCount() > 1){ val.bindingList.get(1).remove() }
+      for(i in range(1, 9)){
+        row = val.bindingList['绑定行'].copy('绑定行' + i.round())
+        row.entryKey = 'row' + i.round()
+      }
     update: |-
+      var.busy = packet['busy']
+      var.packetId = packet['packetId']
+      var.actionToken = packet['action_token']
       var.botConnected = packet['botConnected']
       var.totalBindings = packet['totalBindings']
       var.onlinePlayers = packet['onlinePlayers']
       var.maxPlayers = packet['maxPlayers']
-    # packetHandler: bindings
-    # 包字段:
-    #   - bindings: 绑定列表数据
-    #   - page: 当前页码
-    #   - total: 绑定总条数
-    bindings: |-
+      var.groupCount = packet['groupCount']
       var.bindings = packet['bindings']
       var.bindPage = packet['page']
+      var.bindPages = packet['pages']
       var.bindTotal = packet['total']
-    # packetHandler: cmd_result
-    # 包字段:
-    #   - result: 命令执行结果文本
-    #   - cmd: 执行的命令
-    #   - time: 执行时间
-    cmd_result: |-
-      var.cmdResult = packet['result']
-      var.cmdHistory.add({'cmd': packet['cmd'], 'result': packet['result'], 'time': packet['time']})
-  action:
-    load: |-
-      var.bindTotal = 0
-      var.groups = []
-      var.maxPlayers = 0
-      var.onlinePlayers = 0
-      var.packetId = 'AXS_qqbot_admin'
-      var.totalBindings = 0
-      var.cmdHistory = []
-      var.tab = 'dashboard'
-
+      var.query = packet['query']
+      var.canExecute = packet['canExecute']
+      var.result = packet['message']
+      var.resultType = packet['type']
+      var.unbindName = none
+    bindings: |-
+      var.busy = packet['busy']
+      var.packetId = packet['packetId']
+      var.actionToken = packet['action_token']
+      var.botConnected = packet['botConnected']
+      var.totalBindings = packet['totalBindings']
+      var.onlinePlayers = packet['onlinePlayers']
+      var.maxPlayers = packet['maxPlayers']
+      var.groupCount = packet['groupCount']
+      var.bindings = packet['bindings']
+      var.bindPage = packet['page']
+      var.bindPages = packet['pages']
+      var.bindTotal = packet['total']
+      var.query = packet['query']
+      var.canExecute = packet['canExecute']
+      var.result = packet['message']
+      var.resultType = packet['type']
+      var.unbindName = none
+    result: |-
+      var.busy = packet['busy']
+      var.result = packet['message']
+      var.resultType = packet['type']
 controls:
-  自适应全局布局:
+  全局:
     type: Adaptive
     attribute:
       point: ~middle_center
@@ -87,630 +98,759 @@ controls:
         type: Canvas
         attribute:
           point: ~middle_center
-          width: 900
-          height: 580
+          width: 1000
+          height: 720
         children:
           背景:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~22,26,36,240
-            effect:
-              stroke:
-                width: 2
-                color: ~80,180,255,180
-          # ── 顶部标题栏 ──
-          标题栏强调:
-            type: Texture
-            attribute:
-              x: 28
-              y: 18
-              width: 5
-              height: 48
-              normal: ~255,180,60,255
+              normal: ~22,29,40,248
               shape: ~round_rect
-              radius: 3
+              radius: 18
           标题:
             type: Text
             attribute:
-              x: 44
-              y: 20
-              texts: "~&6QQBot 管理后台"
-              fontSize: 49
-          关闭按钮:
+              x: 30
+              y: 24
+              texts: "\"QQBot 管理\""
+              fontSize: 54
+              limit: 35
+              visible: "true"
+              through: true
+          关闭:
             type: Canvas
             attribute:
-              x: 840
-              y: 18
-              width: 40
-              height: 40
+              x: 910
+              y: 22
+              width: 60
+              height: 48
+              visible: "true"
             action:
               clickLeft: |-
-                var.cmdInput = none
                 self.close()
             children:
-              关闭背景:
+              底:
                 type: Texture
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~180,50,50,200
-                  hover: ~220,70,70,255
+                  normal: ~60,130,180,245
+                  hover: ~80,155,205,255
                   shape: ~round_rect
                   radius: 10
-              关闭文字:
+              字:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  width: 40
-                  texts: "~&f✕"
+                  texts: "'&f×'"
                   fontSize: 36
                   through: true
-          # ── Tab 切换 ──
-          tab_仪表盘:
+          概览:
             type: Canvas
             attribute:
-              x: 28
-              y: 76
-              width: 120
-              height: 38
+              x: 30
+              y: 90
+              width: 160
+              height: 48
+              visible: "true"
             action:
               clickLeft: |-
                 var.tab = 'dashboard'
             children:
-              tab_仪表盘背景:
+              底:
                 type: Texture
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: "var.tab == 'dashboard' ? '255,180,60,220' : '50,55,65,200'"
-                  hover: ~255,200,90,255
+                  normal: ~60,130,180,245
+                  hover: ~80,155,205,255
                   shape: ~round_rect
                   radius: 10
-              tab_仪表盘文字:
+              字:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  width: 120
-                  texts: "~&f仪表盘"
-                  fontSize: 34
+                  texts: "'&f运行概览'"
+                  fontSize: 36
                   through: true
-          tab_绑定管理:
+          绑定:
             type: Canvas
             attribute:
-              x: 158
-              y: 76
-              width: 120
-              height: 38
+              x: 206
+              y: 90
+              width: 160
+              height: 48
+              visible: "true"
             action:
               clickLeft: |-
                 var.tab = 'bindings'
-                Packet.send(var.packetId, 'fetch_bindings', var.bindPage)
             children:
-              tab_绑定管理背景:
+              底:
                 type: Texture
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: "var.tab == 'bindings' ? '255,180,60,220' : '50,55,65,200'"
-                  hover: ~255,200,90,255
+                  normal: ~60,130,180,245
+                  hover: ~80,155,205,255
                   shape: ~round_rect
                   radius: 10
-              tab_绑定管理文字:
+              字:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  width: 120
-                  texts: "~&f绑定管理"
-                  fontSize: 34
+                  texts: "'&f绑定管理'"
+                  fontSize: 36
                   through: true
-          tab_控制台:
+          命令:
             type: Canvas
             attribute:
-              x: 288
-              y: 76
-              width: 120
-              height: 38
+              x: 382
+              y: 90
+              width: 160
+              height: 48
+              visible: "var.canExecute"
             action:
               clickLeft: |-
                 var.tab = 'console'
             children:
-              tab_控制台背景:
+              底:
                 type: Texture
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: "var.tab == 'console' ? '255,180,60,220' : '50,55,65,200'"
-                  hover: ~255,200,90,255
+                  normal: ~60,130,180,245
+                  hover: ~80,155,205,255
                   shape: ~round_rect
                   radius: 10
-              tab_控制台文字:
+              字:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  width: 120
-                  texts: "~&f控制台"
-                  fontSize: 34
+                  texts: "'&f控制台'"
+                  fontSize: 36
                   through: true
-          # ═══════════════════════════════════
-          # ── 仪表盘页 ──
-          # ═══════════════════════════════════
-          仪表盘容器:
+          刷新:
             type: Canvas
             attribute:
-              x: 28
-              y: 126
-              width: 844
-              height: 430
-              visible: var.tab == 'dashboard'
+              x: 790
+              y: 90
+              width: 180
+              height: 48
+              visible: "!var.busy"
+            action:
+              clickLeft: |-
+                if(!var.busy && var.actionToken != none){
+                  var.busy = true
+                  Packet.send(var.packetId, 'refresh', var.actionToken)
+                }
             children:
-              # 连接状态卡片
-              状态卡片:
+              底:
                 type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~60,130,180,245
+                  hover: ~80,155,205,255
+                  shape: ~round_rect
+                  radius: 10
+              字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "'&f刷新'"
+                  fontSize: 36
+                  through: true
+          概览页:
+            type: Canvas
+            attribute:
+              x: 30
+              y: 150
+              width: 940
+              height: 480
+              visible: "var.tab == 'dashboard'"
+            children:
+              连接:
+                type: Text
                 attribute:
                   x: 0
-                  y: 0
-                  width: 260
-                  height: 100
-                  normal: ~35,40,52,220
-                  shape: ~round_rect
-                  radius: 12
-                effect:
-                  stroke:
-                    width: 1
-                    color: ~80,180,255,80
-                children:
-                  状态标题:
-                    type: Text
-                    attribute:
-                      x: 16
-                      y: 10
-                      through: true
-                      texts: "~&7机器人状态"
-                      fontSize: 26
-                  状态值:
-                    type: Text
-                    attribute:
-                      x: 16
-                      y: 38
-                      through: true
-                      texts: "var.botConnected ? '&a● 已连接' : '&c● 已断开'"
-                      fontSize: 38
-                  在线信息:
-                    type: Text
-                    attribute:
-                      x: 16
-                      y: 70
-                      through: true
-                      texts: "'&7在线: &f' + var.onlinePlayers + '/' + var.maxPlayers"
-                      fontSize: 24
-              # 绑定统计卡片
-              绑定卡片:
-                type: Texture
+                  y: 10
+                  texts: "var.botConnected ? '&a● QQ 实现端已连接' : '&c● QQ 实现端未连接'"
+                  fontSize: 48
+                  limit: 60
+                  visible: "true"
+                  through: true
+              人数:
+                type: Text
                 attribute:
-                  x: 278
-                  y: 0
-                  width: 260
-                  height: 100
-                  normal: ~35,40,52,220
-                  shape: ~round_rect
-                  radius: 12
-                effect:
-                  stroke:
-                    width: 1
-                    color: ~80,180,255,80
-                children:
-                  绑定标题:
-                    type: Text
-                    attribute:
-                      x: 16
-                      y: 10
-                      through: true
-                      texts: "~&7绑定统计"
-                      fontSize: 26
-                  绑定数:
-                    type: Text
-                    attribute:
-                      x: 16
-                      y: 38
-                      through: true
-                      texts: "'&f' + var.totalBindings + ' &7组绑定'"
-                      fontSize: 38
-              # 群列表卡片
-              群卡片:
-                type: Texture
+                  x: 0
+                  y: 90
+                  texts: "'&7在线玩家：&f' + var.onlinePlayers.round() + ' / ' + var.maxPlayers.round()"
+                  fontSize: 36
+                  limit: 60
+                  visible: "true"
+                  through: true
+              绑定数:
+                type: Text
                 attribute:
-                  x: 556
-                  y: 0
-                  width: 288
-                  height: 100
-                  normal: ~35,40,52,220
-                  shape: ~round_rect
-                  radius: 12
-                effect:
-                  stroke:
-                    width: 1
-                    color: ~80,180,255,80
-                children:
-                  群标题:
-                    type: Text
-                    attribute:
-                      x: 16
-                      y: 10
-                      through: true
-                      texts: "'&7监听群: &f' + var.groups.size() + ' &7个'"
-                      fontSize: 26
-              # 快捷操作
-              刷新按钮:
+                  x: 0
+                  y: 150
+                  texts: "'&7全部绑定：&f' + var.totalBindings.round()"
+                  fontSize: 36
+                  limit: 60
+                  visible: "true"
+                  through: true
+              群数:
+                type: Text
+                attribute:
+                  x: 0
+                  y: 210
+                  texts: "'&7配置群数：&f' + var.groupCount.round()"
+                  fontSize: 36
+                  limit: 60
+                  visible: "true"
+                  through: true
+              故障教学:
+                type: Text
+                attribute:
+                  x: 0
+                  y: 300
+                  texts: "'&7连接问题：/axs qqbot status，然后检查实现端登录状态和访问令牌。'"
+                  fontSize: 32
+                  limit: 55
+                  visible: "true"
+                  through: true
+              复核教学:
+                type: Text
+                attribute:
+                  x: 0
+                  y: 354
+                  texts: "'&7兑换复核：/axs qqbot redemptions list；先查投递结果，再人工决议。'"
+                  fontSize: 32
+                  limit: 55
+                  visible: "true"
+                  through: true
+          绑定页:
+            type: Canvas
+            attribute:
+              x: 30
+              y: 150
+              width: 940
+              height: 480
+              visible: "var.tab == 'bindings'"
+            children:
+              搜索输入:
                 type: Canvas
                 attribute:
                   x: 0
-                  y: 120
-                  width: 160
-                  height: 42
-                action:
-                  clickLeft: |-
-                    Packet.send(var.packetId, 'refresh')
+                  y: 0
+                  width: 700
+                  height: 50
                 children:
-                  刷新背景:
+                  底:
                     type: Texture
                     attribute:
                       point: ~stretch_all
-                      through: true
-                      normal: ~60,140,200,220
-                      hover: ~80,160,220,255
-                      shape: ~round_rect
-                      radius: 10
-                  刷新文字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      width: 160
-                      texts: "~&f刷新数据"
-                      fontSize: 34
-                      through: true
-          # ═══════════════════════════════════
-          # ── 绑定管理页 ──
-          # ═══════════════════════════════════
-          绑定管理容器:
-            type: Canvas
-            attribute:
-              x: 28
-              y: 126
-              width: 844
-              height: 430
-              visible: var.tab == 'bindings'
-            children:
-              # 搜索栏
-              搜索框:
-                type: TextBox
-                attribute:
-                  x: 0
-                  y: 0
-                  width: 300
-                  height: 36
-                  length: 32
-                  emptyText: ~搜索玩家名或QQ号...
-                  fontSize: 28
-                  background: ~35,38,48,240
-                action:
-                  textChange: |-
-                    var.searchInput = self.getContent()
-                effect:
-                  stroke:
-                    width: 1
-                    color: ~80,180,255,100
-              搜索按钮:
-                type: Canvas
-                attribute:
-                  x: 310
-                  y: 0
-                  width: 80
-                  height: 36
-                action:
-                  clickLeft: |-
-                    Packet.send(var.packetId, 'search_binding', var.searchInput)
-                children:
-                  搜索背景:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: ~60,140,200,220
-                      hover: ~80,160,220,255
+                      normal: ~35,44,57,245
                       shape: ~round_rect
                       radius: 8
-                  搜索文字:
+                  框:
+                    type: TextBox
+                    attribute:
+                      x: 12
+                      y: 6
+                      width: 676
+                      height: 38
+                      length: 32
+                      fontSize: 36
+                      emptyText: "~玩家名或QQ号（最多1000条匹配）"
+                    action:
+                      textChange: |-
+                        var.searchInput = self.getContent()
+              搜索:
+                type: Canvas
+                attribute:
+                  x: 720
+                  y: 0
+                  width: 220
+                  height: 48
+                  visible: "!var.busy"
+                action:
+                  clickLeft: |-
+                    if(!var.busy && var.actionToken != none){
+                      var.busy = true
+                      Packet.send(var.packetId, 'search_binding', var.actionToken, var.searchInput)
+                    }
+                children:
+                  底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~60,130,180,245
+                      hover: ~80,155,205,255
+                      shape: ~round_rect
+                      radius: 10
+                  字:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      width: 80
-                      texts: "~&f搜索"
-                      fontSize: 28
+                      texts: "'&f搜索'"
+                      fontSize: 36
                       through: true
-              # 绑定列表
-              绑定滚动区:
+              列表区:
                 type: Canvas
                 attribute:
-                  x: 0
-                  y: 46
-                  width: 844
-                  height: 330
+                  y: 66
+                  width: 940
+                  height: 302
                 children:
-                  绑定滑块:
+                  滑块:
                     type: Texture
                     attribute:
                       point: ~top_right
-                      width: 8
-                      height: 60
-                      normal: ~120,120,130,180
+                      width: 10
+                      height: 64
+                      maxDragY: 238
+                      normal: ~100,140,170,230
                       shape: ~round_rect
-                      radius: 4
-                      maxDragY: 330 - 60
-                  绑定滚动栏:
+                      radius: 5
+                  内容:
                     type: Scroll
                     attribute:
-                      width: 828
-                      height: 330
-                      moveY: self.parent['绑定滑块'].getDragYRatio()
+                      width: 920
+                      height: 302
+                      moveY: self.parent['滑块'].getDragYRatio()
                     children:
                       绑定列表:
-                        val: bindList
+                        val: bindingList
                         type: VStack
                         attribute:
-                          width: 820
-                          spaceBetween: 4
+                          width: 910
+                          spaceBetween: 6
                         children:
                           绑定行:
                             type: Texture
                             attribute:
-                              entry: var.bindings[self.key]
+                              entryKey: ~row0
+                              entry: var.bindings[self.entryKey]
                               visible: self.entry != none
-                              width: 816
-                              height: 46
-                              normal: ~40,44,54,180
+                              width: 900
+                              height: 64
+                              normal: ~32,42,55,245
                               shape: ~round_rect
                               radius: 8
                             children:
-                              玩家名:
+                              玩家:
                                 type: Text
                                 attribute:
                                   x: 12
                                   y: 10
+                                  texts: "self.parent.entry != none ? '&f' + self.parent.entry['name'] : ''"
+                                  fontSize: 36
+                                  limit: 16
+                                  visible: "true"
                                   through: true
-                                  texts: "'&f' + self.parent.entry['name']"
-                                  fontSize: 30
-                              QQ号:
+                              QQ:
                                 type: Text
                                 attribute:
-                                  x: 220
+                                  x: 270
                                   y: 10
+                                  texts: "self.parent.entry != none ? '&7QQ &f' + self.parent.entry['qq'] : ''"
+                                  fontSize: 32
+                                  limit: 20
+                                  visible: "true"
                                   through: true
-                                  texts: "'&7QQ: &f' + self.parent.entry['qq']"
-                                  fontSize: 30
-                              绑定时间:
+                              时间:
                                 type: Text
                                 attribute:
-                                  x: 460
-                                  y: 10
+                                  x: 520
+                                  y: 14
+                                  texts: "self.parent.entry != none ? '&8' + self.parent.entry['time'] : ''"
+                                  fontSize: 28
+                                  limit: 18
+                                  visible: "true"
                                   through: true
-                                  texts: "'&8' + self.parent.entry['time']"
-                                  fontSize: 26
-                              解绑操作:
+                              解绑:
                                 type: Canvas
                                 attribute:
-                                  x: 730
+                                  x: 750
                                   y: 8
-                                  width: 72
-                                  height: 30
+                                  width: 130
+                                  height: 48
+                                  visible: "!var.busy"
                                 action:
                                   clickLeft: |-
-                                    Packet.send(var.packetId, 'admin_unbind', var.actionToken, self.parent.entry['name'])
+                                    if(!var.busy){
+                                      var.unbindName = self.parent.entry['name']
+                                      var.unbindProfile = self.parent.entry['profile']
+                                    }
                                 children:
-                                  解绑操作背景:
+                                  底:
                                     type: Texture
                                     attribute:
                                       point: ~stretch_all
                                       through: true
-                                      normal: ~180,60,50,200
-                                      hover: ~210,80,70,255
+                                      normal: ~150,70,60,245
+                                      hover: ~80,155,205,255
                                       shape: ~round_rect
-                                      radius: 8
-                                  解绑操作文字:
+                                      radius: 10
+                                  字:
                                     type: Text
                                     attribute:
                                       point: ~middle_center
-                                      width: 72
-                                      texts: "~&f解绑"
-                                      fontSize: 24
+                                      texts: "'&f解绑'"
+                                      fontSize: 36
                                       through: true
-              # 分页控制
+              空记录:
+                type: Text
+                attribute:
+                  x: 30
+                  y: 160
+                  texts: "'&7没有匹配的绑定记录。'"
+                  fontSize: 36
+                  limit: 60
+                  visible: "var.bindTotal == 0"
+                  through: true
               上一页:
                 type: Canvas
                 attribute:
-                  x: 330
+                  x: 0
                   y: 390
-                  width: 80
-                  height: 32
-                  visible: var.bindPage > 0
+                  width: 160
+                  height: 48
+                  visible: "var.bindPage > 0 && !var.busy"
                 action:
                   clickLeft: |-
-                    Packet.send(var.packetId, 'fetch_bindings', var.bindPage - 1)
+                    if(!var.busy && var.actionToken != none){
+                      var.busy = true
+                      Packet.send(var.packetId, 'fetch_bindings', var.actionToken, (var.bindPage - 1).round())
+                    }
                 children:
-                  上一页背景:
+                  底:
                     type: Texture
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: ~50,55,65,200
-                      hover: ~70,75,85,255
+                      normal: ~60,130,180,245
+                      hover: ~80,155,205,255
                       shape: ~round_rect
-                      radius: 8
-                  上一页文字:
+                      radius: 10
+                  字:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      width: 80
-                      texts: "~&f← 上页"
-                      fontSize: 26
+                      texts: "'&f上一页'"
+                      fontSize: 36
                       through: true
               页码:
                 type: Text
                 attribute:
-                  x: 422
-                  y: 394
-                  texts: "'&7' + (var.bindPage + 1) + '/' + math.max(1, math.ceil(var.bindTotal / 10))"
-                  fontSize: 26
-                  center: true
+                  x: 190
+                  y: 398
+                  texts: "'&7第 ' + (var.bindPage + 1).round() + ' / ' + var.bindPages.round() + ' 页，共 ' + var.bindTotal.round() + ' 条'"
+                  fontSize: 32
+                  limit: 60
+                  visible: "true"
+                  through: true
               下一页:
                 type: Canvas
                 attribute:
-                  x: 434
+                  x: 720
                   y: 390
-                  width: 80
-                  height: 32
-                  visible: (var.bindPage + 1) * 10 < var.bindTotal
+                  width: 220
+                  height: 48
+                  visible: "var.bindPage + 1 < var.bindPages && !var.busy"
                 action:
                   clickLeft: |-
-                    Packet.send(var.packetId, 'fetch_bindings', var.bindPage + 1)
+                    if(!var.busy && var.actionToken != none){
+                      var.busy = true
+                      Packet.send(var.packetId, 'fetch_bindings', var.actionToken, (var.bindPage + 1).round())
+                    }
                 children:
-                  下一页背景:
+                  底:
                     type: Texture
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: ~50,55,65,200
-                      hover: ~70,75,85,255
+                      normal: ~60,130,180,245
+                      hover: ~80,155,205,255
                       shape: ~round_rect
-                      radius: 8
-                  下一页文字:
+                      radius: 10
+                  字:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      width: 80
-                      texts: "~&f下页 →"
-                      fontSize: 26
+                      texts: "'&f下一页'"
+                      fontSize: 36
                       through: true
-          # ═══════════════════════════════════
-          # ── 控制台页 ──
-          # ═══════════════════════════════════
-          控制台容器:
+              解绑确认:
+                type: Canvas
+                attribute:
+                  y: 80
+                  width: 940
+                  height: 250
+                  visible: var.unbindName != none
+                children:
+                  遮罩:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~34,42,54,255
+                      shape: ~round_rect
+                      radius: 12
+                  确认文字:
+                    type: Text
+                    attribute:
+                      x: 24
+                      y: 24
+                      texts: "'&e确认解除 ' + var.unbindName + ' 的 QQ 绑定？'"
+                      fontSize: 36
+                      limit: 45
+                      visible: "true"
+                      through: true
+                  确认后果:
+                    type: Text
+                    attribute:
+                      x: 24
+                      y: 80
+                      texts: "'&7该玩家的服务器准入要求将由认证服务重新评估。'"
+                      fontSize: 32
+                      limit: 50
+                      visible: "true"
+                      through: true
+                  确认:
+                    type: Canvas
+                    attribute:
+                      x: 24
+                      y: 150
+                      width: 200
+                      height: 48
+                      visible: "!var.busy"
+                    action:
+                      clickLeft: |-
+                        if(!var.busy && var.actionToken != none){
+                          var.busy = true
+                        Packet.send(var.packetId, 'admin_unbind', var.actionToken, var.unbindProfile)
+                        }
+                    children:
+                      底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: ~150,70,60,245
+                          hover: ~80,155,205,255
+                          shape: ~round_rect
+                          radius: 10
+                      字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: "'&f确认解绑'"
+                          fontSize: 36
+                          through: true
+                  取消:
+                    type: Canvas
+                    attribute:
+                      x: 246
+                      y: 150
+                      width: 180
+                      height: 48
+                      visible: "!var.busy"
+                    action:
+                      clickLeft: |-
+                        var.unbindName = none
+                    children:
+                      底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: ~65,75,90,245
+                          hover: ~80,155,205,255
+                          shape: ~round_rect
+                          radius: 10
+                      字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: "'&f取消'"
+                          fontSize: 36
+                          through: true
+          命令页:
             type: Canvas
             attribute:
-              x: 28
-              y: 126
-              width: 844
-              height: 430
-              visible: var.tab == 'console'
+              x: 30
+              y: 150
+              width: 940
+              height: 480
+              visible: "var.tab == 'console' && var.canExecute"
             children:
-              # 命令历史
-              历史滚动区:
-                type: Canvas
+              命令说明:
+                type: Text
                 attribute:
                   x: 0
                   y: 0
-                  width: 844
-                  height: 378
-                children:
-                  历史滑块:
-                    type: Texture
-                    attribute:
-                      point: ~top_right
-                      width: 8
-                      height: 60
-                      normal: ~120,120,130,180
-                      shape: ~round_rect
-                      radius: 4
-                      maxDragY: 378 - 60
-                  历史滚动栏:
-                    type: Scroll
-                    attribute:
-                      width: 828
-                      height: 378
-                      moveY: self.parent['历史滑块'].getDragYRatio()
-                    children:
-                      历史列表:
-                        val: cmdList
-                        type: VStack
-                        attribute:
-                          width: 820
-                          spaceBetween: 4
-                        children:
-                          历史条目:
-                            type: Texture
-                            attribute:
-                              entry: var.cmdHistory[self.key]
-                              visible: self.entry != none
-                              width: 816
-                              height: 56
-                              normal: ~35,38,48,200
-                              shape: ~round_rect
-                              radius: 6
-                            children:
-                              命令文字:
-                                type: Text
-                                attribute:
-                                  x: 10
-                                  y: 4
-                                  through: true
-                                  texts: "'&7> &e' + self.parent.entry['cmd']"
-                                  fontSize: 24
-                              结果文字:
-                                type: Text
-                                attribute:
-                                  x: 10
-                                  y: 28
-                                  through: true
-                                  width: 796
-                                  texts: "'&f' + self.parent.entry['result']"
-                                  fontSize: 22
-              # 命令输入区
-              命令输入框:
-                type: TextBox
+                  texts: "'&f服务器控制台命令'"
+                  fontSize: 48
+                  limit: 60
+                  visible: "true"
+                  through: true
+              命令权限:
+                type: Text
                 attribute:
                   x: 0
-                  y: 388
-                  width: 730
-                  height: 38
-                  length: 256
-                  emptyText: ~输入服务器命令...
-                  fontSize: 28
-                  background: ~30,34,44,240
-                action:
-                  textChange: |-
-                    var.cmdInput = self.getContent()
-                effect:
-                  stroke:
-                    width: 1
-                    color: ~255,180,60,120
-              执行按钮:
+                  y: 70
+                  texts: "'&7此功能需要独立的控制台执行权限。操作会记录执行人和命令。'"
+                  fontSize: 32
+                  limit: 55
+                  visible: "true"
+                  through: true
+              结果说明:
+                type: Text
+                attribute:
+                  x: 0
+                  y: 116
+                  texts: "'&7返回值代表命令处理器是否接受；插件业务结果请查看服务器日志。'"
+                  fontSize: 32
+                  limit: 55
+                  visible: "true"
+                  through: true
+              命令输入:
                 type: Canvas
                 attribute:
-                  x: 740
-                  y: 388
-                  width: 104
-                  height: 38
+                  x: 0
+                  y: 202
+                  width: 940
+                  height: 50
+                children:
+                  底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~35,44,57,245
+                      shape: ~round_rect
+                      radius: 8
+                  框:
+                    type: TextBox
+                    attribute:
+                      x: 12
+                      y: 6
+                      width: 916
+                      height: 38
+                      length: 256
+                      fontSize: 36
+                      emptyText: "~输入单行服务器命令，无需斜杠"
+                    action:
+                      textChange: |-
+                        var.commandInput = self.getContent()
+                        var.confirmCommand = false
+              准备:
+                type: Canvas
+                attribute:
+                  x: 0
+                  y: 280
+                  width: 200
+                  height: 48
+                  visible: "!var.busy && var.commandInput != none && var.commandInput != '' && !var.confirmCommand"
                 action:
                   clickLeft: |-
-                    if(var.cmdInput != none){
-                      Packet.send(var.packetId, 'exec_command', var.actionToken, var.cmdInput)
-                      var.cmdInput = none
-                    }
+                    var.confirmCommand = true
                 children:
-                  执行背景:
+                  底:
                     type: Texture
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: ~200,150,40,220
-                      hover: ~230,180,60,255
+                      normal: ~60,130,180,245
+                      hover: ~80,155,205,255
                       shape: ~round_rect
                       radius: 10
-                  执行文字:
+                  字:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      width: 104
-                      texts: "~&f执行"
-                      fontSize: 32
+                      texts: "'&f准备执行'"
+                      fontSize: 36
                       through: true
+              确认执行:
+                type: Canvas
+                attribute:
+                  x: 0
+                  y: 280
+                  width: 240
+                  height: 48
+                  visible: "var.confirmCommand && !var.busy"
+                action:
+                  clickLeft: |-
+                    if(!var.busy && var.actionToken != none){
+                      var.busy = true
+                      Packet.send(var.packetId, 'exec_command', var.actionToken, var.commandInput)
+                      var.confirmCommand = false
+                    }
+                children:
+                  底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~150,90,40,245
+                      hover: ~80,155,205,255
+                      shape: ~round_rect
+                      radius: 10
+                  字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: "'&f确认执行'"
+                      fontSize: 36
+                      through: true
+              取消:
+                type: Canvas
+                attribute:
+                  x: 260
+                  y: 280
+                  width: 180
+                  height: 48
+                  visible: "var.confirmCommand && !var.busy"
+                action:
+                  clickLeft: |-
+                    var.confirmCommand = false
+                children:
+                  底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~65,75,90,245
+                      hover: ~80,155,205,255
+                      shape: ~round_rect
+                      radius: 10
+                  字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: "'&f取消'"
+                      fontSize: 36
+                      through: true
+          操作结果:
+            type: Text
+            attribute:
+              x: 30
+              y: 650
+              texts: "var.resultType == 'error' ? '&c' + var.result : (var.resultType == 'success' ? '&a' + var.result : '&7' + var.result)"
+              fontSize: 36
+              limit: 52
+              visible: "var.result != none && var.result != ''"
+              through: true
+          等待提示:
+            type: Text
+            attribute:
+              x: 30
+              y: 686
+              texts: "var.busy ? '&7正在处理，请等待服务端返回…' : '&8QQBot · Esc 关闭'"
+              fontSize: 28
+              limit: 60
+              visible: "true"
+              through: true

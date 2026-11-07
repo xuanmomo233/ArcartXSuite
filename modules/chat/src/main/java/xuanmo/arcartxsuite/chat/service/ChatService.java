@@ -680,6 +680,10 @@ public final class ChatService implements Listener {
         }
         trackMessageFingerprint(sender.getUniqueId(), processedMessage);
         publishChatEvent(sender, channel.id(), "channel");
+        if (channel.permitsExternalRelay()) {
+            Bukkit.getPluginManager().callEvent(new xuanmo.arcartxsuite.api.event.chat.PublicChatMessageEvent(
+                sender, channel.id(), processedMessage));
+        }
         return ChatOperationResult.success(message("result.chat-sent"));
     }
 

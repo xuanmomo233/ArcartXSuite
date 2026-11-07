@@ -39,6 +39,12 @@ public record ChatChannelDefinition(
     String spyFormat
 ) {
 
+    /** External chat relays must never widen a channel's audience. */
+    public boolean permitsExternalRelay() {
+        return enabled && (mode == ChatChannelMode.NORMAL || mode == ChatChannelMode.GLOBAL)
+            && range == 0.0D && receivePermission.isBlank();
+    }
+
     /**
      * 从 yml 配置节加载频道定义。
      *

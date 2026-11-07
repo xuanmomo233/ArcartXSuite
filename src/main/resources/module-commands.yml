@@ -281,8 +281,8 @@ commands:
     aliases: [axspickup]
     permission: arcartxsuite.pickup.use
   qqbot:
-    description: QQ机器人绑定命令
-    usage: /<command> bind <验证码>|unbind|info
+    description: QQ群互联与账号绑定中心
+    usage: /<command> [ui|bind <验证码>|unbind confirm|info|send <消息>|at <QQ> <消息>|admin|help]
     aliases: [axsqqbot]
     permission: arcartxsuite.qqbot.use
   menu:

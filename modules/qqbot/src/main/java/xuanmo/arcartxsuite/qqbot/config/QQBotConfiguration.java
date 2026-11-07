@@ -45,14 +45,28 @@ public record QQBotConfiguration(
     QQBotModerationConfig moderation,
     QQBotBlacklistConfig blacklist,
     boolean atToGameEnabled,
-    QQBotUiConfig ui
+    QQBotUiConfig ui,
+    QQBotDeliveryConfig delivery,
+    boolean remoteConsoleEnabled
 ) {
 
+    public QQBotConfiguration {
+        groups = List.copyOf(groups);
+        adminQQs = List.copyOf(adminQQs);
+        adminAllowedCommands = List.copyOf(adminAllowedCommands);
+        customCommands = java.util.Collections.unmodifiableMap(new LinkedHashMap<>(customCommands));
+        prizes = List.copyOf(prizes);
+        scheduledMessages = List.copyOf(scheduledMessages);
+        if (commandPrefix == null || commandPrefix.isBlank() || helpPrefix == null || helpPrefix.isBlank()
+                || adminCommandPrefix == null || adminCommandPrefix.isBlank())
+            throw new IllegalArgumentException("QQBot 指令前缀不能为空");
+    }
+
     /**
-     * 判断指定 QQ 号是否为已启用的管理员。
+     * 判断可信 QQ 管理是否已启用且该 QQ 在显式名单。远程控制台另有独立开关。
      *
      * @param qqId 待检测的 QQ 号
-     * @return {@code true} 表示管理员功能已启用且该 QQ 在管理员列表中
+     * @return {@code true} 表示管理总开关启用且 QQ 命中管理员列表
      */
     public boolean isAdmin(long qqId) {
         return adminEnabled && adminQQs.contains(qqId);
@@ -84,7 +98,7 @@ public record QQBotConfiguration(
 
         // ── SnowLuma 配置 ──
         var snowlumaSection = yaml.getConfigurationSection("onebot.snowluma");
-        String snowlumaMode = "native";
+        String snowlumaMode = "external";
         String snowlumaDir = "snowluma";
         boolean snowlumaAutoStart = false;
         String snowlumaWebUiPassword = "";
@@ -97,9 +111,10 @@ public record QQBotConfiguration(
         int dockerNovncPort = 6081;
         String dockerVncPassword = "";
         boolean dockerAutoInstall = false;
+        String dockerBindAddress = "127.0.0.1";
 
         if (snowlumaSection != null) {
-            snowlumaMode = snowlumaSection.getString("mode", "native");
+            snowlumaMode = snowlumaSection.getString("mode", "external");
             snowlumaDir = snowlumaSection.getString("dir", "snowluma");
             snowlumaAutoStart = snowlumaSection.getBoolean("auto-start", false);
             snowlumaWebUiPassword = snowlumaSection.getString("webui-password", "");
@@ -114,6 +129,7 @@ public record QQBotConfiguration(
                 dockerNovncPort = dockerSection.getInt("novnc-port", 6081);
                 dockerVncPassword = dockerSection.getString("vnc-password", "");
                 dockerAutoInstall = dockerSection.getBoolean("auto-install", false);
+                dockerBindAddress = dockerSection.getString("bind-address", "127.0.0.1");
             }
         }
 
@@ -122,7 +138,7 @@ public record QQBotConfiguration(
             snowlumaWebUiPassword, snowlumaAcceptAgreements,
             dockerContainerName, dockerImage,
             dockerWebUiPort, dockerWsPort, dockerHttpPort, dockerNovncPort,
-            dockerVncPassword, dockerAutoInstall
+            dockerVncPassword, dockerAutoInstall, dockerBindAddress
         );
 
         QQBotOneBotConfig onebot = new QQBotOneBotConfig(
@@ -156,9 +172,6 @@ public record QQBotConfiguration(
 
         QQBotBindingConfig binding = new QQBotBindingConfig(
             yaml.getBoolean("binding.enabled", true),
-            yaml.getString("binding.method", "code"),
-            yaml.getInt("binding.code-expire-seconds", 300),
-            yaml.getInt("binding.max-bindings-per-qq", 1),
             yaml.getString("binding.bind-prefix", "#绑定"),
             yaml.getString("binding.unbind-prefix", "#解绑"),
             yaml.getString("binding.query-prefix", "#查绑")
@@ -166,8 +179,6 @@ public record QQBotConfiguration(
 
         QQBotWhitelistConfig whitelist = new QQBotWhitelistConfig(
             yaml.getBoolean("whitelist.enabled", true),
-            yaml.getBoolean("whitelist.auto-add-on-bind", true),
-            yaml.getBoolean("whitelist.auto-remove-on-unbind", true),
             yaml.getString("whitelist.add-command", "whitelist add {name}"),
             yaml.getString("whitelist.remove-command", "whitelist remove {name}"),
             yaml.getString("whitelist.add-prefix", "#白名单添加"),
@@ -332,7 +343,7 @@ public record QQBotConfiguration(
         );
 
         QQBotMarketBroadcastConfig marketBroadcast = new QQBotMarketBroadcastConfig(
-            yaml.getBoolean("market-broadcast.enabled", true),
+            yaml.getBoolean("market-broadcast.enabled", false),
             yaml.getDouble("market-broadcast.threshold", 1000.0)
         );
 
@@ -417,7 +428,7 @@ public record QQBotConfiguration(
             signin, prizes, monitor, scheduledMessages, broadcast, marketBroadcast,
             welcome, autoReply, announce, moderation, blacklist,
             yaml.getBoolean("at-to-game.enabled", true),
-            ui
+            ui, QQBotDeliveryConfig.load(yaml), yaml.getBoolean("admin.remote-console-enabled", false)
         );
     }
 

@@ -1,0 +1,20 @@
+from-version: 5
+to-version: 6
+description: "移除已由宿主认证接管的绑定策略，默认使用外部OneBot实现端"
+operations:
+  - type: remove
+    path: binding.method
+  - type: remove
+    path: binding.code-expire-seconds
+  - type: remove
+    path: binding.max-bindings-per-qq
+  - type: remove
+    path: whitelist.auto-add-on-bind
+  - type: remove
+    path: whitelist.auto-remove-on-unbind
+  - type: set-if-missing
+    path: onebot.snowluma.mode
+    value: external
+  - type: set-if-missing
+    path: admin.remote-console-enabled
+    value: false

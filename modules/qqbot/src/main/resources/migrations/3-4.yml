@@ -1,15 +1,8 @@
 from-version: 3
 to-version: 4
-description: "storage.mode 重命名为 storage.shared，值从 sqlite/mysql 映射为 true/false"
+description: "新增共享存储开关，保留原数据库类型与独立连接参数"
 operations:
   - type: set-if-missing
     path: storage.shared
-    value: true
-  - type: rename
-    from: storage.mode
-    to: storage.shared
-  - type: value-map
-    path: storage.shared
-    mapping:
-      "mysql": false
-      "sqlite": true
+    # 旧版均为独立存储；不能把原SQLite自动切至宿主MySQL，也不能删除mode。
+    value: false

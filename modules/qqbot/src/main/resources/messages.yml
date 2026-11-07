@@ -13,6 +13,7 @@ common:
   unknown: "&e未知命令，使用 /{0} qqbot help"
   only-player: "&c该命令仅限玩家使用。"
   no-permission: "&c你没有权限执行这个命令。"
+  operation-failed: "&c操作失败，请联系管理员查看服务器日志。"
 
 # ── help ──────────────────────────────────────────────
 help:
@@ -22,6 +23,7 @@ help:
   lookup: "&7{0} lookup <玩家|QQ>&f - 查询绑定"
   snowluma: "&7{0} snowluma ...&f - SnowLuma 进程管理"
   blacklist: "&7{0} blacklist <add|remove|list> [QQ]&f - 黑名单管理"
+  redemptions: "&7{0} redemptions list|get|resolve&f - 查询和人工复核兑换投递"
 
 # ── status ────────────────────────────────────────────
 status:
@@ -42,6 +44,7 @@ status:
 admin:
   send:
     usage: "&c用法: /axs qqbot send <all|群号> <消息>"
+    pending: "&7发送中，正在等待 QQ 实现端确认…"
     success-all: "&a消息已发送到所有群。"
     success-group: "&a消息已发送到群 &e{0}&a。"
     invalid-group: "&c无效的群号: &7{0}"
@@ -51,6 +54,12 @@ admin:
     by-qq-none: "&cQQ &7{0}&c 未绑定。"
     by-player-success: "&a玩家 &b{0}&a 绑定QQ: &e{1}"
     by-player-none: "&c玩家 &7{0}&c 未绑定。"
+  blacklist:
+    usage: "&c用法: /axs qqbot blacklist <add|remove|list> [QQ号]"
+    invalid-qq: "&c无效的 QQ 号: {0}"
+    empty: "&7动态黑名单为空。"
+    added: "&a已将 QQ {0} 加入黑名单。"
+    removed: "&a已将 QQ {0} 移出黑名单。"
   snowluma:
     checking: "&e正在检查 SnowLuma 版本..."
     title: "&bSnowLuma 管理:"
@@ -71,13 +80,18 @@ player:
   help:
     title: "&6QQBot 命令"
     bind: "&7{0} bind <验证码>&f - 绑定QQ"
-    unbind: "&7{0} unbind&f - 解绑QQ"
+    unbind: "&7{0} unbind confirm&f - 确认解绑QQ"
     info: "&7{0} info&f - 查看绑定信息"
-    ui: "&7{0} ui&f - 打开绑定中心面板"
+    ui: "&7{0} ui&f - 打开绑定与群消息中心（无参数也可打开）"
+    send: "&7{0} send <消息>&f - 向允许接收游戏消息的QQ群发送文本"
     admin: "&7{0} admin&f - 打开管理后台"
     at: "&7{0} at <QQ号> <消息>&f - @QQ群员"
   bind:
     usage: "&c用法: /{0} bind <验证码>"
+    pending: "&7正在由认证服务确认绑定…"
+  unbind:
+    confirm: "&e解绑可能重新触发服务器准入要求。确认请执行 /{0} unbind confirm"
+    pending: "&7正在解除绑定…"
   info:
     bind: "&a已绑定 QQ: &e{0}"
     none: "&7你尚未绑定QQ"
@@ -88,5 +102,8 @@ player:
     invalid-qq: "&c无效的QQ号: &7{0}"
     cooldown: "&c操作过于频繁，请 &e{0} &c秒后再试。"
     sent: "&a消息已通过QQ群发送给 &e{0}&a。"
+  send:
+    usage: "&c用法: /{0} send <消息>"
+    pending: "&7发送中，正在等待 QQ 实现端确认…"
   admin:
     no-permission: "&c你没有管理员权限。"

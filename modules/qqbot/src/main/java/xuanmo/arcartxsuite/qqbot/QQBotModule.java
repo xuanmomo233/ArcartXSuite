@@ -56,14 +56,18 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
     private BukkitTask redPacketRefundTask;
     // 异步启动守卫：startService 后台拉起 SnowLuma 期间若模块被关闭，置位以阻止/回收启动，避免孤儿进程。
     private volatile boolean closed = false;
+    private volatile long generation;
+    private BukkitTask startupTask;
+    private java.util.concurrent.CompletableFuture<Void> previousProcessCleanup = java.util.concurrent.CompletableFuture.completedFuture(null);
     // EventBus 订阅 ID：stopService 时退订，防止 /axs reload 后订阅叠加、播报重复
     private final List<String> eventBusSubscriptionIds = new java.util.ArrayList<>();
+    private final Map<java.util.UUID, org.bukkit.entity.Player> initializedClients = new java.util.concurrent.ConcurrentHashMap<>();
 
     @Override
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("qqbot")
             .name("QQBot")
-            .version("1.5.0")
+            .version("1.6.0")
             .mainClass(getClass().getName())
             .softDepends(List.of("chat"))
             .build();
@@ -80,8 +84,9 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
                     .dynamicSection("prizes")
                     .dynamicSection("scheduled-messages")
                     .dynamicSection("auto-reply.rules")
+                    .opaqueSection("storage")
                 .build())
-            .currentVersion(5)
+            .currentVersion(6)
             .validations(List.of(
                     ValidationRule.required("onebot.ws-url", ValueType.STRING),
                     ValidationRule.required("storage.shared", ValueType.BOOLEAN),
@@ -123,6 +128,14 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
     }
 
     @Override
+    protected xuanmo.arcartxsuite.api.ClientInitializedHandler createInitializedHandler() {
+        return player -> {
+            initializedClients.put(player.getUniqueId(), player);
+            if (uiService != null) uiService.markClientReady(player);
+        };
+    }
+
+    @Override
     protected void loadConfiguration(@Nullable File configFile) throws Exception {
         if (configFile == null) {
             throw new IllegalStateException("ArcartXQQBot.yml 配置文件缺失");
@@ -134,6 +147,8 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
     @Override
     protected void startService() throws Exception {
         closed = false;
+        final long startedGeneration = ++generation;
+        final java.util.concurrent.CompletableFuture<Void> cleanupBeforeStart = previousProcessCleanup;
         // 1. 初始化存储
         // 共享模式：使用本体统一数据源，模块只需提供表前缀
         // 若模块配置了独立 storage 节（mode=mysql 等），则走自建模式（向后兼容）
@@ -168,16 +183,18 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
         );
 
         // 4. 初始化 OneBot WebSocket 客户端
+        final QQBotService startedService = service;
         oneBotClient = new OneBotClient(
             configuration.onebot().wsUrl(),
             configuration.onebot().accessToken(),
             configuration.onebot().reconnectIntervalSeconds(),
             configuration.onebot().heartbeatIntervalSeconds(),
             logger,
-            event -> service.handleOneBotEvent(event),
-            () -> service.onBotConnected(),
-            reason -> service.onBotDisconnected(reason)
+            startedService::handleOneBotEvent,
+            startedService::onBotConnected,
+            startedService::onBotDisconnected
         );
+        oneBotClient.setGroupRateLimit(configuration.delivery().groupMessagesPerMinute());
 
         // 5. 注入 client + capability suppliers
         service.setClient(oneBotClient);
@@ -194,7 +211,7 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
         service.start();
 
         // 7. SnowLuma 进程管理（必须在 WS 连接前启动）
-        // 从 onebot.ws-url 解析出 WS 端口传入，使「按端口清理残留」跟随用户配置，而非写死 3001。
+        // Connection diagnostics use the WS port; process ownership never depends on a port.
         int snowLumaWsPort = 3001;
         try {
             int p = java.net.URI.create(configuration.onebot().wsUrl()).getPort();
@@ -204,7 +221,7 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
             java.nio.file.Path.of("").toAbsolutePath(),
             configuration.onebot().snowluma(),
             logger,
-            () -> configuration.debug(),
+            configuration::debug,
             snowLumaWsPort
         );
         // 8. SnowLuma 启动 + 等待 WS 端口 + 连接 OneBot —— 放到异步线程执行。
@@ -215,14 +232,16 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
         final String wsUrl = configuration.onebot().wsUrl();
         final boolean localWs = isLocalWsUrl(wsUrl);
         // OneBot 断开告警末尾追加 SnowLuma 状态提示（未安装/未运行时指引到具体命令）
-        service.setDisconnectHint(() -> {
-            var m = snowLumaManager;
-            return m == null ? null : m.notReadyHint(localWs);
-        });
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            if (closed) return;                       // 已关闭：不再拉起进程
+        service.setDisconnectHint(() -> "实现端状态可执行 /axs qqbot snowluma status 查询；外部实现端请核对 WS 与 token。");
+        startupTask = Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            try { cleanupBeforeStart.join(); }
+            catch (RuntimeException cleanupFailed) {
+                logger.severe("[QQBot] 上一轮托管进程清理失败，本轮停止启动。请核对进程归属后重载。");
+                return;
+            }
+            if (closed || generation != startedGeneration) return;
             slm.init();
-            if (closed) {                             // 启动期间模块被关闭：立即回收，避免孤儿进程
+            if (closed || generation != startedGeneration) {
                 slm.shutdown();
                 obc.shutdown();
                 return;
@@ -230,7 +249,7 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
             boolean running = slm.getStatus() == xuanmo.arcartxsuite.qqbot.process.SnowLumaProcessManager.Status.RUNNING;
             if (running) {
                 waitForPort(wsUrl, 8000);
-                if (closed) {                         // 等端口期间被关闭：同样回收
+                if (closed || generation != startedGeneration) {
                     slm.shutdown();
                     obc.shutdown();
                     return;
@@ -247,29 +266,17 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
         });
 
         // 9. 注册管理命令
-        adminCommand = new QQBotAdminCommand(() -> service, () -> repository, snowLumaManager, messages());
+        adminCommand = new QQBotAdminCommand(plugin, () -> service, () -> repository, snowLumaManager, messages());
 
-        // 10. 注册 capability（PlayerDataPurgeable + DatabaseMigratable）
+        // QQ assets are owned by QQ identities, not deleted with a Minecraft character.
         JdbcQQBotRepository jdbcRepo = repository;
-        registerCapability(xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable.class,
-            new xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable() {
-                @Override public @NotNull String moduleId() { return "qqbot"; }
-                @Override public int purgePlayerData(@NotNull java.util.UUID playerUuid) {
-                    try { return jdbcRepo.deletePlayerData(playerUuid); }
-                    catch (Exception e) { logger.warning("QQBot purge 失败: " + e.getMessage()); return -1; }
-                }
-                @Override public int purgeAllPlayerData() {
-                    try { return jdbcRepo.deleteAllPlayerData(); }
-                    catch (Exception e) { logger.warning("QQBot purgeAll 失败: " + e.getMessage()); return -1; }
-                }
-            });
 
         registerCapability(xuanmo.arcartxsuite.api.capability.DatabaseMigratable.class,
             new xuanmo.arcartxsuite.api.capability.DatabaseMigratable() {
                 @Override public @NotNull String moduleId() { return "qqbot"; }
                 @Override public @NotNull xuanmo.arcartxsuite.api.storage.MigrationResult migrateDatabase(
                         @NotNull xuanmo.arcartxsuite.api.storage.StorageDescriptor target, boolean overwrite) {
-                    return jdbcRepo.migrateData(target, overwrite);
+                    return jdbcRepo.migrateSafely(target, overwrite);
                 }
                 @Override public @NotNull xuanmo.arcartxsuite.api.storage.StorageDescriptor currentDescriptor() {
                     return jdbcRepo.getDescriptor();
@@ -281,14 +288,27 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
         registerCapability(QQBotBroadcastable.class, new QQBotBroadcastable() {
             @Override
             public void sendToGroup(long groupId, @NotNull String message) {
-                svc.sendToGroup(groupId, message);
+                svc.sendToGroup(groupId, message).thenAccept(result -> {
+                    if (!result.success()) logger.warning("QQ 通知未完成: " + result.message());
+                });
             }
 
             @Override
             public void sendToAllGroups(@NotNull String message) {
-                svc.sendToAllGroups(message);
+                svc.sendToAllGroups(message).thenAccept(result -> {
+                    if (!result.success()) logger.warning("QQ 通知未完成: " + result.message());
+                });
             }
         });
+        registerCapability(xuanmo.arcartxsuite.api.capability.QQBotDelivery.class,
+            new xuanmo.arcartxsuite.api.capability.QQBotDelivery() {
+                @Override public java.util.concurrent.CompletionStage<Result> sendToGroup(long groupId, String message) {
+                    return svc.sendToGroup(groupId, message).thenApply(result -> publicDeliveryResult(result, 1));
+                }
+                @Override public java.util.concurrent.CompletionStage<Result> sendToAllGroups(String message) {
+                    return svc.sendToAllGroups(message).thenApply(result -> publicDeliveryResult(result, svc.configuration().groups().size()));
+                }
+            });
 
         // 13. 注册 QQBotNotifiable capability（反向通知）
         registerCapability(xuanmo.arcartxsuite.api.capability.QQBotNotifiable.class,
@@ -313,18 +333,21 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
         uiService = new QQBotUiService(
             plugin, configuration, repository, bindService, packetBridge, logger
         );
-        uiService.setSendToGroupCallback(msg -> svc.sendToAllGroups(msg));
+        uiService.setSendPlayerMessageCallback(svc::sendPlayerMessage);
         uiService.setServiceConnectedSupplier(() -> svc.isConnected());
+        initializedClients.values().stream().filter(player -> player.isOnline()
+            && Bukkit.getPlayer(player.getUniqueId()) == player).forEach(uiService::markClientReady);
 
         // 玩家退出时清理 UI 动作令牌与在途标记
-        Bukkit.getPluginManager().registerEvents(new org.bukkit.event.Listener() {
+        registerListener(new org.bukkit.event.Listener() {
             @org.bukkit.event.EventHandler
             public void onPlayerQuit(org.bukkit.event.player.PlayerQuitEvent event) {
+                initializedClients.remove(event.getPlayer().getUniqueId(), event.getPlayer());
                 if (uiService != null) {
                     uiService.clearPlayerState(event.getPlayer().getUniqueId());
                 }
             }
-        }, plugin);
+        });
 
         // 注入群消息监听器到 UI 服务
         QQBotUiService uiSvc = uiService;
@@ -428,9 +451,19 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
         return uiService;
     }
 
+    private static xuanmo.arcartxsuite.api.capability.QQBotDelivery.Result publicDeliveryResult(
+            xuanmo.arcartxsuite.qqbot.onebot.OneBotResult result, int total) {
+        int sent = result.data().has("sentGroups") ? result.data().get("sentGroups").getAsInt() : result.success() ? total : 0;
+        return new xuanmo.arcartxsuite.api.capability.QQBotDelivery.Result(result.success(), result.retcode() == -2, sent, total, result.message());
+    }
+
     @Override
     protected void stopService() {
         closed = true;   // 通知后台异步启动任务停止/回收
+        generation++;
+        if (service != null) service.shutdown();
+        if (startupTask != null) { startupTask.cancel(); startupTask = null; }
+        if (uiService != null) uiService.shutdown();
         uiService = null;
         if (monitorService != null) {
             monitorService.stop();
@@ -455,7 +488,7 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
             loginAuditListener = null;
         }
         if (snowLumaManager != null) {
-            snowLumaManager.shutdown();
+            previousProcessCleanup = snowLumaManager.shutdownAsync();
             snowLumaManager = null;
         }
         if (oneBotClient != null) {
@@ -463,7 +496,6 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
             oneBotClient = null;
         }
         if (service != null) {
-            service.shutdown();
             service = null;
         }
         if (repository != null) {
@@ -483,12 +515,13 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
         }
         storageManager.closeModuleDataSource("qqbot");
         configuration = null;
+        adminCommand = null;
     }
 
     @Override
     protected @NotNull Map<String, TabExecutor> commandBindings() {
         return Map.of(
-            "qqbot", new QQBotPlayerCommand(() -> service, () -> uiService, messages())
+            "qqbot", new QQBotPlayerCommand(plugin, () -> service, () -> uiService, messages())
         );
     }
 
@@ -537,7 +570,7 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
         try {
             java.net.URI uri = java.net.URI.create(wsUrl);
             String host = uri.getHost() != null ? uri.getHost() : "127.0.0.1";
-            int port = uri.getPort() > 0 ? uri.getPort() : 80;
+            int port = uri.getPort() > 0 ? uri.getPort() : "wss".equalsIgnoreCase(uri.getScheme()) ? 443 : 80;
             try (java.net.Socket socket = new java.net.Socket()) {
                 socket.connect(new java.net.InetSocketAddress(host, port), timeoutMs);
                 return true;
@@ -551,9 +584,20 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
      * 打印 OneBot 实现端部署引导（仅当本机 ws 端口无服务时调用）。
      * 区分「未安装」与「已安装未运行」两种情形，并附 WebUI/密码查询方式。
      */
+    private static String redactedWsUrl(String value) {
+        try {
+            java.net.URI uri = java.net.URI.create(value);
+            return new java.net.URI(uri.getScheme(), null, uri.getHost(), uri.getPort(), uri.getPath(), null, null).toString();
+        } catch (Exception ignored) { return "所配置的 OneBot 端点"; }
+    }
+
     private void logOneBotSetupGuide(SnowLumaProcessManager slm) {
         if (configuration == null) return; // 异步期间模块可能已被卸载
-        String wsUrl = configuration.onebot().wsUrl();
+        String wsUrl = redactedWsUrl(configuration.onebot().wsUrl());
+        if (!configuration.onebot().snowluma().isManaged()) {
+            logger.warning("[QQBot] 外部 OneBot 未就绪：请配置正向 Universal WebSocket 与相同 access-token，登录 QQ 后将自动重连。详见 QQBot 安装教学。");
+            return;
+        }
         boolean docker = configuration.onebot().snowluma().isDocker();
         StringBuilder sb = new StringBuilder();
         sb.append("====================== [QQBot] 部署引导 ======================\n");
@@ -592,7 +636,7 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
         try {
             java.net.URI uri = java.net.URI.create(wsUrl);
             String host = uri.getHost() != null ? uri.getHost() : "127.0.0.1";
-            int port = uri.getPort() > 0 ? uri.getPort() : 80;
+            int port = uri.getPort() > 0 ? uri.getPort() : "wss".equalsIgnoreCase(uri.getScheme()) ? 443 : 80;
             long deadline = System.currentTimeMillis() + timeoutMs;
             logger.info("等待 WS 端口 " + host + ":" + port + " 就绪...");
             while (System.currentTimeMillis() < deadline) {
