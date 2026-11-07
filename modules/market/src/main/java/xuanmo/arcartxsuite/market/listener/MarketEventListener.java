@@ -7,6 +7,7 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityPickupItemEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.inventory.ItemStack;
 import xuanmo.arcartxsuite.market.MarketService;
 import xuanmo.arcartxsuite.market.recycle.RecycleService;
@@ -27,7 +28,7 @@ public class MarketEventListener implements Listener {
         this.serviceSupplier = serviceSupplier;
     }
 
-    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onPickup(EntityPickupItemEvent event) {
         if (!autoRecycleEnabled) return;
         if (!(event.getEntity() instanceof Player player)) return;
@@ -37,16 +38,24 @@ public class MarketEventListener implements Listener {
         if (service == null) return;
 
         ItemStack item = event.getItem().getItemStack();
-        if (service.isRecyclable(item)) {
-            // 自动回收：取消拾取并给钱，向玩家发送反馈
-            event.setCancelled(true);
-            RecycleService.RecycleResult result = service.recycleAuto(player, item.clone());
-            // 仅回收成功才删除掉落物——货币桥不可用/存款失败时保留物品，避免吞物
-            if (result.success()) {
-                event.getItem().remove();
+        if(service.canAutoRecycle(player,item)){
+            ItemStack snapshot=item.clone();
+            try{
+                var result=service.recycleAuto(player,snapshot,()->{
+                    ItemStack current=event.getItem().getItemStack();
+                    if(!event.getItem().isValid() || !current.isSimilar(snapshot) || current.getAmount()!=snapshot.getAmount())throw new IllegalStateException("拾取物品已变化");
+                    event.getItem().remove();
+                });
+                if(result.success())event.setCancelled(true);
+            }catch(RuntimeException exception){
+                if(!event.getItem().isValid())event.setCancelled(true);
+                player.sendMessage("§c自动回收已中断，已保留流水，请联系管理员核对。");
             }
         }
     }
+
+    @EventHandler
+    public void onJoin(PlayerJoinEvent event){MarketService service=serviceSupplier.get();if(service!=null)service.warmMarketPlayer(event.getPlayer());}
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void onQuit(PlayerQuitEvent event) {

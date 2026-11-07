@@ -1,0 +1,1014 @@
+# AXS Market — 独立玩家店铺
+ui:
+  isHud: false
+  defaultOpen: false
+  hide:
+    - hotbar
+    - experience_bar
+    - crosshair
+    - item_name
+    - jump_bar
+    - mount_health
+    - player_state
+    - player_health
+    - armor_level
+    - food_level
+    - air_level
+  through: false
+  background: false
+  escClose: false
+  closeDied: true
+  show: true
+  jei: false
+  level: 8
+  itemSize: 16
+  screenScale: true
+  packetHandler:
+    store_follow_state: |-
+      var.actionToken = packet['action_token']
+      if(packet['owner'] == var.owner){var.followed = packet['followed']}
+    checkout_data: |-
+      if(var.showTradeConfirm && packet['id'] == var.tradeId && packet['owner'] == var.owner){
+        var.actionToken = packet['action_token']
+        var.checkoutBusy = false
+        var.checkoutSeconds = 0
+        var.checkoutPoll = 0
+        var.tradeConfirmText = packet['message']
+        var.checkoutCanSubmit = var.tradeMode == 'cancel' ? packet['canCancel'] : packet['canBuy']
+      }
+    action_result: |-
+      var.actionToken = packet['action_token']
+      if(packet['rejected'] == true){
+        var.actionBusy = false
+        var.followPending = false
+        var.saving = false
+        var.resultMsg = '会话已刷新，请重新确认后提交'
+      } else if(!var.followPending && !var.saving){
+        var.actionBusy = false
+      }
+    store_result: |-
+      var.packetId = packet['packetId']
+      var.actionToken = packet['action_token']
+      var.resultMsg = packet['message']
+      if(packet['pending'] != true){
+        var.followPending = false
+        var.actionBusy = false
+        var.loading = false
+      }
+    storefront_data: |-
+      var.packetId = packet['packetId']
+      var.actionToken = packet['action_token']
+      var.found = packet['found']
+      var.loading = false
+      if(!var.found){
+        var.showTradeConfirm = false
+        var.shopName = '店铺尚未开店或已被清理'
+        var.isOwner = false
+        var.count = 0
+        var.listings = {}
+        var.resultMsg = packet['message']
+      } else {
+        var.owner = packet['owner']
+        var.ownerName = packet['ownerName']
+        var.shopName = packet['shopName']
+        var.iconJson = packet['iconJson']
+        var.isOwner = packet['isOwner']
+        var.followed = packet['followed']
+        var.followers = packet['followers']
+        var.activeCount = packet['activeCount']
+        var.sales = packet['sales']
+        var.page = packet['page']
+        var.pages = packet['pages']
+        var.pageText = packet['pageText']
+        var.keyword = packet['keyword']
+        var.created = packet['created']
+        var.ownerOnline = packet['ownerOnline']
+        var.descriptionLines = packet['descriptionLines']
+        var.announcementLines = packet['announcementLines']
+        var.listings = packet['listings']
+        var.count = packet['count']
+        var.icons = {}
+        if(var.count > 0){
+          for(i in range(0, var.count - 1)){
+            key = i.round()
+            var.icons[key] = packet['itemJson' + key]
+          }
+        }
+        if(!var.searchDirty || var.searchSubmitted){
+          var.searchDraft = var.keyword
+          var.searchDirty = false
+          var.searchSubmitted = false
+          scheduler.delay(50, -> {
+            if(val.店铺搜索输入 != none){
+              var.searchHydrating = true
+              val.店铺搜索输入.setContent(var.searchDraft)
+              var.searchHydrating = false
+            }
+          })
+        }
+        scheduler.delay(50, -> {
+          if(val.商品卡片区 != none){
+            if(var.count != var.renderedCount){
+              while(val.商品卡片区.childrenCount() > 1){val.商品卡片区.get(1).remove()}
+              if(var.count > 1){
+                for(i in range(1, var.count - 1)){
+                  e = val.商品卡片区['商品卡片'].copy('商品卡片' + i.round())
+                  e.entryKey = i.round()
+                }
+              }
+              var.renderedCount = var.count
+            }
+            if(var.count > 0){
+              for(i in range(0, var.count - 1)){
+                e = val.商品卡片区.get(i.round())
+                if(e != none && e['商品图标'] != none){e['商品图标'].seticon()}
+              }
+            }
+          }
+        })
+        scheduler.delay(50, -> {
+          if(val.店铺大图标 != none){val.店铺大图标.seticon()}
+          if(val.简介行区 != none){
+            while(val.简介行区.childrenCount() > 1){val.简介行区.get(1).remove()}
+            if(var.descriptionLines.keys().length > 1){for(i in range(1, var.descriptionLines.keys().length - 1)){e = val.简介行区['简介行'].copy('简介行' + i.round())
+            e.entryKey = i.round()}}
+          }
+          if(val.公告行区 != none){
+            while(val.公告行区.childrenCount() > 1){val.公告行区.get(1).remove()}
+            if(var.announcementLines.keys().length > 1){for(i in range(1, var.announcementLines.keys().length - 1)){e = val.公告行区['公告行'].copy('公告行' + i.round())
+            e.entryKey = i.round()}}
+          }
+        })
+      }
+  action:
+    load: |-
+      var.packetId = 'AXS_MARKET'
+      var.actionToken = ''
+      var.actionBusy = false
+      var.followPending = false
+      var.saving = false
+      var.loading = true
+      var.resultMsg = ''
+      var.page = 0
+      var.pages = 1
+      var.pageText = '1/1'
+      var.keyword = ''
+      var.searchDraft = ''
+      var.searchDirty = false
+      var.searchSubmitted = false
+      var.searchHydrating = false
+      var.count = 0
+      var.renderedCount = -1
+      var.icons = {}
+      var.air = '{"id":"minecraft:air","Count":1b}'
+      var.refreshSeconds = 0
+      var.found = false
+      var.shopName = '正在打开店铺'
+      var.ownerName = ''
+      var.owner = ''
+      var.ownerOnline = false
+      var.isOwner = false
+      var.followed = false
+      var.followers = 0
+      var.activeCount = 0
+      var.sales = 0
+      var.created = ''
+      var.iconJson = var.air
+      var.descriptionLines = {}
+      var.announcementLines = {}
+      var.listings = {}
+      var.showTradeConfirm = false
+      var.checkoutBusy = false
+      var.checkoutCanSubmit = false
+      var.checkoutSeconds = 0
+      var.checkoutPoll = 0
+      var.tradeMode = ''
+      sx = Screen.getWidth() / 1920
+      sy = Screen.getHeight() / 1080
+      s = sx < sy ? sx : sy
+      var.viewH = Screen.getHeight() / s
+      var.viewW = Screen.getWidth() / s
+      var.offX = (var.viewW - 1920) / 2
+      var.pageW = var.viewW - 96
+      var.pageH = var.viewH - 72
+      var.cardW = (var.pageW - 80) / 3
+      var.storeGoodsW = var.pageW - 420
+      var.goodsCardW = (var.storeGoodsW - 80) / 3
+      var.formW = var.pageW - 540
+    open: |-
+      Packet.send(var.packetId, 'pshop_store_open')
+    resize: |-
+      sx = Screen.getWidth() / 1920
+      sy = Screen.getHeight() / 1080
+      s = sx < sy ? sx : sy
+      var.viewH = Screen.getHeight() / s
+      var.viewW = Screen.getWidth() / s
+      var.offX = (var.viewW - 1920) / 2
+      var.pageW = var.viewW - 96
+      var.pageH = var.viewH - 72
+      var.cardW = (var.pageW - 80) / 3
+      var.storeGoodsW = var.pageW - 420
+      var.goodsCardW = (var.storeGoodsW - 80) / 3
+      var.formW = var.pageW - 540
+    seconds: |-
+      if(var.showTradeConfirm){
+        var.checkoutPoll = var.checkoutPoll + 1
+        if(var.checkoutBusy){
+          var.checkoutSeconds = var.checkoutSeconds + 1
+          if(var.checkoutSeconds >= 10){
+            var.checkoutBusy = false
+            var.checkoutCanSubmit = false
+            var.tradeConfirmText = '核对超时，请手动重新核对；尚未扣款'
+          }
+        } else if(var.checkoutPoll >= 5 && !var.actionBusy){
+          var.checkoutBusy = true
+          var.checkoutSeconds = 0
+          var.checkoutPoll = 0
+          Packet.send(var.packetId, 'pshop_store_quote', var.tradeId)
+        }
+      }
+      var.refreshSeconds = var.refreshSeconds + 1
+      if(var.refreshSeconds >= 8 && !var.loading && !var.actionBusy && !var.followPending && !var.showTradeConfirm && !var.searchDirty){
+        var.refreshSeconds = 0
+        var.loading = true
+        Packet.send(var.packetId, 'pshop_store_list', var.page, var.keyword)
+      }
+
+controls:
+  全屏底:
+    type: Texture
+    attribute:
+      point: ~stretch_all
+      through: true
+      normal: ~Frosted:28;17,24,32,240
+  页面布局:
+    type: Adaptive
+    attribute:
+      point: ~top_center
+      width: 1920
+      height: 1080
+    children:
+      页面:
+        type: Canvas
+        attribute:
+          x: "48 - var.offX"
+          y: 36
+          width: "var.pageW"
+          height: "var.pageH"
+        children:
+          页面底:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              through: true
+              normal: ~25,34,45,240
+              shape: ~round_rect
+              radius: 16
+          页面标题:
+            type: Scroll
+            attribute:
+              x: "28"
+              y: "24"
+              width: "var.pageW - 620"
+              height: 62
+              scrollAnim: none
+              moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
+            action:
+              enter: |-
+                self.scrollAnim = Lerp(0, 1, 2500)
+              leave: |-
+                self.scrollAnim = none
+            children:
+              文字:
+                type: Text
+                attribute:
+                  x: 0
+                  y: 0
+                  texts: "'&f' + var.shopName"
+                  fontSize: 42
+                  through: true
+          真实店主:
+            type: Text
+            attribute:
+              x: "30"
+              y: "82"
+              texts: "'&7店主 ' + var.ownerName + ' · 开店于 ' + var.created"
+              fontSize: 24
+              through: true
+              visible: "var.found"
+          返回目录:
+            type: Canvas
+            attribute:
+              x: "var.pageW - 180"
+              y: "24"
+              width: "150"
+              height: 46
+              enable: "!var.actionBusy"
+            action:
+              clickLeft: |-
+                Packet.send(var.packetId, 'pshop_store_back')
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~49,70,80,235
+                  shape: ~round_rect
+                  radius: 9
+              文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "~&f返回"
+                  fontSize: 26
+                  through: true
+          装修:
+            type: Canvas
+            attribute:
+              x: "var.pageW - 360"
+              y: "24"
+              width: "160"
+              height: 46
+              enable: "!var.actionBusy"
+              visible: "var.isOwner && var.found"
+            action:
+              clickLeft: |-
+                Packet.send(var.packetId, 'pshop_profile_ui_open')
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~49,70,80,235
+                  shape: ~round_rect
+                  radius: 9
+              文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "~&b装修店铺"
+                  fontSize: 26
+                  through: true
+          上架:
+            type: Canvas
+            attribute:
+              x: "var.pageW - 540"
+              y: "24"
+              width: "160"
+              height: 46
+              enable: "!var.actionBusy"
+              visible: "var.isOwner && var.found"
+            action:
+              clickLeft: |-
+                Packet.send(var.packetId, 'pshop_store_sell')
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~49,70,80,235
+                  shape: ~round_rect
+                  radius: 9
+              文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "~&e上架商品"
+                  fontSize: 26
+                  through: true
+          收藏当前店:
+            type: Canvas
+            attribute:
+              x: "var.pageW - 360"
+              y: "24"
+              width: "160"
+              height: 46
+              enable: "!var.actionBusy && var.actionToken != ''"
+              visible: "!var.isOwner && var.found"
+            action:
+              clickLeft: |-
+                var.followPending = true
+                var.actionBusy = true
+                Packet.send(var.packetId, 'pshop_store_follow', var.owner, var.actionToken, var.followed ? '0' : '1')
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~49,70,80,235
+                  shape: ~round_rect
+                  radius: 9
+              文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "var.followed ? '&e取消收藏' : '&e收藏店铺'"
+                  fontSize: 26
+                  through: true
+          分享地址:
+            type: Canvas
+            attribute:
+              x: "var.pageW - 540"
+              y: "24"
+              width: "160"
+              height: 46
+              enable: "!var.actionBusy"
+              visible: "!var.isOwner && var.found"
+            action:
+              clickLeft: |-
+                Packet.send(var.packetId, 'pshop_store_share')
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~49,70,80,235
+                  shape: ~round_rect
+                  radius: 9
+              文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "~&b店铺地址"
+                  fontSize: 26
+                  through: true
+          店铺资料:
+            type: Canvas
+            attribute:
+              x: 24
+              y: 136
+              width: 348
+              height: "var.pageH - 238"
+              visible: "var.found"
+            children:
+              背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~35,47,59,230
+                  shape: ~round_rect
+                  radius: 12
+              店铺大图标:
+                type: Slot
+                val: 店铺大图标
+                attribute:
+                  x: 94
+                  y: 20
+                  width: 160
+                  height: 160
+                  slotType: ~Icon
+                  itemScale: 0.9
+                  seticon: "self.setItemIcon(var.iconJson != '' ? var.iconJson : var.air)"
+              营业信息:
+                type: Text
+                attribute:
+                  x: "20"
+                  y: "200"
+                  texts: "var.ownerOnline ? '&a本服在线 · 可离线购买' : '&7不在本服 · 可离线购买'"
+                  fontSize: 22
+                  through: true
+              数量统计:
+                type: Text
+                attribute:
+                  x: "20"
+                  y: "240"
+                  texts: "'&b在售 ' + var.activeCount.round() + ' · 成交 ' + var.sales.round() + ' · 收藏 ' + var.followers.round()"
+                  fontSize: 22
+                  through: true
+              简介标题:
+                type: Text
+                attribute:
+                  x: "20"
+                  y: "286"
+                  texts: "~&f简介"
+                  fontSize: 26
+                  through: true
+              简介滑块:
+                type: Texture
+                val: 简介滑块
+                attribute:
+                  x: 332
+                  y: 328
+                  width: 6
+                  height: 44
+                  maxDragY: "142 - 44"
+                  normal: ~127,177,187,240
+              简介滚动:
+                type: Scroll
+                attribute:
+                  x: 20
+                  y: 328
+                  width: 308
+                  height: "142"
+                  moveY: "val.简介滑块.getDragYRatio()"
+                action:
+                  wheel: |-
+                    val.简介滑块.setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                children:
+                  简介行区:
+                    type: VStack
+                    val: 简介行区
+                    attribute:
+                      width: 304
+                      spaceBetween: 8
+                    children:
+                      简介行:
+                        type: Text
+                        attribute:
+                          entryKey: 0.round()
+                          visible: "var.descriptionLines[self.entryKey] != none"
+                          texts: "'&7' + var.descriptionLines[self.entryKey]"
+                          fontSize: 22
+                          height: 28
+                          through: true
+              店铺公告标题:
+                type: Text
+                attribute:
+                  x: "20"
+                  y: "492"
+                  texts: "~&f店铺公告"
+                  fontSize: 26
+                  through: true
+              店铺公告滑块:
+                type: Texture
+                val: 店铺公告滑块
+                attribute:
+                  x: 332
+                  y: 534
+                  width: 6
+                  height: 44
+                  maxDragY: "var.pageH - 804 - 44"
+                  normal: ~127,177,187,240
+              店铺公告滚动:
+                type: Scroll
+                attribute:
+                  x: 20
+                  y: 534
+                  width: 308
+                  height: "var.pageH - 804"
+                  moveY: "val.店铺公告滑块.getDragYRatio()"
+                action:
+                  wheel: |-
+                    val.店铺公告滑块.setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                children:
+                  公告行区:
+                    type: VStack
+                    val: 公告行区
+                    attribute:
+                      width: 304
+                      spaceBetween: 8
+                    children:
+                      公告行:
+                        type: Text
+                        attribute:
+                          entryKey: 0.round()
+                          visible: "var.announcementLines[self.entryKey] != none"
+                          texts: "'&7' + var.announcementLines[self.entryKey]"
+                          fontSize: 22
+                          height: 28
+                          through: true
+          店铺搜索输入:
+            type: TextBox
+            val: 店铺搜索输入
+            attribute:
+              x: "400"
+              y: "136"
+              width: "440"
+              height: 42
+              length: "100"
+              fontSize: 28
+            action:
+              textChange: |-
+                var.searchDraft = self.getContent()
+                if(!var.searchHydrating){var.searchDirty = true}
+              enter: |-
+                var.loading = true
+                var.searchSubmitted = true
+                Packet.send(var.packetId, 'pshop_store_list', '0', var.searchDraft)
+          搜索商品:
+            type: Canvas
+            attribute:
+              x: "860"
+              y: "136"
+              width: "140"
+              height: 46
+              enable: "!var.loading && !var.actionBusy"
+            action:
+              clickLeft: |-
+                var.loading = true
+                var.searchSubmitted = true
+                Packet.send(var.packetId, 'pshop_store_list', '0', var.searchDraft)
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~49,70,80,235
+                  shape: ~round_rect
+                  radius: 9
+              文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "~&b店内搜索"
+                  fontSize: 26
+                  through: true
+          手动刷新:
+            type: Canvas
+            attribute:
+              x: 1020
+              y: 136
+              width: 130
+              height: 44
+              enable: "!var.actionBusy"
+            action:
+              clickLeft: |-
+                var.loading = true
+                Packet.send(var.packetId, 'pshop_store_list', var.page, var.keyword)
+            children:
+              文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "~&b刷新页面"
+                  fontSize: 24
+                  through: true
+          搜索草稿提示:
+            type: Text
+            attribute:
+              x: 1190
+              y: 146
+              visible: "var.searchDirty"
+              texts: "~&e关键词尚未应用，请搜索或回车"
+              fontSize: 22
+              through: true
+          整组提示:
+            type: Text
+            attribute:
+              x: "1020"
+              y: "146"
+              texts: "~&7商品按整组固定价格出售"
+              fontSize: 24
+              through: true
+              visible: "var.found && !var.searchDirty"
+          商品滑块:
+            type: Texture
+            val: 商品滑块
+            attribute:
+              x: "var.pageW - 20"
+              y: 208
+              width: 6
+              height: 64
+              maxDragY: "var.pageH - 378"
+              normal: ~127,177,187,245
+          商品滚动:
+            type: Scroll
+            attribute:
+              x: 400
+              y: 208
+              width: "var.storeGoodsW"
+              height: "var.pageH - 314"
+              moveY: "val.商品滑块.getDragYRatio()"
+              visible: "var.found"
+            action:
+              wheel: |-
+                val.商品滑块.setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+            children:
+              商品卡片区:
+                type: HGrid
+                val: 商品卡片区
+                attribute:
+                  width: "var.storeGoodsW"
+                  column: 3
+                  spaceBetweenX: 16
+                  spaceBetweenY: 18
+                children:
+                  商品卡片:
+                    type: Canvas
+                    attribute:
+                      entryKey: 0.round()
+                      entry: var.listings[self.entryKey]
+                      visible: "self.entry != none"
+                      width: "var.goodsCardW"
+                      height: 300
+                    children:
+                      背景:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: ~37,48,62,235
+                          shape: ~round_rect
+                          radius: 12
+                      商品图标:
+                        type: Slot
+                        attribute:
+                          x: 20
+                          y: 20
+                          width: 88
+                          height: 88
+                          slotType: ~Icon
+                          itemScale: 0.72
+                          seticon: "self.setItemIcon(var.icons[self.parent.entryKey] != none && var.icons[self.parent.entryKey] != '' ? var.icons[self.parent.entryKey] : var.air)"
+                      商品名:
+                        type: Scroll
+                        attribute:
+                          x: "124"
+                          y: "24"
+                          width: "var.goodsCardW - 144"
+                          height: 40
+                          scrollAnim: none
+                          moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
+                        action:
+                          enter: |-
+                            self.scrollAnim = Lerp(0, 1, 2500)
+                          leave: |-
+                            self.scrollAnim = none
+                        children:
+                          文字:
+                            type: Text
+                            attribute:
+                              x: 0
+                              y: 0
+                              texts: "self.parent.parent.entry != none ? '&f' + self.parent.parent.entry['name'] : ''"
+                              fontSize: 28
+                              through: true
+                      数量:
+                        type: Text
+                        attribute:
+                          x: "124"
+                          y: "70"
+                          texts: "self.parent.entry != none ? '&7整组 ×' + self.parent.entry['amount'].round() : ''"
+                          fontSize: 24
+                          through: true
+                      总价:
+                        type: Text
+                        attribute:
+                          x: "20"
+                          y: "130"
+                          texts: "self.parent.entry != none ? '&e总价 ' + self.parent.entry['price'] : ''"
+                          fontSize: 26
+                          through: true
+                      留言:
+                        type: Scroll
+                        attribute:
+                          x: "20"
+                          y: "174"
+                          width: "var.goodsCardW - 40"
+                          height: 30
+                          scrollAnim: none
+                          moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
+                        action:
+                          enter: |-
+                            self.scrollAnim = Lerp(0, 1, 2500)
+                          leave: |-
+                            self.scrollAnim = none
+                        children:
+                          文字:
+                            type: Text
+                            attribute:
+                              x: 0
+                              y: 0
+                              texts: "self.parent.parent.entry != none ? '&7' + self.parent.parent.entry['message'] : ''"
+                              fontSize: 22
+                              through: true
+                      到期:
+                        type: Text
+                        attribute:
+                          x: "20"
+                          y: "208"
+                          texts: "self.parent.entry != none ? '&7到期 ' + self.parent.entry['expires'] : ''"
+                          fontSize: 22
+                          through: true
+                      购买或下架:
+                        type: Canvas
+                        attribute:
+                          x: "20"
+                          y: "246"
+                          width: "var.goodsCardW - 40"
+                          height: 46
+                          enable: "!var.actionBusy && var.actionToken != '' && self.parent.entry != none && (self.parent.entry['isMine'] || self.parent.entry['available'])"
+                        action:
+                          clickLeft: |-
+                            var.tradeId = self.parent.entry['id']
+                            var.checkoutCanSubmit = false
+                            var.checkoutBusy = true
+                            var.checkoutSeconds = 0
+                            var.checkoutPoll = 0
+                            var.tradeConfirmText = '整组 ×' + self.parent.entry['amount'].round() + '，总价 ' + self.parent.entry['price']
+                            if(self.parent.entry['isMine']){
+                              var.tradeMode = 'cancel'
+                              var.tradeConfirmText = '确认下架并退还这组商品？'
+                              var.executeTrade = -> { Packet.send(var.packetId, 'pshop_cancel', var.tradeId, var.actionToken) }
+                            } else {
+                              var.tradeMode = 'buy'
+                              var.executeTrade = -> { Packet.send(var.packetId, 'pshop_buy', var.tradeId, var.actionToken) }
+                            }
+                            var.showTradeConfirm = true
+                            Packet.send(var.packetId, 'pshop_store_quote', var.tradeId)
+                        children:
+                          底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              through: true
+                              normal: ~49,70,80,235
+                              shape: ~round_rect
+                              radius: 9
+                          文字:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              texts: "self.parent.parent.entry != none ? self.parent.parent.entry['actionText'] : ''"
+                              fontSize: 26
+                              through: true
+          商品为空:
+            type: Text
+            attribute:
+              x: "440"
+              y: "280"
+              texts: "~&7暂无匹配商品。店铺资料和收藏仍会保留。"
+              fontSize: 30
+              through: true
+              visible: "var.found && !var.loading && var.count == 0"
+          反馈:
+            type: Text
+            attribute:
+              x: "400"
+              y: "var.pageH - 108"
+              texts: "'&7' + var.resultMsg"
+              fontSize: 24
+              through: true
+          上一页:
+            type: Canvas
+            attribute:
+              x: "400"
+              y: "var.pageH - 74"
+              width: "140"
+              height: 46
+              enable: "!var.loading && !var.actionBusy && var.page > 0"
+            action:
+              clickLeft: |-
+                var.loading = true
+                Packet.send(var.packetId, 'pshop_store_list', var.page - 1, var.keyword)
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~49,70,80,235
+                  shape: ~round_rect
+                  radius: 9
+              文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "~&f上一页"
+                  fontSize: 26
+                  through: true
+          下一页:
+            type: Canvas
+            attribute:
+              x: "var.pageW - 170"
+              y: "var.pageH - 74"
+              width: "140"
+              height: 46
+              enable: "!var.loading && !var.actionBusy && var.page + 1 < var.pages"
+            action:
+              clickLeft: |-
+                var.loading = true
+                Packet.send(var.packetId, 'pshop_store_list', var.page + 1, var.keyword)
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~49,70,80,235
+                  shape: ~round_rect
+                  radius: 9
+              文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "~&f下一页"
+                  fontSize: 26
+                  through: true
+          页码:
+            type: Text
+            attribute:
+              x: "var.pageW / 2 + 120"
+              y: "var.pageH - 64"
+              texts: "'&f' + var.pageText"
+              fontSize: 26
+              through: true
+
+  交易确认弹窗:
+    type: Canvas
+    attribute:
+      point: ~stretch_all
+      visible: "var.showTradeConfirm == true"
+    children:
+      遮罩:
+        type: Texture
+        attribute:
+          point: ~stretch_all
+          normal: ~0,0,0,180
+      面板:
+        type: Canvas
+        attribute:
+          point: ~middle_center
+          width: 800
+          height: 320
+        children:
+          背景:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              through: true
+              normal: ~36,38,48,245
+          标题:
+            type: Text
+            attribute:
+              point: ~top_center
+              y: 24
+              texts: "~&f确认交易"
+              fontSize: 36
+              through: true
+          内容:
+            type: Text
+            attribute:
+              point: ~middle_center
+              texts: "var.checkoutBusy ? '&7正在核对商品、金额和状态...' : '&f' + var.tradeConfirmText"
+              fontSize: 28
+              through: true
+          重新核对:
+            type: Canvas
+            attribute:
+              point: ~top_center
+              y: 86
+              width: 220
+              height: 42
+              enable: "!var.checkoutBusy && !var.actionBusy"
+            action:
+              clickLeft: |-
+                var.checkoutBusy = true
+                var.checkoutSeconds = 0
+                Packet.send(var.packetId, 'pshop_store_quote', var.tradeId)
+            children:
+              文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "~&b重新核对商品与余额"
+                  fontSize: 24
+                  through: true
+          确认:
+            type: Canvas
+            attribute:
+              point: ~bottom_left
+              x: 90
+              y: -24
+              width: 240
+              height: 48
+              enable: "!var.actionBusy && !var.checkoutBusy && var.checkoutCanSubmit && var.actionToken != ''"
+            action:
+              clickLeft: |-
+                var.showTradeConfirm = false
+                var.actionBusy = true
+                var.executeTrade()
+            children:
+              文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "~&a确认"
+                  fontSize: 32
+                  through: true
+          取消:
+            type: Canvas
+            attribute:
+              point: ~bottom_right
+              x: -90
+              y: -24
+              width: 240
+              height: 48
+            action:
+              clickLeft: |-
+                var.showTradeConfirm = false
+            children:
+              文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "~&f取消"
+                  fontSize: 32
+                  through: true

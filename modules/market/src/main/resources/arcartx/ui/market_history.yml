@@ -42,6 +42,7 @@ ui:
       var.itemJsons = {}
       oldMaxRecordCount = var.maxRecordCount
       var.packetId = packet['packetId']
+      var.isAdmin = packet['isAdmin'] == true
       var.page = packet['page']
       var.totalPages = packet['totalPages']
       var.records = packet['records']
@@ -68,12 +69,14 @@ ui:
           }
         }
       }
-      for(i in range(0, var.maxRecordCount - 1)){
-        key = i.round()
-        if(val.记录列表 != none){
-          e = val.记录列表.get(key)
-          if(e != none && e['物品图标'] != none){
-            e['物品图标'].seticon()
+      if(var.maxRecordCount > 0){
+        for(i in range(0, var.maxRecordCount - 1)){
+          key = i.round()
+          if(val.记录列表 != none){
+            e = val.记录列表.get(key)
+            if(e != none && e['物品图标'] != none){
+              e['物品图标'].seticon()
+            }
           }
         }
       }
@@ -81,6 +84,7 @@ ui:
     load: |-
       var.packetId = 'AXS_MARKET'
       var.page = 0
+      var.isAdmin = false
       var.totalPages = 1
       var.emptyItemJson = '{"id":"minecraft:air","Count":1b}'
       sx = Screen.getWidth() / 1920
@@ -169,6 +173,33 @@ controls:
               x: 252
               texts: "~&7交易历史"
               fontSize: 36
+          管理交易:
+            type: Canvas
+            attribute:
+              point: ~middle_right
+              x: -120
+              width: 180
+              height: 48
+              visible: "var.isAdmin"
+            action:
+              clickLeft: |-
+                Packet.send(var.packetId, 'audit_ui_open')
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~36,66,92,240
+                  through: true
+                  shape: ~round_rect
+                  radius: 8
+              文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "~&b交易管理"
+                  fontSize: 26
+                  through: true
           关闭按钮:
             type: Canvas
             attribute:
@@ -606,7 +637,7 @@ controls:
                         attribute:
                           x: 105
                           y: 12
-                          texts: "self.parent.entry['typeColor'] + self.parent.entry['typeText']"
+                          texts: "self.parent.entry != none ? (self.parent.entry['typeColor'] + self.parent.entry['typeText']) : ''"
                           fontSize: 36
                           through: true
                       物品名:
@@ -614,7 +645,7 @@ controls:
                         attribute:
                           x: 105
                           y: 48
-                          texts: "'&f' + self.parent.entry['itemName']"
+                          texts: "self.parent.entry != none ? ('&f' + self.parent.entry['itemName']) : ''"
                           fontSize: 32
                           through: true
                       交易方:
@@ -623,7 +654,7 @@ controls:
                           x: 105
                           y: 82
                           visible: "self.parent.entry != none && self.parent.entry['counterpart'] != ''"
-                          texts: "'&7' + self.parent.entry['counterpart']"
+                          texts: "self.parent.entry != none ? ('&7' + self.parent.entry['counterpart']) : ''"
                           fontSize: 32
                           through: true
                       金额:
@@ -632,7 +663,7 @@ controls:
                           point: ~top_right
                           x: -15
                           y: 12
-                          texts: "'&e' + self.parent.entry['amount']"
+                          texts: "self.parent.entry != none ? ('&e' + self.parent.entry['amount']) : ''"
                           fontSize: 36
                           through: true
                       时间:
@@ -641,7 +672,7 @@ controls:
                           point: ~top_right
                           x: -15
                           y: 56
-                          texts: "'&7' + self.parent.entry['time']"
+                          texts: "self.parent.entry != none ? ('&7' + self.parent.entry['time']) : ''"
                           fontSize: 32
                           through: true
           # ── 底部分页栏 ──────────────────────────────

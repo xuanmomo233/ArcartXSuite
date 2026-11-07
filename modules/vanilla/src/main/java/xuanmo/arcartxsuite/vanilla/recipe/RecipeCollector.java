@@ -25,6 +25,8 @@ import java.util.Set;
  * 转换为可发送给客户端 UI 的数据结构（含中文名解析）。
  */
 public final class RecipeCollector {
+    private final RecipeMaterialPlanner planner = new RecipeMaterialPlanner();
+    public RecipeMaterialPlanner materialPlanner() { return planner; }
 
     private final VanillaItemNameBridge nameBridge;
 
@@ -33,47 +35,48 @@ public final class RecipeCollector {
     }
 
     public Map<String, Object> collectCraftingRecipes(Player player) {
+        return collectCraftingRecipes(player, planner.stock(player));
+    }
+    public Map<String, Object> collectCraftingRecipes(Player player, RecipeMaterialPlanner.Stock stock) {
         Map<String, Object> recipes = new LinkedHashMap<>();
         Set<NamespacedKey> discovered = player.getDiscoveredRecipes();
         Iterator<Recipe> it = Bukkit.recipeIterator();
-        int index = 0;
         while (it.hasNext()) {
             Recipe recipe = it.next();
             if (recipe instanceof ShapedRecipe) {
                 ShapedRecipe shaped = (ShapedRecipe) recipe;
                 if (!discovered.contains(shaped.getKey())) continue;
                 Map<String, Object> entry = buildShapedEntry(shaped);
-                entry.put("canCraft", canCraftShaped(player, shaped) ? 1 : 0);
-                recipes.put(Integer.toString(index), entry);
-                index++;
+                entry.put("canCraft", planner.canMake(player, shaped, stock) ? 1 : 0);
+                recipes.put(shaped.getKey().toString(), entry);
             } else if (recipe instanceof ShapelessRecipe) {
                 ShapelessRecipe shapeless = (ShapelessRecipe) recipe;
                 if (!discovered.contains(shapeless.getKey())) continue;
                 Map<String, Object> entry = buildShapelessEntry(shapeless);
-                entry.put("canCraft", canCraftShapeless(player, shapeless) ? 1 : 0);
-                recipes.put(Integer.toString(index), entry);
-                index++;
+                entry.put("canCraft", planner.canMake(player, shapeless, stock) ? 1 : 0);
+                recipes.put(shapeless.getKey().toString(), entry);
             }
         }
         return recipes;
     }
 
     public Map<String, Object> collectFurnaceRecipes(Player player) {
+        return collectFurnaceRecipes(player, planner.stock(player));
+    }
+    public Map<String, Object> collectFurnaceRecipes(Player player, RecipeMaterialPlanner.Stock stock) {
         // 只收集 FurnaceRecipe，还原原版行为：熔炉配方书只显示熔炉配方。
         // SmokingRecipe / BlastingRecipe 留给将来烟熏炉/高炉 UI 替换使用。
         Map<String, Object> recipes = new LinkedHashMap<>();
         Set<NamespacedKey> discovered = player.getDiscoveredRecipes();
         Iterator<Recipe> it = Bukkit.recipeIterator();
-        int index = 0;
         while (it.hasNext()) {
             Recipe recipe = it.next();
             if (recipe instanceof FurnaceRecipe) {
                 FurnaceRecipe furnace = (FurnaceRecipe) recipe;
                 if (!discovered.contains(furnace.getKey())) continue;
                 Map<String, Object> entry = buildCookingEntry(furnace.getResult(), furnace.getInput(), "furnace");
-                entry.put("canCraft", player.getInventory().containsAtLeast(furnace.getInput(), furnace.getInput().getAmount()) ? 1 : 0);
-                recipes.put(Integer.toString(index), entry);
-                index++;
+                entry.put("canCraft", planner.canMake(player, furnace, stock) ? 1 : 0);
+                recipes.put(furnace.getKey().toString(), entry);
             }
         }
         return recipes;
@@ -216,10 +219,13 @@ public final class RecipeCollector {
 
     private boolean canCraftShaped(Player player, ShapedRecipe recipe) {
         Map<Material, Integer> needed = new HashMap<>();
-        for (ItemStack item : recipe.getIngredientMap().values()) {
-            if (item == null || item.getType() == Material.AIR) continue;
-            Material mat = item.getType();
-            needed.merge(mat, 1, Integer::sum);
+        Map<Character, ItemStack> ingredients = recipe.getIngredientMap();
+        for (String row : recipe.getShape()) {
+            for (char symbol : row.toCharArray()) {
+                ItemStack item = ingredients.get(symbol);
+                if (item == null || item.getType().isAir()) continue;
+                needed.merge(item.getType(), 1, Integer::sum);
+            }
         }
         return hasMaterials(player, needed);
     }
@@ -236,7 +242,7 @@ public final class RecipeCollector {
 
     private boolean hasMaterials(Player player, Map<Material, Integer> needed) {
         Map<Material, Integer> have = new HashMap<>();
-        for (ItemStack item : player.getInventory().getContents()) {
+        for (ItemStack item : player.getInventory().getStorageContents()) {
             if (item == null || item.getType() == Material.AIR) continue;
             have.merge(item.getType(), item.getAmount(), Integer::sum);
         }

@@ -35,7 +35,7 @@ public interface AxsMarketService {
         HISTORY,
         /** 出售（快速上架入口） */
         SELL,
-        /** 玩家商店 */
+        /** 玩家店铺目录 */
         PLAYER_SHOP,
         /** 我的挂单 */
         MY_LISTINGS
@@ -45,6 +45,22 @@ public interface AxsMarketService {
      * 为玩家打开指定市场 UI 视图。
      */
     void openUi(@NotNull Player player, @NotNull MarketView view);
+
+    /** 打开指定拍品的独立竞价厅；主线程调用。旧实现可返回 false 表示不支持。 */
+    default boolean openAuctionLot(@NotNull Player player,long listingId) { return false; }
+
+    /** 按店主 UUID 打开独立玩家店铺；主线程调用。 */
+    default boolean openPlayerStore(@NotNull Player player,@NotNull java.util.UUID owner) { return false; }
+
+    /** 打开调用玩家自己的店铺资料编辑页；主线程调用。 */
+    default boolean openOwnStoreEditor(@NotNull Player player) { return false; }
+
+    /** 打开调用玩家自己的回收保护；主线程调用。 */
+    default boolean openRecycleProtection(@NotNull Player player) { return false; }
+
+    /** 打开交易管理；实现仍须验证管理员权限。主线程调用。 */
+    default boolean openTradeManagement(@NotNull Player player) { return false; }
+
 
     /**
      * 替玩家创建一条拍卖挂单（从玩家手中取走物品）。

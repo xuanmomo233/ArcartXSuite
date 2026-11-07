@@ -3,7 +3,10 @@ package xuanmo.arcartxsuite.vanilla.service;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
+import org.bukkit.inventory.CraftingInventory;
+import org.bukkit.inventory.FurnaceInventory;
 import org.bukkit.inventory.ItemStack;
+import xuanmo.arcartxsuite.api.capability.WarehousePanelAccess;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge;
 import xuanmo.arcartxsuite.vanilla.config.VanillaConfiguration;
@@ -27,8 +30,10 @@ public final class VanillaService {
     private final Logger logger;
 
     private final RecipeCollector recipeCollector;
-    private final String craftingUiId;
-    private final String furnaceUiId;
+    private boolean stopped;
+    private String craftingUiId;
+    private String furnaceUiId;
+    private java.util.function.Supplier<WarehousePanelAccess> warehousePanel = () -> null;
 
     private final Map<UUID, Boolean> craftingBookState = new ConcurrentHashMap<>();
     private final Map<UUID, Boolean> furnaceBookState = new ConcurrentHashMap<>();
@@ -44,6 +49,21 @@ public final class VanillaService {
         this.furnaceUiId = configuration.ui().furnaceUiId();
     }
 
+    public void setWarehousePanel(java.util.function.Supplier<WarehousePanelAccess> supplier) {
+        warehousePanel = supplier;
+    }
+    public xuanmo.arcartxsuite.vanilla.recipe.RecipeMaterialPlanner materialPlanner() {
+        return recipeCollector.materialPlanner();
+    }
+
+    public void setCraftingRuntimeUiId(String uiId) {
+        craftingUiId = uiId;
+    }
+
+    public void setFurnaceRuntimeUiId(String uiId) {
+        furnaceUiId = uiId;
+    }
+
     /**
      * 处理客户端发来的自定义包。
      *
@@ -52,15 +72,33 @@ public final class VanillaService {
      * @return true 表示已消费
      */
     public boolean handleClientPacket(Player player, String packetId, List<String> data) {
-        String action = (data == null || data.isEmpty()) ? "" : data.get(0);
+        if (data == null || data.isEmpty()) return false;
+        String action = data.get(0);
         String extra = data.size() > 1 ? data.get(1) : "";
 
-        if (craftingUiId.equalsIgnoreCase(packetId)) {
+        if (craftingUiId.equalsIgnoreCase(packetId) || "AXS:vanilla_crafting".equalsIgnoreCase(packetId)) {
+            if (!configuration.crafting().enabled()
+                || !(player.getOpenInventory().getTopInventory() instanceof CraftingInventory crafting)
+                || crafting.getSize() != 10) return true;
+            if ("warehouse_panel".equals(action)) return handleWarehousePanel(player, craftingUiId, data);
             return handleCraftingPacket(player, action, extra);
-        } else if (furnaceUiId.equalsIgnoreCase(packetId)) {
+        } else if (furnaceUiId.equalsIgnoreCase(packetId) || "AXS:vanilla_furnace".equalsIgnoreCase(packetId)) {
+            if (!configuration.furnace().enabled()
+                || !(player.getOpenInventory().getTopInventory() instanceof FurnaceInventory)) return true;
+            if ("warehouse_panel".equals(action)) return handleWarehousePanel(player, furnaceUiId, data);
             return handleFurnacePacket(player, action, extra);
         }
         return false;
+    }
+
+    private boolean handleWarehousePanel(Player player, String uiId, List<String> data) {
+        WarehousePanelAccess panel = warehousePanel.get();
+        if (panel != null) {
+            panel.handle(player, uiId, data.subList(1, data.size()));
+        } else {
+            packetBridge.sendPacket(player, uiId, "warehouse_panel", Map.of("available", false));
+        }
+        return true;
     }
 
     private boolean handleCraftingPacket(Player player, String action, String extra) {
@@ -71,6 +109,10 @@ public final class VanillaService {
             }
             case "request_recipe_book" -> {
                 handleRequestCraftingRecipeBook(player);
+                return true;
+            }
+            case "show_recipe_book" -> {
+                sendCraftingRecipeBookPacket(player, true);
                 return true;
             }
             case "place_ingredients" -> {
@@ -91,6 +133,10 @@ public final class VanillaService {
             }
             case "request_recipe_book" -> {
                 handleRequestFurnaceRecipeBook(player);
+                return true;
+            }
+            case "show_recipe_book" -> {
+                sendFurnaceRecipeBookPacket(player, true);
                 return true;
             }
             case "place_ingredients" -> {
@@ -116,17 +162,18 @@ public final class VanillaService {
         sendCraftingRecipeBookPacket(player, open);
     }
 
-    private void sendCraftingRecipeBookPacket(Player player, boolean open) {
-        Map<String, Object> packet = new LinkedHashMap<>();
-        packet.put("open", open);
-        // catIcons 始终推送：配方书按钮(书本图标)在关闭状态下也需要图标
-        packet.put("catIcons", recipeCollector.craftingCategoryIcons());
-        if (open) {
-            Map<String, Object> recipes = recipeCollector.collectCraftingRecipes(player);
-            packet.put("recipes", recipes);
-            packet.put("recipeCount", recipes.size());
-        }
-        packetBridge.sendPacket(player, craftingUiId, "recipe_book_toggle", packet);
+    private void sendCraftingRecipeBookPacket(Player player,boolean open){
+        if(stopped)return;
+        var view=player.getOpenInventory();
+        if(!open){packetBridge.sendPacket(player,craftingUiId,"recipe_book_toggle",Map.of("open",false,"catIcons",recipeCollector.craftingCategoryIcons()));return;}
+        materialPlanner().stockAsync(player,stock->{
+            if(stopped || !player.isOnline() || player.getOpenInventory()!=view || !packetBridge.isUiOpen(player,craftingUiId))return;
+            Map<String,Object> packet=new LinkedHashMap<>();
+            packet.put("open",true);packet.put("catIcons",recipeCollector.craftingCategoryIcons());
+            Map<String,Object> recipes=recipeCollector.collectCraftingRecipes(player,stock);
+            packet.put("recipes",recipes);packet.put("recipeCount",recipes.size());
+            packetBridge.sendPacket(player,craftingUiId,"recipe_book_toggle",packet);
+        });
     }
 
     // ── 熔炉配方书 ────────────────────────────────────────
@@ -142,121 +189,49 @@ public final class VanillaService {
         sendFurnaceRecipeBookPacket(player, open);
     }
 
-    private void sendFurnaceRecipeBookPacket(Player player, boolean open) {
-        Map<String, Object> packet = new LinkedHashMap<>();
-        packet.put("open", open);
-        // catIcons 始终推送：配方书按钮(书本图标)在关闭状态下也需要图标
-        packet.put("catIcons", recipeCollector.furnaceCategoryIcons());
-        if (open) {
-            Map<String, Object> recipes = recipeCollector.collectFurnaceRecipes(player);
-            packet.put("recipes", recipes);
-            packet.put("recipeCount", recipes.size());
-        }
-        packetBridge.sendPacket(player, furnaceUiId, "recipe_book_toggle", packet);
+    private void sendFurnaceRecipeBookPacket(Player player,boolean open){
+        if(stopped)return;
+        var view=player.getOpenInventory();
+        if(!open){packetBridge.sendPacket(player,furnaceUiId,"recipe_book_toggle",Map.of("open",false,"catIcons",recipeCollector.furnaceCategoryIcons()));return;}
+        materialPlanner().stockAsync(player,stock->{
+            if(stopped || !player.isOnline() || player.getOpenInventory()!=view || !packetBridge.isUiOpen(player,furnaceUiId))return;
+            Map<String,Object> packet=new LinkedHashMap<>();
+            packet.put("open",true);packet.put("catIcons",recipeCollector.furnaceCategoryIcons());
+            Map<String,Object> recipes=recipeCollector.collectFurnaceRecipes(player,stock);
+            packet.put("recipes",recipes);packet.put("recipeCount",recipes.size());
+            packetBridge.sendPacket(player,furnaceUiId,"recipe_book_toggle",packet);
+        });
     }
 
     // ── 一键填充材料 ──────────────────────────────────────
 
-    @SuppressWarnings("deprecation")
-    private void handlePlaceIngredients(Player player, String recipeKey) {
-        Map<String, Object> recipes = recipeCollector.collectCraftingRecipes(player);
-        Object entry = recipes.get(recipeKey);
-        if (entry == null) return;
-        Map<?, ?> recipe = (Map<?, ?>) entry;
-        var topInv = player.getOpenInventory().getTopInventory();
-        if (topInv.getSize() < 10) return;
+    private void handlePlaceIngredients(Player player,String recipeKey) { placeMaterials(player,recipeKey,false); }
+    private void handlePlaceFurnaceIngredient(Player player,String recipeKey) { placeMaterials(player,recipeKey,true); }
 
-        // 计算每个槽位需要的材料
-        Material[] needed = new Material[10]; // 1~9 对应合成槽
-        Object shapedObj = recipe.get("shaped");
-        boolean shaped = shapedObj instanceof Boolean && (Boolean) shapedObj;
-        if (shaped) {
-            Object shapeObj = recipe.get("shape");
-            Object ingredientsObj = recipe.get("ingredients");
-            if (shapeObj instanceof List<?> shapeList && ingredientsObj instanceof Map<?, ?> ingredientMap) {
-                for (int row = 0; row < shapeList.size(); row++) {
-                    String rowStr = (String) shapeList.get(row);
-                    for (int col = 0; col < rowStr.length(); col++) {
-                        char c = rowStr.charAt(col);
-                        if (c == ' ') continue;
-                        Object json = ingredientMap.get(String.valueOf(c));
-                        if (json == null) continue;
-                        needed[row * 3 + col + 1] = parseMaterialFromJson(json.toString());
-                    }
-                }
-            }
-        } else {
-            Object ingredientsObj = recipe.get("ingredients");
-            if (ingredientsObj instanceof List<?> ingredientList) {
-                for (int i = 0; i < Math.min(ingredientList.size(), 9); i++) {
-                    needed[i + 1] = parseMaterialFromJson(ingredientList.get(i).toString());
-                }
-            }
-        }
-
-        // 退回材料不匹配的槽位物品，保留已正确的
-        for (int i = 1; i <= 9; i++) {
-            ItemStack existing = topInv.getItem(i);
-            if (existing == null || existing.getType() == Material.AIR) continue;
-            if (needed[i] != null && existing.getType() == needed[i]) continue; // 已正确，保留
-            // 材料不匹配，退回背包
-            player.getInventory().addItem(existing);
-            topInv.setItem(i, null);
-        }
-
-        // 填充或累加材料
-        for (int i = 1; i <= 9; i++) {
-            if (needed[i] == null || needed[i] == Material.AIR) continue;
-            ItemStack existing = topInv.getItem(i);
-            if (existing == null || existing.getType() == Material.AIR) {
-                placeFromInventory(player, topInv, i, needed[i]);
-            } else if (existing.getType() == needed[i] && existing.getAmount() < existing.getMaxStackSize()) {
-                // 已有正确材料且未满，尝试追加
-                addToSlotFromInventory(player, topInv, i, needed[i], existing.getMaxStackSize() - existing.getAmount());
-            }
-        }
-        player.updateInventory();
-    }
-
-    @SuppressWarnings("deprecation")
-    private void handlePlaceFurnaceIngredient(Player player, String recipeKey) {
-        Map<String, Object> recipes = recipeCollector.collectFurnaceRecipes(player);
-        Object entry = recipes.get(recipeKey);
-        if (entry == null) return;
-        Map<?, ?> recipe = (Map<?, ?>) entry;
-        Object inputJson = recipe.get("inputJson");
-        if (inputJson == null) return;
-        Material mat = parseMaterialFromJson(inputJson.toString());
-        var topInv = player.getOpenInventory().getTopInventory();
-        if (topInv.getSize() < 3) return;
-        ItemStack existing = topInv.getItem(0);
-        if (existing != null && existing.getType() == mat) {
-            // 已有正确材料，尝试追加而不中断燃烧
-            if (existing.getAmount() < existing.getMaxStackSize()) {
-                addToSlotFromInventory(player, topInv, 0, mat, existing.getMaxStackSize() - existing.getAmount(), true);
-            }
-            return;
-        }
-        // 输入槽为空，直接放入
-        if (existing == null || existing.getType() == Material.AIR) {
-            placeFromInventory(player, topInv, 0, mat);
-            player.updateInventory();
-            return;
-        }
-        // 输入槽有其他物品，退回背包再填充
-        player.getInventory().addItem(existing);
-        topInv.setItem(0, null);
-        placeFromInventory(player, topInv, 0, mat);
-        player.updateInventory();
+    private void placeMaterials(Player player,String recipeKey,boolean furnace) {
+        String ui=furnace?furnaceUiId:craftingUiId;
+        var view=player.getOpenInventory();
+        if(materialPlanner().busy(player)) return;
+        packetBridge.sendPacket(player,ui,"placement_state",Map.of("busy",true,"message","正在准备材料"));
+        materialPlanner().fill(player,recipeKey,furnace,message->{
+            if(!player.isOnline() || player.getOpenInventory()!=view || !packetBridge.isUiOpen(player,ui))return;
+            packetBridge.sendPacket(player,ui,"placement_state",Map.of("busy",false,"message",message));
+            if(!message.isEmpty())player.sendMessage("§e"+message);
+            if(furnace)sendFurnaceRecipeBookPacket(player,true);else sendCraftingRecipeBookPacket(player,true);
+            WarehousePanelAccess panel=warehousePanel.get();
+            if(panel!=null)panel.handle(player,ui,List.of("refresh"));
+        });
     }
 
     private void placeFromInventory(Player player, Inventory topInv, int slot, Material mat) {
         if (mat == Material.AIR) return;
         var playerInv = player.getInventory();
-        for (int i = 0; i < playerInv.getSize(); i++) {
+        for (int i = 0; i < playerInv.getStorageContents().length; i++) {
             ItemStack item = playerInv.getItem(i);
             if (item != null && item.getType() == mat) {
-                topInv.setItem(slot, new ItemStack(mat, 1));
+                ItemStack placed = item.clone();
+                placed.setAmount(1);
+                topInv.setItem(slot, placed);
                 item.setAmount(item.getAmount() - 1);
                 if (item.getAmount() <= 0) {
                     playerInv.setItem(i, null);
@@ -275,10 +250,10 @@ public final class VanillaService {
     private void addToSlotFromInventory(Player player, Inventory topInv, int slot, Material mat, int maxAdd, boolean silent) {
         if (mat == Material.AIR || maxAdd <= 0) return;
         var playerInv = player.getInventory();
-        for (int i = 0; i < playerInv.getSize(); i++) {
+        ItemStack existing = topInv.getItem(slot);
+        for (int i = 0; i < playerInv.getStorageContents().length; i++) {
             ItemStack item = playerInv.getItem(i);
-            if (item != null && item.getType() == mat) {
-                ItemStack existing = topInv.getItem(slot);
+            if (item != null && item.getType() == mat && (existing == null || existing.isSimilar(item))) {
                 int toAdd = Math.min(maxAdd, item.getAmount());
                 if (existing != null) {
                     if (silent) {
@@ -291,7 +266,9 @@ public final class VanillaService {
                         topInv.setItem(slot, copy);
                     }
                 } else {
-                    topInv.setItem(slot, new ItemStack(mat, toAdd));
+                    ItemStack copy = item.clone();
+                    copy.setAmount(toAdd);
+                    topInv.setItem(slot, copy);
                 }
                 item.setAmount(item.getAmount() - toAdd);
                 if (item.getAmount() <= 0) {
@@ -302,6 +279,12 @@ public final class VanillaService {
                 return;
             }
         }
+    }
+
+    private boolean returnToBackpack(Player player, Inventory inventory, int slot, ItemStack item) {
+        ItemStack remainder = player.getInventory().addItem(item.clone()).get(0);
+        inventory.setItem(slot, remainder);
+        return remainder == null;
     }
 
     private Material parseMaterialFromJson(String json) {
@@ -327,6 +310,13 @@ public final class VanillaService {
     }
 
     public void shutdown() {
+        stopped=true;
+        materialPlanner().close();
+        WarehousePanelAccess panel = warehousePanel.get();
+        if (panel != null) {
+            panel.close(craftingUiId);
+            panel.close(furnaceUiId);
+        }
         craftingBookState.clear();
         furnaceBookState.clear();
     }

@@ -18,6 +18,36 @@ public interface MarketRepository {
 
     void shutdown();
 
+    xuanmo.arcartxsuite.market.recycle.RecyclePreferences recyclePreferences(UUID player,boolean defaultAuto);
+    long recyclePreferencesVersion(UUID player);
+    boolean updateRecyclePreferences(UUID player,long version,String action,boolean enabled,xuanmo.arcartxsuite.market.recycle.RecycleProtectionRule rule,int maximum);
+    void noteMarketPlayer(UUID player,String name);
+    UUID resolveMarketPlayer(String name);
+    void describeOperation(String id,String name,String material,String itemData);
+    MarketAuditPage searchMarketAudit(MarketAuditFilter filter);
+    MarketAuditRow marketAuditRow(String id);
+
+    void ensurePlayerShopProfile(UUID owner,String ownerName,boolean publish);
+    xuanmo.arcartxsuite.market.playershop.PlayerShopProfile playerShopProfile(UUID owner);
+    boolean savePlayerShopProfile(xuanmo.arcartxsuite.market.playershop.PlayerShopProfile profile,long expectedVersion,boolean keepIcon);
+    List<xuanmo.arcartxsuite.market.playershop.PlayerShopCard> playerShopDirectory(UUID viewer,String keyword,boolean favorites,int offset,int limit);
+    int countPlayerShopDirectory(UUID viewer,String keyword,boolean favorites);
+    xuanmo.arcartxsuite.market.playershop.PlayerShopView playerShopView(UUID owner,UUID viewer,String keyword,int page,int pageSize);
+    int setPlayerShopFollow(UUID viewer,UUID owner,boolean follow,int maximum);
+    boolean claimPlayerShopPurchase(long listingId);
+
+    void insertOperation(MarketOperation operation);
+    boolean transitionOperation(String id, String expected, String state, String note, String owner);
+    List<MarketOperation> operations(String state, UUID player, int offset, int limit);
+    void heartbeatMarketOwner(String owner);
+    void recoverAbandonedOperations();
+    boolean resolveOperation(String id, String action, String note);
+
+    boolean adjustShopStock(String shop, String item, String mode, int maximum, String action, int amount, UUID player);
+    String shopStockSummary(String shop, String item, String mode, int maximum);
+    void resetShopLimits(String shop, String item, UUID player);
+    boolean restockShopIfDue(String shop, String item, String mode, int maximum, long intervalMillis);
+
     // ─── 拍卖行 ─────────────────────────────────────────────
 
     /**
@@ -40,6 +70,15 @@ public interface MarketRepository {
 
     /** Update an active listing bid only when the new amount is strictly higher. */
     boolean updateListingBidIfHigher(long listingId, double amount, UUID bidder);
+    boolean placeAuctionBid(AuctionListing expected, double amount, UUID bidder, String bidderName, long newExpiresAt);
+    xuanmo.arcartxsuite.market.auction.AuctionRoomSnapshot readAuctionRoom(long listingId,UUID viewer);
+    List<AuctionListing> browseAuction(String mode,UUID viewer,String keyword,int offset,int limit);
+    int countBrowseAuction(String mode,UUID viewer,String keyword);
+    AuctionListing claimAuctionSettlement(long listingId);
+    AuctionListing claimAuctionCancellation(long listingId, UUID seller, boolean allowBids);
+    List<AuctionListing> favoriteListings(UUID player, String keyword, int offset, int limit);
+    int countFavoriteListings(UUID player, String keyword);
+    List<UUID> auctionWatchers(long listingId);
 
     void deleteListing(long listingId);
 
@@ -190,6 +229,10 @@ public interface MarketRepository {
     int countSearchPlayerShopListings(String keyword);
 
     int countPlayerShopSellers();
+
+    List<PlayerShopListing> searchPlayerShopListingsBySeller(UUID seller, String keyword, int offset, int limit);
+
+    int countSearchPlayerShopListingsBySeller(UUID seller, String keyword);
 
     int countListingsByPlayerShopSeller(UUID seller);
 

@@ -1,778 +1,2730 @@
-#
-# ArcartXSuite Vanilla 熔炉 UI — 纯色块风格（参考纯色块背包-优化版）
-# 逻辑脚本(packetHandler/action/val引用/entryKey)与原版完全一致，仅重构视觉层
-# 进度条由 Progress+贴图 改为 Texture+动态宽度纯色块模拟
-# 配方书按钮改为 Slot+icon(BOOK) 展示书本样式，颜色+描边区分打开/关闭状态
-#
+# 材料凭证与可发现置顶入口。
 ui:
   isHud: false
   match:
-    - 熔炉界面
-  itemSize: 16
-  through: true
-  escClose: true
-  background: true
-  closeDied: true
-  show: true
-  jei: false
-  level: 0
-  screenScale: true
-  action:
-    keyPress: |-
-      if(self.currentKeyPress == 'LEFT_SHIFT'){
-        var.shiftHeld = true
-      }
-    keyRelease: |-
-      if(self.currentKeyReleased == 'LEFT_SHIFT'){
-        var.shiftHeld = false
-      }
-    load: |-
-      var.showAll = true
-      var.previewGrid = []
-      var.previewAmounts = []
-      var.previewResultAmount = 0
-      var.searchText = ''
-      var.burnTime = 0
-      var.burnTimeTotal = 1
-      var.cookTime = 0
-      var.cookTimeTotal = 1
-      var.recipeCanCraft = {}
-      var.recipeJsons = {}
-      var.recipes = {}
-      var.allRecipes = {}
-      var.刷新轮次 = 0
-      var.air = '{"id":"minecraft:air","Count":1b}'
-      var.currentCategory = 'all'
-      var.needFilterRefresh = false
-      var.shiftHeld = false
-    tick: |-
-      if(var.needFilterRefresh){
-        var.needFilterRefresh = false
-        var.recipes = {}
-        var.recipeJsons = {}
-        var.recipeCanCraft = {}
-        idx = 0.0
-        for(key in var.allRecipes.keys()){
-          recipe = var.allRecipes[key]
-          cat = recipe['category']
-          if(var.currentCategory == 'all' || (var.currentCategory == 'misc' && cat != 'food' && cat != 'building') || cat == var.currentCategory){
-            name = recipe['resultName']
-            zhName = recipe['resultZhName']
-            if(var.searchText == '' || (name != none && name.contains(var.searchText)) || (zhName != none && zhName.contains(var.searchText))){
-              canCraft = recipe['canCraft']
-              if(var.showAll || canCraft == 1){
-                var.recipes[idx.round()] = recipe
-                var.recipeJsons[idx.round()] = recipe['resultJson']
-                var.recipeCanCraft[idx.round()] = canCraft
-                idx = idx + 1
-              }
-            }
-          }
-        }
-        var.recipeCount = idx.round()
-        配方数 = idx.round()
-        现有控件数 = val.配方展示区.childrenCount()
-        if(现有控件数 > 配方数){
-          while(val.配方展示区.childrenCount() > 配方数 && val.配方展示区.childrenCount() > 1){
-            val.配方展示区.get(val.配方展示区.childrenCount() - 1).remove()
-          }
-        }
-        if(现有控件数 < 配方数){
-          var.刷新轮次 = var.刷新轮次 + 1
-          for(序号 in range(现有控件数, 配方数)){
-            icon = val.配方展示区['配方原型'].copy('配方图标_' + var.刷新轮次 + '_' + 序号.round())
-            icon.entryKey = 序号.round()
-          }
-        }
-        最大数 = 配方数
-        for(i in range(0, 最大数)){
-          icon = val.配方展示区.get(i.round())
-          if(icon != none){
-            icon.entryKey = i.round()
-            icon.seticon()
-          }
-        }
-      }
-      if(var.selectedRecipe != none){
-        item = val.输入槽.getSlotItemStack()
-        var.previewVisible = (item == none || item.getType() == 'null' || item.getCount() == 0)
-        resultItem = val.输出槽.getSlotItemStack()
-        var.resultVisible = (resultItem == none || resultItem.getType() == 'null' || resultItem.getCount() == 0)
-      }
-    open: |-
-      Packet.send('AXS:vanilla_furnace', 'request_recipe_book')
-  packetHandler:
-    # packetHandler: furnace_state
-    # 包字段:
-    #   - burnTime: 燃烧剩余时间 (tick)
-    #   - burnTimeTotal: 燃烧总时间 (tick)
-    #   - cookTime: 烧制已进行时间 (tick)
-    #   - cookTimeTotal: 烧制总时间 (tick)
-    #   - burning: 是否正在燃烧 (true/false)
-    furnace_state: |-
-      //燃烧剩余时间
-      var.burnTime = packet['burnTime']
-      //燃烧总时间
-      var.burnTimeTotal = packet['burnTimeTotal']
-      //烧制已进行时间
-      var.cookTime = packet['cookTime']
-      //烧制总时间
-      var.cookTimeTotal = packet['cookTimeTotal']
-      //燃烧中，返回true/false
-      var.burning = packet['burning']
-    # packetHandler: recipe_book_toggle
-    # 包字段:
-    #   - open: 配方书是否展开 (true/false)
-    #   - recipes: 全部配方数据 map (key=配方名, value=配方详情)
-    #   - catIcons: 分类图标 map (key=book/all/food/building/misc/toggle, value=物品JSON)
-    recipe_book_toggle: |-
-      var.recipeBookOpen = packet['open']
-      if(!var.recipeBookOpen){
-        var.selectedRecipe = none
-      }
-      if(packet['recipes'] != none){
-        var.allRecipes = packet['recipes']
-        var.needFilterRefresh = true
-      }
-      if(packet['catIcons'] != none){
-        var.catIcons = packet['catIcons']
-        if(val.配方书按钮 != none) {
-          val.配方书按钮.setItemIcon(var.catIcons['book'])
-        }
-        if(val.显示切换 != none) {
-          val.显示切换.setItemIcon(var.catIcons['toggle'])
-        }
-        if(val.分类栏['分类_全部'] != none) {
-          val.分类栏['分类_全部'].setItemIcon(var.catIcons['all'])
-        }
-        if(val.分类栏['分类_食品'] != none) {
-          val.分类栏['分类_食品'].setItemIcon(var.catIcons['food'])
-        }
-        if(val.分类栏['分类_建筑'] != none) {
-          val.分类栏['分类_建筑'].setItemIcon(var.catIcons['building'])
-        }
-        if(val.分类栏['分类_杂项'] != none) {
-          val.分类栏['分类_杂项'].setItemIcon(var.catIcons['misc'])
-        }
-      }
+  - 熔炉界面
   defaultOpen: true
+  background: true
+  escClose: true
+  closeDied: true
+  screenScale: true
+  through: var.whLayoutEnabled && var.whAvailable && !var.carrying && !var.recipeOpen && val.warehouseGrid != none && val.warehouseGrid.isHovered() && var.whMenu == '' && !var.whPinHovered
+  jei: false
+  itemSize: 16
+  hide:
+  - hotbar
+  - crosshair
+  - player_state
+  - experience_bar
+  - chat_panel
+  action:
+    load: |-
+      // 服务器在 UI 注册前写入仓库布局能力。
+      var.whLayoutEnabled = false
+      var.carrying = false
+      var.whAvailable = false
+      var.whResolved = false
+      var.whRows = {}
+      var.whDirty = false
+      var.whToken = ''
+      var.whSearch = ''
+      var.whCategory = '全部'
+      var.whSort = '默认'
+      var.whPage = '—'
+      var.whHasPrevious = false
+      var.whHasNext = false
+      var.whCount = '—'
+      var.recipeOpen = !var.whLayoutEnabled
+      var.recipeResolved = false
+      var.recipeHasNext = false
+      var.recipes = {}
+      var.recipeKeys = {}
+      var.recipeDirty = false
+      var.recipePage = 0
+      var.recipeSearch = ''
+      var.recipeName = '选择配方'
+      var.recipeSelection = ''
+      var.recipePageText = '1 / 1'
+      var.onlyCraftable = false
+      var.cook = 0
+      var.burn = 0
+      var.whMenu = ''
+      var.whMenuPage = 0
+      var.whMenuCount = 0
+      var.whCategories = {}
+      var.whCategoryCount = 0
+      var.whSortOptions = {}
+      var.whSortCount = 0
+      var.whSearchTicks = 0
+      var.whPageStep = 0
+      var.recipePageStep = 0
+      var.previewDirty = false
+      var.whPinHovered = false
+      var.fillBusy = false
+      var.fillMessage = ''
+    open: |-
+      if(var.whLayoutEnabled){
+        Packet.send('AXS:vanilla_furnace', 'warehouse_panel', 'open')
+      }else{
+        Packet.send('AXS:vanilla_furnace', 'show_recipe_book')
+      }
+      val.workshopHeaderIcon.setItemIcon('{"id":"minecraft:furnace","Count":1b}')
+    close: Packet.send('AXS:vanilla_furnace', 'warehouse_panel', 'close', var.whToken)
+    tick: |-
+      carried = self.getCarriedItemStack()
+      var.carrying = carried != none && carried.getCount() > 0
+      if(var.whDirty && var.whCells != none){
+        var.whDirty = false
+        for(i in range(0, 23)){
+          idx = i.round()
+          cell = var.whCells[idx]
+          row = var.whRows[idx]
+          if(cell != none){
+            cell['Hit'].id = row == none ? 'axs_wh_entry_empty' : row['clickId']
+            cell['Icon'].setItemIcon(row == none ? '' : row['icon'])
+          }
+        }
+      }
+      if(var.recipeDirty && var.recipeIcons != none){
+        var.recipeDirty = false
+        keys = []
+        for(key in var.recipes.keys()){
+          row = var.recipes[key]
+          if((!var.onlyCraftable || row['canCraft'] == 1) && (var.recipeSearch == '' || row['resultName'].contains(var.recipeSearch) || row['resultZhName'].contains(var.recipeSearch))){
+            keys.add(key)
+          }
+        }
+        pages = 1
+        while(keys.size() > pages * 24){ pages = pages + 1 }
+        if(var.recipePage < 0){ var.recipePage = 0 }
+        if(var.recipePage >= pages){ var.recipePage = pages - 1 }
+        var.recipeHasNext = var.recipePage + 1 < pages
+        var.recipePageText = (var.recipePage + 1).round() + ' / ' + pages.round()
+        var.recipeKeys = {}
+        for(i in range(0, 23)){
+          idx = i.round()
+          offset = (var.recipePage * 24 + idx).round()
+          icon = var.recipeIcons[idx]
+          if(offset < keys.size()){
+            key = keys[offset]
+            var.recipeKeys[idx] = key
+            icon.setItemIcon(var.recipes[key]['resultJson'])
+          }else{
+            icon.setItemIcon('')
+          }
+        }
+      }
+      if(var.whSearchTicks > 0){
+        var.whSearchTicks = var.whSearchTicks - 1
+        if(var.whSearchTicks == 0){ Packet.send('AXS:vanilla_furnace', 'warehouse_panel', 'search', var.whSearch) }
+      }
+      if(var.whPageStep != 0){
+        direction = var.whPageStep < 0 ? 'prev' : 'next'
+        permitted = var.whPageStep < 0 ? var.whHasPrevious : var.whHasNext
+        var.whPageStep = 0
+        if(var.whAvailable && permitted){ Packet.send('AXS:vanilla_furnace', 'warehouse_panel', 'page', direction) }
+      }
+      if(var.recipePageStep != 0){
+        if((var.recipePageStep < 0 && var.recipePage > 0) || (var.recipePageStep > 0 && var.recipeHasNext)){
+          var.recipePage = var.recipePage + var.recipePageStep
+          var.recipeDirty = true
+        }
+        var.recipePageStep = 0
+      }
+      if(var.previewDirty && var.previewIcons != none){
+        var.previewDirty = false
+        selectedRecipe = var.recipes[var.recipeSelection]
+        for(i in range(0, 0)){
+          preview = var.previewIcons[i.round()]
+          if(preview != none){
+            preview.setItemIcon(selectedRecipe == none ? '' : selectedRecipe['previewGrid'].get(i.round()))
+          }
+        }
+        if(val.recipePreviewResult != none){
+          val.recipePreviewResult.setItemIcon(selectedRecipe == none ? '' : selectedRecipe['resultJson'])
+        }
+      }
+      var.whPinHovered = false
+      if(var.whCells != none){
+        for(i in range(0, 23)){
+          pinCell = var.whCells[i.round()]
+          if(pinCell != none && pinCell['置顶按钮'].isHovered()){ var.whPinHovered = true }
+        }
+      }
+  packetHandler:
+    warehouse_panel: |-
+      var.whAvailable = packet['available']
+      var.whResolved = true
+      var.whHasPrevious = var.whAvailable && packet['hasPreviousPage']
+      var.whHasNext = var.whAvailable && packet['hasNextPage']
+      if(var.whAvailable){
+        var.whToken = packet['token']
+        var.whRows = packet['rows']
+        var.whPage = packet['page']
+        var.whSort = packet['sort']
+        var.whCategory = packet['category']
+        var.whCount = packet['count']
+      }else{
+        var.whRows = {}
+      }
+      var.whDirty = true
+      var.whCategories = var.whAvailable ? packet['categories'] : {}
+      var.whCategoryCount = var.whAvailable ? packet['categoryCount'] : 0
+      var.whSortOptions = var.whAvailable ? packet['sorts'] : {}
+      var.whSortCount = var.whAvailable ? packet['sortCount'] : 0
+    recipe_book_toggle: |-
+      if(packet['recipes'] != none){
+        var.recipeResolved = true
+        var.recipes = packet['recipes']
+        var.recipeDirty = true
+      }
+      if(var.recipeSelection != '' && var.recipes[var.recipeSelection] == none){
+        var.recipeSelection = ''
+        var.recipeName = '选择配方'
+      }
+      var.previewDirty = true
+    furnace_state: |-
+      var.cook = packet['cookTimeTotal'] > 0 ? packet['cookTime'] / packet['cookTimeTotal'] : 0
+      var.burn = packet['burnTimeTotal'] > 0 ? packet['burnTime'] / packet['burnTimeTotal'] : 0
+      var.cook = var.cook < 0 ? 0 : (var.cook > 1 ? 1 : var.cook)
+      var.burn = var.burn < 0 ? 0 : (var.burn > 1 ? 1 : var.burn)
+    placement_state: |-
+      var.fillBusy = packet['busy']
+      var.fillMessage = packet['message']
 controls:
-  自适应布局:
+  自适应:
     type: Adaptive
     attribute:
-      point: ~stretch_all
-      width: 1920 / 3
-      height: 1080 / 3
+      point: ~middle_center
+      width: 1920
+      height: 1080
     children:
-      主面板:
+      主窗口:
         type: Canvas
         attribute:
           point: ~middle_center
-          width: 223
-          height: 235
-          visible: true
+          width: 1512
+          height: 940
         children:
-          面板底:
+          外壳:
             type: Texture
             attribute:
-              point: ~middle_center
               x: 0
               y: 0
-              width: 223
-              height: 235
-              normal: ~Frosted:25;95,95,95,235
-              shape: ~round_rect
-              radius: 12
-              visible: true
-            effect:
-              stroke:
-                width: 2
-                color: ~255,255,255,180
-              shadow:
-                xOffset: 2
-                yOffset: 2
-                blur: 5
-                color: ~0,0,0,120
-          标题文字:
-            type: Text
-            attribute:
-              point: ~middle_center
-              y: -105
-              texts:
-                - ~&f熔炉
-              fontSize: 18
+              width: 1512
+              height: 940
+              normal: ~27,25,24,253
               through: true
-          标题下划线:
-            type: Texture
-            attribute:
-              point: ~middle_center
-              y: -93
-              width: 180
-              height: 2
-              normal: ~255,255,255,200
               shape: ~round_rect
-              radius: 1
-              through: true
-          配方书按钮:
-            type: Slot
-            val: 配方书按钮
-            attribute:
-              x: -78
-              y: -48
-              width: 19
-              height: 19
-              slotType: ~Icon
-              point: ~middle_center
-              visible: true
-              normal: "var.recipeBookOpen ? '120,190,255,230' : '255,255,255,150'"
-              hover: ~Frosted:0;255,255,255,240
-              shape: ~round_rect
-              radius: 6
-              itemScale: 0.7
-              tip: ~shift+左键点击配方，即可快速填充材料
-            action:
-              clickLeft: "Packet.send('AXS:vanilla_furnace', 'toggle_recipe_book')"
+              radius: 14
             effect:
               stroke:
                 width: 1
-                color: "var.recipeBookOpen ? '120,190,255,255' : '0,0,0,180'"
-              ripple:
-                duration: 1200
-                color: ~255,255,255,100
-                width: 0.05
-          输入槽:
-            type: Slot
-            val: 输入槽
+                color: ~111,89,72,255
+          顶栏:
+            type: Texture
             attribute:
-              x: -30
-              y: -72
-              width: 21
-              height: 21
-              slotType: ~Container
-              id: 0
-              normal: ~Frosted:0;95,95,95,255
-              hover: ~Frosted:0;255,255,255,255
-              shape: ~round_rect
-              radius: 6
-              point: ~middle_center
-              itemScale: 0.7
-              visible: true
-            effect:
-              stroke:
-                width: 2
-                color: ~0,0,0,255
-          预览输入槽:
-            type: Slot
-            val: 预览输入槽
-            attribute:
-              x: -30
-              y: -72
-              width: 21
-              height: 21
-              slotType: ~Icon
-              seticon: "self.setItemIcon(var.previewGrid[0])"
-              normal: ~Frosted:0;40,40,40,180
-              itemScale: 0.7
-              point: ~middle_center
-              alpha: "var.selectedRecipe != none && var.recipeBookOpen && var.previewVisible ? 1 : 0"
+              x: 12
+              y: 12
+              width: 1488
+              height: 82
+              normal: ~37,31,28,255
               through: true
-              visible: true
-            children:
-              数量:
-                type: Text
-                attribute:
-                  x: 1
-                  y: 13
-                  texts: "var.previewAmounts[0] != none && var.previewAmounts[0] > 1 ? '&f' + var.previewAmounts[0].round() : none"
-                  fontSize: 8
-                  through: true
-          燃料槽:
-            type: Slot
-            attribute:
-              x: -30
-              y: -24
-              width: 21
-              height: 21
-              slotType: ~Container
-              id: 1
-              normal: ~Frosted:0;95,95,95,255
-              hover: ~Frosted:0;255,255,255,255
-              shape: ~round_rect
-              radius: 6
-              point: ~middle_center
-              itemScale: 0.7
-              visible: true
-            effect:
-              stroke:
-                width: 2
-                color: ~0,0,0,255
-          # 燃料进度条：用 Texture + 动态宽度纯色块模拟（原 Progress+贴图）
-          进度条底:
-            type: Texture
-            attribute:
-              x: -30
-              y: -48
-              width: 46
-              height: 7
-              normal: ~Frosted:0;60,60,60,220
-              shape: ~round_rect
-              radius: 3
-              point: ~middle_center
-              visible: true
-          燃料进度条:
-            type: Texture
-            attribute:
-              x: -53
-              y: -48
-              width: "46 * (var.burnTimeTotal > 0 ? (var.burnTime / var.burnTimeTotal) : 0)"
-              height: 7
-              normal: ~255,140,40,255
-              shape: ~round_rect
-              radius: 3
-              point: ~middle_left
-              visible: true
-          # 燃烧进度条：用 Texture + 动态宽度纯色块模拟（原 Progress+贴图）
-          燃烧进度条底:
-            type: Texture
-            attribute:
-              x: 18
-              y: -47
-              width: 23
-              height: 13
-              normal: ~Frosted:0;60,60,60,220
-              shape: ~round_rect
-              radius: 3
-              point: ~middle_center
-              visible: var.burning
-          燃烧进度条:
-            type: Texture
-            attribute:
-              x: 6.5
-              y: -47
-              width: "23 * (var.cookTimeTotal > 0 ? (var.cookTime / var.cookTimeTotal) : 0)"
-              height: 13
-              normal: ~255,200,40,255
-              shape: ~round_rect
-              radius: 3
-              point: ~middle_left
-              visible: var.burning
-          输出槽:
-            type: Slot
-            val: 输出槽
-            attribute:
-              x: 50
-              y: -47
-              width: 23
-              height: 23
-              slotType: ~Container
-              id: 2
-              normal: ~Frosted:0;120,190,255,200
-              hover: ~Frosted:0;255,255,255,255
               shape: ~round_rect
               radius: 8
-              point: ~middle_center
-              itemScale: 0.7
-              visible: true
-            effect:
-              stroke:
-                width: 2
-                color: ~0,0,0,255
-          预览输出槽:
-            type: Slot
-            val: 预览输出槽
+          顶栏线:
+            type: Texture
             attribute:
-              x: 50
-              y: -47
-              width: 23
-              height: 23
-              slotType: ~Icon
-              seticon: self.setItemIcon(var.air)
-              normal: ~Frosted:0;40,40,40,180
-              point: ~middle_center
-              itemScale: 0.7
-              alpha: "var.selectedRecipe != none && var.recipeBookOpen && var.resultVisible ? 1 : 0"
+              x: 24
+              y: 94
+              width: 1464
+              height: 1
+              normal: ~111,89,72,255
               through: true
-              visible: true
-            children:
-              数量:
-                type: Text
-                attribute:
-                  x: 1
-                  y: 15
-                  texts: "var.previewResultAmount > 1 ? '&f' + var.previewResultAmount.round() : none"
-                  fontSize: 8
-                  through: true
-          配方书面板:
+          标题底座:
+            type: Texture
+            attribute:
+              x: 24
+              y: 23
+              width: 56
+              height: 56
+              normal: ~72,53,40,255
+              through: true
+              shape: ~round_rect
+              radius: 8
+          标题图标:
+            type: Slot
+            attribute:
+              x: 29
+              y: 28
+              width: 46
+              height: 46
+              slotType: ~Icon
+              normal: ~0,0,0,0
+              through: true
+              itemScale: 0.9
+            val: workshopHeaderIcon
+          标题:
+            type: Text
+            attribute:
+              x: 96
+              y: 23
+              texts: ~&f熔炉
+              fontSize: 54
+              through: true
+          说明:
+            type: Text
+            attribute:
+              x: 98
+              y: 62
+              texts: ~&7原料处理 / 燃料与烧炼
+              fontSize: 28
+              through: true
+          状态铭牌:
+            type: Text
+            attribute:
+              x: 760
+              y: 40
+              texts: ~&6SMELTING FOUNDRY
+              fontSize: 28
+              through: true
+          切换配方:
             type: Canvas
             attribute:
-              x: 0
-              y: 0
-              width: 0
-              height: 235
-              visible: var.recipeBookOpen
-              point: ~middle_left
-              scale: 0.8
+              x: 1236
+              y: 32
+              width: 188
+              height: 44
+              visible: var.whLayoutEnabled
+            action:
+              clickLeft: |-
+                var.whMenu = ''
+                var.recipeOpen = !var.recipeOpen
+                if(var.recipeOpen){ Packet.send('AXS:vanilla_furnace', 'show_recipe_book') }
             children:
-              面板背景:
+              底色:
                 type: Texture
                 attribute:
-                  point: ~middle_right
-                  normal: ~Frosted:25;80,80,80,235
-                  width: 223
-                  height: 235
-                  scale: 0.8
-                  visible: true
-                  shape: ~round_rect
-                  radius: 12
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~255,255,255,180
-              搜索框:
-                type: TextBox
-                val: 搜索框
-                attribute:
-                  x: -43
-                  y: -67
-                  width: 100
-                  height: 10
-                  emptyText: ~搜索配方...
-                  fontSize: 10
-                  background: ~Frosted:0;60,60,60,220
-                  point: ~middle_right
-                  visible: true
-                action:
-                  textChange: |-
-                    var.searchText = self.getContent()
-                    var.needFilterRefresh = true
-              显示切换:
-                type: Slot
-                val: 显示切换
-                attribute:
-                  x: -19
-                  y: -67
-                  width: 19
-                  height: 19
-                  slotType: ~Icon
-                  normal: "var.showAll ? '120,190,255,230' : '255,255,255,150'"
+                  x: 0
+                  y: 0
+                  width: 188
+                  height: 44
+                  normal: 'self.isHovered() ? ''102,72,47,255'' : ''72,53,40,255'''
+                  through: true
                   shape: ~round_rect
                   radius: 6
-                  itemScale: 0.6
-                  point: ~middle_right
-                  visible: true
-                action:
-                  clickLeft: |-
-                    var.showAll = !var.showAll
-                    var.needFilterRefresh = true
                 effect:
                   stroke:
                     width: 1
-                    color: "var.showAll ? '120,190,255,255' : '0,0,0,180'"
-                  ripple:
-                    duration: 1200
-                    color: ~255,255,255,100
-                    width: 0.05
-              分类栏:
-                type: VStack
-                val: 分类栏
+                    color: ~111,89,72,255
+              文字:
+                type: Text
                 attribute:
-                  x: -137
+                  x: 0
                   y: 0
-                  point: ~middle_right
-                  spaceBetween: 1
-                  width: 20
-                  visible: true
-                children:
-                  分类_全部:
-                    type: Slot
-                    attribute:
-                      width: 19
-                      height: 19
-                      slotType: ~Icon
-                      normal: "var.currentCategory == 'all' ? '120,190,255,230' : '255,255,255,150'"
-                      shape: ~round_rect
-                      radius: 6
-                      itemScale: 0.7
-                      visible: true
-                    action:
-                      clickLeft: |-
-                        var.currentCategory = 'all'
-                        var.needFilterRefresh = true
-                    effect:
-                      stroke:
-                        width: 1
-                        color: "var.currentCategory == 'all' ? '120,190,255,255' : '0,0,0,180'"
-                      ripple:
-                        duration: 1200
-                        color: ~255,255,255,100
-                        width: 0.05
-                  分类_食品:
-                    type: Slot
-                    attribute:
-                      width: 19
-                      height: 19
-                      slotType: ~Icon
-                      normal: "var.currentCategory == 'food' ? '120,190,255,230' : '255,255,255,150'"
-                      shape: ~round_rect
-                      radius: 6
-                      itemScale: 0.7
-                      visible: true
-                    action:
-                      clickLeft: |-
-                        var.currentCategory = 'food'
-                        var.needFilterRefresh = true
-                    effect:
-                      stroke:
-                        width: 1
-                        color: "var.currentCategory == 'food' ? '120,190,255,255' : '0,0,0,180'"
-                      ripple:
-                        duration: 1200
-                        color: ~255,255,255,100
-                        width: 0.05
-                  分类_建筑:
-                    type: Slot
-                    attribute:
-                      width: 19
-                      height: 19
-                      slotType: ~Icon
-                      normal: "var.currentCategory == 'building' ? '120,190,255,230' : '255,255,255,150'"
-                      shape: ~round_rect
-                      radius: 6
-                      itemScale: 0.7
-                      visible: true
-                    action:
-                      clickLeft: |-
-                        var.currentCategory = 'building'
-                        var.needFilterRefresh = true
-                    effect:
-                      stroke:
-                        width: 1
-                        color: "var.currentCategory == 'building' ? '120,190,255,255' : '0,0,0,180'"
-                      ripple:
-                        duration: 1200
-                        color: ~255,255,255,100
-                        width: 0.05
-                  分类_杂项:
-                    type: Slot
-                    attribute:
-                      width: 19
-                      height: 19
-                      slotType: ~Icon
-                      normal: "var.currentCategory == 'misc' ? '120,190,255,230' : '255,255,255,150'"
-                      shape: ~round_rect
-                      radius: 6
-                      itemScale: 0.7
-                      visible: true
-                    action:
-                      clickLeft: |-
-                        var.currentCategory = 'misc'
-                        var.needFilterRefresh = true
-                    effect:
-                      stroke:
-                        width: 1
-                        color: "var.currentCategory == 'misc' ? '120,190,255,255' : '0,0,0,180'"
-                      ripple:
-                        duration: 1200
-                        color: ~255,255,255,100
-                        width: 0.05
-              配方滚动区:
-                type: Scroll
+                  texts: 'var.recipeOpen ? ''&f查看仓库'' : ''&f打开配方书'''
+                  fontSize: 32
+                  through: true
+                  point: ~middle_center
+          关闭:
+            type: Canvas
+            attribute:
+              x: 1440
+              y: 32
+              width: 48
+              height: 44
+            action:
+              clickLeft: Screen.close()
+            children:
+              底色:
+                type: Texture
                 attribute:
-                  x: -30
-                  y: 8
-                  width: 103
-                  height: 129
-                  point: ~middle_right
-                  moveY: "self.parent['滚动条滑块'].getDragYRatio()"
-                  visible: true
+                  x: 0
+                  y: 0
+                  width: 48
+                  height: 44
+                  normal: 'self.isHovered() ? ''102,72,47,255'' : ''72,53,40,255'''
+                  through: true
+                  shape: ~round_rect
+                  radius: 6
+                effect:
+                  stroke:
+                    width: 1
+                    color: ~111,89,72,255
+              文字:
+                type: Text
+                attribute:
+                  x: 0
+                  y: 0
+                  texts: ~&f×
+                  fontSize: 32
+                  through: true
+                  point: ~middle_center
+          工作面板:
+            type: Canvas
+            attribute:
+              x: 24
+              y: 112
+              width: 760
+              height: 388
+              enable: '!var.fillBusy'
+            children:
+              边框:
+                type: Canvas
+                attribute:
+                  x: 0
+                  y: 0
+                  width: 760
+                  height: 388
+                  through: true
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 760
+                      height: 388
+                      normal: ~44,39,36,255
+                      through: true
+                      shape: ~round_rect
+                      radius: 10
+                    effect:
+                      stroke:
+                        width: 1
+                        color: ~111,89,72,255
+                  内沿:
+                    type: Texture
+                    attribute:
+                      x: 8
+                      y: 8
+                      width: 744
+                      height: 1
+                      normal: ~82,67,56,255
+                      through: true
+                  底沿:
+                    type: Texture
+                    attribute:
+                      x: 12
+                      y: 386
+                      width: 736
+                      height: 1
+                      normal: ~27,25,24,255
+                      through: true
+                  左上横:
+                    type: Texture
+                    attribute:
+                      x: 5
+                      y: 5
+                      width: 14
+                      height: 2
+                      normal: ~214,143,80,255
+                      through: true
+                  左上竖:
+                    type: Texture
+                    attribute:
+                      x: 5
+                      y: 5
+                      width: 2
+                      height: 14
+                      normal: ~214,143,80,255
+                      through: true
+                  右上横:
+                    type: Texture
+                    attribute:
+                      x: 741
+                      y: 5
+                      width: 14
+                      height: 2
+                      normal: ~214,143,80,255
+                      through: true
+                  右上竖:
+                    type: Texture
+                    attribute:
+                      x: 755
+                      y: 5
+                      width: 2
+                      height: 14
+                      normal: ~214,143,80,255
+                      through: true
+                  左下横:
+                    type: Texture
+                    attribute:
+                      x: 5
+                      y: 383
+                      width: 14
+                      height: 2
+                      normal: ~214,143,80,255
+                      through: true
+                  左下竖:
+                    type: Texture
+                    attribute:
+                      x: 5
+                      y: 369
+                      width: 2
+                      height: 14
+                      normal: ~214,143,80,255
+                      through: true
+                  右下横:
+                    type: Texture
+                    attribute:
+                      x: 741
+                      y: 383
+                      width: 14
+                      height: 2
+                      normal: ~214,143,80,255
+                      through: true
+                  右下竖:
+                    type: Texture
+                    attribute:
+                      x: 755
+                      y: 369
+                      width: 2
+                      height: 14
+                      normal: ~214,143,80,255
+                      through: true
+              标题:
+                type: Text
+                attribute:
+                  x: 24
+                  y: 20
+                  texts: ~&f烧炼区
+                  fontSize: 36
+                  through: true
+              标题线:
+                type: Texture
+                attribute:
+                  x: 24
+                  y: 52
+                  width: 712
+                  height: 1
+                  normal: ~111,89,72,255
+                  through: true
+              副标:
+                type: Text
+                attribute:
+                  x: -24
+                  y: 24
+                  texts: ~&7原料 + 燃料 → 产物
+                  fontSize: 28
+                  through: true
+                  point: ~top_right
+              原料:
+                type: Canvas
+                attribute:
+                  x: 72
+                  y: 124
+                  width: 96
+                  height: 96
+                children:
+                  底板:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 96
+                      height: 96
+                      normal: 'self.isHovered() ? ''74,54,39,255'' : ''27,25,24,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 1
+                        color: 'self.isHovered() ? ''214,143,80,255'' : ''111,89,72,255'''
+                    children:
+                      上暗线:
+                        type: Texture
+                        attribute:
+                          x: 6
+                          y: 1
+                          width: 84
+                          height: 1
+                          normal: ~10,15,18,160
+                          through: true
+                      下亮线:
+                        type: Texture
+                        attribute:
+                          x: 6
+                          y: 94
+                          width: 84
+                          height: 1
+                          normal: ~82,67,56,255
+                          through: true
+                  槽位:
+                    type: Slot
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 96
+                      height: 96
+                      slotType: ~Container
+                      normal: ~0,0,0,0
+                      itemScale: 0.8
+                      id: 0
+              原料标签:
+                type: Text
+                attribute:
+                  x: 72
+                  y: 86
+                  texts: ~&f原料
+                  fontSize: 32
+                  through: true
+              燃料:
+                type: Canvas
+                attribute:
+                  x: 264
+                  y: 124
+                  width: 96
+                  height: 96
+                children:
+                  底板:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 96
+                      height: 96
+                      normal: 'self.isHovered() ? ''74,54,39,255'' : ''27,25,24,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 1
+                        color: 'self.isHovered() ? ''214,143,80,255'' : ''111,89,72,255'''
+                    children:
+                      上暗线:
+                        type: Texture
+                        attribute:
+                          x: 6
+                          y: 1
+                          width: 84
+                          height: 1
+                          normal: ~10,15,18,160
+                          through: true
+                      下亮线:
+                        type: Texture
+                        attribute:
+                          x: 6
+                          y: 94
+                          width: 84
+                          height: 1
+                          normal: ~82,67,56,255
+                          through: true
+                  槽位:
+                    type: Slot
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 96
+                      height: 96
+                      slotType: ~Container
+                      normal: ~0,0,0,0
+                      itemScale: 0.8
+                      id: 1
+              燃料标签:
+                type: Text
+                attribute:
+                  x: 264
+                  y: 86
+                  texts: ~&f燃料
+                  fontSize: 32
+                  through: true
+              产物:
+                type: Canvas
+                attribute:
+                  x: 568
+                  y: 116
+                  width: 112
+                  height: 112
+                children:
+                  底板:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 112
+                      height: 112
+                      normal: 'self.isHovered() ? ''74,54,39,255'' : ''27,25,24,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 1
+                        color: 'self.isHovered() ? ''214,143,80,255'' : ''111,89,72,255'''
+                    children:
+                      上暗线:
+                        type: Texture
+                        attribute:
+                          x: 6
+                          y: 1
+                          width: 100
+                          height: 1
+                          normal: ~10,15,18,160
+                          through: true
+                      下亮线:
+                        type: Texture
+                        attribute:
+                          x: 6
+                          y: 110
+                          width: 100
+                          height: 1
+                          normal: ~82,67,56,255
+                          through: true
+                  槽位:
+                    type: Slot
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 112
+                      height: 112
+                      slotType: ~Container
+                      normal: ~0,0,0,0
+                      itemScale: 0.8
+                      id: 2
+              产物标签:
+                type: Text
+                attribute:
+                  x: 568
+                  y: 78
+                  texts: ~&f产物
+                  fontSize: 32
+                  through: true
+              加号:
+                type: Text
+                attribute:
+                  x: 204
+                  y: 150
+                  texts: ~&7＋
+                  fontSize: 48
+                  through: true
+              炉膛轨道:
+                type: Texture
+                attribute:
+                  x: 400
+                  y: 168
+                  width: 136
+                  height: 12
+                  normal: ~27,25,24,255
+                  through: true
+                  shape: ~round_rect
+                  radius: 4
+              烧炼进度:
+                type: Texture
+                attribute:
+                  x: 402
+                  y: 170
+                  width: 132 * var.cook
+                  height: 8
+                  normal: ~214,143,80,255
+                  through: true
+                  shape: ~round_rect
+                  radius: 2
+              进度刻线:
+                type: Texture
+                attribute:
+                  x: 400
+                  y: 190
+                  width: 136
+                  height: 1
+                  normal: ~111,89,72,255
+                  through: true
+              烧炼百分比:
+                type: Text
+                attribute:
+                  x: 400
+                  y: 128
+                  texts: '''&f'' + (var.cook * 100).round() + ''%'''
+                  fontSize: 36
+                  through: true
+              箭头:
+                type: Text
+                attribute:
+                  x: 506
+                  y: 208
+                  texts: ~&6→
+                  fontSize: 48
+                  through: true
+              燃料余量:
+                type: Text
+                attribute:
+                  x: 264
+                  y: 242
+                  texts: ~&7燃料余量
+                  fontSize: 28
+                  through: true
+              燃料轨道:
+                type: Texture
+                attribute:
+                  x: 264
+                  y: 268
+                  width: 96
+                  height: 8
+                  normal: ~27,25,24,255
+                  through: true
+                  shape: ~round_rect
+                  radius: 3
+              燃料进度:
+                type: Texture
+                attribute:
+                  x: 265
+                  y: 269
+                  width: 94 * var.burn
+                  height: 6
+                  normal: ~221,170,93,255
+                  through: true
+                  shape: ~round_rect
+                  radius: 2
+              燃料刻线1:
+                type: Texture
+                attribute:
+                  x: 288
+                  y: 267
+                  width: 1
+                  height: 10
+                  normal: ~44,39,36,255
+                  through: true
+              燃料刻线2:
+                type: Texture
+                attribute:
+                  x: 312
+                  y: 267
+                  width: 1
+                  height: 10
+                  normal: ~44,39,36,255
+                  through: true
+              燃料刻线3:
+                type: Texture
+                attribute:
+                  x: 336
+                  y: 267
+                  width: 1
+                  height: 10
+                  normal: ~44,39,36,255
+                  through: true
+              状态条:
+                type: Texture
+                attribute:
+                  x: 40
+                  y: 310
+                  width: 680
+                  height: 48
+                  normal: ~37,31,28,255
+                  through: true
+                  shape: ~round_rect
+                  radius: 6
+              炉火指示:
+                type: Texture
+                attribute:
+                  x: 58
+                  y: 328
+                  width: 10
+                  height: 10
+                  normal: 'var.burn > 0 ? ''233,159,78,255'' : ''104,91,81,255'''
+                  through: true
+                  rotate: 45
+              状态:
+                type: Text
+                attribute:
+                  x: 86
+                  y: 324
+                  texts: 'var.cook > 0 ? ''&6正在烧炼'' : (var.burn > 0 ? ''&6炉火燃烧'' : ''&7熔炉待机'')'
+                  fontSize: 32
+                  through: true
+              状态说明:
+                type: Text
+                attribute:
+                  x: -58
+                  y: 324
+                  texts: 'var.burn > 0 ? ''&7燃料余量 '' + (var.burn * 100).round() + ''%'' : ''&7放入原料与燃料开始烧炼'''
+                  fontSize: 28
+                  through: true
+                  point: ~top_right
+              配方预览标题:
+                type: Text
+                attribute:
+                  x: 72
+                  y: 242
+                  texts: ~&7配方预览
+                  fontSize: 28
+                  through: true
+                  visible: var.recipeSelection != ''
+              材料预览:
+                type: HGrid
+                attribute:
+                  x: 72
+                  y: 266
+                  width: 40
+                  height: 40
+                  column: 1
+                  spaceBetweenX: 4
+                  spaceBetweenY: 4
+                  visible: var.recipeSelection != ''
                 action:
-                  wheel: |-
-                    if(self.moveY >= 0 && self.wheelValue > 0){
-                      self.parent['滚动条滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                    }
-                    if(self.moveY <= 1 && self.wheelValue < 0){
-                      self.parent['滚动条滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                  create: |-
+                    var.previewIcons = {}
+                    for(i in range(0, 0)){
+                      cell = self['材料']
+                      if(i > 0){ cell = cell.copy('预览' + i.round()) }
+                      var.previewIcons[i.round()] = cell['图标']
                     }
                 children:
-                  配方展示区:
-                    type: HGrid
-                    val: 配方展示区
+                  材料:
+                    type: Canvas
                     attribute:
-                      spaceBetweenX: 2
-                      spaceBetweenY: 2
-                      column: 5
-                      visible: true
+                      x: 0
+                      y: 0
+                      width: 40
+                      height: 40
                     children:
-                      配方原型:
-                        type: Slot
+                      底色:
+                        type: Texture
                         attribute:
-                          entryKey: 0.round()
-                          entry: var.recipes[self.entryKey]
-                          visible: self.entry != none
-                          width: 19
-                          height: 19
-                          slotType: ~Icon
-                          normal: "var.recipeCanCraft[self.entryKey] == 1 ? '120,190,255,230' : '255,180,180,170'"
-                          hover: ~Frosted:0;255,255,255,240
+                          x: 0
+                          y: 0
+                          width: 40
+                          height: 40
+                          normal: ~27,25,24,255
+                          through: true
                           shape: ~round_rect
                           radius: 6
-                          seticon: "self.setItemIcon(var.recipeJsons[self.entryKey])"
-                          itemScale: 0.7
-                        children:
-                          数量:
-                            type: Text
-                            attribute:
-                              x: 1
-                              y: 11
-                              texts: "self.parent.entry != none && self.parent.entry['resultAmount'] > 1 ? '&f' + self.parent.entry['resultAmount'].round() : none"
-                              fontSize: 8
-                              through: true
-                        action:
-                          clickLeft: |-
-                            if(var.shiftHeld){
-                              recipe = var.recipes[self.entryKey]
-                              if(recipe != none){
-                                for(key in var.allRecipes.keys()){
-                                  r = var.allRecipes[key]
-                                  if(r['resultItemId'] == recipe['resultItemId']){
-                                    Packet.send('AXS:vanilla_furnace', 'place_ingredients', key)
-                                    break
-                                  }
-                                }
-                              }
-                            } else {
-                              var.selectedRecipe = self.entryKey
-                              recipe = var.recipes[self.entryKey]
-                              if(recipe != none){
-                                var.previewGrid = recipe['previewGrid']
-                                var.previewAmounts = recipe['previewAmounts'] != none ? recipe['previewAmounts'] : []
-                                var.previewResultAmount = recipe['resultAmount'] != none ? recipe['resultAmount'] : 0
-                                slot = val.预览输入槽
-                                if(slot != none){
-                                  slot.seticon()
-                                }
-                                result = val.预览输出槽
-                                if(result != none){
-                                  result.setItemIcon(recipe['resultJson'])
-                                }
-                              }
-                            }
                         effect:
                           stroke:
                             width: 1
-                            color: "var.recipeCanCraft[self.entryKey] == 1 ? '120,190,255,255' : '0,0,0,180'"
-                          ripple:
-                            duration: 1200
-                            color: ~255,255,255,100
-                            width: 0.05
-              滚动条轨道:
-                type: Texture
+                            color: ~111,89,72,255
+                      图标:
+                        type: Slot
+                        attribute:
+                          width: 40
+                          height: 40
+                          slotType: ~Icon
+                          normal: ~0,0,0,0
+                          itemScale: 0.8
+              预览箭头:
+                type: Text
                 attribute:
-                  x: -18.5
-                  y: 8
-                  width: 5
-                  height: 129
-                  normal: ~Frosted:0;60,60,60,200
-                  shape: ~round_rect
-                  radius: 2
-                  point: ~middle_right
-                  visible: true
-              滚动条滑块:
-                type: Texture
-                val: 滚动条滑块
+                  x: 122
+                  y: 276
+                  texts: ~&7→
+                  fontSize: 28
+                  through: true
+                  visible: var.recipeSelection != ''
+              配方产物:
+                type: Canvas
                 attribute:
-                  x: -18.5
-                  y: -46.5
-                  width: 5
-                  height: 20
-                  normal: ~Frosted:0;180,180,180,220
-                  shape: ~round_rect
-                  radius: 2
-                  point: ~middle_right
-                  maxDragY: 109
-                  visible: true
-                effect:
-                  stroke:
-                    width: 0.5
-                    color: ~120,120,120,120
-          背包区:
+                  x: 160
+                  y: 266
+                  width: 40
+                  height: 40
+                  visible: var.recipeSelection != ''
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 40
+                      height: 40
+                      normal: ~27,25,24,255
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 1
+                        color: ~111,89,72,255
+                  图标:
+                    type: Slot
+                    attribute:
+                      width: 40
+                      height: 40
+                      slotType: ~Icon
+                      normal: ~0,0,0,0
+                      itemScale: 0.8
+                    val: recipePreviewResult
+          背包面板:
             type: Canvas
             attribute:
-              width: 179
-              x: 0
-              y: 56
-              point: ~middle_center
-              height: 84
-              visible: true
+              x: 24
+              y: 520
+              width: 760
+              height: 396
+              enable: '!var.fillBusy'
             children:
-              背包网格:
-                type: HGrid
+              边框:
+                type: Canvas
                 attribute:
-                  spaceBetweenX: 1
-                  spaceBetweenY: 0
-                  column: 9
-                  width: 171
                   x: 0
                   y: 0
-                  point: ~top_center
-                  height: 57
-                  visible: true
+                  width: 760
+                  height: 396
+                  through: true
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 760
+                      height: 396
+                      normal: ~44,39,36,255
+                      through: true
+                      shape: ~round_rect
+                      radius: 10
+                    effect:
+                      stroke:
+                        width: 1
+                        color: ~111,89,72,255
+                  内沿:
+                    type: Texture
+                    attribute:
+                      x: 8
+                      y: 8
+                      width: 744
+                      height: 1
+                      normal: ~82,67,56,255
+                      through: true
+                  底沿:
+                    type: Texture
+                    attribute:
+                      x: 12
+                      y: 394
+                      width: 736
+                      height: 1
+                      normal: ~27,25,24,255
+                      through: true
+                  左上横:
+                    type: Texture
+                    attribute:
+                      x: 5
+                      y: 5
+                      width: 14
+                      height: 2
+                      normal: ~214,143,80,255
+                      through: true
+                  左上竖:
+                    type: Texture
+                    attribute:
+                      x: 5
+                      y: 5
+                      width: 2
+                      height: 14
+                      normal: ~214,143,80,255
+                      through: true
+                  右上横:
+                    type: Texture
+                    attribute:
+                      x: 741
+                      y: 5
+                      width: 14
+                      height: 2
+                      normal: ~214,143,80,255
+                      through: true
+                  右上竖:
+                    type: Texture
+                    attribute:
+                      x: 755
+                      y: 5
+                      width: 2
+                      height: 14
+                      normal: ~214,143,80,255
+                      through: true
+                  左下横:
+                    type: Texture
+                    attribute:
+                      x: 5
+                      y: 391
+                      width: 14
+                      height: 2
+                      normal: ~214,143,80,255
+                      through: true
+                  左下竖:
+                    type: Texture
+                    attribute:
+                      x: 5
+                      y: 377
+                      width: 2
+                      height: 14
+                      normal: ~214,143,80,255
+                      through: true
+                  右下横:
+                    type: Texture
+                    attribute:
+                      x: 741
+                      y: 391
+                      width: 14
+                      height: 2
+                      normal: ~214,143,80,255
+                      through: true
+                  右下竖:
+                    type: Texture
+                    attribute:
+                      x: 755
+                      y: 377
+                      width: 2
+                      height: 14
+                      normal: ~214,143,80,255
+                      through: true
+              标题:
+                type: Text
+                attribute:
+                  x: 24
+                  y: 20
+                  texts: ~&f玩家背包
+                  fontSize: 36
+                  through: true
+              标题线:
+                type: Texture
+                attribute:
+                  x: 24
+                  y: 52
+                  width: 712
+                  height: 1
+                  normal: ~111,89,72,255
+                  through: true
+              副标:
+                type: Text
+                attribute:
+                  x: -24
+                  y: 24
+                  texts: ~&727 格 / 快捷栏 9 格
+                  fontSize: 28
+                  through: true
+                  point: ~top_right
+              储物格:
+                type: HGrid
+                attribute:
+                  x: 44
+                  y: 66
+                  width: 672
+                  height: 216
+                  column: 9
+                  spaceBetweenX: 12
+                  spaceBetweenY: 12
                 action:
                   create: |-
                     for(i in range(1, 26)){
-                      slot = self['背包原型'].copy('背包格' + i.round())
-                      slot.id = i.round() + 3
+                      cell = self['格子'].copy('背包格' + i.round())
+                      cell['槽位'].id = (3 + i).round()
                     }
                 children:
-                  背包原型:
-                    type: Slot
+                  格子:
+                    type: Canvas
                     attribute:
-                      normal: ~Frosted:0;95,95,95,255
-                      hover: ~Frosted:0;255,255,255,255
-                      shape: ~round_rect
-                      radius: 6
-                      slotType: ~Backpack
-                      width: 19
-                      id: 3
-                      height: 19
-                      itemScale: 0.7
-                      visible: true
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~0,0,0,255
+                      x: 0
+                      y: 0
+                      width: 64
+                      height: 64
+                    children:
+                      底板:
+                        type: Texture
+                        attribute:
+                          x: 0
+                          y: 0
+                          width: 64
+                          height: 64
+                          normal: 'self.isHovered() ? ''74,54,39,255'' : ''27,25,24,255'''
+                          through: true
+                          shape: ~round_rect
+                          radius: 6
+                        effect:
+                          stroke:
+                            width: 1
+                            color: 'self.isHovered() ? ''214,143,80,255'' : ''111,89,72,255'''
+                        children:
+                          上暗线:
+                            type: Texture
+                            attribute:
+                              x: 6
+                              y: 1
+                              width: 52
+                              height: 1
+                              normal: ~10,15,18,160
+                              through: true
+                          下亮线:
+                            type: Texture
+                            attribute:
+                              x: 6
+                              y: 62
+                              width: 52
+                              height: 1
+                              normal: ~82,67,56,255
+                              through: true
+                      槽位:
+                        type: Slot
+                        attribute:
+                          x: 0
+                          y: 0
+                          width: 64
+                          height: 64
+                          slotType: ~Backpack
+                          normal: ~0,0,0,0
+                          itemScale: 0.8
+                          id: 3
               快捷栏:
                 type: HGrid
                 attribute:
-                  spaceBetweenX: 1
+                  x: 44
+                  y: 310
+                  width: 672
+                  height: 64
                   column: 9
-                  width: 171
-                  x: 0
-                  y: 0
-                  point: ~bottom_center
-                  height: 19
-                  visible: true
+                  spaceBetweenX: 12
+                  spaceBetweenY: 12
                 action:
                   create: |-
                     for(i in range(1, 8)){
-                      slot = self['快捷原型'].copy('快捷格' + i.round())
-                      slot.id = i.round() + 30
+                      cell = self['格子'].copy('背包格' + i.round())
+                      cell['槽位'].id = (30 + i).round()
                     }
                 children:
-                  快捷原型:
-                    type: Slot
+                  格子:
+                    type: Canvas
                     attribute:
-                      normal: ~Frosted:0;95,95,95,255
-                      hover: ~Frosted:0;255,255,255,255
+                      x: 0
+                      y: 0
+                      width: 64
+                      height: 64
+                    children:
+                      底板:
+                        type: Texture
+                        attribute:
+                          x: 0
+                          y: 0
+                          width: 64
+                          height: 64
+                          normal: 'self.isHovered() ? ''74,54,39,255'' : ''27,25,24,255'''
+                          through: true
+                          shape: ~round_rect
+                          radius: 6
+                        effect:
+                          stroke:
+                            width: 1
+                            color: 'self.isHovered() ? ''214,143,80,255'' : ''111,89,72,255'''
+                        children:
+                          上暗线:
+                            type: Texture
+                            attribute:
+                              x: 6
+                              y: 1
+                              width: 52
+                              height: 1
+                              normal: ~10,15,18,160
+                              through: true
+                          下亮线:
+                            type: Texture
+                            attribute:
+                              x: 6
+                              y: 62
+                              width: 52
+                              height: 1
+                              normal: ~82,67,56,255
+                              through: true
+                      槽位:
+                        type: Slot
+                        attribute:
+                          x: 0
+                          y: 0
+                          width: 64
+                          height: 64
+                          slotType: ~Backpack
+                          normal: ~0,0,0,0
+                          itemScale: 0.8
+                          id: 30
+              快捷标签:
+                type: Text
+                attribute:
+                  x: 44
+                  y: 290
+                  texts: ~&7快捷栏
+                  fontSize: 28
+                  through: true
+              快捷分隔:
+                type: Texture
+                attribute:
+                  x: 128
+                  y: 298
+                  width: 588
+                  height: 1
+                  normal: ~111,89,72,255
+                  through: true
+          仓库面板:
+            type: Canvas
+            attribute:
+              x: 808
+              y: 112
+              width: 680
+              height: 804
+              visible: var.whLayoutEnabled && !var.recipeOpen
+              enable: '!var.fillBusy'
+            children:
+              边框:
+                type: Canvas
+                attribute:
+                  x: 0
+                  y: 0
+                  width: 680
+                  height: 804
+                  through: true
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 680
+                      height: 804
+                      normal: ~44,39,36,255
+                      through: true
                       shape: ~round_rect
-                      radius: 6
-                      slotType: ~Backpack
-                      width: 19
-                      id: 30
-                      height: 19
-                      itemScale: 0.7
-                      visible: true
+                      radius: 10
                     effect:
                       stroke:
-                        width: 2
-                        color: ~0,0,0,255
+                        width: 1
+                        color: ~111,89,72,255
+                  内沿:
+                    type: Texture
+                    attribute:
+                      x: 8
+                      y: 8
+                      width: 664
+                      height: 1
+                      normal: ~82,67,56,255
+                      through: true
+                  底沿:
+                    type: Texture
+                    attribute:
+                      x: 12
+                      y: 802
+                      width: 656
+                      height: 1
+                      normal: ~27,25,24,255
+                      through: true
+                  左上横:
+                    type: Texture
+                    attribute:
+                      x: 5
+                      y: 5
+                      width: 14
+                      height: 2
+                      normal: ~214,143,80,255
+                      through: true
+                  左上竖:
+                    type: Texture
+                    attribute:
+                      x: 5
+                      y: 5
+                      width: 2
+                      height: 14
+                      normal: ~214,143,80,255
+                      through: true
+                  右上横:
+                    type: Texture
+                    attribute:
+                      x: 661
+                      y: 5
+                      width: 14
+                      height: 2
+                      normal: ~214,143,80,255
+                      through: true
+                  右上竖:
+                    type: Texture
+                    attribute:
+                      x: 675
+                      y: 5
+                      width: 2
+                      height: 14
+                      normal: ~214,143,80,255
+                      through: true
+                  左下横:
+                    type: Texture
+                    attribute:
+                      x: 5
+                      y: 799
+                      width: 14
+                      height: 2
+                      normal: ~214,143,80,255
+                      through: true
+                  左下竖:
+                    type: Texture
+                    attribute:
+                      x: 5
+                      y: 785
+                      width: 2
+                      height: 14
+                      normal: ~214,143,80,255
+                      through: true
+                  右下横:
+                    type: Texture
+                    attribute:
+                      x: 661
+                      y: 799
+                      width: 14
+                      height: 2
+                      normal: ~214,143,80,255
+                      through: true
+                  右下竖:
+                    type: Texture
+                    attribute:
+                      x: 675
+                      y: 785
+                      width: 2
+                      height: 14
+                      normal: ~214,143,80,255
+                      through: true
+              标题:
+                type: Text
+                attribute:
+                  x: 24
+                  y: 20
+                  texts: ~&f个人仓库
+                  fontSize: 36
+                  through: true
+              标题线:
+                type: Texture
+                attribute:
+                  x: 24
+                  y: 52
+                  width: 632
+                  height: 1
+                  normal: ~111,89,72,255
+                  through: true
+              副标:
+                type: Text
+                attribute:
+                  x: -24
+                  y: 24
+                  texts: '''&7已用 '' + var.whCount + '' 格'''
+                  fontSize: 28
+                  through: true
+                  point: ~top_right
+              搜索框:
+                type: Canvas
+                attribute:
+                  x: 24
+                  y: 76
+                  width: 456
+                  height: 40
+                  enable: var.whAvailable
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 456
+                      height: 40
+                      normal: ~27,25,24,255
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 1
+                        color: ~111,89,72,255
+                  输入:
+                    type: TextBox
+                    attribute:
+                      x: 14
+                      y: 7
+                      width: 428
+                      height: 26
+                      length: 32
+                      emptyText: ~&7搜索物品
+                      fontSize: 32
+                      cursorColor: ~214,143,80,255
+                    action:
+                      textChange: |-
+                        var.whMenu = ''
+                        var.whSearch = self.getContent()
+                        var.whSearchTicks = 6
+                      enter: |-
+                        var.whSearchTicks = 0
+                        Packet.send('AXS:vanilla_furnace', 'warehouse_panel', 'search', var.whSearch)
+                    val: warehouseSearchInput
+              搜索:
+                type: Canvas
+                attribute:
+                  x: 492
+                  y: 76
+                  width: 88
+                  height: 40
+                  enable: var.whAvailable && var.whSearch != ''
+                  alpha: '(var.whAvailable) ? 1 : 0.45'
+                action:
+                  clickLeft: |-
+                    val.warehouseSearchInput.setContent('')
+                    var.whSearch = ''
+                    var.whSearchTicks = 0
+                    Packet.send('AXS:vanilla_furnace', 'warehouse_panel', 'search', '')
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 88
+                      height: 40
+                      normal: 'self.isHovered() ? ''102,72,47,255'' : ''72,53,40,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 1
+                        color: ~111,89,72,255
+                  文字:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: ~&f清空
+                      fontSize: 32
+                      through: true
+                      point: ~middle_center
+              刷新:
+                type: Canvas
+                attribute:
+                  x: 592
+                  y: 76
+                  width: 64
+                  height: 40
+                  enable: (var.whAvailable) && var.whMenu == ''
+                  alpha: '(var.whAvailable) ? 1 : 0.45'
+                action:
+                  clickLeft: Packet.send('AXS:vanilla_furnace', 'warehouse_panel', 'refresh')
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 64
+                      height: 40
+                      normal: 'self.isHovered() ? ''102,72,47,255'' : ''72,53,40,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 1
+                        color: ~111,89,72,255
+                  文字:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: ~&f↻
+                      fontSize: 32
+                      through: true
+                      point: ~middle_center
+              分类:
+                type: Canvas
+                attribute:
+                  x: 24
+                  y: 132
+                  width: 196
+                  height: 36
+                  enable: var.whAvailable
+                  alpha: '(var.whAvailable) ? 1 : 0.45'
+                  tip: ~点击展开，直接选择
+                action:
+                  clickLeft: |-
+                    var.whMenu = var.whMenu == 'category' ? '' : 'category'
+                    var.whMenuPage = 0
+                    var.whMenuCount = var.whCategoryCount
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 196
+                      height: 36
+                      normal: 'self.isHovered() ? ''102,72,47,255'' : ''72,53,40,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 1
+                        color: ~111,89,72,255
+                  文字:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: '''&f分类 · '' + var.whCategory'
+                      fontSize: 32
+                      through: true
+                      point: ~middle_center
+                      limit: 10
+              排序:
+                type: Canvas
+                attribute:
+                  x: 232
+                  y: 132
+                  width: 260
+                  height: 36
+                  enable: var.whAvailable
+                  alpha: '(var.whAvailable) ? 1 : 0.45'
+                  tip: ~点击展开，直接选择
+                action:
+                  clickLeft: |-
+                    var.whMenu = var.whMenu == 'sort' ? '' : 'sort'
+                    var.whMenuPage = 0
+                    var.whMenuCount = var.whSortCount
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 260
+                      height: 36
+                      normal: 'self.isHovered() ? ''102,72,47,255'' : ''72,53,40,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 1
+                        color: ~111,89,72,255
+                  文字:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: 'var.whSort == ''默认 · 存入顺序'' ? ''&f默认 · 存入顺序'' : ''&f'' + var.whSort'
+                      fontSize: 32
+                      through: true
+                      point: ~middle_center
+                      limit: 14
+              默认提示:
+                type: Text
+                attribute:
+                  x: 514
+                  y: 143
+                  texts: ~&7点击 ☆ 置顶
+                  fontSize: 28
+                  through: true
+              仓库网格:
+                type: HGrid
+                attribute:
+                  x: 34
+                  y: 190
+                  width: 612
+                  height: 404
+                  column: 6
+                  spaceBetweenX: 12
+                  spaceBetweenY: 12
+                  visible: '!var.whAvailable || !var.carrying'
+                  enable: var.whAvailable && var.whMenu == ''
+                action:
+                  create: |-
+                    var.whCells = {}
+                    for(i in range(0, 23)){
+                      idx = i.round()
+                      cell = self['条目']
+                      if(idx > 0){
+                        cell = cell.copy('仓库格' + idx)
+                      }
+                      cell.index = idx
+                      var.whCells[idx] = cell
+                    }
+                  wheel: 'var.whPageStep = self.wheelValue > 0 ? -1 : 1'
+                children:
+                  条目:
+                    type: Canvas
+                    attribute:
+                      index: 0.round()
+                      entry: var.whRows[self.index]
+                      width: 92
+                      height: 92
+                    children:
+                      底板:
+                        type: Texture
+                        attribute:
+                          x: 0
+                          y: 0
+                          width: 92
+                          height: 92
+                          normal: 'self.isHovered() ? ''74,54,39,255'' : ''27,25,24,255'''
+                          through: true
+                          shape: ~round_rect
+                          radius: 6
+                        effect:
+                          stroke:
+                            width: 1
+                            color: 'self.isHovered() ? ''214,143,80,255'' : ''111,89,72,255'''
+                        children:
+                          上暗线:
+                            type: Texture
+                            attribute:
+                              x: 6
+                              y: 1
+                              width: 80
+                              height: 1
+                              normal: ~10,15,18,160
+                              through: true
+                          下亮线:
+                            type: Texture
+                            attribute:
+                              x: 6
+                              y: 90
+                              width: 80
+                              height: 1
+                              normal: ~82,67,56,255
+                              through: true
+                      Hit:
+                        type: Slot
+                        attribute:
+                          width: 92
+                          height: 92
+                          id: ~axs_wh_entry_empty
+                          slotType: ~Extra
+                          lock: false
+                          normal: ~0,0,0,0
+                          visible: '!var.carrying && self.parent.entry != none && !self.parent[''置顶按钮''].isHovered()'
+                        action:
+                          wheel: 'var.whPageStep = self.wheelValue > 0 ? -1 : 1'
+                      Icon:
+                        type: Slot
+                        attribute:
+                          width: 92
+                          height: 92
+                          slotType: ~Icon
+                          through: true
+                          normal: ~0,0,0,0
+                          itemScale: 0.68
+                          visible: '!var.carrying && self.parent.entry != none'
+                      数量:
+                        type: Text
+                        attribute:
+                          x: -7
+                          y: -5
+                          texts: 'self.parent.entry == none ? none : (self.parent.entry[''amount''] >= 100000000 ? ''&f'' + ((self.parent.entry[''amount''] / 1000000).round() / 100) + ''亿'' : (self.parent.entry[''amount''] >= 10000 ? ''&f'' + ((self.parent.entry[''amount''] / 100).round() / 100) + ''万'' : ''&f'' + self.parent.entry[''amount''].round()))'
+                          fontSize: 28
+                          through: true
+                          point: ~bottom_right
+                      置顶按钮:
+                        type: Canvas
+                        attribute:
+                          x: 69
+                          y: 3
+                          width: 20
+                          height: 20
+                          visible: self.parent.entry != none && !var.carrying && (self.parent.entry['pinned'] || self.parent.isHovered())
+                          tip: 'var.whSort != ''默认 · 存入顺序'' ? ''仅默认排序可置顶，请先切换排序'' : (self.parent.entry[''pinned''] ? ''取消置顶'' : ''置顶此物品'')'
+                        action:
+                          clickLeft: |-
+                            if(var.whSort == '默认 · 存入顺序' && self.parent.entry != none){
+                              Packet.send('AXS:vanilla_furnace', 'warehouse_panel', 'pin', self.parent.entry['clickId'], var.whToken)
+                            }
+                        children:
+                          底色:
+                            type: Texture
+                            attribute:
+                              width: 20
+                              height: 20
+                              normal: 'self.isHovered() ? ''102,72,47,255'' : ''72,53,40,255'''
+                              through: true
+                              shape: ~round_rect
+                              radius: 4
+                          星标:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              texts: 'self.parent.parent.entry[''pinned''] ? ''&6★'' : (var.whSort == ''默认 · 存入顺序'' ? ''&f☆'' : ''&8☆'')'
+                              fontSize: 28
+                              through: true
+                val: warehouseGrid
+              存入区:
+                type: Canvas
+                attribute:
+                  x: 34
+                  y: 190
+                  width: 612
+                  height: 404
+                  visible: var.whAvailable && var.carrying
+                  enable: (true) && var.whMenu == ''
+                children:
+                  底板:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 612
+                      height: 404
+                      normal: 'self.isHovered() ? ''74,54,39,255'' : ''27,25,24,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 8
+                    effect:
+                      stroke:
+                        width: 1
+                        color: ~214,143,80,255
+                  图形:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: -58
+                      texts: ~&6＋
+                      fontSize: 72
+                      through: true
+                      point: ~middle_center
+                  标题:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: -4
+                      texts: ~&f存入仓库
+                      fontSize: 48
+                      through: true
+                      point: ~middle_center
+                  说明:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 42
+                      texts: ~&7点击存入光标物品，同类物品自动合并
+                      fontSize: 32
+                      through: true
+                      point: ~middle_center
+                action:
+                  clickLeft: Packet.send('AXS:vanilla_furnace', 'warehouse_panel', 'deposit', var.whToken)
+              空提示:
+                type: Canvas
+                attribute:
+                  x: 34
+                  y: 190
+                  width: 612
+                  height: 404
+                  through: true
+                  visible: var.whResolved && (!var.whAvailable || (!var.carrying && var.whRows[0.round()] == none))
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 612
+                      height: 404
+                      normal: ~27,25,24,255
+                      through: true
+                      shape: ~round_rect
+                      radius: 8
+                  标题:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: -16
+                      texts: '!var.whAvailable ? ''&f仓库暂不可用'' : ''&f当前没有匹配物品'''
+                      fontSize: 36
+                      through: true
+                      point: ~middle_center
+                  说明:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 24
+                      texts: ~&7更换分类或搜索词，亦可拿起物品存入
+                      fontSize: 28
+                      through: true
+                      point: ~middle_center
+              取出说明:
+                type: Text
+                attribute:
+                  x: 34
+                  y: 622
+                  texts: ~&7左键取一组 · 右键取半组
+                  fontSize: 28
+                  through: true
+              页码:
+                type: Canvas
+                attribute:
+                  x: 222
+                  y: 658
+                  width: 236
+                  height: 36
+                  through: true
+                children:
+                  文字:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: '''&f'' + var.whPage'
+                      fontSize: 32
+                      through: true
+                      point: ~middle_center
+              上一页:
+                type: Canvas
+                attribute:
+                  x: 166
+                  y: 654
+                  width: 48
+                  height: 40
+                  enable: (var.whAvailable && var.whHasPrevious) && var.whMenu == ''
+                  alpha: '(var.whAvailable && var.whHasPrevious) ? 1 : 0.45'
+                action:
+                  clickLeft: Packet.send('AXS:vanilla_furnace', 'warehouse_panel', 'page', 'prev')
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 48
+                      height: 40
+                      normal: 'self.isHovered() ? ''102,72,47,255'' : ''72,53,40,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 1
+                        color: ~111,89,72,255
+                  文字:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: ~&f‹
+                      fontSize: 32
+                      through: true
+                      point: ~middle_center
+              下一页:
+                type: Canvas
+                attribute:
+                  x: 466
+                  y: 654
+                  width: 48
+                  height: 40
+                  enable: (var.whAvailable && var.whHasNext) && var.whMenu == ''
+                  alpha: '(var.whAvailable && var.whHasNext) ? 1 : 0.45'
+                action:
+                  clickLeft: Packet.send('AXS:vanilla_furnace', 'warehouse_panel', 'page', 'next')
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 48
+                      height: 40
+                      normal: 'self.isHovered() ? ''102,72,47,255'' : ''72,53,40,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 1
+                        color: ~111,89,72,255
+                  文字:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: ~&f›
+                      fontSize: 32
+                      through: true
+                      point: ~middle_center
+              页脚线:
+                type: Texture
+                attribute:
+                  x: 24
+                  y: 714
+                  width: 632
+                  height: 1
+                  normal: ~111,89,72,255
+                  through: true
+              页脚标题:
+                type: Text
+                attribute:
+                  x: 34
+                  y: 738
+                  texts: ~&f随取随补
+                  fontSize: 32
+                  through: true
+              页脚说明:
+                type: Text
+                attribute:
+                  x: 34
+                  y: 768
+                  texts: ~&7共享仓库存储，物品总量显示在图标右下角
+                  fontSize: 28
+                  through: true
+              菜单外点击层:
+                type: Canvas
+                attribute:
+                  x: 0
+                  y: 174
+                  width: 680
+                  height: 630
+                  visible: var.whMenu != ''
+                action:
+                  clickLeft: var.whMenu = ''
+              筛选菜单:
+                type: Canvas
+                attribute:
+                  x: 24
+                  y: 174
+                  width: 632
+                  height: 286
+                  visible: var.whMenu != ''
+                children:
+                  背景:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 632
+                      height: 286
+                      normal: ~37,31,28,255
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 1
+                        color: ~214,143,80,255
+                  标题:
+                    type: Text
+                    attribute:
+                      x: 16
+                      y: 16
+                      texts: 'var.whMenu == ''category'' ? ''&f选择分类'' : ''&f选择排序'''
+                      fontSize: 32
+                      through: true
+                  关闭:
+                    type: Canvas
+                    attribute:
+                      x: 580
+                      y: 8
+                      width: 36
+                      height: 32
+                    children:
+                      底色:
+                        type: Texture
+                        attribute:
+                          x: 0
+                          y: 0
+                          width: 36
+                          height: 32
+                          normal: 'self.isHovered() ? ''102,72,47,255'' : ''72,53,40,255'''
+                          through: true
+                          shape: ~round_rect
+                          radius: 6
+                        effect:
+                          stroke:
+                            width: 1
+                            color: ~111,89,72,255
+                      文字:
+                        type: Text
+                        attribute:
+                          x: 0
+                          y: 0
+                          texts: ~&f×
+                          fontSize: 28
+                          through: true
+                          point: ~middle_center
+                    action:
+                      clickLeft: var.whMenu = ''
+                  选项网格:
+                    type: HGrid
+                    attribute:
+                      x: 16
+                      y: 56
+                      width: 600
+                      height: 168
+                      column: 3
+                      spaceBetweenX: 12
+                      spaceBetweenY: 8
+                    action:
+                      create: |-
+                        for(i in range(1, 11)){
+                          choice = self['选项'].copy('选项' + i.round())
+                          choice.index = i.round()
+                        }
+                    children:
+                      选项:
+                        type: Canvas
+                        attribute:
+                          x: 0
+                          y: 0
+                          width: 192
+                          height: 36
+                          index: 0.round()
+                          entry: 'var.whMenu == ''category'' ? var.whCategories[(var.whMenuPage * 12 + self.index).round()] : var.whSortOptions[(var.whMenuPage * 12 + self.index).round()]'
+                          visible: self.entry != none
+                        children:
+                          底色:
+                            type: Texture
+                            attribute:
+                              x: 0
+                              y: 0
+                              width: 192
+                              height: 36
+                              normal: 'self.parent.entry != none && self.parent.entry[''active''] ? ''102,72,47,255'' : (self.isHovered() ? ''102,72,47,255'' : ''72,53,40,255'')'
+                              through: true
+                              shape: ~round_rect
+                              radius: 6
+                          名称:
+                            type: Text
+                            attribute:
+                              x: 0
+                              y: 0
+                              texts: 'self.parent.entry == none ? none : (self.parent.entry[''active''] ? ''&f✓ '' : ''&7'') + self.parent.entry[''name'']'
+                              fontSize: 28
+                              through: true
+                              point: ~middle_center
+                              limit: 12
+                        action:
+                          clickLeft: |-
+                            if(self.entry != none){
+                              Packet.send('AXS:vanilla_furnace', 'warehouse_panel', var.whMenu, self.entry['id'])
+                              var.whMenu = ''
+                            }
+                  上一组:
+                    type: Canvas
+                    attribute:
+                      x: 16
+                      y: 238
+                      width: 100
+                      height: 32
+                      enable: var.whMenuPage > 0
+                    children:
+                      底色:
+                        type: Texture
+                        attribute:
+                          x: 0
+                          y: 0
+                          width: 100
+                          height: 32
+                          normal: 'self.isHovered() ? ''102,72,47,255'' : ''72,53,40,255'''
+                          through: true
+                          shape: ~round_rect
+                          radius: 6
+                        effect:
+                          stroke:
+                            width: 1
+                            color: ~111,89,72,255
+                      文字:
+                        type: Text
+                        attribute:
+                          x: 0
+                          y: 0
+                          texts: ~&f上一组
+                          fontSize: 28
+                          through: true
+                          point: ~middle_center
+                    action:
+                      clickLeft: var.whMenuPage = var.whMenuPage - 1
+                  页码:
+                    type: Canvas
+                    attribute:
+                      x: 160
+                      y: 238
+                      width: 312
+                      height: 32
+                      through: true
+                    children:
+                      文字:
+                        type: Text
+                        attribute:
+                          x: 0
+                          y: 0
+                          texts: '''&7'' + (var.whMenuPage + 1).round() + '' / '' + ((var.whMenuCount + 11) / 12).toInt().round()'
+                          fontSize: 28
+                          through: true
+                          point: ~middle_center
+                  下一组:
+                    type: Canvas
+                    attribute:
+                      x: 516
+                      y: 238
+                      width: 100
+                      height: 32
+                      enable: (var.whMenuPage + 1) * 12 < var.whMenuCount
+                    children:
+                      底色:
+                        type: Texture
+                        attribute:
+                          x: 0
+                          y: 0
+                          width: 100
+                          height: 32
+                          normal: 'self.isHovered() ? ''102,72,47,255'' : ''72,53,40,255'''
+                          through: true
+                          shape: ~round_rect
+                          radius: 6
+                        effect:
+                          stroke:
+                            width: 1
+                            color: ~111,89,72,255
+                      文字:
+                        type: Text
+                        attribute:
+                          x: 0
+                          y: 0
+                          texts: ~&f下一组
+                          fontSize: 28
+                          through: true
+                          point: ~middle_center
+                    action:
+                      clickLeft: var.whMenuPage = var.whMenuPage + 1
+          配方侧栏:
+            type: Canvas
+            attribute:
+              x: 808
+              y: 112
+              width: 680
+              height: 804
+              visible: '!var.whLayoutEnabled || var.recipeOpen'
+            children:
+              边框:
+                type: Canvas
+                attribute:
+                  x: 0
+                  y: 0
+                  width: 680
+                  height: 804
+                  through: true
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 680
+                      height: 804
+                      normal: ~44,39,36,255
+                      through: true
+                      shape: ~round_rect
+                      radius: 10
+                    effect:
+                      stroke:
+                        width: 1
+                        color: ~111,89,72,255
+                  内沿:
+                    type: Texture
+                    attribute:
+                      x: 8
+                      y: 8
+                      width: 664
+                      height: 1
+                      normal: ~82,67,56,255
+                      through: true
+                  底沿:
+                    type: Texture
+                    attribute:
+                      x: 12
+                      y: 802
+                      width: 656
+                      height: 1
+                      normal: ~27,25,24,255
+                      through: true
+                  左上横:
+                    type: Texture
+                    attribute:
+                      x: 5
+                      y: 5
+                      width: 14
+                      height: 2
+                      normal: ~214,143,80,255
+                      through: true
+                  左上竖:
+                    type: Texture
+                    attribute:
+                      x: 5
+                      y: 5
+                      width: 2
+                      height: 14
+                      normal: ~214,143,80,255
+                      through: true
+                  右上横:
+                    type: Texture
+                    attribute:
+                      x: 661
+                      y: 5
+                      width: 14
+                      height: 2
+                      normal: ~214,143,80,255
+                      through: true
+                  右上竖:
+                    type: Texture
+                    attribute:
+                      x: 675
+                      y: 5
+                      width: 2
+                      height: 14
+                      normal: ~214,143,80,255
+                      through: true
+                  左下横:
+                    type: Texture
+                    attribute:
+                      x: 5
+                      y: 799
+                      width: 14
+                      height: 2
+                      normal: ~214,143,80,255
+                      through: true
+                  左下竖:
+                    type: Texture
+                    attribute:
+                      x: 5
+                      y: 785
+                      width: 2
+                      height: 14
+                      normal: ~214,143,80,255
+                      through: true
+                  右下横:
+                    type: Texture
+                    attribute:
+                      x: 661
+                      y: 799
+                      width: 14
+                      height: 2
+                      normal: ~214,143,80,255
+                      through: true
+                  右下竖:
+                    type: Texture
+                    attribute:
+                      x: 675
+                      y: 785
+                      width: 2
+                      height: 14
+                      normal: ~214,143,80,255
+                      through: true
+              标题:
+                type: Text
+                attribute:
+                  x: 24
+                  y: 20
+                  texts: ~&f烧炼配方
+                  fontSize: 36
+                  through: true
+              标题线:
+                type: Texture
+                attribute:
+                  x: 24
+                  y: 52
+                  width: 632
+                  height: 1
+                  normal: ~111,89,72,255
+                  through: true
+              副标:
+                type: Text
+                attribute:
+                  x: -24
+                  y: 24
+                  texts: ~&7选择后填入材料
+                  fontSize: 28
+                  through: true
+                  point: ~top_right
+              搜索框:
+                type: Canvas
+                attribute:
+                  x: 24
+                  y: 76
+                  width: 456
+                  height: 40
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 456
+                      height: 40
+                      normal: ~27,25,24,255
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 1
+                        color: ~111,89,72,255
+                  输入:
+                    type: TextBox
+                    attribute:
+                      x: 14
+                      y: 7
+                      width: 428
+                      height: 26
+                      length: 32
+                      emptyText: ~&7搜索物品
+                      fontSize: 32
+                      cursorColor: ~214,143,80,255
+                    action:
+                      textChange: |-
+                        var.recipeSearch = self.getContent()
+                        var.recipePage = 0
+                        var.recipeDirty = true
+              筛选:
+                type: Canvas
+                attribute:
+                  x: 492
+                  y: 76
+                  width: 164
+                  height: 40
+                action:
+                  clickLeft: |-
+                    var.onlyCraftable = !var.onlyCraftable
+                    var.recipePage = 0
+                    var.recipeDirty = true
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 164
+                      height: 40
+                      normal: 'self.isHovered() ? ''102,72,47,255'' : ''72,53,40,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 1
+                        color: ~111,89,72,255
+                  文字:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: 'var.onlyCraftable ? ''&f仅可制作'' : ''&f所有配方'''
+                      fontSize: 32
+                      through: true
+                      point: ~middle_center
+              选择提示:
+                type: Text
+                attribute:
+                  x: 34
+                  y: 143
+                  texts: 'var.carrying ? ''&7放下光标物品后可填入材料'' : ''&7左键预览配方 · 右键填入材料'''
+                  fontSize: 28
+                  through: true
+              配方网格:
+                type: HGrid
+                attribute:
+                  x: 34
+                  y: 190
+                  width: 612
+                  height: 404
+                  column: 6
+                  spaceBetweenX: 12
+                  spaceBetweenY: 12
+                action:
+                  create: |-
+                    var.recipeIcons = {}
+                    for(i in range(0, 23)){
+                      idx = i.round()
+                      cell = self['配方项']
+                      if(idx > 0){ cell = cell.copy('配方格' + idx) }
+                      cell.index = idx
+                      var.recipeIcons[idx] = cell['图标']
+                    }
+                  wheel: 'var.recipePageStep = self.wheelValue > 0 ? -1 : 1'
+                children:
+                  配方项:
+                    type: Canvas
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 92
+                      height: 92
+                      index: 0.round()
+                      entryKey: var.recipeKeys[self.index]
+                      entry: var.recipes[self.entryKey]
+                    children:
+                      底板:
+                        type: Texture
+                        attribute:
+                          x: 0
+                          y: 0
+                          width: 92
+                          height: 92
+                          normal: 'self.parent.entry != none && self.parent.entryKey == var.recipeSelection ? ''102,72,47,255'' : (self.isHovered() ? ''74,54,39,255'' : ''27,25,24,255'')'
+                          through: true
+                          shape: ~round_rect
+                          radius: 6
+                        effect:
+                          stroke:
+                            width: 1
+                            color: 'self.isHovered() ? ''214,143,80,255'' : ''111,89,72,255'''
+                        children:
+                          上暗线:
+                            type: Texture
+                            attribute:
+                              x: 6
+                              y: 1
+                              width: 80
+                              height: 1
+                              normal: ~10,15,18,160
+                              through: true
+                          下亮线:
+                            type: Texture
+                            attribute:
+                              x: 6
+                              y: 90
+                              width: 80
+                              height: 1
+                              normal: ~82,67,56,255
+                              through: true
+                      图标:
+                        type: Slot
+                        attribute:
+                          width: 92
+                          height: 92
+                          slotType: ~Icon
+                          normal: ~0,0,0,0
+                          itemScale: 0.68
+                          visible: self.parent.entry != none
+                        action:
+                          clickLeft: |-
+                            var.recipeSelection = self.parent.entryKey
+                            var.recipeName = self.parent.entry['resultZhName']
+                            var.previewDirty = true
+                          clickRight: |-
+                            if(!var.carrying && !var.fillBusy){
+                              var.recipeSelection = self.parent.entryKey
+                              var.recipeName = self.parent.entry['resultZhName']
+                              var.previewDirty = true
+                              Packet.send('AXS:vanilla_furnace', 'place_ingredients', self.parent.entryKey)
+                            }
+                          wheel: 'var.recipePageStep = self.wheelValue > 0 ? -1 : 1'
+                      可制作标记:
+                        type: Texture
+                        attribute:
+                          x: 12
+                          y: 85
+                          width: 68
+                          height: 2
+                          normal: 'self.parent.entry != none && self.parent.entry[''canCraft''] == 1 ? ''123,176,137,255'' : ''111,89,72,255'''
+                          through: true
+                          visible: self.parent.entry != none
+              空提示:
+                type: Text
+                attribute:
+                  x: 34
+                  y: 622
+                  texts: 'var.recipeResolved && var.recipeKeys[0.round()] == none ? ''&7没有匹配的配方，请调整搜索或筛选'' : ''&7绿色细线表示材料可用'''
+                  fontSize: 28
+                  through: true
+              上一页:
+                type: Canvas
+                attribute:
+                  x: 166
+                  y: 654
+                  width: 48
+                  height: 40
+                  enable: var.recipePage > 0
+                  alpha: '(var.recipePage > 0) ? 1 : 0.45'
+                action:
+                  clickLeft: |-
+                    var.recipePage = var.recipePage - 1
+                    var.recipeDirty = true
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 48
+                      height: 40
+                      normal: 'self.isHovered() ? ''102,72,47,255'' : ''72,53,40,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 1
+                        color: ~111,89,72,255
+                  文字:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: ~&f‹
+                      fontSize: 32
+                      through: true
+                      point: ~middle_center
+              下一页:
+                type: Canvas
+                attribute:
+                  x: 466
+                  y: 654
+                  width: 48
+                  height: 40
+                  enable: var.recipeHasNext
+                  alpha: 'var.recipeHasNext ? 1 : 0.45'
+                action:
+                  clickLeft: |-
+                    var.recipePage = var.recipePage + 1
+                    var.recipeDirty = true
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 48
+                      height: 40
+                      normal: 'self.isHovered() ? ''102,72,47,255'' : ''72,53,40,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 1
+                        color: ~111,89,72,255
+                  文字:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: ~&f›
+                      fontSize: 32
+                      through: true
+                      point: ~middle_center
+              页码:
+                type: Canvas
+                attribute:
+                  x: 222
+                  y: 658
+                  width: 236
+                  height: 36
+                  through: true
+                children:
+                  文字:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: '''&f'' + var.recipePageText'
+                      fontSize: 32
+                      through: true
+                      point: ~middle_center
+              选中底:
+                type: Texture
+                attribute:
+                  x: 24
+                  y: 722
+                  width: 632
+                  height: 60
+                  normal: ~37,31,28,255
+                  through: true
+                  shape: ~round_rect
+                  radius: 6
+              选中名称:
+                type: Text
+                attribute:
+                  x: 40
+                  y: 744
+                  texts: '''&f'' + var.recipeName'
+                  fontSize: 32
+                  through: true
+                  limit: 22
+              填入材料:
+                type: Canvas
+                attribute:
+                  x: 464
+                  y: 732
+                  width: 180
+                  height: 40
+                  enable: var.recipeSelection != '' && !var.carrying && !var.fillBusy
+                  alpha: 'var.recipeSelection != '''' && !var.carrying && !var.fillBusy ? 1 : 0.45'
+                action:
+                  clickLeft: Packet.send('AXS:vanilla_furnace', 'place_ingredients', var.recipeSelection)
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 180
+                      height: 40
+                      normal: 'self.isHovered() ? ''102,72,47,255'' : ''72,53,40,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 1
+                        color: ~111,89,72,255
+                  文字:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: ~&f填入材料
+                      fontSize: 32
+                      through: true
+                      point: ~middle_center
+              产出数量:
+                type: Text
+                attribute:
+                  x: -232
+                  y: 746
+                  texts: 'var.recipes[var.recipeSelection] == none ? none : ''&f×'' + var.recipes[var.recipeSelection][''resultAmount''].round()'
+                  fontSize: 28
+                  through: true
+                  point: ~top_right
+              刷新材料:
+                type: Canvas
+                attribute:
+                  x: 522
+                  y: 132
+                  width: 134
+                  height: 36
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 134
+                      height: 36
+                      normal: 'self.isHovered() ? ''102,72,47,255'' : ''72,53,40,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 1
+                        color: ~111,89,72,255
+                  文字:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: ~&f刷新材料
+                      fontSize: 28
+                      through: true
+                      point: ~middle_center
+                action:
+                  clickLeft: Packet.send('AXS:vanilla_furnace', 'show_recipe_book')
+          材料处理状态:
+            type: Canvas
+            attribute:
+              x: 760
+              y: 65
+              width: 456
+              height: 24
+              tip: var.fillMessage
+              visible: var.fillMessage != ''
+            children:
+              文字:
+                type: Text
+                attribute:
+                  x: 0
+                  y: 0
+                  texts: '''&7'' + var.fillMessage'
+                  fontSize: 28
+                  limit: 31
+                  through: true

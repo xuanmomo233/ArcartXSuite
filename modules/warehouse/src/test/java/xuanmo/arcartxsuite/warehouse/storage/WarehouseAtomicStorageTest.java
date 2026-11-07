@@ -43,8 +43,12 @@ class WarehouseAtomicStorageTest {
     }
 
     SlotItemRecord slot(int index, long amount) {
+        return slot(index, amount, 1);
+    }
+
+    SlotItemRecord slot(int index, long amount, long createdAt) {
         return new SlotItemRecord("personal", player.toString(), "personal", index, "hash", "all", "石头", "STONE", "石头", "shitou", "st",
-            "serialized", "{}", amount, 1, 1, "");
+            "serialized", "{}", amount, createdAt, createdAt, "");
     }
 
     @Test void insertAndCompareAndSetPreventReplay() throws Exception {
@@ -60,6 +64,20 @@ class WarehouseAtomicStorageTest {
         repository.upsertSlot(slot(1, 10));
         assertFalse(repository.applySlotChanges(List.of(new SlotChange(slot(0,64), slot(0,80)), new SlotChange(slot(1,9), null))));
         assertEquals(64, repository.loadSlot("personal", player.toString(), "personal", 0).orElseThrow().amount());
+    }
+
+    @Test void recreatedSlotRejectsAnOlderSnapshotWithTheSameItemAndAmount() throws Exception {
+        SlotItemRecord original = slot(0, 64, 1);
+        assertTrue(repository.applySlotChanges(List.of(new SlotChange(null, original))));
+        assertTrue(repository.applySlotChanges(List.of(new SlotChange(original, null))));
+        SlotItemRecord replacement = slot(0, 64, 2);
+        assertTrue(repository.applySlotChanges(List.of(new SlotChange(null, replacement))));
+
+        assertFalse(repository.applySlotChanges(List.of(new SlotChange(original, null))));
+        assertFalse(repository.applySlotChanges(List.of(new SlotChange(original, slot(0, 32, 1)))));
+        SlotItemRecord retained = repository.loadSlot("personal", player.toString(), "personal", 0).orElseThrow();
+        assertEquals(64, retained.amount());
+        assertEquals(2, retained.createdAt());
     }
 
     @Test void failedInsertRollsBackEarlierMerge() throws Exception {

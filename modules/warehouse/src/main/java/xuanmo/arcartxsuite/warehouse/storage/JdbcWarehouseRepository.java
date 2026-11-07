@@ -30,10 +30,32 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
 
     @Override
     public boolean applySlotChanges(List<SlotChange> changes) throws SQLException {
+        return materialMutation(changes, null, null);
+    }
+
+    @Override public boolean escrowMaterials(List<SlotChange> changes, MaterialTransfer transfer) throws SQLException {
+        return materialMutation(changes, transfer, null);
+    }
+
+    @Override public boolean restoreHeldMaterialTransfer(MaterialTransfer transfer, List<SlotChange> reverse) throws SQLException {
+        return materialMutation(reverse, null, transfer);
+    }
+
+    private boolean materialMutation(List<SlotChange> changes, MaterialTransfer create, MaterialTransfer restore) throws SQLException {
         try (Connection connection = getConnection()) {
             boolean autoCommit = connection.getAutoCommit();
             connection.setAutoCommit(false);
             try {
+                if (restore != null) {
+                    try (PreparedStatement scope = connection.prepareStatement("SELECT warehouse_id FROM warehouse_personal WHERE player_uuid=? AND warehouse_id=?")) {
+                        scope.setString(1,restore.ownerId());scope.setString(2,restore.warehouseId());
+                        try (ResultSet owner=scope.executeQuery()) { if(!owner.next()){connection.rollback();return false;} }
+                    }
+                    try (PreparedStatement guard = connection.prepareStatement("UPDATE warehouse_material_transfers SET state='RETURNED',updated_at=?,note='未授权交付，已原位回仓' WHERE id=? AND owner_id=? AND state='HELD'")) {
+                        guard.setLong(1, System.currentTimeMillis()); guard.setString(2, restore.id()); guard.setString(3, restore.ownerId());
+                        if (guard.executeUpdate() != 1) { connection.rollback(); return false; }
+                    }
+                }
                 for (SlotChange change : changes) {
                     SlotItemRecord before = change.before();
                     SlotItemRecord after = change.after();
@@ -46,8 +68,8 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
                     } else {
                         boolean delete = after == null;
                         try (PreparedStatement statement = connection.prepareStatement(delete
-                            ? "DELETE FROM warehouse_slots WHERE owner_type=? AND owner_id=? AND warehouse_id=? AND slot=? AND item_hash=? AND amount=?"
-                            : "UPDATE warehouse_slots SET amount=?,updated_at=? WHERE owner_type=? AND owner_id=? AND warehouse_id=? AND slot=? AND item_hash=? AND amount=?")) {
+                            ? "DELETE FROM warehouse_slots WHERE owner_type=? AND owner_id=? AND warehouse_id=? AND slot=? AND item_hash=? AND amount=? AND created_at=?"
+                            : "UPDATE warehouse_slots SET amount=?,updated_at=? WHERE owner_type=? AND owner_id=? AND warehouse_id=? AND slot=? AND item_hash=? AND amount=? AND created_at=?")) {
                             int i = 1;
                             if (!delete) { statement.setLong(i++, after.amount()); statement.setLong(i++, after.updatedAt()); }
                             statement.setString(i++, before.ownerType());
@@ -55,12 +77,22 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
                             statement.setString(i++, before.warehouseId());
                             statement.setInt(i++, before.slot());
                             statement.setString(i++, before.itemHash());
-                            statement.setLong(i, before.amount());
+                            statement.setLong(i++, before.amount());
+                            statement.setLong(i, before.createdAt());
                             if (statement.executeUpdate() != 1) {
                                 connection.rollback();
                                 return false;
                             }
                         }
+                    }
+                }
+                if (create != null) {
+                    try (PreparedStatement insert = connection.prepareStatement("INSERT INTO warehouse_material_transfers (id,owner_id,warehouse_id,server_id,run_id,state,adapter,target_id,evidence,payload,created_at,updated_at,note) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)")) {
+                        insert.setString(1,create.id()); insert.setString(2,create.ownerId()); insert.setString(3,create.warehouseId());
+                        insert.setString(4,create.serverId()); insert.setString(5,create.runId()); insert.setString(6,create.state());
+                        insert.setString(7,create.adapter()); insert.setString(8,create.target()); insert.setString(9,create.evidence());
+                        insert.setString(10,create.payload()); insert.setLong(11,create.createdAt()); insert.setLong(12,create.updatedAt()); insert.setString(13,create.note());
+                        insert.executeUpdate();
                     }
                 }
                 connection.commit();
@@ -71,6 +103,38 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
             } finally {
                 connection.setAutoCommit(autoCommit);
             }
+        }
+    }
+
+    @Override public boolean transitionMaterialTransfer(String id, String owner, String from, String to, String note) throws SQLException {
+        try (Connection c=getConnection(); PreparedStatement q=c.prepareStatement("UPDATE warehouse_material_transfers SET state=?,updated_at=?,note=? WHERE id=? AND owner_id=? AND state=?")) {
+            q.setString(1,to); q.setLong(2,System.currentTimeMillis()); q.setString(3,note); q.setString(4,id); q.setString(5,owner); q.setString(6,from);
+            return q.executeUpdate()==1;
+        }
+    }
+
+    private static MaterialTransfer readMaterialTransfer(ResultSet r) throws SQLException {
+        return new MaterialTransfer(r.getString("id"),r.getString("owner_id"),r.getString("warehouse_id"),r.getString("server_id"),r.getString("run_id"),r.getString("state"),r.getString("adapter"),r.getString("target_id"),r.getString("evidence"),r.getString("payload"),r.getLong("created_at"),r.getLong("updated_at"),r.getString("note"));
+    }
+
+    @Override public java.util.Optional<MaterialTransfer> materialTransfer(String id, String owner) throws SQLException {
+        try (Connection c=getConnection(); PreparedStatement q=c.prepareStatement("SELECT * FROM warehouse_material_transfers WHERE id=? AND owner_id=?")) {
+            q.setString(1,id); q.setString(2,owner);
+            try (ResultSet r=q.executeQuery()) { return r.next() ? java.util.Optional.of(readMaterialTransfer(r)) : java.util.Optional.empty(); }
+        }
+    }
+
+    @Override public List<MaterialTransfer> oldMaterialTransfers(String server, String run, int limit) throws SQLException {
+        try (Connection c=getConnection(); PreparedStatement q=c.prepareStatement("SELECT * FROM warehouse_material_transfers WHERE server_id=? AND state IN ('HELD','APPLYING','APPLIED') AND (run_id<>? OR (state='HELD' AND created_at<?)) ORDER BY created_at LIMIT ?")) {
+            q.setString(1,server); q.setString(2,run); q.setLong(3,System.currentTimeMillis()-30000L); q.setInt(4,Math.min(100,Math.max(1,limit)));
+            try (ResultSet r=q.executeQuery()) { List<MaterialTransfer> rows=new ArrayList<>(); while(r.next()) rows.add(readMaterialTransfer(r)); return rows; }
+        }
+    }
+
+    @Override public List<MaterialTransfer> materialTransfers(String owner, int limit) throws SQLException {
+        try (Connection c=getConnection(); PreparedStatement q=c.prepareStatement("SELECT * FROM warehouse_material_transfers WHERE owner_id=? AND state IN ('HELD','APPLYING','REVIEW') ORDER BY created_at DESC LIMIT ?")) {
+            q.setString(1,owner); q.setInt(2,Math.min(100,Math.max(1,limit)));
+            try (ResultSet r=q.executeQuery()) { List<MaterialTransfer> rows=new ArrayList<>(); while(r.next()) rows.add(readMaterialTransfer(r)); return rows; }
         }
     }
 
@@ -116,6 +180,7 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
     @Override
     protected int onPurgePlayerData(UUID playerUuid) throws SQLException {
         List<String> statements = List.of(
+            "UPDATE warehouse_material_transfers SET state='REVIEW',note='玩家数据已清理，禁止自动补发' WHERE owner_id=? AND state IN ('HELD','APPLYING','APPLIED')",
             "DELETE FROM warehouse_slots WHERE owner_type='personal' AND owner_id=?",
             "DELETE FROM warehouse_slots WHERE owner_type='shared' AND owner_id IN (SELECT id FROM warehouse_shared WHERE owner_uuid=?)",
             "DELETE FROM warehouse_shared_members WHERE shared_id IN (SELECT id FROM warehouse_shared WHERE owner_uuid=?)",
@@ -127,6 +192,7 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
             "DELETE FROM warehouse_personal WHERE player_uuid=?",
             "DELETE FROM warehouse_bank_balances WHERE player_uuid=?",
             "DELETE FROM warehouse_fixed_deposits WHERE player_uuid=?",
+            "DELETE FROM warehouse_pins WHERE player_uuid=?",
             "DELETE FROM warehouse_player_settings WHERE player_uuid=?"
         );
         try (Connection connection = getConnection()) {
@@ -164,8 +230,40 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
             "warehouse_shared",
             "warehouse_shared_members",
             "warehouse_pending_transfers",
-            "warehouse_player_settings"
+            "warehouse_player_settings",
+            "warehouse_pins",
+            "warehouse_material_transfers"
         );
+    }
+
+    @Override
+    public java.util.Set<String> loadPins(UUID playerUuid, String warehouseId) throws SQLException {
+        java.util.Set<String> pins = new java.util.HashSet<>();
+        try (Connection connection = getConnection();
+             PreparedStatement statement = connection.prepareStatement(
+                 "SELECT item_hash FROM warehouse_pins WHERE player_uuid=? AND warehouse_id=?")) {
+            statement.setString(1, playerUuid.toString());
+            statement.setString(2, warehouseId);
+            try (ResultSet result = statement.executeQuery()) {
+                while (result.next()) pins.add(result.getString(1));
+            }
+        }
+        return pins;
+    }
+
+    @Override
+    public void setPin(UUID playerUuid, String warehouseId, String itemHash, boolean pinned) throws SQLException {
+        List<String> key = List.of("player_uuid", "warehouse_id", "item_hash");
+        String sql = pinned
+            ? upsertSql("warehouse_pins", key, List.of("updated_at"))
+            : "DELETE FROM warehouse_pins WHERE player_uuid=? AND warehouse_id=? AND item_hash=?";
+        try (Connection connection = getConnection(); PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, playerUuid.toString());
+            statement.setString(2, warehouseId);
+            statement.setString(3, itemHash);
+            if (pinned) statement.setLong(4, System.currentTimeMillis());
+            statement.executeUpdate();
+        }
     }
 
     /**
@@ -294,6 +392,27 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
             statement.setInt(4, slot);
             try (ResultSet resultSet = statement.executeQuery()) {
                 return resultSet.next() ? Optional.of(slot(resultSet)) : Optional.empty();
+            }
+        }
+    }
+
+    @Override
+    public List<SlotItemRecord> loadSlots(String ownerType, String ownerId, String warehouseId,
+                                          List<Integer> slots) throws SQLException {
+        if (slots.isEmpty()) return List.of();
+        String placeholders = String.join(",", java.util.Collections.nCopies(slots.size(), "?"));
+        try (Connection connection = getConnection();
+             PreparedStatement statement = connection.prepareStatement(
+                 "SELECT * FROM warehouse_slots WHERE owner_type=? AND owner_id=? AND warehouse_id=? AND slot IN ("
+                     + placeholders + ")")) {
+            statement.setString(1, ownerType);
+            statement.setString(2, ownerId);
+            statement.setString(3, warehouseId);
+            for (int i = 0; i < slots.size(); i++) statement.setInt(i + 4, slots.get(i));
+            try (ResultSet result = statement.executeQuery()) {
+                List<SlotItemRecord> records = new ArrayList<>();
+                while (result.next()) records.add(slot(result));
+                return records;
             }
         }
     }
@@ -1634,6 +1753,28 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
     }
 
     private void createTables(Connection connection) throws SQLException {
+        try (Statement statement = connection.createStatement()) {
+            statement.execute("CREATE TABLE IF NOT EXISTS warehouse_material_transfers (id VARCHAR(36) PRIMARY KEY, owner_id VARCHAR(36) NOT NULL, warehouse_id VARCHAR(64) NOT NULL, server_id VARCHAR(36) NOT NULL, run_id VARCHAR(36) NOT NULL, state VARCHAR(16) NOT NULL, adapter VARCHAR(64) NOT NULL, target_id VARCHAR(255) NOT NULL, evidence "
+                + (isMysql() ? "LONGTEXT" : "TEXT") + " NOT NULL, payload " + (isMysql() ? "LONGTEXT" : "TEXT") + " NOT NULL, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, note VARCHAR(255) NOT NULL)");
+            for (String index : List.of("CREATE INDEX warehouse_material_owner_idx ON warehouse_material_transfers(owner_id,state,created_at)", "CREATE INDEX warehouse_material_recovery_idx ON warehouse_material_transfers(server_id,state,created_at)")) {
+                try { statement.execute(index); }
+                catch (SQLException exception) {
+                    String message = String.valueOf(exception.getMessage()).toLowerCase(java.util.Locale.ROOT);
+                    if (exception.getErrorCode() != 1061 && !message.contains("already exists")) throw exception;
+                }
+            }
+        }
+        try (Statement statement = connection.createStatement()) {
+            statement.execute("""
+                CREATE TABLE IF NOT EXISTS warehouse_pins (
+                    player_uuid VARCHAR(36) NOT NULL,
+                    warehouse_id VARCHAR(64) NOT NULL,
+                    item_hash VARCHAR(64) NOT NULL,
+                    updated_at BIGINT NOT NULL,
+                    PRIMARY KEY (player_uuid, warehouse_id, item_hash)
+                )
+                """);
+        }
         try (Statement statement = connection.createStatement()) {
             statement.execute("""
                 CREATE TABLE IF NOT EXISTS warehouse_personal (

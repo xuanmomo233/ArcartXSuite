@@ -29,6 +29,10 @@ ui:
   itemSize: 16
   screenScale: true
   packetHandler:
+    action_result: |-
+      var.actionToken = packet['action_token']
+      var.actionBusy = false
+      var.actionBusySeconds = 0
     # packetHandler: update
     # 接收服务端推送的可回收物品数据
     # 包字段:
@@ -46,13 +50,20 @@ ui:
       var.itemJsons = {}
       oldMaxRecycleCount = var.maxRecycleCount
       var.packetId = packet['packetId']
+      var.inventoryFingerprint = packet['inventoryFingerprint']
+      var.protectionVersion = packet['protectionVersion']
+      var.autoEffective = packet['autoEffective'] == true
       var.recyclables = packet['recyclables']
       var.earningsTitle = packet['earningsTitle']
       var.earningsTexts = packet['earningsTexts']
       var.maxEarningsCount = packet['maxEarningsCount']
       var.multiplier = packet['multiplier']
       var.maxRecycleCount = packet['maxRecycleCount']
+      var.eligibleCount = packet['eligibleCount']
+      var.protectedItems = packet['protectedItems']
       var.batchConfirm = packet['batchConfirm']
+      var.batchEnabled = packet['batchEnabled']
+      var.showBatchConfirm = false
       var.actionToken = packet['action_token']
       for(key in var.recyclables.keys()){
         json = packet['recycleItemJson' + key]
@@ -62,46 +73,127 @@ ui:
           var.itemJsons[key] = var.emptyItemJson
         }
       }
-      if(var.maxRecycleCount != oldMaxRecycleCount){
-        while(val.回收列表.childrenCount() > 1){
-          val.回收列表.get(1).remove()
-        }
-        if(var.maxRecycleCount > 1){
-          for(i in range(1, var.maxRecycleCount - 1)){
-            key = i.round()
-            if(val.回收列表['回收卡片'] != none) {
-              e = val.回收列表['回收卡片'].copy('回收卡片' + key)
-              e.entryKey = key
-            }
-          }
-        }
-      }
-      for(i in range(0, var.maxRecycleCount - 1)){
-        key = i.round()
-        if(val.回收列表 != none){
-          e = val.回收列表.get(key)
-          if(e != none && e['物品图标'] != none){
-            e['物品图标'].seticon()
-          }
-        }
-      }
+      var.recycleRenderPending = true
+      var.earningsRenderPending = true
+      scheduler.delay(50, -> {
+        var.renderRecycleRows()
+        var.renderEarnings()
+      })
       var.actionBusy = false
   action:
     seconds: |-
+      if(var.recycleRenderPending){
+        var.renderRecycleRows()
+      }
+      if(var.recycleIconsPending){
+        var.applyRecycleIcons()
+      }
+      if(var.earningsRenderPending){
+        var.renderEarnings()
+      }
       if(var.actionBusy){
         var.actionBusySeconds = var.actionBusySeconds + 1
         if(var.actionBusySeconds >= 3){
           var.actionBusy = false
           var.actionBusySeconds = 0
         }
-      }else{
+      }
+      else{
         var.actionBusySeconds = 0
       }
     load: |-
       var.actionToken = ''
+      var.recycleCopies = {}
+      var.earningCopies = {}
+      var.recycleGeneration = 0
+      var.earningGeneration = 0
+      var.renderedRecycleCount = -1
+      var.renderedEarningsCount = -1
+      var.maxEarningsCount = 0
+      var.recycleRenderPending = false
+      var.recycleIconsPending = false
+      var.earningsRenderPending = false
+      var.renderRecycleRows = -> {
+        if(val.回收列表 != none){
+          if(var.maxRecycleCount != var.renderedRecycleCount){
+            for(key in var.recycleCopies.keys()){
+              var.recycleCopies[key].remove()
+            }
+            var.recycleCopies = {}
+            var.recycleGeneration = var.recycleGeneration + 1
+            if(var.maxRecycleCount > 1){
+              for(i in range(1, var.maxRecycleCount - 1)){
+                e = val.回收列表.get(0).copy('回收卡片_' + var.recycleGeneration.round() + '_' + i.round())
+                e.entryKey = i.round()
+                var.recycleCopies[i.round()] = e
+              }
+            }
+            var.renderedRecycleCount = var.maxRecycleCount
+          }
+          var.recycleRenderPending = false
+          var.recycleIconsPending = true
+          scheduler.delay(50, -> {
+            var.applyRecycleIcons()
+          })
+        }
+      }
+      var.applyRecycleIcons = -> {
+        if(val.回收列表 != none){
+          var.allRecycleIconsReady = true
+          if(var.maxRecycleCount > 0){
+            row = val.回收列表.get(0)
+            if(row['物品图标'] != none){
+              row['物品图标'].seticon()
+            }
+            else{
+              var.allRecycleIconsReady = false
+            }
+            for(key in var.recycleCopies.keys()){
+              row = var.recycleCopies[key]
+              if(row['物品图标'] != none){
+                row['物品图标'].seticon()
+              }
+              else{
+                var.allRecycleIconsReady = false
+              }
+            }
+          }
+          var.recycleIconsPending = !var.allRecycleIconsReady
+        }
+      }
+      var.renderEarnings = -> {
+        if(val.收益列表 != none){
+          if(var.maxEarningsCount != var.renderedEarningsCount){
+            for(key in var.earningCopies.keys()){
+              var.earningCopies[key].remove()
+            }
+            var.earningCopies = {}
+            var.earningGeneration = var.earningGeneration + 1
+            if(var.maxEarningsCount > 1){
+              for(i in range(1, var.maxEarningsCount - 1)){
+                e = val.收益列表.get(0).copy('收益项_' + var.earningGeneration.round() + '_' + i.round())
+                e.entryKey = i.round()
+                var.earningCopies[i.round()] = e
+              }
+            }
+            var.renderedEarningsCount = var.maxEarningsCount
+            val.收益滑块.setDragYRatio(0)
+          }
+          var.earningsRenderPending = false
+        }
+      }
+      var.batchConfirm = true
+      var.batchEnabled = false
+      var.showBatchConfirm = false
       var.earningsTexts = {}
       var.earningsTitle = '可回收总价值:'
       var.maxRecycleCount = 0
+      var.eligibleCount = 0
+      var.protectedItems = 0
+      var.protectionVersion = ''
+      var.confirmProtectionVersion = ''
+      var.confirmInventoryFingerprint = ''
+      var.autoEffective = false
       var.multiplier = '1.0'
       var.packetId = 'AXS_MARKET'
       var.emptyItemJson = '{"id":"minecraft:air","Count":1b}'
@@ -143,6 +235,7 @@ controls:
       point: ~top_center
       width: 1920
       height: 1080
+      enable: "!var.showBatchConfirm"
     children:
       顶栏:
         type: Canvas
@@ -489,30 +582,101 @@ controls:
               texts: "'&f' + var.earningsTitle"
               fontSize: 36
               through: true
+          收益滑块:
+            type: Texture
+            val: 收益滑块
+            attribute:
+              x: 278
+              y: 580
+              width: 6
+              height: 44
+              maxDragY: "var.viewH - 908"
+              normal: ~131,177,196,245
           收益列表容器:
-            type: Canvas
+            type: Scroll
             attribute:
               point: ~top_left
               x: 28
               y: 580
               width: 244
-              height: "var.viewH - 724"
+              height: "var.viewH - 864"
+              moveY: "val.收益滑块.getDragYRatio()"
+            action:
+              wheel: |-
+                val.收益滑块.setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
             children:
               收益列表:
                 type: VStack
+                val: 收益列表
                 attribute:
                   width: 244
                   spaceBetween: 6
                 children:
                   收益项:
-                    type: Text
+                    type: Scroll
                     attribute:
                       entryKey: 0.round()
+                      width: 244
+                      height: 38
                       visible: "var.earningsTexts[self.entryKey] != none"
-                      texts: "'&a' + var.earningsTexts[self.entryKey]"
-                      fontSize: 32
-                      through: true
+                      scrollAnim: none
+                      moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
+                    action:
+                      enter: |-
+                        self.scrollAnim = Lerp(0,1,2500)
+                      leave: |-
+                        self.scrollAnim = none
+                    children:
+                      文字:
+                        type: Text
+                        attribute:
+                          texts: "'&a' + var.earningsTexts[self.parent.entryKey]"
+                          fontSize: 26
+                          through: true
           # ── 一键回收按钮 ──────────────────────────
+          回收保护入口:
+            type: Canvas
+            attribute:
+              x: "14"
+              y: "var.viewH - 196"
+              width: "272"
+              height: 44
+              enable: "!var.actionBusy"
+            action:
+              clickLeft: |-
+                Packet.send(var.packetId, 'guard_ui_open')
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~48,67,82,240
+                  shape: ~round_rect
+                  radius: 8
+              文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "~&b个人回收保护"
+                  fontSize: 24
+                  through: true
+          自动回收状态:
+            type: Text
+            attribute:
+              x: 14
+              y: "var.viewH - 272"
+              texts: "var.autoEffective ? '&a个人自动回收生效中' : '&7个人自动回收未生效'"
+              fontSize: 22
+              through: true
+          保护提示:
+            type: Text
+            attribute:
+              x: "14"
+              y: "var.viewH - 242"
+              texts: "'&7已保留受保护物品 ' + var.protectedItems.round() + ' 件'"
+              fontSize: 22
+              through: true
           一键回收按钮:
             type: Canvas
             attribute:
@@ -521,11 +685,17 @@ controls:
               y: "var.viewH - 132"
               width: 272
               height: 48
-              enable: "!var.actionBusy && var.actionToken != '' && var.maxRecycleCount > 0"
+              enable: "!var.actionBusy && var.actionToken != '' && var.eligibleCount > 0 && var.batchEnabled"
             action:
               clickLeft: |-
-                var.actionBusy = true
-                Packet.send(var.packetId, 'recycle_all', var.actionToken)
+                if(var.batchConfirm){
+                  var.confirmProtectionVersion = var.protectionVersion
+                  var.confirmInventoryFingerprint = var.inventoryFingerprint
+                  var.showBatchConfirm = true
+                } else {
+                  var.actionBusy = true
+                  Packet.send(var.packetId, 'recycle_all', var.actionToken, var.inventoryFingerprint, var.protectionVersion)
+                }
             children:
               一键回收底:
                 type: Texture
@@ -681,7 +851,7 @@ controls:
                       entry: var.recyclables[self.entryKey]
                       visible: self.entry != none
                       width: "var.cardW"
-                      height: 220
+                      height: 260
                     children:
                       卡片底:
                         type: Texture
@@ -690,7 +860,7 @@ controls:
                           x: 3
                           y: 0
                           width: "var.cardW - 6"
-                          height: 220
+                          height: 260
                           through: true
                           normal: ~42,50,66,210
                           shape: ~round_rect
@@ -711,55 +881,122 @@ controls:
                           normal: ~36,42,54,220
                           shape: ~round_rect
                           radius: 12
-                          seticon: "self.setItemIcon(var.itemJsons[self.parent.entryKey] != none ? var.itemJsons[self.parent.entryKey] : var.emptyItemJson)"
+                          seticon: "self.setItemIcon(var.itemJsons[self.parent.entryKey])"
                         effect:
                           stroke:
                             width: 2
                             color: ~255,255,255,230
                       物品名称:
-                        type: Text
+                        type: Scroll
                         attribute:
                           x: 123
                           y: 16
-                          texts: "'&f' + self.parent.entry['name']"
-                          fontSize: 36
-                          through: true
+                          width: "var.cardW - 140"
+                          height: 42
+                          scrollAnim: none
+                          moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
+                        action:
+                          enter: |-
+                            self.scrollAnim = Lerp(0,1,2500)
+                          leave: |-
+                            self.scrollAnim = none
+                        children:
+                          文字:
+                            type: Text
+                            attribute:
+                              x: 0
+                              y: 0
+                              texts: "self.parent.parent.entry != none ? ('&f' + self.parent.parent.entry['name']) : ''"
+                              fontSize: 36
+                              through: true
                       数量:
                         type: Text
                         attribute:
                           x: 123
                           y: 52
-                          texts: "'&7数量: &f' + self.parent.entry['amount'].round()"
+                          texts: "self.parent.entry != none ? ('&7数量: &f' + self.parent.entry['amount'].round()) : ''"
                           fontSize: 32
                           through: true
                       单价:
-                        type: Text
+                        type: Scroll
                         attribute:
                           x: 123
                           y: 88
-                          texts: "'&7单价: &e' + self.parent.entry['unitPrice'] + ' &7' + self.parent.entry['currencyName']"
-                          fontSize: 32
-                          through: true
+                          width: "var.cardW - 140"
+                          height: 38
+                          scrollAnim: none
+                          moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
+                        action:
+                          enter: |-
+                            self.scrollAnim = Lerp(0,1,2500)
+                          leave: |-
+                            self.scrollAnim = none
+                        children:
+                          文字:
+                            type: Text
+                            attribute:
+                              x: 0
+                              y: 0
+                              texts: "self.parent.parent.entry != none ? ('&7单价: &e' + self.parent.parent.entry['unitPrice'] + ' &7' + self.parent.parent.entry['currencyName']) : ''"
+                              fontSize: 32
+                              through: true
                       总价:
-                        type: Text
+                        type: Scroll
                         attribute:
                           x: 123
                           y: 124
-                          texts: "'&a总价: &f' + self.parent.entry['totalPrice'] + ' &7' + self.parent.entry['currencyName']"
-                          fontSize: 32
-                          through: true
+                          width: "var.cardW - 140"
+                          height: 38
+                          scrollAnim: none
+                          moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
+                        action:
+                          enter: |-
+                            self.scrollAnim = Lerp(0,1,2500)
+                          leave: |-
+                            self.scrollAnim = none
+                        children:
+                          文字:
+                            type: Text
+                            attribute:
+                              x: 0
+                              y: 0
+                              texts: "self.parent.parent.entry != none ? ('&a总价: &f' + self.parent.parent.entry['totalPrice'] + ' &7' + self.parent.parent.entry['currencyName']) : ''"
+                              fontSize: 32
+                              through: true
+                      保护原因:
+                        type: Scroll
+                        attribute:
+                          x: 15
+                          y: 172
+                          width: "var.cardW - 30"
+                          height: 28
+                          visible: "self.parent.entry['protected']"
+                          scrollAnim: none
+                          moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
+                        action:
+                          enter: |-
+                            self.scrollAnim = Lerp(0,1,2500)
+                          leave: |-
+                            self.scrollAnim = none
+                        children:
+                          文字:
+                            type: Text
+                            attribute:
+                              texts: "'&7' + self.parent.parent.entry['protectedReason']"
+                              fontSize: 22
+                              through: true
                       回收按钮:
                         type: Canvas
                         attribute:
                           x: 15
-                          y: 168
+                          y: 208
                           width: "var.cardW - 30"
                           height: 40
-                          enable: "!var.actionBusy && var.actionToken != ''"
+                          enable: "!var.actionBusy && var.actionToken != '' && self.parent.entry != none && !self.parent.entry['protected']"
                         action:
                           clickLeft: |-
                             var.actionBusy = true
-                            Packet.send(var.packetId, 'recycle_single', self.parent.entry['slot'].round(), var.actionToken)
+                            Packet.send(var.packetId, 'recycle_single', self.parent.entry['slot'].round(), var.actionToken, self.parent.entry['fingerprint'], var.protectionVersion)
                         children:
                           回收单底:
                             type: Texture
@@ -782,6 +1019,86 @@ controls:
                             type: Text
                             attribute:
                               point: ~middle_center
-                              texts: "~&f回收此物品"
+                              texts: "self.parent.parent.entry != none && self.parent.parent.entry['protected'] ? '&7已保护 · 不回收' : '&f回收此物品'"
                               fontSize: 32
                               through: true
+  批量回收确认:
+    type: Canvas
+    attribute:
+      point: ~stretch_all
+      visible: "var.showBatchConfirm == true"
+    children:
+      遮罩:
+        type: Texture
+        attribute:
+          point: ~stretch_all
+          normal: ~0,0,0,180
+      面板:
+        type: Adaptive
+        attribute:
+          point: ~middle_center
+          width: 640
+          height: 240
+        children:
+          底:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              through: true
+              normal: ~36,38,48,245
+          标题:
+            type: Text
+            attribute:
+              point: ~top_center
+              y: 28
+              texts: "~&f确认回收背包中全部可回收物品？"
+              fontSize: 32
+              through: true
+          提示:
+            type: Text
+            attribute:
+              point: ~middle_center
+              texts: "~&7仅回收当前预览范围；背包或保护变化后需重新确认。"
+              fontSize: 24
+              through: true
+          确认:
+            type: Canvas
+            attribute:
+              point: ~bottom_left
+              x: 60
+              y: -24
+              width: 200
+              height: 48
+              enable: "!var.actionBusy && var.actionToken != '' && var.batchEnabled"
+            action:
+              clickLeft: |-
+                var.showBatchConfirm = false
+                var.actionBusy = true
+                Packet.send(var.packetId, 'recycle_all', var.actionToken, var.confirmInventoryFingerprint, var.confirmProtectionVersion)
+            children:
+              文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "~&a确认回收"
+                  fontSize: 32
+                  through: true
+          取消:
+            type: Canvas
+            attribute:
+              point: ~bottom_right
+              x: -60
+              y: -24
+              width: 200
+              height: 48
+            action:
+              clickLeft: |-
+                var.showBatchConfirm = false
+            children:
+              文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "~&f取消"
+                  fontSize: 32
+                  through: true

@@ -29,8 +29,13 @@ ui:
   itemSize: 16
   screenScale: true
   packetHandler:
+    action_result: |-
+      var.actionToken = packet['action_token']
+      var.actionBusy = false
+      var.actionBusySeconds = 0
     # packetHandler: update
     update: |-
+      var.packetId = packet['packetId']
       var.auctionCurrencies = packet['auctionCurrencies']
       var.auctionMaxCurrencyCount = packet['auctionMaxCurrencyCount']
       var.auctionDefaultCurrency = packet['auctionDefaultCurrency']
@@ -38,6 +43,9 @@ ui:
       var.auctionPriceMax = packet['auctionPriceMax']
       var.auctionMessageMaxLength = packet['auctionMessageMaxLength']
       var.auctionEnabled = packet['auctionEnabled']
+      var.auctionDurationMin = packet['auctionDurationMin']
+      var.auctionDurationMax = packet['auctionDurationMax']
+      var.auctionDurationDefault = packet['auctionDurationDefault']
       var.pshopCurrencies = packet['pshopCurrencies']
       var.pshopMaxCurrencyCount = packet['pshopMaxCurrencyCount']
       var.pshopDefaultCurrency = packet['pshopDefaultCurrency']
@@ -45,6 +53,12 @@ ui:
       var.pshopPriceMax = packet['pshopPriceMax']
       var.pshopMessageMaxLength = packet['pshopMessageMaxLength']
       var.pshopEnabled = packet['pshopEnabled']
+      var.pshopDurationMin = packet['pshopDurationMin']
+      var.pshopDurationMax = packet['pshopDurationMax']
+      var.pshopDurationDefault = packet['pshopDurationDefault']
+      var.selectedMode = packet['initialMode']
+      if(!var.auctionEnabled && var.pshopEnabled){ var.selectedMode = 'pshop' }
+      if(!var.pshopEnabled && var.auctionEnabled){ var.selectedMode = 'auction' }
       var.actionToken = packet['action_token']
       var.syncMode()
       var.actionBusy = false
@@ -82,6 +96,9 @@ ui:
           var.priceMin = var.auctionPriceMin
           var.priceMax = var.auctionPriceMax
           var.messageMaxLength = var.auctionMessageMaxLength
+          var.durationMin = var.auctionDurationMin
+          var.durationMax = var.auctionDurationMax
+          var.selectedDuration = var.auctionDurationDefault
         } else {
           var.activeCurrencies = var.pshopCurrencies
           var.maxCurrencyCount = var.pshopMaxCurrencyCount
@@ -89,6 +106,9 @@ ui:
           var.priceMin = var.pshopPriceMin
           var.priceMax = var.pshopPriceMax
           var.messageMaxLength = var.pshopMessageMaxLength
+          var.durationMin = var.pshopDurationMin
+          var.durationMax = var.pshopDurationMax
+          var.selectedDuration = var.pshopDurationDefault
         }
         if(var.maxCurrencyCount != oldMaxCurrencyCount){
           while(val.货币列表.childrenCount() > 1){
@@ -1095,7 +1115,7 @@ controls:
                   point: ~top_left
                   x: "var.sellLeftW / 2 + 10"
                   y: 216
-                  texts: "~&f上架时长"
+                  texts: "'&f上架时长（默认 ' + var.selectedDuration.round() + ' 秒）'"
                   fontSize: 32
                   through: true
               时长1天:
@@ -1106,6 +1126,7 @@ controls:
                   y: 252
                   width: 95
                   height: 44
+                  enable: "var.durationMin <= 86400 && var.durationMax >= 86400"
                 action:
                   clickLeft: |-
                     var.selectedDuration = 86400
@@ -1137,6 +1158,7 @@ controls:
                   y: 252
                   width: 95
                   height: 44
+                  enable: "var.durationMin <= 259200 && var.durationMax >= 259200"
                 action:
                   clickLeft: |-
                     var.selectedDuration = 259200
@@ -1168,6 +1190,7 @@ controls:
                   y: 252
                   width: 95
                   height: 44
+                  enable: "var.durationMin <= 604800 && var.durationMax >= 604800"
                 action:
                   clickLeft: |-
                     var.selectedDuration = 604800
@@ -1200,6 +1223,7 @@ controls:
                   width: 95
                   height: 44
                   visible: "var.selectedMode == 'pshop'"
+                  enable: "var.durationMin <= 2592000 && var.durationMax >= 2592000"
                 action:
                   clickLeft: |-
                     var.selectedDuration = 2592000
@@ -1232,7 +1256,7 @@ controls:
                   y: 312
                   width: "var.sellLeftW / 2 - 30"
                   height: 48
-                  enable: "!var.actionBusy && var.actionToken != '' && var.selectedSlot != none && var.selectedPrice != none && var.selectedPrice != ''"
+                  enable: "!var.actionBusy && var.actionToken != '' && var.selectedSlot != none && var.selectedPrice != none && var.selectedPrice != '' && (var.auctionEnabled || var.pshopEnabled)"
                 action:
                   clickLeft: |-
                     if(var.selectedSlot != none && var.selectedPrice != none && var.selectedPrice != ''){

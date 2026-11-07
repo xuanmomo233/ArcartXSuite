@@ -1,4 +1,5 @@
 schema-version: 1
+# 仅在 LoginView 模块启用时读取并执行认证策略。
 # 宿主认证策略修改后需重启；重载 LoginView 只更新界面。
 backend: standalone
 # 中心节点使用 auth-center/config/node.example.yml 的完整配置；策略由中心统一提供。

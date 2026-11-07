@@ -1,0 +1,1553 @@
+# AXS Market — 管理员交易管理（只读）
+ui:
+  isHud: false
+  defaultOpen: false
+  hide:
+    - hotbar
+    - experience_bar
+    - crosshair
+    - item_name
+    - jump_bar
+    - mount_health
+    - player_state
+    - player_health
+    - armor_level
+    - food_level
+    - air_level
+  through: false
+  background: false
+  escClose: true
+  closeDied: true
+  show: true
+  jei: false
+  level: 8
+  itemSize: 16
+  screenScale: true
+  packetHandler:
+    admin_denied: |-
+      Screen.close()
+    audit_result: |-
+      if(packet['channel'] == 'detail'){
+        if(packet['request'] == var.detailRequest && packet['id'] == var.selectedId && !var.loading && !var.ignoreDetail){
+          var.resultMsg = packet['message']
+          var.detailLoading = false
+          var.detailReady = false
+        }
+      } else if(packet['request'] == var.listRequest){
+        var.resultMsg = packet['message']
+        var.loading = false
+        var.hydrating = false
+        var.formRenderPending = false
+      }
+    audit_data: |-
+      if(var.ignoreList || packet['request'] != var.listRequest){
+        return
+      }
+      var.resultMsg = ''
+      var.listReady = true
+      var.listAge = 0
+      var.packetId = packet['packetId']
+      var.rows = packet['rows']
+      var.selectionPresent = false
+      for(key in var.rows.keys()){
+        if(var.rows[key]['id'] == var.selectedId){
+          var.selectionPresent = true
+        }
+      }
+      if(!var.selectionPresent){
+        var.selectedId = ''
+        var.detailReady = false
+        var.detailLoading = false
+      }
+      else if(var.selectedId != ''){
+        var.detailReady = false
+        var.detailLoading = false
+      }
+      var.count = packet['count']
+      var.page = packet['page']
+      var.pages = packet['pages']
+      var.pageText = packet['pageText']
+      var.total = packet['total']
+      var.party = packet['player']
+      var.appliedParty = var.party
+      var.item = packet['item']
+      var.appliedItem = var.item
+      var.from = packet['from']
+      var.appliedFrom = var.from
+      var.until = packet['until']
+      var.appliedUntil = var.until
+      var.type = packet['type']
+      var.appliedType = var.type
+      var.state = packet['state']
+      var.appliedState = var.state
+      var.scope = packet['scope'] == 'all' ? 'operations' : packet['scope']
+      var.appliedScope = var.scope
+      var.filterDirty = false
+      var.group = packet['group']
+      var.readAt = packet['readAt']
+      var.zone = packet['zone']
+      var.hydrating = true
+      var.formRenderPending = true
+      scheduler.delay(50, -> {
+        var.hydrateAuditForm()
+      })
+      var.rowsRenderPending = true
+      scheduler.delay(50, -> {
+        var.renderAuditRows()
+      })
+    audit_detail_data: |-
+      if(packet['request'] == var.detailRequest && packet['id'] == var.selectedId && !var.loading && !var.ignoreDetail){
+        var.detailLoading = false
+        var.detailReady = true
+        var.detailTitle = packet['title']
+        var.detailGroup = packet['group']
+        var.detailKind = packet['kind']
+        var.detailState = packet['state']
+        var.detailSource = packet['source']
+        var.detailPlayer = packet['player']
+        var.detailPlayerId = packet['playerId']
+        var.detailOther = packet['other']
+        var.detailOtherId = packet['otherId']
+        var.detailAmount = packet['amount']
+        var.detailMaterial = packet['material']
+        var.detailTime = packet['time']
+        var.detailIcon = (packet['icon'] != none && packet['icon'] != '') ? packet['icon'] : var.air
+        var.detailQuantity = packet['quantity']
+        var.notes = packet['noteLines']
+        var.noteCount = var.notes.keys().length
+        scheduler.delay(50, -> {
+          if(val.详情物品 != none){
+            val.详情物品.seticon()
+          }
+        })
+        var.notesRenderPending = true
+        scheduler.delay(50, -> {
+          var.renderAuditNotes()
+        })
+      }
+  action:
+    load: |-
+      var.packetId = 'AXS_MARKET'
+      var.busy = false
+      var.requestSerial = 0
+      var.listRequest = ''
+      var.detailRequest = ''
+      var.loading = true
+      var.listReady = false
+      var.filterDirty = false
+      var.ignoreList = false
+      var.ignoreDetail = false
+      var.listAge = 0
+      var.detailAge = 0
+      var.auditCopies = {}
+      var.noteCopies = {}
+      var.auditGeneration = 0
+      var.noteGeneration = 0
+      var.rowsRenderPending = false
+      var.formRenderPending = false
+      var.notesRenderPending = false
+      var.hydrating = false
+      var.detailLoading = false
+      var.detailReady = false
+      var.scope = 'history'
+      var.type = 'ALL'
+      var.state = 'ALL'
+      var.party = ''
+      var.item = ''
+      var.from = ''
+      var.until = ''
+      var.group = ''
+      var.rows = {}
+      var.count = 0
+      var.renderedCount = -1
+      var.page = 0
+      var.pages = 1
+      var.pageText = '1/1'
+      var.total = '0'
+      var.zone = ''
+      var.readAt = ''
+      var.resultMsg = ''
+      var.selectedId = ''
+      var.detailTitle = ''
+      var.detailGroup = ''
+      var.detailKind = ''
+      var.detailState = ''
+      var.detailSource = ''
+      var.detailPlayer = ''
+      var.detailPlayerId = ''
+      var.detailOther = ''
+      var.detailOtherId = ''
+      var.detailAmount = ''
+      var.detailMaterial = ''
+      var.detailTime = ''
+      var.detailQuantity = 0
+      var.air = '{"id":"minecraft:air","Count":1b}'
+      var.typeLabels = {'ALL':'全部','AUCTION':'拍卖','PSHOP':'玩家店铺','SHOP':'系统商店','RECYCLE':'回收','OTHER':'其他'}
+      var.stateLabels = {'ALL':'全部','PENDING':'待发放','ISSUES':'失败与待核对','PREPARED':'已准备','READY':'待执行','RUNNING':'处理中','REVIEW':'需核对','DONE':'处理结束','FAILED':'明确失败','CANCELLED':'已取消','EXPIRED':'已到期'}
+      var.notes = {}
+      var.noteCount = 0
+      var.renderedNotes = -1
+      var.detailIcon = '{"id":"minecraft:air","Count":1b}'
+      var.appliedParty = ''
+      var.appliedItem = ''
+      var.appliedFrom = ''
+      var.appliedUntil = ''
+      var.appliedType = 'ALL'
+      var.appliedState = 'ALL'
+      var.appliedScope = 'history'
+      var.scopeLabels = {'history':'业务历史','operations':'处理流水'}
+      var.hydrateAuditForm = -> {
+        if(var.formRenderPending && val.玩家输入 != none && val.物品输入 != none && val.开始时间输入 != none && val.结束时间输入 != none){
+          val.玩家输入.setContent(var.party)
+          val.物品输入.setContent(var.item)
+          val.开始时间输入.setContent(var.from)
+          val.结束时间输入.setContent(var.until)
+          var.hydrating = false
+          var.loading = false
+          var.formRenderPending = false
+          if(var.selectedId != ''){
+            var.detailReady = false
+            var.beginDetail()
+            var.ignoreDetail = false
+            var.detailAge = 0
+            Packet.send(var.packetId, 'audit_detail', var.selectedId, var.detailRequest)
+          }
+        }
+      }
+      var.updateDirty = -> {
+        var.filterDirty = var.party != var.appliedParty || var.item != var.appliedItem || var.from != var.appliedFrom || var.until != var.appliedUntil || var.type != var.appliedType || var.state != var.appliedState || var.scope != var.appliedScope
+      }
+      var.beginDetail = -> {
+        var.requestSerial = var.requestSerial + 1
+        var.detailRequest = 'detail' + var.requestSerial.round()
+        var.detailLoading = true
+        var.detailReady = false
+        var.ignoreDetail = false
+        var.detailAge = 0
+      }
+      var.beginList = -> {
+        var.requestSerial = var.requestSerial + 1
+        var.listRequest = 'list' + var.requestSerial.round()
+        var.detailRequest = ''
+        var.formRenderPending = false
+        var.loading = true
+        var.listAge = 0
+        var.ignoreList = false
+        var.ignoreDetail = true
+        var.detailReady = false
+        var.detailLoading = false
+        var.resultMsg = ''
+      }
+      var.renderAuditRows = -> {
+        if(val.流水行区 != none){
+          if(var.count != var.renderedCount){
+            for(key in var.auditCopies.keys()){
+              var.auditCopies[key].remove()
+            }
+            var.auditCopies = {}
+            var.auditGeneration = var.auditGeneration + 1
+            if(var.count > 1){
+              for(i in range(1, var.count - 1)){
+                e = val.流水行区.get(0).copy('流水行_' + var.auditGeneration.round() + '_' + i.round())
+                e.entryKey = i.round()
+                var.auditCopies[i.round()] = e
+              }
+            }
+            var.renderedCount = var.count
+          }
+          val.流水滑块.setDragYRatio(0)
+          var.rowsRenderPending = false
+        }
+      }
+      var.renderAuditNotes = -> {
+        if(val.详情说明行区 != none){
+          if(var.noteCount != var.renderedNotes){
+            for(key in var.noteCopies.keys()){
+              var.noteCopies[key].remove()
+            }
+            var.noteCopies = {}
+            var.noteGeneration = var.noteGeneration + 1
+            if(var.noteCount > 1){
+              for(i in range(1, var.noteCount - 1)){
+                e = val.详情说明行区.get(0).copy('说明行_' + var.noteGeneration.round() + '_' + i.round())
+                e.entryKey = i.round()
+                var.noteCopies[i.round()] = e
+              }
+            }
+            var.renderedNotes = var.noteCount
+          }
+          val.说明滑块.setDragYRatio(0)
+          var.notesRenderPending = false
+        }
+      }
+      var.applyFilter = -> {
+        if(var.loading || var.hydrating){
+          return
+        }
+        form = {}
+        form['player'] = var.party
+        form['item'] = var.item
+        form['from'] = var.from
+        form['until'] = var.until
+        form['type'] = var.type
+        form['state'] = var.state
+        form['scope'] = var.scope
+        var.beginList()
+        Packet.send(var.packetId, 'audit_filter', json.stringify(form), var.listRequest)
+      }
+      sx = Screen.getWidth() / 1920
+      sy = Screen.getHeight() / 1080
+      s = sx < sy ? sx : sy
+      var.viewW = Screen.getWidth() / s
+      var.viewH = Screen.getHeight() / s
+      var.offX = (var.viewW - 1920) / 2
+      var.pageW = var.viewW - 96
+      var.pageH = var.viewH - 72
+      var.listW = var.pageW * 0.58
+      var.detailW = var.pageW - var.listW - 72
+    open: |-
+      var.beginList()
+      Packet.send(var.packetId, 'audit_open', var.listRequest)
+    resize: |-
+      sx = Screen.getWidth() / 1920
+      sy = Screen.getHeight() / 1080
+      s = sx < sy ? sx : sy
+      var.viewW = Screen.getWidth() / s
+      var.viewH = Screen.getHeight() / s
+      var.offX = (var.viewW - 1920) / 2
+      var.pageW = var.viewW - 96
+      var.pageH = var.viewH - 72
+      var.listW = var.pageW * 0.58
+      var.detailW = var.pageW - var.listW - 72
+    seconds: |-
+      if(var.formRenderPending){
+        var.hydrateAuditForm()
+      }
+      if(var.rowsRenderPending){
+        var.renderAuditRows()
+      }
+      if(var.notesRenderPending){
+        var.renderAuditNotes()
+      }
+      if(var.loading){
+        var.listAge = var.listAge + 1
+        if(var.listAge >= 15){
+          var.ignoreList = true
+          var.formRenderPending = false
+          var.loading = false
+          var.hydrating = false
+          var.resultMsg = '查询超时，请刷新或重新查询'
+          Packet.send(var.packetId, 'audit_cancel', 'list', var.listRequest)
+        }
+      }
+      if(var.detailLoading){
+        var.detailAge = var.detailAge + 1
+        if(var.detailAge >= 15){
+          var.ignoreDetail = true
+          var.detailLoading = false
+          var.detailReady = false
+          var.resultMsg = '详情读取超时，请重新读取'
+          Packet.send(var.packetId, 'audit_cancel', 'detail', var.detailRequest)
+        }
+      }
+
+controls:
+  全屏底:
+    type: Texture
+    attribute:
+      point: ~stretch_all
+      through: true
+      normal: ~Frosted:28;16,23,33,242
+  自适应布局:
+    type: Adaptive
+    attribute:
+      point: ~top_center
+      width: 1920
+      height: 1080
+    children:
+      页面:
+        type: Canvas
+        attribute:
+          x: "48 - var.offX"
+          y: 36
+          width: "var.pageW"
+          height: "var.pageH"
+        children:
+          底:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              through: true
+              normal: ~25,34,47,240
+              shape: ~round_rect
+              radius: 14
+          标题:
+            type: Text
+            attribute:
+              x: "28"
+              y: "22"
+              texts: "~&f管理员交易管理"
+              fontSize: 40
+              through: true
+          关闭:
+            type: Canvas
+            attribute:
+              x: "var.pageW - 106"
+              y: "24"
+              width: "78"
+              height: 44
+              enable: "true"
+            action:
+              clickLeft: |-
+                Screen.close()
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~48,67,82,240
+                  shape: ~round_rect
+                  radius: 8
+              文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "~&f×"
+                  fontSize: 24
+                  through: true
+          时区:
+            type: Text
+            attribute:
+              x: "330"
+              y: "36"
+              texts: "'&7服务器时区 ' + var.zone + ' · 读取于 ' + var.readAt"
+              fontSize: 24
+              through: true
+          交易记录:
+            type: Canvas
+            attribute:
+              x: "28"
+              y: "96"
+              width: "170"
+              height: 44
+              enable: "!var.loading"
+            action:
+              clickLeft: |-
+                var.scope = 'history'
+                var.state = 'ALL'
+                var.applyFilter()
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~48,67,82,240
+                  shape: ~round_rect
+                  radius: 8
+              文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "~&f交易记录"
+                  fontSize: 24
+                  through: true
+          处理流水:
+            type: Canvas
+            attribute:
+              x: "218"
+              y: "96"
+              width: "170"
+              height: 44
+              enable: "!var.loading"
+            action:
+              clickLeft: |-
+                var.scope = 'operations'
+                var.state = 'ALL'
+                var.applyFilter()
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~48,67,82,240
+                  shape: ~round_rect
+                  radius: 8
+              文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "~&f处理流水"
+                  fontSize: 24
+                  through: true
+          待发放不限日期:
+            type: Canvas
+            attribute:
+              x: "408"
+              y: "96"
+              width: "220"
+              height: 44
+              enable: "!var.loading"
+            action:
+              clickLeft: |-
+                var.scope = 'operations'
+                var.state = 'PENDING'
+                var.from = ''
+                var.until = ''
+                var.applyFilter()
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~48,67,82,240
+                  shape: ~round_rect
+                  radius: 8
+              文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "~&e待发放不限日期"
+                  fontSize: 24
+                  through: true
+          失败与待核对:
+            type: Canvas
+            attribute:
+              x: "648"
+              y: "96"
+              width: "220"
+              height: 44
+              enable: "!var.loading"
+            action:
+              clickLeft: |-
+                var.scope = 'operations'
+                var.state = 'ISSUES'
+                var.from = ''
+                var.until = ''
+                var.applyFilter()
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~48,67,82,240
+                  shape: ~round_rect
+                  radius: 8
+              文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "~&e失败与待核对"
+                  fontSize: 24
+                  through: true
+          退出关联:
+            type: Canvas
+            attribute:
+              x: "888"
+              y: "96"
+              width: "180"
+              height: 44
+              enable: "!var.loading"
+              visible: "var.group != ''"
+            action:
+              clickLeft: |-
+                var.beginList()
+                Packet.send(var.packetId, 'audit_back_filter', var.listRequest)
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~48,67,82,240
+                  shape: ~round_rect
+                  radius: 8
+              文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "~&b返回原筛选"
+                  fontSize: 24
+                  through: true
+          刷新列表:
+            type: Canvas
+            attribute:
+              x: "var.pageW - 200"
+              y: "96"
+              width: "170"
+              height: 44
+              enable: "!var.loading"
+            action:
+              clickLeft: |-
+                if(var.filterDirty){
+                  var.applyFilter()
+                  return
+                }
+                var.beginList()
+                Packet.send(var.packetId, 'audit_page', var.page, var.listRequest)
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~48,67,82,240
+                  shape: ~round_rect
+                  radius: 8
+              文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "~&b刷新当前页"
+                  fontSize: 24
+                  through: true
+          筛选表单:
+            type: Canvas
+            attribute:
+              x: 28
+              y: 164
+              width: "var.pageW - 56"
+              height: 146
+              enable: "!var.loading"
+            children:
+              玩家输入标签:
+                type: Text
+                attribute:
+                  x: "0"
+                  y: "0"
+                  texts: "~&7玩家名或UUID"
+                  fontSize: 22
+                  through: true
+              玩家输入:
+                type: TextBox
+                val: 玩家输入
+                attribute:
+                  x: 0
+                  y: 40
+                  width: 280
+                  height: 40
+                  length: 64
+                  fontSize: 24
+                action:
+                  textChange: |-
+                    var.party = self.getContent()
+                    if(!var.hydrating){
+                      var.updateDirty()
+                    }
+                  enter: |-
+                    var.applyFilter()
+              物品输入标签:
+                type: Text
+                attribute:
+                  x: "310"
+                  y: "0"
+                  texts: "~&7物品名或材质ID"
+                  fontSize: 22
+                  through: true
+              物品输入:
+                type: TextBox
+                val: 物品输入
+                attribute:
+                  x: 310
+                  y: 40
+                  width: 280
+                  height: 40
+                  length: 100
+                  fontSize: 24
+                action:
+                  textChange: |-
+                    var.item = self.getContent()
+                    if(!var.hydrating){
+                      var.updateDirty()
+                    }
+                  enter: |-
+                    var.applyFilter()
+              开始时间输入标签:
+                type: Text
+                attribute:
+                  x: "620"
+                  y: "0"
+                  texts: "~&7创建起始日期/时刻"
+                  fontSize: 22
+                  through: true
+              开始时间输入:
+                type: TextBox
+                val: 开始时间输入
+                attribute:
+                  x: 620
+                  y: 40
+                  width: 280
+                  height: 40
+                  length: 19
+                  fontSize: 24
+                action:
+                  textChange: |-
+                    var.from = self.getContent()
+                    if(!var.hydrating){
+                      var.updateDirty()
+                    }
+                  enter: |-
+                    var.applyFilter()
+              结束时间输入标签:
+                type: Text
+                attribute:
+                  x: "930"
+                  y: "0"
+                  texts: "~&7创建截止日期/时刻（含）"
+                  fontSize: 22
+                  through: true
+              结束时间输入:
+                type: TextBox
+                val: 结束时间输入
+                attribute:
+                  x: 930
+                  y: 40
+                  width: 280
+                  height: 40
+                  length: 19
+                  fontSize: 24
+                action:
+                  textChange: |-
+                    var.until = self.getContent()
+                    if(!var.hydrating){
+                      var.updateDirty()
+                    }
+                  enter: |-
+                    var.applyFilter()
+              执行查询:
+                type: Canvas
+                attribute:
+                  x: "1240"
+                  y: "38"
+                  width: "150"
+                  height: 44
+                  enable: "!var.loading"
+                action:
+                  clickLeft: |-
+                    var.applyFilter()
+                children:
+                  底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~48,67,82,240
+                      shape: ~round_rect
+                      radius: 8
+                  文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: "~&a查询"
+                      fontSize: 24
+                      through: true
+              清空日期:
+                type: Canvas
+                attribute:
+                  x: "1410"
+                  y: "38"
+                  width: "150"
+                  height: 44
+                  enable: "!var.loading"
+                action:
+                  clickLeft: |-
+                    var.from = ''
+                    var.until = ''
+                    val.开始时间输入.setContent('')
+                    val.结束时间输入.setContent('')
+                children:
+                  底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~48,67,82,240
+                      shape: ~round_rect
+                      radius: 8
+                  文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: "~&b不限日期"
+                      fontSize: 24
+                      through: true
+              交易类型:
+                type: Canvas
+                attribute:
+                  x: "0"
+                  y: "96"
+                  width: "250"
+                  height: 44
+                  enable: "!var.loading"
+                action:
+                  clickLeft: |-
+                    if(var.type == 'ALL'){
+                      var.type = 'AUCTION'
+                    }
+                    else if(var.type == 'AUCTION'){
+                      var.type = 'PSHOP'
+                    }
+                    else if(var.type == 'PSHOP'){
+                      var.type = 'SHOP'
+                    }
+                    else if(var.type == 'SHOP'){
+                      var.type = 'RECYCLE'
+                    }
+                    else if(var.type == 'RECYCLE'){
+                      var.type = 'OTHER'
+                    }
+                    else {
+                      var.type = 'ALL'
+                    }
+                    var.updateDirty()
+                children:
+                  底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~48,67,82,240
+                      shape: ~round_rect
+                      radius: 8
+                  文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: "'&f业务类型: ' + var.typeLabels[var.type]"
+                      fontSize: 24
+                      through: true
+              状态筛选:
+                type: Canvas
+                attribute:
+                  x: "280"
+                  y: "96"
+                  width: "250"
+                  height: 44
+                  enable: "!var.loading"
+                action:
+                  clickLeft: |-
+                    if(var.state == 'ALL'){
+                      var.state = 'PENDING'
+                    }
+                    else if(var.state == 'PENDING'){
+                      var.state = 'ISSUES'
+                    }
+                    else if(var.state == 'ISSUES'){
+                      var.state = 'PREPARED'
+                    }
+                    else if(var.state == 'PREPARED'){
+                      var.state = 'READY'
+                    }
+                    else if(var.state == 'READY'){
+                      var.state = 'RUNNING'
+                    }
+                    else if(var.state == 'RUNNING'){
+                      var.state = 'REVIEW'
+                    }
+                    else if(var.state == 'REVIEW'){
+                      var.state = 'DONE'
+                    }
+                    else if(var.state == 'DONE'){
+                      var.state = 'FAILED'
+                    }
+                    else if(var.state == 'FAILED'){
+                      var.state = 'CANCELLED'
+                    }
+                    else if(var.state == 'CANCELLED'){
+                      var.state = 'EXPIRED'
+                    }
+                    else {
+                      var.state = 'ALL'
+                    }
+                    var.updateDirty()
+                children:
+                  底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~48,67,82,240
+                      shape: ~round_rect
+                      radius: 8
+                  文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: "'&f记录状态: ' + var.stateLabels[var.state]"
+                      fontSize: 24
+                      through: true
+              状态说明:
+                type: Text
+                attribute:
+                  x: "560"
+                  y: "108"
+                  texts: "~&7历史仅代表业务已记录；钱物是否到达，请查看关联处理流水。"
+                  fontSize: 22
+                  through: true
+          查询摘要:
+            type: Text
+            attribute:
+              x: "28"
+              y: "326"
+              texts: "var.group != '' ? '&e关联交易 ' + var.group : '&7记录数 ' + var.total + ' · ' + var.scopeLabels[var.scope]"
+              fontSize: 24
+              through: true
+          筛选变更提示:
+            type: Text
+            attribute:
+              x: 1160
+              y: 326
+              visible: "var.filterDirty"
+              texts: "~&e筛选尚未提交，请点击查询"
+              fontSize: 24
+              through: true
+          取消查询:
+            type: Canvas
+            attribute:
+              x: "var.pageW - 390"
+              y: 96
+              width: 170
+              height: 44
+              visible: "var.loading"
+            action:
+              clickLeft: |-
+                var.ignoreList = true
+                var.formRenderPending = false
+                var.loading = false
+                var.hydrating = false
+                var.detailLoading = false
+                var.ignoreDetail = true
+                Packet.send(var.packetId, 'audit_cancel', 'list', var.listRequest)
+            children:
+              文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "~&e停止当前查询"
+                  fontSize: 24
+                  through: true
+          查询状态:
+            type: Text
+            attribute:
+              x: 50
+              y: 430
+              visible: "var.loading || (var.listReady && var.count == 0)"
+              texts: "var.loading ? '&7正在查询...' : '&7没有符合条件的记录，可调整筛选后重试'"
+              fontSize: 26
+              through: true
+          流水滑块:
+            type: Texture
+            val: 流水滑块
+            attribute:
+              x: "var.listW + 14"
+              y: 374
+              width: 6
+              height: 58
+              maxDragY: "var.pageH - 570"
+              normal: ~131,177,196,245
+          流水滚动:
+            type: Scroll
+            attribute:
+              x: 24
+              y: 374
+              width: "var.listW"
+              height: "var.pageH - 512"
+              moveY: "val.流水滑块.getDragYRatio()"
+            action:
+              wheel: |-
+                val.流水滑块.setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+            children:
+              流水行区:
+                type: VStack
+                val: 流水行区
+                attribute:
+                  width: "var.listW"
+                  spaceBetween: 10
+                children:
+                  流水行:
+                    type: Canvas
+                    attribute:
+                      entryKey: 0.round()
+                      entry: var.rows[self.entryKey]
+                      visible: "self.entry != none"
+                      width: "var.listW"
+                      height: 112
+                      enable: "!var.loading && !var.hydrating"
+                    action:
+                      clickLeft: |-
+                        var.selectedId = self.entry['id']
+                        var.detailReady = false
+                        var.beginDetail()
+                        var.ignoreDetail = false
+                        var.detailAge = 0
+                        Packet.send(var.packetId, 'audit_detail', var.selectedId, var.detailRequest)
+                    children:
+                      底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: "self.parent.entry['id'] == var.selectedId ? '~48,79,98,245' : '~37,48,65,235'"
+                          shape: ~round_rect
+                          radius: 8
+                      物品名称:
+                        type: Scroll
+                        attribute:
+                          x: "16"
+                          y: "12"
+                          width: "var.listW - 270"
+                          height: 34
+                          scrollAnim: none
+                          moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
+                        action:
+                          enter: |-
+                            self.scrollAnim = Lerp(0,1,2500)
+                          leave: |-
+                            self.scrollAnim = none
+                          clickLeft: |-
+                            if(var.loading || var.hydrating){
+                              return
+                            }
+                            var.selectedId = self.parent.entry['id']
+                            var.detailReady = false
+                            var.beginDetail()
+                            var.ignoreDetail = false
+                            var.detailAge = 0
+                            Packet.send(var.packetId, 'audit_detail', var.selectedId, var.detailRequest)
+                        children:
+                          文本:
+                            type: Text
+                            attribute:
+                              x: 0
+                              y: 0
+                              texts: "self.parent.parent.entry != none ? '&f' + self.parent.parent.entry['item'] : ''"
+                              fontSize: 26
+                              through: true
+                      金额:
+                        type: Text
+                        attribute:
+                          x: "var.listW - 230"
+                          y: "12"
+                          texts: "self.parent.entry != none ? '&e' + self.parent.entry['amount'] : ''"
+                          fontSize: 24
+                          through: true
+                      记录类型:
+                        type: Scroll
+                        attribute:
+                          x: "16"
+                          y: "48"
+                          width: "var.listW - 40"
+                          height: 28
+                          scrollAnim: none
+                          moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
+                        action:
+                          enter: |-
+                            self.scrollAnim = Lerp(0,1,2500)
+                          leave: |-
+                            self.scrollAnim = none
+                          clickLeft: |-
+                            if(var.loading || var.hydrating){
+                              return
+                            }
+                            var.selectedId = self.parent.entry['id']
+                            var.detailReady = false
+                            var.beginDetail()
+                            var.ignoreDetail = false
+                            var.detailAge = 0
+                            Packet.send(var.packetId, 'audit_detail', var.selectedId, var.detailRequest)
+                        children:
+                          文本:
+                            type: Text
+                            attribute:
+                              x: 0
+                              y: 0
+                              texts: "self.parent.parent.entry != none ? '&b' + self.parent.parent.entry['kind'] + ' / ' + self.parent.parent.entry['state'] : ''"
+                              fontSize: 22
+                              through: true
+                      玩家时间:
+                        type: Scroll
+                        attribute:
+                          x: "16"
+                          y: "82"
+                          width: "var.listW - 40"
+                          height: 28
+                          scrollAnim: none
+                          moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
+                        action:
+                          enter: |-
+                            self.scrollAnim = Lerp(0,1,2500)
+                          leave: |-
+                            self.scrollAnim = none
+                          clickLeft: |-
+                            if(var.loading || var.hydrating){
+                              return
+                            }
+                            var.selectedId = self.parent.entry['id']
+                            var.detailReady = false
+                            var.beginDetail()
+                            var.ignoreDetail = false
+                            var.detailAge = 0
+                            Packet.send(var.packetId, 'audit_detail', var.selectedId, var.detailRequest)
+                        children:
+                          文本:
+                            type: Text
+                            attribute:
+                              x: 0
+                              y: 0
+                              texts: "self.parent.parent.entry != none ? '&7' + self.parent.parent.entry['player'] + ' · ' + self.parent.parent.entry['time'] : ''"
+                              fontSize: 20
+                              through: true
+          详情占位:
+            type: Text
+            attribute:
+              x: "var.listW + 78"
+              y: 420
+              visible: "!var.detailReady"
+              texts: "var.detailLoading ? '&7读取详情...' : '&7选择一条记录查看详情'"
+              fontSize: 26
+              through: true
+          重试详情:
+            type: Canvas
+            attribute:
+              x: "var.listW + 78"
+              y: 480
+              width: 220
+              height: 44
+              visible: "!var.detailReady && var.selectedId != ''"
+              enable: "!var.detailLoading"
+            action:
+              clickLeft: |-
+                var.beginDetail()
+                var.ignoreDetail = false
+                var.detailAge = 0
+                Packet.send(var.packetId, 'audit_detail', var.selectedId, var.detailRequest)
+            children:
+              文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "~&b重新读取此记录"
+                  fontSize: 24
+                  through: true
+          详情区:
+            type: Canvas
+            attribute:
+              visible: "var.detailReady"
+              x: "var.listW + 48"
+              y: 374
+              width: "var.detailW"
+              height: "var.pageH - 476"
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~31,41,55,235
+                  shape: ~round_rect
+                  radius: 10
+              详情物品:
+                type: Slot
+                val: 详情物品
+                attribute:
+                  slotType: ~Icon
+                  x: 20
+                  y: 54
+                  width: 92
+                  height: 92
+                  itemScale: 0.8
+                  seticon: "self.setItemIcon(var.detailIcon)"
+              详情标题:
+                type: Scroll
+                attribute:
+                  x: "20"
+                  y: "14"
+                  width: "var.detailW - 40"
+                  height: 36
+                  scrollAnim: none
+                  moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
+                action:
+                  enter: |-
+                    self.scrollAnim = Lerp(0,1,2500)
+                  leave: |-
+                    self.scrollAnim = none
+                children:
+                  文本:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: "var.detailLoading ? '&7读取详情...' : '&f' + var.detailTitle"
+                      fontSize: 28
+                      through: true
+              详情类型:
+                type: Scroll
+                attribute:
+                  x: "130"
+                  y: "60"
+                  width: "var.detailW - 150"
+                  height: 28
+                  scrollAnim: none
+                  moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
+                action:
+                  enter: |-
+                    self.scrollAnim = Lerp(0,1,2500)
+                  leave: |-
+                    self.scrollAnim = none
+                children:
+                  文本:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: "'&b' + var.detailKind"
+                      fontSize: 22
+                      through: true
+              详情状态:
+                type: Scroll
+                attribute:
+                  x: "130"
+                  y: "96"
+                  width: "var.detailW - 150"
+                  height: 28
+                  scrollAnim: none
+                  moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
+                action:
+                  enter: |-
+                    self.scrollAnim = Lerp(0,1,2500)
+                  leave: |-
+                    self.scrollAnim = none
+                children:
+                  文本:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: "'&e' + var.detailState + ' / ' + var.detailSource"
+                      fontSize: 22
+                      through: true
+              物品数量:
+                type: Scroll
+                attribute:
+                  x: "130"
+                  y: "130"
+                  width: "var.detailW - 150"
+                  height: 28
+                  scrollAnim: none
+                  moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
+                action:
+                  enter: |-
+                    self.scrollAnim = Lerp(0,1,2500)
+                  leave: |-
+                    self.scrollAnim = none
+                children:
+                  文本:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: "var.detailQuantity > 0 ? '&7快照数量 ' + var.detailQuantity.round() + ' · ' + var.detailMaterial : '&7无可预览物品快照'"
+                      fontSize: 22
+                      through: true
+              参与者:
+                type: Scroll
+                attribute:
+                  x: "20"
+                  y: "170"
+                  width: "var.detailW - 40"
+                  height: 28
+                  scrollAnim: none
+                  moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
+                action:
+                  enter: |-
+                    self.scrollAnim = Lerp(0,1,2500)
+                  leave: |-
+                    self.scrollAnim = none
+                children:
+                  文本:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: "'&7玩家 ' + var.detailPlayer"
+                      fontSize: 22
+                      through: true
+              玩家标识:
+                type: Scroll
+                attribute:
+                  x: "20"
+                  y: "204"
+                  width: "var.detailW - 40"
+                  height: 28
+                  scrollAnim: none
+                  moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
+                action:
+                  enter: |-
+                    self.scrollAnim = Lerp(0,1,2500)
+                  leave: |-
+                    self.scrollAnim = none
+                children:
+                  文本:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: "'&7' + var.detailPlayerId"
+                      fontSize: 20
+                      through: true
+              对方:
+                type: Scroll
+                attribute:
+                  x: "20"
+                  y: "238"
+                  width: "var.detailW - 40"
+                  height: 28
+                  scrollAnim: none
+                  moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
+                action:
+                  enter: |-
+                    self.scrollAnim = Lerp(0,1,2500)
+                  leave: |-
+                    self.scrollAnim = none
+                children:
+                  文本:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: "'&7另一参与者 ' + var.detailOther + ' ' + var.detailOtherId"
+                      fontSize: 22
+                      through: true
+              详情金额:
+                type: Scroll
+                attribute:
+                  x: "20"
+                  y: "272"
+                  width: "var.detailW - 40"
+                  height: 28
+                  scrollAnim: none
+                  moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
+                action:
+                  enter: |-
+                    self.scrollAnim = Lerp(0,1,2500)
+                  leave: |-
+                    self.scrollAnim = none
+                children:
+                  文本:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: "'&e金额 ' + var.detailAmount + ' · ' + var.detailTime"
+                      fontSize: 22
+                      through: true
+              记录标识:
+                type: Scroll
+                attribute:
+                  x: "20"
+                  y: "306"
+                  width: "var.detailW - 40"
+                  height: 28
+                  scrollAnim: none
+                  moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
+                action:
+                  enter: |-
+                    self.scrollAnim = Lerp(0,1,2500)
+                  leave: |-
+                    self.scrollAnim = none
+                children:
+                  文本:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: "'&7记录 ' + var.selectedId"
+                      fontSize: 18
+                      through: true
+              关联流水:
+                type: Canvas
+                attribute:
+                  x: "20"
+                  y: "340"
+                  width: "180"
+                  height: 44
+                  enable: "var.detailReady && !var.loading && var.detailGroup != ''"
+                action:
+                  clickLeft: |-
+                    var.beginList()
+                    Packet.send(var.packetId, 'audit_group', var.selectedId, var.listRequest)
+                children:
+                  底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~48,67,82,240
+                      shape: ~round_rect
+                      radius: 8
+                  文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: "var.detailGroup != '' ? '&b查看关联流水' : '&7未记录关联编号'"
+                      fontSize: 24
+                      through: true
+              刷新详情:
+                type: Canvas
+                attribute:
+                  x: "220"
+                  y: "340"
+                  width: "180"
+                  height: 44
+                  enable: "var.detailReady && !var.detailLoading"
+                action:
+                  clickLeft: |-
+                    var.beginDetail()
+                    var.ignoreDetail = false
+                    var.detailAge = 0
+                    Packet.send(var.packetId, 'audit_detail', var.selectedId, var.detailRequest)
+                children:
+                  底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~48,67,82,240
+                      shape: ~round_rect
+                      radius: 8
+                  文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: "~&b刷新详情"
+                      fontSize: 24
+                      through: true
+              说明滑块:
+                type: Texture
+                val: 说明滑块
+                attribute:
+                  x: "var.detailW - 12"
+                  y: 406
+                  width: 6
+                  height: 40
+                  maxDragY: "var.pageH - 948"
+                  normal: ~131,177,196,245
+              说明滚动:
+                type: Scroll
+                attribute:
+                  x: 20
+                  y: 406
+                  width: "var.detailW - 40"
+                  height: "var.pageH - 908"
+                  moveY: "val.说明滑块.getDragYRatio()"
+                action:
+                  wheel: |-
+                    val.说明滑块.setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                children:
+                  详情说明行区:
+                    type: VStack
+                    val: 详情说明行区
+                    attribute:
+                      width: "var.detailW - 40"
+                      spaceBetween: 8
+                    children:
+                      说明行:
+                        type: Text
+                        attribute:
+                          entryKey: 0.round()
+                          visible: "var.notes[self.entryKey] != none"
+                          texts: "'&7' + var.notes[self.entryKey]"
+                          height: 28
+                          fontSize: 22
+                          through: true
+          上一页:
+            type: Canvas
+            attribute:
+              x: "28"
+              y: "var.pageH - 68"
+              width: "160"
+              height: 44
+              enable: "!var.loading && !var.filterDirty && var.page > 0"
+            action:
+              clickLeft: |-
+                var.beginList()
+                Packet.send(var.packetId, 'audit_page', var.page - 1, var.listRequest)
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~48,67,82,240
+                  shape: ~round_rect
+                  radius: 8
+              文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "~&f上一页"
+                  fontSize: 24
+                  through: true
+          下一页:
+            type: Canvas
+            attribute:
+              x: "var.listW - 140"
+              y: "var.pageH - 68"
+              width: "160"
+              height: 44
+              enable: "!var.loading && !var.filterDirty && var.page + 1 < var.pages"
+            action:
+              clickLeft: |-
+                var.beginList()
+                Packet.send(var.packetId, 'audit_page', var.page + 1, var.listRequest)
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~48,67,82,240
+                  shape: ~round_rect
+                  radius: 8
+              文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "~&f下一页"
+                  fontSize: 24
+                  through: true
+          页码:
+            type: Text
+            attribute:
+              x: "var.listW / 2 - 40"
+              y: "var.pageH - 56"
+              texts: "'&f' + var.pageText"
+              fontSize: 26
+              through: true
+          反馈:
+            type: Scroll
+            attribute:
+              x: "28"
+              y: "var.pageH - 114"
+              width: "var.pageW - 56"
+              height: 30
+              scrollAnim: none
+              moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
+            action:
+              enter: |-
+                self.scrollAnim = Lerp(0,1,2500)
+              leave: |-
+                self.scrollAnim = none
+            children:
+              文本:
+                type: Text
+                attribute:
+                  x: 0
+                  y: 0
+                  texts: "'&7' + var.resultMsg"
+                  fontSize: 22
+                  through: true

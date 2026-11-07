@@ -74,7 +74,7 @@ pickup:
 
 search:
   page-size: 18  # 搜索结果每页显示数量
-  default-sort: "time"  # 默认排序方式（time / name / amount）
+  default-sort: "default"  # 默认：置顶优先，其余按首次存入时间排列
 
 warehouses:
   personal:

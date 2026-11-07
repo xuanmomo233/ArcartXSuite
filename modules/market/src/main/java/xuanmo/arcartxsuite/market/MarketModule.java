@@ -46,6 +46,8 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
 
     private static final String SHOP_UI_RESOURCE_PATH = "arcartx/ui/market_shop.yml";
     private static final String SHOP_UI_FILE_PATH = "ui/market_shop.yml";
+    private static final String AUCTION_ROOM_RESOURCE_PATH = "arcartx/ui/market_auction_room.yml";
+    private static final String AUCTION_ROOM_FILE_PATH = "ui/market_auction_room.yml";
     private static final String AUCTION_UI_RESOURCE_PATH = "arcartx/ui/market_auction.yml";
     private static final String AUCTION_UI_FILE_PATH = "ui/market_auction.yml";
     private static final String AUCTION_SELL_UI_RESOURCE_PATH = "arcartx/ui/market_sell.yml";
@@ -84,6 +86,7 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
                     .dynamicSection("player-shop.blacklist")
                     .dynamicSection("player-shop.tax-discount")
                     .dynamicSection("recycle.price-multiplier")
+                    .dynamicSection("shop.dynamic.strategies")
                     .dynamicSection("messages")
                 .build())
             .currentVersion(4)
@@ -101,6 +104,24 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
                         .withRange(60, null),
                     ValidationRule.of("auction.max-duration-seconds", ValueType.INT)
                         .withRange(3600, null),
+                    ValidationRule.of("auction.allow-cancel-with-bids", ValueType.BOOLEAN),
+                    ValidationRule.of("auction.end-protection.enabled", ValueType.BOOLEAN),
+                    ValidationRule.of("auction.end-protection.window-seconds", ValueType.INT).withRange(1,3600),
+                    ValidationRule.of("auction.end-protection.extend-seconds", ValueType.INT).withRange(1,3600),
+                    ValidationRule.of("auction.end-protection.max-extension-seconds", ValueType.INT).withRange(1,86400),
+                    ValidationRule.of("auction.notifications.outbid", ValueType.BOOLEAN),
+                    ValidationRule.of("auction.notifications.settlement", ValueType.BOOLEAN),
+                    ValidationRule.of("auction.notifications.watch-bids", ValueType.BOOLEAN),
+                    ValidationRule.of("player-shop.max-listings-per-player", ValueType.INT)
+                        .withRange(1, 1000),
+                    ValidationRule.of("player-shop.transaction-tax-rate", ValueType.DOUBLE)
+                        .withRange(0.0, 0.99),
+                    ValidationRule.of("player-shop.profile.name-max-length",ValueType.INT).withRange(1,64),
+                    ValidationRule.of("player-shop.profile.description-max-length",ValueType.INT).withRange(1,1024),
+                    ValidationRule.of("player-shop.profile.announcement-max-length",ValueType.INT).withRange(1,2048),
+                    ValidationRule.of("player-shop.profile.max-favorites",ValueType.INT).withRange(1,1000),
+                    ValidationRule.of("recycle.protection.default-auto-recycle",ValueType.BOOLEAN),
+                    ValidationRule.of("recycle.protection.max-rules",ValueType.INT).withRange(1,1000),
                     ValidationRule.of("redis.cache-ttl-seconds", ValueType.INT)
                         .withRange(10, 86400)
             ))
@@ -112,8 +133,14 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
         Map<String, String> mappings = new LinkedHashMap<>();
         mappings.put(SHOP_UI_RESOURCE_PATH, SHOP_UI_FILE_PATH);
         mappings.put(AUCTION_UI_RESOURCE_PATH, AUCTION_UI_FILE_PATH);
+        mappings.put(configuration!=null?configuration.ui().auctionRoomFile():AUCTION_ROOM_RESOURCE_PATH, AUCTION_ROOM_FILE_PATH);
         mappings.put(AUCTION_SELL_UI_RESOURCE_PATH, AUCTION_SELL_UI_FILE_PATH);
         mappings.put(PLAYER_SHOP_UI_RESOURCE_PATH, PLAYER_SHOP_UI_FILE_PATH);
+        mappings.put("arcartx/ui/market_player_shops.yml","ui/market_player_shops.yml");
+        mappings.put("arcartx/ui/market_player_store.yml","ui/market_player_store.yml");
+        mappings.put("arcartx/ui/market_player_store_edit.yml","ui/market_player_store_edit.yml");
+        mappings.put("arcartx/ui/market_recycle_protection.yml","ui/market_recycle_protection.yml");
+        mappings.put("arcartx/ui/market_admin_trades.yml","ui/market_admin_trades.yml");
         mappings.put(RECYCLE_UI_RESOURCE_PATH, RECYCLE_UI_FILE_PATH);
         mappings.put(HISTORY_UI_RESOURCE_PATH, HISTORY_UI_FILE_PATH);
         mappings.put(SHOP_EDIT_UI_RESOURCE_PATH, SHOP_EDIT_UI_FILE_PATH);
@@ -234,15 +261,23 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
         service.start(dataFolder, marketRepo);
 
         // 注册待发放队列消费者（玩家上线补发离线期间累积的物品/货币）
-        registerListener(new PendingDeliveryService(
-            plugin, service.getRepository(), currencyManager, itemSerializer, itemRewardDispatcher, logger));
+        PendingDeliveryService deliveries = new PendingDeliveryService(
+            plugin, service.getRepository(), currencyManager, itemSerializer, itemRewardDispatcher, logger, service.getLedger());
+        registerListener(deliveries);
+        service.attachDeliveries(deliveries);
 
         // 注册 UI 到 ArcartX 桥接层
         bindMarketUi(configuration.ui().shopId(), SHOP_UI_FILE_PATH);
         bindMarketUi(configuration.ui().auctionId(), AUCTION_UI_FILE_PATH);
+        bindMarketUi(configuration.ui().auctionRoomId(), AUCTION_ROOM_FILE_PATH);
         bindMarketUi("AXS:market_auction_sell", AUCTION_SELL_UI_FILE_PATH);
         bindMarketUi(configuration.ui().sellId(), AUCTION_SELL_UI_FILE_PATH);
         bindMarketUi(configuration.ui().playerShopId(), PLAYER_SHOP_UI_FILE_PATH);
+        bindMarketUi(configuration.ui().playerShopsId(),"ui/market_player_shops.yml");
+        bindMarketUi(configuration.ui().playerStoreId(),"ui/market_player_store.yml");
+        bindMarketUi(configuration.ui().playerStoreEditId(),"ui/market_player_store_edit.yml");
+        bindMarketUi(configuration.ui().recycleProtectionId(),"ui/market_recycle_protection.yml");
+        bindMarketUi(configuration.ui().adminTradesId(),"ui/market_admin_trades.yml");
         bindMarketUi(configuration.ui().recycleId(), RECYCLE_UI_FILE_PATH);
         bindMarketUi(configuration.ui().historyId(), HISTORY_UI_FILE_PATH);
         bindMarketUi(configuration.ui().shopEditId(), SHOP_EDIT_UI_FILE_PATH);
@@ -311,8 +346,25 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
                 @Override public int auctionCount() {
                     return service != null ? service.getAuctionCount() : 0;
                 }
+                @Override public boolean openAuctionLot(@NotNull org.bukkit.entity.Player player,long listingId) {
+                    return service != null && service.openAuctionRoom(player,listingId);
+                }
+                @Override public boolean openPlayerStore(@NotNull org.bukkit.entity.Player player,@NotNull java.util.UUID owner) {
+                    return service!=null && service.openPlayerStore(player,owner);
+                }
+                @Override public boolean openOwnStoreEditor(@NotNull org.bukkit.entity.Player player) {
+                    if(service==null || !service.isPlayerShopEnabled())return false;
+                    service.openPlayerStoreEditor(player);return true;
+                }
                 @Override public int shopCount() {
                     return service != null ? service.getShopCount() : 0;
+                }
+                @Override public boolean openRecycleProtection(@NotNull org.bukkit.entity.Player player){
+                    if(service==null || !configuration.recycle().enabled())return false;service.openRecycleProtection(player);return true;
+                }
+                @Override public boolean openTradeManagement(@NotNull org.bukkit.entity.Player player){
+                    if(service==null || !player.hasPermission("arcartxsuite.market.admin"))return false;
+                    service.openTradeManagement(player);return true;
                 }
                 @Override public int myListingCount(@NotNull org.bukkit.entity.Player player) {
                     return service != null ? service.getMyListingsCount(player) : 0;

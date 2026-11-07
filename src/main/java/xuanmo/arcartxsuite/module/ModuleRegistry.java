@@ -89,7 +89,7 @@ public final class ModuleRegistry {
     private final CapabilityRegistry capabilityRegistry;
     private final ClientPacketRouter clientPacketRouter;
     private GlobalBridgeFactory globalBridgeFactory;
-    private xuanmo.arcartxsuite.auth.runtime.HostAuthentication authenticationRuntime;
+    private volatile xuanmo.arcartxsuite.auth.runtime.LoginViewAuthentication authenticationRuntime;
     private xuanmo.arcartxsuite.auth.runtime.AdmissionGuard admissionGuard;
     private boolean shuttingDown;
 
@@ -102,11 +102,12 @@ public final class ModuleRegistry {
         if (authenticationRuntime == null) {
             xuanmo.arcartxsuite.api.auth.AuthAccess.install(() -> authenticationRuntime);
             if(admissionGuard==null) {
-                admissionGuard = new xuanmo.arcartxsuite.auth.runtime.AdmissionGuard();
+                admissionGuard = new xuanmo.arcartxsuite.auth.runtime.AdmissionGuard(
+                    () -> authenticationRuntime == null || authenticationRuntime.requiresAdmission());
                 org.bukkit.Bukkit.getPluginManager().registerEvents(admissionGuard, plugin);
                 admissionGuard.registerPaperChat(plugin);
             }
-            authenticationRuntime = xuanmo.arcartxsuite.auth.runtime.HostAuthentication.create(
+            authenticationRuntime = xuanmo.arcartxsuite.auth.runtime.HostAuthentication.forLoginView(
                 plugin, storageManager, () -> getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
             authenticationRuntime.start();
         }
@@ -363,6 +364,7 @@ public final class ModuleRegistry {
             return true;
         } catch (Exception exception) {
             LOGGER.log(Level.SEVERE, loaded.descriptor().name() + " 模块重载失败", exception);
+            if("loginview".equals(moduleId)) cleanupFailedModule(moduleId);
             return false;
         }
     }
@@ -822,7 +824,16 @@ public final class ModuleRegistry {
         }
 
         // 启用
-        boolean success = instance.onEnable(context);
+        boolean success = false;
+        try {
+            if("loginview".equals(descriptor.id())) {
+                authenticationRuntime();
+                authenticationRuntime.setLoginViewEnabled(true);
+            }
+            success = instance.onEnable(context);
+        } finally {
+            if(!success) cleanupFailedModule(descriptor.id());
+        }
         if (success) {
             loaded.setEnabled(true);
             // 注册声明归属该模块的客户端按键（keybinds.<entry>.module 包含此 id 的条目）
@@ -841,7 +852,6 @@ public final class ModuleRegistry {
             return true;
         } else {
             LOGGER.warning(descriptor.name() + " 模块 onEnable 返回 false，已清理并卸载。");
-            cleanupFailedModule(descriptor.id());
             return false;
         }
     }
@@ -852,6 +862,7 @@ public final class ModuleRegistry {
         } catch (Exception exception) {
             LOGGER.log(Level.SEVERE, loaded.descriptor().name() + " 模块 onDisable 异常", exception);
         } finally {
+            releaseLoginViewAuthentication(loaded.descriptor().id());
             clearModuleRegistrations(loaded);
             loaded.setEnabled(false);
             LOGGER.info(loaded.descriptor().name() + " 模块已禁用。");
@@ -875,6 +886,7 @@ public final class ModuleRegistry {
         if (loaded == null) {
             return;
         }
+        releaseLoginViewAuthentication(moduleId);
         clearModuleRegistrations(loaded);
         try {
             loaded.instance().onDisable();
@@ -884,6 +896,11 @@ public final class ModuleRegistry {
             LOGGER.warning("清理失败模块 " + loaded.descriptor().name() + " 时依赖不可用: " + error.getMessage());
         }
         closeClassLoader(loaded);
+    }
+
+    private void releaseLoginViewAuthentication(String moduleId) {
+        if("loginview".equals(moduleId) && authenticationRuntime!=null && !shuttingDown && plugin.isEnabled())
+            authenticationRuntime.setLoginViewEnabled(false);
     }
 
     private void clearModuleRegistrations(LoadedModule loaded) {

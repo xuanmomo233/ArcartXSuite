@@ -19,6 +19,7 @@ public record AuctionHistory(
     long timestamp
 ) {
     public enum TransactionType {
-        BUY_NOW, BID_WIN, EXPIRED, CANCELLED
+        BUY_NOW, BID_WIN, EXPIRED, CANCELLED, ADMIN_CANCELLED, SHOP_BUY, RECYCLE,
+        PSHOP_PURCHASE, PSHOP_EXPIRED, PSHOP_CANCELLED
     }
 }

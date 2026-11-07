@@ -55,6 +55,7 @@ import xuanmo.arcartxsuite.warehouse.storage.JdbcWarehouseRepository;
 public final class WarehouseModule extends AbstractAXSModule implements ModuleCommandHandler {
 
     private WarehouseAdminCommand adminCommand;
+    private xuanmo.arcartxsuite.warehouse.service.WarehouseMaterials materialService;
 
     private static final String STORAGE_UI_RESOURCE_PATH = "arcartx/ui/warehouse_storage.yml";
     private static final String STORAGE_UI_FILE_PATH = "ui/warehouse_storage.yml";
@@ -66,6 +67,7 @@ public final class WarehouseModule extends AbstractAXSModule implements ModuleCo
     private WarehouseModuleConfiguration configuration;
     private CrossServerChannelConfig crossServerChannelConfig = CrossServerChannelConfig.disabled();
     private WarehouseService service;
+    private xuanmo.arcartxsuite.warehouse.service.WarehouseCursorPanel cursorPanel;
     private JdbcWarehouseRepository repository;
 
     @Override
@@ -219,6 +221,13 @@ public final class WarehouseModule extends AbstractAXSModule implements ModuleCo
 
         // 个人仓库直接访问能力：扩展背包等模块经此读写同一套仓库存储
         registerCapability(xuanmo.arcartxsuite.api.capability.WarehouseAccess.class, service);
+        materialService = new xuanmo.arcartxsuite.warehouse.service.WarehouseMaterials(service, plugin, dataFolder, whDesc.isMysql());
+        org.bukkit.Bukkit.getPluginManager().registerEvents(materialService, plugin);
+        registerCapability(xuanmo.arcartxsuite.api.capability.WarehouseMaterialAccess.class, materialService);
+        cursorPanel = new xuanmo.arcartxsuite.warehouse.service.WarehouseCursorPanel(service, packetBridge, logger);
+        cursorPanel.registerClientEvents(plugin);
+        org.bukkit.Bukkit.getPluginManager().registerEvents(cursorPanel, plugin);
+        registerCapability(xuanmo.arcartxsuite.api.capability.WarehousePanelAccess.class, cursorPanel);
 
         WarehouseService registeredService = service;
         registerCapability(xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable.class,
@@ -266,6 +275,16 @@ public final class WarehouseModule extends AbstractAXSModule implements ModuleCo
      */
     @Override
     protected void stopService() {
+        if (materialService != null) {
+            org.bukkit.event.HandlerList.unregisterAll(materialService);
+            materialService.close();
+            materialService = null;
+        }
+        if (cursorPanel != null) {
+            cursorPanel.close();
+            org.bukkit.event.HandlerList.unregisterAll(cursorPanel);
+            cursorPanel = null;
+        }
         if (service != null) {
             service.shutdown();
             service = null;
@@ -309,6 +328,7 @@ public final class WarehouseModule extends AbstractAXSModule implements ModuleCo
     @Override public String commandId() { return "warehouse"; }
     @Override public List<String> actions() { return adminCommand != null ? adminCommand.actions() : List.of("help", "status"); }
     @Override public boolean onCommand(@NotNull CommandSender sender, @NotNull String label, @NotNull String[] args) {
+        if (materialService != null && materialService.handleAdminCommand(sender, args)) return true;
         return adminCommand != null ? adminCommand.onCommand(sender, label, args) : false;
     }
     @Override public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull String[] args) {
