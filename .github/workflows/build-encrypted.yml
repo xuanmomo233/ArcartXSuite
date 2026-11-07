@@ -87,9 +87,9 @@ jobs:
           echo "=== Changed files ==="
           cat /tmp/changed_files.txt
 
-          # 本体(core)：本体源码 / axs-core / api / placeholder / 构建脚本 / native / 加密脚本 / 密钥 / 工作流
+          # 工作流自身的调整由 Regression checks 验证，不产生新的产品版本。
           CORE_CHANGED=false
-          if grep -Eq '^(src/main/|axs-core/|axs-api/|axs-placeholder/|buildSrc/|proguard/|native/|scripts/|gradle/|keys/|gradle\.properties|settings\.gradle\.kts|build\.gradle\.kts|\.github/workflows/)' /tmp/changed_files.txt; then
+          if grep -Eq '^(src/main/|axs-core/|axs-api/|axs-placeholder/|buildSrc/|proguard/|native/|scripts/|gradle/|keys/|gradle\.properties|settings\.gradle\.kts|build\.gradle\.kts)' /tmp/changed_files.txt; then
             CORE_CHANGED=true
           fi
           echo "core_changed=$CORE_CHANGED" >> $GITHUB_OUTPUT

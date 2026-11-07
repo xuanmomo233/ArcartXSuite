@@ -1,0 +1,130 @@
+name: Regression checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: checks-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Select affected checks
+        id: scope
+        shell: python
+        run: |
+          import json
+          import os
+          from pathlib import Path
+          import re
+          import subprocess
+
+          event = json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text())
+          base = event.get('pull_request', {}).get('base', {}).get('sha') or event.get('before')
+          full = os.environ['GITHUB_EVENT_NAME'] == 'workflow_dispatch'
+          if not base or base == '0' * 40:
+              full = True
+          elif subprocess.run(['git', 'cat-file', '-e', base + '^{commit}'], capture_output=True).returncode:
+              full = True
+          changed = [] if full else subprocess.check_output(
+              ['git', 'diff', '--name-only', base, 'HEAD'], text=True).splitlines()
+          shared = full or any(
+              path.startswith(('axs-api/', 'axs-core/', 'src/', 'buildSrc/', 'native/', 'scripts/', 'gradle/', '.github/'))
+              or path in {'build.gradle.kts', 'settings.gradle.kts', 'gradle.properties'}
+              for path in changed)
+          modules = {'abyss', 'map'} if shared else set()
+          for path in changed:
+              match = re.match(r'^modules/([a-z0-9_-]+)/', path)
+              if match:
+                  modules.add(match.group(1))
+          if full:
+              modules.update(path.name for path in Path('modules').iterdir() if path.is_dir() and path.name != 'debug')
+          tasks = [':axs-core:test'] if shared else []
+          for module in sorted(modules):
+              if not Path('modules', module, 'build.gradle.kts').exists():
+                  continue
+              task = 'test' if Path('modules', module, 'src/test').exists() else 'compileJava'
+              tasks.append(f':modules:{module}:{task}')
+          for project in ('axs-api', 'axs-placeholder', 'auth-center', 'auth-minecraft'):
+              if (full or any(path.startswith(project + '/') for path in changed)) and Path(project, 'src/test').exists():
+                  tasks.append(f':{project}:test')
+          if any(path.startswith('proxy/') for path in changed) or full:
+              tasks.append(':proxy:bungee:compileJava')
+              tasks.append(':proxy:velocity:compileJava')
+          ui = [module for module in ('abyss', 'map') if module in modules]
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write('tasks=' + ' '.join(tasks) + '\n')
+              output.write('ui=' + ' '.join(ui) + '\n')
+          print('Gradle tasks:', tasks)
+          print('UI checks:', ui)
+      - uses: actions/setup-java@v5
+        if: steps.scope.outputs.tasks != ''
+        with:
+          java-version: '17'
+          distribution: temurin
+      - uses: gradle/actions/setup-gradle@v6
+        if: steps.scope.outputs.tasks != ''
+        with:
+          gradle-version: '8.10.2'
+          cache-read-only: true
+      - uses: actions/setup-node@v4
+        if: steps.scope.outputs.ui != ''
+        with:
+          node-version: '22'
+      - name: Check bundled UI contracts
+        if: steps.scope.outputs.ui != ''
+        env:
+          UI_MODULES: ${{ steps.scope.outputs.ui }}
+        run: |
+          python -m pip install PyYAML==6.0.2
+          for module in $UI_MODULES; do
+            python "modules/$module/src/test/ui/verify_${module}_ui.py"
+          done
+      - name: Run affected tests and compilation
+        if: steps.scope.outputs.tasks != ''
+        env:
+          GRADLE_TASKS: ${{ steps.scope.outputs.tasks }}
+        run: |
+          read -r -a tasks <<< "$GRADLE_TASKS"
+          gradle "${tasks[@]}" -PskipNativeCheck=true --no-daemon --no-configuration-cache
+      - name: Summarize tests
+        if: always() && steps.scope.outputs.tasks != ''
+        shell: python
+        run: |
+          from pathlib import Path
+          import os
+          import xml.etree.ElementTree as ET
+          totals = dict(tests=0, failures=0, errors=0)
+          for path in Path('.').glob('**/build/test-results/test/TEST-*.xml'):
+              suite = ET.parse(path).getroot()
+              for key in totals:
+                  totals[key] += int(suite.get(key, 0))
+          summary = 'JUnit: {tests} tests, {failures} failures, {errors} errors'.format(**totals)
+          print(summary)
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as output:
+              output.write(summary + '\n')
+      - name: Upload test reports
+        if: always() && steps.scope.outputs.tasks != ''
+        uses: actions/upload-artifact@v5
+        with:
+          name: regression-test-reports
+          path: |
+            **/build/reports/tests/test/
+            **/build/test-results/test/
+          if-no-files-found: ignore
+          retention-days: 14
