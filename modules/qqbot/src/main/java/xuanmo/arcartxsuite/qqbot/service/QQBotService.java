@@ -2,10 +2,8 @@ package xuanmo.arcartxsuite.qqbot.service;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
-import java.util.regex.Pattern;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.entity.LivingEntity;
@@ -32,9 +30,6 @@ import xuanmo.arcartxsuite.api.message.MessageProvider;
 
 public final class QQBotService implements Listener {
 
-    private static final Pattern CQ_CODE_PATTERN = Pattern.compile("\\[CQ:[^]]+]");
-    private static final Pattern COLOR_CODE_PATTERN = Pattern.compile("(?i)§[0-9A-FK-ORX]");
-
     private final JavaPlugin plugin;
     private final QQBotConfiguration config;
     private final MessageProvider messages;
@@ -46,7 +41,7 @@ public final class QQBotService implements Listener {
     private volatile QQBotSignInService signInService;
     private final Logger logger;
     private final java.util.function.Supplier<xuanmo.arcartxsuite.api.capability.MailDispatchable> mailProvider;
-    private final Set<String> processedMessageIds = ConcurrentHashMap.newKeySet();
+    private final Map<String, Long> processedMessageIds = new ConcurrentHashMap<>();
 
     private BukkitTask cleanupTask;
     private volatile boolean connected;
@@ -62,6 +57,8 @@ public final class QQBotService implements Listener {
     private final java.util.concurrent.CopyOnWriteArrayList<xuanmo.arcartxsuite.api.capability.QQBotNotifiable.QQGroupEventListener> eventListeners =
         new java.util.concurrent.CopyOnWriteArrayList<>();
     private final Map<Long, Long> groupLastAutoReply = new ConcurrentHashMap<>();
+    private volatile QQBotMessageGateway messageGateway;
+    private volatile boolean closed = true;
 
     public QQBotService(
         JavaPlugin plugin,
@@ -89,6 +86,7 @@ public final class QQBotService implements Listener {
      */
     public void setClient(OneBotClient client) {
         this.client = client;
+        this.messageGateway = new QQBotMessageGateway(plugin, config, repository, client);
         this.commandRouter = new QQBotCommandRouter(plugin, config, client, bindService, repository, logger, placeholderResolver, mailProvider);
     }
 
@@ -100,15 +98,23 @@ public final class QQBotService implements Listener {
     }
 
     public void start() {
+        closed = false;
         Bukkit.getPluginManager().registerEvents(this, plugin);
-        // 定时清理过期验证码
+        // Keep a bounded replay window; binding codes belong to the host authentication service.
         cleanupTask = Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, () -> {
             // 清理已处理消息 ID 缓存
-            processedMessageIds.clear();
+            long now = System.nanoTime() / 1_000_000L;
+            processedMessageIds.entrySet().removeIf(entry -> now - entry.getValue() >= 300000L);
         }, 6000L, 6000L); // 每5分钟
     }
 
     public void shutdown() {
+        closed = true;
+        connected = false;
+        if (commandRouter != null) commandRouter.close();
+        if (messageGateway != null) messageGateway.close();
+        eventListeners.clear();
+        groupMessageListener = null;
         HandlerList.unregisterAll(this);
         if (cleanupTask != null) {
             cleanupTask.cancel();
@@ -118,6 +124,7 @@ public final class QQBotService implements Listener {
     }
 
     public void onBotConnected() {
+        if (closed) return;
         connected = true;
         disconnectWarned = false;
         reconnectFailCount = 0;
@@ -125,14 +132,13 @@ public final class QQBotService implements Listener {
     }
 
     public void onBotDisconnected(String reason) {
+        if (closed) return;
         connected = false;
         String hint = disconnectHint != null ? disconnectHint.get() : null;
         if (!disconnectWarned) {
-            String wsUrl = config.onebot().wsUrl();
             int interval = config.onebot().reconnectIntervalSeconds();
             logger.warning(ChatColor.RED + "OneBot 连接断开 — " + reason
-                + "。请检查 OneBot 实现端（SnowLuma/NapCat/Lagrange 等）是否已启动、wsUrl(" + wsUrl
-                + ")配置是否正确。将在 " + interval + " 秒后自动重连。" + (hint != null ? hint : ""));
+                + "。请检查实现端、正向 WS 地址与 access-token。将在 " + interval + " 秒后自动重连。" + (hint != null ? hint : ""));
             disconnectWarned = true;
             reconnectFailCount = 1;
             return;
@@ -177,7 +183,7 @@ public final class QQBotService implements Listener {
     }
 
     public void addGroupEventListener(xuanmo.arcartxsuite.api.capability.QQBotNotifiable.QQGroupEventListener listener) {
-        if (listener != null) eventListeners.add(listener);
+        if (listener != null && !closed) eventListeners.addIfAbsent(listener);
     }
 
     public void removeGroupEventListener(xuanmo.arcartxsuite.api.capability.QQBotNotifiable.QQGroupEventListener listener) {
@@ -187,9 +193,11 @@ public final class QQBotService implements Listener {
     // ─── OneBot 事件处理 ──────────────────────────────────
 
     public void handleOneBotEvent(OneBotEvent event) {
+        if (closed || !(event.isGroupMessage() || event.isNotice())
+                || event.userId() <= 0 || findGroupConfig(event.groupId()) == null) return;
         if (config.debug()) {
             logger.info("[Debug] ← OneBot事件: type=" + event.postType()
-                + (event.isGroupMessage() ? " group=" + event.groupId() + " msg=" + event.rawMessage() : ""));
+                + " group=" + event.groupId());
         }
 
         // 黑名单拦截（配置静态黑名单 + 数据库动态黑名单）
@@ -199,6 +207,7 @@ public final class QQBotService implements Listener {
             }
             return;
         }
+        if (closed) return;
 
         // notice 事件（入群欢迎 / 禁言同步）
         if (event.isNotice()) {
@@ -211,8 +220,13 @@ public final class QQBotService implements Listener {
         // 消息去重：OneBot 重连重放/多端上报可能重复投递同一 message_id，
         // 重复处理会导致签到/积分/红包等指令被执行两次（set 每 5 分钟清空，覆盖重放窗口）
         int messageId = event.messageId();
-        if (messageId != 0 && !processedMessageIds.add(event.userId() + ":" + messageId)) {
-            return;
+        if (messageId != 0) {
+            String key = event.groupId() + ":" + event.userId() + ":" + messageId;
+            long now = System.nanoTime() / 1_000_000L;
+            Long previous = processedMessageIds.get(key);
+            if (previous != null && now - previous < 300000L) return;
+            if (previous == null && processedMessageIds.size() >= 10000) return;
+            processedMessageIds.put(key, now);
         }
 
         long groupId = event.groupId();
@@ -220,7 +234,7 @@ public final class QQBotService implements Listener {
         if (groupConfig == null) return;
 
         String rawMessage = event.rawMessage().trim();
-        if (rawMessage.isEmpty()) return;
+        if (rawMessage.isEmpty() || rawMessage.length() > 4000) return;
 
         // 自动 moderation（关键词拦截）
         if (maybeAutoModerate(event, rawMessage)) {
@@ -245,28 +259,30 @@ public final class QQBotService implements Listener {
             signInService.recordActivity(event.userId(), groupId);
         }
 
-        // 消息同步：QQ → 游戏
+        // Public notifications are independent from the optional game-chat relay.
+        String nick = event.senderCard();
+        if (nick == null || nick.isEmpty()) nick = event.senderNickname();
+        if (nick == null) nick = String.valueOf(event.userId());
+        nick = safeChatText(nick);
+        String cleanMessage = safeChatText(rawMessage);
+        if (cleanMessage.isEmpty()) return;
+        final String displayNick = nick;
+        for (var listener : eventListeners) {
+            try { listener.onGroupMessage(groupId, event.userId(), displayNick, cleanMessage); }
+            catch (Exception error) { logger.warning("群消息监听器异常: " + error.getClass().getSimpleName()); }
+        }
         if (groupConfig.syncQqToGame()) {
-            String nick = event.senderCard();
-            if (nick == null || nick.isEmpty()) {
-                nick = event.senderNickname();
-            }
-            if (nick == null) nick = String.valueOf(event.userId());
-
-            // 过滤 CQ 码（图片/表情等），仅保留纯文本
-            String cleanMessage = CQ_CODE_PATTERN.matcher(rawMessage).replaceAll("").trim();
-            if (cleanMessage.isEmpty()) return;
-
-            String formatted = groupConfig.qqToGameFormat()
+            String formatted = ChatColor.translateAlternateColorCodes('&', groupConfig.qqToGameFormat())
                 .replace("{nick}", nick)
                 .replace("{qq}", String.valueOf(event.userId()))
                 .replace("{message}", cleanMessage)
                 .replace("{group}", String.valueOf(groupId));
 
-            String colored = ChatColor.translateAlternateColorCodes('&', formatted);
-            // 在主线程广播
-            Bukkit.getScheduler().runTask(plugin, () ->
-                Bukkit.broadcastMessage(colored));
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                if (closed) return;
+                for (Player online : Bukkit.getOnlinePlayers())
+                    if (xuanmo.arcartxsuite.api.auth.AuthAccess.admitted(online.getUniqueId())) online.sendMessage(formatted);
+            });
 
             // 通知 UI 服务
             if (groupMessageListener != null) {
@@ -274,50 +290,26 @@ public final class QQBotService implements Listener {
                 groupMessageListener.onMessage(finalNick, cleanMessage, groupId);
             }
 
-            // 派发给 QQBotNotifiable 监听器
-            String dispatchNick = nick;
-            String dispatchClean = cleanMessage;
-            for (var listener : eventListeners) {
-                try {
-                    listener.onGroupMessage(groupId, event.userId(), dispatchNick, dispatchClean);
-                } catch (Exception ex) {
-                    logger.warning("群事件监听器异常: " + ex.getMessage());
-                }
-            }
         }
     }
 
     // ─── Bukkit 事件监听 ──────────────────────────────────
 
-    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = false)
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onAsyncPlayerChat(AsyncPlayerChatEvent event) {
-        if (config.debug()) {
-            logger.info("[Debug] AsyncPlayerChatEvent: player=" + event.getPlayer().getName()
-                + " connected=" + connected + " client=" + (client != null)
-                + " cancelled=" + event.isCancelled());
-        }
-        if (!connected) return;
-        Player player = event.getPlayer();
-        String message = event.getMessage();
-        if (message == null || message.isEmpty()) return;
+        if (event.isCancelled() || closed || !connected || !config.delivery().vanillaChatFallback()
+                || xuanmo.arcartxsuite.api.AxsCapabilities.get(xuanmo.arcartxsuite.api.capability.ChatMutable.class) != null) return;
+        sendPlayerMessage(event.getPlayer(), event.getMessage());
+    }
 
-        // 去掉颜色代码
-        String cleanMessage = COLOR_CODE_PATTERN.matcher(message).replaceAll("");
-        cleanMessage = ChatColor.stripColor(cleanMessage);
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onPublicChat(xuanmo.arcartxsuite.api.event.chat.PublicChatMessageEvent event) {
+        if (!closed && connected) sendPlayerMessage(event.player(), event.message());
+    }
 
-        for (QQBotGroupConfig group : config.groups()) {
-            if (group.syncGameToQq()) {
-                String formatted = group.gameToQqFormat()
-                    .replace("{player}", player.getName())
-                    .replace("{display_name}", player.getDisplayName() != null ? player.getDisplayName() : player.getName())
-                    .replace("{message}", cleanMessage)
-                    .replace("{server}", config.serverId());
-                if (config.debug()) {
-                    logger.info("[Debug] → QQ群 " + group.groupId() + ": " + formatted);
-                }
-                client.sendGroupMessage(group.groupId(), formatted);
-            }
-        }
+    @EventHandler
+    public void clearPlayerDeliveryState(PlayerQuitEvent event) {
+        if (messageGateway != null) messageGateway.clearPlayer(event.getPlayer().getUniqueId());
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
@@ -362,9 +354,11 @@ public final class QQBotService implements Listener {
         for (Long qqId : atQqs) {
             QQBotBinding binding = bindService.findByQq(qqId);
             if (binding == null) continue;
-            Player player = Bukkit.getPlayerExact(binding.playerName());
-            if (player == null || !player.isOnline()) continue;
             Bukkit.getScheduler().runTask(plugin, () -> {
+                if (closed) return;
+                Player player = Bukkit.getPlayerExact(binding.playerName());
+                if (player == null || !player.isOnline()
+                        || !xuanmo.arcartxsuite.api.auth.AuthAccess.admitted(player.getUniqueId())) return;
                 player.sendTitle("", messages.get("player.at-title", nick), 10, 70, 20);
                 player.sendMessage(messages.get("player.at-message", nick));
             });
@@ -425,6 +419,7 @@ public final class QQBotService implements Listener {
 
         // 入群欢迎
         if (event.isGroupMemberIncrease()) {
+            notifyMembership(event, true);
             var wc = config.welcome();
             if (wc.enabled() && connected) {
                 long newMember = event.userId();
@@ -435,6 +430,7 @@ public final class QQBotService implements Listener {
             }
             return;
         }
+        if (event.isGroupMemberDecrease()) { notifyMembership(event, false); return; }
 
         // 禁言同步：QQ 群禁言 → 游戏内封禁绑定玩家
         if (event.isGroupBan()) {
@@ -452,8 +448,9 @@ public final class QQBotService implements Listener {
                             .bindRaw("duration", mc.syncBanUseDuration() ? durationStr : "")
                             .bindQuoted("reason", mc.syncBanReason())
                             .build();
-                        Bukkit.getScheduler().runTask(plugin, () ->
-                            Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd));
+                        Bukkit.getScheduler().runTask(plugin, () -> {
+                            if (!closed) Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd);
+                        });
                     } catch (IllegalArgumentException e) {
                         logger.warning("禁言同步跳过: 非法玩家名 " + playerName);
                         return;
@@ -498,15 +495,14 @@ public final class QQBotService implements Listener {
         long groupId = event.groupId();
         long now = System.currentTimeMillis();
         long last = groupLastAutoMod.getOrDefault(groupId, 0L);
-        if (now - last < am.cooldownSeconds() * 1000L) return false;
-
-        String lower = message.toLowerCase();
+        String lower = message.toLowerCase(java.util.Locale.ROOT);
         for (String kw : am.keywords()) {
-            if (kw != null && !kw.isBlank() && lower.contains(kw.toLowerCase())) {
+            if (kw != null && !kw.isBlank() && lower.contains(kw.toLowerCase(java.util.Locale.ROOT))) {
+                if (now - last < am.cooldownSeconds() * 1000L) return true;
                 groupLastAutoMod.put(groupId, now);
                 // 撤回消息
                 int msgId = event.messageId();
-                if (msgId > 0) {
+                if (msgId != 0) {
                     client.deleteMessage(msgId);
                 }
                 // 禁言发送者
@@ -521,17 +517,36 @@ public final class QQBotService implements Listener {
 
     // ─── 公共方法 ────────────────────────────────────────
 
-    public void sendToGroup(long groupId, String message) {
-        if (connected) {
-            client.sendGroupMessage(groupId, message);
-        }
+    public java.util.concurrent.CompletableFuture<xuanmo.arcartxsuite.qqbot.onebot.OneBotResult> sendToGroup(long groupId, String message) {
+        return sendAdminMessage(groupId, message);
     }
 
-    public void sendToAllGroups(String message) {
-        if (!connected) return;
-        for (QQBotGroupConfig group : config.groups()) {
-            client.sendGroupMessage(group.groupId(), message);
+    public java.util.concurrent.CompletableFuture<xuanmo.arcartxsuite.qqbot.onebot.OneBotResult> sendToAllGroups(String message) {
+        return sendAdminMessage(null, message);
+    }
+
+    public java.util.concurrent.CompletableFuture<xuanmo.arcartxsuite.qqbot.onebot.OneBotResult> sendAdminMessage(Long groupId, String message) {
+        return messageGateway.sendSystem(groupId, message);
+    }
+    public java.util.concurrent.CompletableFuture<xuanmo.arcartxsuite.qqbot.onebot.OneBotResult> sendPlayerMessage(Player player, String message) {
+        return messageGateway.sendPlayer(player, message, null);
+    }
+    public java.util.concurrent.CompletableFuture<xuanmo.arcartxsuite.qqbot.onebot.OneBotResult> sendPlayerMention(Player player, long qq, String message) {
+        return messageGateway.sendPlayer(player, message, qq);
+    }
+    public QQBotSignInService getSignInService() { return signInService; }
+
+    private void notifyMembership(OneBotEvent event, boolean joined) {
+        for (var listener : eventListeners) {
+            try {
+                if (joined) listener.onMemberJoin(event.groupId(), event.userId());
+                else listener.onMemberLeave(event.groupId(), event.userId());
+            } catch (Exception error) { logger.warning("群成员监听器异常: " + error.getClass().getSimpleName()); }
         }
+    }
+    private static String safeChatText(String value) {
+        String text = ChatColor.stripColor(value).replace('\n', ' ').replace('\r', ' ');
+        return text.length() > 500 ? text.substring(0, 500) + "…" : text;
     }
 
     public QQBotConfiguration configuration() {

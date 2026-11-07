@@ -22,6 +22,11 @@ public record QQBotGroupConfig(
     /** 玩家退出服务器时推送到群的消息模板 */
     String quitMessage
 ) {
+    public QQBotGroupConfig {
+        syncMode = syncMode == null ? "none" : syncMode.trim().toLowerCase(java.util.Locale.ROOT);
+        if (!java.util.Set.of("both", "game-to-qq", "qq-to-game", "none").contains(syncMode))
+            throw new IllegalArgumentException("QQBot 群同步模式无效: " + syncMode);
+    }
     /**
      * 是否开启「游戏 → QQ」方向的消息同步。
      *

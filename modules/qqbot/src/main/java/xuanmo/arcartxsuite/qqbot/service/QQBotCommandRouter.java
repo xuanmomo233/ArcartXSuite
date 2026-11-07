@@ -37,6 +37,9 @@ public final class QQBotCommandRouter {
     private volatile Supplier<EssentialsQueryable> essentialsProvider;
     private volatile Supplier<MailDispatchable> mailProvider;
     private volatile QQBotSignInService signInService;
+    private volatile boolean closed;
+    private final SlidingWindowRateLimiter<Long> commandBudget = new SlidingWindowRateLimiter<>(5, 10000L, 4096);
+    public void close() { closed = true; commandBudget.clear(); }
 
     // ── 反射缓存：Paper getTPS / NMS recentTps，避免每次调用都反射查找 ──
     private static final Method GET_TPS_METHOD;
@@ -90,6 +93,7 @@ public final class QQBotCommandRouter {
      * 处理群消息中的指令。返回 true 表示已处理。
      */
     public boolean handleCommand(OneBotEvent event) {
+        if (closed) return false;
         // 黑名单拦截（防御性检查，主拦截在 QQBotService.handleOneBotEvent）
         if (config.blacklist().isConfigBlacklisted(event.userId()) || repository.isBlacklisted(event.userId())) {
             reply(event, config.messages().blacklistBlocked());
@@ -98,28 +102,32 @@ public final class QQBotCommandRouter {
 
         String raw = event.rawMessage().trim();
         String prefix = config.commandPrefix();
+        if (closed) return false;
+        boolean commandLike = raw.startsWith(prefix) || raw.startsWith(config.binding().bindPrefix())
+            || raw.startsWith(config.binding().unbindPrefix()) || raw.startsWith(config.helpPrefix());
+        if (commandLike && !commandBudget.allow(event.userId(), System.nanoTime() / 1_000_000L)) {
+            reply(event, "指令过于频繁，请稍后重试"); return true;
+        }
 
         // 管理员控制台指令（优先级最高）
-        if (config.adminEnabled()) {
-            String adminPrefix = config.adminCommandPrefix();
-            if (raw.startsWith(adminPrefix + " ") || raw.equals(adminPrefix)) {
-                handleAdminConsoleCommand(event, raw.length() > adminPrefix.length()
-                    ? raw.substring(adminPrefix.length()).trim() : "");
-                return true;
-            }
+        String adminPrefix = config.adminCommandPrefix();
+        if (raw.startsWith(adminPrefix + " ") || raw.equals(adminPrefix)) {
+            handleAdminConsoleCommand(event, raw.length() > adminPrefix.length()
+                ? raw.substring(adminPrefix.length()).trim() : "");
+            return true;
         }
 
         // 绑定/解绑/查绑 特殊指令
         if (config.binding().enabled()) {
-            if (raw.startsWith(config.binding().bindPrefix())) {
+            if (raw.equals(config.binding().bindPrefix()) || raw.startsWith(config.binding().bindPrefix() + " ")) {
                 handleBindCommand(event, raw.substring(config.binding().bindPrefix().length()).trim());
                 return true;
             }
-            if (raw.startsWith(config.binding().unbindPrefix())) {
+            if (raw.equals(config.binding().unbindPrefix())) {
                 handleUnbindCommand(event);
                 return true;
             }
-            if (raw.startsWith(config.binding().queryPrefix())) {
+            if (raw.equals(config.binding().queryPrefix()) || raw.startsWith(config.binding().queryPrefix() + " ")) {
                 handleQueryBindCommand(event, raw.substring(config.binding().queryPrefix().length()).trim());
                 return true;
             }
@@ -256,6 +264,7 @@ public final class QQBotCommandRouter {
                 if (cmd.isBuiltin()) {
                     handleBuiltinCommand(event, cmd.builtinId(), args);
                 } else if (cmd.isServerCommand()) {
+                    if (!config.isAdmin(event.userId())) { reply(event, config.messages().noPermission()); return true; }
                     handleServerCommand(event, cmd, args);
                 } else if (cmd.isPapiQuery()) {
                     handlePapiQuery(event, cmd, args);
@@ -300,7 +309,7 @@ public final class QQBotCommandRouter {
     }
 
     private void handleWhitelistAdd(OneBotEvent event, String args) {
-        if (!event.isSenderAdmin()) {
+        if (!config.isAdmin(event.userId())) {
             reply(event, config.messages().noPermission());
             return;
         }
@@ -328,13 +337,11 @@ public final class QQBotCommandRouter {
             reply(event, "非法玩家名: " + playerName);
             return;
         }
-        Bukkit.getScheduler().runTask(plugin, () ->
-            Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd));
-        reply(event, config.messages().whitelistAdded().replace("{name}", playerName));
+        dispatchConsole(event, cmd, config.messages().whitelistAdded().replace("{name}", playerName));
     }
 
     private void handleWhitelistRemove(OneBotEvent event, String args) {
-        if (!event.isSenderAdmin()) {
+        if (!config.isAdmin(event.userId())) {
             reply(event, config.messages().noPermission());
             return;
         }
@@ -362,45 +369,41 @@ public final class QQBotCommandRouter {
             reply(event, "非法玩家名: " + playerName);
             return;
         }
-        Bukkit.getScheduler().runTask(plugin, () ->
-            Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd));
-        reply(event, config.messages().whitelistRemoved().replace("{name}", playerName));
+        dispatchConsole(event, cmd, config.messages().whitelistRemoved().replace("{name}", playerName));
     }
 
     private void handleWhitelistList(OneBotEvent event) {
-        if (!event.isSenderAdmin()) {
+        if (!config.isAdmin(event.userId())) {
             reply(event, config.messages().noPermission());
             return;
         }
-        var whitelist = Bukkit.getWhitelistedPlayers();
-        if (whitelist.isEmpty()) {
-            reply(event, "白名单为空");
-            return;
-        }
-        StringBuilder sb = new StringBuilder("═══ 白名单列表 ═══ (共 " + whitelist.size() + " 人)");
-        for (var entry : whitelist) {
-            sb.append("\n- ").append(entry.getName());
-        }
-        reply(event, sb.toString());
+        runOnMain(() -> {
+            var whitelist = Bukkit.getWhitelistedPlayers();
+            if (whitelist.isEmpty()) { reply(event, "白名单为空"); return; }
+            StringBuilder sb = new StringBuilder("═══ 白名单列表 ═══ (共 " + whitelist.size() + " 人)");
+            for (var entry : whitelist) sb.append("\n- ").append(entry.getName());
+            reply(event, sb.toString());
+        });
     }
 
     private void handleBuiltinCommand(OneBotEvent event, String builtinId, String args) {
         switch (builtinId) {
             case "online-list" -> {
-                Bukkit.getScheduler().runTask(plugin, () -> {
+                runOnMain(() -> {
                     var players = Bukkit.getOnlinePlayers();
                     EssentialsQueryable ess = essentialsProvider != null ? essentialsProvider.get() : null;
+                    var visiblePlayers = players.stream().filter(player -> ess == null || !ess.isVanished(player.getUniqueId()))
+                        .filter(player -> xuanmo.arcartxsuite.api.auth.AuthAccess.admitted(player.getUniqueId())).toList();
                     StringBuilder sb = new StringBuilder();
-                    sb.append("在线玩家 (").append(players.size()).append("/").append(Bukkit.getMaxPlayers()).append(")");
-                    if (!players.isEmpty()) {
+                    sb.append("在线玩家 (").append(visiblePlayers.size()).append("/").append(Bukkit.getMaxPlayers()).append(")");
+                    if (!visiblePlayers.isEmpty()) {
                         sb.append("\n");
                         List<String> names = new ArrayList<>();
-                        for (Player p : players) {
+                        for (Player p : visiblePlayers) {
                             StringBuilder tag = new StringBuilder(p.getName());
                             if (ess != null) {
                                 java.util.UUID uid = p.getUniqueId();
                                 if (ess.isAfk(uid)) tag.append(" [AFK]");
-                                if (ess.isVanished(uid)) tag.append(" [\u9690\u8eab]");
                                 if (ess.isGodMode(uid)) tag.append(" [\u65e0\u654c]");
                             }
                             names.add(tag.toString());
@@ -412,7 +415,7 @@ public final class QQBotCommandRouter {
             }
             case "server-status" -> {
                 // 必须在主线程获取实体/区块数据
-                Bukkit.getScheduler().runTask(plugin, () -> {
+                runOnMain(() -> {
                     double[] tps = getServerTps();
                     Runtime rt = Runtime.getRuntime();
                     long maxMem = rt.maxMemory() / 1024 / 1024;
@@ -543,7 +546,7 @@ public final class QQBotCommandRouter {
     // ─── 公告处理 ─────────────────────────────────────────
 
     private void handleAnnounce(OneBotEvent event, String content) {
-        if (!event.isSenderAdmin() && !config.isAdmin(event.userId())) {
+        if (!config.isAdmin(event.userId())) {
             reply(event, config.messages().noPermission());
             return;
         }
@@ -554,7 +557,7 @@ public final class QQBotCommandRouter {
         var ac = config.announce();
         String gameMsg = org.bukkit.ChatColor.translateAlternateColorCodes('&',
             ac.gameFormat().replace("{content}", content));
-        Bukkit.getScheduler().runTask(plugin, () -> {
+        runOnMain(() -> {
             Bukkit.broadcastMessage(gameMsg);
             if (ac.titleEnabled()) {
                 String title = org.bukkit.ChatColor.translateAlternateColorCodes('&', ac.titleText());
@@ -571,7 +574,7 @@ public final class QQBotCommandRouter {
     // ─── moderation 处理 ─────────────────────────────────
 
     private void handleKick(OneBotEvent event, String args) {
-        if (!event.isSenderAdmin() && !config.isAdmin(event.userId())) {
+        if (!config.isAdmin(event.userId())) {
             reply(event, config.messages().noPermission());
             return;
         }
@@ -587,17 +590,15 @@ public final class QQBotCommandRouter {
                 .bindPlayerName("name", name)
                 .bindQuoted("reason", reason)
                 .build();
-            Bukkit.getScheduler().runTask(plugin, () ->
-                Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd));
+            dispatchConsole(event, cmd, "踢出命令已执行，请以控制台结果为准: " + name);
         } catch (IllegalArgumentException e) {
             reply(event, "非法玩家名: " + name);
             return;
         }
-        reply(event, "已踢出玩家: " + name + "（原因: " + reason + "）");
     }
 
     private void handleBan(OneBotEvent event, String args) {
-        if (!event.isSenderAdmin() && !config.isAdmin(event.userId())) {
+        if (!config.isAdmin(event.userId())) {
             reply(event, config.messages().noPermission());
             return;
         }
@@ -613,13 +614,11 @@ public final class QQBotCommandRouter {
                 .bindPlayerName("name", name)
                 .bindQuoted("reason", reason)
                 .build();
-            Bukkit.getScheduler().runTask(plugin, () ->
-                Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd));
+            dispatchConsole(event, cmd, "封禁命令已执行，请以控制台结果为准: " + name);
         } catch (IllegalArgumentException e) {
             reply(event, "非法玩家名: " + name);
             return;
         }
-        reply(event, "已封禁玩家: " + name + "（原因: " + reason + "）");
     }
 
     private void handleServerCommand(OneBotEvent event, QQBotCustomCommand cmd, String args) {
@@ -630,9 +629,7 @@ public final class QQBotCommandRouter {
         String command = xuanmo.arcartxsuite.api.command.SafeCommandExecutor.builder(cmd.command())
             .bindQuoted("args", args)
             .build();
-        Bukkit.getScheduler().runTask(plugin, () ->
-            Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command));
-        reply(event, config.messages().commandExecuted().replace("{command}", command));
+        dispatchConsole(event, command, config.messages().commandExecuted().replace("{command}", command));
     }
 
     private void handlePapiQuery(OneBotEvent event, QQBotCustomCommand cmd, String args) {
@@ -641,14 +638,13 @@ public final class QQBotCommandRouter {
             reply(event, "请指定玩家名，或先绑定QQ");
             return;
         }
-        Player player = Bukkit.getPlayerExact(playerName);
-        if (player == null || !player.isOnline()) {
-            reply(event, config.messages().playerNotFound().replace("{name}", playerName));
-            return;
-        }
-
-        Bukkit.getScheduler().runTask(plugin, () -> {
+        runOnMain(() -> {
             try {
+                Player player = Bukkit.getPlayerExact(playerName);
+                if (player == null || !player.isOnline()
+                        || !xuanmo.arcartxsuite.api.auth.AuthAccess.admitted(player.getUniqueId())) {
+                    reply(event, config.messages().playerNotFound().replace("{name}", playerName)); return;
+                }
                 String format = cmd.format().replace("{name}", player.getName());
                 List<String> placeholders = cmd.placeholders();
                 for (int i = 0; i < placeholders.size(); i++) {
@@ -694,7 +690,7 @@ public final class QQBotCommandRouter {
 
     private void handleAdminConsoleCommand(OneBotEvent event, String commandLine) {
         long qqId = event.userId();
-        if (!config.isAdmin(qqId)) {
+        if (!config.remoteConsoleEnabled() || !config.isAdmin(qqId)) {
             reply(event, config.messages().noPermission());
             return;
         }
@@ -721,7 +717,7 @@ public final class QQBotCommandRouter {
             logger.info("[Admin] QQ=" + qqId + " 执行控制台命令: " + commandLine);
         }
         String cmd = commandLine;
-        Bukkit.getScheduler().runTask(plugin, () -> {
+        runOnMain(() -> {
             try {
                 boolean dispatched = Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd);
                 if (dispatched) {
@@ -741,7 +737,7 @@ public final class QQBotCommandRouter {
     }
 
     private void handleBlacklistAdd(OneBotEvent event, String args) {
-        if (!event.isSenderAdmin() && !config.isAdmin(event.userId())) {
+        if (!config.isAdmin(event.userId())) {
             reply(event, config.messages().blacklistNoPermission());
             return;
         }
@@ -778,7 +774,7 @@ public final class QQBotCommandRouter {
     }
 
     private void handleBlacklistRemove(OneBotEvent event, String args) {
-        if (!event.isSenderAdmin() && !config.isAdmin(event.userId())) {
+        if (!config.isAdmin(event.userId())) {
             reply(event, config.messages().blacklistNoPermission());
             return;
         }
@@ -815,7 +811,7 @@ public final class QQBotCommandRouter {
     }
 
     private void handleBlacklistList(OneBotEvent event) {
-        if (!event.isSenderAdmin() && !config.isAdmin(event.userId())) {
+        if (!config.isAdmin(event.userId())) {
             reply(event, config.messages().blacklistNoPermission());
             return;
         }
@@ -840,7 +836,7 @@ public final class QQBotCommandRouter {
 
     private void handleSendMailCommand(OneBotEvent event, String args) {
         // 仅管理员可用
-        if (!event.isSenderAdmin() && !config.isAdmin(event.userId())) {
+        if (!config.isAdmin(event.userId())) {
             reply(event, config.messages().noPermission());
             return;
         }
@@ -938,7 +934,26 @@ public final class QQBotCommandRouter {
         reply(event, sb.toString());
     }
 
+    private void dispatchConsole(OneBotEvent event, String command, String accepted) {
+        runOnMain(() -> {
+            try {
+                boolean dispatched = Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command);
+                reply(event, dispatched ? accepted : "命令未执行，请检查服务器命令配置");
+            } catch (RuntimeException error) { reply(event, "命令执行失败，请查看服务器日志"); }
+        });
+    }
+
+    private void runOnMain(Runnable operation) {
+        if (closed) return;
+        try {
+            Bukkit.getScheduler().runTask(plugin, () -> { if (!closed) operation.run(); });
+        } catch (org.bukkit.plugin.IllegalPluginAccessException stopped) {
+            logger.fine("QQBot 已停止，取消旧群指令");
+        }
+    }
+
     private void reply(OneBotEvent event, String message) {
+        if (closed) return;
         client.sendGroupMessage(event.groupId(), message);
     }
 }

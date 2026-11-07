@@ -1,9 +1,7 @@
 package xuanmo.arcartxsuite.qqbot.onebot;
 
-import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import java.util.ArrayList;
 import java.util.List;
 import org.jetbrains.annotations.Nullable;
 
@@ -12,11 +10,11 @@ public final class OneBotEvent {
     private final JsonObject raw;
 
     public OneBotEvent(JsonObject raw) {
-        this.raw = raw;
+        this.raw = raw.deepCopy();
     }
 
     public JsonObject raw() {
-        return raw;
+        return raw.deepCopy();
     }
 
     public String postType() {
@@ -95,68 +93,16 @@ public final class OneBotEvent {
     }
 
     public String rawMessage() {
-        // 优先用 raw_message（纯文本），回退到 message
-        String raw = getString("raw_message", null);
-        if (raw != null) return raw;
-        // message 可能是字符串或消息段数组
-        JsonElement msgEl = this.raw.get("message");
-        if (msgEl == null || msgEl.isJsonNull()) return "";
-        if (msgEl.isJsonPrimitive()) return msgEl.getAsString();
-        if (msgEl.isJsonArray()) return extractTextFromSegments(msgEl.getAsJsonArray());
-        return "";
-    }
-
-    /**
-     * 从 OneBot 消息段数组中提取纯文本。
-     * 格式: [{"type":"text","data":{"text":"hello"}}, {"type":"image",...}]
-     */
-    private static String extractTextFromSegments(JsonArray segments) {
-        StringBuilder sb = new StringBuilder();
-        for (JsonElement seg : segments) {
-            if (!seg.isJsonObject()) continue;
-            JsonObject obj = seg.getAsJsonObject();
-            String type = obj.has("type") ? obj.get("type").getAsString() : "";
-            JsonObject data = obj.has("data") && obj.get("data").isJsonObject()
-                ? obj.getAsJsonObject("data") : null;
-            if ("text".equals(type) && data != null && data.has("text")) {
-                sb.append(data.get("text").getAsString());
-            } else if ("at".equals(type) && data != null && data.has("qq")) {
-                sb.append("@").append(data.get("qq").getAsString());
-            } else if ("face".equals(type)) {
-                sb.append("[表情]");
-            } else if ("image".equals(type)) {
-                sb.append("[图片]");
-            } else if ("reply".equals(type)) {
-                // 忽略回复引用
-            } else if (!"text".equals(type)) {
-                sb.append("[").append(type).append("]");
-            }
-        }
-        return sb.toString();
+        JsonElement message = raw.get("message");
+        if (message == null || message.isJsonNull()) message = raw.get("raw_message");
+        return OneBotMessageCodec.text(message);
     }
 
     /** 从消息段数组中提取被 @ 的 QQ 号列表 */
     public List<Long> atQQs() {
-        List<Long> list = new ArrayList<>();
-        JsonElement msgEl = raw.get("message");
-        if (msgEl == null || !msgEl.isJsonArray()) return list;
-        JsonArray segments = msgEl.getAsJsonArray();
-        for (JsonElement seg : segments) {
-            if (!seg.isJsonObject()) continue;
-            JsonObject obj = seg.getAsJsonObject();
-            if (!"at".equals(obj.has("type") ? obj.get("type").getAsString() : "")) continue;
-            JsonObject data = obj.has("data") && obj.get("data").isJsonObject()
-                ? obj.getAsJsonObject("data") : null;
-            if (data != null && data.has("qq")) {
-                try {
-                    String qqStr = data.get("qq").getAsString();
-                    if (!"all".equals(qqStr)) {
-                        list.add(Long.parseLong(qqStr));
-                    }
-                } catch (NumberFormatException ignored) {}
-            }
-        }
-        return list;
+        JsonElement message = raw.get("message");
+        if (message == null || message.isJsonNull()) message = raw.get("raw_message");
+        return OneBotMessageCodec.mentions(message);
     }
 
     @Nullable

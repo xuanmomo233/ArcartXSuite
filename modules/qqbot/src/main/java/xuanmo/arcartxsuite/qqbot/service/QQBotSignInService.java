@@ -13,7 +13,11 @@ import xuanmo.arcartxsuite.qqbot.config.QQBotSignInConfig;
 import xuanmo.arcartxsuite.qqbot.storage.QQBotRepository;
 import xuanmo.arcartxsuite.qqbot.storage.QQBotRepository.PointAccount;
 import xuanmo.arcartxsuite.qqbot.storage.QQBotRepository.QQBotBinding;
-import xuanmo.arcartxsuite.qqbot.storage.QQBotRepository.SignInRecord;
+import xuanmo.arcartxsuite.qqbot.storage.QQBotRepository.MutationStatus;
+import xuanmo.arcartxsuite.qqbot.storage.QQBotRepository.Redemption;
+import xuanmo.arcartxsuite.qqbot.storage.QQBotRepository.RedemptionItemState;
+import xuanmo.arcartxsuite.qqbot.storage.QQBotRepository.RedemptionResolution;
+import xuanmo.arcartxsuite.qqbot.storage.QQBotRepository.RedemptionState;
 
 /**
  * QQ 群签到打卡 + 积分 + 兑换商店服务。
@@ -49,37 +53,17 @@ public final class QQBotSignInService {
      */
     public String signIn(long qqId) {
         QQBotSignInConfig cfg = config.signin();
-        String today = LocalDate.now().toString();
-
-        if (repository.hasSignedOn(qqId, today)) {
-            SignInRecord last = repository.getLastSignIn(qqId);
-            int streak = last != null ? last.streak() : 1;
-            int balance = repository.getPoints(qqId);
+        var outcome = repository.signInAtomic(qqId, LocalDate.now().toString(), cfg.basePoints(), cfg.streakBonus(), cfg.maxStreakBonus());
+        if (outcome.status() == MutationStatus.ALREADY) {
             return config.messages().signInAlready()
-                .replace("{streak}", String.valueOf(streak))
-                .replace("{balance}", String.valueOf(balance));
+                .replace("{streak}", String.valueOf(outcome.streak()))
+                .replace("{balance}", String.valueOf(outcome.balance()));
         }
-
-        // 计算连续签到天数
-        int streak = 1;
-        SignInRecord last = repository.getLastSignIn(qqId);
-        if (last != null) {
-            String yesterday = LocalDate.now().minusDays(1).toString();
-            if (yesterday.equals(last.date())) {
-                streak = last.streak() + 1;
-            }
-        }
-
-        int bonus = Math.min((streak - 1) * cfg.streakBonus(), cfg.maxStreakBonus());
-        int points = cfg.basePoints() + bonus;
-
-        repository.recordSignIn(qqId, today, streak, System.currentTimeMillis());
-        int balance = repository.addPoints(qqId, points, "signin", "每日签到 streak=" + streak);
-
+        if (outcome.status() != MutationStatus.SUCCESS) return "签到未完成，请查询积分和签到状态后重试";
         return config.messages().signInSuccess()
-            .replace("{points}", String.valueOf(points))
-            .replace("{streak}", String.valueOf(streak))
-            .replace("{balance}", String.valueOf(balance));
+            .replace("{points}", String.valueOf(outcome.points()))
+            .replace("{streak}", String.valueOf(outcome.streak()))
+            .replace("{balance}", String.valueOf(outcome.balance()));
     }
 
     // ─── 积分查询 ─────────────────────────────────────────
@@ -108,7 +92,7 @@ public final class QQBotSignInService {
                 sb.append("\n").append(config.messages().shopItem()
                     .replace("{id}", p.id())
                     .replace("{name}", p.name())
-                    .replace("{cost}", String.valueOf(p.cost()))
+                    .replace("{cost}", String.valueOf(p.currentCost()))
                     .replace("{desc}", p.description() == null ? "" : p.description()));
             }
         }
@@ -129,80 +113,57 @@ public final class QQBotSignInService {
             return config.messages().redeemNotFound().replace("{id}", prizeId);
         }
 
-        // 解析绑定玩家
         QQBotBinding binding = repository.findByQq(qqId);
-        String playerName = binding != null ? binding.playerName() : null;
-
-        if (prize.requireBind() && playerName == null) {
-            return config.messages().redeemNotBound();
-        }
-
-        // 邮件发放需要玩家名
-        if (playerName == null) {
-            return config.messages().redeemNotBound();
-        }
-
+        if (binding == null) return config.messages().redeemNotBound();
+        String playerName = binding.playerName();
+        MailDispatchable mail = mailProvider != null ? mailProvider.get() : null;
+        if (mail == null) return "邮件系统暂不可用，本次未扣除积分";
+        if (prize.mailPresets() == null || prize.mailPresets().isEmpty()) return "奖品尚未配置有效邮件，本次未扣除积分";
         int actualCost = prize.currentCost();
         boolean discounted = prize.isDiscountActive();
-
-        // 每日限购
-        String today = LocalDate.now().toString();
-        if (prize.hasDailyLimit()) {
-            int count = repository.countRedeemToday(qqId, prizeId, today);
-            if (count >= prize.limitPerDay()) {
-                return config.messages().redeemLimitReached().replace("{name}", prize.name());
-            }
-        }
-
-        // 余额检查
-        int balance = repository.getPoints(qqId);
-        if (balance < actualCost) {
+        var reservation = repository.reserveRedemption(qqId, prize.id(), binding.playerUuid(), playerName,
+            actualCost, LocalDate.now().toString(), prize.limitPerDay(), prize.mailPresets());
+        if (reservation.status() == MutationStatus.LIMIT) return config.messages().redeemLimitReached().replace("{name}", prize.name());
+        if (reservation.status() == MutationStatus.INSUFFICIENT) {
             return config.messages().redeemNoPoints()
                 .replace("{name}", prize.name())
                 .replace("{cost}", String.valueOf(actualCost))
-                .replace("{balance}", String.valueOf(balance));
+                .replace("{balance}", String.valueOf(repository.getPoints(qqId)));
         }
-
-        // 扣分（原子操作，余额不足返回 false）
-        if (!repository.deductPoints(qqId, actualCost, "redeem", prizeId)) {
-            int cur = repository.getPoints(qqId);
-            return config.messages().redeemNoPoints()
-                .replace("{name}", prize.name())
-                .replace("{cost}", String.valueOf(actualCost))
-                .replace("{balance}", String.valueOf(cur));
+        if (reservation.status() == MutationStatus.REVIEW && reservation.redemption() != null) {
+            return reviewMessage(reservation.redemption().id());
         }
-
-        // 发放邮件
-        MailDispatchable mail = mailProvider != null ? mailProvider.get() : null;
-        boolean dispatched = false;
-        if (mail != null && prize.mailPresets() != null && !prize.mailPresets().isEmpty()) {
-            try {
-                for (String presetId : prize.mailPresets()) {
-                    if (presetId == null || presetId.isBlank()) continue;
-                    MailSendResult result = mail.dispatchPreset(MailPresetRequest.builder(presetId, playerName)
+        if (reservation.status() != MutationStatus.SUCCESS || reservation.redemption() == null) {
+            return "兑换未完成，请查询积分并联系管理员核对兑换记录";
+        }
+        Redemption redemption = reservation.redemption();
+        try {
+            for (var item : redemption.items()) {
+                if (!repository.beginRedemptionItem(redemption.id(), item.ordinal())) return reviewMessage(redemption.id());
+                try {
+                    MailSendResult result = mail.dispatchPreset(MailPresetRequest.builder(item.presetId(), redemption.playerName())
                         .sourceModule("qqbot")
-                        .sourceDetail("redeem:" + prizeId)
+                        .sourceDetail("redeem:" + redemption.id() + ":" + item.ordinal())
                         .build());
-                    if (result.success()) {
-                        dispatched = true;
-                    } else {
-                        logger.warning("兑换邮件发放失败: " + presetId + " — " + result.message());
-                    }
+                    repository.recordRedemptionItem(redemption.id(), item.ordinal(),
+                        result.success() ? RedemptionItemState.SENT : RedemptionItemState.FAILED, result.message());
+                } catch (Exception e) {
+                    // The remote write may already have succeeded. Keep the debit and freeze this order.
+                    repository.recordRedemptionItem(redemption.id(), item.ordinal(), RedemptionItemState.UNKNOWN,
+                        "邮件结果未确认：" + e.getClass().getSimpleName());
+                    logger.warning("兑换 " + redemption.id() + " 发放待核对: " + e.getClass().getSimpleName());
+                    break;
                 }
-            } catch (Exception e) {
-                logger.warning("兑换邮件发放异常: " + e.getMessage());
             }
+            redemption = repository.finishRedemption(redemption.id());
+        } catch (QQBotRepository.StorageFailure e) {
+            logger.warning("兑换 " + redemption.id() + " 状态持久化失败，需要人工核对");
+            try { repository.freezeRedemption(redemption.id(), "发放调用已结束，但结果持久化未确认，请人工核对"); }
+            catch (QQBotRepository.StorageFailure ignored) { /* Durable SENDING remains frozen until ownership recovery. */ }
+            return reviewMessage(redemption.id());
         }
-
-        if (!dispatched) {
-            // 退款
-            int refunded = repository.addPoints(qqId, actualCost, "refund", "兑换失败退款 " + prizeId);
-            logger.warning("兑换 " + prizeId + " 邮件发放失败，已退款 " + actualCost + " 积分给 QQ " + qqId);
-            return config.messages().redeemMailFailed();
-        }
-
-        // 记录流水
-        repository.logRedeem(qqId, prizeId, actualCost, today);
+        if (redemption.state() == RedemptionState.REFUNDED) return config.messages().redeemMailFailed();
+        if (redemption.state() != RedemptionState.COMPLETE) return reviewMessage(redemption.id());
         int remaining = repository.getPoints(qqId);
         String msg = config.messages().redeemSuccess()
             .replace("{name}", prize.name())
@@ -213,6 +174,25 @@ public final class QQBotSignInService {
             msg += "\n（限时折扣中，原价 " + prize.cost() + " 积分）";
         }
         return msg;
+    }
+
+    private static String reviewMessage(String id) {
+        return "兑换记录 " + id + " 待管理员核对；积分与额度已保留，请勿重复兑换。管理员可使用 /axs qqbot redemptions 查看";
+    }
+
+    public List<Redemption> listRedemptions(int limit) { return repository.listRedemptions(limit); }
+
+    public Redemption getRedemption(String id) { return repository.getRedemption(id); }
+
+    public String resolveRedemption(String id, RedemptionResolution resolution, String note) {
+        return switch (repository.resolveRedemption(id, resolution, note)) {
+            case SUCCESS -> resolution == RedemptionResolution.CONFIRM_DELIVERED ? "已确认发放并结案" : "已确认全部未发并退款";
+            case ALREADY -> "该兑换已经结案，未重复处理";
+            case NOT_FOUND -> "兑换记录不存在";
+            case INVALID -> "请提供有效兑换编号和至少4字的核对说明";
+            case REVIEW -> "兑换仍在处理中或已有邮件确认发放，不能全额退款；请核对并补齐后确认发放";
+            default -> "处理失败，请重新查询兑换状态后再操作";
+        };
     }
 
     // ─── 积分转账 ─────────────────────────────────────────
@@ -229,16 +209,11 @@ public final class QQBotSignInService {
         if (toBinding == null) {
             return "对方尚未绑定游戏账号，无法转账";
         }
-        // 先扣减
-        if (!repository.deductPoints(fromQqId, amount, "transfer", "转账给 QQ " + toQqId)) {
-            int balance = repository.getPoints(fromQqId);
-            return "积分不足！你当前只有 " + balance + " 积分";
-        }
-        // 再增加
-        int toBalance = repository.addPoints(toQqId, amount, "transfer", "来自 QQ " + fromQqId + " 的转账");
-        int fromBalance = repository.getPoints(fromQqId);
-        return "转账成功！向 QQ " + toQqId + " 转账 " + amount + " 积分\n你的剩余积分: " + fromBalance
-            + "\n对方当前积分: " + toBalance;
+        var result = repository.transferPointsAtomic(fromQqId, toQqId, amount);
+        if (result.status() == MutationStatus.INSUFFICIENT) return "积分不足！你当前只有 " + result.fromBalance() + " 积分";
+        if (result.status() != MutationStatus.SUCCESS) return "转账未确认，请查询双方积分后联系管理员核对，勿立即重复转账";
+        return "转账成功！向 QQ " + toQqId + " 转账 " + amount + " 积分\n你的剩余积分: " + result.fromBalance()
+            + "\n对方当前积分: " + result.toBalance();
     }
 
     // ─── 积分排行榜 ───────────────────────────────────────
@@ -256,15 +231,10 @@ public final class QQBotSignInService {
         if (count > totalAmount) {
             return "份数不能大于总积分（每人至少 1 积分）";
         }
-        if (!repository.deductPoints(senderQq, totalAmount, "redpacket", "群发红包")) {
-            return "积分不足！你当前只有 " + repository.getPoints(senderQq) + " 积分";
-        }
         long expireAt = System.currentTimeMillis() + 24 * 60 * 60 * 1000L;
-        long id = repository.createRedPacket(senderQq, groupId, totalAmount, count, expireAt);
-        if (id < 0) {
-            repository.addPoints(senderQq, totalAmount, "redpacket_refund", "红包创建失败退款");
-            return "红包创建失败，积分已退还";
-        }
+        var result = repository.createRedPacketAtomic(senderQq, groupId, totalAmount, count, expireAt);
+        if (result.status() == MutationStatus.INSUFFICIENT) return "积分不足！你当前只有 " + result.balance() + " 积分";
+        if (result.status() != MutationStatus.SUCCESS) return "红包发送未确认，请查询积分与红包后联系管理员核对，勿立即重复发送";
         return "🧧 红包已发出！总积分 " + totalAmount + "，共 " + count + " 份\n发送 #抢红包 来抢红包吧~";
     }
 

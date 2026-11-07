@@ -48,6 +48,31 @@ public interface QQBotRepository {
      */
     int addPoints(long qqId, int delta, String action, String detail);
 
+    /** Atomically records the sign-in and credits its reward. */
+    SignInOutcome signInAtomic(long qqId, String date, int basePoints, int streakBonus, int maxBonus);
+
+    /** Debits and credits both accounts in one database transaction. */
+    TransferOutcome transferPointsAtomic(long fromQq, long toQq, int amount);
+
+    /** Reserves balance and daily quota before any external mail call. */
+    RedemptionReservation reserveRedemption(long qqId, String prizeId, UUID playerUuid,
+        String playerName, int cost, String date, int dailyLimit, List<String> presets);
+
+    boolean beginRedemptionItem(String redemptionId, int ordinal);
+
+    void recordRedemptionItem(String redemptionId, int ordinal, RedemptionItemState state, String detail);
+
+    Redemption finishRedemption(String redemptionId);
+
+    /** Stops this owner's dispatcher after its external call has returned or failed. */
+    void freezeRedemption(String redemptionId, String note);
+
+    @Nullable Redemption getRedemption(String redemptionId);
+
+    List<Redemption> listRedemptions(int limit);
+
+    MutationStatus resolveRedemption(String redemptionId, RedemptionResolution resolution, String note);
+
     /**
      * 扣减积分（余额不足返回 false，不扣减）。
      *
@@ -90,8 +115,11 @@ public interface QQBotRepository {
 
     // ─── 积分红包 ────────────────────────────────────────
 
-    /** 创建红包，返回红包 ID */
+    /** 创建红包并原子扣款，返回红包 ID；调用者不能提前扣款。 */
+    @Deprecated
     long createRedPacket(long senderQq, long groupId, int totalAmount, int count, long expireAt);
+
+    RedPacketSendOutcome createRedPacketAtomic(long senderQq, long groupId, int totalAmount, int count, long expireAt);
 
     /** 获取未过期且未领完的红包 */
     @Nullable
@@ -148,4 +176,31 @@ public interface QQBotRepository {
         long qqId,
         int messageCount
     ) {}
+
+    enum MutationStatus { SUCCESS, ALREADY, INSUFFICIENT, LIMIT, INVALID, FAILED, REVIEW, NOT_FOUND }
+
+    record SignInOutcome(MutationStatus status, int points, int streak, int balance) {}
+
+    record TransferOutcome(MutationStatus status, int fromBalance, int toBalance) {}
+
+    record RedPacketSendOutcome(MutationStatus status, long id, int balance) {}
+
+    enum RedemptionState { RESERVED, COMPLETE, REFUNDED, REVIEW }
+
+    enum RedemptionItemState { PENDING, SENDING, SENT, FAILED, UNKNOWN }
+
+    enum RedemptionResolution { CONFIRM_DELIVERED, CONFIRM_NOT_DELIVERED }
+
+    record RedemptionItem(int ordinal, String presetId, RedemptionItemState state, String detail) {}
+
+    record Redemption(String id, long qqId, String prizeId, UUID playerUuid, String playerName,
+        int cost, String date, RedemptionState state, long createdAt, long updatedAt,
+        String note, List<RedemptionItem> items) {}
+
+    record RedemptionReservation(MutationStatus status, @Nullable Redemption redemption) {}
+
+    /** A storage failure must never be mistaken for a successful points mutation. */
+    final class StorageFailure extends RuntimeException {
+        public StorageFailure(String operation, Throwable cause) { super(operation, cause); }
+    }
 }

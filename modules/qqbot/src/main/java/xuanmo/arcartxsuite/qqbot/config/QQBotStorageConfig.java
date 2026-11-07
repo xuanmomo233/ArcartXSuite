@@ -92,7 +92,12 @@ public record QQBotStorageConfig(
      */
     public static QQBotStorageConfig load(@Nullable ConfigurationSection section) {
         if (section == null) section = new org.bukkit.configuration.MemoryConfiguration();
-        boolean shared = section.getBoolean("shared", true);
+        Object sharedValue = section.get("shared");
+        if (sharedValue != null && !(sharedValue instanceof Boolean)
+            && !(sharedValue instanceof String s && ("true".equalsIgnoreCase(s) || "false".equalsIgnoreCase(s)))) {
+            throw new IllegalArgumentException("storage.shared 必须为 true 或 false");
+        }
+        boolean shared = sharedValue == null || Boolean.parseBoolean(String.valueOf(sharedValue));
         // 向后兼容：如果 shared 字段不存在但 mode=mysql 存在，视为 shared=false
         if (!section.isSet("shared") && "mysql".equalsIgnoreCase(section.getString("mode", "sqlite"))) {
             shared = false;
@@ -102,16 +107,29 @@ public record QQBotStorageConfig(
                 "127.0.0.1", 3306, "arcartxsuite", "root", "",
                 "axs_qqbot_", 4);
         }
+        String mode = section.getString("mode");
+        if (mode == null || !("mysql".equalsIgnoreCase(mode) || "sqlite".equalsIgnoreCase(mode))) {
+            throw new IllegalArgumentException("独立存储必须明确配置 storage.mode: mysql 或 sqlite；请核对原数据库后填写，禁止自动切库");
+        }
+        String file = section.getString("sqlite.file", "qqbot.db");
+        if (file == null || file.isBlank() || file.contains("/") || file.contains("\\") || file.contains(":")) {
+            throw new IllegalArgumentException("storage.sqlite.file 必须为模块目录内的文件名");
+        }
+        String prefix = section.getString("mysql.table-prefix", "axs_qqbot_");
+        if (prefix == null || !prefix.matches("[A-Za-z0-9_]{0,48}")) throw new IllegalArgumentException("非法的QQBot表前缀");
+        int port = section.getInt("mysql.port", 3306);
+        int pool = section.getInt("pool-size", 4);
+        if (port < 1 || port > 65535 || pool < 1 || pool > 32) throw new IllegalArgumentException("数据库端口或连接池大小超出范围");
         return new QQBotStorageConfig(false,
-            section.getString("mode", "sqlite"),
-            section.getString("sqlite.file", "qqbot.db"),
+            mode,
+            file,
             section.getString("mysql.host", "127.0.0.1"),
-            section.getInt("mysql.port", 3306),
+            port,
             section.getString("mysql.database", "arcartxsuite"),
             section.getString("mysql.username", "root"),
             section.getString("mysql.password", ""),
-            section.getString("mysql.table-prefix", "axs_qqbot_"),
-            section.getInt("pool-size", 4)
+            prefix,
+            pool
         );
     }
 }

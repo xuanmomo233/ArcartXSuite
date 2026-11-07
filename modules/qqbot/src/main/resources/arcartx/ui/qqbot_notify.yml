@@ -1,6 +1,4 @@
-# AXS QQBot 消息通知 HUD
-# 当QQ群有@玩家或重要消息时，在屏幕右上角弹出通知
-
+# 固定四行通知：非数字字典键、毫秒时钟、只遍历有效的四个槽位。
 ui:
   isHud: true
   defaultOpen: true
@@ -10,112 +8,80 @@ ui:
   show: true
   level: 50
   screenScale: true
-  packetHandler:
-    # packetHandler: notify
-    # 包字段:
-    #   - nick: 发送者昵称
-    #   - msg: 消息内容
-    #   - time: 消息时间
-    #   - maxDisplay: 最大同时显示通知数
-    notify: |-
-      var.notifications.add({'nick': packet['nick'], 'msg': packet['msg'], 'time': packet['time'], 'alpha': 1.0, 'born': Time.now()})
-      var.maxDisplay = packet['maxDisplay']
-      var.showCount = var.notifications.size()
   action:
     load: |-
-      var.notifications = []
-      var.showCount = 0
-      var.displayDuration = 8000
+      var.notices = {}
+      var.noticeReady = false
     tick: |-
-      if(var.notifications.size() > 0){
-        var.now = Time.now()
-        var.toRemove = []
-        for(i in range(0, var.notifications.size())){
-          var.item = var.notifications[i]
-          var.elapsed = var.now - var.item['born']
-          if(var.elapsed > var.displayDuration){
-            var.toRemove.add(i)
-          }elif(var.elapsed > var.displayDuration - 1000){
-            var.item['alpha'] = (var.displayDuration - var.elapsed) / 1000.0
-          }
+      var.now = Time.currentTime()
+      for(i in range(0, 3)){
+        key = 'row' + i.round()
+        entry = var.notices[key]
+        if(entry != none && var.now - entry['born'] >= 8000){
+          var.notices[key] = none
         }
-        for(i in var.toRemove.reverse()){
-          var.notifications.remove(i)
-        }
-        var.showCount = var.notifications.size()
       }
-
+  packetHandler:
+    notify: |-
+      if(!var.noticeReady){
+        for(i in range(1, 3)){
+          row = val.noticeList['通知行'].copy('通知行' + i.round())
+          row.entryKey = 'row' + i.round()
+        }
+        var.noticeReady = true
+      }
+      var.notices['row3'] = var.notices['row2']
+      var.notices['row2'] = var.notices['row1']
+      var.notices['row1'] = var.notices['row0']
+      var.notices['row0'] = {'nick': packet['nick'], 'msg': packet['msg'], 'time': packet['time'], 'born': Time.currentTime()}
 controls:
-  自适应全局布局:
+  全局:
     type: Adaptive
     attribute:
       point: ~top_right
       width: 1920
       height: 1080
     children:
-      通知容器:
-        type: Canvas
+      通知列表:
+        val: noticeList
+        type: VStack
         attribute:
           point: ~top_right
-          x: -20
-          y: 60
-          width: 340
-          height: 400
-          visible: var.showCount > 0
+          x: -24
+          y: 70
+          width: 520
+          spaceBetween: 8
+          through: true
         children:
-          通知列表:
-            val: notifyList
-            type: VStack
+          通知行:
+            type: Texture
             attribute:
-              width: 340
-              spaceBetween: 6
+              entryKey: ~row0
+              entry: var.notices[self.entryKey]
+              visible: self.entry != none
+              width: 520
+              height: 94
+              normal: ~24,34,48,245
+              shape: ~round_rect
+              radius: 10
+              through: true
+              alpha: "self.entry != none ? Math.max(0, Math.min(1, (8000 - (Time.currentTime() - self.entry['born'])) / 1000)) : 0"
             children:
-              通知条目:
-                type: Texture
+              来源:
+                type: Text
                 attribute:
-                  entry: var.notifications[self.key]
-                  visible: self.entry != none
-                  width: 340
-                  height: 58
-                  normal: ~20,26,36,200
-                  shape: ~round_rect
-                  radius: 10
-                  alpha: "self.entry != none ? self.entry['alpha'] : 0"
-                effect:
-                  stroke:
-                    width: 1
-                    color: ~80,180,255,100
-                children:
-                  QQ图标:
-                    type: Text
-                    attribute:
-                      x: 12
-                      y: 6
-                      through: true
-                      texts: "~&b✉"
-                      fontSize: 32
-                  发送者:
-                    type: Text
-                    attribute:
-                      x: 38
-                      y: 4
-                      through: true
-                      texts: "'&f' + self.parent.entry['nick']"
-                      fontSize: 24
-                  时间:
-                    type: Text
-                    attribute:
-                      x: 38
-                      y: 24
-                      through: true
-                      texts: "'&7' + self.parent.entry['time']"
-                      fontSize: 20
-                  消息内容:
-                    type: Text
-                    attribute:
-                      x: 12
-                      y: 34
-                      through: true
-                      width: 316
-                      texts: "'&f' + self.parent.entry['msg']"
-                      fontSize: 24
+                  x: 14
+                  y: 10
+                  texts: "self.parent.entry != none ? '&b' + self.parent.entry['nick'] + '  &8' + self.parent.entry['time'] : ''"
+                  fontSize: 32
+                  limit: 30
+                  through: true
+              消息:
+                type: Text
+                attribute:
+                  x: 14
+                  y: 50
+                  texts: "self.parent.entry != none ? '&f' + self.parent.entry['msg'] : ''"
+                  fontSize: 36
+                  limit: 26
+                  through: true

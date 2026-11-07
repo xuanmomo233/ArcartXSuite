@@ -23,11 +23,37 @@ import xuanmo.arcartxsuite.api.storage.StorageDescriptor;
  */
 public final class JdbcQQBotRepository extends AbstractModuleRepository implements QQBotRepository {
 
-    private List<QQBotBinding> bindingRows() {
+    private volatile BindingIndex bindingIndex = new BindingIndex(List.of(), List.of(), java.util.Map.of(), java.util.Map.of(), java.util.Map.of());
+
+    private record BindingIndex(List<?> authority, List<QQBotBinding> rows,
+        java.util.Map<Long, List<QQBotBinding>> byQq, java.util.Map<UUID, QQBotBinding> byPlayer,
+        java.util.Map<String, QQBotBinding> byName) {}
+
+    private BindingIndex bindings() {
         var service=xuanmo.arcartxsuite.api.AxsCapabilities.get(xuanmo.arcartxsuite.api.capability.BindingService.class);
-        if(service==null) return List.of();
-        return service.snapshot().stream().map(b -> new QQBotBinding(b.qqId(),b.profileId(),b.profileName(),b.boundAt())).toList();
+        List<xuanmo.arcartxsuite.api.capability.BindingService.Binding> snapshot = service == null ? List.of() : service.snapshot();
+        BindingIndex cached = bindingIndex;
+        if (cached.authority() == snapshot) return cached;
+        synchronized (this) {
+            cached = bindingIndex;
+            if (cached.authority() == snapshot) return cached;
+            var rows = snapshot.stream().map(b -> new QQBotBinding(b.qqId(), b.profileId(), b.profileName(), b.boundAt()))
+                .sorted(java.util.Comparator.comparingLong(QQBotBinding::boundAt).reversed()).toList();
+            java.util.Map<Long, List<QQBotBinding>> qq = new java.util.HashMap<>();
+            java.util.Map<UUID, QQBotBinding> players = new java.util.HashMap<>();
+            java.util.Map<String, QQBotBinding> names = new java.util.HashMap<>();
+            for (QQBotBinding row : rows) {
+                qq.computeIfAbsent(row.qqId(), ignored -> new ArrayList<>()).add(row);
+                players.put(row.playerUuid(), row);
+                names.put(row.playerName().toLowerCase(java.util.Locale.ROOT), row);
+            }
+            qq.replaceAll((key, value) -> List.copyOf(value));
+            return bindingIndex = new BindingIndex(snapshot, rows, java.util.Map.copyOf(qq),
+                java.util.Map.copyOf(players), java.util.Map.copyOf(names));
+        }
     }
+
+    private List<QQBotBinding> bindingRows() { return bindings().rows(); }
 
     private final String tablePoints;
     private final String tableSignin;
@@ -36,11 +62,16 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
     private final String tableRedPackets;
     private final String tableRedPacketClaims;
     private final String tableActivity;
+    private final QQBotEconomyStore economy;
+    private final Object blacklistLock = new Object();
+    private volatile java.util.Set<Long> blacklistSnapshot = java.util.Set.of();
+    private volatile long blacklistExpiresAt;
 
     public JdbcQQBotRepository(DataSource dataSource, StorageDescriptor descriptor,
                                File dataFolder, Logger logger) {
         super("AXS-QQBot", dataSource, descriptor, dataFolder, logger);
         String prefix = isMysql() ? tablePrefix() : "axs_qqbot_";
+        if (prefix == null || !prefix.matches("[A-Za-z0-9_]{0,48}")) throw new IllegalArgumentException("非法的QQBot表前缀");
         this.tablePoints = prefix + "points";
         this.tableSignin = prefix + "signin";
         this.tableRedeemLog = prefix + "redeem_log";
@@ -48,6 +79,7 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
         this.tableRedPackets = prefix + "red_packets";
         this.tableRedPacketClaims = prefix + "red_packet_claims";
         this.tableActivity = prefix + "activity";
+        this.economy = new QQBotEconomyStore(dataSource, isMysql(), prefix);
     }
 
     @Override
@@ -157,6 +189,7 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
             ps.executeUpdate();
         }
         tryExecute(conn, "CREATE INDEX IF NOT EXISTS idx_qqbot_activity_date ON " + tableActivity + " (activity_date)");
+        economy.initialize(conn);
     }
 
     @Override
@@ -166,8 +199,10 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
 
     @Override
     protected List<String> allTables() {
-        return List.of(tablePoints, tableSignin, tableRedeemLog, tableBlacklist,
-            tableRedPackets, tableRedPacketClaims, tableActivity);
+        List<String> tables = new ArrayList<>(List.of(tablePoints, tableSignin, tableRedeemLog, tableBlacklist,
+            tableRedPackets, tableRedPacketClaims, tableActivity));
+        tables.addAll(economy.tables());
+        return List.copyOf(tables);
     }
 
     /**
@@ -175,7 +210,21 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
      */
     @Override
     public void close() {
+        try { economy.close(); }
+        catch (StorageFailure e) { logger.warning("QQBot 节点关闭状态未能写入，遗留兑换将在租约过期后冻结"); }
         shutdown();
+    }
+
+    public xuanmo.arcartxsuite.api.storage.MigrationResult migrateSafely(StorageDescriptor target, boolean overwrite) {
+        boolean safe;
+        try { safe = economy.canMigrate(); }
+        catch (StorageFailure e) { safe = false; }
+        if (!safe) {
+            var result = new xuanmo.arcartxsuite.api.storage.MigrationResult(false, 0, 0);
+            result.addError("QQBot 不支持在线迁移。请先处理未结案兑换、停止所有节点的机器人写入，再离线迁移；奖励审计须一并保留。");
+            return result;
+        }
+        return migrateData(target, overwrite);
     }
 
     /**
@@ -222,7 +271,7 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
     @Override
     @Nullable
     public QQBotBinding findByPlayer(UUID playerUuid) {
-        return bindingRows().stream().filter(b -> b.playerUuid().equals(playerUuid)).findFirst().orElse(null);
+        return playerUuid == null ? null : bindings().byPlayer().get(playerUuid);
     }
 
     /**
@@ -234,7 +283,7 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
     @Override
     @Nullable
     public QQBotBinding findByPlayerName(String playerName) {
-        return bindingRows().stream().filter(b -> b.playerName().equalsIgnoreCase(playerName)).findFirst().orElse(null);
+        return playerName == null ? null : bindings().byName().get(playerName.toLowerCase(java.util.Locale.ROOT));
     }
 
     /**
@@ -245,7 +294,7 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
      */
     @Override
     public List<QQBotBinding> findAllByQq(long qqId) {
-        return bindingRows().stream().filter(b -> b.qqId()==qqId).toList();
+        return bindings().byQq().getOrDefault(qqId, List.of());
     }
 
     /**
@@ -279,7 +328,7 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
     @Override
     public List<QQBotBinding> getBindingsPage(int page, int pageSize) {
         if(page<0 || pageSize<1 || pageSize>1000) return List.of();
-        return bindingRows().stream().sorted(java.util.Comparator.comparingLong(QQBotBinding::boundAt).reversed()).skip((long)page*pageSize).limit(pageSize).toList();
+        return bindingRows().stream().skip((long)page*pageSize).limit(pageSize).toList();
     }
 
     /**
@@ -360,54 +409,30 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
      * @return 操作后的积分余额
      */
     @Override
-    public synchronized int addPoints(long qqId, int delta, String action, String detail) {
-        long now = System.currentTimeMillis();
-        // upsert: 存在则累加，不存在则插入
-        String upsert = isMysql()
-            ? "INSERT INTO " + tablePoints + " (qq_id, balance, total_earned, total_spent, updated_at) "
-                + "VALUES (?, ?, ?, 0, ?) "
-                + "ON DUPLICATE KEY UPDATE balance = balance + ?, total_earned = total_earned + ?, updated_at = ?"
-            : "INSERT INTO " + tablePoints + " (qq_id, balance, total_earned, total_spent, updated_at) "
-                + "VALUES (?, ?, ?, 0, ?) "
-                + "ON CONFLICT(qq_id) DO UPDATE SET balance = balance + ?, total_earned = total_earned + ?, updated_at = ?";
-        int earnedDelta = Math.max(0, delta);
-        try (Connection conn = getConnection();
-             PreparedStatement ps = conn.prepareStatement(upsert)) {
-            ps.setLong(1, qqId);
-            ps.setInt(2, delta);
-            ps.setInt(3, earnedDelta);
-            ps.setLong(4, now);
-            ps.setInt(5, delta);
-            ps.setInt(6, earnedDelta);
-            ps.setLong(7, now);
-            ps.executeUpdate();
-        } catch (SQLException e) {
-            logger.warning("QQBot 增加积分失败: " + e.getMessage());
-        }
-        return getPoints(qqId);
+    public int addPoints(long qqId, int delta, String action, String detail) {
+        return economy.adjust(qqId, delta, action, detail);
     }
 
-    /** 在给定连接上执行积分 upsert（供事务内复用，不自行开连接/提交）。 */
-    private void addPointsOnConnection(Connection conn, long qqId, int delta) throws SQLException {
-        long now = System.currentTimeMillis();
-        String upsert = isMysql()
-            ? "INSERT INTO " + tablePoints + " (qq_id, balance, total_earned, total_spent, updated_at) "
-                + "VALUES (?, ?, ?, 0, ?) "
-                + "ON DUPLICATE KEY UPDATE balance = balance + ?, total_earned = total_earned + ?, updated_at = ?"
-            : "INSERT INTO " + tablePoints + " (qq_id, balance, total_earned, total_spent, updated_at) "
-                + "VALUES (?, ?, ?, 0, ?) "
-                + "ON CONFLICT(qq_id) DO UPDATE SET balance = balance + ?, total_earned = total_earned + ?, updated_at = ?";
-        int earnedDelta = Math.max(0, delta);
-        try (PreparedStatement ps = conn.prepareStatement(upsert)) {
-            ps.setLong(1, qqId);
-            ps.setInt(2, delta);
-            ps.setInt(3, earnedDelta);
-            ps.setLong(4, now);
-            ps.setInt(5, delta);
-            ps.setInt(6, earnedDelta);
-            ps.setLong(7, now);
-            ps.executeUpdate();
-        }
+    @Override public SignInOutcome signInAtomic(long qq, String date, int base, int bonus, int maxBonus) {
+        return economy.signIn(qq, date, base, bonus, maxBonus);
+    }
+    @Override public TransferOutcome transferPointsAtomic(long from, long to, int amount) {
+        return economy.transfer(from, to, amount);
+    }
+    @Override public RedemptionReservation reserveRedemption(long qq, String prize, UUID uuid, String name,
+        int cost, String date, int limit, List<String> presets) {
+        return economy.reserve(qq, prize, uuid, name, cost, date, limit, presets);
+    }
+    @Override public boolean beginRedemptionItem(String id, int ordinal) { return economy.beginItem(id, ordinal); }
+    @Override public void recordRedemptionItem(String id, int ordinal, RedemptionItemState state, String detail) {
+        economy.recordItem(id, ordinal, state, detail);
+    }
+    @Override public Redemption finishRedemption(String id) { return economy.finish(id); }
+    @Override public void freezeRedemption(String id, String note) { economy.freeze(id, note); }
+    @Override public Redemption getRedemption(String id) { return economy.get(id); }
+    @Override public List<Redemption> listRedemptions(int limit) { return economy.pending(limit); }
+    @Override public MutationStatus resolveRedemption(String id, RedemptionResolution resolution, String note) {
+        return economy.resolve(id, resolution, note);
     }
 
     /**
@@ -420,25 +445,8 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
      * @return {@code true} 表示扣减成功
      */
     @Override
-    public synchronized boolean deductPoints(long qqId, int amount, String action, String detail) {
-        if (amount <= 0) return true;
-        int balance = getPoints(qqId);
-        if (balance < amount) return false;
-        long now = System.currentTimeMillis();
-        String sql = "UPDATE " + tablePoints
-            + " SET balance = balance - ?, total_spent = total_spent + ?, updated_at = ? WHERE qq_id = ? AND balance >= ?";
-        try (Connection conn = getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setInt(1, amount);
-            ps.setInt(2, amount);
-            ps.setLong(3, now);
-            ps.setLong(4, qqId);
-            ps.setInt(5, amount);
-            return ps.executeUpdate() > 0;
-        } catch (SQLException e) {
-            logger.warning("QQBot 扣减积分失败: " + e.getMessage());
-            return false;
-        }
+    public boolean deductPoints(long qqId, int amount, String action, String detail) {
+        return economy.deduct(qqId, amount, action, detail);
     }
 
     /**
@@ -558,11 +566,11 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
     @Override
     public int countRedeemToday(long qqId, String prizeId, String date) {
         String sql = "SELECT COUNT(*) FROM " + tableRedeemLog
-            + " WHERE qq_id = ? AND prize_id = ? AND redeem_date = ?";
+            + " WHERE qq_id = ? AND LOWER(prize_id) = ? AND redeem_date = ?";
         try (Connection conn = getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setLong(1, qqId);
-            ps.setString(2, prizeId);
+            ps.setString(2, prizeId.toLowerCase(java.util.Locale.ROOT));
             ps.setString(3, date);
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) return rs.getInt(1);
@@ -618,7 +626,9 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
             ps.setLong(3, System.currentTimeMillis());
             ps.executeUpdate();
         } catch (SQLException e) {
-            logger.warning("QQBot 添加黑名单失败: " + e.getMessage());
+            throw new StorageFailure("QQBot 添加黑名单失败", e);
+        } finally {
+            synchronized (blacklistLock) { blacklistExpiresAt = 0; }
         }
     }
 
@@ -635,7 +645,9 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
             ps.setLong(1, qqId);
             ps.executeUpdate();
         } catch (SQLException e) {
-            logger.warning("QQBot 移除黑名单失败: " + e.getMessage());
+            throw new StorageFailure("QQBot 移除黑名单失败", e);
+        } finally {
+            synchronized (blacklistLock) { blacklistExpiresAt = 0; }
         }
     }
 
@@ -647,17 +659,7 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
      */
     @Override
     public boolean isBlacklisted(long qqId) {
-        String sql = "SELECT 1 FROM " + tableBlacklist + " WHERE qq_id = ? LIMIT 1";
-        try (Connection conn = getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setLong(1, qqId);
-            try (ResultSet rs = ps.executeQuery()) {
-                return rs.next();
-            }
-        } catch (SQLException e) {
-            logger.warning("QQBot 查询黑名单失败: " + e.getMessage());
-        }
-        return false;
+        return blacklistSnapshot().contains(qqId);
     }
 
     /**
@@ -667,6 +669,23 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
      */
     @Override
     public List<Long> getBlacklist() {
+        return blacklistSnapshot().stream().sorted().toList();
+    }
+
+    private java.util.Set<Long> blacklistSnapshot() {
+        long now = System.nanoTime();
+        if (now < blacklistExpiresAt) return blacklistSnapshot;
+        synchronized (blacklistLock) {
+            now = System.nanoTime();
+            if (now < blacklistExpiresAt) return blacklistSnapshot;
+            java.util.Set<Long> loaded = java.util.Set.copyOf(loadBlacklist());
+            blacklistSnapshot = loaded;
+            blacklistExpiresAt = now + java.util.concurrent.TimeUnit.SECONDS.toNanos(5);
+            return loaded;
+        }
+    }
+
+    private List<Long> loadBlacklist() {
         List<Long> list = new ArrayList<>();
         String sql = "SELECT qq_id FROM " + tableBlacklist + " ORDER BY added_at DESC";
         try (Connection conn = getConnection();
@@ -676,7 +695,8 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
                 list.add(rs.getLong(1));
             }
         } catch (SQLException e) {
-            logger.warning("QQBot 获取黑名单列表失败: " + e.getMessage());
+            // Do not silently turn a failed authorization read into an empty deny list.
+            throw new StorageFailure("QQBot 获取黑名单列表失败", e);
         }
         return list;
     }
@@ -694,28 +714,16 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
      * @return 红包 ID，失败返回 {@code -1}
      */
     @Override
+    @Deprecated
     public long createRedPacket(long senderQq, long groupId, int totalAmount, int count, long expireAt) {
-        String sql = "INSERT INTO " + tableRedPackets
-            + " (sender_qq, group_id, total_amount, remaining_amount, count, claimed_count, expire_at, created_at)"
-            + " VALUES (?, ?, ?, ?, ?, 0, ?, ?)";
-        try (Connection conn = getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql, PreparedStatement.RETURN_GENERATED_KEYS)) {
-            long now = System.currentTimeMillis();
-            ps.setLong(1, senderQq);
-            ps.setLong(2, groupId);
-            ps.setInt(3, totalAmount);
-            ps.setInt(4, totalAmount);
-            ps.setInt(5, count);
-            ps.setLong(6, expireAt);
-            ps.setLong(7, now);
-            ps.executeUpdate();
-            try (ResultSet rs = ps.getGeneratedKeys()) {
-                if (rs.next()) return rs.getLong(1);
-            }
-        } catch (SQLException e) {
-            logger.warning("QQBot 创建红包失败: " + e.getMessage());
-        }
-        return -1;
+        // Legacy entry point now includes the debit; callers must not pre-deduct points.
+        RedPacketSendOutcome result = createRedPacketAtomic(senderQq, groupId, totalAmount, count, expireAt);
+        return result.status() == MutationStatus.SUCCESS ? result.id() : -1;
+    }
+
+    @Override
+    public RedPacketSendOutcome createRedPacketAtomic(long senderQq, long groupId, int totalAmount, int count, long expireAt) {
+        return economy.sendRedPacket(senderQq, groupId, totalAmount, count, expireAt);
     }
 
     /**
@@ -765,104 +773,7 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
      */
     @Override
     public int tryClaimRedPacket(long redPacketId, long claimerQq) {
-        try (Connection conn = getConnection()) {
-            conn.setAutoCommit(false);
-            try {
-                String checkSql = "SELECT 1 FROM " + tableRedPacketClaims
-                    + " WHERE red_packet_id = ? AND claimer_qq = ? LIMIT 1";
-                try (PreparedStatement ps = conn.prepareStatement(checkSql)) {
-                    ps.setLong(1, redPacketId);
-                    ps.setLong(2, claimerQq);
-                    try (ResultSet rs = ps.executeQuery()) {
-                        if (rs.next()) {
-                            conn.rollback();
-                            return -2;
-                        }
-                    }
-                }
-
-                RedPacket rp;
-                String selectSql = "SELECT remaining_amount, claimed_count, count, expire_at FROM " + tableRedPackets
-                    + " WHERE id = ? AND expire_at > ? AND remaining_amount > 0 AND claimed_count < count";
-                try (PreparedStatement ps = conn.prepareStatement(selectSql)) {
-                    ps.setLong(1, redPacketId);
-                    ps.setLong(2, System.currentTimeMillis());
-                    try (ResultSet rs = ps.executeQuery()) {
-                        if (!rs.next()) {
-                            conn.rollback();
-                            return -3;
-                        }
-                        rp = new RedPacket(redPacketId, 0, 0, 0,
-                            rs.getInt("remaining_amount"), rs.getInt("count"),
-                            rs.getInt("claimed_count"), rs.getLong("expire_at"), 0);
-                    }
-                }
-
-                int remaining = rp.remainingAmount();
-                int left = rp.count() - rp.claimedCount();
-                int amount = left <= 1 ? remaining : 1 + (int) (Math.random() * (remaining - left + 1));
-
-                String updateSql = "UPDATE " + tableRedPackets
-                    + " SET remaining_amount = remaining_amount - ?, claimed_count = claimed_count + 1"
-                    + " WHERE id = ? AND remaining_amount >= ? AND claimed_count < count";
-                try (PreparedStatement ps = conn.prepareStatement(updateSql)) {
-                    ps.setInt(1, amount);
-                    ps.setLong(2, redPacketId);
-                    ps.setInt(3, amount);
-                    if (ps.executeUpdate() == 0) {
-                        conn.rollback();
-                        return -1;
-                    }
-                }
-
-                String insertSql = "INSERT INTO " + tableRedPacketClaims
-                    + " (red_packet_id, claimer_qq, amount, claimed_at) VALUES (?, ?, ?, ?)";
-                try (PreparedStatement ps = conn.prepareStatement(insertSql)) {
-                    ps.setLong(1, redPacketId);
-                    ps.setLong(2, claimerQq);
-                    ps.setInt(3, amount);
-                    ps.setLong(4, System.currentTimeMillis());
-                    ps.executeUpdate();
-                }
-
-                creditPointsOnConnection(conn, claimerQq, amount);
-                conn.commit();
-                return amount;
-            } catch (SQLException exception) {
-                conn.rollback();
-                logger.warning("QQBot 抢红包事务失败: " + exception.getMessage());
-                return -1;
-            } finally {
-                conn.setAutoCommit(true);
-            }
-        } catch (SQLException exception) {
-            logger.warning("QQBot 抢红包失败: " + exception.getMessage());
-            return -1;
-        }
-    }
-
-    private void creditPointsOnConnection(Connection conn, long qqId, int delta) throws SQLException {
-        if (delta <= 0) {
-            return;
-        }
-        long now = System.currentTimeMillis();
-        String upsert = isMysql()
-            ? "INSERT INTO " + tablePoints + " (qq_id, balance, total_earned, total_spent, updated_at) "
-                + "VALUES (?, ?, ?, 0, ?) "
-                + "ON DUPLICATE KEY UPDATE balance = balance + ?, total_earned = total_earned + ?, updated_at = ?"
-            : "INSERT INTO " + tablePoints + " (qq_id, balance, total_earned, total_spent, updated_at) "
-                + "VALUES (?, ?, ?, 0, ?) "
-                + "ON CONFLICT(qq_id) DO UPDATE SET balance = balance + ?, total_earned = total_earned + ?, updated_at = ?";
-        try (PreparedStatement ps = conn.prepareStatement(upsert)) {
-            ps.setLong(1, qqId);
-            ps.setInt(2, delta);
-            ps.setInt(3, delta);
-            ps.setLong(4, now);
-            ps.setInt(5, delta);
-            ps.setInt(6, delta);
-            ps.setLong(7, now);
-            ps.executeUpdate();
-        }
+        return economy.claimRedPacket(redPacketId, claimerQq);
     }
 
     /**
@@ -870,43 +781,7 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
      */
     @Override
     public void refundExpiredRedPackets() {
-        String selectSql = "SELECT id, sender_qq, remaining_amount FROM " + tableRedPackets
-            + " WHERE expire_at <= ? AND remaining_amount > 0";
-        // 单事务 + 原子抢占：UPDATE...WHERE remaining_amount>0 返回 0 行表示已被其他节点/轮次处理，
-        // 抢到才加积分，杜绝并发重复退款；任一失败整体回滚
-        try (Connection conn = getConnection()) {
-            conn.setAutoCommit(false);
-            try (PreparedStatement ps = conn.prepareStatement(selectSql)) {
-                ps.setLong(1, System.currentTimeMillis());
-                List<long[]> rows = new java.util.ArrayList<>();
-                try (ResultSet rs = ps.executeQuery()) {
-                    while (rs.next()) {
-                        rows.add(new long[]{rs.getLong("id"), rs.getLong("sender_qq"), rs.getInt("remaining_amount")});
-                    }
-                }
-                for (long[] row : rows) {
-                    long id = row[0];
-                    long senderQq = row[1];
-                    int remaining = (int) row[2];
-                    try (PreparedStatement upd = conn.prepareStatement(
-                        "UPDATE " + tableRedPackets + " SET remaining_amount = 0 WHERE id = ? AND remaining_amount > 0")) {
-                        upd.setLong(1, id);
-                        if (upd.executeUpdate() <= 0) {
-                            continue; // 已被并发处理
-                        }
-                    }
-                    addPointsOnConnection(conn, senderQq, remaining);
-                }
-                conn.commit();
-            } catch (SQLException e) {
-                conn.rollback();
-                throw e;
-            } finally {
-                conn.setAutoCommit(true);
-            }
-        } catch (SQLException e) {
-            logger.warning("QQBot 退还过期红包失败: " + e.getMessage());
-        }
+        economy.refundRedPackets();
     }
 
     // ─── 活跃度实现 ──────────────────────────────────────

@@ -193,6 +193,12 @@ permissions:
     default: true
   arcartxsuite.qqbot.admin:
     default: op
+  arcartxsuite.qqbot.send:
+    default: true
+  arcartxsuite.qqbot.at:
+    default: op
+  arcartxsuite.qqbot.console:
+    default: op
   # ─── Fishing ───
   arcartxsuite.fishing.use:
     default: true

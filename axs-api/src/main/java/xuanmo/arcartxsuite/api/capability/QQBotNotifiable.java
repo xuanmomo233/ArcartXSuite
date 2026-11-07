@@ -32,7 +32,8 @@ public interface QQBotNotifiable {
     void unregisterListener(@NotNull QQGroupEventListener listener);
 
     /**
-     * QQ 群事件监听器。
+     * QQ 群事件监听器。回调在 QQBot 的串行业务工作线程执行，与聊天转发开关无关。
+     * 不应阻塞回调；操作 Bukkit 对象时请调度到主线程。注销不撤销已开始的回调。
      */
     interface QQGroupEventListener {
 
