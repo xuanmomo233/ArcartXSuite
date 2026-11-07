@@ -10,6 +10,8 @@ import xuanmo.arcartxsuite.api.auth.AuthAccess;
 
 /** Independent of UI registration. Cleanup and offline system jobs are not intercepted here. */
 public final class AdmissionGuard implements Listener {
+    private final java.util.function.BooleanSupplier enforced;
+    public AdmissionGuard(java.util.function.BooleanSupplier enforced) { this.enforced=enforced; }
     @SuppressWarnings("unchecked")
     public void registerPaperChat(org.bukkit.plugin.java.JavaPlugin plugin) {
         try {
@@ -25,7 +27,7 @@ public final class AdmissionGuard implements Listener {
             // Legacy chat listener is used on Spigot.
         } catch(ReflectiveOperationException e) { throw new IllegalStateException("Cannot register Paper admission chat guard",e); }
     }
-    private boolean blocked(Player player) { return !AuthAccess.admitted(player.getUniqueId()); }
+    private boolean blocked(Player player) { return enforced.getAsBoolean() && !AuthAccess.admitted(player.getUniqueId()); }
     @EventHandler(ignoreCancelled=true) public void move(PlayerMoveEvent e) {
         if (blocked(e.getPlayer()) && e.getTo()!=null && !e.getFrom().getBlock().equals(e.getTo().getBlock())) e.setCancelled(true);
     }

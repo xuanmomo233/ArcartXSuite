@@ -29,6 +29,28 @@ ui:
   itemSize: 16
   screenScale: true
   packetHandler:
+    shop_quote: |-
+      if(var.showTradeConfirm && packet['shopId'] == var.tradeShop && packet['itemId'] == var.tradeItem){
+        var.quoteBusy = false
+        var.quoteAvailable = packet['available']
+        if(var.quoteAvailable){
+          var.tradeQuantity = packet['quantity']
+          var.tradeMaximum = packet['maximum']
+          var.tradePrice = packet['unitPrice']
+          var.tradeTotal = packet['total']
+          var.tradeBase = packet['basePrice']
+          var.tradeDetails = '库存 ' + packet['stockDisplay'] + ' / 限购余额 ' + packet['limitDisplay'] + ' / 背包可容纳 ' + packet['capacity'].round()
+          val.购买数量输入.setContent(var.tradeQuantity.round())
+          var.quantityDirty = false
+        } else {
+          var.tradeMaximum = 0
+          var.tradeDetails = '商品已不可购买，请关闭并刷新列表'
+        }
+      }
+    action_result: |-
+      var.actionToken = packet['action_token']
+      var.actionBusy = false
+      var.actionBusySeconds = 0
     # packetHandler: update
     # 接收服务端推送的商店数据
     # 包字段:
@@ -102,21 +124,25 @@ ui:
           }
         }
       }
-      for(i in range(0, var.maxShopCount - 1)){
-        key = i.round()
-        if(val.商店列表 != none){
-          e = val.商店列表.get(key)
-          if(e != none && e['商店图标'] != none){
-            e['商店图标'].seticon()
+      if(var.maxShopCount > 0){
+        for(i in range(0, var.maxShopCount - 1)){
+          key = i.round()
+          if(val.商店列表 != none){
+            e = val.商店列表.get(key)
+            if(e != none && e['商店图标'] != none){
+              e['商店图标'].seticon()
+            }
           }
         }
       }
-      for(i in range(0, var.maxItemCount - 1)){
-        key = i.round()
-        if(val.商品列表 != none){
-          e = val.商品列表.get(key)
-          if(e != none && e['商品图标'] != none){
-            e['商品图标'].seticon()
+      if(var.maxItemCount > 0){
+        for(i in range(0, var.maxItemCount - 1)){
+          key = i.round()
+          if(val.商品列表 != none){
+            e = val.商品列表.get(key)
+            if(e != none && e['商品图标'] != none){
+              e['商品图标'].seticon()
+            }
           }
         }
       }
@@ -134,6 +160,12 @@ ui:
       }
     load: |-
       var.actionToken = ''
+      var.showTradeConfirm = false
+      var.quoteBusy = false
+      var.quoteAvailable = false
+      var.quantityDirty = false
+      var.tradeQuantity = 1
+      var.tradeMaximum = 0
       var.packetId = 'AXS_MARKET'
       var.shopId = ''
       var.shopName = ''
@@ -817,7 +849,7 @@ controls:
                         attribute:
                           x: 123
                           y: 16
-                          texts: "'&f' + self.parent.entry['name']"
+                          texts: "self.parent.entry != none ? ('&f' + self.parent.entry['name']) : ''"
                           fontSize: 36
                           through: true
                       价格:
@@ -825,7 +857,7 @@ controls:
                         attribute:
                           x: 123
                           y: 52
-                          texts: "'&e价格: &f' + self.parent.entry['price'] + ' &7' + self.parent.entry['currencyName']"
+                          texts: "self.parent.entry != none ? ('&e价格: &f' + self.parent.entry['price'] + ' &7' + self.parent.entry['currencyName']) : ''"
                           fontSize: 32
                           through: true
                       库存:
@@ -833,7 +865,7 @@ controls:
                         attribute:
                           x: 123
                           y: 88
-                          texts: "'&7库存: &f' + self.parent.entry['stock']"
+                          texts: "self.parent.entry != none ? ('&7库存: &f' + self.parent.entry['stock']) : ''"
                           fontSize: 32
                           through: true
                       限购:
@@ -842,7 +874,7 @@ controls:
                           x: 123
                           y: 124
                           visible: "self.parent.entry != none && self.parent.entry['limitText'] != ''"
-                          texts: "'&c' + self.parent.entry['limitText']"
+                          texts: "self.parent.entry != none ? ('&c' + self.parent.entry['limitText']) : ''"
                           fontSize: 32
                           through: true
                       购买按钮:
@@ -855,8 +887,18 @@ controls:
                           enable: "!var.actionBusy && var.actionToken != ''"
                         action:
                           clickLeft: |-
-                            var.actionBusy = true
-                            Packet.send(var.packetId, 'shop_buy', var.shopId, self.parent.entry['key'], '1', var.actionToken)
+                            var.tradeItem = self.parent.entry['key']
+                            var.tradeName = self.parent.entry['name']
+                            var.tradePrice = self.parent.entry['priceRaw']
+                            var.tradeShop = var.shopId
+                            var.quoteBusy = true
+                            var.quoteAvailable = false
+                            Packet.send(var.packetId, 'shop_quote', var.tradeShop, var.tradeItem, '1')
+                            var.tradeConfirmText = '购买 1 份 ' + self.parent.entry['name'] + '，花费 ' + self.parent.entry['price'] + ' ' + self.parent.entry['currencyName']
+                            var.executeTrade = -> {
+                              Packet.send(var.packetId, 'shop_buy', var.tradeShop, var.tradeItem, var.tradeQuantity.round(), var.actionToken, var.tradePrice)
+                            }
+                            var.showTradeConfirm = true
                         children:
                           购买底:
                             type: Texture
@@ -882,3 +924,205 @@ controls:
                               texts: "~&f购买"
                               fontSize: 32
                               through: true
+
+  交易确认弹窗:
+    type: Canvas
+    attribute:
+      point: ~stretch_all
+      visible: "var.showTradeConfirm == true"
+    children:
+      遮罩:
+        type: Texture
+        attribute:
+          point: ~stretch_all
+          normal: ~0,0,0,180
+      面板:
+        type: Canvas
+        attribute:
+          point: ~middle_center
+          width: 800
+          height: 420
+        children:
+          背景:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              through: true
+              normal: ~36,38,48,245
+          标题:
+            type: Text
+            attribute:
+              point: ~top_center
+              y: 24
+              texts: "'&f购买：' + var.tradeName"
+              fontSize: 36
+              through: true
+          内容:
+            type: Text
+            attribute:
+              point: ~top_center
+              y: 82
+              texts: "var.quoteBusy ? '&7正在计算报价...' : '&f数量 ' + var.tradeQuantity.round() + '，总计 &e' + var.tradeTotal"
+              fontSize: 28
+              through: true
+          报价明细:
+            type: Text
+            attribute:
+              point: ~top_center
+              y: 124
+              texts: "var.quoteAvailable ? '&7原单价 ' + var.tradeBase + '；折后单价 ' + var.tradePrice : ''"
+              fontSize: 24
+              through: true
+          数量约束:
+            type: Text
+            attribute:
+              point: ~top_center
+              y: 164
+              texts: "'&7' + var.tradeDetails"
+              fontSize: 24
+              through: true
+          购买数量输入:
+            type: TextBox
+            val: 购买数量输入
+            attribute:
+              point: ~top_center
+              y: 220
+              width: 180
+              height: 40
+              length: 4
+              inputPattern: "^[0-9]*$"
+              emptyText: "~&7购买数量"
+              editable: "!var.quoteBusy && !var.actionBusy"
+              fontSize: 32
+            action:
+              textChange: |-
+                var.quantityRequested = self.getContent()
+                var.quantityDirty = true
+              enter: |-
+                var.quoteBusy = true
+                Packet.send(var.packetId, 'shop_quote', var.tradeShop, var.tradeItem, var.quantityRequested)
+          减少数量:
+            type: Canvas
+            attribute:
+              point: ~top_center
+              x: -180
+              y: 218
+              width: 90
+              height: 44
+              enable: "!var.quoteBusy && !var.actionBusy"
+            action:
+              clickLeft: |-
+                var.quoteBusy = true
+                Packet.send(var.packetId, 'shop_quote', var.tradeShop, var.tradeItem, var.tradeQuantity - 1)
+            children:
+              文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "~&b−"
+                  fontSize: 28
+                  through: true
+          增加数量:
+            type: Canvas
+            attribute:
+              point: ~top_center
+              x: 180
+              y: 218
+              width: 90
+              height: 44
+              enable: "!var.quoteBusy && !var.actionBusy"
+            action:
+              clickLeft: |-
+                var.quoteBusy = true
+                Packet.send(var.packetId, 'shop_quote', var.tradeShop, var.tradeItem, var.tradeQuantity + 1)
+            children:
+              文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "~&b＋"
+                  fontSize: 28
+                  through: true
+          最大数量:
+            type: Canvas
+            attribute:
+              point: ~top_center
+              x: 280
+              y: 218
+              width: 90
+              height: 44
+              enable: "!var.quoteBusy && !var.actionBusy"
+            action:
+              clickLeft: |-
+                var.quoteBusy = true
+                Packet.send(var.packetId, 'shop_quote', var.tradeShop, var.tradeItem, var.tradeMaximum)
+            children:
+              文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "~&b最大"
+                  fontSize: 28
+                  through: true
+          更新报价:
+            type: Canvas
+            attribute:
+              point: ~top_center
+              x: -300
+              y: 218
+              width: 90
+              height: 44
+              enable: "!var.quoteBusy && !var.actionBusy"
+            action:
+              clickLeft: |-
+                var.quoteBusy = true
+                Packet.send(var.packetId, 'shop_quote', var.tradeShop, var.tradeItem, var.quantityRequested)
+            children:
+              文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "~&b报价"
+                  fontSize: 28
+                  through: true
+          确认:
+            type: Canvas
+            attribute:
+              point: ~bottom_left
+              x: 90
+              y: -24
+              width: 240
+              height: 48
+              enable: "!var.actionBusy && !var.quoteBusy && !var.quantityDirty && var.quoteAvailable && var.tradeQuantity > 0 && var.actionToken != ''"
+            action:
+              clickLeft: |-
+                var.showTradeConfirm = false
+                var.actionBusy = true
+                var.executeTrade()
+            children:
+              文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "~&a确认"
+                  fontSize: 32
+                  through: true
+          取消:
+            type: Canvas
+            attribute:
+              point: ~bottom_right
+              x: -90
+              y: -24
+              width: 240
+              height: 48
+            action:
+              clickLeft: |-
+                var.showTradeConfirm = false
+            children:
+              文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "~&f取消"
+                  fontSize: 32
+                  through: true

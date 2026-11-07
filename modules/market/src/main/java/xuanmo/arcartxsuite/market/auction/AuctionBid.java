@@ -11,5 +11,11 @@ public record AuctionBid(
     UUID bidder,
     String bidderName,
     double amount,
-    long timestamp
-) {}
+    long timestamp,
+    long previousExpiresAt,
+    long expiresAt
+) {
+    public AuctionBid(long id,long listingId,UUID bidder,String bidderName,double amount,long timestamp) {
+        this(id,listingId,bidder,bidderName,amount,timestamp,0,0);
+    }
+}

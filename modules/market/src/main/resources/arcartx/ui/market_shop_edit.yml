@@ -36,7 +36,7 @@ ui:
     - air_level
   through: false
   background: false
-  escClose: true
+  escClose: false
   closeDied: true
   show: true
   jei: false
@@ -44,10 +44,24 @@ ui:
   itemSize: 16
   screenScale: true
   packetHandler:
+    stock_summary: |-
+      var.fStockSummary = packet['summary']
+      var.actionToken = packet['action_token']
+      var.actionBusy = false
+    edit_preview: |-
+      var.fItemPreviewJson = packet['itemJson']
+      val.物品预览.seticon()
+      var.actionBusy = false
+      var.resultMsg = '物品预览已更新（未发放、未保存）'
+    action_result: |-
+      var.actionToken = packet['action_token']
+      var.actionBusy = false
+      var.actionBusySeconds = 0
     edit_list: |-
       var.editShops = packet['shops']
       var.shopTexts = packet['shopTexts']
       var.maxShopCount = packet['maxShopCount']
+      var.packetId = packet['packetId']
       var.actionToken = packet['action_token']
       var.defaultCurrency = packet['defaultCurrency']
       var.shopIconJsons = {}
@@ -71,18 +85,24 @@ ui:
           }
         }
       }
-      for(i in range(0, var.maxShopCount - 1)){
-        key = i.round()
-        e = val.商店行区.get(key)
-        if(e != none && e['商店行图标'] != none){
-          e['商店行图标'].seticon()
+      if(var.maxShopCount > 0){
+        for(i in range(0, var.maxShopCount - 1)){
+          key = i.round()
+          e = val.商店行区.get(key)
+          if(e != none && e['商店行图标'] != none){
+            e['商店行图标'].seticon()
+          }
         }
       }
       var.actionBusy = false
     edit_shop: |-
+      var.packetId = packet['packetId']
       var.actionToken = packet['action_token']
       if(packet['found'] == true){
+        var.formLoading = true
+        var.shopRevision = packet['revision']
         sameShop = var.editShopId == packet['shopId']
+        var.dirty = false
         var.editShopNew = false
         var.editShopId = packet['shopId']
         var.fShopName = packet['displayName']
@@ -107,6 +127,7 @@ ui:
         }
         // setContent/seticon 必须推迟到下一帧，等待视图切换后控件可见
         scheduler.delay(50, -> {
+          var.hydrating = true
           val.商店ID输入.setContent(var.editShopId)
           val.商店名输入.setContent(var.fShopName)
           val.商店权限输入.setContent(var.fShopPerm)
@@ -127,13 +148,17 @@ ui:
               }
             }
           }
-          for(i in range(0, var.maxEditItemCount - 1)){
-            key = i.round()
-            e = val.商品行区.get(key)
-            if(e != none && e['商品行图标'] != none){
-              e['商品行图标'].seticon()
+          if(var.maxEditItemCount > 0){
+            for(i in range(0, var.maxEditItemCount - 1)){
+              key = i.round()
+              e = val.商品行区.get(key)
+              if(e != none && e['商品行图标'] != none){
+                e['商品行图标'].seticon()
+              }
             }
           }
+          var.hydrating = false
+          var.formLoading = false
         })
       } else {
         if(var.view == 'shop' || var.view == 'item'){
@@ -142,8 +167,13 @@ ui:
       }
       var.actionBusy = false
     edit_item: |-
+      var.packetId = packet['packetId']
       var.actionToken = packet['action_token']
       if(packet['found'] == true){
+        var.dirty = false
+        var.formLoading = true
+        var.shopRevision = packet['revision']
+        var.editShopId = packet['shopId']
         var.itemNew = false
         var.editItemKey = packet['key']
         var.fItemType = packet['type']
@@ -153,6 +183,9 @@ ui:
         var.fCurrency = packet['currency']
         var.fStockMode = packet['stockMode']
         var.fStockAmount = packet['stockAmount']
+        var.fRestockInterval = packet['restockInterval']
+        var.fStockSummary = packet['stockSummary']
+        var.applyStock = false
         var.fLimit = packet['limitPerPlayer']
         var.fLimitReset = packet['limitReset']
         var.fConditions = packet['conditions']
@@ -166,6 +199,8 @@ ui:
         var.fItemPreviewJson = packet['itemPreview']
         var.view = 'item'
         scheduler.delay(50, -> {
+          var.hydrating = true
+          val.表单滑块.setDragYRatio(0)
           val.商品ID输入.setContent(var.editItemKey)
           val.商品名输入.setContent(var.fItemName)
           val.来源输入.setContent(var.fItemSource)
@@ -175,6 +210,7 @@ ui:
           val.卖出价输入.setContent(var.fSellPrice)
           val.货币输入.setContent(var.fCurrency)
           val.库存量输入.setContent(var.fStockAmount)
+          val.补货间隔输入.setContent(var.fRestockInterval)
           val.限购输入.setContent(var.fLimit)
           val.条件输入.setContent(var.fConditions)
           val.指令输入.setContent(var.fCommands)
@@ -187,6 +223,8 @@ ui:
           }
           val.商品图标预览.seticon()
           val.物品预览.seticon()
+          var.hydrating = false
+          var.formLoading = false
         })
       } else {
         if(var.view == 'item'){
@@ -223,11 +261,14 @@ ui:
           val.物品预览.seticon()
         })
       }
+      var.dirty = true
       var.showPicker = false
       var.actionBusy = false
     edit_result: |-
+      if(packet['success'] == true && packet['op'] != 'stock'){ var.dirty = false }
       var.resultMsg = packet['message']
       var.resultOk = packet['success']
+      var.packetId = packet['packetId']
       var.actionToken = packet['action_token']
       var.actionBusy = false
   action:
@@ -243,6 +284,21 @@ ui:
       }
     load: |-
       var.packetId = 'AXS_MARKET'
+      var.dirty = false
+      var.hydrating = false
+      var.formLoading = false
+      var.shopRevision = ''
+      var.navigate = -> {
+        if(!var.actionBusy && !var.formLoading){
+          if(var.dirty){
+            var.confirmTarget = 'discard'
+            var.confirmText = '尚有未保存的修改，是否放弃并继续？'
+            var.showConfirm = true
+          } else {
+            var.pendingNavigation()
+          }
+        }
+      }
       var.view = 'list'
       var.air = '{"id":"minecraft:air","Count":1b}'
       var.actionToken = ''
@@ -286,6 +342,11 @@ ui:
       var.fCurrency = ''
       var.fStockMode = 'unlimited'
       var.fStockAmount = '0'
+      var.fRestockInterval = '0'
+      var.fStockSummary = ''
+      var.applyStock = false
+      var.stockTarget = ''
+      var.stockManageAmount = '1'
       var.fLimit = '0'
       var.fLimitReset = 'never'
       var.fConditions = ''
@@ -379,7 +440,7 @@ controls:
             attribute:
               point: ~middle_left
               x: 252
-              texts: "~&7系统商店管理"
+              texts: "var.resultMsg != none && var.resultMsg != '' ? var.resultMsg : '&7系统商店管理（返回按钮保留未保存提醒）'"
               fontSize: 36
           关闭按钮:
             type: Canvas
@@ -390,7 +451,10 @@ controls:
               height: 48
             action:
               clickLeft: |-
-                Screen.close()
+                var.pendingNavigation = -> {
+                  Packet.send(var.packetId, 'shop_ui_open', var.editShopNew == true ? '' : var.editShopId)
+                }
+                var.navigate()
             children:
               关闭背景:
                 type: Texture
@@ -443,26 +507,36 @@ controls:
               height: 58
             action:
               clickLeft: |-
-                var.editShopNew = true
-                var.editShopId = ''
-                var.fShopName = ''
-                var.fShopPerm = ''
-                var.fShopTags = ''
-                var.fShopIconJson = var.air
-                var.fShopIconMode = 'none'
-                var.editItems = {}
-                var.maxEditItemCount = 0
-                var.view = 'shop'
-                scheduler.delay(50, -> {
-                  val.商店ID输入.setContent('')
-                  val.商店名输入.setContent('')
-                  val.商店权限输入.setContent('')
-                  val.商店标签输入.setContent('')
-                  val.商店图标预览.seticon()
-                  while(val.商品行区.childrenCount() > 1){
-                    val.商品行区.get(1).remove()
-                  }
-                })
+                var.pendingNavigation = -> {
+                  var.formLoading = true
+                  var.hydrating = true
+                  var.shopRevision = ''
+                  var.resultMsg = ''
+                  var.editShopNew = true
+                  var.editShopId = ''
+                  var.fShopName = ''
+                  var.fShopPerm = ''
+                  var.fShopTags = ''
+                  var.fShopIconJson = var.air
+                  var.fShopIconMode = 'none'
+                  var.editItems = {}
+                  var.maxEditItemCount = 0
+                  var.view = 'shop'
+                  scheduler.delay(50, -> {
+                    val.商店ID输入.setContent('')
+                    val.商店名输入.setContent('')
+                    val.商店权限输入.setContent('')
+                    val.商店标签输入.setContent('')
+                    val.商店图标预览.seticon()
+                    while(val.商品行区.childrenCount() > 1){
+                      val.商品行区.get(1).remove()
+                    }
+                    var.hydrating = false
+                    var.formLoading = false
+                    var.dirty = false
+                  })
+                }
+                var.navigate()
             children:
               新建商店底:
                 type: Texture
@@ -556,7 +630,13 @@ controls:
                       height: 56
                     action:
                       clickLeft: |-
-                        Packet.send(var.packetId, 'shop_edit_shop', self.entry['id'])
+                        var.navigateShopId = self.entry['id']
+                        var.pendingNavigation = -> {
+                          var.view = 'shop'
+                          var.actionBusy = true
+                          Packet.send(var.packetId, 'shop_edit_shop', var.navigateShopId)
+                        }
+                        var.navigate()
                     children:
                       商店行底:
                         type: Texture
@@ -596,7 +676,7 @@ controls:
                         attribute:
                           point: ~middle_left
                           x: 56
-                          texts: "self.parent.entry != none ? '&f' + var.shopTexts[self.entryKey] : ''"
+                          texts: "self.parent.entry != none ? '&f' + var.shopTexts[self.parent.entryKey] : ''"
                           fontSize: 32
                           through: true
                       商店行数量:
@@ -642,6 +722,7 @@ controls:
           商店视图:
             type: Canvas
             attribute:
+              enable: "!var.actionBusy && !var.formLoading"
               point: ~stretch_all
               visible: "var.view == 'shop'"
             children:
@@ -657,7 +738,7 @@ controls:
               商店ID标签:
                 type: Text
                 attribute:
-                  point: ~middle_left
+                  point: ~top_left
                   x: 24
                   y: 108
                   texts: "~&7商店ID"
@@ -666,7 +747,7 @@ controls:
               商店ID输入区:
                 type: Canvas
                 attribute:
-                  point: ~middle_left
+                  point: ~top_left
                   x: 150
                   y: 108
                   width: 320
@@ -698,11 +779,12 @@ controls:
                       fontSize: 32
                     action:
                       textChange: |-
+                        if(!var.hydrating){ var.dirty = true }
                         var.editShopId = self.getContent()
               显示名标签:
                 type: Text
                 attribute:
-                  point: ~middle_left
+                  point: ~top_left
                   x: 24
                   y: 168
                   texts: "~&7显示名"
@@ -711,7 +793,7 @@ controls:
               显示名输入区:
                 type: Canvas
                 attribute:
-                  point: ~middle_left
+                  point: ~top_left
                   x: 150
                   y: 168
                   width: 420
@@ -742,11 +824,12 @@ controls:
                       fontSize: 32
                     action:
                       textChange: |-
+                        if(!var.hydrating){ var.dirty = true }
                         var.fShopName = self.getContent()
               权限标签:
                 type: Text
                 attribute:
-                  point: ~middle_left
+                  point: ~top_left
                   x: 24
                   y: 228
                   texts: "~&7权限"
@@ -755,7 +838,7 @@ controls:
               权限输入区:
                 type: Canvas
                 attribute:
-                  point: ~middle_left
+                  point: ~top_left
                   x: 150
                   y: 228
                   width: 420
@@ -786,11 +869,12 @@ controls:
                       fontSize: 32
                     action:
                       textChange: |-
+                        if(!var.hydrating){ var.dirty = true }
                         var.fShopPerm = self.getContent()
               标签标签:
                 type: Text
                 attribute:
-                  point: ~middle_left
+                  point: ~top_left
                   x: 24
                   y: 288
                   texts: "~&7标签"
@@ -799,7 +883,7 @@ controls:
               标签输入区:
                 type: Canvas
                 attribute:
-                  point: ~middle_left
+                  point: ~top_left
                   x: 150
                   y: 288
                   width: 520
@@ -830,6 +914,7 @@ controls:
                       fontSize: 32
                     action:
                       textChange: |-
+                        if(!var.hydrating){ var.dirty = true }
                         var.fShopTags = self.getContent()
               商店图标区:
                 type: Canvas
@@ -878,6 +963,7 @@ controls:
                       height: 40
                     action:
                       clickLeft: |-
+                        var.resultMsg = ''
                         var.pickTarget = 'shop_icon'
                         var.showPicker = true
                     children:
@@ -913,6 +999,7 @@ controls:
                       clickLeft: |-
                         var.fShopIconJson = var.air
                         var.fShopIconMode = 'none'
+                        var.dirty = true
                         val.商店图标预览.seticon()
                     children:
                       商店清图标底:
@@ -974,44 +1061,61 @@ controls:
                   visible: "var.editShopNew != true"
                 action:
                   clickLeft: |-
-                    var.itemNew = true
-                    var.editItemKey = ''
-                    var.fItemType = 'item'
-                    var.fItemName = ''
-                    var.fItemSource = 'minecraft'
-                    var.fItemId = ''
-                    var.fItemNbt = ''
-                    var.fBuyPrice = '0'
-                    var.fSellPrice = '0'
-                    var.fCurrency = var.defaultCurrency
-                    var.fStockMode = 'unlimited'
-                    var.fStockAmount = '0'
-                    var.fLimit = '0'
-                    var.fLimitReset = 'never'
-                    var.fConditions = ''
-                    var.fCommands = ''
-                    var.fDiscounts = ''
-                    var.fItemIconJson = var.air
-                    var.fItemIconMode = 'none'
-                    var.fItemPreviewJson = var.air
-                    var.view = 'item'
-                    scheduler.delay(50, -> {
-                      val.商品ID输入.setContent('')
-                      val.商品名输入.setContent('')
-                      val.来源输入.setContent('minecraft')
-                      val.物品ID输入.setContent('')
-                      val.NBT输入.setContent('')
-                      val.买入价输入.setContent('0')
-                      val.卖出价输入.setContent('0')
-                      val.货币输入.setContent(var.fCurrency)
-                      val.库存量输入.setContent('0')
-                      val.限购输入.setContent('0')
-                      val.条件输入.setContent('')
-                      val.指令输入.setContent('')
-                      val.折扣输入.setContent('')
-                      val.商品图标预览.seticon()
-                      val.物品预览.seticon()
-                    })
+                    var.pendingNavigation = -> {
+                      var.formLoading = true
+                      var.hydrating = true
+                      var.resultMsg = ''
+                      var.fRestockInterval = '0'
+                      var.fStockSummary = '新商品尚未保存'
+                      var.applyStock = false
+                      var.itemNew = true
+                      var.editItemKey = ''
+                      var.fItemType = 'item'
+                      var.dirty = true
+                      var.fItemName = ''
+                      var.fItemSource = 'minecraft'
+                      var.fItemId = ''
+                      var.fItemNbt = ''
+                      var.fBuyPrice = '0'
+                      var.fSellPrice = '0'
+                      var.fCurrency = var.defaultCurrency
+                      var.fStockMode = 'unlimited'
+                      var.dirty = true
+                      var.fStockAmount = '0'
+                      var.fLimit = '0'
+                      var.fLimitReset = 'never'
+                      var.dirty = true
+                      var.fConditions = ''
+                      var.fCommands = ''
+                      var.fDiscounts = ''
+                      var.fItemIconJson = var.air
+                      var.fItemIconMode = 'none'
+                      var.dirty = true
+                      var.fItemPreviewJson = var.air
+                      var.view = 'item'
+                      scheduler.delay(50, -> {
+                        val.商品ID输入.setContent('')
+                        val.商品名输入.setContent('')
+                        val.来源输入.setContent('minecraft')
+                        val.物品ID输入.setContent('')
+                        val.NBT输入.setContent('')
+                        val.买入价输入.setContent('0')
+                        val.卖出价输入.setContent('0')
+                        val.货币输入.setContent(var.fCurrency)
+                        val.库存量输入.setContent('0')
+                        val.补货间隔输入.setContent('0')
+                        val.限购输入.setContent('0')
+                        val.条件输入.setContent('')
+                        val.指令输入.setContent('')
+                        val.折扣输入.setContent('')
+                        val.商品图标预览.seticon()
+                        val.物品预览.seticon()
+                        var.hydrating = false
+                        var.formLoading = false
+                        var.dirty = false
+                      })
+                    }
+                    var.navigate()
                 children:
                   新建商品底:
                     type: Texture
@@ -1134,7 +1238,7 @@ controls:
                           商品行名称:
                             type: Text
                             attribute:
-                              point: ~middle_left
+                              point: ~top_left
                               x: 72
                               texts: "self.parent.entry != none ? '&f' + self.parent.entry['name'] + ' &8(' + self.parent.entry['key'] + ')' : ''"
                               fontSize: 30
@@ -1213,12 +1317,13 @@ controls:
                   y: -16
                   width: 160
                   height: 52
-                  enable: "!var.actionBusy && var.actionToken != none && var.actionToken != '' && var.editShopId != none && var.editShopId != ''"
+                  enable: "!var.actionBusy && !var.formLoading && var.actionToken != none && var.actionToken != '' && var.editShopId != none && var.editShopId != ''"
                 action:
                   clickLeft: |-
-                    if(!var.actionBusy){
+                    if(!var.actionBusy && !var.formLoading){
                       var.actionBusy = true
                       form = {}
+                      form['revision'] = var.shopRevision
                       form['displayName'] = var.fShopName
                       form['permission'] = var.fShopPerm
                       form['tags'] = var.fShopTags
@@ -1299,6 +1404,7 @@ controls:
           商品视图:
             type: Canvas
             attribute:
+              enable: "!var.actionBusy && !var.formLoading"
               point: ~stretch_all
               visible: "var.view == 'item'"
             children:
@@ -1321,7 +1427,8 @@ controls:
                   height: 48
                 action:
                   clickLeft: |-
-                    var.view = 'shop'
+                    var.pendingNavigation = -> { var.view = 'shop' }
+                    var.navigate()
                 children:
                   返回底:
                     type: Texture
@@ -1343,936 +1450,1205 @@ controls:
                       texts: "~&f← 返回"
                       fontSize: 32
                       through: true
-              商品ID标签:
-                type: Text
+              表单滑块:
+                type: Texture
+                val: 表单滑块
                 attribute:
-                  point: ~middle_left
-                  x: 24
-                  y: 108
-                  texts: "~&7商品ID"
-                  fontSize: 32
-                  through: true
-              商品ID输入区:
-                type: Canvas
-                attribute:
-                  point: ~middle_left
-                  x: 150
-                  y: 108
-                  width: 300
-                  height: 44
-                children:
-                  商品ID输入底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: ~36,42,50,225
-                      shape: ~round_rect
-                      radius: 10
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~255,255,255,230
-                  商品ID输入:
-                    type: TextBox
-                    val: 商品ID输入
-                    attribute:
-                      x: 10
-                      y: 6
-                      width: 280
-                      height: 32
-                      length: 64
-                      editable: "var.itemNew == true"
-                      emptyText: "~&8items下的key（字母/数字/_/-）"
-                      fontSize: 32
-                    action:
-                      textChange: |-
-                        var.editItemKey = self.getContent()
-              类型标签:
-                type: Text
-                attribute:
-                  point: ~middle_left
-                  x: 24
-                  y: 168
-                  texts: "~&7类型"
-                  fontSize: 32
-                  through: true
-              类型物品按钮:
-                type: Canvas
-                attribute:
-                  point: ~middle_left
-                  x: 150
-                  y: 168
-                  width: 110
-                  height: 44
-                action:
-                  clickLeft: |-
-                    var.fItemType = 'item'
-                children:
-                  类型物品底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: "var.fItemType == 'item' ? '70,150,250,230' : '62,66,74,210'"
-                      shape: ~round_rect
-                      radius: 8
-                    effect:
-                      ripple:
-                      stroke:
-                        width: 2
-                        color: ~255,255,255,230
-                  类型物品文字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      texts: "~&f物品"
-                      fontSize: 30
-                      through: true
-              类型指令按钮:
-                type: Canvas
-                attribute:
-                  point: ~middle_left
-                  x: 270
-                  y: 168
-                  width: 110
-                  height: 44
-                action:
-                  clickLeft: |-
-                    var.fItemType = 'command'
-                children:
-                  类型指令底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: "var.fItemType == 'command' ? '70,150,250,230' : '62,66,74,210'"
-                      shape: ~round_rect
-                      radius: 8
-                    effect:
-                      ripple:
-                      stroke:
-                        width: 2
-                        color: ~255,255,255,230
-                  类型指令文字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      texts: "~&f指令"
-                      fontSize: 30
-                      through: true
-              显示名标签2:
-                type: Text
-                attribute:
-                  point: ~middle_left
-                  x: 24
-                  y: 228
-                  texts: "~&7显示名"
-                  fontSize: 32
-                  through: true
-              商品名输入区:
-                type: Canvas
-                attribute:
-                  point: ~middle_left
-                  x: 150
-                  y: 228
-                  width: 400
-                  height: 44
-                children:
-                  商品名输入底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: ~36,42,50,225
-                      shape: ~round_rect
-                      radius: 10
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~255,255,255,230
-                  商品名输入:
-                    type: TextBox
-                    val: 商品名输入
-                    attribute:
-                      x: 10
-                      y: 6
-                      width: 380
-                      height: 32
-                      length: 128
-                      emptyText: "~&8商品显示名"
-                      fontSize: 32
-                    action:
-                      textChange: |-
-                        var.fItemName = self.getContent()
-              价格标签:
-                type: Text
-                attribute:
-                  point: ~middle_left
-                  x: 24
-                  y: 288
-                  texts: "~&7买/卖价"
-                  fontSize: 32
-                  through: true
-              买入价输入区:
-                type: Canvas
-                attribute:
-                  point: ~middle_left
-                  x: 150
-                  y: 288
-                  width: 160
-                  height: 44
-                children:
-                  买入价输入底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: ~36,42,50,225
-                      shape: ~round_rect
-                      radius: 10
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~255,255,255,230
-                  买入价输入:
-                    type: TextBox
-                    val: 买入价输入
-                    attribute:
-                      x: 10
-                      y: 6
-                      width: 140
-                      height: 32
-                      length: 16
-                      inputPattern: "^[0-9.]*$"
-                      emptyText: "~&8买入价"
-                      fontSize: 32
-                    action:
-                      textChange: |-
-                        var.fBuyPrice = self.getContent()
-              卖出价输入区:
-                type: Canvas
-                attribute:
-                  point: ~middle_left
-                  x: 330
-                  y: 288
-                  width: 160
-                  height: 44
-                children:
-                  卖出价输入底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: ~36,42,50,225
-                      shape: ~round_rect
-                      radius: 10
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~255,255,255,230
-                  卖出价输入:
-                    type: TextBox
-                    val: 卖出价输入
-                    attribute:
-                      x: 10
-                      y: 6
-                      width: 140
-                      height: 32
-                      length: 16
-                      inputPattern: "^[0-9.]*$"
-                      emptyText: "~&8卖出价"
-                      fontSize: 32
-                    action:
-                      textChange: |-
-                        var.fSellPrice = self.getContent()
-              货币输入区:
-                type: Canvas
-                attribute:
-                  point: ~middle_left
-                  x: 510
-                  y: 288
-                  width: 180
-                  height: 44
-                children:
-                  货币输入底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: ~36,42,50,225
-                      shape: ~round_rect
-                      radius: 10
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~255,255,255,230
-                  货币输入:
-                    type: TextBox
-                    val: 货币输入
-                    attribute:
-                      x: 10
-                      y: 6
-                      width: 160
-                      height: 32
-                      length: 64
-                      emptyText: "~&8货币ID"
-                      fontSize: 32
-                    action:
-                      textChange: |-
-                        var.fCurrency = self.getContent()
-              库存标签:
-                type: Text
-                attribute:
-                  point: ~middle_left
-                  x: 24
-                  y: 348
-                  texts: "~&7库存"
-                  fontSize: 32
-                  through: true
-              库存模式按钮:
-                type: Canvas
-                attribute:
-                  point: ~middle_left
-                  x: 150
-                  y: 348
-                  width: 180
-                  height: 44
-                action:
-                  clickLeft: |-
-                    if(var.fStockMode == 'unlimited'){
-                      var.fStockMode = 'global'
-                    } else if(var.fStockMode == 'global'){
-                      var.fStockMode = 'per-player'
-                    } else {
-                      var.fStockMode = 'unlimited'
-                    }
-                children:
-                  库存模式底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: ~62,66,74,210
-                      shape: ~round_rect
-                      radius: 8
-                    effect:
-                      ripple:
-                      stroke:
-                        width: 2
-                        color: "self.isHovered() ? '140,200,255,255' : '255,255,255,230'"
-                  库存模式文字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      texts: "var.stockModeNames[var.fStockMode] != none ? '&f' + var.stockModeNames[var.fStockMode] : '&f无限'"
-                      fontSize: 30
-                      through: true
-              库存量输入区:
-                type: Canvas
-                attribute:
-                  point: ~middle_left
-                  x: 350
-                  y: 348
-                  width: 140
-                  height: 44
-                  visible: "var.fStockMode != 'unlimited'"
-                children:
-                  库存量输入底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: ~36,42,50,225
-                      shape: ~round_rect
-                      radius: 10
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~255,255,255,230
-                  库存量输入:
-                    type: TextBox
-                    val: 库存量输入
-                    attribute:
-                      x: 10
-                      y: 6
-                      width: 120
-                      height: 32
-                      length: 10
-                      inputPattern: "^[0-9]*$"
-                      emptyText: "~&8数量"
-                      fontSize: 32
-                    action:
-                      textChange: |-
-                        var.fStockAmount = self.getContent()
-              限购标签:
-                type: Text
-                attribute:
-                  point: ~middle_left
-                  x: 24
-                  y: 408
-                  texts: "~&7限购"
-                  fontSize: 32
-                  through: true
-              限购输入区:
-                type: Canvas
-                attribute:
-                  point: ~middle_left
-                  x: 150
-                  y: 408
-                  width: 140
-                  height: 44
-                children:
-                  限购输入底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: ~36,42,50,225
-                      shape: ~round_rect
-                      radius: 10
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~255,255,255,230
-                  限购输入:
-                    type: TextBox
-                    val: 限购输入
-                    attribute:
-                      x: 10
-                      y: 6
-                      width: 120
-                      height: 32
-                      length: 10
-                      inputPattern: "^[0-9]*$"
-                      emptyText: "~&8数量"
-                      fontSize: 32
-                    action:
-                      textChange: |-
-                        var.fLimit = self.getContent()
-              限购重置按钮:
-                type: Canvas
-                attribute:
-                  point: ~middle_left
-                  x: 310
-                  y: 408
-                  width: 180
-                  height: 44
-                action:
-                  clickLeft: |-
-                    if(var.fLimitReset == 'never'){
-                      var.fLimitReset = 'daily'
-                    } else if(var.fLimitReset == 'daily'){
-                      var.fLimitReset = 'weekly'
-                    } else if(var.fLimitReset == 'weekly'){
-                      var.fLimitReset = 'monthly'
-                    } else {
-                      var.fLimitReset = 'never'
-                    }
-                children:
-                  限购重置底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: ~62,66,74,210
-                      shape: ~round_rect
-                      radius: 8
-                    effect:
-                      ripple:
-                      stroke:
-                        width: 2
-                        color: "self.isHovered() ? '140,200,255,255' : '255,255,255,230'"
-                  限购重置文字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      texts: "var.limitResetNames[var.fLimitReset] != none ? '&f' + var.limitResetNames[var.fLimitReset] : '&f不重置'"
-                      fontSize: 30
-                      through: true
-              条件标签:
-                type: Text
-                attribute:
-                  point: ~middle_left
-                  x: 24
-                  y: 492
-                  texts: "~&7条件"
-                  fontSize: 32
-                  through: true
-              条件输入区:
-                type: Canvas
-                attribute:
-                  point: ~top_left
-                  x: 150
-                  y: 452
-                  width: 540
+                  point: ~top_right
+                  x: -14
+                  y: 88
+                  width: 8
                   height: 80
-                children:
-                  条件输入底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: ~36,42,50,225
-                      shape: ~round_rect
-                      radius: 10
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~255,255,255,230
-                  条件输入:
-                    type: TextBox
-                    val: 条件输入
-                    attribute:
-                      x: 10
-                      y: 6
-                      width: 520
-                      height: 68
-                      length: 4096
-                      allowNewLine: true
-                      emptyText: "~&8每行一条: %占位符% >= 值 / aria:脚本 / js:脚本"
-                      fontSize: 26
-                    action:
-                      textChange: |-
-                        var.fConditions = self.getContent()
-              条件提示:
-                type: Text
-                attribute:
-                  point: ~top_left
-                  x: 150
-                  y: 540
-                  texts: "~&8不满足条件的玩家看不到此商品（AXS条件系统，全部条件需满足）"
-                  fontSize: 24
-                  through: true
-              折扣标签:
-                type: Text
-                attribute:
-                  point: ~middle_left
-                  x: 24
-                  y: 624
-                  texts: "~&7折扣"
-                  fontSize: 32
-                  through: true
-              折扣输入区:
-                type: Canvas
-                attribute:
-                  point: ~top_left
-                  x: 150
-                  y: 584
-                  width: 440
-                  height: 80
-                children:
-                  折扣输入底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: ~36,42,50,225
-                      shape: ~round_rect
-                      radius: 10
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~255,255,255,230
-                  折扣输入:
-                    type: TextBox
-                    val: 折扣输入
-                    attribute:
-                      x: 10
-                      y: 6
-                      width: 420
-                      height: 68
-                      length: 512
-                      allowNewLine: true
-                      emptyText: "~&8每行: 权限=倍率（如 vip=0.8）"
-                      fontSize: 30
-                    action:
-                      textChange: |-
-                        var.fDiscounts = self.getContent()
-              # ── 物品定义区（type=item）─────────────────
-              物品定义区:
-                type: Canvas
+                  normal: ~140,200,255,255
+                  maxDragY: "var.viewH - 400"
+              表单滚动:
+                type: Scroll
                 attribute:
                   point: ~top_left
                   x: 0
-                  y: 690
-                  width: 720
-                  height: 240
-                  visible: "var.fItemType == 'item'"
+                  y: 88
+                  width: "var.contentW - 32"
+                  height: "var.viewH - 320"
+                  moveY: "val.表单滑块.getDragYRatio()"
+                action:
+                  wheel: |-
+                    val.表单滑块.setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
                 children:
-                  物品来源标签:
-                    type: Text
-                    attribute:
-                      point: ~middle_left
-                      x: 24
-                      y: 24
-                      texts: "~&7来源/ID"
-                      fontSize: 32
-                      through: true
-                  来源输入区:
+                  表单内容:
                     type: Canvas
                     attribute:
-                      point: ~middle_left
-                      x: 150
-                      y: 24
-                      width: 160
-                      height: 44
+                      width: "var.contentW - 32"
+                      height: 1000
                     children:
-                      来源输入底:
-                        type: Texture
+                      商品ID标签:
+                        type: Text
                         attribute:
-                          point: ~stretch_all
+                          point: ~top_left
+                          x: 24
+                          y: 20
+                          texts: "~&7商品ID"
+                          fontSize: 32
                           through: true
-                          normal: ~36,42,50,225
-                          shape: ~round_rect
-                          radius: 10
-                        effect:
-                          stroke:
-                            width: 2
-                            color: ~255,255,255,230
-                      来源输入:
-                        type: TextBox
-                        val: 来源输入
+                      商品ID输入区:
+                        type: Canvas
                         attribute:
-                          x: 10
-                          y: 6
+                          point: ~top_left
+                          x: 150
+                          y: 20
+                          width: 300
+                          height: 44
+                        children:
+                          商品ID输入底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              through: true
+                              normal: ~36,42,50,225
+                              shape: ~round_rect
+                              radius: 10
+                            effect:
+                              stroke:
+                                width: 2
+                                color: ~255,255,255,230
+                          商品ID输入:
+                            type: TextBox
+                            val: 商品ID输入
+                            attribute:
+                              x: 10
+                              y: 6
+                              width: 280
+                              height: 32
+                              length: 64
+                              editable: "var.itemNew == true"
+                              emptyText: "~&8items下的key（字母/数字/_/-）"
+                              fontSize: 32
+                            action:
+                              textChange: |-
+                                if(!var.hydrating){ var.dirty = true }
+                                var.editItemKey = self.getContent()
+                      类型标签:
+                        type: Text
+                        attribute:
+                          point: ~top_left
+                          x: 24
+                          y: 168
+                          texts: "~&7类型"
+                          fontSize: 32
+                          through: true
+                      类型物品按钮:
+                        type: Canvas
+                        attribute:
+                          point: ~top_left
+                          x: 150
+                          y: 168
+                          width: 110
+                          height: 44
+                        action:
+                          clickLeft: |-
+                            var.fItemType = 'item'
+                            var.dirty = true
+                        children:
+                          类型物品底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              through: true
+                              normal: "var.fItemType == 'item' ? '70,150,250,230' : '62,66,74,210'"
+                              shape: ~round_rect
+                              radius: 8
+                            effect:
+                              ripple:
+                              stroke:
+                                width: 2
+                                color: ~255,255,255,230
+                          类型物品文字:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              texts: "~&f物品"
+                              fontSize: 30
+                              through: true
+                      类型指令按钮:
+                        type: Canvas
+                        attribute:
+                          point: ~top_left
+                          x: 270
+                          y: 168
+                          width: 110
+                          height: 44
+                        action:
+                          clickLeft: |-
+                            var.fItemType = 'command'
+                            var.dirty = true
+                        children:
+                          类型指令底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              through: true
+                              normal: "var.fItemType == 'command' ? '70,150,250,230' : '62,66,74,210'"
+                              shape: ~round_rect
+                              radius: 8
+                            effect:
+                              ripple:
+                              stroke:
+                                width: 2
+                                color: ~255,255,255,230
+                          类型指令文字:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              texts: "~&f指令"
+                              fontSize: 30
+                              through: true
+                      显示名标签2:
+                        type: Text
+                        attribute:
+                          point: ~top_left
+                          x: 24
+                          y: 228
+                          texts: "~&7显示名"
+                          fontSize: 32
+                          through: true
+                      商品名输入区:
+                        type: Canvas
+                        attribute:
+                          point: ~top_left
+                          x: 150
+                          y: 228
+                          width: 400
+                          height: 44
+                        children:
+                          商品名输入底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              through: true
+                              normal: ~36,42,50,225
+                              shape: ~round_rect
+                              radius: 10
+                            effect:
+                              stroke:
+                                width: 2
+                                color: ~255,255,255,230
+                          商品名输入:
+                            type: TextBox
+                            val: 商品名输入
+                            attribute:
+                              x: 10
+                              y: 6
+                              width: 380
+                              height: 32
+                              length: 128
+                              emptyText: "~&8商品显示名"
+                              fontSize: 32
+                            action:
+                              textChange: |-
+                                if(!var.hydrating){ var.dirty = true }
+                                var.fItemName = self.getContent()
+                      价格标签:
+                        type: Text
+                        attribute:
+                          point: ~top_left
+                          x: 24
+                          y: 288
+                          texts: "~&7购买/预留价"
+                          fontSize: 32
+                          through: true
+                      买入价输入区:
+                        type: Canvas
+                        attribute:
+                          point: ~top_left
+                          x: 150
+                          y: 288
+                          width: 160
+                          height: 44
+                        children:
+                          买入价输入底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              through: true
+                              normal: ~36,42,50,225
+                              shape: ~round_rect
+                              radius: 10
+                            effect:
+                              stroke:
+                                width: 2
+                                color: ~255,255,255,230
+                          买入价输入:
+                            type: TextBox
+                            val: 买入价输入
+                            attribute:
+                              x: 10
+                              y: 6
+                              width: 140
+                              height: 32
+                              length: 32
+                              inputPattern: "^[0-9.]*$"
+                              emptyText: "~&8买入价"
+                              fontSize: 32
+                            action:
+                              textChange: |-
+                                if(!var.hydrating){ var.dirty = true }
+                                var.fBuyPrice = self.getContent()
+                      卖出价输入区:
+                        type: Canvas
+                        attribute:
+                          point: ~top_left
+                          x: 330
+                          y: 288
+                          width: 160
+                          height: 44
+                        children:
+                          卖出价输入底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              through: true
+                              normal: ~36,42,50,225
+                              shape: ~round_rect
+                              radius: 10
+                            effect:
+                              stroke:
+                                width: 2
+                                color: ~255,255,255,230
+                          卖出价输入:
+                            type: TextBox
+                            val: 卖出价输入
+                            attribute:
+                              x: 10
+                              y: 6
+                              width: 140
+                              height: 32
+                              length: 32
+                              inputPattern: "^[0-9.]*$"
+                              emptyText: "~&8预留字段，不用于回收"
+                              fontSize: 32
+                            action:
+                              textChange: |-
+                                if(!var.hydrating){ var.dirty = true }
+                                var.fSellPrice = self.getContent()
+                      货币输入区:
+                        type: Canvas
+                        attribute:
+                          point: ~top_left
+                          x: 510
+                          y: 288
+                          width: 180
+                          height: 44
+                        children:
+                          货币输入底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              through: true
+                              normal: ~36,42,50,225
+                              shape: ~round_rect
+                              radius: 10
+                            effect:
+                              stroke:
+                                width: 2
+                                color: ~255,255,255,230
+                          货币输入:
+                            type: TextBox
+                            val: 货币输入
+                            attribute:
+                              x: 10
+                              y: 6
+                              width: 160
+                              height: 32
+                              length: 64
+                              emptyText: "~&8货币ID"
+                              fontSize: 32
+                            action:
+                              textChange: |-
+                                if(!var.hydrating){ var.dirty = true }
+                                var.fCurrency = self.getContent()
+                      库存标签:
+                        type: Text
+                        attribute:
+                          point: ~top_left
+                          x: 24
+                          y: 348
+                          texts: "~&7库存"
+                          fontSize: 32
+                          through: true
+                      库存模式按钮:
+                        type: Canvas
+                        attribute:
+                          point: ~top_left
+                          x: 150
+                          y: 348
+                          width: 180
+                          height: 44
+                        action:
+                          clickLeft: |-
+                            if(var.fStockMode == 'unlimited'){
+                              var.fStockMode = 'global'
+                              var.dirty = true
+                            } else if(var.fStockMode == 'global'){
+                              var.fStockMode = 'per-player'
+                              var.dirty = true
+                            } else {
+                              var.fStockMode = 'unlimited'
+                              var.dirty = true
+                            }
+                        children:
+                          库存模式底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              through: true
+                              normal: ~62,66,74,210
+                              shape: ~round_rect
+                              radius: 8
+                            effect:
+                              ripple:
+                              stroke:
+                                width: 2
+                                color: "self.isHovered() ? '140,200,255,255' : '255,255,255,230'"
+                          库存模式文字:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              texts: "var.stockModeNames[var.fStockMode] != none ? '&f' + var.stockModeNames[var.fStockMode] : '&f无限'"
+                              fontSize: 30
+                              through: true
+                      库存量输入区:
+                        type: Canvas
+                        attribute:
+                          point: ~top_left
+                          x: 350
+                          y: 348
                           width: 140
-                          height: 32
-                          length: 32
-                          emptyText: "~&8来源"
+                          height: 44
+                          visible: "var.fStockMode != 'unlimited'"
+                        children:
+                          库存量输入底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              through: true
+                              normal: ~36,42,50,225
+                              shape: ~round_rect
+                              radius: 10
+                            effect:
+                              stroke:
+                                width: 2
+                                color: ~255,255,255,230
+                          库存量输入:
+                            type: TextBox
+                            val: 库存量输入
+                            attribute:
+                              x: 10
+                              y: 6
+                              width: 120
+                              height: 32
+                              length: 10
+                              inputPattern: "^[0-9]*$"
+                              emptyText: "~&8数量"
+                              fontSize: 32
+                            action:
+                              textChange: |-
+                                if(!var.hydrating){ var.dirty = true }
+                                var.fStockAmount = self.getContent()
+                      限购标签:
+                        type: Text
+                        attribute:
+                          point: ~top_left
+                          x: 24
+                          y: 408
+                          texts: "~&7限购"
                           fontSize: 32
-                        action:
-                          textChange: |-
-                            var.fItemSource = self.getContent()
-                  物品ID输入区:
-                    type: Canvas
-                    attribute:
-                      point: ~middle_left
-                      x: 330
-                      y: 24
-                      width: 280
-                      height: 44
-                    children:
-                      物品ID输入底:
-                        type: Texture
-                        attribute:
-                          point: ~stretch_all
                           through: true
-                          normal: ~36,42,50,225
-                          shape: ~round_rect
-                          radius: 10
-                        effect:
-                          stroke:
-                            width: 2
-                            color: ~255,255,255,230
-                      物品ID输入:
-                        type: TextBox
-                        val: 物品ID输入
+                      限购输入区:
+                        type: Canvas
                         attribute:
-                          x: 10
-                          y: 6
-                          width: 260
-                          height: 32
-                          length: 128
-                          emptyText: "~&8物品ID"
+                          point: ~top_left
+                          x: 150
+                          y: 408
+                          width: 140
+                          height: 44
+                        children:
+                          限购输入底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              through: true
+                              normal: ~36,42,50,225
+                              shape: ~round_rect
+                              radius: 10
+                            effect:
+                              stroke:
+                                width: 2
+                                color: ~255,255,255,230
+                          限购输入:
+                            type: TextBox
+                            val: 限购输入
+                            attribute:
+                              x: 10
+                              y: 6
+                              width: 120
+                              height: 32
+                              length: 10
+                              inputPattern: "^[0-9]*$"
+                              emptyText: "~&8数量"
+                              fontSize: 32
+                            action:
+                              textChange: |-
+                                if(!var.hydrating){ var.dirty = true }
+                                var.fLimit = self.getContent()
+                      限购重置按钮:
+                        type: Canvas
+                        attribute:
+                          point: ~top_left
+                          x: 310
+                          y: 408
+                          width: 180
+                          height: 44
+                        action:
+                          clickLeft: |-
+                            if(var.fLimitReset == 'never'){
+                              var.fLimitReset = 'daily'
+                              var.dirty = true
+                            } else if(var.fLimitReset == 'daily'){
+                              var.fLimitReset = 'weekly'
+                              var.dirty = true
+                            } else if(var.fLimitReset == 'weekly'){
+                              var.fLimitReset = 'monthly'
+                              var.dirty = true
+                            } else {
+                              var.fLimitReset = 'never'
+                              var.dirty = true
+                            }
+                        children:
+                          限购重置底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              through: true
+                              normal: ~62,66,74,210
+                              shape: ~round_rect
+                              radius: 8
+                            effect:
+                              ripple:
+                              stroke:
+                                width: 2
+                                color: "self.isHovered() ? '140,200,255,255' : '255,255,255,230'"
+                          限购重置文字:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              texts: "var.limitResetNames[var.fLimitReset] != none ? '&f' + var.limitResetNames[var.fLimitReset] : '&f不重置'"
+                              fontSize: 30
+                              through: true
+                      条件标签:
+                        type: Text
+                        attribute:
+                          point: ~top_left
+                          x: 24
+                          y: 492
+                          texts: "~&7条件"
                           fontSize: 32
-                        action:
-                          textChange: |-
-                            var.fItemId = self.getContent()
-                  物品来源提示:
-                    type: Text
-                    attribute:
-                      point: ~middle_left
-                      x: 620
-                      y: 24
-                      texts: "~&8minecraft/mythic/neige/overture/mmoitems"
-                      fontSize: 22
-                      through: true
-                  NBT标签:
-                    type: Text
-                    attribute:
-                      point: ~top_left
-                      x: 24
-                      y: 52
-                      texts: "~&7NBT"
-                      fontSize: 32
-                      through: true
-                  NBT输入区:
-                    type: Canvas
-                    attribute:
-                      point: ~top_left
-                      x: 150
-                      y: 48
-                      width: 540
-                      height: 64
-                    children:
-                      NBT输入底:
-                        type: Texture
-                        attribute:
-                          point: ~stretch_all
                           through: true
-                          normal: ~36,42,50,225
-                          shape: ~round_rect
-                          radius: 10
-                        effect:
-                          stroke:
-                            width: 2
-                            color: ~255,255,255,230
-                      NBT输入:
-                        type: TextBox
-                        val: NBT输入
+                      条件输入区:
+                        type: Canvas
                         attribute:
-                          x: 10
-                          y: 6
-                          width: 520
-                          height: 52
-                          length: 4096
-                          allowNewLine: true
-                          emptyText: "~&8原版物品SNBT（可空）"
-                          fontSize: 26
-                        action:
-                          textChange: |-
-                            var.fItemNbt = self.getContent()
-                  选物品按钮:
-                    type: Canvas
-                    attribute:
-                      point: ~top_left
-                      x: 150
-                      y: 126
-                      width: 180
-                      height: 44
-                    action:
-                      clickLeft: |-
-                        var.pickTarget = 'item_def'
-                        var.showPicker = true
-                    children:
-                      选物品底:
-                        type: Texture
-                        attribute:
-                          point: ~stretch_all
-                          through: true
-                          normal: ~70,150,250,230
-                          shape: ~round_rect
-                          radius: 8
-                        effect:
-                          ripple:
-                          stroke:
-                            width: 2
-                            color: "self.isHovered() ? '140,200,255,255' : '255,255,255,230'"
-                      选物品文字:
+                          point: ~top_left
+                          x: 150
+                          y: 452
+                          width: 540
+                          height: 80
+                        children:
+                          条件输入底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              through: true
+                              normal: ~36,42,50,225
+                              shape: ~round_rect
+                              radius: 10
+                            effect:
+                              stroke:
+                                width: 2
+                                color: ~255,255,255,230
+                          条件输入:
+                            type: TextBox
+                            val: 条件输入
+                            attribute:
+                              x: 10
+                              y: 6
+                              width: 520
+                              height: 68
+                              length: 4096
+                              allowNewLine: true
+                              emptyText: "~&8每行一条: %占位符% >= 值 / aria:脚本 / js:脚本"
+                              fontSize: 26
+                            action:
+                              textChange: |-
+                                if(!var.hydrating){ var.dirty = true }
+                                var.fConditions = self.getContent()
+                      条件提示:
                         type: Text
                         attribute:
-                          point: ~middle_center
-                          texts: "~&f从背包选物品"
-                          fontSize: 28
+                          point: ~top_left
+                          x: 150
+                          y: 540
+                          texts: "~&8不满足条件的玩家看不到此商品（AXS条件系统，全部条件需满足）"
+                          fontSize: 24
                           through: true
-                  物品预览标签:
-                    type: Text
-                    attribute:
-                      point: ~top_left
-                      x: 350
-                      y: 126
-                      texts: "~&7物品预览"
-                      fontSize: 28
-                      through: true
-                  物品预览:
-                    type: Slot
-                    val: 物品预览
-                    attribute:
-                      slotType: ~Icon
-                      itemScale: 0.72
-                      x: 350
-                      y: 158
-                      width: 72
-                      height: 72
-                      normal: ~36,42,54,220
-                      shape: ~round_rect
-                      radius: 10
-                      through: true
-                      seticon: "self.setItemIcon(var.fItemPreviewJson != none && var.fItemPreviewJson != '' ? var.fItemPreviewJson : var.air)"
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~255,255,255,230
-              # ── 指令区（type=command）─────────────────
-              指令区:
-                type: Canvas
-                attribute:
-                  point: ~top_left
-                  x: 0
-                  y: 690
-                  width: 720
-                  height: 180
-                  visible: "var.fItemType == 'command'"
-                children:
-                  指令标签:
-                    type: Text
-                    attribute:
-                      point: ~top_left
-                      x: 24
-                      y: 24
-                      texts: "~&7奖励指令"
-                      fontSize: 32
-                      through: true
-                  指令输入区:
-                    type: Canvas
-                    attribute:
-                      point: ~top_left
-                      x: 150
-                      y: 16
-                      width: 540
-                      height: 110
-                    children:
-                      指令输入底:
-                        type: Texture
-                        attribute:
-                          point: ~stretch_all
-                          through: true
-                          normal: ~36,42,50,225
-                          shape: ~round_rect
-                          radius: 10
-                        effect:
-                          stroke:
-                            width: 2
-                            color: ~255,255,255,230
-                      指令输入:
-                        type: TextBox
-                        val: 指令输入
-                        attribute:
-                          x: 10
-                          y: 6
-                          width: 520
-                          height: 98
-                          length: 8192
-                          allowNewLine: true
-                          emptyText: "~&8每行一条，%player% 为玩家占位符"
-                          fontSize: 26
-                        action:
-                          textChange: |-
-                            var.fCommands = self.getContent()
-                  指令提示:
-                    type: Text
-                    attribute:
-                      point: ~top_left
-                      x: 150
-                      y: 134
-                      texts: "~&8执行时以控制台身份运行，无需前导 /"
-                      fontSize: 24
-                      through: true
-              # ── 右列：商品图标 ─────────────────────────
-              商品图标区:
-                type: Canvas
-                attribute:
-                  point: ~top_left
-                  x: "var.contentW - 380"
-                  y: 96
-                  width: 356
-                  height: 240
-                children:
-                  商品图标标签:
-                    type: Text
-                    attribute:
-                      point: ~top_left
-                      x: 0
-                      y: 0
-                      texts: "~&7商品图标"
-                      fontSize: 32
-                      through: true
-                  商品图标预览:
-                    type: Slot
-                    val: 商品图标预览
-                    attribute:
-                      slotType: ~Icon
-                      itemScale: 0.72
-                      x: 0
-                      y: 44
-                      width: 88
-                      height: 88
-                      normal: ~36,42,54,220
-                      shape: ~round_rect
-                      radius: 10
-                      through: true
-                      seticon: "self.setItemIcon(var.fItemIconJson != none && var.fItemIconJson != '' ? var.fItemIconJson : var.air)"
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~255,255,255,230
-                  商品选图标按钮:
-                    type: Canvas
-                    attribute:
-                      point: ~top_left
-                      x: 104
-                      y: 44
-                      width: 140
-                      height: 40
-                    action:
-                      clickLeft: |-
-                        var.pickTarget = 'item_icon'
-                        var.showPicker = true
-                    children:
-                      商品选图标底:
-                        type: Texture
-                        attribute:
-                          point: ~stretch_all
-                          through: true
-                          normal: ~62,66,74,210
-                          shape: ~round_rect
-                          radius: 8
-                        effect:
-                          ripple:
-                          stroke:
-                            width: 2
-                            color: "self.isHovered() ? '140,200,255,255' : '255,255,255,230'"
-                      商品选图标文字:
+                      折扣标签:
                         type: Text
                         attribute:
-                          point: ~middle_center
-                          texts: "~&f背包选择"
-                          fontSize: 28
+                          point: ~top_left
+                          x: 24
+                          y: 624
+                          texts: "~&7折扣"
+                          fontSize: 32
                           through: true
-                  商品清图标按钮:
-                    type: Canvas
-                    attribute:
-                      point: ~top_left
-                      x: 104
-                      y: 92
-                      width: 140
-                      height: 40
-                    action:
-                      clickLeft: |-
-                        var.fItemIconJson = var.air
-                        var.fItemIconMode = 'none'
-                        val.商品图标预览.seticon()
-                    children:
-                      商品清图标底:
-                        type: Texture
+                      折扣输入区:
+                        type: Canvas
                         attribute:
-                          point: ~stretch_all
-                          through: true
-                          normal: ~90,60,60,210
-                          shape: ~round_rect
-                          radius: 8
-                        effect:
-                          ripple:
-                          stroke:
-                            width: 2
-                            color: "self.isHovered() ? '255,140,140,255' : '255,255,255,230'"
-                      商品清图标文字:
-                        type: Text
+                          point: ~top_left
+                          x: 150
+                          y: 584
+                          width: 440
+                          height: 80
+                        children:
+                          折扣输入底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              through: true
+                              normal: ~36,42,50,225
+                              shape: ~round_rect
+                              radius: 10
+                            effect:
+                              stroke:
+                                width: 2
+                                color: ~255,255,255,230
+                          折扣输入:
+                            type: TextBox
+                            val: 折扣输入
+                            attribute:
+                              x: 10
+                              y: 6
+                              width: 420
+                              height: 68
+                              length: 512
+                              allowNewLine: true
+                              emptyText: "~&8每行: 权限=倍率（如 vip=0.8）"
+                              fontSize: 30
+                            action:
+                              textChange: |-
+                                if(!var.hydrating){ var.dirty = true }
+                                var.fDiscounts = self.getContent()
+                      # ── 物品定义区（type=item）─────────────────
+                      库存管理区:
+                        type: Canvas
                         attribute:
-                          point: ~middle_center
-                          texts: "~&f清除图标"
-                          fontSize: 28
-                          through: true
-                  商品图标提示:
-                    type: Text
-                    attribute:
-                      point: ~top_left
-                      x: 0
-                      y: 148
-                      texts: "~&8未设置时显示商品物品本身"
-                      fontSize: 24
-                      through: true
+                          point: ~top_left
+                          x: "var.contentW - 760"
+                          y: 580
+                          width: 720
+                          height: 410
+                        children:
+                          补货间隔标签:
+                            type: Text
+                            attribute:
+                              x: 0
+                              y: 6
+                              texts: "~&7补货间隔（秒，0关闭）"
+                              fontSize: 26
+                              through: true
+                          补货间隔输入:
+                            type: TextBox
+                            val: 补货间隔输入
+                            attribute:
+                              x: 310
+                              width: 220
+                              height: 40
+                              length: 8
+                              inputPattern: "^[0-9]*$"
+                              fontSize: 28
+                            action:
+                              textChange: |-
+                                var.fRestockInterval = self.getContent()
+                                if(!var.hydrating){ var.dirty = true }
+                          保存应用库存:
+                            type: Canvas
+                            attribute:
+                              y: 52
+                              width: 640
+                              height: 40
+                              enable: "var.fStockMode != 'unlimited' || var.applyStock"
+                            action:
+                              clickLeft: |-
+                                var.applyStock = !var.applyStock
+                                var.dirty = true
+                            children:
+                              文字:
+                                type: Text
+                                attribute:
+                                  point: ~middle_left
+                                  texts: "var.applyStock ? '&e☑ 保存配置后补满实际库存（含所有玩家）' : '&7☐ 保存时保留当前实际库存'"
+                                  fontSize: 26
+                                  through: true
+                          实际库存:
+                            type: Text
+                            attribute:
+                              y: 102
+                              texts: "'&b' + var.fStockSummary"
+                              fontSize: 24
+                              through: true
+                          库存目标输入:
+                            type: TextBox
+                            attribute:
+                              y: 150
+                              width: 640
+                              height: 40
+                              length: 36
+                              emptyText: "~&7目标玩家UUID；留空表示全体玩家"
+                              fontSize: 24
+                            action:
+                              textChange: |-
+                                var.stockTarget = self.getContent()
+                          补货数量输入:
+                            type: TextBox
+                            attribute:
+                              y: 204
+                              width: 220
+                              height: 40
+                              length: 7
+                              inputPattern: "^[0-9]*$"
+                              emptyText: "~&7补货数量（默认1）"
+                              fontSize: 26
+                            action:
+                              textChange: |-
+                                var.stockManageAmount = self.getContent()
+                          查看目标库存:
+                            type: Canvas
+                            attribute:
+                              x: 260
+                              y: 204
+                              width: 280
+                              height: 40
+                              visible: "!var.itemNew"
+                            action:
+                              clickLeft: |-
+                                var.actionBusy = true
+                                Packet.send(var.packetId, 'shop_edit_stock', var.editShopId, var.editItemKey, 'inspect', '0', var.stockTarget, var.actionToken, var.shopRevision)
+                            children:
+                              文字:
+                                type: Text
+                                attribute:
+                                  point: ~middle_center
+                                  texts: "~&b查看目标实际库存"
+                                  fontSize: 26
+                                  through: true
+                          补货按钮:
+                            type: Canvas
+                            attribute:
+                              x: 0
+                              y: 264
+                              width: 146
+                              height: 44
+                              visible: "!var.itemNew"
+                            action:
+                              clickLeft: |-
+                                var.stockAction = 'add'
+                                var.stockAmountArg = var.stockManageAmount
+                                var.confirmTarget = 'stock'
+                                var.confirmText = '补货：目标 ' + (var.stockTarget == '' ? '全部玩家/全服库存' : var.stockTarget)
+                                var.showConfirm = true
+                            children:
+                              文字:
+                                type: Text
+                                attribute:
+                                  point: ~middle_center
+                                  texts: "~&b补货"
+                                  fontSize: 26
+                                  through: true
+                          清空按钮:
+                            type: Canvas
+                            attribute:
+                              x: 158
+                              y: 264
+                              width: 146
+                              height: 44
+                              visible: "!var.itemNew"
+                            action:
+                              clickLeft: |-
+                                var.stockAction = 'set'
+                                var.stockAmountArg = '0'
+                                var.confirmTarget = 'stock'
+                                var.confirmText = '清空：目标 ' + (var.stockTarget == '' ? '全部玩家/全服库存' : var.stockTarget)
+                                var.showConfirm = true
+                            children:
+                              文字:
+                                type: Text
+                                attribute:
+                                  point: ~middle_center
+                                  texts: "~&b清空"
+                                  fontSize: 26
+                                  through: true
+                          补满按钮:
+                            type: Canvas
+                            attribute:
+                              x: 316
+                              y: 264
+                              width: 146
+                              height: 44
+                              visible: "!var.itemNew"
+                            action:
+                              clickLeft: |-
+                                var.stockAction = 'reset'
+                                var.stockAmountArg = '0'
+                                var.confirmTarget = 'stock'
+                                var.confirmText = '补满：目标 ' + (var.stockTarget == '' ? '全部玩家/全服库存' : var.stockTarget)
+                                var.showConfirm = true
+                            children:
+                              文字:
+                                type: Text
+                                attribute:
+                                  point: ~middle_center
+                                  texts: "~&b补满"
+                                  fontSize: 26
+                                  through: true
+                          重置限购按钮:
+                            type: Canvas
+                            attribute:
+                              x: 474
+                              y: 264
+                              width: 146
+                              height: 44
+                              visible: "!var.itemNew"
+                            action:
+                              clickLeft: |-
+                                var.stockAction = 'reset-limit'
+                                var.stockAmountArg = '0'
+                                var.confirmTarget = 'stock'
+                                var.confirmText = '重置限购：目标 ' + (var.stockTarget == '' ? '全部玩家/全服库存' : var.stockTarget)
+                                var.showConfirm = true
+                            children:
+                              文字:
+                                type: Text
+                                attribute:
+                                  point: ~middle_center
+                                  texts: "~&b重置限购"
+                                  fontSize: 26
+                                  through: true
+                      物品定义区:
+                        type: Canvas
+                        attribute:
+                          point: ~top_left
+                          x: 0
+                          y: 690
+                          width: 720
+                          height: 280
+                          visible: "var.fItemType == 'item'"
+                        children:
+                          物品来源标签:
+                            type: Text
+                            attribute:
+                              point: ~top_left
+                              x: 24
+                              y: 24
+                              texts: "~&7来源/ID"
+                              fontSize: 32
+                              through: true
+                          来源输入区:
+                            type: Canvas
+                            attribute:
+                              point: ~top_left
+                              x: 150
+                              y: 24
+                              width: 160
+                              height: 44
+                            children:
+                              来源输入底:
+                                type: Texture
+                                attribute:
+                                  point: ~stretch_all
+                                  through: true
+                                  normal: ~36,42,50,225
+                                  shape: ~round_rect
+                                  radius: 10
+                                effect:
+                                  stroke:
+                                    width: 2
+                                    color: ~255,255,255,230
+                              来源输入:
+                                type: TextBox
+                                val: 来源输入
+                                attribute:
+                                  x: 10
+                                  y: 6
+                                  width: 140
+                                  height: 32
+                                  length: 32
+                                  emptyText: "~&8来源"
+                                  fontSize: 32
+                                action:
+                                  textChange: |-
+                                    if(!var.hydrating){ var.dirty = true }
+                                    var.fItemSource = self.getContent()
+                          物品ID输入区:
+                            type: Canvas
+                            attribute:
+                              point: ~top_left
+                              x: 330
+                              y: 24
+                              width: 280
+                              height: 44
+                            children:
+                              物品ID输入底:
+                                type: Texture
+                                attribute:
+                                  point: ~stretch_all
+                                  through: true
+                                  normal: ~36,42,50,225
+                                  shape: ~round_rect
+                                  radius: 10
+                                effect:
+                                  stroke:
+                                    width: 2
+                                    color: ~255,255,255,230
+                              物品ID输入:
+                                type: TextBox
+                                val: 物品ID输入
+                                attribute:
+                                  x: 10
+                                  y: 6
+                                  width: 260
+                                  height: 32
+                                  length: 128
+                                  emptyText: "~&8物品ID"
+                                  fontSize: 32
+                                action:
+                                  textChange: |-
+                                    if(!var.hydrating){ var.dirty = true }
+                                    var.fItemId = self.getContent()
+                          物品来源提示:
+                            type: Text
+                            attribute:
+                              point: ~top_left
+                              x: 620
+                              y: 24
+                              texts: "~&8minecraft/mythic/neige/overture/mmoitems"
+                              fontSize: 22
+                              through: true
+                          NBT标签:
+                            type: Text
+                            attribute:
+                              point: ~top_left
+                              x: 24
+                              y: 86
+                              texts: "~&7NBT"
+                              fontSize: 32
+                              through: true
+                          NBT输入区:
+                            type: Canvas
+                            attribute:
+                              point: ~top_left
+                              x: 150
+                              y: 80
+                              width: 540
+                              height: 64
+                            children:
+                              NBT输入底:
+                                type: Texture
+                                attribute:
+                                  point: ~stretch_all
+                                  through: true
+                                  normal: ~36,42,50,225
+                                  shape: ~round_rect
+                                  radius: 10
+                                effect:
+                                  stroke:
+                                    width: 2
+                                    color: ~255,255,255,230
+                              NBT输入:
+                                type: TextBox
+                                val: NBT输入
+                                attribute:
+                                  x: 10
+                                  y: 6
+                                  width: 520
+                                  height: 52
+                                  length: 4096
+                                  allowNewLine: true
+                                  emptyText: "~&8原版物品SNBT（可空）"
+                                  fontSize: 26
+                                action:
+                                  textChange: |-
+                                    if(!var.hydrating){ var.dirty = true }
+                                    var.fItemNbt = self.getContent()
+                          选物品按钮:
+                            type: Canvas
+                            attribute:
+                              point: ~top_left
+                              x: 150
+                              y: 160
+                              width: 180
+                              height: 44
+                            action:
+                              clickLeft: |-
+                                var.resultMsg = ''
+                                var.pickTarget = 'item_def'
+                                var.showPicker = true
+                            children:
+                              选物品底:
+                                type: Texture
+                                attribute:
+                                  point: ~stretch_all
+                                  through: true
+                                  normal: ~70,150,250,230
+                                  shape: ~round_rect
+                                  radius: 8
+                                effect:
+                                  ripple:
+                                  stroke:
+                                    width: 2
+                                    color: "self.isHovered() ? '140,200,255,255' : '255,255,255,230'"
+                              选物品文字:
+                                type: Text
+                                attribute:
+                                  point: ~middle_center
+                                  texts: "~&f从背包选物品"
+                                  fontSize: 28
+                                  through: true
+                          更新预览按钮:
+                            type: Canvas
+                            attribute:
+                              point: ~top_left
+                              x: 440
+                              y: 160
+                              width: 220
+                              height: 44
+                              enable: "!var.actionBusy && !var.formLoading && var.fItemId != ''"
+                            action:
+                              clickLeft: |-
+                                var.actionBusy = true
+                                Packet.send(var.packetId, 'shop_edit_preview', var.fItemSource, var.fItemId, var.fItemNbt)
+                            children:
+                              文字:
+                                type: Text
+                                attribute:
+                                  point: ~middle_center
+                                  texts: "~&b按当前字段更新预览"
+                                  fontSize: 28
+                                  through: true
+                          物品预览标签:
+                            type: Text
+                            attribute:
+                              point: ~top_left
+                              x: 350
+                              y: 160
+                              texts: "~&7物品预览"
+                              fontSize: 28
+                              through: true
+                          物品预览:
+                            type: Slot
+                            val: 物品预览
+                            attribute:
+                              slotType: ~Icon
+                              itemScale: 0.72
+                              x: 350
+                              y: 194
+                              width: 72
+                              height: 72
+                              normal: ~36,42,54,220
+                              shape: ~round_rect
+                              radius: 10
+                              through: true
+                              seticon: "self.setItemIcon(var.fItemPreviewJson != none && var.fItemPreviewJson != '' ? var.fItemPreviewJson : var.air)"
+                            effect:
+                              stroke:
+                                width: 2
+                                color: ~255,255,255,230
+                      # ── 指令区（type=command）─────────────────
+                      指令区:
+                        type: Canvas
+                        attribute:
+                          point: ~top_left
+                          x: "var.contentW - 760"
+                          y: 380
+                          width: 720
+                          height: 180
+                        children:
+                          指令标签:
+                            type: Text
+                            attribute:
+                              point: ~top_left
+                              x: 24
+                              y: 24
+                              texts: "~&7奖励指令"
+                              fontSize: 32
+                              through: true
+                          指令输入区:
+                            type: Canvas
+                            attribute:
+                              point: ~top_left
+                              x: 150
+                              y: 16
+                              width: 540
+                              height: 110
+                            children:
+                              指令输入底:
+                                type: Texture
+                                attribute:
+                                  point: ~stretch_all
+                                  through: true
+                                  normal: ~36,42,50,225
+                                  shape: ~round_rect
+                                  radius: 10
+                                effect:
+                                  stroke:
+                                    width: 2
+                                    color: ~255,255,255,230
+                              指令输入:
+                                type: TextBox
+                                val: 指令输入
+                                attribute:
+                                  x: 10
+                                  y: 6
+                                  width: 520
+                                  height: 98
+                                  length: 8192
+                                  allowNewLine: true
+                                  emptyText: "~&8每行一条；支持 {player} / {uuid} / {amount}"
+                                  fontSize: 26
+                                action:
+                                  textChange: |-
+                                    if(!var.hydrating){ var.dirty = true }
+                                    var.fCommands = self.getContent()
+                          指令提示:
+                            type: Text
+                            attribute:
+                              point: ~top_left
+                              x: 150
+                              y: 134
+                              texts: "~&8执行时以控制台身份运行，无需前导 /"
+                              fontSize: 24
+                              through: true
+                      # ── 右列：商品图标 ─────────────────────────
+                      商品图标区:
+                        type: Canvas
+                        attribute:
+                          point: ~top_left
+                          x: "var.contentW - 380"
+                          y: 96
+                          width: 356
+                          height: 240
+                        children:
+                          商品图标标签:
+                            type: Text
+                            attribute:
+                              point: ~top_left
+                              x: 0
+                              y: 0
+                              texts: "~&7商品图标"
+                              fontSize: 32
+                              through: true
+                          商品图标预览:
+                            type: Slot
+                            val: 商品图标预览
+                            attribute:
+                              slotType: ~Icon
+                              itemScale: 0.72
+                              x: 0
+                              y: 44
+                              width: 88
+                              height: 88
+                              normal: ~36,42,54,220
+                              shape: ~round_rect
+                              radius: 10
+                              through: true
+                              seticon: "self.setItemIcon(var.fItemIconJson != none && var.fItemIconJson != '' ? var.fItemIconJson : var.air)"
+                            effect:
+                              stroke:
+                                width: 2
+                                color: ~255,255,255,230
+                          商品选图标按钮:
+                            type: Canvas
+                            attribute:
+                              point: ~top_left
+                              x: 104
+                              y: 44
+                              width: 140
+                              height: 40
+                            action:
+                              clickLeft: |-
+                                var.resultMsg = ''
+                                var.pickTarget = 'item_icon'
+                                var.showPicker = true
+                            children:
+                              商品选图标底:
+                                type: Texture
+                                attribute:
+                                  point: ~stretch_all
+                                  through: true
+                                  normal: ~62,66,74,210
+                                  shape: ~round_rect
+                                  radius: 8
+                                effect:
+                                  ripple:
+                                  stroke:
+                                    width: 2
+                                    color: "self.isHovered() ? '140,200,255,255' : '255,255,255,230'"
+                              商品选图标文字:
+                                type: Text
+                                attribute:
+                                  point: ~middle_center
+                                  texts: "~&f背包选择"
+                                  fontSize: 28
+                                  through: true
+                          商品清图标按钮:
+                            type: Canvas
+                            attribute:
+                              point: ~top_left
+                              x: 104
+                              y: 92
+                              width: 140
+                              height: 40
+                            action:
+                              clickLeft: |-
+                                var.fItemIconJson = var.air
+                                var.fItemIconMode = 'none'
+                                var.dirty = true
+                                val.商品图标预览.seticon()
+                            children:
+                              商品清图标底:
+                                type: Texture
+                                attribute:
+                                  point: ~stretch_all
+                                  through: true
+                                  normal: ~90,60,60,210
+                                  shape: ~round_rect
+                                  radius: 8
+                                effect:
+                                  ripple:
+                                  stroke:
+                                    width: 2
+                                    color: "self.isHovered() ? '255,140,140,255' : '255,255,255,230'"
+                              商品清图标文字:
+                                type: Text
+                                attribute:
+                                  point: ~middle_center
+                                  texts: "~&f清除图标"
+                                  fontSize: 28
+                                  through: true
+                          商品图标提示:
+                            type: Text
+                            attribute:
+                              point: ~top_left
+                              x: 0
+                              y: 148
+                              texts: "~&8未设置时显示商品物品本身"
+                              fontSize: 24
+                              through: true
               保存商品按钮:
                 type: Canvas
                 attribute:
@@ -2281,18 +2657,21 @@ controls:
                   y: -16
                   width: 160
                   height: 52
-                  enable: "!var.actionBusy && var.actionToken != none && var.actionToken != '' && var.editItemKey != none && var.editItemKey != ''"
+                  enable: "!var.actionBusy && !var.formLoading && var.actionToken != none && var.actionToken != '' && var.editItemKey != none && var.editItemKey != ''"
                 action:
                   clickLeft: |-
-                    if(!var.actionBusy){
+                    if(!var.actionBusy && !var.formLoading){
                       var.actionBusy = true
                       form = {}
+                      form['revision'] = var.shopRevision
                       form['key'] = var.editItemKey
                       form['type'] = var.fItemType
                       form['displayName'] = var.fItemName
                       form['buyPrice'] = var.fBuyPrice
                       form['sellPrice'] = var.fSellPrice
                       form['currency'] = var.fCurrency
+                      form['restockInterval'] = var.fRestockInterval
+                      form['applyStock'] = var.applyStock
                       form['stockMode'] = var.fStockMode
                       form['stockAmount'] = var.fStockAmount
                       form['limitPerPlayer'] = var.fLimit
@@ -2307,7 +2686,17 @@ controls:
                       form['iconJson'] = var.fItemIconJson == var.air ? '' : var.fItemIconJson
                       form['iconMaterial'] = ''
                       flag = var.itemNew == true ? '1' : '0'
-                      Packet.send(var.packetId, 'shop_edit_item_save', var.editShopId, flag, json.stringify(form), var.actionToken)
+                      if(var.applyStock){
+                        var.pendingSaveShop = var.editShopId
+                        var.pendingSaveNew = flag
+                        var.pendingSaveJson = json.stringify(form)
+                        var.confirmTarget = 'save-stock'
+                        var.confirmText = '保存配置并补满实际库存（所有玩家），确定继续？'
+                        var.showConfirm = true
+                        var.actionBusy = false
+                      } else {
+                        Packet.send(var.packetId, 'shop_edit_item_save', var.editShopId, flag, json.stringify(form), var.actionToken)
+                      }
                     }
                 children:
                   保存商品底:
@@ -2377,6 +2766,37 @@ controls:
                   fontSize: 30
                   through: true
 
+      重新加载编辑内容:
+        type: Canvas
+        attribute:
+          point: ~top_right
+          x: -120
+          y: 24
+          width: 200
+          height: 48
+          visible: "var.editShopId != '' && !var.editShopNew"
+          enable: "!var.actionBusy && !var.formLoading"
+        action:
+          clickLeft: |-
+            var.pendingNavigation = -> {
+              var.actionBusy = true
+              if(var.view == 'item' && !var.itemNew){
+                Packet.send(var.packetId, 'shop_edit_item', var.editShopId, var.editItemKey)
+              } else {
+                var.view = 'shop'
+                Packet.send(var.packetId, 'shop_edit_shop', var.editShopId)
+              }
+            }
+            var.navigate()
+        children:
+          文字:
+            type: Text
+            attribute:
+              point: ~middle_center
+              texts: "~&b重新加载当前内容"
+              fontSize: 28
+              through: true
+
       # ── 背包选物弹窗 ───────────────────────────────────
       选物弹窗:
         type: Canvas
@@ -2421,7 +2841,7 @@ controls:
                 attribute:
                   point: ~top_center
                   y: 80
-                  texts: "~&7点击背包中的物品，服务端将读取真实槽位内容"
+                  texts: "var.resultOk != true && var.resultMsg != '' ? var.resultMsg : '&7选择物品只复制配置，不会取走背包物品'"
                   fontSize: 28
                   through: true
               背包网格:
@@ -2452,7 +2872,7 @@ controls:
                         item = self['背包槽位'].getSlotItemStack()
                         if(item != none && item.getType() != 'null' && item.getCount() > 0){
                           Packet.send(var.packetId, 'shop_edit_pick', self.entryKey, var.pickTarget)
-                          var.showPicker = false
+                          var.actionBusy = true
                         }
                     children:
                       背包槽底:
@@ -2563,15 +2983,23 @@ controls:
                   y: -24
                   width: 170
                   height: 48
+                  enable: "!var.actionBusy && !var.formLoading && var.actionToken != ''"
                 action:
                   clickLeft: |-
-                    if(var.confirmTarget == 'shop'){
-                      Packet.send(var.packetId, 'shop_edit_shop_delete', var.editShopId, var.actionToken)
+                    if(var.confirmTarget == 'discard'){
+                      var.dirty = false
+                      var.pendingNavigation()
+                    } else if(var.confirmTarget == 'stock'){
+                      Packet.send(var.packetId, 'shop_edit_stock', var.editShopId, var.editItemKey, var.stockAction, var.stockAmountArg, var.stockTarget, var.actionToken, var.shopRevision)
+                    } else if(var.confirmTarget == 'save-stock'){
+                      Packet.send(var.packetId, 'shop_edit_item_save', var.pendingSaveShop, var.pendingSaveNew, var.pendingSaveJson, var.actionToken)
+                    } else if(var.confirmTarget == 'shop'){
+                      Packet.send(var.packetId, 'shop_edit_shop_delete', var.editShopId, var.actionToken, var.shopRevision)
                     } else if(var.confirmTarget == 'item'){
-                      Packet.send(var.packetId, 'shop_edit_item_delete', var.editShopId, var.confirmKey, var.actionToken)
+                      Packet.send(var.packetId, 'shop_edit_item_delete', var.editShopId, var.confirmKey, var.actionToken, var.shopRevision)
                     }
                     var.showConfirm = false
-                    var.actionBusy = true
+                    if(var.confirmTarget != 'discard'){ var.actionBusy = true }
                 children:
                   确认执行底:
                     type: Texture
@@ -2590,7 +3018,7 @@ controls:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      texts: "~&f确认删除"
+                      texts: "var.confirmTarget == 'discard' ? '&f放弃修改' : '&f确认操作'"
                       fontSize: 32
                       through: true
               确认取消按钮:

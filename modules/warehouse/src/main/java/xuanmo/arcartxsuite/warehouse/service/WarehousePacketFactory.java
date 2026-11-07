@@ -60,12 +60,19 @@ final class WarehousePacketFactory {
         int pageTotal = Math.max(1, (visibleSlots.size() + pageSize - 1) / pageSize);
         state.setPage(Math.max(1, Math.min(state.page(), pageTotal)));
         int start = (state.page() - 1) * pageSize;
+        Map<Integer,SlotItemRecord> pageItems=new LinkedHashMap<>();
+        List<Integer> indices=visibleSlots.subList(start,Math.min(visibleSlots.size(),start+pageSize)).stream().map(SlotItemRecord::slot).toList();
+        for(var full:service.repository.loadSlots(state.ownerType(),state.ownerId(),state.warehouseId(),indices))pageItems.put(full.slot(),full);
         Map<Integer, SlotItemRecord> displayedSlots = new LinkedHashMap<>();
         for (int displaySlot = 0; displaySlot < pageSize; displaySlot++) {
             int index = start + displaySlot;
             SlotItemRecord item = index >= 0 && index < visibleSlots.size()
                 ? visibleSlots.get(index)
                 : null;
+            if(item!=null){
+                SlotItemRecord full=pageItems.get(item.slot());
+                item=full!=null && full.itemHash().equals(item.itemHash()) && full.createdAt()==item.createdAt()?full:null;
+            }
             Map<String, Object> row = item != null
                 ? slotPacket(item)
                 : emptySlotPacket(displaySlot);
@@ -688,20 +695,9 @@ final class WarehousePacketFactory {
      * 历史遗留空值时才回退到反序列化 item_data 重新生成。
      */
     String displayItemJson(SlotItemRecord item) {
-        String stored = item.itemJson();
-        if (stored != null && !stored.isBlank()) {
-            return xuanmo.arcartxsuite.api.util.ItemPreview.singleCount(stored);
-        }
-        if (item.itemData() == null || item.itemData().isBlank()) {
-            return stored == null ? "" : stored;
-        }
-        try {
-            ItemStack stack = ItemSerializer.deserialize(Base64.getDecoder().decode(item.itemData()));
-            String json = service.itemJson(stack);
-            return json.isBlank() ? (stored == null ? "" : stored) : json;
-        } catch (RuntimeException exception) {
-            return stored == null ? "" : stored;
-        }
+        ItemStack stack=service.deserializeSlotItem(item);
+        if(stack==null)stack=service.unavailableItemIcon(item);
+        return service.itemJson(stack);
     }
 
     Comparator<SlotItemRecord> sortComparator(String sortId) {
@@ -745,6 +741,7 @@ final class WarehousePacketFactory {
 
     String sortText(String sortId) {
         return switch (WarehouseTexts.normalizeId(sortId)) {
+            case "default" -> "默认 · 存入顺序";
             case "time" -> service.message("ui.sort-time");
             case "name" -> service.message("ui.sort-name");
             case "amount" -> service.message("ui.sort-amount");
@@ -754,10 +751,27 @@ final class WarehousePacketFactory {
 
     List<SlotItemRecord> visibleSlots(WarehouseService.ViewState state) {
         String normalizedSearch = WarehouseTexts.normalizeToken(state.search());
-        return service.loadSlots(state.ownerType(), state.ownerId(), state.warehouseId()).stream()
+        return orderedSlots(state.ownerType(), state.ownerId(), state.warehouseId(), state.sortId()).stream()
             .filter(item -> service.slotMatches(item, state.categoryId(), normalizedSearch))
-            .sorted(sortComparator(state.sortId()))
             .toList();
+    }
+
+    List<SlotItemRecord> orderedSlots(String ownerType, String ownerId, String warehouseId, String sortId) {
+        List<SlotItemRecord> rows = service.loadSlots(ownerType, ownerId, warehouseId);
+        if (!"default".equals(sortId)) {
+            return rows.stream().sorted(sortComparator(sortId)).toList();
+        }
+        java.util.Set<String> pins = java.util.Set.of();
+        if (WarehouseService.OWNER_PERSONAL.equals(ownerType)) {
+            try {
+                pins = service.repository.loadPins(java.util.UUID.fromString(ownerId), warehouseId);
+            } catch (java.sql.SQLException exception) {
+                throw new IllegalStateException("读取仓库置顶失败", exception);
+            }
+        }
+        java.util.Set<String> pinned = pins;
+        return rows.stream().sorted(Comparator.comparing((SlotItemRecord row) -> !pinned.contains(row.itemHash()))
+            .thenComparingLong(SlotItemRecord::createdAt).thenComparingInt(SlotItemRecord::slot)).toList();
     }
 
     int selectedDisplaySlot(WarehouseService.ViewState state, List<SlotItemRecord> precomputedSlots) {

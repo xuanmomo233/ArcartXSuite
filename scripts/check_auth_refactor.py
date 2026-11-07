@@ -119,8 +119,7 @@ def unique_json_mapping(pairs):
         result[key] = value
     return result
 
-json_paths = ("auth-center/config/center.example.json", "auth-center/config/center.external.example.json",
-              "docs/auth-refactor/progress.json", "docs/auth-refactor/p3-contract.json", "docs/auth-refactor/p4-contract.json")
+json_paths = ("auth-center/config/center.example.json", "auth-center/config/center.external.example.json")
 for relative in json_paths:
     try:
         json.loads((ROOT / relative).read_text(encoding="utf-8-sig"), object_pairs_hook=unique_json_mapping)

@@ -21,13 +21,16 @@ help:
   status: "&7{0} status&f - 状态"
   reload: "&7{0} reload&f - 重载"
   clear-expired: "&7{0} clear-expired&f - 处理到期"
-  remove: "&7{0} remove <ID>&f - 强制移除"
+  remove: "&7{0} remove <auction|pshop> <ID>&f - 强制下架并退还"
   edit: "&7{0} edit [商店ID]&f - 编辑系统商店"
+  open: "&7{0} open <auction|pshop|shop|recycle|history|sell> [商店ID]&f - 打开对应界面"
 
 # ── 状态查询 ──────────────────────────────────────────
 status:
   title: "&6AXS Market 状态"
   active-listings: "&7活跃拍卖: &f{0}"
+  player-shop-listings: "&7玩家商店在售: &f{0}"
+  subsystems: "&7功能状态: &f{0}"
   shops: "&7系统商店: &f{0}"
   recycle-entries: "&7回收条目: &f{0}"
   list-cache: "&7列表缓存(Redis): &f{0}"
@@ -40,7 +43,7 @@ status:
 # ── 管理操作 ──────────────────────────────────────────
 admin:
   clear-expired-success: "&a已处理 {0} 个到期物品"
-  remove-usage: "&e用法: /axs market remove <上架ID>"
+  remove-usage: "&e用法: /axs market remove <auction|pshop> <上架ID>（省略类型时为 auction）"
   remove-success: "&a已强制移除上架物品"
   remove-not-found: "&c未找到该上架ID"
   invalid-id: "&c无效的 ID 格式。"
@@ -48,6 +51,8 @@ admin:
 # ── player ────────────────────────────────────────────
 player:
   auction-unavailable: "&c拍卖行未启用"
+  pshop-unavailable: "&c玩家商店未启用"
+  sell-unavailable: "&c拍卖行和玩家商店均未启用"
   cancel-failed: "&c取消失败（不存在或非本人上架）"
   shop-unavailable: "&c系统商店未启用"
   recycle-unavailable: "&c回收商店未启用"
@@ -56,15 +61,15 @@ player:
   batch-recycle-disabled: "&c一键回收功能已关闭"
   help:
     title: "&6全球市场 命令"
-    auction: "&7/market&f - 打开拍卖行"
-    pshop: "&7/market pshop&f - 玩家商店"
+    auction: "&7/market&f - 拍卖大厅；/market lot <ID> 打开拍品竞价厅"
+    pshop: "&7/market pshop&f - 店铺目录；mine 我的店铺 / edit 装修 / market 全部商品"
     shop: "&7/market shop [商店ID]&f - 系统商店"
-    sell: "&7/market sell <起拍价> [时长] [货币]&f - 上架物品"
-    recycle: "&7/market recycle [all]&f - 回收商店"
-    history: "&7/market history&f - 交易历史"
-    my: "&7/market my&f - 我的上架"
+    sell: "&7/market sell <起拍价> [时长] [货币]&f - 拍卖上架；/market sellui 打开统一上架界面"
+    recycle: "&7/market recycle [all|protect]&f - 回收商店 / 个人回收保护"
+    history: "&7/market history&f - 四类交易历史"
+    my: "&7/market my [auction|pshop]&f - 我的上架"
     search: "&7/market search <关键词>&f - 搜索"
-    cancel: "&7/market cancel <ID>&f - 取消上架"
+    cancel: "&7/market cancel <ID> [auction|pshop]&f - 取消自己的上架"
   sell:
     usage: "&e用法: /market sell <起拍价> [时长秒] [货币]"
     air: "&c请手持要上架的物品"
@@ -76,7 +81,7 @@ player:
     message-too-long: "&c留言不能超过 {0} 个字符"
     message-filtered: "&c留言包含敏感词，请修改后重试"
   cancel:
-    usage: "&e用法: /market cancel <上架ID>"
+    usage: "&e用法: /market cancel <上架ID> [auction|pshop]"
     invalid-id: "&c无效的上架 ID 格式"
   search:
     usage: "&e用法: /market search <关键词>"
@@ -89,11 +94,11 @@ auction-expired: "&7您上架的 &e{item} &7已到期，已退回。"  # 到期�
 auction-sold: "&a您上架的 &e{item} &a已售出！收入: &e{amount}"  # 售出通知，{amount}=税后收入
 auction-cancelled: "&7已取消上架。"                    # 取消上架成功
 # ── 系统商店消息 ──
-shop-bought: "&a购买成功！花费: &e{amount}"            # {amount}=花费金额
+shop-bought: "&a购买成功！花费: &e{amount}&a，奖励已进入持久交付队列。" # {amount}=花费金额
 shop-limit-reached: "&c该商品已达购买上限。"           # 限购商品达到上限
 shop-condition-denied: "&c你不满足该商品的上架条件。"      # 商品 conditions 条件不满足
 # ── 回收商店消息 ──
-recycle-success: "&a回收成功！获得: &e{amount}"        # {amount}=获得金额
+recycle-success: "&a回收已受理，收益等待入账: &e{amount}" # {amount}=已建立入账任务的金额
 recycle-nothing: "&7背包中没有可回收的物品。"          # 无可回收物品
 # ── 玩家商店消息 ──
 player-shop-listed: "&a商品已上架到你的商店！"          # 上架成功

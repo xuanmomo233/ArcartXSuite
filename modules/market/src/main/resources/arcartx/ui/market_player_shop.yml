@@ -1,4 +1,4 @@
-# AXS Market — 玩家商店浏览界面
+# AXS Market — 玩家市场（全部商品）
 # 打开方式: /market pshop 或导航跳转
 # 布局: 全屏玻璃底 + Adaptive(~top_center,1920x1080) + 顶栏 + 左侧导航(页面导航+卖家列表) + 内容区(搜索+商品网格+分页)
 # 配色: 蓝色系 主色70,150,250 强调140,200,255 底42,50,66,210 描边255,255,255,230
@@ -29,6 +29,10 @@ ui:
   itemSize: 16
   screenScale: true
   packetHandler:
+    action_result: |-
+      var.actionToken = packet['action_token']
+      var.actionBusy = false
+      var.actionBusySeconds = 0
     # packetHandler: pshop_list
     # 商品列表包，接收服务端推送的商品数据
     # 包字段:
@@ -52,6 +56,8 @@ ui:
       var.pageText = packet['pageText']
       var.keyword = packet['keyword']
       var.sellerUuid = packet['sellerUuid']
+      var.selfUuid = packet['selfUuid']
+      var.showTradeConfirm = false
       var.listings = packet['listings']
       var.listingTexts = packet['listingTexts']
       var.maxItemCount = packet['maxItemCount']
@@ -78,12 +84,14 @@ ui:
           }
         }
       }
-      for(i in range(0, var.maxItemCount - 1)){
-        key = i.round()
-        if(val.商品列表 != none){
-          e = val.商品列表.get(key)
-          if(e != none && e['商品图标'] != none){
-            e['商品图标'].seticon()
+      if(var.maxItemCount > 0){
+        for(i in range(0, var.maxItemCount - 1)){
+          key = i.round()
+          if(val.商品列表 != none){
+            e = val.商品列表.get(key)
+            if(e != none && e['商品图标'] != none){
+              e['商品图标'].seticon()
+            }
           }
         }
       }
@@ -99,6 +107,7 @@ ui:
     #   - sellerTexts: 卖家显示文本字典
     #   - maxSellerCount: 卖家最大数量
     pshop_sellers: |-
+      var.packetId = packet['packetId']
       oldMaxSellerCount = var.maxSellerCount
       var.sellerPage = packet['page']
       var.sellerTotalPages = packet['totalPages']
@@ -133,6 +142,11 @@ ui:
       }
     load: |-
       var.actionToken = ''
+      var.showTradeConfirm = false
+      var.selfUuid = ''
+      var.sellerPage = 0
+      var.sellerTotalPages = 1
+      var.sellerPageText = '1/1'
       var.keyword = ''
       var.packetId = 'AXS_MARKET'
       var.page = 0
@@ -233,6 +247,24 @@ controls:
               x: 252
               texts: "~&7玩家商店"
               fontSize: 36
+          店铺目录入口:
+            type: Canvas
+            attribute:
+              point: ~middle_right
+              x: -124
+              width: 180
+              height: 48
+            action:
+              clickLeft: |-
+                Packet.send(var.packetId, 'pshop_directory_ui_open')
+            children:
+              文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "~&b玩家店铺目录"
+                  fontSize: 28
+                  through: true
           关闭按钮:
             type: Canvas
             attribute:
@@ -467,7 +499,7 @@ controls:
               height: 58
             action:
               clickLeft: |-
-                Packet.send(var.packetId, 'sell_ui_open')
+                Packet.send(var.packetId, 'sell_ui_open', 'pshop')
             children:
               上架底:
                 type: Texture
@@ -510,8 +542,7 @@ controls:
               height: 48
             action:
               clickLeft: |-
-                var.sellerUuid = ''
-                Packet.send(var.packetId, 'pshop_list', '0', '', '')
+                Packet.send(var.packetId, 'pshop_store_ui_open', 'self')
             children:
               全部卖家底:
                 type: Texture
@@ -530,7 +561,7 @@ controls:
                 attribute:
                   point: ~middle_left
                   x: 28
-                  texts: "var.sellerUuid == '' ? '&0全部卖家' : '&f全部卖家'"
+                  texts: "~&f进入我的店铺"
                   fontSize: 32
                   through: true
           卖家标题:
@@ -542,6 +573,54 @@ controls:
               texts: "~&f卖家列表"
               fontSize: 36
               through: true
+          卖家上一页:
+            type: Canvas
+            attribute:
+              point: ~bottom_left
+              x: 14
+              y: -16
+              width: 80
+              height: 40
+              enable: "var.sellerPage > 0"
+            action:
+              clickLeft: |-
+                Packet.send(var.packetId, 'pshop_sellers', var.sellerPage - 1)
+            children:
+              文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "~&f上一页"
+                  fontSize: 24
+                  through: true
+          卖家页码:
+            type: Text
+            attribute:
+              point: ~bottom_center
+              y: -24
+              texts: "'&7' + var.sellerPageText"
+              fontSize: 24
+              through: true
+          卖家下一页:
+            type: Canvas
+            attribute:
+              point: ~bottom_right
+              x: -14
+              y: -16
+              width: 80
+              height: 40
+              enable: "var.sellerPage + 1 < var.sellerTotalPages"
+            action:
+              clickLeft: |-
+                Packet.send(var.packetId, 'pshop_sellers', var.sellerPage + 1)
+            children:
+              文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "~&f下一页"
+                  fontSize: 24
+                  through: true
           卖家滑轨:
             type: Texture
             attribute:
@@ -549,7 +628,7 @@ controls:
               x: -10
               y: 546
               width: 8
-              height: "var.viewH - 710"
+              height: "var.viewH - 762"
               normal: ~42,50,66,225
               shape: ~round_rect
               radius: 4
@@ -567,7 +646,7 @@ controls:
               width: 8
               height: 60
               normal: ~140,200,255,255
-              maxDragY: "var.viewH - 770"
+              maxDragY: "var.viewH - 822"
               shape: ~round_rect
               radius: 4
           卖家滚动:
@@ -578,7 +657,7 @@ controls:
               x: 20
               y: 546
               width: 260
-              height: "var.viewH - 710"
+              height: "var.viewH - 762"
               moveY: "self.parent['卖家滑块'].getDragYRatio()"
             action:
               wheel: |-
@@ -607,7 +686,7 @@ controls:
                     action:
                       clickLeft: |-
                         var.sellerUuid = self.entry['uuid']
-                        Packet.send(var.packetId, 'pshop_list', '0', '', self.entry['uuid'])
+                        Packet.send(var.packetId, 'pshop_store_ui_open', self.entry['uuid'])
                     children:
                       卖家项底:
                         type: Texture
@@ -702,8 +781,7 @@ controls:
                   textChange: |-
                     var.keyword = self.getContent()
                   enter: |-
-                    var.sellerUuid = ''
-                    Packet.send(var.packetId, 'pshop_list', '0', var.keyword, '')
+                    Packet.send(var.packetId, 'pshop_list', '0', var.keyword, var.sellerUuid)
           搜索按钮:
             type: Canvas
             attribute:
@@ -714,8 +792,7 @@ controls:
               height: 48
             action:
               clickLeft: |-
-                var.sellerUuid = ''
-                Packet.send(var.packetId, 'pshop_list', '0', var.keyword, '')
+                Packet.send(var.packetId, 'pshop_list', '0', var.keyword, var.sellerUuid)
             children:
               搜索按钮底:
                 type: Texture
@@ -747,7 +824,7 @@ controls:
               height: 48
             action:
               clickLeft: |-
-                Packet.send(var.packetId, 'pshop_list', var.page, var.keyword, var.sellerUuid)
+                Packet.send(var.packetId, 'pshop_list', var.page, var.keyword, var.sellerUuid, 'refresh')
             children:
               刷新底:
                 type: Texture
@@ -779,7 +856,7 @@ controls:
               height: 48
             action:
               clickLeft: |-
-                Packet.send(var.packetId, 'sell_ui_open')
+                Packet.send(var.packetId, 'sell_ui_open', 'pshop')
             children:
               我要上架底:
                 type: Texture
@@ -924,7 +1001,7 @@ controls:
                         attribute:
                           x: 123
                           y: 16
-                          texts: "'&f' + self.parent.entry['itemDisplayName']"
+                          texts: "self.parent.entry != none ? ('&f' + self.parent.entry['itemDisplayName']) : ''"
                           fontSize: 36
                           through: true
                       卖家名:
@@ -932,7 +1009,7 @@ controls:
                         attribute:
                           x: 123
                           y: 52
-                          texts: "'&7卖家: &f' + self.parent.entry['sellerName']"
+                          texts: "self.parent.entry != none ? ('&7卖家: &f' + self.parent.entry['sellerName']) : ''"
                           fontSize: 32
                           through: true
                       价格:
@@ -940,7 +1017,7 @@ controls:
                         attribute:
                           x: 123
                           y: 88
-                          texts: "'&e价格: &f' + self.parent.entry['price'].round() + ' &7' + self.parent.entry['currencyName']"
+                          texts: "self.parent.entry != none ? ('&e价格: &f' + self.parent.entry['price'] + ' &7' + self.parent.entry['currencyName']) : ''"
                           fontSize: 32
                           through: true
                       留言:
@@ -990,8 +1067,12 @@ controls:
                               enable: "!var.actionBusy && var.actionToken != ''"
                             action:
                               clickLeft: |-
-                                var.actionBusy = true
-                                Packet.send(var.packetId, 'pshop_buy', self.parent.parent.entry['id'].round(), var.actionToken)
+                                var.tradeId = self.parent.parent.entry['id'].round()
+                                var.tradeConfirmText = '整组购买 ×' + self.parent.parent.entry['itemAmount'].round() + '，总价 ' + self.parent.parent.entry['price'] + ' ' + self.parent.parent.entry['currencyName']
+                                var.executeTrade = -> {
+                                  Packet.send(var.packetId, 'pshop_buy', var.tradeId, var.actionToken, var.page, var.keyword, var.sellerUuid)
+                                }
+                                var.showTradeConfirm = true
                             children:
                               购买底:
                                 type: Texture
@@ -1026,8 +1107,12 @@ controls:
                               enable: "!var.actionBusy && var.actionToken != ''"
                             action:
                               clickLeft: |-
-                                var.actionBusy = true
-                                Packet.send(var.packetId, 'pshop_cancel', self.parent.parent.entry['id'].round(), var.actionToken)
+                                var.tradeId = self.parent.parent.entry['id'].round()
+                                var.tradeConfirmText = '确认下架并退还这组商品？'
+                                var.executeTrade = -> {
+                                  Packet.send(var.packetId, 'pshop_cancel', var.tradeId, var.actionToken, var.page, var.keyword, var.sellerUuid)
+                                }
+                                var.showTradeConfirm = true
                             children:
                               下架底:
                                 type: Texture
@@ -1129,4 +1214,85 @@ controls:
                   point: ~middle_center
                   texts: "~&f下一页 >"
                   fontSize: 36
+                  through: true
+
+  交易确认弹窗:
+    type: Canvas
+    attribute:
+      point: ~stretch_all
+      visible: "var.showTradeConfirm == true"
+    children:
+      遮罩:
+        type: Texture
+        attribute:
+          point: ~stretch_all
+          normal: ~0,0,0,180
+      面板:
+        type: Canvas
+        attribute:
+          point: ~middle_center
+          width: 800
+          height: 260
+        children:
+          背景:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              through: true
+              normal: ~36,38,48,245
+          标题:
+            type: Text
+            attribute:
+              point: ~top_center
+              y: 24
+              texts: "~&f确认交易"
+              fontSize: 36
+              through: true
+          内容:
+            type: Text
+            attribute:
+              point: ~middle_center
+              texts: "'&f' + var.tradeConfirmText"
+              fontSize: 28
+              through: true
+          确认:
+            type: Canvas
+            attribute:
+              point: ~bottom_left
+              x: 90
+              y: -24
+              width: 240
+              height: 48
+              enable: "!var.actionBusy && var.actionToken != ''"
+            action:
+              clickLeft: |-
+                var.showTradeConfirm = false
+                var.actionBusy = true
+                var.executeTrade()
+            children:
+              文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "~&a确认"
+                  fontSize: 32
+                  through: true
+          取消:
+            type: Canvas
+            attribute:
+              point: ~bottom_right
+              x: -90
+              y: -24
+              width: 240
+              height: 48
+            action:
+              clickLeft: |-
+                var.showTradeConfirm = false
+            children:
+              文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "~&f取消"
+                  fontSize: 32
                   through: true

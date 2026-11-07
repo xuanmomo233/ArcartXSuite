@@ -26,6 +26,15 @@ import xuanmo.arcartxsuite.market.storage.MarketRepository;
  * 回收商店业务服务。
  */
 public class RecycleService {
+    private xuanmo.arcartxsuite.market.MarketLedger ledger;
+    private RecycleProtectionService protection;
+    public void setProtection(RecycleProtectionService protection){this.protection=protection;}
+    public String protectionReason(Player player,ItemStack item){return protection==null?"回收保护尚未就绪":protection.denial(player,item);}
+    public boolean canAutoRecycle(Player player,ItemStack item){return protection!=null && protection.automatic(player) && isRecyclable(item) && protection.denial(player,item)==null;}
+
+
+    public void setLedger(xuanmo.arcartxsuite.market.MarketLedger ledger) { this.ledger = ledger; }
+
 
     private final RecycleConfiguration config;
     private final MessagesConfiguration messages;
@@ -82,11 +91,16 @@ public class RecycleService {
                 for (String key : entriesSec.getKeys(false)) {
                     ConfigurationSection entrySec = entriesSec.getConfigurationSection(key);
                     if (entrySec == null) continue;
+                    double price = entrySec.getDouble("price", 0);
+                    if (!Double.isFinite(price) || price <= 0) {
+                        logger.warning("[Recycle] 跳过无效价格条目: " + file.getName() + "/" + key);
+                        continue;
+                    }
                     entries.put(key, new RecycleEntry(
                         key,
                         entrySec.getString("source", "minecraft"),
                         entrySec.getString("item-id", "STONE"),
-                        entrySec.getDouble("price", 0),
+                        price,
                         entrySec.getString("currency", config.defaultCurrency())
                     ));
                 }
@@ -99,92 +113,78 @@ public class RecycleService {
     /**
      * 回收单个物品。
      */
-    public RecycleResult recycle(Player player, ItemStack item) {
-        RecycleEntry entry = findEntry(item);
-        if (entry == null) return RecycleResult.fail("该物品不可回收");
-
-        double pricePerUnit = entry.price();
-        double multiplier = getMultiplier(player);
-        double total = pricePerUnit * item.getAmount() * multiplier;
-
-        CurrencyBridgeAPI.CurrencyBridge bridge = currencyManager.bridge(entry.currency());
-        if (bridge == null || !bridge.available()) {
-            return RecycleResult.fail("货币系统不可用");
+    public RecycleResult recycle(Player player,ItemStack item) {
+        if(item!=null)for(int slot=0;slot<36;slot++){
+            ItemStack current=player.getInventory().getItem(slot);
+            if(current!=null && current.isSimilar(item) && current.getAmount()==item.getAmount())return recycleSlot(player,slot);
         }
-        CurrencyTransactionResult result = bridge.deposit(player, BigDecimal.valueOf(total));
-        if (!result.success()) {
-            return RecycleResult.fail("存款失败");
-        }
-
-        int count = item.getAmount();
-        item.setAmount(0);
-
-        // 统计
-        repository.addRecycleStats(player.getUniqueId(), entry.currency(), total, count);
-
-        return RecycleResult.success(total, entry.currency(), count, Map.of(entry.currency(), total));
+        return RecycleResult.fail("物品不在主背包中，请重新选择");
     }
 
-    /**
-     * 自动回收（拾取触发）：执行回收并向玩家发送反馈消息。
-     * 供 {@link xuanmo.arcartxsuite.market.listener.MarketEventListener} 调用。
-     *
-     * @return 回收结果——调用方只能在 {@code success()} 时移除掉落物，
-     *         否则货币入账失败时物品照删会吞掉玩家物品
-     */
-    public RecycleResult recycleAuto(Player player, ItemStack item) {
-        RecycleResult result = recycle(player, item);
-        if (result.success()) {
-            String earnings = result.earningsByCurrency().entrySet().stream()
-                .map(e -> currencyManager.format(e.getKey(), BigDecimal.valueOf(e.getValue())))
-                .collect(java.util.stream.Collectors.joining(", "));
-            player.sendMessage(ChatColor.translateAlternateColorCodes('&',
-                messages.recycleSuccess().replace("{amount}", earnings)));
-        } else {
-            player.sendMessage(ChatColor.RED + result.error());
-        }
+    public RecycleResult recycleSlot(Player player,int slot){
+        if(slot<0 || slot>=36)return RecycleResult.fail("槽位无效");
+        ItemStack source=player.getInventory().getItem(slot);
+        if(source==null || source.getType().isAir())return RecycleResult.fail("该槽位已没有物品");
+        ItemStack snapshot=source.clone();
+        return ledger.trade("RECYCLE",player.getUniqueId(),"slot="+slot,
+            () -> recycleOwned(player,snapshot,()->takeSlot(player,slot,snapshot)),result -> result.success());
+    }
+
+    private void takeSlot(Player player,int slot,ItemStack expected){
+        ItemStack current=player.getInventory().getItem(slot);
+        if(current==null || !current.isSimilar(expected) || current.getAmount()!=expected.getAmount())throw new IllegalStateException("回收槽位已变化");
+        player.getInventory().setItem(slot,null);
+    }
+
+    private String itemName(ItemStack item){
+        return item.hasItemMeta() && item.getItemMeta().hasDisplayName()?item.getItemMeta().getDisplayName()
+            :xuanmo.arcartxsuite.api.item.VanillaItemNameTable.translate(item.getType());
+    }
+
+    private RecycleResult recycleOwned(Player player,ItemStack snapshot,Runnable take){
+        RecycleEntry entry=findEntry(snapshot);if(entry==null)return RecycleResult.fail("该物品不可回收");
+        String data=java.util.Base64.getEncoder().encodeToString(xuanmo.arcartxsuite.api.util.ItemSerializer.serialize(snapshot));
+        ledger.describe(itemName(snapshot),snapshot.getType().name(),data);
+        String reason=protectionReason(player,snapshot);if(reason!=null)return RecycleResult.fail(reason);
+        if(protection==null || !protection.currentVersion(player))return RecycleResult.fail("回收保护设置已变化，请刷新后重试");
+        double multiplier=getMultiplier(player);
+        if(!Double.isFinite(multiplier) || multiplier<=0)return RecycleResult.fail("回收倍率无效");
+        BigDecimal total=BigDecimal.valueOf(entry.price()).multiply(BigDecimal.valueOf(snapshot.getAmount())).multiply(BigDecimal.valueOf(multiplier));
+        var bridge=currencyManager.bridge(entry.currency());
+        if(bridge==null || !bridge.available())return RecycleResult.fail("货币系统不可用，物品未回收");
+        String task=ledger.prepareDelivery(xuanmo.arcartxsuite.market.MarketLedger.delivery(player.getUniqueId(),"CURRENCY",entry.currency(),total.toPlainString(),"","recycle_income"));
+        take.run();
+        ledger.activatePrepared(List.of(task),true,"已收取回收物品，等待入账");
+        repository.addRecycleStats(player.getUniqueId(),entry.currency(),total.doubleValue(),snapshot.getAmount());
+        recordHistory(player,snapshot,total.doubleValue(),entry.currency());
+        return RecycleResult.success(total.doubleValue(),entry.currency(),snapshot.getAmount(),Map.of(entry.currency(),total.doubleValue()));
+    }
+
+    /** The pickup listener owns the entity and supplies the main-thread removal after the income snapshot is durable. */
+    public RecycleResult recycleAuto(Player player,ItemStack item,Runnable take){
+        if(!canAutoRecycle(player,item))return RecycleResult.fail("个人自动回收关闭或物品受保护");
+        RecycleResult result=ledger.trade("RECYCLE_AUTO",player.getUniqueId(),"pickup",
+            () -> recycleOwned(player,item.clone(),take),value -> value.success());
+        if(result.success())player.sendMessage(ChatColor.translateAlternateColorCodes('&',messages.recycleSuccess().replace("{amount}",
+            currencyManager.format(result.currency(),BigDecimal.valueOf(result.totalAmount())))));
         return result;
     }
 
-    /**
-     * 批量回收背包所有可回收物品。
-     */
-    public RecycleResult recycleBatch(Player player) {
-        double totalEarnings = 0;
-        int totalItems = 0;
-        String mainCurrency = config.defaultCurrency();
-        Map<String, Double> earningsByCurrency = new LinkedHashMap<>();
-
-        // 仅扫描主背包 0-35，避免误回收盔甲槽(36-39)与副手(40)
-        for (int i = 0; i < 36; i++) {
-            ItemStack item = player.getInventory().getItem(i);
-            if (item == null || item.getType().isAir()) continue;
-
-            RecycleEntry entry = findEntry(item);
-            if (entry == null) continue;
-
-            double multiplier = getMultiplier(player);
-            double total = entry.price() * item.getAmount() * multiplier;
-
-            CurrencyBridgeAPI.CurrencyBridge bridge = currencyManager.bridge(entry.currency());
-            if (bridge == null || !bridge.available()) continue;
-
-            CurrencyTransactionResult result = bridge.deposit(player, BigDecimal.valueOf(total));
-            if (!result.success()) continue;
-
-            totalItems += item.getAmount();
-            earningsByCurrency.merge(entry.currency(), total, Double::sum);
-            totalEarnings += total;
-
-            repository.addRecycleStats(player.getUniqueId(), entry.currency(), total, item.getAmount());
-            player.getInventory().setItem(i, null);
-        }
-
-        if (totalItems == 0) {
-            return RecycleResult.fail(messages.recycleNothing());
-        }
-
-        return RecycleResult.success(totalEarnings, mainCurrency, totalItems, earningsByCurrency);
+    public RecycleResult recycleBatch(Player player){
+        return ledger.trade("RECYCLE_BATCH",player.getUniqueId(),"backpack",()->{
+            if(protection==null || protection.cached(player)==null)return RecycleResult.fail("回收保护资料读取中，请稍后刷新");
+            Map<String,Double> earnings=new LinkedHashMap<>();int count=0,protectedCount=0;
+            for(int slot=0;slot<36;slot++){
+                ItemStack source=player.getInventory().getItem(slot);if(source==null || source.getType().isAir() || findEntry(source)==null)continue;
+                if(protectionReason(player,source)!=null){protectedCount+=source.getAmount();continue;}
+                final int selected=slot;final ItemStack snapshot=source.clone();
+                RecycleResult result=recycleOwned(player,snapshot,()->takeSlot(player,selected,snapshot));
+                if(result.success()){count+=result.itemCount();result.earningsByCurrency().forEach((currency,value)->earnings.merge(currency,value,Double::sum));}
+            }
+            if(protectedCount>0)player.sendMessage(ChatColor.GRAY+"已跳过 "+protectedCount+" 件受保护物品。");
+            if(count==0)return RecycleResult.fail(protectedCount>0?"没有可安全回收的物品，受保护物品已保留":messages.recycleNothing());
+            return RecycleResult.success(earnings.values().stream().mapToDouble(Double::doubleValue).sum(),config.defaultCurrency(),count,earnings);
+        },result -> result.success());
     }
 
     /**
@@ -257,6 +257,20 @@ public class RecycleService {
             }
         }
         return matched ? bestMultiplier : 1.0;
+    }
+
+    private void recordHistory(Player player, ItemStack item, double total, String currency) {
+        try {
+        String name = item.hasItemMeta() && item.getItemMeta().hasDisplayName()
+            ? item.getItemMeta().getDisplayName() : item.getType().name();
+        String data = java.util.Base64.getEncoder().encodeToString(
+            xuanmo.arcartxsuite.api.util.ItemSerializer.serialize(item.clone()));
+        repository.insertHistory(new xuanmo.arcartxsuite.market.storage.AuctionHistory(
+            0, 0, player.getUniqueId(), null, data, name, total, currency, 0,
+            "RECYCLE", System.currentTimeMillis()));
+        } catch (RuntimeException exception) {
+            logger.log(Level.SEVERE, "[Recycle] 回收已结算，但历史写入失败: " + player.getUniqueId(), exception);
+        }
     }
 
     // ─── 结果 ───────────────────────────────────────────────

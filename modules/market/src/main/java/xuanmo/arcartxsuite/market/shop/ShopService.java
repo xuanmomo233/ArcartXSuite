@@ -35,6 +35,10 @@ import xuanmo.arcartxsuite.market.storage.MarketRepository;
  * 系统商店业务服务。
  */
 public class ShopService {
+    private xuanmo.arcartxsuite.market.MarketLedger ledger;
+
+    public void setLedger(xuanmo.arcartxsuite.market.MarketLedger ledger) { this.ledger = ledger; }
+
 
     /** 限购更新跨服广播回调（由 MarketService 注入，无注入时不广播）。 */
     public interface LimitUpdateBroadcaster {
@@ -52,6 +56,7 @@ public class ShopService {
     private final Logger logger;
 
     private final Map<String, ShopDefinition> shops = new LinkedHashMap<>();
+    private final Map<String, Long> restockIntervals = new java.util.concurrent.ConcurrentHashMap<>();
     private BukkitTask refreshTask;
     private volatile LimitUpdateBroadcaster limitBroadcaster;
     private volatile DynamicShopService dynamicShopService;
@@ -103,8 +108,9 @@ public class ShopService {
         start();
     }
 
-    private void loadShops() {
+    private synchronized void loadShops() {
         shops.clear();
+        restockIntervals.clear();
         File shopDir = new File(dataFolder, config.shopsDirectory());
         if (!shopDir.exists()) {
             shopDir.mkdirs();
@@ -116,7 +122,7 @@ public class ShopService {
         for (File file : files) {
             try {
                 String shopId = file.getName().replaceFirst("\\.(yml|yaml)$", "");
-                YamlConfiguration yaml = YamlConfiguration.loadConfiguration(file);
+                YamlConfiguration yaml = loadEditableYaml(file);
                 ShopDefinition shop = parseShop(shopId, yaml);
                 if (shop != null) {
                     shops.put(shopId, shop);
@@ -153,6 +159,7 @@ public class ShopService {
                     itemDefinitionSection.getString("nbt", null)
                 );
             String itemDisplayName = itemSec.getString("display-name", itemDefinition.id());
+            restockIntervals.put(shopId + "/" + itemKey, Math.max(0L, itemSec.getLong("restock-interval-seconds", 0)));
             double buyPrice = itemSec.getDouble("buy-price", 0);
             double sellPrice = itemSec.getDouble("sell-price", 0);
             // 价格非负校验：负价格可能导致玩家购买反而获得货币
@@ -196,6 +203,15 @@ public class ShopService {
      * 购买系统商店物品。
      */
     public BuyResult buy(Player player, String shopId, String itemId, int amount) {
+        return buy(player, shopId, itemId, amount, null);
+    }
+
+    public BuyResult buy(Player player, String shopId, String itemId, int amount, @Nullable BigDecimal expectedUnitPrice) {
+        return ledger.trade("SHOP_BUY", player.getUniqueId(), shopId + "/" + itemId + ",amount=" + amount,
+            () -> buyWork(player, shopId, itemId, amount, expectedUnitPrice), result -> result.success());
+    }
+
+public BuyResult buyWork(Player player, String shopId, String itemId, int amount, @Nullable BigDecimal expectedUnitPrice) {
         ShopDefinition shop = getEffectiveShop(shopId);
         if (shop == null) return BuyResult.fail("商店不存在");
         if (!shop.permission().isEmpty() && !player.hasPermission(shop.permission())) {
@@ -204,6 +220,7 @@ public class ShopService {
 
         ShopItem shopItem = shop.items().get(itemId);
         if (shopItem == null) return BuyResult.fail("商品不存在");
+        ledger.describe(shopItem.displayName(),shopItem.type()==ShopItemType.COMMAND?"COMMAND":shopItem.item().id(),"");
 
         // 上架条件校验（AXS 统一条件系统）
         // 正常途径下不满足条件的商品不会出现在商店 UI 中，此处为伪造包兜底
@@ -221,7 +238,8 @@ public class ShopService {
         // 限购检查（用 long 运算，避免 int 溢出绕过）
         if (shopItem.limitPerPlayer() > 0) {
             ShopLimitRecord limit = repository.getShopLimit(player.getUniqueId(), shopId, itemId);
-            long purchased = limit == null ? 0L : limit.purchasedCount();
+            long purchased = limit == null || (limit.resetTime() > 0 && limit.resetTime() <= System.currentTimeMillis())
+                ? 0L : limit.purchasedCount();
             if (purchased + (long) amount > shopItem.limitPerPlayer()) {
                 return BuyResult.fail(messages.shopLimitReached());
             }
@@ -243,6 +261,9 @@ public class ShopService {
             unitPrice = unitPrice.multiply(bestDiscount);
         }
         BigDecimal totalPrice = unitPrice.multiply(BigDecimal.valueOf(amount));
+        if (expectedUnitPrice != null && unitPrice.compareTo(expectedUnitPrice) != 0) {
+            return BuyResult.fail("商品价格已变化，请刷新并重新确认金额");
+        }
 
         // 扣款
         CurrencyBridgeAPI.CurrencyBridge bridge = currencyManager.bridge(shopItem.currency());
@@ -254,46 +275,38 @@ public class ShopService {
             return BuyResult.fail("指令商品未配置有效的 reward-commands");
         }
 
+        ItemStack preparedItem = shopItem.type() == ShopItemType.ITEM ? createItem(shopItem, amount, player) : null;
+        if (shopItem.type() == ShopItemType.ITEM && preparedItem == null) return BuyResult.fail("物品生成失败");
+        if (preparedItem != null && preparedItem.getAmount() != amount) return BuyResult.fail("物品来源未生成请求数量，已取消购买");
+        if(preparedItem!=null)ledger.describe(shopItem.displayName(),preparedItem.getType().name(),
+            java.util.Base64.getEncoder().encodeToString(xuanmo.arcartxsuite.api.util.ItemSerializer.serialize(preparedItem)));
+        List<String> preparedRewards = prepareRewards(player,shopItem,amount,preparedItem);
         if (!tryConsumeStock(player, shopId, itemId, shopItem, amount)) {
+            ledger.activatePrepared(preparedRewards,false);
             return BuyResult.fail("商品库存不足");
         }
         CurrencyTransactionResult result = bridge.withdraw(player, totalPrice);
         if (!result.success()) {
+            ledger.activatePrepared(preparedRewards,false);
             restoreStock(player, shopId, itemId, shopItem, amount);
             return BuyResult.fail(messages.insufficientFunds());
         }
 
+        ledger.activatePrepared(preparedRewards,true);
+
         // 生成物品
         if (shopItem.type() == ShopItemType.COMMAND) {
-            executeRewardCommands(player, shopItem, amount);
             updateLimit(player, shopId, itemId, shopItem, amount);
+            recordHistory(player, shopItem, amount, totalPrice, null);
             return BuyResult.success(totalPrice.doubleValue(), shopItem.currency());
         }
 
-        ItemStack item = createItem(shopItem, amount, player);
-        if (item == null) {
-            depositSafe(player, shopItem.currency(), totalPrice, "shop_item_generation_refund");
-            restoreStock(player, shopId, itemId, shopItem, amount);
-            return BuyResult.fail("物品生成失败");
-        }
-
-        // 给予物品；背包装不下的部分按比例退款，杜绝"扣了钱却吞物品"
-        Map<Integer, ItemStack> overflow = player.getInventory().addItem(item);
-        int leftover = overflow.values().stream().mapToInt(ItemStack::getAmount).sum();
-        int delivered = amount - leftover;
-        if (leftover > 0) {
-            depositSafe(player, shopItem.currency(), unitPrice.multiply(BigDecimal.valueOf(leftover)), "shop_inventory_overflow_refund");
-            restoreStock(player, shopId, itemId, shopItem, leftover);
-            player.sendMessage(ChatColor.translateAlternateColorCodes('&',
-                "&e背包空间不足，仅购买 " + delivered + " 个，多余款项已退还"));
-        }
-        if (delivered <= 0) {
-            return BuyResult.fail("背包空间不足");
-        }
+        ItemStack item = preparedItem;
+        int delivered = amount;
 
         // 更新限购记录（按实际成交数量计）
         updateLimit(player, shopId, itemId, shopItem, delivered);
-        executeRewardCommands(player, shopItem, delivered);
+        recordHistory(player, shopItem, delivered, unitPrice.multiply(BigDecimal.valueOf(delivered)), item);
 
         // 记录成交量（供需模式价格浮动策略据此调价）
         if (dynamicShopService != null) {
@@ -312,11 +325,40 @@ public class ShopService {
         return conditionEvaluator.passes(player, conditions);
     }
 
+    private void recordHistory(Player player, ShopItem item, int amount, BigDecimal price, @Nullable ItemStack stack) {
+        try {
+        String data = "";
+        if (stack != null) {
+            ItemStack snapshot = stack.clone();
+            snapshot.setAmount(amount);
+            data = java.util.Base64.getEncoder().encodeToString(
+                xuanmo.arcartxsuite.api.util.ItemSerializer.serialize(snapshot));
+        }
+        repository.insertHistory(new xuanmo.arcartxsuite.market.storage.AuctionHistory(
+            0, 0, player.getUniqueId(), null, data, item.displayName() + " ×" + amount,
+            price.doubleValue(), item.currency(), 0, "SHOP_BUY", System.currentTimeMillis()));
+        } catch (RuntimeException exception) {
+            logger.log(Level.SEVERE, "[Shop] 交易已完成，但历史写入失败: " + player.getUniqueId(), exception);
+        }
+    }
+
     /**
      * 获取所有商店列表。
      */
     public Map<String, ShopDefinition> getShops() {
         return Collections.unmodifiableMap(shops);
+    }
+
+    /** 与成交使用相同折扣，向商品卡和确认弹窗显示实际单价。 */
+    public double displayBuyPrice(Player player, ShopItem item) {
+        return displayBuyPriceDecimal(player, item).doubleValue();
+    }
+
+    public BigDecimal displayBuyPriceDecimal(Player player, ShopItem item) {
+        double discount = item.discount().entrySet().stream()
+            .filter(entry -> player.hasPermission(entry.getKey()))
+            .mapToDouble(Map.Entry::getValue).min().orElse(1.0);
+        return BigDecimal.valueOf(item.buyPrice()).multiply(BigDecimal.valueOf(discount));
     }
 
     public @Nullable ShopDefinition getShop(String shopId) {
@@ -377,7 +419,8 @@ public class ShopService {
     private void updateLimit(Player player, String shopId, String itemId, ShopItem shopItem, int delivered) {
         if (shopItem.limitPerPlayer() <= 0 || delivered <= 0) return;
         ShopLimitRecord existing = repository.getShopLimit(player.getUniqueId(), shopId, itemId);
-        int newCount = (existing == null ? 0 : existing.purchasedCount()) + delivered;
+        int newCount = (existing == null || (existing.resetTime() > 0 && existing.resetTime() <= System.currentTimeMillis())
+            ? 0 : existing.purchasedCount()) + delivered;
         long now = System.currentTimeMillis();
         long resetTime = calculateResetTime(shopItem.limitReset());
         repository.upsertShopLimit(new ShopLimitRecord(
@@ -397,52 +440,24 @@ public class ShopService {
      * 投递商品奖励命令。命令采用“提交即成功”语义，不依据 Bukkit 的返回值退款，
      * 与 lottery 奖励命令保持一致；返回值为 false 的单条命令仅记录警告。
      */
-    private void executeRewardCommands(Player player, ShopItem shopItem, int amount) {
-        List<String> commands = shopItem.rewardCommands().stream()
-            .filter(command -> command != null && !command.isBlank())
-            .toList();
-        if (commands.isEmpty()) return;
-        if (Bukkit.isPrimaryThread()) {
-            dispatchRewardCommands(player, shopItem, commands, amount);
-        } else {
-            Bukkit.getScheduler().runTask(
-                plugin,
-                () -> dispatchRewardCommands(player, shopItem, commands, amount)
-            );
+    private List<String> prepareRewards(Player player, ShopItem item, int amount, @Nullable ItemStack stack) {
+        List<String> ids=new ArrayList<>();
+        if(stack!=null) {
+            String data=java.util.Base64.getEncoder().encodeToString(xuanmo.arcartxsuite.api.util.ItemSerializer.serialize(stack));
+            ids.add(ledger.prepareDelivery(xuanmo.arcartxsuite.market.MarketLedger.delivery(player.getUniqueId(),"ITEM","","0",data,"shop_item:"+item.key())));
         }
-    }
-
-    private void dispatchRewardCommands(
-            Player player,
-            ShopItem shopItem,
-            List<String> commands,
-            int amount
-    ) {
-        for (String raw : commands) {
-            String safeName = xuanmo.arcartxsuite.api.command.CommandSanitizer.validatePlayerName(player.getName());
-            String command = raw.replace("{player}", safeName)
-                .replace("{uuid}", player.getUniqueId().toString())
-                .replace("{amount}", Integer.toString(amount));
-            if (command.startsWith("/")) command = command.substring(1);
-            if (!Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command)) {
-                logger.warning(
-                    "[Shop] 商品奖励命令派发返回 false: shop-item="
-                        + shopItem.key() + ", command=" + command
-                );
-            }
+        for(String raw:item.rewardCommands()) {
+            if(raw==null || raw.isBlank()) continue;
+            String name=xuanmo.arcartxsuite.api.command.CommandSanitizer.validatePlayerName(player.getName());
+            String command=raw.replace("{player}",name).replace("{uuid}",player.getUniqueId().toString()).replace("{amount}",Integer.toString(amount));
+            if(command.startsWith("/"))command=command.substring(1);
+            ids.add(ledger.prepareDelivery(xuanmo.arcartxsuite.market.MarketLedger.delivery(player.getUniqueId(),"COMMAND","","0",command,"shop_command:"+item.key())));
         }
+        return ids;
     }
 
     private void depositSafe(Player player, String currency, BigDecimal amount, String reason) {
-        if (amount == null || amount.signum() <= 0) return;
-        CurrencyBridgeAPI.CurrencyBridge bridge = currencyManager.bridge(currency);
-        if (bridge != null && bridge.available()) {
-            CurrencyTransactionResult result = bridge.deposit(player, amount);
-            if (result.success()) return;
-            logger.warning("[Shop] refund failed; queueing pending currency: player=" + player.getName()
-                + " currency=" + currency + " amount=" + amount + " reason=" + reason);
-        }
-        repository.addPendingCurrency(player.getUniqueId(), currency, amount.doubleValue(), reason);
+        if (amount != null && amount.signum() > 0) repository.addPendingCurrency(player.getUniqueId(), currency, amount.doubleValue(), reason);
     }
 
     private @Nullable ItemStack createItem(ShopItem shopItem, int amount, Player player) {
@@ -464,8 +479,13 @@ public class ShopService {
         };
     }
 
-    private void refreshStocks() {
+    private synchronized void refreshStocks() {
         repository.resetExpiredShopLimits("auto");
+        for (var shop : List.copyOf(shops.values())) for (var item : shop.items().values()) {
+            long seconds = getRestockInterval(shop.id(), item.key());
+            if (seconds > 0) repository.restockShopIfDue(shop.id(), item.key(), item.stockMode(), item.stockAmount(),
+                Math.min(seconds, 31536000L) * 1000L);
+        }
     }
 
     private static boolean hasLimitedStock(ShopService.ShopItem shopItem) {
@@ -522,23 +542,28 @@ public class ShopService {
      * @return null 表示成功，否则为错误信息
      */
     public synchronized @Nullable String saveShop(String shopId, boolean create, ShopEdit edit) {
+        return saveShop(shopId, create, edit, null);
+    }
+
+    public synchronized @Nullable String saveShop(String shopId, boolean create, ShopEdit edit, @Nullable String expectedRevision) {
         if (!isValidId(shopId)) return "商店ID非法（仅允许字母/数字/_/-，1-64位）";
         File dir = new File(dataFolder, config.shopsDirectory());
         File file = findShopFile(shopId);
+        if (!create && !matchesRevision(file, expectedRevision)) return "商店已被其他操作修改，请先重新加载再编辑（当前表单已保留）";
         if (create && file != null) return "商店ID已存在: " + shopId;
         if (!create && file == null) return "商店不存在: " + shopId;
         if (file == null) file = new File(dir, shopId + ".yml");
         try {
             if (!dir.isDirectory() && !dir.mkdirs()) return "商店目录创建失败";
             YamlConfiguration yaml = file.isFile()
-                ? YamlConfiguration.loadConfiguration(file) : new YamlConfiguration();
+                ? loadEditableYaml(file) : new YamlConfiguration();
             yaml.set("display-name",
                 edit.displayName() == null || edit.displayName().isBlank() ? shopId : edit.displayName());
             yaml.set("permission", edit.permission() == null ? "" : edit.permission().trim());
             yaml.set("tags", edit.tags() == null ? List.of() : edit.tags());
             writeIcon(yaml, "icon", edit.icon());
             if (yaml.getConfigurationSection("items") == null) yaml.createSection("items");
-            yaml.save(file);
+            saveEditableYaml(yaml, file);
             loadShops();
             return null;
         } catch (Exception exception) {
@@ -551,9 +576,16 @@ public class ShopService {
      * 删除商店：移除文件与内存定义。返回 null 表示成功。
      */
     public synchronized @Nullable String deleteShop(String shopId) {
+        return deleteShop(shopId, null);
+    }
+
+    public synchronized @Nullable String deleteShop(String shopId, @Nullable String expectedRevision) {
         if (!isValidId(shopId)) return "商店ID非法";
         File file = findShopFile(shopId);
+        if (!matchesRevision(file, expectedRevision)) return "商店已被其他操作修改，请先重新加载再编辑（当前表单已保留）";
         if (file == null) return "商店不存在: " + shopId;
+        try { backupEditableFile(file); }
+        catch (java.io.IOException exception) { return "备份商店失败: " + exception.getMessage(); }
         if (!file.delete()) return "删除商店文件失败: " + file.getName();
         shops.remove(shopId);
         return null;
@@ -563,8 +595,13 @@ public class ShopService {
      * 保存商品（新建或覆盖编辑）。返回 null 表示成功。
      */
     public synchronized @Nullable String saveShopItem(String shopId, boolean create, ItemEdit edit) {
+        return saveShopItem(shopId, create, edit, null);
+    }
+
+    public synchronized @Nullable String saveShopItem(String shopId, boolean create, ItemEdit edit, @Nullable String expectedRevision) {
         if (!isValidId(shopId)) return "商店ID非法";
         File file = findShopFile(shopId);
+        if (!matchesRevision(file, expectedRevision)) return "商店已被其他操作修改，请先重新加载再编辑（当前表单已保留）";
         if (file == null) return "商店不存在: " + shopId;
         String key = edit.key();
         if (!isValidId(key)) return "商品ID非法（仅允许字母/数字/_/-，1-64位）";
@@ -579,7 +616,7 @@ public class ShopService {
             return "指令商品必须至少填写一条奖励指令";
         }
         try {
-            YamlConfiguration yaml = YamlConfiguration.loadConfiguration(file);
+            YamlConfiguration yaml = loadEditableYaml(file);
             ConfigurationSection items = yaml.getConfigurationSection("items");
             if (items == null) items = yaml.createSection("items");
             if (create && items.contains(key)) return "商品ID已存在: " + key;
@@ -605,6 +642,7 @@ public class ShopService {
             yaml.set(base + "stock-amount", Math.max(0, edit.stockAmount()));
             yaml.set(base + "limit-per-player", Math.max(0, edit.limitPerPlayer()));
             yaml.set(base + "limit-reset", edit.limitReset());
+            yaml.set(base + "restock-interval-seconds", edit.restockIntervalSeconds());
             yaml.set(base + "reward-commands", commands.isEmpty() ? null : commands);
             ConfigurationSection itemSec = yaml.getConfigurationSection("items." + key);
             // discount 的 key 是权限节点（含 '.'），必须以 Map 整体写入避免路径拆分
@@ -616,9 +654,15 @@ public class ShopService {
             List<String> conditionLines = edit.conditionLines() == null ? List.of()
                 : edit.conditionLines().stream()
                     .filter(c -> c != null && !c.isBlank()).map(String::trim).toList();
-            itemSec.set("conditions", conditionLines.isEmpty() ? null : conditionLines);
+            List<String> previousLines = ScriptConditionsLoader.loadModuleConditions(
+                    itemSec, logger, "[Shop] 条件配置读取失败: ").stream().map(ScriptCondition::raw)
+                    .filter(java.util.Objects::nonNull).toList();
+            // Preserve structured condition metadata when the expression text was not edited.
+            if (create || !previousLines.equals(conditionLines)) {
+                itemSec.set("conditions", conditionLines.isEmpty() ? null : conditionLines);
+            }
             writeIcon(itemSec, "icon", edit.icon());
-            yaml.save(file);
+            saveEditableYaml(yaml, file);
             loadShops();
             return null;
         } catch (Exception exception) {
@@ -631,22 +675,76 @@ public class ShopService {
      * 删除商品并回写商店文件。返回 null 表示成功。
      */
     public synchronized @Nullable String deleteShopItem(String shopId, String itemKey) {
+        return deleteShopItem(shopId, itemKey, null);
+    }
+
+    public synchronized @Nullable String deleteShopItem(String shopId, String itemKey, @Nullable String expectedRevision) {
         if (!isValidId(shopId) || !isValidId(itemKey)) return "ID非法";
         File file = findShopFile(shopId);
+        if (!matchesRevision(file, expectedRevision)) return "商店已被其他操作修改，请先重新加载再编辑（当前表单已保留）";
         if (file == null) return "商店不存在: " + shopId;
         try {
-            YamlConfiguration yaml = YamlConfiguration.loadConfiguration(file);
+            YamlConfiguration yaml = loadEditableYaml(file);
             if (!yaml.isConfigurationSection("items." + itemKey)) {
                 return "商品不存在: " + itemKey;
             }
             yaml.set("items." + itemKey, null);
-            yaml.save(file);
+            saveEditableYaml(yaml, file);
             loadShops();
             return null;
         } catch (Exception exception) {
             logger.log(Level.WARNING, "[Shop] 删除商品失败: " + shopId + "/" + itemKey, exception);
             return "删除商品失败: " + exception.getMessage();
         }
+    }
+
+    public record EditableShop(ShopDefinition shop, String revision) {}
+
+    /** Parse and fingerprint the same bytes, so externally edited files are not silently overwritten. */
+    public synchronized @Nullable EditableShop editableShop(String shopId) {
+        if (!isValidId(shopId)) return null;
+        File file = findShopFile(shopId);
+        if (file == null) return null;
+        try {
+            byte[] bytes = java.nio.file.Files.readAllBytes(file.toPath());
+            YamlConfiguration yaml = new YamlConfiguration();
+            yaml.loadFromString(new String(bytes, java.nio.charset.StandardCharsets.UTF_8));
+            ShopDefinition definition = parseShop(shopId, yaml);
+            if (definition == null) return null;
+            return new EditableShop(definition, fingerprint(bytes));
+        } catch (Exception exception) {
+            logger.log(Level.WARNING, "[Shop] 无法读取编辑快照: " + shopId, exception);
+            return null;
+        }
+    }
+
+    private static String fingerprint(byte[] bytes) throws java.security.NoSuchAlgorithmException {
+        return java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(bytes));
+    }
+
+    private static boolean matchesRevision(@Nullable File file, @Nullable String expected) {
+        if (expected == null) return true; // Existing non-UI callers retain their contract.
+        if (file == null || expected.isBlank()) return false;
+        try { return expected.equals(fingerprint(java.nio.file.Files.readAllBytes(file.toPath()))); }
+        catch (Exception exception) { return false; }
+    }
+
+    private static YamlConfiguration loadEditableYaml(File file) throws Exception {
+        YamlConfiguration yaml = new YamlConfiguration();
+        yaml.load(file);
+        return yaml;
+    }
+
+    private static void backupEditableFile(File file) throws java.io.IOException {
+        if (file.isFile()) {
+            java.nio.file.Files.copy(file.toPath(),
+                file.toPath().resolveSibling(file.getName() + "." + java.util.UUID.randomUUID() + ".bak"));
+        }
+    }
+
+    private static void saveEditableYaml(YamlConfiguration yaml, File file) throws java.io.IOException {
+        backupEditableFile(file);
+        yaml.save(file);
     }
 
     /** 按编辑模式写入 icon 节：keep 不动 / none 移除 / material / json。 */
@@ -687,8 +785,60 @@ public class ShopService {
         List<String> conditionLines,
         List<String> rewardCommands, Map<String, Double> discount,
         String itemSource, String itemId, @Nullable String itemNbt,
-        IconEdit icon
+        IconEdit icon, long restockIntervalSeconds
     ) {}
+
+    public long getRestockInterval(String shop, String item) { return restockIntervals.getOrDefault(shop + "/" + item, 0L); }
+
+    public String manageStock(String shopId, String itemId, String action, int amount, @Nullable UUID target) {
+        EditableShop snapshot = editableShop(shopId);
+        ShopDefinition shop = snapshot == null ? null : snapshot.shop();
+        ShopItem item = shop == null ? null : shop.items().get(itemId);
+        if (item == null) return "商品不存在，请先保存商品";
+        if ("inspect".equals(action)) return null;
+        if ("reset-limit".equals(action)) { repository.resetShopLimits(shopId,itemId,target); return null; }
+        if ("global".equals(item.stockMode()) && target != null) return "全服库存不能按玩家操作，请清空目标 UUID";
+        return repository.adjustShopStock(shopId,itemId,item.stockMode(),item.stockAmount(),action,amount,target)
+            ? null : "库存操作无效；有限库存的数量不得超过配置上限";
+    }
+
+    public record PurchaseQuote(int maximum, int stock, int limit, int capacity, BigDecimal basePrice,
+                                BigDecimal unitPrice, String currency) {}
+
+    public PurchaseQuote quote(Player player, String shopId, String itemId) {
+        ShopDefinition shop = getEffectiveShop(shopId);
+        if (shop == null || (!shop.permission().isEmpty() && !player.hasPermission(shop.permission()))) return null;
+        ShopItem item = shop.items().get(itemId);
+        if (item == null || !meetsConditions(player,item)) return null;
+        int stock = MAX_PURCHASE_AMOUNT;
+        if (hasLimitedStock(item)) stock = "global".equalsIgnoreCase(item.stockMode())
+            ? repository.getGlobalShopStock(shopId,itemId,item.stockAmount())
+            : repository.getPlayerShopStock(player.getUniqueId(),shopId,itemId,item.stockAmount());
+        int limit = MAX_PURCHASE_AMOUNT;
+        if (item.limitPerPlayer() > 0) {
+            ShopLimitRecord record = repository.getShopLimit(player.getUniqueId(),shopId,itemId);
+            int used = record == null || (record.resetTime()>0 && record.resetTime()<=System.currentTimeMillis()) ? 0 : record.purchasedCount();
+            limit = Math.max(0,item.limitPerPlayer()-used);
+        }
+        int capacity = MAX_PURCHASE_AMOUNT;
+        if (item.type() == ShopItemType.ITEM) {
+            ItemStack sample = createItem(item,1,player);
+            if (sample == null) return null;
+            capacity=0;
+            for (int slot=0;slot<36;slot++) {
+                ItemStack current=player.getInventory().getItem(slot);
+                if(current==null || current.getType().isAir()) capacity+=sample.getMaxStackSize();
+                else if(current.isSimilar(sample)) capacity+=Math.max(0,sample.getMaxStackSize()-current.getAmount());
+            }
+        }
+        BigDecimal unit=displayBuyPriceDecimal(player,item);
+        var bridge=currencyManager.bridge(item.currency());
+        int affordable=bridge==null || !bridge.available() ? 0 : unit.signum()==0 ? MAX_PURCHASE_AMOUNT
+            : bridge.balance(player).max(BigDecimal.ZERO).divide(unit,0,java.math.RoundingMode.DOWN)
+                .min(BigDecimal.valueOf(MAX_PURCHASE_AMOUNT)).intValue();
+        int maximum=Math.max(0,Math.min(MAX_PURCHASE_AMOUNT,Math.min(affordable,Math.min(stock,Math.min(limit,capacity)))));
+        return new PurchaseQuote(maximum,stock,limit,capacity,BigDecimal.valueOf(item.buyPrice()),unit,item.currency());
+    }
 
     // ─── 数据模型 ───────────────────────────────────────────
 

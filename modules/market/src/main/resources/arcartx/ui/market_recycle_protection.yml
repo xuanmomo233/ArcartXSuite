@@ -1,0 +1,1069 @@
+# AXS Market — 个人回收保护
+ui:
+  isHud: false
+  defaultOpen: false
+  hide:
+    - hotbar
+    - experience_bar
+    - crosshair
+    - item_name
+    - jump_bar
+    - mount_health
+    - player_state
+    - player_health
+    - armor_level
+    - food_level
+    - air_level
+  through: false
+  background: false
+  escClose: true
+  closeDied: true
+  show: true
+  jei: false
+  level: 8
+  itemSize: 16
+  screenScale: true
+  packetHandler:
+    action_result: |-
+      var.actionToken = packet['action_token']
+      if(packet['rejected'] == true){
+        var.pending = false
+        var.busy = false
+        var.resultMsg = '会话已刷新，请重新确认设置'
+      } else if(!var.pending){
+        var.busy = false
+      }
+    guard_unavailable: |-
+      var.ready = false
+      var.autoStatus = '自动回收已暂停，正在读取或保存保护设置'
+      var.pending = packet['saving'] == true
+      var.busy = var.pending
+      var.loading = false
+      var.resultMsg = packet['message']
+    guard_result: |-
+      var.packetId = packet['packetId']
+      var.actionToken = packet['action_token']
+      var.resultMsg = packet['message']
+      if(packet['pending'] != true && packet['saving'] != true){
+        var.pending = false
+        var.busy = false
+        var.loading = false
+        if(packet['success'] == true){
+          var.showConfirm = false
+          var.showPicker = false
+          var.pickToken = ''
+        }
+      } else if(!var.pending){
+        var.loading = false
+      }
+    guard_pick: |-
+      if(!var.showPicker){
+        return
+      }
+      var.actionToken = packet['action_token']
+      var.confirmVersion = packet['version']
+      var.pickToken = packet['token']
+      var.confirmName = packet['name']
+      var.confirmText = packet['description']
+      var.confirmIcon = (packet['icon'] != none && packet['icon'] != '') ? packet['icon'] : var.air
+      var.confirmMode = 'add'
+      var.showPicker = false
+      var.showConfirm = true
+      var.busy = false
+      scheduler.delay(50, -> {
+        if(val.确认物品 != none){
+          val.确认物品.seticon()
+        }
+      })
+    guard_data: |-
+      var.packetId = packet['packetId']
+      var.actionToken = packet['action_token']
+      if(var.showConfirm && !var.pending && var.confirmVersion != packet['version']){
+        var.showConfirm = false
+        var.pickToken = ''
+        var.resultMsg = '保护设置已变化，请重新选择并确认'
+      }
+      var.version = packet['version']
+      var.pending = packet['saving'] == true
+      var.busy = var.pending
+      var.autoEnabled = packet['auto']
+      var.autoStatus = packet['autoStatus']
+      var.page = packet['page']
+      var.pages = packet['pages']
+      var.pageText = packet['pageText']
+      var.kind = packet['kind']
+      var.total = packet['total']
+      var.maximum = packet['maximum']
+      var.rules = packet['rules']
+      var.count = packet['count']
+      var.ready = packet['ready'] == true && !var.pending
+      var.loading = false
+      var.icons = {}
+      if(var.count > 0){
+        for(i in range(0, var.count - 1)){
+          key = i.round()
+          var.icons[key] = (packet['ruleIcon' + key] != none && packet['ruleIcon' + key] != '') ? packet['ruleIcon' + key] : var.air
+        }
+      }
+      var.rulesRenderPending = true
+      scheduler.delay(50, -> {
+        var.renderRuleRows()
+      })
+  action:
+    load: |-
+      var.packetId = 'AXS_MARKET'
+      var.actionToken = ''
+      var.ready = false
+      var.loading = true
+      var.pending = false
+      var.busy = false
+      var.version = ''
+      var.confirmVersion = ''
+      var.ruleCopies = {}
+      var.ruleGeneration = 0
+      var.rulesRenderPending = false
+      var.iconsPending = false
+      var.autoEnabled = false
+      var.autoStatus = '正在读取个人设置'
+      var.kind = 'ALL'
+      var.rules = {}
+      var.icons = {}
+      var.count = 0
+      var.renderedCount = -1
+      var.total = 0
+      var.maximum = 200
+      var.page = 0
+      var.pages = 1
+      var.pageText = '1/1'
+      var.resultMsg = ''
+      var.pickKind = 'EXCLUDE'
+      var.pickToken = ''
+      var.confirmMode = ''
+      var.confirmName = ''
+      var.confirmText = ''
+      var.confirmRule = ''
+      var.showPicker = false
+      var.showConfirm = false
+      var.air = '{"id":"minecraft:air","Count":1b}'
+      var.confirmIcon = var.air
+      var.retrySeconds = 0
+      var.renderRuleRows = -> {
+        if(val.保护行区 != none){
+          if(var.count != var.renderedCount){
+            for(key in var.ruleCopies.keys()){
+              var.ruleCopies[key].remove()
+            }
+            var.ruleCopies = {}
+            var.ruleGeneration = var.ruleGeneration + 1
+            if(var.count > 1){
+              for(i in range(1, var.count - 1)){
+                e = val.保护行区.get(0).copy('保护行_' + var.ruleGeneration.round() + '_' + i.round())
+                e.entryKey = i.round()
+                var.ruleCopies[i.round()] = e
+              }
+            }
+            var.renderedCount = var.count
+            val.保护滑块.setDragYRatio(0)
+          }
+          var.rulesRenderPending = false
+          var.iconsPending = true
+          scheduler.delay(50, -> {
+            var.applyRuleIcons()
+          })
+        }
+      }
+      var.applyRuleIcons = -> {
+        if(val.保护行区 != none){
+          var.allIconsReady = true
+          if(var.count > 0){
+            row = val.保护行区.get(0)
+            if(row['保护图标'] != none){
+              row['保护图标'].seticon()
+            }
+            else{
+              var.allIconsReady = false
+            }
+            for(key in var.ruleCopies.keys()){
+              row = var.ruleCopies[key]
+              if(row['保护图标'] != none){
+                row['保护图标'].seticon()
+              }
+              else{
+                var.allIconsReady = false
+              }
+            }
+          }
+          var.iconsPending = !var.allIconsReady
+        }
+      }
+      sx = Screen.getWidth() / 1920
+      sy = Screen.getHeight() / 1080
+      s = sx < sy ? sx : sy
+      var.viewW = Screen.getWidth() / s
+      var.viewH = Screen.getHeight() / s
+      var.offX = (var.viewW - 1920) / 2
+      var.pageW = var.viewW - 96
+      var.pageH = var.viewH - 72
+      var.listW = var.pageW * 0.58
+      var.detailW = var.pageW - var.listW - 72
+    open: |-
+      Packet.send(var.packetId, 'guard_open', '0', 'ALL')
+    resize: |-
+      sx = Screen.getWidth() / 1920
+      sy = Screen.getHeight() / 1080
+      s = sx < sy ? sx : sy
+      var.viewW = Screen.getWidth() / s
+      var.viewH = Screen.getHeight() / s
+      var.offX = (var.viewW - 1920) / 2
+      var.pageW = var.viewW - 96
+      var.pageH = var.viewH - 72
+      var.listW = var.pageW * 0.58
+      var.detailW = var.pageW - var.listW - 72
+    seconds: |-
+      if(var.rulesRenderPending){
+        var.renderRuleRows()
+      }
+      if(var.iconsPending){
+        var.applyRuleIcons()
+      }
+      var.retrySeconds = var.retrySeconds + 1
+      if(var.pending && var.retrySeconds >= 8){
+        var.retrySeconds = 0
+        var.resultMsg = '正在确认保存结果，可关闭后重新打开查看'
+        Packet.send(var.packetId, 'guard_refresh', var.page, var.kind)
+      } else if(!var.busy && !var.showConfirm && !var.showPicker && var.retrySeconds >= 8){
+        var.retrySeconds = 0
+        Packet.send(var.packetId, 'guard_refresh', var.page, var.kind)
+      }
+
+controls:
+  全屏底:
+    type: Texture
+    attribute:
+      point: ~stretch_all
+      through: true
+      normal: ~Frosted:28;16,23,33,242
+  自适应布局:
+    type: Adaptive
+    attribute:
+      point: ~top_center
+      width: 1920
+      height: 1080
+    children:
+      页面:
+        type: Canvas
+        attribute:
+          x: "48 - var.offX"
+          y: 36
+          width: "var.pageW"
+          height: "var.pageH"
+          enable: "!var.showPicker && !var.showConfirm"
+        children:
+          底:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              through: true
+              normal: ~25,34,47,240
+              shape: ~round_rect
+              radius: 14
+          标题:
+            type: Text
+            attribute:
+              x: "28"
+              y: "22"
+              texts: "~&f个人回收保护"
+              fontSize: 40
+              through: true
+          说明:
+            type: Text
+            attribute:
+              x: "28"
+              y: "80"
+              texts: "~&7逐件、批量、自动回收都跳过受保护物品。保护规则不改物品NBT。"
+              fontSize: 26
+              through: true
+          返回回收:
+            type: Canvas
+            attribute:
+              x: "var.pageW - 220"
+              y: "24"
+              width: "190"
+              height: 44
+              enable: "!var.pending"
+            action:
+              clickLeft: |-
+                Packet.send(var.packetId, 'guard_back')
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~48,67,82,240
+                  shape: ~round_rect
+                  radius: 8
+              文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "~&f返回回收界面"
+                  fontSize: 24
+                  through: true
+          个人自动回收:
+            type: Canvas
+            attribute:
+              x: "28"
+              y: "128"
+              width: "340"
+              height: 44
+              enable: "var.ready && !var.pending && !var.busy && !var.loading && var.actionToken != ''"
+            action:
+              clickLeft: |-
+                if(var.autoEnabled){
+                  var.pending = true
+                  var.busy = true
+                  Packet.send(var.packetId, 'guard_auto', '0', var.version, var.actionToken)
+                } else {
+                  var.confirmVersion = var.version
+                  var.confirmMode = 'auto'
+                  var.confirmName = '开启个人自动回收'
+                  var.confirmText = '开启后，拾取的可回收且未受保护物品将被自动出售。'
+                  var.confirmIcon = var.air
+                  var.showConfirm = true
+                  scheduler.delay(50, -> {
+                    val.确认物品.seticon()
+                  })
+                }
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~48,67,82,240
+                  shape: ~round_rect
+                  radius: 8
+              文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "var.autoEnabled ? '&e关闭个人自动回收' : '&b开启个人自动回收'"
+                  fontSize: 24
+                  through: true
+          自动状态:
+            type: Text
+            attribute:
+              x: "400"
+              y: "138"
+              texts: "'&7' + var.autoStatus"
+              fontSize: 26
+              through: true
+          排除此材质:
+            type: Canvas
+            attribute:
+              x: "28"
+              y: "194"
+              width: "220"
+              height: 44
+              enable: "var.ready && !var.pending && !var.busy && !var.loading && var.actionToken != ''"
+            action:
+              clickLeft: |-
+                var.pickKind = 'EXCLUDE'
+                var.resultMsg = ''
+                var.showPicker = true
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~48,67,82,240
+                  shape: ~round_rect
+                  radius: 8
+              文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "~&b排除此材质"
+                  fontSize: 24
+                  through: true
+          收藏同款物品:
+            type: Canvas
+            attribute:
+              x: "268"
+              y: "194"
+              width: "220"
+              height: 44
+              enable: "var.ready && !var.pending && !var.busy && !var.loading && var.actionToken != ''"
+            action:
+              clickLeft: |-
+                var.pickKind = 'FAVORITE'
+                var.resultMsg = ''
+                var.showPicker = true
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~48,67,82,240
+                  shape: ~round_rect
+                  radius: 8
+              文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "~&b收藏同款物品"
+                  fontSize: 24
+                  through: true
+          全部:
+            type: Canvas
+            attribute:
+              x: "560"
+              y: "194"
+              width: "150"
+              height: 44
+              enable: "!var.pending && !var.loading"
+            action:
+              clickLeft: |-
+                var.loading = true
+                Packet.send(var.packetId, 'guard_list', '0', 'ALL')
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~48,67,82,240
+                  shape: ~round_rect
+                  radius: 8
+              文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "~&f全部"
+                  fontSize: 24
+                  through: true
+          材质排除:
+            type: Canvas
+            attribute:
+              x: "730"
+              y: "194"
+              width: "150"
+              height: 44
+              enable: "!var.pending && !var.loading"
+            action:
+              clickLeft: |-
+                var.loading = true
+                Packet.send(var.packetId, 'guard_list', '0', 'EXCLUDE')
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~48,67,82,240
+                  shape: ~round_rect
+                  radius: 8
+              文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "~&f材质排除"
+                  fontSize: 24
+                  through: true
+          收藏同款:
+            type: Canvas
+            attribute:
+              x: "900"
+              y: "194"
+              width: "150"
+              height: 44
+              enable: "!var.pending && !var.loading"
+            action:
+              clickLeft: |-
+                var.loading = true
+                Packet.send(var.packetId, 'guard_list', '0', 'FAVORITE')
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~48,67,82,240
+                  shape: ~round_rect
+                  radius: 8
+              文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "~&f收藏同款"
+                  fontSize: 24
+                  through: true
+          刷新:
+            type: Canvas
+            attribute:
+              x: "var.pageW - 190"
+              y: "194"
+              width: "160"
+              height: 44
+              enable: "!var.pending"
+            action:
+              clickLeft: |-
+                var.loading = true
+                Packet.send(var.packetId, 'guard_refresh', var.page, var.kind)
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~48,67,82,240
+                  shape: ~round_rect
+                  radius: 8
+              文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "~&b刷新保护清单"
+                  fontSize: 24
+                  through: true
+          清单计数:
+            type: Text
+            attribute:
+              x: "28"
+              y: "258"
+              texts: "'&7保护规则 ' + var.total.round() + '/' + var.maximum.round() + ' · 排除材质覆盖全部变体；收藏同款保留其他特征。'"
+              fontSize: 24
+              through: true
+          保护滑块:
+            type: Texture
+            val: 保护滑块
+            attribute:
+              x: "var.pageW - 18"
+              y: 312
+              width: 6
+              height: 58
+              maxDragY: "var.pageH - 514"
+              normal: ~131,177,196,245
+          保护滚动:
+            type: Scroll
+            attribute:
+              x: 24
+              y: 312
+              width: "var.pageW - 48"
+              height: "var.pageH - 456"
+              moveY: "val.保护滑块.getDragYRatio()"
+            action:
+              wheel: |-
+                val.保护滑块.setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+            children:
+              保护行区:
+                type: VStack
+                val: 保护行区
+                attribute:
+                  width: "var.pageW - 48"
+                  spaceBetween: 12
+                children:
+                  保护行:
+                    type: Canvas
+                    attribute:
+                      entryKey: 0.round()
+                      entry: var.rules[self.entryKey]
+                      visible: "self.entry != none"
+                      width: "var.pageW - 48"
+                      height: 108
+                    children:
+                      底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: ~36,47,62,235
+                          shape: ~round_rect
+                          radius: 10
+                      保护图标:
+                        type: Slot
+                        attribute:
+                          slotType: ~Icon
+                          x: 14
+                          y: 14
+                          width: 78
+                          height: 78
+                          itemScale: 0.72
+                          seticon: "self.setItemIcon(var.icons[self.parent.entryKey])"
+                      保护物品名:
+                        type: Scroll
+                        attribute:
+                          x: "112"
+                          y: "18"
+                          width: "var.pageW - 430"
+                          height: 40
+                          scrollAnim: none
+                          moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
+                        action:
+                          enter: |-
+                            self.scrollAnim = Lerp(0,1,2500)
+                          leave: |-
+                            self.scrollAnim = none
+                        children:
+                          文本:
+                            type: Text
+                            attribute:
+                              x: 0
+                              y: 0
+                              texts: "self.parent.parent.entry != none ? '&f' + self.parent.parent.entry['name'] : ''"
+                              fontSize: 28
+                              through: true
+                      保护范围:
+                        type: Scroll
+                        attribute:
+                          x: "112"
+                          y: "64"
+                          width: "var.pageW - 430"
+                          height: 32
+                          scrollAnim: none
+                          moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
+                        action:
+                          enter: |-
+                            self.scrollAnim = Lerp(0,1,2500)
+                          leave: |-
+                            self.scrollAnim = none
+                        children:
+                          文本:
+                            type: Text
+                            attribute:
+                              x: 0
+                              y: 0
+                              texts: "self.parent.parent.entry != none ? '&7' + self.parent.parent.entry['description'] : ''"
+                              fontSize: 24
+                              through: true
+                      移除规则:
+                        type: Canvas
+                        attribute:
+                          x: "var.pageW - 278"
+                          y: "32"
+                          width: "190"
+                          height: 44
+                          enable: "var.ready && !var.pending && !var.busy && !var.loading && var.actionToken != ''"
+                        action:
+                          clickLeft: |-
+                            var.confirmVersion = var.version
+                            var.confirmMode = 'remove'
+                            var.confirmRule = self.parent.entry['id']
+                            var.confirmName = self.parent.entry['name']
+                            var.confirmIcon = var.icons[self.parent.entryKey]
+                            var.confirmText = '移除后，这款物品可能被后续回收。是否继续？'
+                            var.showConfirm = true
+                            scheduler.delay(50, -> {
+                              if(val.确认物品 != none){
+                                val.确认物品.seticon()
+                              }
+                            })
+                        children:
+                          底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              through: true
+                              normal: ~48,67,82,240
+                              shape: ~round_rect
+                              radius: 8
+                          文字:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              texts: "~&c移除保护"
+                              fontSize: 24
+                              through: true
+          空清单:
+            type: Text
+            attribute:
+              x: "100"
+              y: "370"
+              texts: "~&7暂无此类规则；个人自动回收默认关闭，可先添加保护再开启。"
+              fontSize: 30
+              through: true
+              visible: "var.ready && !var.loading && var.count == 0"
+          上一页:
+            type: Canvas
+            attribute:
+              x: "28"
+              y: "var.pageH - 68"
+              width: "160"
+              height: 44
+              enable: "!var.pending && !var.loading && var.page > 0"
+            action:
+              clickLeft: |-
+                var.loading = true
+                Packet.send(var.packetId, 'guard_list', var.page - 1, var.kind)
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~48,67,82,240
+                  shape: ~round_rect
+                  radius: 8
+              文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "~&f上一页"
+                  fontSize: 24
+                  through: true
+          下一页:
+            type: Canvas
+            attribute:
+              x: "var.pageW - 190"
+              y: "var.pageH - 68"
+              width: "160"
+              height: 44
+              enable: "!var.pending && !var.loading && var.page + 1 < var.pages"
+            action:
+              clickLeft: |-
+                var.loading = true
+                Packet.send(var.packetId, 'guard_list', var.page + 1, var.kind)
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~48,67,82,240
+                  shape: ~round_rect
+                  radius: 8
+              文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "~&f下一页"
+                  fontSize: 24
+                  through: true
+          页码:
+            type: Text
+            attribute:
+              x: "var.pageW / 2 - 50"
+              y: "var.pageH - 58"
+              texts: "'&f' + var.pageText"
+              fontSize: 26
+              through: true
+          结果:
+            type: Scroll
+            attribute:
+              x: "240"
+              y: "var.pageH - 112"
+              width: "var.pageW - 280"
+              height: 32
+              scrollAnim: none
+              moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
+            action:
+              enter: |-
+                self.scrollAnim = Lerp(0,1,2500)
+              leave: |-
+                self.scrollAnim = none
+            children:
+              文本:
+                type: Text
+                attribute:
+                  x: 0
+                  y: 0
+                  texts: "'&7' + var.resultMsg"
+                  fontSize: 24
+                  through: true
+  选择保护物品:
+    type: Canvas
+    attribute:
+      point: ~stretch_all
+      visible: "var.showPicker"
+    children:
+      遮罩:
+        type: Texture
+        attribute:
+          point: ~stretch_all
+          normal: ~0,0,0,190
+      面板:
+        type: Adaptive
+        attribute:
+          point: ~middle_center
+          width: 920
+          height: 590
+        children:
+          底:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              through: true
+              normal: ~28,39,53,245
+          选物标题:
+            type: Text
+            attribute:
+              x: "28"
+              y: "24"
+              texts: "var.pickKind == 'EXCLUDE' ? '&f选择要排除的材质' : '&f选择要收藏保护的同款物品'"
+              fontSize: 32
+              through: true
+          选物说明:
+            type: Scroll
+            attribute:
+              x: "28"
+              y: "82"
+              width: "856"
+              height: 34
+              scrollAnim: none
+              moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
+            action:
+              enter: |-
+                self.scrollAnim = Lerp(0,1,2500)
+              leave: |-
+                self.scrollAnim = none
+            children:
+              文本:
+                type: Text
+                attribute:
+                  x: 0
+                  y: 0
+                  texts: "'&7不取走物品 · ' + var.resultMsg"
+                  fontSize: 24
+                  through: true
+          背包:
+            type: HGrid
+            attribute:
+              x: 32
+              y: 128
+              width: 856
+              column: 9
+              spaceBetweenX: 8
+              spaceBetweenY: 8
+            action:
+              create: |-
+                for(i in range(1,35)){
+                  e = self['背包格'].copy('背包格' + i.round())
+                  e.entryKey = (9 + i).round()
+                }
+            children:
+              背包格:
+                type: Canvas
+                attribute:
+                  entryKey: 9.round()
+                  width: 88
+                  height: 88
+                  enable: "!var.busy && !var.pending"
+                action:
+                  clickLeft: |-
+                    var.busy = true
+                    Packet.send(var.packetId, 'guard_pick', self.entryKey, var.pickKind, var.actionToken)
+                children:
+                  物品槽:
+                    type: Slot
+                    attribute:
+                      id: self.parent.entryKey
+                      slotType: ~Backpack
+                      point: ~stretch_all
+                      itemScale: 0.72
+                      lock: true
+                      through: true
+          取消选物:
+            type: Canvas
+            attribute:
+              x: "360"
+              y: "532"
+              width: "200"
+              height: 44
+              enable: "!var.pending"
+            action:
+              clickLeft: |-
+                var.showPicker = false
+                var.busy = false
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~48,67,82,240
+                  shape: ~round_rect
+                  radius: 8
+              文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "~&f取消"
+                  fontSize: 24
+                  through: true
+  保护变更确认:
+    type: Canvas
+    attribute:
+      point: ~stretch_all
+      visible: "var.showConfirm"
+    children:
+      遮罩:
+        type: Texture
+        attribute:
+          point: ~stretch_all
+          normal: ~0,0,0,190
+      面板:
+        type: Adaptive
+        attribute:
+          point: ~middle_center
+          width: 920
+          height: 400
+        children:
+          底:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              through: true
+              normal: ~28,39,53,245
+          确认物品:
+            type: Slot
+            val: 确认物品
+            attribute:
+              x: 32
+              y: 76
+              width: 96
+              height: 96
+              slotType: ~Icon
+              itemScale: 0.8
+              seticon: "self.setItemIcon(var.confirmIcon)"
+          确认标题:
+            type: Text
+            attribute:
+              x: "28"
+              y: "24"
+              texts: "~&f确认回收保护变更"
+              fontSize: 34
+              through: true
+          确认对象:
+            type: Scroll
+            attribute:
+              x: "150"
+              y: "96"
+              width: "720"
+              height: 44
+              scrollAnim: none
+              moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
+            action:
+              enter: |-
+                self.scrollAnim = Lerp(0,1,2500)
+              leave: |-
+                self.scrollAnim = none
+            children:
+              文本:
+                type: Text
+                attribute:
+                  x: 0
+                  y: 0
+                  texts: "'&f' + var.confirmName"
+                  fontSize: 28
+                  through: true
+          确认说明:
+            type: Scroll
+            attribute:
+              x: "32"
+              y: "202"
+              width: "856"
+              height: 34
+              scrollAnim: none
+              moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
+            action:
+              enter: |-
+                self.scrollAnim = Lerp(0,1,2500)
+              leave: |-
+                self.scrollAnim = none
+            children:
+              文本:
+                type: Text
+                attribute:
+                  x: 0
+                  y: 0
+                  texts: "'&7' + var.confirmText"
+                  fontSize: 26
+                  through: true
+          确认结果:
+            type: Scroll
+            attribute:
+              x: "32"
+              y: "250"
+              width: "856"
+              height: 30
+              scrollAnim: none
+              moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
+            action:
+              enter: |-
+                self.scrollAnim = Lerp(0,1,2500)
+              leave: |-
+                self.scrollAnim = none
+            children:
+              文本:
+                type: Text
+                attribute:
+                  x: 0
+                  y: 0
+                  texts: "'&7' + var.resultMsg"
+                  fontSize: 22
+                  through: true
+          确认:
+            type: Canvas
+            attribute:
+              x: "110"
+              y: "326"
+              width: "260"
+              height: 44
+              enable: "var.ready && !var.pending && !var.busy && !var.loading && var.actionToken != ''"
+            action:
+              clickLeft: |-
+                var.pending = true
+                var.busy = true
+                if(var.confirmMode == 'auto'){
+                  Packet.send(var.packetId, 'guard_auto', '1', var.confirmVersion, var.actionToken)
+                } else if(var.confirmMode == 'remove'){
+                  Packet.send(var.packetId, 'guard_remove', var.confirmRule, var.confirmVersion, var.actionToken)
+                } else {
+                  Packet.send(var.packetId, 'guard_add', var.pickToken, var.confirmVersion, var.actionToken)
+                }
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~48,67,82,240
+                  shape: ~round_rect
+                  radius: 8
+              文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "~&a确认变更"
+                  fontSize: 24
+                  through: true
+          取消确认:
+            type: Canvas
+            attribute:
+              x: "550"
+              y: "326"
+              width: "260"
+              height: 44
+              enable: "!var.pending"
+            action:
+              clickLeft: |-
+                var.showConfirm = false
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~48,67,82,240
+                  shape: ~round_rect
+                  radius: 8
+              文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "~&f取消"
+                  fontSize: 24
+                  through: true

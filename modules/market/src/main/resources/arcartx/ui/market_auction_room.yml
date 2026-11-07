@@ -1,0 +1,1097 @@
+# AXS Market — 单件拍品竞价厅
+# 通过服务端选择拍品进入；所有出价均需报价与确认。
+ui:
+  isHud: false
+  defaultOpen: false
+  hide:
+    - hotbar
+    - experience_bar
+    - crosshair
+    - item_name
+    - jump_bar
+    - mount_health
+    - player_state
+    - player_health
+    - armor_level
+    - food_level
+    - air_level
+  through: false
+  background: false
+  escClose: false
+  closeDied: true
+  show: true
+  jei: false
+  level: 8
+  itemSize: 16
+  screenScale: true
+  packetHandler:
+    room_error: |-
+      var.packetId = packet['packetId']
+      var.syncMessage = packet['message']
+    action_result: |-
+      var.actionToken = packet['action_token']
+      var.actionBusy = false
+      var.actionBusySeconds = 0
+      Packet.send(var.packetId, 'auction_room_refresh')
+    auction_quote: |-
+      if(var.showTradeConfirm && var.tradeMode == 'bid' && packet['id'] == var.tradeId){
+        var.quoteBusy = false
+        var.quoteAvailable = packet['available']
+        var.bidReason = packet['reason']
+        var.quoteRevision = packet['revision']
+        if(var.quoteAvailable){
+          var.bidCanSubmit = packet['canSubmit']
+          var.tradeAmount = packet['amount']
+          var.bidMinimum = packet['minimum']
+          var.bidCurrent = packet['current']
+          var.bidHighest = packet['highest']
+          var.bidDebit = packet['debit']
+          var.bidHeld = packet['held']
+          var.bidDeadline = packet['deadline']
+          var.bidProtection = packet['protection']
+          val.自定义出价输入.setContent(var.tradeAmount)
+          var.bidDirty = false
+        } else {
+          var.bidCanSubmit = false
+        }
+      }
+    room_snapshot: |-
+      var.packetId = packet['packetId']
+      var.actionToken = packet['action_token']
+      var.roomFound = packet['found']
+      if(!var.roomFound){
+        var.syncMessage = packet['message']
+        var.lotName = '拍品已不存在'
+        var.canBid = false
+        var.canCancel = false
+      } else {
+        if(var.bidRevision != '' && var.bidRevision != packet['bidRevision']){
+          var.eventText = packet['announcement']
+          var.eventTTL = 8
+        }
+        var.bidRevision = packet['bidRevision']
+        if(var.showTradeConfirm && var.tradeMode == 'bid' && var.quoteRevision != '' && var.quoteRevision != var.bidRevision){
+          var.bidCanSubmit = false
+          var.bidReason = '竞价状态已变化，请更新报价后重新确认'
+        }
+        oldTimelineCount = var.timelineCount
+        oldLoreCount = var.loreCount
+        var.lotId = packet['id']
+        var.lotName = packet['name']
+        var.seller = packet['seller']
+        var.itemAmount = packet['itemAmount']
+        var.lotMessage = packet['message']
+        var.status = packet['status']
+        var.participation = packet['participation']
+        var.active = packet['active']
+        var.waiting = packet['waiting']
+        var.isSeller = packet['isSeller']
+        var.isLeading = packet['isLeading']
+        var.followed = packet['followed']
+        var.canBid = packet['canBid']
+        var.canCancel = packet['canCancel']
+        var.startingPrice = packet['startingPrice']
+        var.currentPrice = packet['currentPrice']
+        var.minimum = packet['minimum']
+        var.currency = packet['currency']
+        var.highest = packet['highest']
+        var.myHighest = packet['myHighest']
+        var.myBalance = packet['myBalance']
+        var.myHeld = packet['myHeld']
+        var.remainingSeconds = packet['remainingSeconds']
+        var.createdAt = packet['createdAt']
+        var.deadline = packet['deadline']
+        var.originalDeadline = packet['originalDeadline']
+        var.extendedSeconds = packet['extendedSeconds']
+        var.bidCount = packet['bidCount']
+        var.bidderCount = packet['bidderCount']
+        var.watchCount = packet['watchCount']
+        var.protection = packet['protection']
+        var.myDelivery = packet['myDelivery']
+        var.announcement = packet['announcement']
+        var.timeline = packet['timeline']
+        var.timelineCount = packet['timelineCount']
+        var.lore = packet['lore']
+        var.loreCount = packet['loreCount']
+        var.itemJson = packet['itemJson']
+        var.elapsed = 0
+        var.syncMessage = '已同步服务端拍卖状态'
+        var.accent = var.active ? '239,182,68,255' : '139,160,181,255'
+        scheduler.delay(50, -> {
+          if(var.roomFound && val.拍品预览 != none && val.竞价记录行区 != none && val.物品说明行区 != none){
+            val.拍品预览.seticon()
+            if(var.timelineCount != var.renderedTimelineCount){
+              while(val.竞价记录行区.childrenCount() > 1){
+                val.竞价记录行区.get(1).remove()
+              }
+              if(var.timelineCount > 1){
+                for(i in range(1, var.timelineCount - 1)){
+                  e = val.竞价记录行区['竞价记录行'].copy('竞价记录行' + i.round())
+                  e.entryKey = i.round()
+                }
+              }
+            }
+            if(var.loreCount != var.renderedLoreCount){
+              while(val.物品说明行区.childrenCount() > 1){
+                val.物品说明行区.get(1).remove()
+              }
+              if(var.loreCount > 1){
+                for(i in range(1, var.loreCount - 1)){
+                  e = val.物品说明行区['物品说明行'].copy('物品说明行' + i.round())
+                  e.entryKey = i.round()
+                }
+              }
+            }
+            var.renderedTimelineCount = var.timelineCount
+            var.renderedLoreCount = var.loreCount
+          }
+        })
+      }
+  action:
+    load: |-
+      var.packetId = 'AXS_MARKET'
+      var.actionToken = ''
+      var.roomFound = false
+      var.lotId = ''
+      var.lotName = '正在打开竞价厅'
+      var.itemJson = '{"id":"minecraft:air","Count":1b}'
+      var.itemAmount = 0
+      var.bidCount = 0
+      var.bidderCount = 0
+      var.watchCount = 0
+      var.remainingSeconds = 0
+      var.extendedSeconds = 0
+      var.quoteAvailable = false
+      var.tradeAmount = '0'
+      var.timeline = {}
+      var.timelineCount = 0
+      var.renderedTimelineCount = -1
+      var.renderedLoreCount = -1
+      var.lore = {}
+      var.loreCount = 0
+      var.bidRevision = ''
+      var.quoteRevision = ''
+      var.canBid = false
+      var.canCancel = false
+      var.active = false
+      var.waiting = false
+      var.followed = false
+      var.elapsed = 0
+      var.eventTTL = 0
+      var.eventText = ''
+      var.status = '读取状态中'
+      var.syncMessage = '正在连接拍品'
+      var.announcement = '有效竞价由服务端确认，不会自动替你抬价'
+      var.actionBusy = false
+      var.actionBusySeconds = 0
+      var.quoteBusy = false
+      var.bidDirty = false
+      var.bidCanSubmit = false
+      var.showTradeConfirm = false
+      var.tradeMode = ''
+      var.seller = ''
+      var.lotMessage = ''
+      var.participation = ''
+      var.startingPrice = ''
+      var.currentPrice = ''
+      var.minimum = ''
+      var.currency = ''
+      var.highest = ''
+      var.myHighest = ''
+      var.myBalance = ''
+      var.myHeld = ''
+      var.createdAt = ''
+      var.deadline = ''
+      var.originalDeadline = ''
+      var.protection = ''
+      var.myDelivery = ''
+      var.bidMinimum = ''
+      var.bidCurrent = ''
+      var.bidHighest = ''
+      var.bidDebit = ''
+      var.bidHeld = ''
+      var.bidDeadline = ''
+      var.bidProtection = ''
+      var.bidReason = ''
+      var.quoteSeconds = 0
+      var.accent = '239,182,68,255'
+      var.openBid = -> {
+        if(var.canBid && !var.actionBusy){
+          var.tradeId = var.lotId
+          var.tradeName = var.lotName
+          var.tradeMode = 'bid'
+          var.showTradeConfirm = true
+          var.quoteBusy = true
+          var.bidDirty = false
+          var.bidCanSubmit = false
+          var.quoteRevision = ''
+          var.bidReason = '正在读取最新有效报价'
+          var.executeTrade = -> {
+            Packet.send(var.packetId, 'auction_bid', var.lotId, var.tradeAmount, var.actionToken, '0', 'all', '')
+          }
+          Packet.send(var.packetId, 'auction_quote', var.lotId, var.requestedBid)
+        }
+      }
+      sx = Screen.getWidth() / 1920
+      sy = Screen.getHeight() / 1080
+      s = sx < sy ? sx : sy
+      var.viewH = Screen.getHeight() / s
+      var.viewW = Screen.getWidth() / s
+      var.offX = (var.viewW - 1920) / 2
+      var.roomW = var.viewW - 96
+      var.roomH = var.viewH - 96
+      var.colH = var.roomH - 270
+      var.leftW = 360
+      var.rightW = 400
+      var.centerW = var.roomW - var.leftW - var.rightW - 96
+    open: |-
+      Packet.send(var.packetId, 'auction_room_open')
+    resize: |-
+      sx = Screen.getWidth() / 1920
+      sy = Screen.getHeight() / 1080
+      s = sx < sy ? sx : sy
+      var.viewH = Screen.getHeight() / s
+      var.viewW = Screen.getWidth() / s
+      var.offX = (var.viewW - 1920) / 2
+      var.roomW = var.viewW - 96
+      var.roomH = var.viewH - 96
+      var.colH = var.roomH - 270
+      var.leftW = 360
+      var.rightW = 400
+      var.centerW = var.roomW - var.leftW - var.rightW - 96
+    seconds: |-
+      var.elapsed = var.elapsed + 1
+      if(var.eventTTL > 0){ var.eventTTL = var.eventTTL - 1 }
+      if(var.actionBusy){
+        var.actionBusySeconds = var.actionBusySeconds + 1
+        if(var.actionBusySeconds >= 5){
+          var.actionBusy = false
+          var.actionBusySeconds = 0
+          Packet.send(var.packetId, 'auction_room_refresh')
+        }
+      }
+      if(var.elapsed > 10){ var.syncMessage = '同步延迟，请刷新后再确认竞价' }
+      var.quoteSeconds = var.quoteSeconds + 1
+      if(var.quoteSeconds >= 5){
+        var.quoteSeconds = 0
+        if(var.showTradeConfirm && var.tradeMode == 'bid' && !var.bidDirty && !var.quoteBusy && !var.actionBusy){
+          var.quoteBusy = true
+          Packet.send(var.packetId, 'auction_quote', var.lotId, var.tradeAmount)
+        }
+      }
+
+controls:
+  竞价厅背景:
+    type: Texture
+    attribute:
+      point: ~stretch_all
+      through: true
+      normal: ~Frosted:26;13,17,25,245
+  竞价厅布局:
+    type: Adaptive
+    attribute:
+      point: ~top_center
+      width: 1920
+      height: 1080
+    children:
+      竞价厅:
+        type: Canvas
+        attribute:
+          point: ~top_left
+          x: "48 - var.offX"
+          y: 48
+          width: "var.roomW"
+          height: "var.roomH"
+        children:
+          底板:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              through: true
+              normal: ~23,28,39,245
+              shape: ~round_rect
+              radius: 16
+          拍品名称:
+            type: Text
+            attribute:
+              x: "28"
+              y: "20"
+              texts: "'&f' + var.lotName"
+              fontSize: 42
+              through: true
+          拍品编号:
+            type: Text
+            attribute:
+              x: "30"
+              y: "76"
+              texts: "'&7LOT #' + var.lotId + ' · ' + var.status"
+              fontSize: 28
+              through: true
+          返回大厅:
+            type: Canvas
+            attribute:
+              x: "var.roomW - 210"
+              y: "24"
+              width: "180"
+              height: 46
+              enable: "!var.actionBusy"
+            action:
+              clickLeft: |-
+                Packet.send(var.packetId, 'auction_room_back')
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~48,59,77,235
+                  shape: ~round_rect
+                  radius: 8
+              文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "~&f返回拍卖大厅"
+                  fontSize: 26
+                  through: true
+          手动刷新:
+            type: Canvas
+            attribute:
+              x: "var.roomW - 370"
+              y: "24"
+              width: "140"
+              height: 46
+              enable: "!var.actionBusy"
+            action:
+              clickLeft: |-
+                Packet.send(var.packetId, 'auction_room_refresh')
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~48,59,77,235
+                  shape: ~round_rect
+                  radius: 8
+              文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "~&b刷新状态"
+                  fontSize: 26
+                  through: true
+          拍卖师播报:
+            type: Text
+            attribute:
+              x: "30"
+              y: "118"
+              texts: "var.eventTTL > 0 ? '&e' + var.eventText : '&7' + var.announcement"
+              fontSize: 28
+              through: true
+          拍品展示:
+            type: Canvas
+            attribute:
+              x: "24"
+              y: 166
+              width: "var.leftW"
+              height: "var.colH"
+              visible: "var.roomFound"
+            children:
+              面板底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~31,38,51,230
+                  shape: ~round_rect
+                  radius: 12
+              卖家:
+                type: Text
+                attribute:
+                  x: "20"
+                  y: "20"
+                  texts: "'&7卖家  &f' + var.seller"
+                  fontSize: 28
+                  through: true
+              拍品预览:
+                type: Slot
+                val: 拍品预览
+                attribute:
+                  slotType: ~Icon
+                  x: 84
+                  y: 66
+                  width: 192
+                  height: 192
+                  itemScale: 0.9
+                  normal: ~22,27,38,230
+                  seticon: "self.setItemIcon(var.itemJson)"
+              数量:
+                type: Text
+                attribute:
+                  x: "20"
+                  y: "278"
+                  texts: "'&f整组拍品 ×' + var.itemAmount.round()"
+                  fontSize: 30
+                  through: true
+              起拍价:
+                type: Text
+                attribute:
+                  x: "20"
+                  y: "320"
+                  texts: "'&7起拍价  &e' + var.startingPrice"
+                  fontSize: 26
+                  through: true
+              说明标题:
+                type: Text
+                attribute:
+                  x: "20"
+                  y: "366"
+                  texts: "~&f拍品说明"
+                  fontSize: 26
+                  through: true
+              物品说明滑块:
+                type: Texture
+                val: 物品说明滑块
+                attribute:
+                  x: "var.leftW - 12"
+                  y: 410
+                  width: 6
+                  height: 54
+                  maxDragY: "var.colH - 488"
+                  normal: ~153,177,207,240
+                  shape: ~round_rect
+                  radius: 3
+              物品说明滚动:
+                type: Scroll
+                attribute:
+                  x: 20
+                  y: 410
+                  width: "var.leftW - 40"
+                  height: "var.colH - 434"
+                  moveY: "val.物品说明滑块.getDragYRatio()"
+                action:
+                  wheel: |-
+                    val.物品说明滑块.setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                children:
+                  物品说明行区:
+                    type: VStack
+                    val: 物品说明行区
+                    attribute:
+                      width: "var.leftW - 40"
+                      spaceBetween: 6
+                    children:
+                      物品说明行:
+                        type: Text
+                        attribute:
+                          entryKey: 0.round()
+                          visible: "var.lore[self.entryKey] != none"
+                          texts: "var.lore[self.entryKey]"
+                          fontSize: 24
+                          height: 32
+                          through: true
+          竞价记录:
+            type: Canvas
+            attribute:
+              x: "var.leftW + 48"
+              y: 166
+              width: "var.centerW"
+              height: "var.colH"
+              visible: "var.roomFound"
+            children:
+              面板底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~31,38,51,230
+                  shape: ~round_rect
+                  radius: 12
+              现价:
+                type: Text
+                attribute:
+                  x: "24"
+                  y: "20"
+                  texts: "'&6当前最高价  &f' + var.currentPrice"
+                  fontSize: 36
+                  through: true
+              参与统计:
+                type: Text
+                attribute:
+                  x: "24"
+                  y: "78"
+                  texts: "'&7有效出价 ' + var.bidCount.round() + ' 次 · 竞价者 ' + var.bidderCount.round() + ' 人 · 关注 ' + var.watchCount.round() + ' 人'"
+                  fontSize: 26
+                  through: true
+              领先者:
+                type: Text
+                attribute:
+                  x: "24"
+                  y: "118"
+                  texts: "'&7领先者  &b' + var.highest"
+                  fontSize: 28
+                  through: true
+              倒计时:
+                type: Text
+                attribute:
+                  x: "24"
+                  y: "160"
+                  texts: "var.remainingSeconds > var.elapsed && var.active ? '&e剩余 ' + (var.remainingSeconds - var.elapsed).round() + ' 秒' : '&7' + var.status"
+                  fontSize: 32
+                  through: true
+              记录标题:
+                type: Text
+                attribute:
+                  x: "24"
+                  y: "216"
+                  texts: "~&f竞价实录 · 最近20次有效出价"
+                  fontSize: 28
+                  through: true
+              竞价记录滑块:
+                type: Texture
+                val: 竞价记录滑块
+                attribute:
+                  x: "var.centerW - 12"
+                  y: 262
+                  width: 6
+                  height: 54
+                  maxDragY: "var.colH - 340"
+                  normal: ~153,177,207,240
+                  shape: ~round_rect
+                  radius: 3
+              竞价记录滚动:
+                type: Scroll
+                attribute:
+                  x: 16
+                  y: 262
+                  width: "var.centerW - 32"
+                  height: "var.colH - 286"
+                  moveY: "val.竞价记录滑块.getDragYRatio()"
+                action:
+                  wheel: |-
+                    val.竞价记录滑块.setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                children:
+                  竞价记录行区:
+                    type: VStack
+                    val: 竞价记录行区
+                    attribute:
+                      width: "var.centerW - 32"
+                      spaceBetween: 10
+                    children:
+                      竞价记录行:
+                        type: Canvas
+                        attribute:
+                          entryKey: 0.round()
+                          entry: var.timeline[self.entryKey]
+                          visible: "self.entry != none"
+                          width: "var.centerW - 32"
+                          height: 78
+                        children:
+                          记录底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              through: true
+                              normal: "self.parent.entry != none && self.parent.entry['leading'] ? '49,85,75,235' : '43,52,69,225'"
+                              shape: ~round_rect
+                              radius: 8
+                          出价内容:
+                            type: Text
+                            attribute:
+                              x: 14
+                              y: 10
+                              texts: "self.parent.entry != none ? '&f' + self.parent.entry['title'] : ''"
+                              fontSize: 28
+                              through: true
+                          时间与延时:
+                            type: Text
+                            attribute:
+                              x: 14
+                              y: 46
+                              texts: "self.parent.entry != none ? '&7' + self.parent.entry['detail'] : ''"
+                              fontSize: 22
+                              through: true
+          参与面板:
+            type: Canvas
+            attribute:
+              x: "var.roomW - var.rightW - 24"
+              y: 166
+              width: "var.rightW"
+              height: "var.colH"
+              visible: "var.roomFound"
+            children:
+              面板底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~31,38,51,230
+                  shape: ~round_rect
+                  radius: 12
+              身份:
+                type: Text
+                attribute:
+                  x: "20"
+                  y: "22"
+                  texts: "'&f' + var.participation"
+                  fontSize: 28
+                  through: true
+              可用余额:
+                type: Text
+                attribute:
+                  x: "20"
+                  y: "76"
+                  texts: "'&7可用余额  &e' + var.myBalance"
+                  fontSize: 24
+                  through: true
+              冻结款项:
+                type: Text
+                attribute:
+                  x: "20"
+                  y: "116"
+                  texts: "'&7当前押金  &f' + var.myHeld"
+                  fontSize: 24
+                  through: true
+              最高参与:
+                type: Text
+                attribute:
+                  x: "20"
+                  y: "156"
+                  texts: "'&7你的最高出价  &f' + var.myHighest"
+                  fontSize: 24
+                  through: true
+              交付状态:
+                type: Text
+                attribute:
+                  x: "20"
+                  y: "200"
+                  texts: "'&b' + var.myDelivery"
+                  fontSize: 22
+                  through: true
+              最低出价:
+                type: Text
+                attribute:
+                  x: "20"
+                  y: "258"
+                  texts: "'&7下次最低  &e' + var.minimum + ' ' + var.currency"
+                  fontSize: 26
+                  through: true
+              自定义出价:
+                type: Canvas
+                attribute:
+                  x: "20"
+                  y: "310"
+                  width: "var.rightW - 40"
+                  height: 46
+                  enable: "var.canBid && !var.actionBusy && var.elapsed <= 10"
+                action:
+                  clickLeft: |-
+                    var.requestedBid = '0'
+                    var.openBid()
+                children:
+                  底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~48,59,77,235
+                      shape: ~round_rect
+                      radius: 8
+                  文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: "~&6自定义金额并确认"
+                      fontSize: 26
+                      through: true
+              最低有效:
+                type: Canvas
+                attribute:
+                  x: "20"
+                  y: "372"
+                  width: "170"
+                  height: 46
+                  enable: "var.canBid && !var.actionBusy && var.elapsed <= 10"
+                action:
+                  clickLeft: |-
+                    var.requestedBid = '0'
+                    var.openBid()
+                children:
+                  底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~48,59,77,235
+                      shape: ~round_rect
+                      radius: 8
+                  文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: "~&b最低有效价"
+                      fontSize: 26
+                      through: true
+              再加一档:
+                type: Canvas
+                attribute:
+                  x: "210"
+                  y: "372"
+                  width: "170"
+                  height: 46
+                  enable: "var.canBid && !var.actionBusy && var.elapsed <= 10"
+                action:
+                  clickLeft: |-
+                    var.requestedBid = 'step1'
+                    var.openBid()
+                children:
+                  底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~48,59,77,235
+                      shape: ~round_rect
+                      radius: 8
+                  文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: "~&b再加一档"
+                      fontSize: 26
+                      through: true
+              再加两档:
+                type: Canvas
+                attribute:
+                  x: "20"
+                  y: "434"
+                  width: "170"
+                  height: 46
+                  enable: "var.canBid && !var.actionBusy && var.elapsed <= 10"
+                action:
+                  clickLeft: |-
+                    var.requestedBid = 'step2'
+                    var.openBid()
+                children:
+                  底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~48,59,77,235
+                      shape: ~round_rect
+                      radius: 8
+                  文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: "~&b再加两档"
+                      fontSize: 26
+                      through: true
+              关注拍品:
+                type: Canvas
+                attribute:
+                  x: "210"
+                  y: "434"
+                  width: "170"
+                  height: 46
+                  enable: "!var.actionBusy && var.actionToken != ''"
+                action:
+                  clickLeft: |-
+                    var.actionBusy = true
+                    Packet.send(var.packetId, 'auction_favorite', var.lotId, 'all', '', '0', var.actionToken)
+                children:
+                  底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~48,59,77,235
+                      shape: ~round_rect
+                      radius: 8
+                  文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: "var.followed ? '&e取消关注' : '&e关注拍品'"
+                      fontSize: 26
+                      through: true
+              卖家下架:
+                type: Canvas
+                attribute:
+                  x: "20"
+                  y: "498"
+                  width: "var.rightW - 40"
+                  height: 46
+                  enable: "var.canCancel && !var.actionBusy"
+                  visible: "var.isSeller"
+                action:
+                  clickLeft: |-
+                    var.tradeId = var.lotId
+                    var.tradeMode = 'cancel'
+                    var.tradeConfirmText = '确认下架此拍品？服务端将再次核对竞价状态。'
+                    var.executeTrade = -> {
+                      Packet.send(var.packetId, 'auction_cancel', var.lotId, var.actionToken, '0', 'all', '')
+                    }
+                    var.showTradeConfirm = true
+                children:
+                  底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~48,59,77,235
+                      shape: ~round_rect
+                      radius: 8
+                  文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: "~&c下架此拍品"
+                      fontSize: 26
+                      through: true
+              卖家规则:
+                type: Text
+                attribute:
+                  x: "20"
+                  y: "560"
+                  texts: "~&7已有出价时能否下架，以配置为准"
+                  fontSize: 22
+                  through: true
+                  visible: "var.isSeller"
+          当前截止:
+            type: Text
+            attribute:
+              x: "30"
+              y: "var.roomH - 90"
+              texts: "'&7当前截止 ' + var.deadline + ' · 原截止 ' + var.originalDeadline + ' · 已顺延 ' + var.extendedSeconds.round() + ' 秒'"
+              fontSize: 24
+              through: true
+              visible: "var.roomFound"
+          防抢拍规则:
+            type: Text
+            attribute:
+              x: "30"
+              y: "var.roomH - 56"
+              texts: "'&6' + var.protection"
+              fontSize: 24
+              through: true
+              visible: "var.roomFound"
+          状态同步:
+            type: Text
+            attribute:
+              x: "var.roomW - 440"
+              y: "var.roomH - 56"
+              texts: "'&7' + var.syncMessage"
+              fontSize: 22
+              through: true
+          不存在提示:
+            type: Text
+            attribute:
+              x: "100"
+              y: "240"
+              texts: "'&7' + var.syncMessage"
+              fontSize: 32
+              through: true
+              visible: "!var.roomFound"
+
+  交易确认弹窗:
+    type: Canvas
+    attribute:
+      point: ~stretch_all
+      visible: "var.showTradeConfirm == true"
+    children:
+      遮罩:
+        type: Texture
+        attribute:
+          point: ~stretch_all
+          normal: ~0,0,0,180
+      面板:
+        type: Canvas
+        attribute:
+          point: ~middle_center
+          width: 800
+          height: "var.tradeMode == 'bid' ? 580 : 260"
+        children:
+          背景:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              through: true
+              normal: ~36,38,48,245
+          标题:
+            type: Text
+            attribute:
+              point: ~top_center
+              y: 24
+              texts: "var.tradeMode == 'bid' ? '&f竞价：' + var.tradeName : '&f确认下架'"
+              fontSize: 36
+              through: true
+          内容:
+            type: Text
+            attribute:
+              point: ~top_center
+              y: 80
+              texts: "var.tradeMode == 'bid' ? var.bidReason : var.tradeConfirmText"
+              fontSize: 28
+              through: true
+          自定义出价输入:
+            type: TextBox
+            val: 自定义出价输入
+            attribute:
+              point: ~top_center
+              y: 140
+              width: 260
+              height: 44
+              length: 32
+              inputPattern: "^[0-9.]*$"
+              emptyText: "~&7输入你的出价"
+              visible: "var.tradeMode == 'bid'"
+              editable: "!var.quoteBusy && !var.actionBusy"
+              fontSize: 32
+            action:
+              textChange: |-
+                var.tradeAmount = self.getContent()
+                var.bidDirty = true
+              enter: |-
+                var.quoteBusy = true
+                Packet.send(var.packetId, 'auction_quote', var.tradeId, var.tradeAmount)
+          最低出价:
+            type: Canvas
+            attribute:
+              point: ~top_center
+              x: -280
+              y: 138
+              width: 160
+              height: 48
+              visible: "var.tradeMode == 'bid'"
+              enable: "!var.quoteBusy && !var.actionBusy"
+            action:
+              clickLeft: |-
+                var.quoteBusy = true
+                Packet.send(var.packetId, 'auction_quote', var.tradeId, '0')
+            children:
+              文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "~&b最低有效出价"
+                  fontSize: 26
+                  through: true
+          更新报价:
+            type: Canvas
+            attribute:
+              point: ~top_center
+              x: 280
+              y: 138
+              width: 160
+              height: 48
+              visible: "var.tradeMode == 'bid'"
+              enable: "!var.quoteBusy && !var.actionBusy"
+            action:
+              clickLeft: |-
+                var.quoteBusy = true
+                Packet.send(var.packetId, 'auction_quote', var.tradeId, var.tradeAmount)
+            children:
+              文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "~&b更新报价"
+                  fontSize: 26
+                  through: true
+          当前竞价:
+            type: Text
+            attribute:
+              point: ~top_center
+              y: 220
+              visible: "var.tradeMode == 'bid'"
+              texts: "'&7当前: ' + var.bidCurrent + '；领先: ' + var.bidHighest"
+              fontSize: 24
+              through: true
+          最低金额:
+            type: Text
+            attribute:
+              point: ~top_center
+              y: 264
+              visible: "var.tradeMode == 'bid'"
+              texts: "'&7最低有效出价: &e' + var.bidMinimum"
+              fontSize: 24
+              through: true
+          本次扣款:
+            type: Text
+            attribute:
+              point: ~top_center
+              y: 308
+              visible: "var.tradeMode == 'bid'"
+              texts: "'&7已冻结 ' + var.bidHeld + '；本次追加扣款 &e' + var.bidDebit"
+              fontSize: 24
+              through: true
+          截止时间:
+            type: Text
+            attribute:
+              point: ~top_center
+              y: 352
+              visible: "var.tradeMode == 'bid'"
+              texts: "'&7当前截止时间: ' + var.bidDeadline"
+              fontSize: 24
+              through: true
+          延时规则:
+            type: Text
+            attribute:
+              point: ~top_center
+              y: 396
+              visible: "var.tradeMode == 'bid'"
+              texts: "'&6' + var.bidProtection"
+              fontSize: 24
+              through: true
+          扣款说明:
+            type: Text
+            attribute:
+              point: ~top_center
+              y: 440
+              visible: "var.tradeMode == 'bid'"
+              texts: "'&7被他人超价后原押金进入退款队列；领先者再次加价仅扣差额'"
+              fontSize: 24
+              through: true
+          确认:
+            type: Canvas
+            attribute:
+              point: ~bottom_left
+              x: 90
+              y: -24
+              width: 240
+              height: 48
+              enable: "!var.actionBusy && var.actionToken != '' && (var.tradeMode == 'cancel' || (!var.quoteBusy && !var.bidDirty && var.bidCanSubmit))"
+            action:
+              clickLeft: |-
+                var.showTradeConfirm = false
+                var.actionBusy = true
+                var.executeTrade()
+            children:
+              文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "~&a确认"
+                  fontSize: 32
+                  through: true
+          取消:
+            type: Canvas
+            attribute:
+              point: ~bottom_right
+              x: -90
+              y: -24
+              width: 240
+              height: 48
+            action:
+              clickLeft: |-
+                var.showTradeConfirm = false
+            children:
+              文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "~&f取消"
+                  fontSize: 32
+                  through: true

@@ -86,6 +86,15 @@ public final class ItemSerializer {
         }
     }
 
+    /** Protection templates must not silently lose NBT through the compatibility fallback. */
+    public static ItemStack deserializeStrict(byte[] bytes) {
+        if(bytes==null || bytes.length==0)return null;
+        try(ByteArrayInputStream input=new ByteArrayInputStream(bytes);BukkitObjectInputStream stream=new BukkitObjectInputStream(input)){
+            Object value=stream.readObject();if(value instanceof ItemStack item)return item;
+            throw new IllegalStateException("Item protection template is not an ItemStack.");
+        }catch(IOException|ClassNotFoundException exception){throw new IllegalStateException("Unable to read item protection template without NBT loss.",exception);}
+    }
+
     private static ItemStack deserializeCompat(byte[] bytes) throws IOException, ClassNotFoundException, ReflectiveOperationException {
         try (ByteArrayInputStream inputStream = new ByteArrayInputStream(bytes);
              ObjectInputStream dataStream = new ObjectInputStream(inputStream)) {

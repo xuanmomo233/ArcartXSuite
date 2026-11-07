@@ -25,6 +25,9 @@ help:
   password: "&7{0} password <玩家> clear&f - 已移除，请使用 /axs password"
   bank: "&7{0} bank <玩家> <货币ID> <set|add|take> <金额>&f - 管理银行"
   export: "&7{0} export <玩家> <仓库ID> <槽位>&f - 导出槽位物品原始数据"
+  material-transfers: "&7{0} material-transfers <玩家UUID或在线名>&f - 查询待处理材料转移凭证（最多50条）"
+  material-evidence: "&7{0} material-evidence <玩家UUID或在线名> <凭证UUID>&f - 导出完整材料转移凭证"
+  material-confirm: "&7{0} material-confirm <玩家UUID或在线名> <凭证UUID> confirm&f - 人工核对结案，仅标记、不补发"
 
 # ── status ────────────────────────────────────────────
 status:
@@ -135,7 +138,8 @@ player:
   read-only-withdraw: "当前仓库只读，无法取出。"
   no-slot-selected: "未选择可取出的槽位。"
   slot-no-item: "该槽位没有物品。"
-  slot-corrupt: "该槽位物品数据损坏，已清理。"
+  slot-corrupt: "该物品无法还原，手动取出将直接丢弃，不会生成物品。"
+  unavailable-discarded: "已丢弃 {0} 个无法还原的仓库物品，没有生成物品；该部分无法恢复。"
   inventory-full: "背包空间不足。"
   withdraw-success: "已取出 {0} 件物品。"
   unknown-currency: "未知货币。"

@@ -166,6 +166,7 @@ items:
     currency: "money"
     stock-mode: "per-player"
     stock-amount: 64          # 每个玩家最多库存 64 个
+    restock-interval-seconds: 86400  # 每24小时补满库存；0关闭，实际触发受 shop.refresh-interval-ticks 影响
     limit-per-player: 128     # 每人每日最多购买 128 个
     limit-reset: "daily"
     discount: {}              # 空对象表示无折扣

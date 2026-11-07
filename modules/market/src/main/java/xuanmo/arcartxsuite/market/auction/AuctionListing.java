@@ -25,6 +25,7 @@ public class AuctionListing {
     private ListingStatus status;
     private final long createdAt;
     private final long expiresAt;
+    private long originalExpiresAt;
 
     public AuctionListing(long id, UUID seller, String sellerName, String itemData,
                           String itemDisplayName, String pinyin, String initials,
@@ -50,6 +51,7 @@ public class AuctionListing {
         this.status = status;
         this.createdAt = createdAt;
         this.expiresAt = expiresAt;
+        this.originalExpiresAt = expiresAt;
     }
 
     public long getId() { return id; }
@@ -75,9 +77,11 @@ public class AuctionListing {
     public void setStatus(ListingStatus status) { this.status = status; }
     public long getCreatedAt() { return createdAt; }
     public long getExpiresAt() { return expiresAt; }
+    public long getOriginalExpiresAt() { return originalExpiresAt; }
+    public void setOriginalExpiresAt(long value) { originalExpiresAt = value > 0 ? value : expiresAt; }
 
     public boolean isExpired() {
-        return System.currentTimeMillis() > expiresAt;
+        return System.currentTimeMillis() >= expiresAt;
     }
 
     public boolean isActive() {

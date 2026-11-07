@@ -46,6 +46,10 @@ public final class LoginViewController implements AutoCloseable {
         var view=new View(state,prompt);
         if(state.connectionId()==null) return;
         if(force && state.admitted() && !state.provider().equals("local-password")) {
+            if("server".equals(state.provider())) {
+                player.sendMessage("Suite 认证未启用，玩家已正常准入。");
+                return;
+            }
             player.sendMessage("外部身份的密码请到对应身份提供方修改。"); return;
         }
         if(force) forced.add(id);
@@ -130,6 +134,7 @@ public final class LoginViewController implements AutoCloseable {
     private String text(String code) {
         return switch(code) {
             case "ADMITTED" -> "验证成功，欢迎进入游戏。";
+            case "SERVER_ADMITTED","AUTH_DISABLED" -> "Suite 认证未启用，玩家已正常准入。";
             case "QQ_BINDING_REQUIRED" -> "身份已验证，请在QQ群申请验证码完成绑定。";
             case "BOUND" -> "绑定成功。";
             case "PASSWORD_CHANGED" -> "密码已修改，请重新登录。";

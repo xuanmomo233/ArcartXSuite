@@ -84,7 +84,7 @@ public record WarehouseModuleConfiguration(
 
         SearchConfiguration search = new SearchConfiguration(
             Math.max(4, configuration.getInt("search.page-size", 18)),
-            normalizeId(configuration.getString("search.default-sort", "time"))
+            normalizeId(configuration.getString("search.default-sort", "default"))
         );
 
         Map<String, WarehouseDefinition> warehouses = loadWarehouses(configuration.getConfigurationSection("warehouses"), logger);
@@ -205,7 +205,10 @@ public record WarehouseModuleConfiguration(
     }
 
     public List<String> sortProfileIds() {
-        return List.copyOf(sortProfiles.keySet());
+        List<String> ids = new ArrayList<>();
+        ids.add("default");
+        sortProfiles.keySet().stream().filter(id -> !id.equals("default")).forEach(ids::add);
+        return List.copyOf(ids);
     }
 
     public CategoryDefinition otherCategory() {

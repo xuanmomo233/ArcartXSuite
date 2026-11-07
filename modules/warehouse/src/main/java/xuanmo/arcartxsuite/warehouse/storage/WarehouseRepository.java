@@ -3,6 +3,7 @@ package xuanmo.arcartxsuite.warehouse.storage;
 import java.math.BigDecimal;
 import java.sql.SQLException;
 import java.util.List;
+import java.util.Set;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -37,6 +38,12 @@ public interface WarehouseRepository {
      */
     List<SlotItemRecord> loadSlotSummaries(String ownerType, String ownerId, String warehouseId) throws SQLException;
 
+    List<SlotItemRecord> loadSlots(String ownerType, String ownerId, String warehouseId, List<Integer> slots) throws SQLException;
+
+    Set<String> loadPins(UUID playerUuid, String warehouseId) throws SQLException;
+
+    void setPin(UUID playerUuid, String warehouseId, String itemHash, boolean pinned) throws SQLException;
+
     Optional<SlotItemRecord> loadSlot(String ownerType, String ownerId, String warehouseId, int slot) throws SQLException;
 
     Optional<SlotItemRecord> findSlotByHash(String ownerType, String ownerId, String warehouseId, String itemHash) throws SQLException;
@@ -65,6 +72,15 @@ public interface WarehouseRepository {
 
     /** 一次提交槽位变更；旧数量或物品已变化时整批回滚，避免跨服覆盖与部分提交。 */
     boolean applySlotChanges(List<SlotChange> changes) throws SQLException;
+    boolean escrowMaterials(List<SlotChange> changes, MaterialTransfer transfer) throws SQLException;
+    boolean transitionMaterialTransfer(String operationId, String ownerId, String from, String to, String note) throws SQLException;
+    boolean restoreHeldMaterialTransfer(MaterialTransfer transfer, List<SlotChange> reverse) throws SQLException;
+    List<MaterialTransfer> oldMaterialTransfers(String serverId, String runId, int limit) throws SQLException;
+    List<MaterialTransfer> materialTransfers(String ownerId, int limit) throws SQLException;
+    java.util.Optional<MaterialTransfer> materialTransfer(String id, String ownerId) throws SQLException;
+
+    record MaterialTransfer(String id, String ownerId, String warehouseId, String serverId, String runId,
+        String state, String adapter, String target, String evidence, String payload, long createdAt, long updatedAt, String note) { }
 
     record SlotChange(SlotItemRecord before, SlotItemRecord after) { }
 

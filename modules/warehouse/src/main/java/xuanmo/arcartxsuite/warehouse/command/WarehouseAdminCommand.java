@@ -25,7 +25,7 @@ import xuanmo.arcartxsuite.warehouse.service.WarehouseService;
  */
 public final class WarehouseAdminCommand implements ModuleCommandHandler {
 
-    private static final List<String> ACTIONS = List.of("help", "status", "open", "info", "view", "delete", "bank", "export");
+    private static final List<String> ACTIONS = List.of("help", "status", "open", "info", "view", "delete", "bank", "export", "material-transfers", "material-evidence", "material-confirm");
 
     private final Supplier<WarehouseService> serviceProvider;
     private final MessageProvider messages;
@@ -90,7 +90,7 @@ public final class WarehouseAdminCommand implements ModuleCommandHandler {
     @Override
     public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull String[] args) {
         if (args.length == 2) return filter(ACTIONS, args[1]);
-        if (args.length == 3 && List.of("open", "info", "view", "delete", "bank", "export").contains(args[1].toLowerCase(Locale.ROOT))) {
+        if (args.length == 3 && List.of("open", "info", "view", "delete", "bank", "export", "material-transfers", "material-evidence", "material-confirm").contains(args[1].toLowerCase(Locale.ROOT))) {
             return null; // player names
         }
         WarehouseService svc = serviceProvider.get();
@@ -106,6 +106,7 @@ public final class WarehouseAdminCommand implements ModuleCommandHandler {
         if (args.length == 5) {
             if ("bank".equalsIgnoreCase(args[1])) return filter(List.of("set", "add", "take"), args[4]);
             if ("delete".equalsIgnoreCase(args[1])) return filter(List.of("confirm"), args[4]);
+            if ("material-confirm".equalsIgnoreCase(args[1])) return filter(List.of("confirm"), args[4]);
         }
         return List.of();
     }
@@ -120,6 +121,9 @@ public final class WarehouseAdminCommand implements ModuleCommandHandler {
         sender.sendMessage(fullMsg("help.delete", cmd));
         sender.sendMessage(fullMsg("help.bank", cmd));
         sender.sendMessage(fullMsg("help.export", cmd));
+        sender.sendMessage(fullMsg("help.material-transfers", cmd));
+        sender.sendMessage(fullMsg("help.material-evidence", cmd));
+        sender.sendMessage(fullMsg("help.material-confirm", cmd));
     }
 
     private void sendStatus(CommandSender sender) {

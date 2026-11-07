@@ -88,7 +88,14 @@ public record MarketModuleConfiguration(
             readStr(config, "ui.shop-edit-file", "arcartx/ui/market_shop_edit.yml"),
             readStr(config, "ui.packet-id", "AXS_MARKET"),
             config.getBoolean("ui.register-ui-on-enable", true),
-            config.getBoolean("ui.overwrite-ui-files", false)
+            config.getBoolean("ui.overwrite-ui-files", false),
+            readStr(config,"ui.auction-room-ui-id","AXS:market_auction_room"),
+            readStr(config,"ui.auction-room-file","arcartx/ui/market_auction_room.yml"),
+            readStr(config,"ui.player-shops-ui-id","AXS:market_player_shops"),
+            readStr(config,"ui.player-store-ui-id","AXS:market_player_store"),
+            readStr(config,"ui.player-store-edit-ui-id","AXS:market_player_store_edit"),
+            readStr(config,"ui.recycle-protection-ui-id","AXS:market_recycle_protection"),
+            readStr(config,"ui.admin-trades-ui-id","AXS:market_admin_trades")
         );
     }
 
@@ -172,7 +179,15 @@ public record MarketModuleConfiguration(
             readStr(sec, "expired-return-method", "mail"),
             readStr(sec, "outbid-notify", "chat"),
             blacklist,
-            categories
+            categories,
+            sec.getBoolean("allow-cancel-with-bids", false),
+            sec.getBoolean("end-protection.enabled", false),
+            Math.max(1,Math.min(3600,sec.getInt("end-protection.window-seconds",120))),
+            Math.max(1,Math.min(3600,sec.getInt("end-protection.extend-seconds",120))),
+            Math.max(1,Math.min(86400,sec.getInt("end-protection.max-extension-seconds",1800))),
+            sec.getBoolean("notifications.outbid",true),
+            sec.getBoolean("notifications.settlement",true),
+            sec.getBoolean("notifications.watch-bids",false)
         );
     }
 
@@ -219,7 +234,11 @@ public record MarketModuleConfiguration(
             readStr(sec, "transaction-tax-currency", "money"),
             taxDiscount,
             readStr(sec, "expired-return-method", "mail"),
-            blacklist
+            blacklist,
+            Math.max(1,Math.min(64,sec.getInt("profile.name-max-length",32))),
+            Math.max(1,Math.min(1024,sec.getInt("profile.description-max-length",256))),
+            Math.max(1,Math.min(2048,sec.getInt("profile.announcement-max-length",512))),
+            Math.max(1,Math.min(1000,sec.getInt("profile.max-favorites",100)))
         );
     }
 
@@ -253,13 +272,15 @@ public record MarketModuleConfiguration(
             sec.getBoolean("allow-auto-recycle", true),
             sec.getBoolean("batch-recycle-enabled", true),
             sec.getBoolean("batch-confirm", true),
-            priceMultiplier
+            priceMultiplier,
+            sec.getBoolean("protection.default-auto-recycle",false),
+            Math.max(1,Math.min(1000,sec.getInt("protection.max-rules",200)))
         );
     }
 
     private static MessagesConfiguration loadMessages(FileConfiguration config) {
         ConfigurationSection sec = config.getConfigurationSection("messages");
-        if (sec == null) return MessagesConfiguration.defaults();
+        if (sec == null) sec = config;
         return new MessagesConfiguration(
             readStr(sec, "prefix", "&8[&6AXS市场&8] &7"),
             readStr(sec, "auction-listed", "&a物品已成功上架！"),
@@ -271,7 +292,7 @@ public record MarketModuleConfiguration(
             readTradeMessage(sec, "shop-bought", "&a购买成功！花费: &e{amount}"),
             readStr(sec, "shop-limit-reached", "&c该商品已达购买上限。"),
             readStr(sec, "shop-condition-denied", "&c你不满足该商品的上架条件。"),
-            readTradeMessage(sec, "recycle-success", "&a回收成功！获得: &e{amount}"),
+            readTradeMessage(sec, "recycle-success", "&a回收已受理，收益等待入账: &e{amount}"),
             readStr(sec, "recycle-nothing", "&7背包中没有可回收的物品。"),
             readStr(sec, "insufficient-funds", "&c余额不足。"),
             readStr(sec, "item-blacklisted", "&c该物品不允许上架。"),
@@ -304,8 +325,17 @@ public record MarketModuleConfiguration(
         String playerShopId, String playerShopFile,
         String shopEditId, String shopEditFile,
         String packetId,
-        boolean registerOnEnable, boolean overwriteUiFiles
-    ) {}
+        boolean registerOnEnable, boolean overwriteUiFiles,
+        String auctionRoomId, String auctionRoomFile,
+        String playerShopsId,String playerStoreId,String playerStoreEditId,String recycleProtectionId,String adminTradesId
+    ) {
+        public UiConfiguration {
+            var existing=new java.util.HashSet<>(List.of(shopId,auctionId,recycleId,historyId,sellId,playerShopId,shopEditId,auctionRoomId,"AXS:market_auction_sell"));
+            var storeIds=List.of(playerShopsId,playerStoreId,playerStoreEditId,recycleProtectionId,adminTradesId);
+            if(new java.util.HashSet<>(storeIds).size()!=5 || storeIds.stream().anyMatch(existing::contains))
+                throw new IllegalArgumentException("店铺、回收保护、交易管理等新增界面的UI ID必须互不相同，且不能与其他市场界面共用");
+        }
+    }
 
     public record StorageConfiguration(
         boolean shared,
@@ -414,7 +444,10 @@ public record MarketModuleConfiguration(
         Map<String, Double> taxDiscount,
         String expiredReturnMethod, String outbidNotify,
         ItemMatcher blacklist,
-        Map<String, CategoryDefinition> categories
+        Map<String, CategoryDefinition> categories,
+        boolean allowCancelWithBids, boolean endProtectionEnabled,
+        int endWindowSeconds, int endExtendSeconds, int endMaxExtensionSeconds,
+        boolean notifyOutbid, boolean notifySettlement, boolean notifyWatchBids
     ) {
         public static AuctionConfiguration defaults() {
             return new AuctionConfiguration(
@@ -423,7 +456,7 @@ public record MarketModuleConfiguration(
                 3600L, 604800L, 86400L, 10, 0.05, 10.0,
                 0.0, "money", 0.05, "money",
                 Map.of(), "mail", "chat",
-                ItemMatcher.empty(), Map.of()
+                ItemMatcher.empty(), Map.of(), false, false, 120, 120, 1800, true, true, false
             );
         }
     }
@@ -439,7 +472,7 @@ public record MarketModuleConfiguration(
         double transactionTaxRate, String transactionTaxCurrency,
         Map<String, Double> taxDiscount,
         String expiredReturnMethod,
-        ItemMatcher blacklist
+        ItemMatcher blacklist, int nameMaxLength,int descriptionMaxLength,int announcementMaxLength,int maxShopFavorites
     ) {
         public static PlayerShopConfiguration defaults() {
             return new PlayerShopConfiguration(
@@ -448,7 +481,7 @@ public record MarketModuleConfiguration(
                 3600L, 2592000L, 604800L, 20,
                 0.0, "money", 0.05, "money",
                 Map.of(), "mail",
-                ItemMatcher.empty()
+                ItemMatcher.empty(),32,256,512,100
             );
         }
     }
@@ -502,10 +535,10 @@ public record MarketModuleConfiguration(
     public record RecycleConfiguration(
         boolean enabled, String recycleDirectory, String defaultCurrency,
         boolean allowAutoRecycle, boolean batchRecycleEnabled, boolean batchConfirm,
-        Map<String, Double> priceMultiplier
+        Map<String, Double> priceMultiplier,boolean defaultAutoRecycle,int maxProtectionRules
     ) {
         public static RecycleConfiguration defaults() {
-            return new RecycleConfiguration(true, "recycle", "money", true, true, true, Map.of());
+            return new RecycleConfiguration(true, "recycle", "money", true, true, true, Map.of(), false,200);
         }
     }
 
@@ -527,7 +560,7 @@ public record MarketModuleConfiguration(
                 "&7您上架的 &e{item} &7已到期，已退回。", "&a您上架的 &e{item} &a已售出！收入: &e{amount}",
                 "&7已取消上架。", "&a购买成功！花费: &e{amount}", "&c该商品已达购买上限。",
                 "&c你不满足该商品的上架条件。",
-                "&a回收成功！获得: &e{amount}", "&7背包中没有可回收的物品。",
+                "&a回收已受理，收益等待入账: &e{amount}", "&7背包中没有可回收的物品。",
                 "&c余额不足。",
                 "&c该物品不允许上架。",
                 "&c一键回收功能已关闭",

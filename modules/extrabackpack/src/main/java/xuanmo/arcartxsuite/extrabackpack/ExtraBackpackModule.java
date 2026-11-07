@@ -56,7 +56,7 @@ public final class ExtraBackpackModule extends AbstractAXSModule implements Modu
             .version("1.5.0")
             .mainClass(getClass().getName())
             // 共通存储：扩展背包直接读写玩家个人仓库，warehouse 缺席则无存储后端
-            .depends(java.util.List.of("warehouse"))
+            .softDepends(java.util.List.of("warehouse"))
             .build();
     }
 
@@ -89,7 +89,7 @@ public final class ExtraBackpackModule extends AbstractAXSModule implements Modu
     @Override
     protected @NotNull ModuleUiSpec uiSpec() {
         Map<String, String> mappings = new LinkedHashMap<>();
-        mappings.put("arcartx/ui/extrabackpack.yml", "ui/extrabackpack.yml");
+        mappings.put("arcartx/ui/extrabackpack.yml", "ui/extrabackpack_v2.yml");
         return new ModuleUiSpec(mappings, configuration != null && configuration.ui().overwriteUiFiles());
     }
 
@@ -161,15 +161,17 @@ public final class ExtraBackpackModule extends AbstractAXSModule implements Modu
             plugin,
             logger,
             packetBridge,
-            propBridge,
             uiExporter,
             configuration,
             messages(),
-            vanillaItemNameBridge
+            vanillaItemNameBridge,
+            currencyManager,
+            rondoBridge
         );
         service.setEventBusProvider(() -> getCapability(EventBusCapability.class));
         // 共通存储：扩展背包直接读写玩家个人仓库（同一存储，两个入口）
         service.setWarehouseProvider(() -> getCapability(xuanmo.arcartxsuite.api.capability.WarehouseAccess.class));
+        service.setPanelProvider(() -> getCapability(xuanmo.arcartxsuite.api.capability.WarehousePanelAccess.class));
         service.start();
         adminCommand = new ExtraBackpackAdminCommand(() -> service, messages());
         // 将 Service 手动注册的 UI 纳入基类生命周期管理（onDisable 时兜底注销）

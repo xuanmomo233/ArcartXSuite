@@ -2,18 +2,27 @@
 # AXS Market 全球市场 主配置文件
 # =============================================================================
 # 功能概述:
-#   Market 模块提供三合一经济交易系统：
+#   Market 模块提供四类经济交易功能：
 #   1. 拍卖行 - 玩家间纯竞价交易，支持分类筛选和搜索
 #   2. 系统商店 - 管理员预设商品，支持多物品来源（原版/第三方插件）
 #   3. 回收商店 - 玩家将物品出售给系统，支持批量回收和自动回收
+#   4. 玩家商店 - 玩家固定价格挂单，按卖家浏览并直接购买
 #
 # 命令:
 #   玩家: /market              打开市场主界面
 #         /market shop [商店ID] 打开系统商店
-#         /market sell <价格> [起拍价] [时长] [货币]  上架手持物品
+#         /market sell <起拍价> [时长秒] [货币]  上架手持物品到拍卖行
+#         /market sellui       打开统一上架界面（拍卖/玩家商店）
+#         /market pshop        打开玩家商店
+#         /market my [auction|pshop]  查看自己的挂单
+#         /market history      查看四类交易记录
 #         /market recycle      打开回收界面
-#   管理: /axs market reload   重载商店/回收配置
+#   管理: /axs reload market   重载模块配置、商店和回收表
 #         /axs market status   查看模块运行状态
+#         /axs market remove <auction|pshop> <ID>  强制下架并退还
+#         /axs market clear-expired  处理两类到期挂单
+#         /axs market edit [商店ID]  编辑系统商店
+#         /axs market open <auction|pshop|shop|recycle|history|sell> [商店ID]
 #
 # PAPI 占位符:
 #   %axsmarket_auction_count%    当前活跃拍卖数量
@@ -23,7 +32,7 @@
 #   %axsmarket_redis_status%       Redis 连接状态
 # =============================================================================
 
-config-version: 3
+config-version: 4
 
 # ------------------------------------------------------------------------------
 # 全局设置
@@ -51,6 +60,10 @@ ui:
   # 拍卖行 UI ID
   auction-ui-id: "AXS:market_auction"
   auction-file: "arcartx/ui/market_auction.yml"
+  # 单件拍品竞价厅：真实竞价实录、个人状态、延时与交付进度。
+  # 此 ID 应与其他市场界面及 AXS:market_auction_sell 保持不同。
+  auction-room-ui-id: "AXS:market_auction_room"
+  auction-room-file: "arcartx/ui/market_auction_room.yml"
   # 回收商店 UI ID
   recycle-ui-id: "AXS:market_recycle"
   recycle-file: "arcartx/ui/market_recycle.yml"
@@ -63,6 +76,13 @@ ui:
   # 玩家商店浏览 UI ID
   player-shop-ui-id: "AXS:market_player_shop"
   player-shop-file: "arcartx/ui/market_player_shop.yml"
+  # 店铺目录、独立店铺、店主装修页；三个 ID 必须与其他市场 UI 保持不同。
+  player-shops-ui-id: "AXS:market_player_shops"
+  player-store-ui-id: "AXS:market_player_store"
+  player-store-edit-ui-id: "AXS:market_player_store_edit"
+  # 个人回收保护与管理员交易管理页，ID 必须与其他市场 UI 不同。
+  recycle-protection-ui-id: "AXS:market_recycle_protection"
+  admin-trades-ui-id: "AXS:market_admin_trades"
   # 系统商店编辑 UI ID（管理员，/axs market edit 打开）
   shop-edit-ui-id: "AXS:market_shop_edit"
   shop-edit-file: "arcartx/ui/market_shop_edit.yml"
@@ -124,8 +144,8 @@ redis:
 cross-server:
   # 是否启用跨服同步（多服架构下建议启用，单服无需开启）
   enabled: false
-  # 严格业务校验：对入站 BID_PLACED 校验挂单存在/活跃/拍卖类型/金额范围与最小加价；
-  # 对 DYNAMIC_SHOP_UPDATE 的价格/乘数/库存做范围 clamp，阻断伪造消息注入非法数值。
+  # 严格业务校验：对 DYNAMIC_SHOP_UPDATE 的价格/乘数/库存做范围 clamp。
+  # 拍卖消息仅通知缓存失效，不重复写入竞价；多服市场须共享数据库。
   # 建议多服部署开启；仅影响入站校验，不影响出站广播。
   strict-validation: false
   # 要求入站消息必须验签通过（宿主 cross-server 签名开启的前提下生效）。
@@ -161,6 +181,20 @@ auction:
   # 例如: 当前最高价 100，ratio=0.05 absolute=10 → 新出价至少 110（取 max(105, 110)）
   min-bid-increment-ratio: 0.05     # 比例: 5%
   min-bid-increment-absolute: 10    # 绝对值: 10
+  # 首次出价可等于起拍价；有出价后按以上规则加价，并向上取到货币精度。
+  # 默认禁止卖家取消已有有效出价的拍卖；管理员仍可强制下架并退款。
+  allow-cancel-with-bids: false
+  # 可选临近结束延时，默认关闭；延时在有效竞价写入时原子更新。
+  end-protection:
+    enabled: false
+    window-seconds: 120           # 剩余不超过120秒时触发
+    extend-seconds: 120           # 确保本次出价后至少还有120秒（受累计上限限制）
+    max-extension-seconds: 1800   # 最多比原截止时间延后1800秒
+  # 提醒先持久化，离线玩家上线后接收；关注列表可查看已结束的拍卖。
+  notifications:
+    outbid: true                 # 被其他玩家超价，按 outbid-notify 选择显示位置
+    settlement: true             # 卖家成交收入、买家得标、流拍及关注商品结束
+    watch-bids: false            # 每次有人出价都提醒关注者，默认关闭以减少打扰
   # 上架手续费（固定金额，上架时立即扣除，无论是否成交）
   # 设为 0 表示免费上架
   listing-fee: 0
@@ -169,12 +203,11 @@ auction:
   # 例如: 成交价 1000，税率 0.05 → 卖家实际获得 950
   transaction-tax-rate: 0.05
   transaction-tax-currency: "money"   # 税费货币类型
-  # VIP 税率减免（拥有对应权限的玩家享受更低税率）
-  # 最终税率 = base-rate - 匹配的减免值，取最大减免
-  # 例: base 5% - VIP 2% = 3%；base 5% - MVP 1% = 4%
+  # 权限税率（拍卖行与玩家商店语义相同）：取匹配权限中最低的最终税率。
+  # 未匹配权限时使用 transaction-tax-rate；这里填写最终税率，不是减免量。
   tax-discount:
-    "axsmarket.vip": 0.02            # VIP 减免 2%
-    "axsmarket.mvp": 0.01            # MVP 减免 1%
+    "axsmarket.vip": 0.02            # VIP 最终税率 2%
+    "axsmarket.mvp": 0.01            # MVP 最终税率 1%
   # 到期未售物品退回方式:
   #   mail     - 通过邮件系统退回（需 Mail 模块支持）
   #   inventory- 直接放入玩家背包（背包满时可能丢失！）
@@ -263,6 +296,13 @@ auction:
 # 与拍卖行独立运作，使用单独的数据库表。
 # ═══════════════════════════════════════════════════════════════════════════════
 player-shop:
+  # 每名玩家一个独立店铺，按 UUID 识别；店名不会改变商品归属。
+  # 资料为纯文本，沿用已有内容过滤能力；编辑失败会保留客户端草稿。
+  profile:
+    name-max-length: 32
+    description-max-length: 256
+    announcement-max-length: 512
+    max-favorites: 100
   # 是否启用玩家商店功能
   enabled: true
   # 允许用于玩家商店交易的货币，id 必须已由 CurrencyBridgeAPI 注册
@@ -325,14 +365,19 @@ shop:
   # 是否启用系统商店功能
   enabled: true
   # 商店定义文件所在目录（相对模块数据目录）
-  # 模块启动时会递归扫描此目录下的所有 .yml 文件并加载为商店
+  # 模块启动时扫描此目录直属的 .yml/.yaml 文件，每个文件一个商店
   shops-directory: "shops"
-  # 全局刷新间隔（tick），用于限时商品的定时刷新逻辑
-  # 例如: 设置每日限量的商品，到达此间隔后自动重置库存
+  # 限购到期清理及周期补货调度间隔（tick）。
+  # 商品需设置 restock-interval-seconds > 0 才会自动补满 global/per-player 库存。
   refresh-interval-ticks: 6000        # 6000 tick = 5 分钟
   # 默认货币类型，当商店商品未指定 currency 时 fallback 使用
   # 具体可用货币取决于 CurrencyBridgeManager 的注册情况（如 Vault/PlayerPoints 等）
   default-currency: "money"
+  # 动态策略：random-refresh（随机上货）/ price-float（价格浮动）/ scheduled-swap（轮换商品）
+  # 每个策略必须指定 shop-id 和 schedule；shop-id 对应 shops/ 文件名。
+  dynamic:
+    enabled: false
+    strategies: {}
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # 子系统配置 - 回收商店
@@ -349,10 +394,15 @@ recycle:
   # 默认回收货币类型（当回收条目未指定 currency 时 fallback）
   default-currency: "money"
   # 是否允许自动回收:
-  #   true  - 玩家拾取物品时，若该物品在回收表中，自动出售并提示
+  #   true  - 允许玩家开启个人自动回收，拾取回收表内且未被保护的物品时生效
   #   false - 只能通过 /market recycle 界面手动回收
-  # 注意: 自动回收需要玩家拥有 axsmarket.autorecycle 权限
+  # 注意: 还需 axsmarket.autorecycle 权限及个人开关；个人默认关闭。
   allow-auto-recycle: true
+  protection:
+    # 只决定首次创建个人设置时的默认值，不覆盖已有玩家的开关。
+    default-auto-recycle: false
+    # 每人排除清单与收藏规则的合计上限（1-1000）。
+    max-rules: 200
   # 是否允许 UI 一键回收（/market recycle 界面的"一键回收全部"按钮）:
   #   true  - 一键回收按钮可用
   #   false - 一键回收按钮禁用，玩家仍可逐件回收

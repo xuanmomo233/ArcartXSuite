@@ -37,6 +37,10 @@ import xuanmo.arcartxsuite.market.storage.RedisMarketCache;
  * {@link xuanmo.arcartxsuite.api.item.ItemRewardDispatcher} 等底层设施。
  */
 public class PlayerShopService {
+    private xuanmo.arcartxsuite.market.MarketLedger ledger;
+
+    public void setLedger(xuanmo.arcartxsuite.market.MarketLedger ledger) { this.ledger = ledger; }
+
 
     private static final int BACKPACK_SLOTS = 36;
     private static final HanyuPinyinOutputFormat PINYIN_FORMAT = new HanyuPinyinOutputFormat();
@@ -107,16 +111,25 @@ public class PlayerShopService {
             return ListingResult.fail("invalid item slot");
         }
         ItemStack item = seller.getInventory().getItem(slot);
+        repository.ensurePlayerShopProfile(seller.getUniqueId(),seller.getName(),true);
         return createListingInternal(seller, item, price, currency, durationSeconds, message, slot);
     }
 
     private ListingResult createListingInternal(Player seller, ItemStack item, double price,
                                                  String currency, long durationSeconds,
                                                  String message, int sourceSlot) {
+        return ledger.trade("PSHOP_LIST", seller.getUniqueId(), "slot=" + sourceSlot + ",price=" + price, item==null?"":itemSerializer.serialize(item),
+            () -> createListingInternalWork(seller, item, price, currency, durationSeconds, message, sourceSlot), result -> result.success());
+    }
+
+private ListingResult createListingInternalWork(Player seller, ItemStack item, double price,
+                                                 String currency, long durationSeconds,
+                                                 String message, int sourceSlot) {
         if (item == null || item.getType().isAir()) {
             return ListingResult.fail("没有可上架的物品");
         }
         item = item.clone();
+        ledger.describe(getItemDisplayName(item),item.getType().name(),itemSerializer.serialize(item));
 
         // 检查上架数量限制
         int currentCount = repository.countListingsByPlayerShopSeller(seller.getUniqueId());
@@ -139,7 +152,7 @@ public class PlayerShopService {
         }
 
         // 价格校验
-        if (price < config.minPrice() || price > config.maxPrice()) {
+        if (!Double.isFinite(price) || price < config.minPrice() || price > config.maxPrice()) {
             return ListingResult.fail("价格超出允许范围");
         }
 
@@ -204,8 +217,8 @@ public class PlayerShopService {
 
         if (redisCache != null && redisCache.isAvailable()) {
             redisCache.invalidateByPrefix("market:pshop:");
-            publishCrossServer("PSHOP_LISTING_CREATED:" + listing.getId());
         }
+        publishCrossServer("PSHOP_LISTING_CREATED:" + listing.getId());
 
         return ListingResult.success(listing);
     }
@@ -213,6 +226,19 @@ public class PlayerShopService {
     // ─── 购买 ───────────────────────────────────────────────
 
     public PurchaseResult purchase(Player buyer, long listingId) {
+        return ledger.trade("PSHOP_BUY", buyer.getUniqueId(), "listing=" + listingId,
+            () -> purchaseWork(buyer, listingId), result -> result.success());
+    }
+
+public PurchaseResult purchaseWork(Player buyer, long listingId) { return purchaseChecked(buyer,listingId,null); }
+
+    public PurchaseResult purchaseFromStore(Player buyer,long listingId,UUID expectedOwner) {
+        if(expectedOwner==null)return PurchaseResult.fail("店铺选择已失效，请重新进入店铺");
+        return ledger.trade("PSHOP_BUY",buyer.getUniqueId(),"listing="+listingId,
+            () -> purchaseChecked(buyer,listingId,expectedOwner),result -> result.success());
+    }
+
+    private PurchaseResult purchaseChecked(Player buyer,long listingId,UUID expectedOwner) {
         if (!config.enabled()) {
             return PurchaseResult.fail("玩家商店未启用");
         }
@@ -220,11 +246,20 @@ public class PlayerShopService {
         if (listing == null || !listing.isActive()) {
             return PurchaseResult.fail("该商品已不可购买");
         }
+        if(expectedOwner!=null && !expectedOwner.equals(listing.getSeller()))return PurchaseResult.fail("商品不属于当前店铺，请刷新后重试");
         if (listing.getSeller().equals(buyer.getUniqueId())) {
             return PurchaseResult.fail("不能购买自己的商品");
         }
 
+        ItemStack prepared;
+        try{prepared=itemSerializer.deserialize(listing.getItemData());}
+        catch(RuntimeException exception){return PurchaseResult.fail("物品数据暂不可读取，请联系店主；本次未扣款");}
+        if(prepared==null || prepared.getType().isAir() || prepared.getAmount()<1)
+            return PurchaseResult.fail("商品物品无效，请联系店主；本次未扣款");
+
+        ledger.describe(listing.getItemDisplayName(),prepared.getType().name(),listing.getItemData());
         double price = listing.getPrice();
+        if(!Double.isFinite(price) || price<0)return PurchaseResult.fail("商品价格异常，请联系店主；本次未扣款");
         String currency = listing.getCurrency();
 
         CurrencyBridgeAPI.CurrencyBridge bridge = currencyManager.bridge(currency);
@@ -233,8 +268,7 @@ public class PlayerShopService {
         }
 
         // CAS 抢占
-        if (!repository.compareAndSetPlayerShopListingStatus(listingId,
-                PlayerShopListing.ListingStatus.ACTIVE, PlayerShopListing.ListingStatus.SOLD)) {
+        if (!repository.claimPlayerShopPurchase(listingId)) {
             return PurchaseResult.fail("该商品已不可购买");
         }
 
@@ -260,7 +294,7 @@ public class PlayerShopService {
 
         // 给买家物品
         deliverItemSafe(buyer.getUniqueId(), listing, "pshop_purchase_item");
-        ItemStack item = itemSerializer.deserialize(listing.getItemData());
+        ItemStack item = prepared.clone();
 
         // 记录历史
         repository.insertPlayerShopHistory(new MarketRepository.PlayerShopHistory(
@@ -280,8 +314,8 @@ public class PlayerShopService {
         // 跨服广播
         if (redisCache != null && redisCache.isAvailable()) {
             redisCache.invalidateByPrefix("market:pshop:");
-            publishCrossServer("PSHOP_LISTING_SOLD:" + listing.getId());
         }
+        publishCrossServer("PSHOP_LISTING_SOLD:" + listing.getId());
 
         return PurchaseResult.success(item, price, tax, currency);
     }
@@ -289,6 +323,11 @@ public class PlayerShopService {
     // ─── 下架 ───────────────────────────────────────────────
 
     public boolean cancelListing(Player seller, long listingId) {
+        return ledger.trade("PSHOP_CANCEL", seller.getUniqueId(), "listing=" + listingId,
+            () -> cancelListingWork(seller, listingId), result -> result);
+    }
+
+public boolean cancelListingWork(Player seller, long listingId) {
         PlayerShopListing listing = repository.getPlayerShopListing(listingId);
         if (listing == null || listing.getSeller() == null
                 || !listing.getSeller().equals(seller.getUniqueId())) {
@@ -298,6 +337,7 @@ public class PlayerShopService {
                 PlayerShopListing.ListingStatus.ACTIVE, PlayerShopListing.ListingStatus.CANCELLED)) {
             return false;
         }
+        describeListing(listing);
         listing.setStatus(PlayerShopListing.ListingStatus.CANCELLED);
         repository.updatePlayerShopListing(listing);
         deliverItemSafe(seller.getUniqueId(), listing, "pshop_cancel_return");
@@ -310,18 +350,28 @@ public class PlayerShopService {
 
         if (redisCache != null && redisCache.isAvailable()) {
             redisCache.invalidateByPrefix("market:pshop:");
-            publishCrossServer("PSHOP_LISTING_CANCELLED:" + listing.getId());
         }
+        publishCrossServer("PSHOP_LISTING_CANCELLED:" + listing.getId());
         return true;
     }
 
     public boolean adminForceCancel(long listingId) {
+        return adminForceCancel(new UUID(0,0),listingId);
+    }
+
+    public boolean adminForceCancel(UUID actor,long listingId) {
+        return ledger.trade("PSHOP_ADMIN_CANCEL", actor, "listing=" + listingId,
+            () -> adminForceCancelWork(listingId), result -> result);
+    }
+
+public boolean adminForceCancelWork(long listingId) {
         PlayerShopListing listing = repository.getPlayerShopListing(listingId);
         if (listing == null) return false;
         if (!repository.compareAndSetPlayerShopListingStatus(listingId,
                 PlayerShopListing.ListingStatus.ACTIVE, PlayerShopListing.ListingStatus.CANCELLED)) {
             return false;
         }
+        describeListing(listing);
         listing.setStatus(PlayerShopListing.ListingStatus.CANCELLED);
         repository.updatePlayerShopListing(listing);
         deliverItemSafe(listing.getSeller(), listing, "pshop_admin_cancel_return");
@@ -334,8 +384,8 @@ public class PlayerShopService {
 
         if (redisCache != null && redisCache.isAvailable()) {
             redisCache.invalidateByPrefix("market:pshop:");
-            publishCrossServer("PSHOP_LISTING_CANCELLED:" + listing.getId());
         }
+        publishCrossServer("PSHOP_LISTING_CANCELLED:" + listing.getId());
         return true;
     }
 
@@ -359,10 +409,16 @@ public class PlayerShopService {
     }
 
     private void processExpiredListing(PlayerShopListing listing) {
+        ledger.trade("PSHOP_EXPIRE", listing.getSeller(), "listing=" + listing.getId(),
+            () -> { processExpiredListingWork(listing); return true; }, result -> result);
+    }
+
+private void processExpiredListingWork(PlayerShopListing listing) {
         if (!repository.compareAndSetPlayerShopListingStatus(listing.getId(),
                 PlayerShopListing.ListingStatus.ACTIVE, PlayerShopListing.ListingStatus.EXPIRED)) {
             return;
         }
+        describeListing(listing);
         listing.setStatus(PlayerShopListing.ListingStatus.EXPIRED);
         repository.updatePlayerShopListing(listing);
         deliverItemSafe(listing.getSeller(), listing, "pshop_expired_return");
@@ -382,6 +438,7 @@ public class PlayerShopService {
         if (redisCache != null && redisCache.isAvailable()) {
             redisCache.invalidateByPrefix("market:pshop:");
         }
+        publishCrossServer("PSHOP_LISTING_EXPIRED:" + listing.getId());
     }
 
     // ─── 查询 ───────────────────────────────────────────────
@@ -422,67 +479,37 @@ public class PlayerShopService {
         return repository.countPlayerShopSellers();
     }
 
+    public List<PlayerShopListing> searchListingsBySeller(UUID seller, String keyword, int page, int pageSize) {
+        return repository.searchPlayerShopListingsBySeller(seller, keyword, page * pageSize, pageSize);
+    }
+
+    public int countSearchBySeller(UUID seller, String keyword) {
+        return repository.countSearchPlayerShopListingsBySeller(seller, keyword);
+    }
+
     // ─── 工具方法（复用拍卖行模式）───────────────────────────
+
+    private void describeListing(PlayerShopListing listing){
+        String material="";
+        try{ItemStack item=itemSerializer.deserialize(listing.getItemData());if(item!=null)material=item.getType().name();}
+        catch(RuntimeException ignored){}
+        ledger.describe(listing.getItemDisplayName(),material,listing.getItemData());
+    }
 
     private int heldSlot(Player player) {
         return player.getInventory().getHeldItemSlot();
     }
 
     private void giveBack(Player player, ItemStack item) {
-        xuanmo.arcartxsuite.api.item.ItemRewardDispatcher.DispatchOptions options =
-            xuanmo.arcartxsuite.api.item.ItemRewardDispatcher.DispatchOptions.builder("market")
-                .sourceDetail("pshop-giveback")
-                .overflowMailSubject("玩家商店物品归还")
-                .overflowMailBody("您的背包已满，下架/过期物品通过邮件归还。")
-                .overflowMailSenderName("全球市场")
-                .build();
-        itemRewardDispatcher.dispatchItem(player, item, options);
+        repository.addPendingItem(player.getUniqueId(), itemSerializer.serialize(item), "listing_giveback");
     }
 
     private void deliverItemSafe(UUID target, PlayerShopListing listing, String reason) {
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            final ItemStack item = itemSerializer.deserialize(listing.getItemData());
-            if (item == null) {
-                logger.warning("[PlayerShop] 物品反序列化失败，已转入待发放队列 listing=" + listing.getId());
-                repository.addPendingItem(target, listing.getItemData(), reason);
-                return;
-            }
-            Player online = Bukkit.getPlayer(target);
-            if (online != null && online.isOnline()) {
-                Bukkit.getScheduler().runTask(plugin, () -> {
-                    xuanmo.arcartxsuite.api.item.ItemRewardDispatcher.DispatchOptions options =
-                        xuanmo.arcartxsuite.api.item.ItemRewardDispatcher.DispatchOptions.builder("market")
-                            .sourceDetail("pshop-settlement:" + listing.getId())
-                            .overflowMailSubject("玩家商店结算物品")
-                            .overflowMailBody("您购买/退回的物品已通过邮件发放，请查收。")
-                            .overflowMailSenderName("全球市场")
-                            .build();
-                    xuanmo.arcartxsuite.api.item.ItemRewardDispatcher.DispatchResult result =
-                        itemRewardDispatcher.dispatchItem(online, item, options);
-                    if (!result.success()) {
-                        repository.addPendingItem(target, listing.getItemData(), reason);
-                    }
-                });
-            } else {
-                repository.addPendingItem(target, listing.getItemData(), reason);
-            }
-        });
+        repository.addPendingItem(target, listing.getItemData(), reason + ":" + listing.getId());
     }
 
     private void depositSafe(UUID target, String currency, double amount, String reason) {
-        if (amount <= 0) return;
-        Player online = Bukkit.getPlayer(target);
-        CurrencyBridgeAPI.CurrencyBridge bridge = currencyManager.bridge(currency);
-        if (online != null && online.isOnline() && bridge != null && bridge.available()) {
-            CurrencyTransactionResult[] resultHolder = new CurrencyTransactionResult[1];
-            runOnMain(() -> resultHolder[0] = bridge.deposit(online, BigDecimal.valueOf(amount)));
-            if (resultHolder[0] != null && resultHolder[0].success()) {
-                return;
-            }
-            logger.warning("[PlayerShop] 在线入账失败，转入待发放队列: player="
-                + online.getName() + " currency=" + currency + " amount=" + amount);
-        }
-        repository.addPendingCurrency(target, currency, amount, reason);
+        if (amount > 0) repository.addPendingCurrency(target, currency, amount, reason);
     }
 
     private void runOnMain(Runnable task) {

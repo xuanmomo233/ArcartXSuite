@@ -33,6 +33,8 @@ public class MarketPlaceholderExpansion extends PlaceholderExpansion {
 
         return switch (params.toLowerCase()) {
             case "auction_count" -> String.valueOf(service.getAuctionCount());
+            case "player_shop_count" -> String.valueOf(service.getPlayerShopCount());
+            case "my_player_shop_listings" -> player == null ? "0" : String.valueOf(service.getMyPlayerShopListingIds(player).size());
             case "shop_count" -> String.valueOf(service.getShopCount());
             case "recycle_count" -> String.valueOf(service.getRecycleEntryCount());
             case "redis_status", "list_cache_status" -> service.isListCacheConnected() ? "已连接" : "未连接";

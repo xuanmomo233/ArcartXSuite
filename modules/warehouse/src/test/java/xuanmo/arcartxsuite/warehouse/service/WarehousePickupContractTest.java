@@ -95,14 +95,18 @@ class WarehousePickupContractTest {
     }
     @Test void nativePickupPreservesThePartVanillaCouldNotFit() throws Exception {
         when(matcher.matches(any(),eq(stack))).thenReturn(false);
-        when(repository.applySlotChanges(anyList())).thenReturn(true);
+        when(player.getCanPickupItems()).thenReturn(true);
+        when(repository.loadPersonalWarehouses(id)).thenReturn(List.of(
+            new WarehouseRepository.WarehouseRecord(id,"personal",1,"",false,1,0)));
+        WarehouseService pickupService = spy(service);
+        doReturn(new WarehouseService.DepositResult(true,32,0,""))
+            .when(pickupService).depositStack(eq(player),eq("personal"),eq(id.toString()),eq("personal"),any(ItemStack.class));
         org.bukkit.entity.Item item=mock(org.bukkit.entity.Item.class);
         when(item.getItemStack()).thenReturn(stack);
+        when(item.isValid()).thenReturn(true);
+        when(item.getUniqueId()).thenReturn(UUID.randomUUID());
         var event=new org.bukkit.event.entity.EntityPickupItemEvent(player,item,16);
-        try(var serializer=mockStatic(ItemSerializer.class)) {
-            serializer.when(()->ItemSerializer.serialize(any())).thenReturn(new byte[]{1});
-            service.onEntityPickupItem(event);
-        }
+        pickupService.onEntityPickupItem(event);
         assertTrue(event.isCancelled());
         verify(stack).setAmount(16);
         verify(item).setItemStack(stack);
