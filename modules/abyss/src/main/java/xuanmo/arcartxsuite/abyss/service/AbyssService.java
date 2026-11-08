@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.HashMap;
 import java.util.Set;
 import java.util.LinkedHashMap;
 import java.util.UUID;
@@ -107,6 +108,7 @@ public final class AbyssService {
     private RunLedger runLedger;
     private RunOperations runOperations;
     private ReviveTransactions revives;
+    private final Map<UUID, Map<String, List<ItemStack>>> defaultChestRolls = new HashMap<>();
     RunOperations runOperations() { return runOperations; }
     public RunLedger runLedger() { return runLedger; }
     public xuanmo.arcartxsuite.api.capability.AbyssReviveAccess reviveAccess() { return revives; }
@@ -2686,11 +2688,16 @@ public final class AbyssService {
     private void defaultChestHandler(Player player,
                                      xuanmo.arcartxsuite.abyss.template.RewardConfig.ChestReward chest,
                                      AbyssInstance instance) {
-        List<ItemStack> items = rewards.rollChestOptions(chest, Math.min(9, chest.rows() * 9));
+        String request = "chest:" + instance.getInstanceId() + ":" + player.getUniqueId() + ":" + chest.name();
+        var rolls = defaultChestRolls.computeIfAbsent(instance.getInstanceId(), ignored -> new HashMap<>());
+        List<ItemStack> items = rolls.computeIfAbsent(request,
+            ignored -> List.copyOf(rewards.rollChestOptions(chest, Math.min(9, chest.rows() * 9))));
         if (!items.isEmpty()) {
-            dispatchRunItems(player, items, "chest:" + instance.getInstanceId() + ":" + player.getUniqueId()
-                + ":" + chest.name(), instance).whenComplete((ignored, failure) -> runOnMain(() -> {
-                    if (failure == null) instance.markTriggeredOnce(chestClaimKey(chest.name(), player.getUniqueId()));
+            dispatchRunItems(player, items, request, instance).whenComplete((ignored, failure) -> runOnMain(() -> {
+                    if (failure == null) {
+                        instance.markTriggeredOnce(chestClaimKey(chest.name(), player.getUniqueId()));
+                        rolls.remove(request);
+                    }
                     else player.sendMessage("§c宝箱奖励正在等待确认，可稍后重试。");
                 }));
         }
@@ -2763,6 +2770,7 @@ public final class AbyssService {
         admission.changed(operation);
         admission.detached(instance);
         runIntegration.detached(instance.getInstanceId());
+        defaultChestRolls.remove(instance.getInstanceId());
         reconnects.detach(instance.getInstanceId());
     }
 

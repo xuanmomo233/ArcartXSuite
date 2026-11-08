@@ -35,6 +35,7 @@ public final class RunLedger implements AbyssRunLootAccess {
     private xuanmo.arcartxsuite.api.item.PendingRewardService rewards;
     private final java.util.concurrent.atomic.AtomicBoolean replaying = new java.util.concurrent.atomic.AtomicBoolean();
     private long nextReplay;
+    private String replayAfter = "";
     final JdbcAbyssRepository repository;
     final PlayerDataManager database;
 
@@ -187,11 +188,13 @@ public final class RunLedger implements AbyssRunLootAccess {
         if (!replaying.compareAndSet(false, true)) return;
         nextReplay = now + 30000;
         database.submitMaintenance(() -> {
-            for (String raw : repository.runDocuments("delivery/", 25)) {
-                if (raw.isEmpty()) continue;
-                try { deliver(JSON.fromJson(raw, Delivery.class)); }
+            var page = repository.runDocuments("delivery/", replayAfter, 25);
+            for (var document : page) {
+                replayAfter = document.key();
+                try { deliver(JSON.fromJson(document.snapshot(), Delivery.class)); }
                 catch (Exception failure) { java.util.logging.Logger.getLogger("Abyss").warning("奖励补交等待重试: " + failure.getMessage()); }
             }
+            if (page.size() < 25) replayAfter = "";
             return null;
         }).whenComplete((ignored, failure) -> replaying.set(false));
     }
@@ -241,7 +244,7 @@ public final class RunLedger implements AbyssRunLootAccess {
     }
 
     /** Called on a worker with the exact confirmed host batch identity. Does not deliver rewards. */
-    public void record(UUID run, List<LootEntry> entries) throws Exception {
+    void record(UUID run, List<LootEntry> entries) throws Exception {
         repository.runTransaction(run, documents -> {
             var data = read(documents, run);
             for (var entry : entries) {

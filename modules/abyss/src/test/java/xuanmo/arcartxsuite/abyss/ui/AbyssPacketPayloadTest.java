@@ -138,7 +138,9 @@ class AbyssPacketPayloadTest {
     @Test void chestOnlyConsumesAnItemAfterHostPersistenceConfirmation()throws Exception {
         var rewards=mock(xuanmo.arcartxsuite.abyss.reward.RewardResolver.class,withSettings().mockMaker(org.mockito.MockMakers.INLINE));set("rewards",rewards);
         when(rewards.rollChestOptions(any(),anyInt())).thenReturn(List.of(new org.bukkit.inventory.ItemStack(Material.STONE,2),new org.bukkit.inventory.ItemStack(Material.STONE,3)));
-        when(rewards.queueItems(any(),anyList(),anyString())).thenReturn(false,true);
+        var failed = new java.util.concurrent.CompletableFuture<Void>();
+        var accepted = new java.util.concurrent.CompletableFuture<Void>();
+        when(rewards.queueItemsAsync(eq(player),anyList(),anyString(),eq(instance),any())).thenReturn(failed,accepted);
         ui.open(player,new RewardConfig.ChestReward("test","test",1,List.of()),instance);
         String token=(String)flush().get("action_token");
         var field=AbyssUiService.class.getDeclaredField("pendingChests");field.setAccessible(true);
@@ -147,8 +149,16 @@ class AbyssPacketPayloadTest {
         ui.handlePacket(player,"abyss",List.of("chest_claim_one","0",token));
         assertEquals(2,((List<?>)items.invoke(chest)).size());
         ui.handlePacket(player,"abyss",List.of("chest_claim_one","0",token));
+        verify(rewards,times(1)).queueItemsAsync(eq(player),anyList(),anyString(),eq(instance),any());
+        failed.completeExceptionally(new IllegalStateException("host unavailable"));
+        token = (String)flush().get("action_token");
+        assertEquals(2,((List<?>)items.invoke(chest)).size());
+        ui.handlePacket(player,"abyss",List.of("chest_claim_one","0",token));
+        assertEquals(2,((List<?>)items.invoke(chest)).size());
+        accepted.complete(null);
+        flush();
         assertEquals(1,((List<?>)items.invoke(chest)).size());
-        verify(rewards,times(2)).queueItems(eq(player),anyList(),anyString());
+        verify(rewards,times(2)).queueItemsAsync(eq(player),anyList(),anyString(),eq(instance),any());
     }
     Player peer()throws Exception {
         Player peer=mock(Player.class);when(peer.getUniqueId()).thenReturn(UUID.randomUUID());

@@ -228,6 +228,24 @@ class RunTransactionsTest {
             await(revives.reserve("xc", operation, runId, playerId, "rescue", revision)).state());
         return operation;
     }
+
+    @Test void hiddenRewardOfferExposesOnlyTheSelectedPrize() throws Exception {
+        var host = mock(PendingRewardService.class);
+        ledger.rewards(host);
+        when(host.savePendingBatchConfirmed(anyString(), anyList())).thenReturn(true);
+        UUID offer = UUID.randomUUID();
+        ledger.linkOffer(offer, runId);
+        assertTrue(await(ledger.snapshot(runId, playerId, null, 10)).entries().isEmpty());
+        var batch = List.of(PendingRewardService.PendingReward.currency(playerId, "abyss", "money", 2, "selected"));
+        var metadata = RunLedger.describe("slot/1", "flip", batch);
+        assertTrue(ledger.submitGame(offer, 1, playerId, batch, metadata));
+        assertTrue(ledger.submitGame(offer, 1, playerId, batch, metadata));
+        var visible = await(ledger.snapshot(runId, playerId, null, 10));
+        assertEquals(1, visible.entries().size());
+        assertEquals(2, visible.entries().get(0).quantity());
+        assertTrue(await(ledger.snapshot(runId, teammate, null, 10)).entries().isEmpty());
+        verify(host, times(1)).savePendingBatchConfirmed("reward-game:" + offer + ":1", batch);
+    }
     private void mutateLease(UUID operation, java.util.function.Consumer<ReviveTransactions.Lease> mutation) throws Exception {
         repository.runTransaction(runId, documents -> {
             var data = RunLedger.read(documents, runId);

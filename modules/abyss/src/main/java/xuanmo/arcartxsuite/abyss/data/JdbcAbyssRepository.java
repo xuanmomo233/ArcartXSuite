@@ -205,13 +205,24 @@ public final class JdbcAbyssRepository extends AbstractModuleRepository {
         }
     }
 
-    public List<String> runDocuments(String prefix, int limit) throws SQLException {
+    public void insertRunOperation(UUID run, String key, UUID player, String snapshot) throws SQLException {
+        try (Connection connection = getConnection()) {
+            new RunDocuments(connection, run).insert(key, player, snapshot);
+        }
+    }
+
+    public record RunDocument(String key, String snapshot) { }
+    public List<RunDocument> runDocuments(String prefix, String after, int limit) throws SQLException {
         try (Connection connection = getConnection(); var statement = connection.prepareStatement(
-                "SELECT snapshot FROM " + tRunDocuments + " WHERE document_key LIKE ? ORDER BY document_key LIMIT ?")) {
+                "SELECT document_key,snapshot FROM " + tRunDocuments
+                    + " WHERE document_key LIKE ? AND document_key>? ORDER BY document_key LIMIT ?")) {
             statement.setString(1, prefix + "%");
-            statement.setInt(2, limit);
-            var values = new ArrayList<String>();
-            try (var rows = statement.executeQuery()) { while (rows.next()) values.add(rows.getString(1)); }
+            statement.setString(2, after);
+            statement.setInt(3, limit);
+            var values = new ArrayList<RunDocument>();
+            try (var rows = statement.executeQuery()) {
+                while (rows.next()) values.add(new RunDocument(rows.getString(1), rows.getString(2)));
+            }
             return values;
         }
     }

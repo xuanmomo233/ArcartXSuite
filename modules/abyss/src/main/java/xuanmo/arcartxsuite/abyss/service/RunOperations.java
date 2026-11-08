@@ -82,7 +82,6 @@ final class RunOperations {
                 String rejected = authorize(request, previous == null);
                 if (rejected != null) {
                     var value = receipt(request, OperationState.REJECTED, rejected, revision(request.runId()));
-                    if (run == null) { complete(request, result, value, null); return; }
                     persist(request, value, previous == null).whenComplete((ignored, failure) -> complete(request, result, value, failure));
                     return;
                 }
@@ -93,7 +92,7 @@ final class RunOperations {
                 });
             });
         });
-        return result;
+        return result.orTimeout(10, java.util.concurrent.TimeUnit.SECONDS);
     }
 
     private String authorize(Operation request, boolean checkRevision) {
@@ -134,13 +133,16 @@ final class RunOperations {
     }
 
     private CompletableFuture<Void> persist(Operation request, OperationReceipt value, boolean insert) {
-        return ledger.database.submitDatabase(() -> ledger.repository.runTransaction(request.runId(), documents -> {
+        return ledger.database.submitDatabase(() -> {
             String key = key(request.owner(), request.runId(), request.operationId());
             String raw = RunLedger.JSON.toJson(new Stored(request, value));
-            if (insert) documents.insert(key, request.playerId(), raw);
-            else documents.write(key, request.playerId(), raw);
+            if (insert) ledger.repository.insertRunOperation(request.runId(), key, request.playerId(), raw);
+            else ledger.repository.runTransaction(request.runId(), documents -> {
+                documents.write(key, request.playerId(), raw);
+                return null;
+            });
             return null;
-        }));
+        });
     }
 
     CompletableFuture<OperationReceipt> query(String owner, UUID run, UUID operation) {
