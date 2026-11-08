@@ -2,6 +2,7 @@
 init:
   - "setvar coins 10"
 start:
+  - "message @all &e/abyss run 打开原生战术面板；可自救、救援队友和查看战利品。"
   - "message @all &5深渊探索开始！&e队伍初始金币 10，清房可获得更多金币。"
   - "message @all &7商店房可购买补给；休整房首次进入时为队伍恢复生命。"
 complete:

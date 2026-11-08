@@ -255,8 +255,8 @@ public final class JdbcAbyssRepository extends AbstractModuleRepository {
         public void write(String key, UUID player, String snapshot) throws SQLException {
             try (var statement = connection.prepareStatement("INSERT INTO " + tRunDocuments
                     + " (document_key,run_id,player_uuid,snapshot) VALUES (?,?,?,?)"
-                    + (sqlite ? " ON CONFLICT(document_key) DO UPDATE SET snapshot=excluded.snapshot"
-                        : " ON DUPLICATE KEY UPDATE snapshot=VALUES(snapshot)"))) {
+                    + (sqlite ? " ON CONFLICT(document_key) DO UPDATE SET snapshot=excluded.snapshot,run_id=excluded.run_id,player_uuid=excluded.player_uuid"
+                        : " ON DUPLICATE KEY UPDATE snapshot=VALUES(snapshot),run_id=VALUES(run_id),player_uuid=VALUES(player_uuid)"))) {
                 statement.setString(1, key);
                 statement.setString(2, run.toString());
                 statement.setString(3, player == null ? null : player.toString());

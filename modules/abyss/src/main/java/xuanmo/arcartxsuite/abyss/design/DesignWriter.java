@@ -117,6 +117,8 @@ public final class DesignWriter {
                 String prefix = join(o.path(), o.id());
                 o.values().forEach((key, value) -> {
                     if (key.equals("design-revive-limit")) yaml.set("requirements.revive-limit", value);
+                    else if (key.startsWith("design-native-"))
+                        yaml.set("requirements.native-rescue." + key.substring("design-native-".length()), value);
                     else yaml.set(prefix + "." + key, value);
                 });
                 continue;

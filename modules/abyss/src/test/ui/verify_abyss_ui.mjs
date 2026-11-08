@@ -19,6 +19,7 @@ function rewrite(code) {
 }
 const AIR='{"id":"minecraft:air","Count":1b}';
 function row(i,version) {return {id:'id_'+version+'_'+i,key:'object_'+i,name:'LongPlayerName16',label:'标题'+i,
+ title:'本局条目'+i,detail:'剩余2次或待发奖励',target:'00000000-0000-0000-0000-000000000001',
  icon:'◆',kind:'interact',mark:'point',kindLabel:'交互点',kindColor:'186,140,232',summary:'摘要',
  iconJson:AIR,desc0:'第一行说明',desc1:'第二行说明',desc2:'第三行说明',difficulty:'普通',minPlayers:1,maxPlayers:8,
  partyRequired:false,staminaCost:1,moneyCost:5,cooldown:10,cooldownLeft:0,stamina:100,running:0,timeLimit:600,
@@ -44,7 +45,8 @@ function fixture(n,version=0) {
  for(const [data,count]of Object.entries({dungeonRows:'dungeonCount',partyRows:'partyCount',inviteRows:'inviteCount',
  nodeRows:'nodeCount',objRows:'objCount',kindRows:'kindCount',memberRows:'memberCount',feedRows:'feedCount',
  applicantRows:'applicantCount',allDungeonRows:'allDungeonCount',onlineRows:'onlineCount',cards:'count',
- goods:'goodsCount',statRows:'statCount',boardRows:'boardCount'})){p[data]=rows;p[count]=n}
+ goods:'goodsCount',statRows:'statCount',boardRows:'boardCount',runRows:'runCount'})){p[data]=rows;p[count]=n}
+ p.runMode='rescue';p.runHint='保持原位完成救援';p.hasPrevious=false;p.hasNext=n>8;
  p.fieldCount=n;p.fieldRows=Object.fromEntries(Array.from({length:n},(_,i)=>[''+i,
  {name:'field'+i,editor:['TEXT','TOGGLE','CYCLE','COORD'][i%4],label:'属性',value:'true',valueZh:'是',options:'a,b'}]));
  p.groupCount=n?Math.min(3,n):0;p.groupRows=Object.fromEntries(Array.from({length:p.groupCount},(_,g)=>[''+g,{
@@ -324,6 +326,16 @@ for(const [name,doc]of Object.entries(documents)) {
   engine.invoke(good,'clickLeft');
   assert.equal(engine.packets.filter(p=>p[1]==='shop_buy').length,before,'unaffordable goods must not submit a purchase');
   assert.equal(engine.state.coinsText,'0','balance text must update with the numeric balance');
+ }
+ if(name==='run'){
+  engine.receive(fixture(2));engine.render();
+  const row=engine.nodes.find(node=>node.name==='行0');
+  engine.run(row.definition.action.clickLeft,row);
+  assert.deepEqual(engine.packets.at(-1),['abyss','run_rescue','00000000-0000-0000-0000-000000000001','token']);
+  engine.receive({...fixture(2),runMode:'loot'});engine.render();
+  const before=engine.packets.length;
+  engine.run(row.definition.action.clickLeft,row);
+  assert.equal(engine.packets.length,before,'read-only loot rows cannot claim rewards');
  }
  if(name==='reward_game'){
   engine.receive({...fixture(1),mode:'wheel',remaining:1});engine.render();

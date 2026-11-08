@@ -449,6 +449,24 @@ controls:
                   texts: "var.canLeave ? '&f继续拾取' : '&f关闭'"
                   fontSize: 38
                   through: true
+          本局战利品:
+            type: Canvas
+            attribute:
+              point: ~bottom_center
+              x: 400
+              y: -28
+              width: 160
+              height: 48
+            action:
+              clickLeft: "Packet.send(var.packetId, 'open_run_loot', var.actionToken)"
+            children:
+              字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: ~&d战利品
+                  fontSize: 32
+                  through: true
           待领奖励:
             type: Canvas
             attribute:

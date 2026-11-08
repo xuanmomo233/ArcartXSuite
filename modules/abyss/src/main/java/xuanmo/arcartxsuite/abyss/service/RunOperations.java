@@ -12,7 +12,8 @@ import static xuanmo.arcartxsuite.api.capability.AbyssRunAccess.*;
 
 /** LEAVE saves its immutable request before touching the live world. */
 final class RunOperations {
-    private record Stored(Operation request, OperationReceipt receipt) { }
+    static final String NATIVE_OWNER = "abyss-native";
+    private record Stored(Operation request, OperationReceipt receipt, boolean nativeRequest) { }
     private record Lookup(String raw, boolean departed) { }
     private final AbyssService service;
     private final RunLedger ledger;
@@ -32,6 +33,7 @@ final class RunOperations {
     }
     OperationResult begin(Operation request) {
         if (!valid(request)) return new OperationResult(false, "INVALID_REQUEST", 0);
+        if (request.owner().equals(NATIVE_OWNER)) return new OperationResult(false, "NOT_OWNER", 0);
         var previous = recent.get(key(request.owner(), request.runId(), request.operationId()));
         if (previous != null && !previous.request().equals(request)) return new OperationResult(false, "OPERATION_CONFLICT", 0);
         if (previous != null && previous.receipt().state() != OperationState.ACCEPTED
@@ -46,6 +48,31 @@ final class RunOperations {
     }
 
     CompletableFuture<OperationReceipt> execute(Operation request) {
+        if (request != null && NATIVE_OWNER.equals(request.owner()))
+            return CompletableFuture.completedFuture(receipt(request, OperationState.REJECTED, "NOT_OWNER", 0));
+        return execute(request, false);
+    }
+
+    CompletableFuture<OperationReceipt> leaveNative(UUID run, UUID player) {
+        RunLedger.requireMain();
+        UUID operation = UUID.nameUUIDFromBytes(("abyss-native-leave/" + run + "/" + player)
+            .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        var result = new CompletableFuture<OperationReceipt>();
+        ledger.database.submitDatabase(() -> ledger.repository.runDocument(key(NATIVE_OWNER, run, operation)))
+            .whenComplete((raw, error) -> {
+                if (error != null) { result.completeExceptionally(error); return; }
+                service.runOnMain(() -> {
+                    var request = raw == null ? new Operation(operation, run, revision(run), NATIVE_OWNER,
+                        Action.LEAVE, player, null, null) : RunLedger.JSON.fromJson(raw, Stored.class).request();
+                    execute(request, true).whenComplete((receipt, failure) -> {
+                        if (failure == null) result.complete(receipt); else result.completeExceptionally(failure);
+                    });
+                });
+            });
+        return result.orTimeout(10, java.util.concurrent.TimeUnit.SECONDS);
+    }
+
+    private CompletableFuture<OperationReceipt> execute(Operation request, boolean nativeRequest) {
         RunLedger.requireMain();
         if (!valid(request)) return CompletableFuture.failedFuture(new IllegalArgumentException("Invalid LEAVE"));
         String key = key(request.owner(), request.runId(), request.operationId());
@@ -65,7 +92,7 @@ final class RunOperations {
             if (error != null) { complete(request, result, null, error); return; }
             service.runOnMain(() -> {
                 Stored previous = raw == null ? null : RunLedger.JSON.fromJson(raw, Stored.class);
-                if (previous != null && !previous.request().equals(request)) {
+                if (previous != null && (!previous.request().equals(request) || previous.nativeRequest() != nativeRequest)) {
                     complete(request, result, receipt(request, OperationState.REJECTED, "OPERATION_CONFLICT", 0), null);
                     return;
                 }
@@ -80,30 +107,31 @@ final class RunOperations {
                         .whenComplete((value, failure) -> complete(request, result, value, failure));
                     return;
                 }
-                String rejected = authorize(request, previous == null);
+                String rejected = authorize(request, previous == null, nativeRequest);
                 if (rejected != null) {
                     var value = receipt(request, OperationState.REJECTED, rejected, revision(request.runId()));
-                    persist(request, value, previous == null).whenComplete((ignored, failure) -> complete(request, result, value, failure));
+                    persist(request, value, previous == null, nativeRequest).whenComplete((ignored, failure) -> complete(request, result, value, failure));
                     return;
                 }
                 var accepted = receipt(request, OperationState.ACCEPTED, "IN_PROGRESS", revision(request.runId()));
-                persist(request, accepted, previous == null).whenComplete((ignored, failure) -> {
+                persist(request, accepted, previous == null, nativeRequest).whenComplete((ignored, failure) -> {
                     if (failure != null) { complete(request, result, null, failure); return; }
-                    service.runOnMain(() -> apply(request, result));
+                    service.runOnMain(() -> apply(request, result, nativeRequest));
                 });
             });
         });
         return result.orTimeout(10, java.util.concurrent.TimeUnit.SECONDS);
     }
 
-    private String authorize(Operation request, boolean checkRevision) {
+    private String authorize(Operation request, boolean checkRevision, boolean nativeRequest) {
         if (!service.running()) return "UNAVAILABLE";
         var run = service.instances().getInstance(request.runId());
         if (run == null || run.designMode() || !run.admitted()) return "UNKNOWN_RUN";
         var admission = service.admissionOperation(run);
-        if (!Objects.equals(request.owner(), run.getTemplate().requirements().externalControlOwner())
-                || admission == null || !request.owner().equals(admission.intent.owner())) return "NOT_OWNER";
-        if (checkRevision && revision(request.runId()) != request.expectedRevision()) return "STALE_REVISION";
+        if (nativeRequest && !request.owner().equals(NATIVE_OWNER)) return "NOT_OWNER";
+        if (!nativeRequest && (!Objects.equals(request.owner(), run.getTemplate().requirements().externalControlOwner())
+                || admission == null || !request.owner().equals(admission.intent.owner()))) return "NOT_OWNER";
+        if (checkRevision && !nativeRequest && revision(request.runId()) != request.expectedRevision()) return "STALE_REVISION";
         return run.hasPlayer(request.playerId()) ? null : "NOT_A_MEMBER";
     }
 
@@ -112,9 +140,9 @@ final class RunOperations {
         return snapshot == null ? 0 : snapshot.revision();
     }
 
-    private void apply(Operation request, CompletableFuture<OperationReceipt> result) {
+    private void apply(Operation request, CompletableFuture<OperationReceipt> result, boolean nativeRequest) {
         OperationReceipt value;
-        String invalid = authorize(request, false);
+        String invalid = authorize(request, false, nativeRequest);
         if (invalid != null) {
             query(request.owner(), request.runId(), request.operationId())
                 .whenComplete((receipt, error) -> complete(request, result, receipt, error));
@@ -130,13 +158,13 @@ final class RunOperations {
             value = receipt(request, OperationState.UNKNOWN, "OUTCOME_UNKNOWN", revision(request.runId()));
         }
         var finalValue = value;
-        persist(request, value, false).whenComplete((ignored, error) -> complete(request, result, finalValue, error));
+        persist(request, value, false, nativeRequest).whenComplete((ignored, error) -> complete(request, result, finalValue, error));
     }
 
-    private CompletableFuture<Void> persist(Operation request, OperationReceipt value, boolean insert) {
+    private CompletableFuture<Void> persist(Operation request, OperationReceipt value, boolean insert, boolean nativeRequest) {
         return ledger.database.submitDatabase(() -> {
             String key = key(request.owner(), request.runId(), request.operationId());
-            String raw = RunLedger.JSON.toJson(new Stored(request, value));
+            String raw = RunLedger.JSON.toJson(new Stored(request, value, nativeRequest));
             if (insert) ledger.repository.insertRunOperation(request.runId(), key, request.playerId(), raw);
             else ledger.repository.runTransaction(request.runId(), documents -> {
                 documents.write(key, request.playerId(), raw);
@@ -192,7 +220,7 @@ final class RunOperations {
 
     private void reconcile(Stored stored, CompletableFuture<OperationReceipt> result) {
         var value = receipt(stored.request(), OperationState.COMPLETED, "APPLIED", stored.receipt().revision());
-        persist(stored.request(), value, false).whenComplete((ignored, failure) -> {
+        persist(stored.request(), value, false, stored.nativeRequest()).whenComplete((ignored, failure) -> {
             if (failure == null) result.complete(value); else result.completeExceptionally(failure);
         });
     }
@@ -203,7 +231,8 @@ final class RunOperations {
             inFlight.remove(key);
             requests.remove(key);
             if (error == null) {
-                if (!value.code().equals("OPERATION_CONFLICT")) recent.put(key, new Stored(request, value));
+                if (!value.code().equals("OPERATION_CONFLICT")) recent.put(key, new Stored(request, value,
+                    request.owner().equals(NATIVE_OWNER)));
                 if (recent.size() > 32768) recent.remove(recent.keySet().iterator().next());
                 result.complete(value);
             } else result.completeExceptionally(error);

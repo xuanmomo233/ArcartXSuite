@@ -22,6 +22,8 @@ final class ReviveTransactions implements AbyssReviveAccess {
         String code;
         long expires;
         UUID epoch;
+        UUID rescuer;
+        boolean nativeRequest;
     }
     private final AbyssService service;
     private final RunLedger ledger;
@@ -38,11 +40,15 @@ final class ReviveTransactions implements AbyssReviveAccess {
     private AbyssInstance live(UUID run) {
         return service.running() ? service.instances().getInstance(run) : null;
     }
-    private String eligibility(AbyssInstance run, UUID player, String owner) {
+    private String eligibility(AbyssInstance run, UUID player, String owner, UUID rescuer) {
         if (run == null || run.designMode() || !run.admitted()) return "UNKNOWN_RUN";
-        if (!Objects.equals(owner, run.getTemplate().requirements().externalControlOwner())
+        if (rescuer == null && (!Objects.equals(owner, run.getTemplate().requirements().externalControlOwner())
                 || service.admissionOperation(run) == null
-                || !Objects.equals(owner, service.admissionOperation(run).intent.owner())) return "NOT_OWNER";
+                || !Objects.equals(owner, service.admissionOperation(run).intent.owner()))) return "NOT_OWNER";
+        if (rescuer != null) {
+            String denied = service.nativeRuns().canRescue(run, rescuer, player);
+            if (denied != null) return denied;
+        }
         if (run.getStatus() != AbyssStatus.ACTIVE) return "NOT_ACTIVE";
         Player target = Bukkit.getPlayer(player);
         if (!run.hasPlayer(player) || target == null || !target.isOnline() || target.getWorld() != run.getWorld())
@@ -70,18 +76,36 @@ final class ReviveTransactions implements AbyssReviveAccess {
 
     @Override public CompletableFuture<Receipt> reserve(String owner, UUID operation, UUID run, UUID player,
                                                        String reason, long expectedRevision) {
+        if (RunOperations.NATIVE_OWNER.equals(owner)) return CompletableFuture.failedFuture(new IllegalArgumentException("Reserved owner"));
+        return reserve(owner, operation, run, player, reason, expectedRevision, null);
+    }
+
+    CompletableFuture<Receipt> reserveNative(UUID operation, UUID run, UUID rescuer, UUID player, long revision) {
+        return reserve(RunOperations.NATIVE_OWNER, operation, run, player, "native-rescue", revision, rescuer);
+    }
+
+    CompletableFuture<UUID> lastNative(UUID run, UUID rescuer) {
+        return ledger.database.submitDatabase(() -> {
+            String value = ledger.repository.runDocument("native-rescue/" + run + "/" + rescuer);
+            return value == null ? null : UUID.fromString(value);
+        });
+    }
+
+    private CompletableFuture<Receipt> reserve(String owner, UUID operation, UUID run, UUID player,
+                                               String reason, long expectedRevision, UUID rescuer) {
         validate(owner, operation);
         Objects.requireNonNull(run); Objects.requireNonNull(player);
         if (reason == null || reason.length() > 256) throw new IllegalArgumentException("Invalid reason");
         var instance = live(run);
-        String invalid = eligibility(instance, player, owner);
+        String invalid = eligibility(instance, player, owner, rescuer);
         int death = instance == null ? -1 : instance.getDeaths(player);
         return ledger.database.submitDatabase(() -> {
             String previous = ledger.repository.runDocument(key(owner, operation));
             if (previous != null) {
                 var lease = RunLedger.JSON.fromJson(previous, Lease.class);
                 if (!lease.run.equals(run) || !lease.player.equals(player) || !lease.reason.equals(reason)
-                        || lease.expected != expectedRevision) return rejected(owner, operation, run, player, "OPERATION_CONFLICT");
+                        || lease.expected != expectedRevision || !Objects.equals(lease.rescuer, rescuer))
+                    return rejected(owner, operation, run, player, "OPERATION_CONFLICT");
                 return refresh(lease);
             }
             if (invalid != null) return rejected(owner, operation, run, player, invalid);
@@ -91,6 +115,8 @@ final class ReviveTransactions implements AbyssReviveAccess {
                 lease.owner = owner; lease.operation = operation; lease.run = run; lease.player = player;
                 lease.reason = reason; lease.expected = expectedRevision; lease.death = death;
                 lease.epoch = epoch;
+                lease.rescuer = rescuer;
+                lease.nativeRequest = rescuer != null;
                 if (data.leases.size() >= 10000) throw new IllegalStateException("REVIVE_OPERATION_CAPACITY");
                 String denied = !data.state.equals("ACTIVE") ? "NOT_ACTIVE"
                     : data.departed.contains(player) ? "NOT_A_MEMBER"
@@ -101,6 +127,8 @@ final class ReviveTransactions implements AbyssReviveAccess {
                 lease.code = denied == null ? "OK" : denied;
                 lease.expires = System.currentTimeMillis() + 30000;
                 documents.insert(key(owner, operation), player, RunLedger.JSON.toJson(lease));
+                if (rescuer != null && lease.state == State.RESERVED)
+                    documents.write("native-rescue/" + run + "/" + rescuer, rescuer, operation.toString());
                 data.leases.put(key(owner, operation), lease);
                 RunLedger.save(documents, data);
                 return receipt(lease, data);
@@ -187,7 +215,9 @@ final class ReviveTransactions implements AbyssReviveAccess {
                     return;
                 }
                 var run = live(lease.run);
-                String invalid = eligibility(run, lease.player, owner);
+                String invalid = eligibility(run, lease.player, owner, lease.nativeRequest ? lease.rescuer : null);
+                if (invalid == null && lease.nativeRequest && !service.nativeRuns().canCommit(lease.operation, lease.rescuer))
+                    invalid = "RESCUE_INTERRUPTED";
                 State outcome = State.RELEASED;
                 String code = invalid;
                 if (invalid == null && run.getDeaths(lease.player) != lease.death) code = "DEATH_CHANGED";

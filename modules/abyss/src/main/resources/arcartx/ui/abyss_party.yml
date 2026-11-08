@@ -280,6 +280,24 @@ controls:
               height: 3
               normal: var.accent
               through: true
+          本局战术:
+            type: Canvas
+            attribute:
+              point: ~top_right
+              x: -90
+              y: 108
+              width: 220
+              height: 44
+            action:
+              clickLeft: "Packet.send(var.packetId, 'open_run_ui')"
+            children:
+              字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: ~&d本局战术
+                  fontSize: 26
+                  through: true
           品牌标记:
             type: Text
             attribute:

@@ -79,8 +79,10 @@ public final class AbyssPlayerCommand implements TabExecutor {
                     player.sendMessage(service.msg("error.not-in-dungeon"));
                     return true;
                 }
-                service.playerExit(i, player, LeaveReason.QUIT);
+                service.nativeRuns().leave(player);
             }
+            case "run", "tactical", "rescue" -> service.nativeRuns().open(player, "rescue");
+            case "loot" -> service.nativeRuns().open(player, "loot");
             case "list" -> {
                 player.sendMessage(service.msg("list.title"));
                 for (AbyssTemplate t : service.instances().getAllTemplates()) {
@@ -142,6 +144,7 @@ public final class AbyssPlayerCommand implements TabExecutor {
             p.sendMessage(service.msg("help." + k, "label", label));
         }
         p.sendMessage("§e/"+label+" stats §7- 查看当前统计或本次登录最近的结算");
+        p.sendMessage("§e/"+label+" run §7- 自救、队友救援和撤离；/"+label+" loot §7- 本局战利品");
     }
 
     // ═══ /party ═══
@@ -494,7 +497,7 @@ public final class AbyssPlayerCommand implements TabExecutor {
         // /abyss ...
         if (args.length == 1) {
             return filter(List.of("enter", "rejoin", "leave", "list", "info", "stamina", "rewards",
-                "rank", "party", "ui", "stats"), args[0]);
+                "rank", "party", "ui", "stats", "run", "tactical", "rescue", "loot"), args[0]);
         }
         if (args.length == 2 && ("enter".equalsIgnoreCase(args[0])
             || "rank".equalsIgnoreCase(args[0]) || "top".equalsIgnoreCase(args[0]))) {

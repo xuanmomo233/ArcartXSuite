@@ -55,7 +55,8 @@ public final class AbyssModule extends AbstractAXSModule implements ModuleComman
         new UiEntry("ui/abyss_design_pick.yml", AbyssModuleConfiguration.UiSection::designPickId),
         new UiEntry("ui/abyss_design_edit.yml", AbyssModuleConfiguration.UiSection::designEditId),
         new UiEntry("ui/abyss_shop.yml", AbyssModuleConfiguration.UiSection::shopId),
-        new UiEntry("ui/abyss_reward_game.yml", ignored -> "abyss_reward_game")
+        new UiEntry("ui/abyss_reward_game.yml", ignored -> "abyss_reward_game"),
+        new UiEntry("ui/abyss_run.yml", ignored -> "abyss_run")
     );
 
     @Override

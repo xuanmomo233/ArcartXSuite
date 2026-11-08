@@ -84,6 +84,22 @@ class AbyssPacketPayloadTest {
         ui.openBrowser(player);assertClientFields("browser",flush());
         ui.openLobby(player);assertClientFields("lobby",flush());
     }
+    @Test void nativeRunPanelInitialisesAndRejectsPacketsFromAnOlderWindow() throws Exception {
+        var nativeGame = mock(xuanmo.arcartxsuite.abyss.service.NativeRunGameplay.class,
+            withSettings().mockMaker(org.mockito.MockMakers.INLINE));
+        set("nativeRuns", nativeGame);
+        ui.openRunPanel(player, "rescue", "保持原位", List.of(
+            new xuanmo.arcartxsuite.abyss.service.NativeRunGameplay.Row("自救", "剩余2次", player.getUniqueId().toString())), false, false);
+        var payload = flush();
+        assertClientFields("run", payload);
+        String token = (String)payload.get("action_token");
+        ui.handlePacket(player, "abyss", List.of("run_rescue", player.getUniqueId().toString(), token));
+        verify(nativeGame).rescue(player, player.getUniqueId());
+        ui.openParty(player);
+        flush();
+        ui.handlePacket(player, "abyss", List.of("run_rescue", player.getUniqueId().toString(), token));
+        verify(nativeGame, times(1)).rescue(player, player.getUniqueId());
+    }
     @Test void oldWindowTokenCannotCreatePartyAfterNavigation() {
         ui.openBrowser(player);String oldToken=(String)flush().get("action_token");
         ui.openLobby(player);String fresh=(String)flush().get("action_token");assertNotEquals(oldToken,fresh);

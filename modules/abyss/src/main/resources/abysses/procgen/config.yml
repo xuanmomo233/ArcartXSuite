@@ -36,5 +36,12 @@ settlement:
     show-stats: true
 
 requirements:
+  revive-limit: 2
+  native-rescue:
+    enabled: true
+    allow-self: true
+    channel-seconds: 5
+    range: 0
+    wipe-window-seconds: 15
   min-players: 1
   max-players: 4

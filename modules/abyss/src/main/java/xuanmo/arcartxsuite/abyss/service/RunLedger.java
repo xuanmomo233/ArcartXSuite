@@ -224,8 +224,19 @@ public final class RunLedger implements AbyssRunLootAccess {
         data.roster.addAll(run.getPlayerUUIDs());
         database.submitDatabase(() -> {
             repository.initializeRunDocument(data.run, JSON.toJson(data));
+            repository.runTransaction(data.run, documents -> {
+                for (UUID player : data.roster) documents.write("participant/" + player, player, data.run.toString());
+                return null;
+            });
             return null;
         }).exceptionally(error -> { service.logRunResultFailure(data.run, error); return null; });
+    }
+
+    CompletableFuture<UUID> recentRun(UUID player) {
+        return database.submitDatabase(() -> {
+            String run = repository.runDocument("participant/" + player);
+            return run == null ? null : UUID.fromString(run);
+        });
     }
 
     static Data read(JdbcAbyssRepository.RunDocuments documents, UUID run) throws Exception {

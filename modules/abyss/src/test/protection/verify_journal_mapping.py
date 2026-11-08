@@ -19,8 +19,8 @@ for line in mapping.read_text(encoding="utf-8").splitlines():
 
 expected = {
     "RunLedger$Data": {"run", "owner", "state", "reviveLimit", "revision", "roster", "departed", "used", "leases", "loot"},
-    "ReviveTransactions$Lease": {"owner", "operation", "run", "player", "reason", "expected", "death", "state", "code", "expires", "epoch"},
-    "RunOperations$Stored": {"request", "receipt"},
+    "ReviveTransactions$Lease": {"owner", "operation", "run", "player", "reason", "expected", "death", "state", "code", "expires", "epoch", "rescuer", "nativeRequest"},
+    "RunOperations$Stored": {"request", "receipt", "nativeRequest"},
     "RunLedger$Delivery": {"run", "key", "player", "rewards", "entries"},
 }
 jar = mapping.with_name(mapping.name.replace("-proguard-mapping.txt", ".jar"))

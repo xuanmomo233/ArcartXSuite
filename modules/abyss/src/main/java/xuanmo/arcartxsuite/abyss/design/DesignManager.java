@@ -428,14 +428,22 @@ public final class DesignManager {
         var settlement = xuanmo.arcartxsuite.abyss.template.SettlementConfig.load(
             config == null ? null : config.getConfigurationSection("settlement"));
         int reviveLimit = config == null ? 0 : config.getInt("requirements.revive-limit", 0);
-        addSettlement(out, "settlement", "通关结算", settlement.complete(), reviveLimit);
-        addSettlement(out, "failure", "失败结算", settlement.failure(), reviveLimit);
+        var nativeRescue = xuanmo.arcartxsuite.abyss.template.EntryRequirements.load(
+            config == null ? null : config.getConfigurationSection("requirements")).nativeRescue();
+        addSettlement(out, "settlement", "通关结算", settlement.complete(), reviveLimit, nativeRescue);
+        addSettlement(out, "failure", "失败结算", settlement.failure(), reviveLimit, nativeRescue);
     }
 
     private void addSettlement(List<DesignObject> out, String id, String label,
-                               xuanmo.arcartxsuite.abyss.template.SettlementConfig.Policy policy, int reviveLimit) {
+                               xuanmo.arcartxsuite.abyss.template.SettlementConfig.Policy policy, int reviveLimit,
+                               xuanmo.arcartxsuite.abyss.template.EntryRequirements.NativeRescue nativeRescue) {
         Map<String, Object> values = new LinkedHashMap<>();
         values.put("design-revive-limit", reviveLimit);
+        values.put("design-native-enabled", nativeRescue.enabled());
+        values.put("design-native-allow-self", nativeRescue.allowSelf());
+        values.put("design-native-channel-seconds", nativeRescue.channelSeconds());
+        values.put("design-native-range", nativeRescue.range());
+        values.put("design-native-wipe-window-seconds", nativeRescue.wipeWindowSeconds());
         values.put("exit-mode", policy.mode().name());
         values.put("exit-delay-seconds", policy.seconds());
         values.put("manual-timeout-seconds", policy.manualTimeoutSeconds());
@@ -943,13 +951,17 @@ public final class DesignManager {
                 }
             }
         }
-        if (o.kind() == DesignObject.Kind.SETTLEMENT && field.equals("design-revive-limit")) {
-            if (!(value instanceof Number number) || number.doubleValue() != number.intValue()
-                    || number.intValue() < 0 || number.intValue() > 1000)
+        if (o.kind() == DesignObject.Kind.SETTLEMENT
+                && (field.equals("design-revive-limit") || field.startsWith("design-native-"))) {
+            if (field.equals("design-revive-limit") && (!(value instanceof Number number)
+                    || number.doubleValue() != number.intValue() || number.intValue() < 0 || number.intValue() > 1000))
                 throw new IllegalArgumentException("本局救援额度必须为 0～1000 的整数");
+            if (field.startsWith("design-native-") && !field.equals("design-native-range")
+                    && value instanceof Number number && number.doubleValue() != number.intValue())
+                throw new IllegalArgumentException("救援时间必须为整数");
             for (var other : List.copyOf(s.objects().values())) {
                 if (other.kind() == DesignObject.Kind.SETTLEMENT)
-                    s.put(other.withValue(field, number.intValue()));
+                    s.put(other.withValue(field, value));
             }
         } else s.put(o.withValue(field, value));
         postEdit(s, s.get(key));

@@ -94,6 +94,26 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
     private String chestUi() { return axsUiId(service.config().ui().chestId()); }
     private String statsUi() { return axsUiId(service.config().ui().statsId()); }
     private String rewardGameUi() { return axsUiId("abyss_reward_game"); }
+    private String runUi() { return axsUiId("abyss_run"); }
+
+    public void openRunPanel(Player player, String mode, String hint,
+            List<xuanmo.arcartxsuite.abyss.service.NativeRunGameplay.Row> rows, boolean previous, boolean next) {
+        if (!available()) { player.sendMessage("§e战术面板需要 ArcartX 客户端。可用 /abyss leave 撤离。"); return; }
+        var payload = new LinkedHashMap<String, Object>();
+        var entries = new LinkedHashMap<String, Object>();
+        for (int index = 0; index < rows.size(); index++) {
+            var row = rows.get(index);
+            entries.put(Integer.toString(index), Map.of("title", row.title(), "detail", row.detail(), "target", row.target()));
+        }
+        payload.put("packetId", CHANNEL); payload.put("runMode", mode); payload.put("runHint", hint);
+        payload.put("runRows", entries); payload.put("runCount", rows.size());
+        payload.put("hasPrevious", previous); payload.put("hasNext", next);
+        openView(player, runUi(), payload);
+    }
+    public void closeRunPanel(Player player) { views.close(player, runUi()); }
+    public void closeExitedStats(Player player, UUID run) {
+        if (run.equals(statsViews.get(player.getUniqueId()))) views.close(player, statsUi());
+    }
     private record RewardAction(UUID offer, int revision, java.util.function.IntConsumer pick) { }
     private final Map<UUID, RewardAction> rewardActions = new ConcurrentHashMap<>();
 
@@ -163,10 +183,12 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         if(action.equals("reward_game_pick"))return ui.equals(rewardGameUi());
         if(action.equals("reward_game_pending"))return ui.equals(statsUi());
         if(action.equals("reopen_chest"))return ui.equals(statsUi());
+        if(action.startsWith("run_"))return ui.equals(runUi());
         return true;
     }
 
     private void openView(Player player, String uiId, Map<String, Object> payload) {
+        if (!uiId.equals(runUi()) && service.nativeRuns() != null) service.nativeRuns().closeView(player);
         if (!uiId.equals(rewardGameUi())) rewardActions.remove(player.getUniqueId());
         boardRequests.remove(player.getUniqueId());
         var previousQuery=boardQueries.remove(player.getUniqueId());if(previousQuery!=null)previousQuery.cancel(false);
@@ -192,13 +214,14 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
             case "buff" -> buffUi(); case "shop" -> shopUi(); case "design" -> designUi();
             case "design_pick" -> designPickUi(); case "design_edit" -> designEditUi();
             case "reward_game" -> rewardGameUi();
+            case "run" -> runUi();
             default -> null;
         };
     }
 
     public void closeInstanceViews(Player player) {
         shopOffers.remove(player.getUniqueId()); inputOffers.remove(player.getUniqueId()); buffOffers.remove(player.getUniqueId());
-        for (String key : List.of("chest", "input", "buff", "shop", "design", "design_pick", "design_edit"))
+        for (String key : List.of("run", "chest", "input", "buff", "shop", "design", "design_pick", "design_edit"))
             views.close(player, uiForKey(key));
     }
 
@@ -1245,7 +1268,9 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
                 if (data.size()>3 && (checkToken(player, data, 2)
                     || views.matchesNonce(player,uiForKey(data.get(1)),data.get(3)))) {
                     String ui = uiForKey(data.get(1));
+                    boolean runClosed = "run".equals(data.get(1)) && views.matchesNonce(player, runUi(), data.get(3));
                     if (ui != null && data.size() > 3) views.closed(player, ui, data.get(3));
+                    if (runClosed && service.nativeRuns() != null) service.nativeRuns().closeView(player);
                 }
                 return true;
             }
@@ -1253,6 +1278,35 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
                 // Read-only handshake: only an already authorised open view can be initialised.
                 String uiId = data.size() > 1 ? uiForKey(data.get(1)) : null;
                 if (uiId != null) views.clientReady(player, uiId);
+                return true;
+            }
+            case "open_run_ui" -> {
+                service.nativeRuns().open(player, "rescue");
+                return true;
+            }
+            case "open_run_loot" -> {
+                if (checkToken(player, data, 1)) service.nativeRuns().open(player, "loot");
+                return true;
+            }
+            case "run_mode" -> {
+                if (checkToken(player, data, 2) && Set.of("rescue", "loot").contains(data.get(1)))
+                    service.nativeRuns().open(player, data.get(1));
+                return true;
+            }
+            case "run_page" -> {
+                if (checkToken(player, data, 2))
+                    service.nativeRuns().page(player, parseInt(data.get(1), 0) > 0 ? 1 : -1);
+                return true;
+            }
+            case "run_rescue" -> {
+                if (checkToken(player, data, 2)) {
+                    try { service.nativeRuns().rescue(player, UUID.fromString(data.get(1))); }
+                    catch (IllegalArgumentException invalid) { player.sendMessage("§c救援目标无效。"); }
+                }
+                return true;
+            }
+            case "run_leave" -> {
+                if (checkToken(player, data, 1)) service.nativeRuns().leaveFromPanel(player);
                 return true;
             }
             case "open_confirm" -> {
@@ -1614,9 +1668,8 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
             case "settlement_leave" -> {
                 if(checkToken(player, data, 1)) {
                     AbyssInstance instance=service.instances().getInstance(player);
-                    if(instance!=null && instance.isFinished() && instance.getInstanceId().equals(statsViews.get(player.getUniqueId()))
-                        && service.playerExit(instance,player,xuanmo.arcartxsuite.abyss.instance.LeaveReason.QUIT))
-                        views.close(player,statsUi());
+                    if(instance!=null && instance.isFinished() && instance.getInstanceId().equals(statsViews.get(player.getUniqueId())))
+                        service.nativeRuns().leave(player);
                 }
                 return true;
             }

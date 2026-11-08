@@ -250,6 +250,113 @@ class RunTransactionsTest {
         return operation;
     }
 
+    private record NativeFixture(NativeRunGameplay game, java.util.concurrent.atomic.AtomicLong clock,
+                                 CompletableFuture<Void> started, CompletableFuture<Void> finished) { }
+
+    private NativeFixture nativeFixture() throws Exception {
+        var config = new YamlConfiguration();
+        config.set("revive-limit", 1);
+        config.set("native-rescue.enabled", true);
+        config.set("native-rescue.channel-seconds", 1);
+        config.set("native-rescue.wipe-window-seconds", 3);
+        var requirements = EntryRequirements.load(config);
+        when(run.getTemplate().requirements()).thenReturn(requirements);
+        when(service.instances().getInstance(player)).thenReturn(run);
+        when(run.getPlayers()).thenReturn(List.of(player));
+        when(player.getLocation()).thenReturn(new org.bukkit.Location(run.getWorld(), 0, 64, 0));
+        var clock = new java.util.concurrent.atomic.AtomicLong();
+        var game = new NativeRunGameplay(service, clock::get);
+        when(service.nativeRuns()).thenReturn(game);
+        when(service.reviveAccess()).thenReturn(revives);
+        when(service.runLootAccess()).thenReturn(ledger);
+        when(service.reviveTransactions()).thenReturn(revives);
+        var ui = fake(xuanmo.arcartxsuite.abyss.ui.AbyssUiService.class);
+        when(service.uiFacade()).thenReturn(ui);
+        var opened = new CompletableFuture<Void>();
+        var started = new CompletableFuture<Void>();
+        var finished = new CompletableFuture<Void>();
+        doAnswer(call -> { opened.complete(null); return null; }).when(ui)
+            .openRunPanel(eq(player), anyString(), anyString(), anyList(), anyBoolean(), anyBoolean());
+        doAnswer(call -> { started.complete(null); return null; }).when(ui).closeRunPanel(player);
+        doAnswer(call -> {
+            if (call.<String>getArgument(0).contains("救援成功")) finished.complete(null);
+            return null;
+        }).when(player).sendMessage(anyString());
+        game.open(player, "rescue");
+        await(opened);
+        return new NativeFixture(game, clock, started, finished);
+    }
+
+    @Test void nativeSelfRescueUsesTheExistingQuotaWithoutAnExternalOwner() throws Exception {
+        var fixture = nativeFixture();
+        when(service.tryRevivePlayer(run, player)).thenAnswer(call -> { dead.set(false); return true; });
+        fixture.game().rescue(player, playerId);
+        await(fixture.started());
+        fixture.clock().set(2000);
+        fixture.game().tick();
+        await(fixture.finished());
+        assertEquals(1, await(revives.reviveStatus(runId, playerId)).used());
+        verify(service, times(1)).tryRevivePlayer(run, player);
+        assertEquals("NOT_OWNER", await(revives.reserve("foreign", UUID.randomUUID(), runId, playerId, "external", 0)).code());
+    }
+
+    @Test void movingOrDamageDuringNativeRescueReleasesTheCredit() throws Exception {
+        var fixture = nativeFixture();
+        fixture.game().rescue(player, playerId);
+        await(fixture.started());
+        when(player.getLocation()).thenReturn(new org.bukkit.Location(run.getWorld(), 1, 64, 0));
+        fixture.game().tick();
+        assertEquals(1, await(revives.reviveStatus(runId, playerId)).remaining());
+        verify(service, never()).tryRevivePlayer(any(), any());
+        var second = nativeFixture();
+        second.game().rescue(player, playerId);
+        await(second.started());
+        second.game().interrupt(playerId, "受伤中断救援");
+        assertEquals(1, await(revives.reviveStatus(runId, playerId)).remaining());
+        verify(service, never()).tryRevivePlayer(any(), any());
+    }
+
+    @Test void lootPanelCannotStartARescueEvenWithAForgedTarget() throws Exception {
+        var fixture = nativeFixture();
+        fixture.game().open(player, "loot");
+        when(service.reviveTransactions()).thenThrow(new AssertionError("Read-only loot panel started a rescue"));
+        fixture.game().rescue(player, playerId);
+        verify(service, never()).tryRevivePlayer(any(), any());
+    }
+
+    @Test void staleNativePanelCannotLeaveANewerRun() throws Exception {
+        var fixture = nativeFixture();
+        var other = fake(AbyssInstance.class);
+        when(other.getInstanceId()).thenReturn(UUID.randomUUID());
+        when(service.instances().getInstance(player)).thenReturn(other);
+        fixture.game().leaveFromPanel(player);
+        verify(service, never()).playerExit(any(), any(), any());
+    }
+
+    @Test void nativeLeaveReusesTheDurableOperationWithoutExternalOwnership() throws Exception {
+        nativeFixture();
+        var operations = new RunOperations(service, ledger);
+        when(service.runOperations()).thenReturn(operations);
+        when(service.playerExit(run, player, LeaveReason.QUIT)).thenAnswer(call -> { member.set(false); return true; });
+        assertEquals("APPLIED", await(operations.leaveNative(runId, playerId)).code());
+        assertEquals("APPLIED", await(operations.leaveNative(runId, playerId)).code());
+        verify(service, times(1)).playerExit(run, player, LeaveReason.QUIT);
+    }
+
+    @Test void oldWipeWindowDoesNotEndARecoveredOrNewWipe() throws Exception {
+        var fixture = nativeFixture();
+        var deadlines = new java.util.ArrayList<Runnable>();
+        doAnswer(call -> { deadlines.add(call.getArgument(1)); return null; }).when(service).scheduleOnce(eq(run), any(), anyLong());
+        when(run.getAlivePlayerCount()).thenReturn(0);
+        assertTrue(fixture.game().teamWipe(run));
+        fixture.game().revived(run);
+        assertTrue(fixture.game().teamWipe(run));
+        deadlines.get(0).run();
+        verify(service, never()).failDungeon(any(), any());
+        deadlines.get(1).run();
+        verify(service).failDungeon(run, FailReason.TEAM_WIPE);
+    }
+
     @Test void durableGrantRegistrationCanContinueWhileTheHostIsUnavailable() throws Exception {
         var host = mock(PendingRewardService.class);
         ledger.rewards(host);

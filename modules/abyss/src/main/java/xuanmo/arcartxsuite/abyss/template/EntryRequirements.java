@@ -48,10 +48,51 @@ public record EntryRequirements(
     @org.jetbrains.annotations.Nullable String externalCostOwner,
     @org.jetbrains.annotations.Nullable String externalControlOwner,
     int reconnectGraceSeconds,
-    int reviveLimit
+    int reviveLimit,
+    NativeRescue nativeRescue
 ) {
     public EntryRequirements {
         if (reviveLimit < 0 || reviveLimit > 1000) throw new IllegalArgumentException("revive-limit 必须为 0～1000");
+        if (nativeRescue == null) nativeRescue = NativeRescue.load(null);
+    }
+
+    public record NativeRescue(boolean enabled, boolean allowSelf, int channelSeconds,
+                               double range, int wipeWindowSeconds) {
+        public NativeRescue {
+            if (channelSeconds < 1 || channelSeconds > 20 || !Double.isFinite(range) || range < 0 || range > 128
+                    || wipeWindowSeconds < 1 || wipeWindowSeconds > 120
+                    || enabled && allowSelf && wipeWindowSeconds < channelSeconds + 2)
+                throw new IllegalArgumentException("救援读条为1～20秒、距离0～128格，自救窗口须比读条至少长2秒且不超过120秒");
+        }
+        static NativeRescue load(ConfigurationSection section) {
+            if (section != null) {
+                for (String key : List.of("enabled", "allow-self"))
+                    if (section.contains(key) && !(section.get(key) instanceof Boolean))
+                        throw new IllegalArgumentException("native-rescue." + key + " 必须为布尔值");
+                for (String key : List.of("channel-seconds", "range", "wipe-window-seconds")) {
+                    if (!section.contains(key)) continue;
+                    if (!(section.get(key) instanceof Number number) || !Double.isFinite(number.doubleValue())
+                            || !key.equals("range") && number.doubleValue() != number.intValue())
+                        throw new IllegalArgumentException("native-rescue." + key + " 数值无效");
+                }
+            }
+            return section == null ? new NativeRescue(false, true, 5, 0, 15)
+                : new NativeRescue(section.getBoolean("enabled", false), section.getBoolean("allow-self", true),
+                    section.getInt("channel-seconds", 5), section.getDouble("range", 0),
+                    section.getInt("wipe-window-seconds", 15));
+        }
+    }
+
+    public EntryRequirements(int minPlayers, int maxPlayers, boolean partyRequired, String partyMode,
+            int minLevel, int maxLevel, long cooldownSeconds, double moneyCost, String currencyId, int staminaCost,
+            List<RequiredItem> requiredItems, List<String> requiredPermissions, List<ScriptCondition> conditions,
+            boolean requireAllPlayers, List<ScriptCondition> leaderOnlyConditions, List<String> disabledCommands,
+            List<String> disabledItems, List<String> admissionPolicies, String externalCostOwner,
+            String externalControlOwner, int reconnectGraceSeconds, int reviveLimit) {
+        this(minPlayers, maxPlayers, partyRequired, partyMode, minLevel, maxLevel, cooldownSeconds, moneyCost,
+            currencyId, staminaCost, requiredItems, requiredPermissions, conditions, requireAllPlayers,
+            leaderOnlyConditions, disabledCommands, disabledItems, admissionPolicies, externalCostOwner,
+            externalControlOwner, reconnectGraceSeconds, reviveLimit, NativeRescue.load(null));
     }
 
     public EntryRequirements(int minPlayers, int maxPlayers, boolean partyRequired, String partyMode,
@@ -108,6 +149,9 @@ public record EntryRequirements(
 
     public static EntryRequirements load(ConfigurationSection s) {
         if (s == null) return defaults();
+        if (s.contains("revive-limit") && (!(s.get("revive-limit") instanceof Number limit)
+                || !Double.isFinite(limit.doubleValue()) || limit.doubleValue() != limit.intValue()))
+            throw new IllegalArgumentException("revive-limit 必须为整数");
         return new EntryRequirements(
             s.getInt("min-players", s.getInt("min_players", 1)),
             s.getInt("max-players", s.getInt("max_players", 4)),
@@ -137,7 +181,8 @@ public record EntryRequirements(
             empty2null(s.getString("external-cost-owner")),
             empty2null(s.getString("external-control-owner")),
             Math.min(600, Math.max(0, s.getInt("reconnect-grace-seconds", 0))),
-            s.getInt("revive-limit", 0)
+            s.getInt("revive-limit", 0),
+            NativeRescue.load(s.getConfigurationSection("native-rescue"))
         );
     }
 }

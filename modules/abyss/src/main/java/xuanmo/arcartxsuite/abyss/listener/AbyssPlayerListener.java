@@ -56,6 +56,12 @@ public final class AbyssPlayerListener implements Listener {
         service.handleQuit(event.getPlayer());
     }
 
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onRescueDamage(EntityDamageEvent event) {
+        if (event.getEntity() instanceof Player player && event.getFinalDamage() > 0 && service.nativeRuns() != null)
+            service.nativeRuns().interrupt(player.getUniqueId(), "受伤中断救援");
+    }
+
     // ═══ 致命伤害拦截（旁观死亡机制核心） ═══
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
@@ -121,6 +127,9 @@ public final class AbyssPlayerListener implements Listener {
                 && player.getGameMode() != org.bukkit.GameMode.SPECTATOR) {
                 player.setGameMode(org.bukkit.GameMode.SPECTATOR);
             }
+            if (player.isOnline() && instance.isPlayerCurrentlyDead(player) && service.nativeRuns() != null
+                    && instance.getTemplate().requirements().nativeRescue().enabled())
+                service.nativeRuns().open(player, "rescue");
         }, 1L);
     }
 

@@ -108,6 +108,9 @@ public final class AbyssService {
     private RunLedger runLedger;
     private RunOperations runOperations;
     private ReviveTransactions revives;
+    private NativeRunGameplay nativeRuns;
+    public NativeRunGameplay nativeRuns() { return nativeRuns; }
+    ReviveTransactions reviveTransactions() { return revives; }
     private final Map<UUID, Map<String, List<ItemStack>>> defaultChestRolls = new HashMap<>();
     RunOperations runOperations() { return runOperations; }
     public RunLedger runLedger() { return runLedger; }
@@ -288,6 +291,7 @@ public final class AbyssService {
         runLedger = new RunLedger(this, repository, playerData);
         runOperations = new RunOperations(this, runLedger);
         revives = new ReviveTransactions(this, runLedger);
+        nativeRuns = new NativeRunGameplay(this);
         runResults.configure(repository, playerData, dataFolder.toPath().resolve("run-result-outbox"));
         try {
             admission.load(repository, playerData);
@@ -490,6 +494,7 @@ public final class AbyssService {
     private ScheduledTask proximityTask;
 
     public void shutdown() {
+        if (nativeRuns != null) nativeRuns.shutdown();
         if (chunkPreloader != null) chunkPreloader.close();
         runIntegration.shutdown();
         admission.shutdown();
@@ -2112,6 +2117,9 @@ public final class AbyssService {
 
     /** 玩家退出副本（主动/结束/管理）：传送回原位置 + 恢复模式。 */
     public boolean playerExit(AbyssInstance instance, Player player, LeaveReason reason) {
+        if (nativeRuns != null) {
+            nativeRuns.interrupt(player.getUniqueId(), "离场中断救援");
+        }
         return playerExit(instance,player,reason,true);
     }
     private boolean playerExit(AbyssInstance instance,Player player,LeaveReason reason,boolean teleport) {
@@ -2135,6 +2143,7 @@ public final class AbyssService {
             if(!returned){player.sendMessage("§c暂时无法返回安全位置，副本与物品已保留，请稍后重试退出。");return false;}
         }
         instance.removePlayer(player.getUniqueId());
+        if (nativeRuns != null) nativeRuns.closeView(player);
         instances.playerLeaveInstance(player);
         runResults.member(instance, player.getUniqueId(), AbyssRunResultAccess.MemberState.LEFT, reason.name(), null);
         if (runLedger != null && instance.admitted() && !instance.designMode()) runLedger.departed(instance, player.getUniqueId());
@@ -2198,6 +2207,10 @@ public final class AbyssService {
 
     /** 玩家断线（监听器调用）：存待恢复位置+从实例移除。 */
     public void handleQuit(Player player) {
+        if (nativeRuns != null) {
+            nativeRuns.interrupt(player.getUniqueId(), "断线中断救援");
+            nativeRuns.closeView(player);
+        }
         recoveringPlayers.remove(player.getUniqueId(),player);
         // 无论是否在副本内，先清理 UI 会话态（token/HUD 标记）
         if (uiFacade instanceof AbyssUiService ui0) {
@@ -2343,6 +2356,7 @@ public final class AbyssService {
         }
         if (recoveryManager != null) recoveryManager.discardMark(id);
         runResults.reconnected(instance, id);
+        if (nativeRuns != null && instance.getAlivePlayerCount() > 0) nativeRuns.revived(instance);
         if (uiFacade instanceof AbyssUiService ui) ui.openHud(player, instance);
         return "REJOINED";
     }
@@ -2395,6 +2409,11 @@ public final class AbyssService {
      * 保证两条路径语义一致。
      */
     public void notifyPlayerDeath(AbyssInstance instance, Player player, int deaths) {
+        if (nativeRuns != null) {
+            nativeRuns.interrupt(player.getUniqueId(), "阵亡中断救援");
+            if (instance.getTemplate().requirements().nativeRescue().enabled() && !player.isDead())
+                nativeRuns.open(player, "rescue");
+        }
         runResults.member(instance, player.getUniqueId(), AbyssRunResultAccess.MemberState.PRESENT, null, deaths);
         publishEvent("axs.abyss.player_death", player, Map.of(
             "dungeon", instance.getTemplate().id(),
@@ -2405,6 +2424,7 @@ public final class AbyssService {
 
         // 全队覆灭判定
         if (instance.getAlivePlayerCount() == 0 && instance.markTeamWipeHandled()) {
+            if (nativeRuns != null && nativeRuns.teamWipe(instance)) return;
             if (config.death().teamWipeMode() == AbyssModuleConfiguration.TeamWipeMode.STRICT) {
                 runLifecycleScript(instance, "all_death", player);
                 failDungeon(instance, FailReason.TEAM_WIPE);
@@ -2442,6 +2462,7 @@ public final class AbyssService {
         Location spawn = spawnLocation(instance);
         if (spawn == null || !player.teleport(spawn)) return false;
         instance.revive(player);
+        if (nativeRuns != null) nativeRuns.revived(instance);
         instance.restorePlayerGameMode(player);
         if (player.getGameMode() == GameMode.SPECTATOR) {
             player.setGameMode(GameMode.SURVIVAL);
@@ -2770,6 +2791,7 @@ public final class AbyssService {
         admission.changed(operation);
         admission.detached(instance);
         runIntegration.detached(instance.getInstanceId());
+        if (nativeRuns != null) nativeRuns.detached(instance.getInstanceId());
         defaultChestRolls.remove(instance.getInstanceId());
         reconnects.detach(instance.getInstanceId());
     }
@@ -3030,6 +3052,7 @@ public final class AbyssService {
 
     /** 1s 轮询：障碍物 proximity + 区域交互点触发。 */
     private void proximityTick() {
+        if (nativeRuns != null && running()) nativeRuns.tick();
         if (started && instanceTicker != null) instanceTicker.tick();
     }
 

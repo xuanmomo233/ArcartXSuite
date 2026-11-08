@@ -184,6 +184,7 @@ public final class AbyssInstance {
 
     public void revive(Player p) {
         deadPlayers.remove(p.getUniqueId());
+        teamWipeHandled = false;
     }
 
     public void restoreDeathState(UUID player) { deadPlayers.add(player); }
@@ -206,6 +207,7 @@ public final class AbyssInstance {
     }
 
     public boolean isTeamWipeHandled() { return teamWipeHandled; }
+    public void clearTeamWipeHandled() { teamWipeHandled = false; }
     public boolean markTeamWipeHandled() {
         synchronized (this) {
             if (teamWipeHandled) return false;

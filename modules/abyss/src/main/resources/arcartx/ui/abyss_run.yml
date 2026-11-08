@@ -1,0 +1,595 @@
+# Abyss 原生战术面板。客户端只发送意图，救援与撤离由服务端验证。
+ui:
+  isHud: false
+  defaultOpen: false
+  background: false
+  closeDied: false
+  escClose: true
+  through: false
+  screenScale: true
+  show: true
+  level: 8
+  packetHandler:
+    init: |-
+      if(packet['view_nonce'] != none){ var.viewNonce = packet['view_nonce'] }
+      var.packetId = packet['packetId']
+      var.actionToken = packet['action_token']
+      var.runMode = packet['runMode']
+      var.runHint = packet['runHint']
+      var.runRows = packet['runRows']
+      var.runCount = packet['runCount']
+      var.hasPrevious = packet['hasPrevious']
+      var.hasNext = packet['hasNext']
+  action:
+    load: |-
+      var.actionToken = ''
+      var.viewNonce = ''
+      var.packetId = 'abyss'
+      var.runMode = 'rescue'
+      var.runHint = ''
+      var.runRows = {}
+      var.runCount = 0
+      var.hasPrevious = false
+      var.hasNext = false
+    open: |-
+      Packet.send('abyss', 'view_ready', 'run')
+    close: |-
+      if(var.actionToken != '' && var.viewNonce != ''){
+        Packet.send(var.packetId, 'close_view', 'run', var.actionToken, var.viewNonce)
+      }
+controls:
+  布局:
+    type: Adaptive
+    attribute:
+      point: ~middle_center
+      width: 1920
+      height: 1080
+    children:
+      战术:
+        type: Canvas
+        attribute:
+          point: ~middle_center
+          width: 1160
+          height: 940
+          visible: "var.actionToken != ''"
+        children:
+          底:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~28,22,44,248
+              shape: ~round_rect
+              radius: 14
+              through: true
+          标题:
+            type: Text
+            attribute:
+              point: ~top_center
+              y: 20
+              texts: ~&fABYSS · 本局战术
+              fontSize: 40
+              through: true
+          自救与救援:
+            type: Canvas
+            attribute:
+              point: ~top_center
+              x: -130
+              y: 76
+              width: 220
+              height: 42
+            action:
+              clickLeft: "Packet.send(var.packetId, 'run_mode', 'rescue', var.actionToken)"
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: "var.runMode == 'rescue' ? '110,78,150,255' : '60,50,78,245'"
+                  shape: ~round_rect
+                  radius: 6
+                  through: true
+              字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: ~&f自救与救援
+                  fontSize: 30
+                  through: true
+          本局战利品:
+            type: Canvas
+            attribute:
+              point: ~top_center
+              x: 130
+              y: 76
+              width: 220
+              height: 42
+            action:
+              clickLeft: "Packet.send(var.packetId, 'run_mode', 'loot', var.actionToken)"
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: "var.runMode == 'loot' ? '110,78,150,255' : '60,50,78,245'"
+                  shape: ~round_rect
+                  radius: 6
+                  through: true
+              字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: ~&f本局战利品
+                  fontSize: 30
+                  through: true
+          提示:
+            type: Text
+            attribute:
+              point: ~top_center
+              y: 136
+              texts: "var.runHint"
+              fontSize: 24
+              limit: 42
+              through: true
+          空:
+            type: Text
+            attribute:
+              point: ~middle_center
+              texts: "var.runMode == 'loot' ? '&7当前没有已登记奖励' : '&7暂无可救援成员'"
+              visible: "var.runCount == 0"
+              fontSize: 32
+              through: true
+          行0:
+            type: Canvas
+            attribute:
+              x: 40
+              y: 184
+              width: 1080
+              height: 72
+              visible: "var.runCount > 0"
+            action:
+              clickLeft: |-
+                if(var.runMode == 'rescue' && var.runCount > 0 && var.runRows['0']['target'] != ''){
+                  Packet.send(var.packetId, 'run_rescue', var.runRows['0']['target'], var.actionToken)
+                }
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~52,43,68,245
+                  shape: ~round_rect
+                  radius: 8
+                  through: true
+              名称:
+                type: Text
+                attribute:
+                  x: 20
+                  y: 6
+                  texts: "var.runCount > 0 ? var.runRows['0']['title'] : ''"
+                  fontSize: 30
+                  limit: 32
+                  through: true
+              说明:
+                type: Text
+                attribute:
+                  x: 20
+                  y: 42
+                  texts: "var.runCount > 0 ? var.runRows['0']['detail'] : ''"
+                  fontSize: 22
+                  limit: 46
+                  through: true
+          行1:
+            type: Canvas
+            attribute:
+              x: 40
+              y: 262
+              width: 1080
+              height: 72
+              visible: "var.runCount > 1"
+            action:
+              clickLeft: |-
+                if(var.runMode == 'rescue' && var.runCount > 1 && var.runRows['1']['target'] != ''){
+                  Packet.send(var.packetId, 'run_rescue', var.runRows['1']['target'], var.actionToken)
+                }
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~52,43,68,245
+                  shape: ~round_rect
+                  radius: 8
+                  through: true
+              名称:
+                type: Text
+                attribute:
+                  x: 20
+                  y: 6
+                  texts: "var.runCount > 1 ? var.runRows['1']['title'] : ''"
+                  fontSize: 30
+                  limit: 32
+                  through: true
+              说明:
+                type: Text
+                attribute:
+                  x: 20
+                  y: 42
+                  texts: "var.runCount > 1 ? var.runRows['1']['detail'] : ''"
+                  fontSize: 22
+                  limit: 46
+                  through: true
+          行2:
+            type: Canvas
+            attribute:
+              x: 40
+              y: 340
+              width: 1080
+              height: 72
+              visible: "var.runCount > 2"
+            action:
+              clickLeft: |-
+                if(var.runMode == 'rescue' && var.runCount > 2 && var.runRows['2']['target'] != ''){
+                  Packet.send(var.packetId, 'run_rescue', var.runRows['2']['target'], var.actionToken)
+                }
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~52,43,68,245
+                  shape: ~round_rect
+                  radius: 8
+                  through: true
+              名称:
+                type: Text
+                attribute:
+                  x: 20
+                  y: 6
+                  texts: "var.runCount > 2 ? var.runRows['2']['title'] : ''"
+                  fontSize: 30
+                  limit: 32
+                  through: true
+              说明:
+                type: Text
+                attribute:
+                  x: 20
+                  y: 42
+                  texts: "var.runCount > 2 ? var.runRows['2']['detail'] : ''"
+                  fontSize: 22
+                  limit: 46
+                  through: true
+          行3:
+            type: Canvas
+            attribute:
+              x: 40
+              y: 418
+              width: 1080
+              height: 72
+              visible: "var.runCount > 3"
+            action:
+              clickLeft: |-
+                if(var.runMode == 'rescue' && var.runCount > 3 && var.runRows['3']['target'] != ''){
+                  Packet.send(var.packetId, 'run_rescue', var.runRows['3']['target'], var.actionToken)
+                }
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~52,43,68,245
+                  shape: ~round_rect
+                  radius: 8
+                  through: true
+              名称:
+                type: Text
+                attribute:
+                  x: 20
+                  y: 6
+                  texts: "var.runCount > 3 ? var.runRows['3']['title'] : ''"
+                  fontSize: 30
+                  limit: 32
+                  through: true
+              说明:
+                type: Text
+                attribute:
+                  x: 20
+                  y: 42
+                  texts: "var.runCount > 3 ? var.runRows['3']['detail'] : ''"
+                  fontSize: 22
+                  limit: 46
+                  through: true
+          行4:
+            type: Canvas
+            attribute:
+              x: 40
+              y: 496
+              width: 1080
+              height: 72
+              visible: "var.runCount > 4"
+            action:
+              clickLeft: |-
+                if(var.runMode == 'rescue' && var.runCount > 4 && var.runRows['4']['target'] != ''){
+                  Packet.send(var.packetId, 'run_rescue', var.runRows['4']['target'], var.actionToken)
+                }
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~52,43,68,245
+                  shape: ~round_rect
+                  radius: 8
+                  through: true
+              名称:
+                type: Text
+                attribute:
+                  x: 20
+                  y: 6
+                  texts: "var.runCount > 4 ? var.runRows['4']['title'] : ''"
+                  fontSize: 30
+                  limit: 32
+                  through: true
+              说明:
+                type: Text
+                attribute:
+                  x: 20
+                  y: 42
+                  texts: "var.runCount > 4 ? var.runRows['4']['detail'] : ''"
+                  fontSize: 22
+                  limit: 46
+                  through: true
+          行5:
+            type: Canvas
+            attribute:
+              x: 40
+              y: 574
+              width: 1080
+              height: 72
+              visible: "var.runCount > 5"
+            action:
+              clickLeft: |-
+                if(var.runMode == 'rescue' && var.runCount > 5 && var.runRows['5']['target'] != ''){
+                  Packet.send(var.packetId, 'run_rescue', var.runRows['5']['target'], var.actionToken)
+                }
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~52,43,68,245
+                  shape: ~round_rect
+                  radius: 8
+                  through: true
+              名称:
+                type: Text
+                attribute:
+                  x: 20
+                  y: 6
+                  texts: "var.runCount > 5 ? var.runRows['5']['title'] : ''"
+                  fontSize: 30
+                  limit: 32
+                  through: true
+              说明:
+                type: Text
+                attribute:
+                  x: 20
+                  y: 42
+                  texts: "var.runCount > 5 ? var.runRows['5']['detail'] : ''"
+                  fontSize: 22
+                  limit: 46
+                  through: true
+          行6:
+            type: Canvas
+            attribute:
+              x: 40
+              y: 652
+              width: 1080
+              height: 72
+              visible: "var.runCount > 6"
+            action:
+              clickLeft: |-
+                if(var.runMode == 'rescue' && var.runCount > 6 && var.runRows['6']['target'] != ''){
+                  Packet.send(var.packetId, 'run_rescue', var.runRows['6']['target'], var.actionToken)
+                }
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~52,43,68,245
+                  shape: ~round_rect
+                  radius: 8
+                  through: true
+              名称:
+                type: Text
+                attribute:
+                  x: 20
+                  y: 6
+                  texts: "var.runCount > 6 ? var.runRows['6']['title'] : ''"
+                  fontSize: 30
+                  limit: 32
+                  through: true
+              说明:
+                type: Text
+                attribute:
+                  x: 20
+                  y: 42
+                  texts: "var.runCount > 6 ? var.runRows['6']['detail'] : ''"
+                  fontSize: 22
+                  limit: 46
+                  through: true
+          行7:
+            type: Canvas
+            attribute:
+              x: 40
+              y: 730
+              width: 1080
+              height: 72
+              visible: "var.runCount > 7"
+            action:
+              clickLeft: |-
+                if(var.runMode == 'rescue' && var.runCount > 7 && var.runRows['7']['target'] != ''){
+                  Packet.send(var.packetId, 'run_rescue', var.runRows['7']['target'], var.actionToken)
+                }
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~52,43,68,245
+                  shape: ~round_rect
+                  radius: 8
+                  through: true
+              名称:
+                type: Text
+                attribute:
+                  x: 20
+                  y: 6
+                  texts: "var.runCount > 7 ? var.runRows['7']['title'] : ''"
+                  fontSize: 30
+                  limit: 32
+                  through: true
+              说明:
+                type: Text
+                attribute:
+                  x: 20
+                  y: 42
+                  texts: "var.runCount > 7 ? var.runRows['7']['detail'] : ''"
+                  fontSize: 22
+                  limit: 46
+                  through: true
+          上一页:
+            type: Canvas
+            attribute:
+              point: ~bottom_center
+              x: -420
+              y: -28
+              width: 180
+              height: 48
+              visible: "var.hasPrevious"
+            action:
+              clickLeft: "Packet.send(var.packetId, 'run_page', '-1', var.actionToken)"
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~76,58,112,245
+                  shape: ~round_rect
+                  radius: 8
+                  through: true
+              字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: ~&f上一页
+                  fontSize: 30
+                  through: true
+          下一页:
+            type: Canvas
+            attribute:
+              point: ~bottom_center
+              x: -210
+              y: -28
+              width: 180
+              height: 48
+              visible: "var.hasNext"
+            action:
+              clickLeft: "Packet.send(var.packetId, 'run_page', '1', var.actionToken)"
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~76,58,112,245
+                  shape: ~round_rect
+                  radius: 8
+                  through: true
+              字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: ~&f下一页
+                  fontSize: 30
+                  through: true
+          刷新:
+            type: Canvas
+            attribute:
+              point: ~bottom_center
+              x: 0
+              y: -28
+              width: 180
+              height: 48
+              visible: "true"
+            action:
+              clickLeft: "Packet.send(var.packetId, 'run_mode', var.runMode, var.actionToken)"
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~76,58,112,245
+                  shape: ~round_rect
+                  radius: 8
+                  through: true
+              字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: ~&f刷新
+                  fontSize: 30
+                  through: true
+          撤离:
+            type: Canvas
+            attribute:
+              point: ~bottom_center
+              x: 210
+              y: -28
+              width: 180
+              height: 48
+              visible: "true"
+            action:
+              clickLeft: "Packet.send(var.packetId, 'run_leave', var.actionToken)"
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~76,58,112,245
+                  shape: ~round_rect
+                  radius: 8
+                  through: true
+              字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: ~&f离开副本
+                  fontSize: 30
+                  through: true
+          关闭:
+            type: Canvas
+            attribute:
+              point: ~bottom_center
+              x: 420
+              y: -28
+              width: 180
+              height: 48
+              visible: "true"
+            action:
+              clickLeft: "Screen.close()"
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~76,58,112,245
+                  shape: ~round_rect
+                  radius: 8
+                  through: true
+              字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: ~&f关闭
+                  fontSize: 30
+                  through: true

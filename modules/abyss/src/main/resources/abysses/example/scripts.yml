@@ -723,9 +723,7 @@ fail:
   - "message @all &c试炼结束。&e请查看结算并拾取已有掉落物，退出时间由 settlement.failure 设置。"
 
 player-death:
-  - "message @all &c{player} 阵亡了！&7将在 8 秒后复活，撑住！"
-  - "wait 8"
-  - "revive_player @trigger"
+  - "message @all &c{player} 阵亡了！&e打开 /abyss run 自救或救援，剩余额度以面板为准。"
 
 all-death:
   - "fail_dungeon"
