@@ -40,6 +40,9 @@ on:
 permissions:
   contents: read
   actions: read
+concurrency:
+  group: encrypted-publication-${{ github.ref }}
+  cancel-in-progress: false
 env:
   # Keep native fail-closed self-integrity OFF until a native CI run validates injected hashes.
   AXS_PRODUCTION: OFF
@@ -74,7 +77,7 @@ jobs:
           else
             # A failed run may have introduced public API changes without publishing the host.
             # Include every change since the last successful publication in the next attempt.
-            BASE=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/build-encrypted.yml/runs?branch=main&status=success&per_page=1" --jq '.workflow_runs[0].head_sha // empty') || exit 1
+            BASE=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/build-encrypted.yml/runs?branch=main&event=push&status=success&per_page=1" --jq '.workflow_runs[0].head_sha // empty') || exit 1
           fi
 
           # 首次提交 / 手动触发 / 无法解析 BASE 时全量构建（本体 + 全部模块）
