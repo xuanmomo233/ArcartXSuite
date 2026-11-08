@@ -169,6 +169,16 @@ class RunTransactionsTest {
         verify(service, times(1)).playerExit(run, player, LeaveReason.QUIT);
     }
 
+    @Test void interruptedCommitInTheSameModuleIsUnknownAndNeverReplayed() throws Exception {
+        UUID operation = reserve();
+        mutateLease(operation, lease -> lease.state = AbyssReviveAccess.State.COMMITTING);
+        var receipt = await(revives.query("xc", operation));
+        assertEquals(AbyssReviveAccess.State.UNKNOWN, receipt.state());
+        assertEquals("COMMIT_INTERRUPTED", receipt.code());
+        assertEquals(AbyssReviveAccess.State.UNKNOWN, await(revives.commit("xc", operation)).state());
+        verify(service, never()).tryRevivePlayer(any(), any());
+    }
+
     @Test void pendingReturnCanRetryAndOldRevisionIsRejected() throws Exception {
         var operations = new RunOperations(service, ledger);
         assertEquals("STALE_REVISION", await(operations.execute(leave(0))).code());

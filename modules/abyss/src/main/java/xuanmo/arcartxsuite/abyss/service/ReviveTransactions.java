@@ -26,6 +26,7 @@ final class ReviveTransactions implements AbyssReviveAccess {
     private final AbyssService service;
     private final RunLedger ledger;
     private final UUID epoch = UUID.randomUUID();
+    private final java.util.Set<String> executions = java.util.concurrent.ConcurrentHashMap.newKeySet();
     ReviveTransactions(AbyssService service, RunLedger ledger) { this.service = service; this.ledger = ledger; }
 
     private static String key(String owner, UUID operation) { return "revive/" + owner + "/" + operation; }
@@ -120,9 +121,10 @@ final class ReviveTransactions implements AbyssReviveAccess {
         return ledger.repository.runTransaction(lease.run, documents -> {
             var data = RunLedger.read(documents, lease.run);
             var current = data.leases.get(key(lease.owner, lease.operation));
-            if (current.state == State.COMMITTING && !epoch.equals(current.epoch)) {
+            if (current.state == State.COMMITTING
+                    && (!epoch.equals(current.epoch) || !executions.contains(key(current.owner, current.operation)))) {
                 current.state = State.UNKNOWN;
-                current.code = "RESTART_DURING_COMMIT";
+                current.code = epoch.equals(current.epoch) ? "COMMIT_INTERRUPTED" : "RESTART_DURING_COMMIT";
                 store(documents, data, current);
             }
             if (current.state == State.RESERVED && (current.expires <= System.currentTimeMillis()
@@ -155,7 +157,10 @@ final class ReviveTransactions implements AbyssReviveAccess {
 
     @Override public CompletableFuture<Receipt> commit(String owner, UUID operation) {
         validate(owner, operation);
+        String execution = key(owner, operation);
+        if (!executions.add(execution)) return query(owner, operation);
         var result = new CompletableFuture<Receipt>();
+        result.whenComplete((ignored, failure) -> executions.remove(execution));
         ledger.database.submitDatabase(() -> {
             String raw = ledger.repository.runDocument(key(owner, operation));
             if (raw == null) return null;
@@ -170,6 +175,7 @@ final class ReviveTransactions implements AbyssReviveAccess {
                     return null;
                 }
                 current.state = State.COMMITTING; current.code = "IN_PROGRESS";
+                current.epoch = epoch;
                 store(documents, data, current);
                 return current;
             });
