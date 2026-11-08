@@ -126,6 +126,7 @@ final class AdmissionAccess implements AbyssAdmissionAccess {
                 "reviveTransactions", running && storage != null ? "AVAILABLE" : "UNAVAILABLE",
                 "runLoot", running && storage != null ? "AVAILABLE" : "UNAVAILABLE",
                 "durableLeave", running && storage != null ? "AVAILABLE" : "UNAVAILABLE",
+                "runGameplay", running && storage != null ? "AVAILABLE" : "UNAVAILABLE",
                 "remoteEntry", "UNSUPPORTED", "originalRunReconnect", running ? "SAME_PROCESS_OPT_IN" : "UNAVAILABLE",
                 "externalCost", running && storage != null ? "AVAILABLE" : "UNAVAILABLE"));
     }

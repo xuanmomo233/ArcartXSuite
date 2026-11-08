@@ -59,11 +59,29 @@ class DesignRoundTripTest {
         manager.setField(session, "settlement:settlement", "design-revive-limit", "2");
         manager.setField(session, "settlement:failure", "design-revive-limit", "3");
         assertEquals(3, ((Number)session.get("settlement:settlement").values().get("design-revive-limit")).intValue());
+        manager.setField(session, "settlement:settlement", "design-native-enabled", "true");
+        manager.setField(session, "settlement:failure", "design-native-channel-seconds", "6");
         assertTrue(save().ok());
         assertEquals(3, read("config.yml").getInt("requirements.revive-limit"));
+        var nativeRescue = EntryRequirements.load(read("config.yml").getConfigurationSection("requirements")).nativeRescue();
+        assertTrue(nativeRescue.enabled());
+        assertEquals(6, nativeRescue.channelSeconds());
+        assertEquals(6, ((Number)session.get("settlement:settlement").values().get("design-native-channel-seconds")).intValue());
         assertFalse(read("config.yml").contains("settlement.design-revive-limit"));
+        assertFalse(read("config.yml").contains("settlement.design-native-enabled"));
         assertThrows(IllegalArgumentException.class,
             () -> manager.setField(session, "settlement:failure", "design-revive-limit", "1.5"));
+    }
+
+    @Test void nativeRescueSettingsValidateTypesAndPreserveLegacyDefaults() {
+        assertFalse(EntryRequirements.defaults().nativeRescue().enabled());
+        var config = new YamlConfiguration();
+        config.set("native-rescue.enabled", true);
+        config.set("native-rescue.channel-seconds", 1.5);
+        assertThrows(IllegalArgumentException.class, () -> EntryRequirements.load(config));
+        config.set("native-rescue.channel-seconds", 5);
+        config.set("native-rescue.wipe-window-seconds", 6);
+        assertThrows(IllegalArgumentException.class, () -> EntryRequirements.load(config));
     }
     @Test void clearingLegacyScriptDoesNotResurrectAlias()throws Exception {
         write("monsters.yml","wave_1:\n  on_end: [old_action]\n");open(false);

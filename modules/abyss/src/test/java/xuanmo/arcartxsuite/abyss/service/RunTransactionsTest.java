@@ -253,7 +253,7 @@ class RunTransactionsTest {
     private record NativeFixture(NativeRunGameplay game, java.util.concurrent.atomic.AtomicLong clock,
                                  CompletableFuture<Void> started, CompletableFuture<Void> finished) { }
 
-    private NativeFixture nativeFixture() throws Exception {
+    private NativeFixture nativeFixture(Player... peers) throws Exception {
         var config = new YamlConfiguration();
         config.set("revive-limit", 1);
         config.set("native-rescue.enabled", true);
@@ -262,8 +262,12 @@ class RunTransactionsTest {
         var requirements = EntryRequirements.load(config);
         when(run.getTemplate().requirements()).thenReturn(requirements);
         when(service.instances().getInstance(player)).thenReturn(run);
-        when(run.getPlayers()).thenReturn(List.of(player));
-        when(player.getLocation()).thenReturn(new org.bukkit.Location(run.getWorld(), 0, 64, 0));
+        var members = new java.util.ArrayList<Player>();
+        members.add(player);
+        members.addAll(List.of(peers));
+        when(run.getPlayers()).thenReturn(members);
+        var origin = new org.bukkit.Location(run.getWorld(), 0, 64, 0);
+        when(player.getLocation()).thenReturn(origin);
         var clock = new java.util.concurrent.atomic.AtomicLong();
         var game = new NativeRunGameplay(service, clock::get);
         when(service.nativeRuns()).thenReturn(game);
@@ -304,7 +308,8 @@ class RunTransactionsTest {
         var fixture = nativeFixture();
         fixture.game().rescue(player, playerId);
         await(fixture.started());
-        when(player.getLocation()).thenReturn(new org.bukkit.Location(run.getWorld(), 1, 64, 0));
+        var moved = new org.bukkit.Location(run.getWorld(), 1, 64, 0);
+        when(player.getLocation()).thenReturn(moved);
         fixture.game().tick();
         assertEquals(1, await(revives.reviveStatus(runId, playerId)).remaining());
         verify(service, never()).tryRevivePlayer(any(), any());
@@ -314,6 +319,32 @@ class RunTransactionsTest {
         second.game().interrupt(playerId, "受伤中断救援");
         assertEquals(1, await(revives.reviveStatus(runId, playerId)).remaining());
         verify(service, never()).tryRevivePlayer(any(), any());
+    }
+
+    @Test void nativeTeammateRescueChargesTheTargetRatherThanTheRescuer() throws Exception {
+        dead.set(false);
+        var peer = mock(Player.class);
+        when(peer.getUniqueId()).thenReturn(teammate);
+        when(peer.getName()).thenReturn("Peer");
+        var world = run.getWorld();
+        when(peer.getWorld()).thenReturn(world);
+        when(peer.isOnline()).thenReturn(true);
+        var server = (org.bukkit.Server)serverField.get(null);
+        when(server.getPlayer(teammate)).thenReturn(peer);
+        var peerDead = new AtomicBoolean(true);
+        when(run.isPlayerCurrentlyDead(peer)).thenAnswer(call -> peerDead.get());
+        when(run.getDeaths(teammate)).thenReturn(1);
+        var fixture = nativeFixture(peer);
+        when(service.tryRevivePlayer(run, peer)).thenAnswer(call -> { peerDead.set(false); return true; });
+        fixture.game().rescue(player, teammate);
+        await(fixture.started());
+        fixture.clock().set(2000);
+        fixture.game().tick();
+        await(fixture.finished());
+        assertEquals(1, await(revives.reviveStatus(runId, teammate)).used());
+        assertEquals(0, await(revives.reviveStatus(runId, playerId)).used());
+        verify(service, times(1)).tryRevivePlayer(run, peer);
+        verify(service, never()).tryRevivePlayer(run, player);
     }
 
     @Test void lootPanelCannotStartARescueEvenWithAForgedTarget() throws Exception {

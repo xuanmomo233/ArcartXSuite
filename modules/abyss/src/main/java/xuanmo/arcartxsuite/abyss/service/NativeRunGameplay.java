@@ -185,6 +185,7 @@ public final class NativeRunGameplay {
         if (run == null || !run.admitted() || run.designMode() || run.getStatus() != AbyssStatus.ACTIVE) return "NOT_ACTIVE";
         var policy = run.getTemplate().requirements().nativeRescue();
         if (!policy.enabled() || run.getTemplate().requirements().reviveLimit() == 0) return "NATIVE_DISABLED";
+        if (leaving.contains(actorId) || leaving.contains(targetId)) return "LEAVE_PENDING";
         var actor = Bukkit.getPlayer(actorId);
         var target = Bukkit.getPlayer(targetId);
         if (actor == null || target == null || !actor.isOnline() || !target.isOnline()
@@ -316,6 +317,7 @@ public final class NativeRunGameplay {
             case "OUT_OF_RANGE" -> "距离目标过远";
             case "MOVE_INTERRUPTED" -> "移动中断救援";
             case "WAIT_RESPAWN" -> "请先完成原版重生，再进行救援";
+            case "LEAVE_PENDING" -> "撤离正在确认结果";
             case "EXHAUSTED" -> "本局额度已耗尽";
             case "TARGET_RESERVED" -> "已有成员正在救援该目标";
             case "STALE_REVISION" -> "额度状态已变化，请重试";

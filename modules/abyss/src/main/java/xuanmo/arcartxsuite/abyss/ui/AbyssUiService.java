@@ -1268,9 +1268,10 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
                 if (data.size()>3 && (checkToken(player, data, 2)
                     || views.matchesNonce(player,uiForKey(data.get(1)),data.get(3)))) {
                     String ui = uiForKey(data.get(1));
-                    boolean runClosed = "run".equals(data.get(1)) && views.matchesNonce(player, runUi(), data.get(3));
+                    boolean currentClosed = ui != null && ui.equals(foregroundUis.get(player.getUniqueId()))
+                        && views.matchesNonce(player, ui, data.get(3));
                     if (ui != null && data.size() > 3) views.closed(player, ui, data.get(3));
-                    if (runClosed && service.nativeRuns() != null) service.nativeRuns().closeView(player);
+                    if (currentClosed && service.nativeRuns() != null) service.nativeRuns().closeView(player);
                 }
                 return true;
             }
