@@ -166,7 +166,7 @@ public final class RewardResolver {
         var batch = new ArrayList<PendingReward>();
         collectSet(player, set, instance, 0, batch);
         String key = "reward:" + instance.getInstanceId() + ":" + java.util.UUID.randomUUID();
-        return ledger.submit(instance.getInstanceId(), key, batch,
+        return ledger.registerGrant(instance.getInstanceId(), key, batch,
             xuanmo.arcartxsuite.abyss.service.RunLedger.describe(key, "reward:" + name, batch));
     }
 

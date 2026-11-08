@@ -84,15 +84,26 @@ public final class RunLedger implements AbyssRunLootAccess {
     /** Metadata is captured on the server thread; the journal and host submission run on the database queue. */
     public CompletableFuture<Void> submit(UUID run, String key,
             List<xuanmo.arcartxsuite.api.item.PendingRewardService.PendingReward> batch, List<LootEntry> entries) {
+        return submit(run, key, batch, entries, false);
+    }
+
+    public CompletableFuture<Void> registerGrant(UUID run, String key,
+            List<xuanmo.arcartxsuite.api.item.PendingRewardService.PendingReward> batch, List<LootEntry> entries) {
+        return submit(run, key, batch, entries, true);
+    }
+
+    private CompletableFuture<Void> submit(UUID run, String key,
+            List<xuanmo.arcartxsuite.api.item.PendingRewardService.PendingReward> batch,
+            List<LootEntry> entries, boolean allowPending) {
         if (batch.isEmpty()) return CompletableFuture.completedFuture(null);
         var delivery = new Delivery(run, key, batch.get(0).playerUuid(), List.copyOf(batch), List.copyOf(entries));
         return database.submitDatabase(() -> {
-            submitNow(delivery);
+            submitNow(delivery, allowPending);
             return null;
         });
     }
 
-    private void submitNow(Delivery delivery) throws Exception {
+    private void submitNow(Delivery delivery, boolean allowPending) throws Exception {
         UUID run = delivery.run();
         String document = deliveryKey(delivery.key());
         repository.runTransaction(run, documents -> {
@@ -117,7 +128,13 @@ public final class RunLedger implements AbyssRunLootAccess {
             return null;
         });
         String pending = repository.runDocument(document);
-        if (pending != null) deliver(JSON.fromJson(pending, Delivery.class));
+        if (pending != null) {
+            try { deliver(JSON.fromJson(pending, Delivery.class)); }
+            catch (Exception failure) {
+                if (!allowPending) throw failure;
+                java.util.logging.Logger.getLogger("Abyss").warning("本局奖励已登记，等待宿主恢复: " + failure.getMessage());
+            }
+        }
     }
 
     private static void verifyDelivery(String raw, Delivery delivery) {
@@ -153,7 +170,7 @@ public final class RunLedger implements AbyssRunLootAccess {
                 meta == null ? null : meta.quality(), "reward-game:" + offer, player,
                 Scope.PERSONAL, State.PENDING, System.currentTimeMillis()));
         }
-        submitNow(new Delivery(UUID.fromString(raw), key, player, batch, entries));
+        submitNow(new Delivery(UUID.fromString(raw), key, player, batch, entries), false);
         return true;
     }
 

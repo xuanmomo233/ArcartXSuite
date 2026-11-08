@@ -229,6 +229,15 @@ class RunTransactionsTest {
         return operation;
     }
 
+    @Test void durableGrantRegistrationCanContinueWhileTheHostIsUnavailable() throws Exception {
+        var host = mock(PendingRewardService.class);
+        ledger.rewards(host);
+        when(host.savePendingBatchConfirmed(anyString(), anyList())).thenReturn(false);
+        var batch = List.of(PendingRewardService.PendingReward.currency(playerId, "abyss", "money", 2, "loot"));
+        await(ledger.registerGrant(runId, "grant", batch, RunLedger.describe("grant", "reward:test", batch)));
+        assertEquals(State.PENDING, await(ledger.snapshot(runId, playerId, null, 10)).entries().get(0).state());
+    }
+
     @Test void hiddenRewardOfferExposesOnlyTheSelectedPrize() throws Exception {
         var host = mock(PendingRewardService.class);
         ledger.rewards(host);
