@@ -189,6 +189,17 @@ class RunTransactionsTest {
         verify(service, times(1)).playerExit(any(), any(), any());
     }
 
+    @Test void departureJournalReconcilesAfterTheWorldHasBeenDestroyed() throws Exception {
+        var operations = new RunOperations(service, ledger);
+        var request = leave(1);
+        when(service.playerExit(run, player, LeaveReason.QUIT)).thenReturn(false);
+        await(operations.execute(request));
+        ledger.departed(run, playerId);
+        when(service.instances().getInstance(runId)).thenReturn(null);
+        assertEquals("APPLIED", await(new RunOperations(service, ledger).query("xc", runId, request.operationId())).code());
+        verify(service, times(1)).playerExit(any(), any(), any());
+    }
+
     @Test void lootIsFilteredReadOnlyAndCursorConflictsAreExplicit() throws Exception {
         var privateEntry = loot("a", teammate, Scope.PERSONAL);
         var sharedEntry = loot("b", teammate, Scope.SHARED);

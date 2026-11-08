@@ -13,6 +13,7 @@ import static xuanmo.arcartxsuite.api.capability.AbyssRunAccess.*;
 /** LEAVE saves its immutable request before touching the live world. */
 final class RunOperations {
     private record Stored(Operation request, OperationReceipt receipt) { }
+    private record Lookup(String raw, boolean departed) { }
     private final AbyssService service;
     private final RunLedger ledger;
     private final LinkedHashMap<String, CompletableFuture<OperationReceipt>> inFlight = new LinkedHashMap<>();
@@ -150,9 +151,17 @@ final class RunOperations {
         if (owner == null || !owner.matches("[a-z0-9_.:-]{1,96}") || run == null || operation == null)
             return CompletableFuture.failedFuture(new IllegalArgumentException("Invalid operation query"));
         var result = new CompletableFuture<OperationReceipt>();
-        ledger.database.submitDatabase(() -> ledger.repository.runDocument(key(owner, run, operation))).whenComplete((raw, error) -> {
+        ledger.database.submitDatabase(() -> {
+            String raw = ledger.repository.runDocument(key(owner, run, operation));
+            String manifest = ledger.repository.runDocument("run/" + run);
+            boolean departed = raw != null && manifest != null
+                && RunLedger.JSON.fromJson(manifest, RunLedger.Data.class).departed.contains(
+                    RunLedger.JSON.fromJson(raw, Stored.class).request().playerId());
+            return new Lookup(raw, departed);
+        }).whenComplete((lookup, error) -> {
             if (error != null) { result.completeExceptionally(error); return; }
             service.runOnMain(() -> {
+                String raw = lookup.raw();
                 if (raw == null) {
                     result.complete(new OperationReceipt(operation, run, owner, OperationState.NOT_FOUND, "NOT_FOUND", 0, System.currentTimeMillis()));
                     return;
@@ -164,6 +173,8 @@ final class RunOperations {
                 var live = service.instances().getInstance(run);
                 if (live != null) {
                     if (live.hasPlayer(stored.request().playerId())) { result.complete(stored.receipt()); return; }
+                    reconcile(stored, result);
+                } else if (lookup.departed()) {
                     reconcile(stored, result);
                 } else {
                     service.runResultAccess().result(run).whenComplete((facts, failure) -> {

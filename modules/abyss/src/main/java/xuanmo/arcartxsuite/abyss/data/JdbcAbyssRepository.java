@@ -187,7 +187,11 @@ public final class JdbcAbyssRepository extends AbstractModuleRepository {
                 try (var lock = connection.prepareStatement("UPDATE " + tRunDocuments
                         + " SET snapshot=snapshot WHERE document_key=?")) {
                     lock.setString(1, "run/" + run);
-                    if (lock.executeUpdate() != 1) throw new IllegalStateException("UNKNOWN_RUN");
+                    if (lock.executeUpdate() == 0) {
+                        // MySQL useAffectedRows=true reports zero for a no-op update even when its row was locked.
+                        if (new RunDocuments(connection, run).read("run/" + run) == null)
+                            throw new IllegalStateException("UNKNOWN_RUN");
+                    }
                 }
                 T result = work.execute(new RunDocuments(connection, run));
                 connection.commit();
