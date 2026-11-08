@@ -909,6 +909,10 @@ jobs:
           echo "=== 生成的 .axb ==="
           ls -la build/ArcartX-Suite/module-axb/ || echo "DIR NOT FOUND"
 
+      - name: Verify protected Abyss journal schema
+        if: contains(fromJSON(needs.detect-changes.outputs.changed_modules), 'abyss')
+        run: python3 modules/abyss/src/test/protection/verify_journal_mapping.py
+
       - name: Upload encrypted modules (.axb) to cloud
         if: inputs.skip_upload != true
         env:

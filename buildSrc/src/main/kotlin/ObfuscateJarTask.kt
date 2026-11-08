@@ -109,7 +109,10 @@ abstract class ObfuscateJarTask : DefaultTask() {
         sb.appendLine("-dontwarn")
         sb.appendLine("-dontoptimize")
         sb.appendLine("-dontshrink")
-        sb.appendLine("-keepattributes Signature,*Annotation*,InnerClasses,EnclosingMethod,Exceptions,SourceFile,LineNumberTable")
+        sb.appendLine("-keepattributes Signature,*Annotation*,InnerClasses,EnclosingMethod,Exceptions,Record,SourceFile,LineNumberTable")
+        // Durable Abyss JSON documents must keep the same field names between releases.
+        sb.appendLine("-keepclassmembers class xuanmo.arcartxsuite.abyss.service.RunLedger" + '$' + "Data { <fields>; }")
+        sb.appendLine("-keepclassmembers class xuanmo.arcartxsuite.abyss.service.ReviveTransactions" + '$' + "Lease { <fields>; }")
 
         // ── 公开 API 全保留（对外契约，不混淆） ──
         sb.appendLine("-keep class xuanmo.arcartxsuite.api.** { *; }")
