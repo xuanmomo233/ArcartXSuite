@@ -39,6 +39,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 env:
   # Keep native fail-closed self-integrity OFF until a native CI run validates injected hashes.
   AXS_PRODUCTION: OFF
@@ -59,6 +60,8 @@ jobs:
 
       - name: Detect changed scopes
         id: changes
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           # 全部模块清单（用于手动 / 无法 diff 时的全量构建）
           # 排除 debug 模块（非生产模块，无 encryptModuleAxb 任务）
@@ -69,7 +72,9 @@ jobs:
           elif [ "${{ github.event_name }}" = "pull_request" ]; then
             BASE="${{ github.event.pull_request.base.sha }}"
           else
-            BASE="${{ github.event.before }}"
+            # A failed run may have introduced public API changes without publishing the host.
+            # Include every change since the last successful publication in the next attempt.
+            BASE=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/build-encrypted.yml/runs?branch=main&status=success&per_page=1" --jq '.workflow_runs[0].head_sha // empty') || exit 1
           fi
 
           # 首次提交 / 手动触发 / 无法解析 BASE 时全量构建（本体 + 全部模块）
