@@ -53,6 +53,18 @@ class DesignRoundTripTest {
         assertTrue(save().ok());
         assertEquals(List.of("old_action","new_action"),MonsterConfig.load(read("monsters.yml")).groups().get("wave_1").onEnd());
     }
+    @Test void reviveQuotaIsSharedByBothSettlementFormsAndSavedToRequirements() throws Exception {
+        write("config.yml", "requirements:\n  revive-limit: 1\n");
+        open(false);
+        manager.setField(session, "settlement:settlement", "design-revive-limit", "2");
+        manager.setField(session, "settlement:failure", "design-revive-limit", "3");
+        assertEquals(3, ((Number)session.get("settlement:settlement").values().get("design-revive-limit")).intValue());
+        assertTrue(save().ok());
+        assertEquals(3, read("config.yml").getInt("requirements.revive-limit"));
+        assertFalse(read("config.yml").contains("settlement.design-revive-limit"));
+        assertThrows(IllegalArgumentException.class,
+            () -> manager.setField(session, "settlement:failure", "design-revive-limit", "1.5"));
+    }
     @Test void clearingLegacyScriptDoesNotResurrectAlias()throws Exception {
         write("monsters.yml","wave_1:\n  on_end: [old_action]\n");open(false);
         manager.lineDel(session,"group:wave_1","on-end",0);

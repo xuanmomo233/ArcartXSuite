@@ -943,7 +943,15 @@ public final class DesignManager {
                 }
             }
         }
-        s.put(o.withValue(field, value));
+        if (o.kind() == DesignObject.Kind.SETTLEMENT && field.equals("design-revive-limit")) {
+            if (!(value instanceof Number number) || number.doubleValue() != number.intValue()
+                    || number.intValue() < 0 || number.intValue() > 1000)
+                throw new IllegalArgumentException("本局救援额度必须为 0～1000 的整数");
+            for (var other : List.copyOf(s.objects().values())) {
+                if (other.kind() == DesignObject.Kind.SETTLEMENT)
+                    s.put(other.withValue(field, number.intValue()));
+            }
+        } else s.put(o.withValue(field, value));
         postEdit(s, s.get(key));
         return true;
     }
