@@ -1966,13 +1966,16 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         if (index >= items.size()) return;
         var selected = index < 0 ? List.copyOf(items) : List.of(items.get(index));
         chestClaims.add(player.getUniqueId());
-        var accepted = java.util.concurrent.ConcurrentHashMap.<ItemStack>newKeySet();
-        var futures = selected.stream().map(item -> service.dispatchRunItems(player, List.of(item), pc.key(item),
-            pc.instance()).thenRun(() -> accepted.add(item))).toList();
+        var accepted = java.util.concurrent.ConcurrentHashMap.<String>newKeySet();
+        var futures = selected.stream().map(item -> {
+            String entryId = pc.key(item);
+            return service.dispatchRunItems(player, List.of(item), entryId, pc.instance())
+                .thenRun(() -> accepted.add(entryId));
+        }).toList();
         java.util.concurrent.CompletableFuture.allOf(futures.toArray(java.util.concurrent.CompletableFuture[]::new))
             .whenComplete((ignored, failure) -> service.runOnMain(() -> {
                 chestClaims.remove(player.getUniqueId());
-                items.removeAll(accepted);
+                items.removeIf(item -> accepted.contains(pc.key(item)));
                 if (failure != null) player.sendMessage("§c部分奖励等待确认，已确认的奖励不会重复发放。");
                 if (items.isEmpty()) {
                     pendingChests.remove(player.getUniqueId(), pc);
