@@ -83,7 +83,7 @@ class RunTransactionsTest {
         when(run.getTemplate()).thenReturn(template);
         when(service.admissionOperation(run)).thenReturn(new AdmissionAccess.Operation(
             new Intent("xc", UUID.randomUUID(), playerId, List.of(playerId, teammate), "example", null, null, null)));
-        var access = fake(AbyssRunAccess.class);
+        var access = mock(AbyssRunAccess.class);
         when(access.snapshot(runId)).thenReturn(new AbyssRunAccess.Snapshot(runId, 1, "ACTIVE", List.of()));
         when(service.runAccess()).thenReturn(access);
         ledger = new RunLedger(service, repository, database);
