@@ -122,6 +122,8 @@ public final class AbyssModule extends AbstractAXSModule implements ModuleComman
         registerCapability(xuanmo.arcartxsuite.api.capability.AbyssAdmissionAccess.class, service.admissionAccess());
         registerCapability(xuanmo.arcartxsuite.api.capability.AbyssRunResultAccess.class, service.runResultAccess());
         registerCapability(xuanmo.arcartxsuite.api.capability.AbyssRunAccess.class, service.runAccess());
+        registerCapability(xuanmo.arcartxsuite.api.capability.AbyssReviveAccess.class, service.reviveAccess());
+        registerCapability(xuanmo.arcartxsuite.api.capability.AbyssRunLootAccess.class, service.runLootAccess());
         registerCapability(xuanmo.arcartxsuite.api.capability.AbyssExternalPartyAccess.class, service.externalPartyAccess());
         registerCapability(xuanmo.arcartxsuite.api.capability.AbyssReconnectAccess.class, service.reconnectAccess());
         registerCapability(xuanmo.arcartxsuite.api.capability.AbyssRewardGameAccess.class, service.rewardGames());

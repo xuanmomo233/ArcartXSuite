@@ -47,8 +47,24 @@ public record EntryRequirements(
     List<String> admissionPolicies,
     @org.jetbrains.annotations.Nullable String externalCostOwner,
     @org.jetbrains.annotations.Nullable String externalControlOwner,
-    int reconnectGraceSeconds
+    int reconnectGraceSeconds,
+    int reviveLimit
 ) {
+    public EntryRequirements {
+        if (reviveLimit < 0 || reviveLimit > 1000) throw new IllegalArgumentException("revive-limit 必须为 0～1000");
+    }
+
+    public EntryRequirements(int minPlayers, int maxPlayers, boolean partyRequired, String partyMode,
+            int minLevel, int maxLevel, long cooldownSeconds, double moneyCost, String currencyId, int staminaCost,
+            List<RequiredItem> requiredItems, List<String> requiredPermissions, List<ScriptCondition> conditions,
+            boolean requireAllPlayers, List<ScriptCondition> leaderOnlyConditions, List<String> disabledCommands,
+            List<String> disabledItems, List<String> admissionPolicies, String externalCostOwner,
+            String externalControlOwner, int reconnectGraceSeconds) {
+        this(minPlayers, maxPlayers, partyRequired, partyMode, minLevel, maxLevel, cooldownSeconds, moneyCost,
+            currencyId, staminaCost, requiredItems, requiredPermissions, conditions, requireAllPlayers,
+            leaderOnlyConditions, disabledCommands, disabledItems, admissionPolicies, externalCostOwner,
+            externalControlOwner, reconnectGraceSeconds, 0);
+    }
 
     public record RequiredItem(String source, String id, int amount) {
         /**
@@ -120,7 +136,8 @@ public record EntryRequirements(
             List.copyOf(s.getStringList("admission-policies")),
             empty2null(s.getString("external-cost-owner")),
             empty2null(s.getString("external-control-owner")),
-            Math.min(600, Math.max(0, s.getInt("reconnect-grace-seconds", 0)))
+            Math.min(600, Math.max(0, s.getInt("reconnect-grace-seconds", 0))),
+            s.getInt("revive-limit", 0)
         );
     }
 }

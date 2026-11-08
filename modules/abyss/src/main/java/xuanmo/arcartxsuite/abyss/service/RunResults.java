@@ -83,6 +83,8 @@ final class RunResults implements AbyssRunResultAccess {
 
     void finish(AbyssInstance instance, Outcome outcome, String reason) {
         UUID id = instance.getInstanceId();
+        if (!instance.designMode() && instance.admitted() && service.runLedger() != null)
+            service.runLedger().finished(instance, outcome.name());
         var facts = live.remove(id);
         if (facts == null || database == null) return;
         var intent = facts.operation().intent;

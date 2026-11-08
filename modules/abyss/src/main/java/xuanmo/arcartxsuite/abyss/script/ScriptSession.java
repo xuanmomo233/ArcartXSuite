@@ -22,6 +22,20 @@ public final class ScriptSession {
     private final AtomicInteger cursor = new AtomicInteger(0);
     private final AtomicBoolean cancelled = new AtomicBoolean(false);
     private volatile ScheduledTask pendingTask;
+    private boolean awaiting;
+    public boolean awaiting() { return awaiting; }
+    public void await(java.util.concurrent.CompletableFuture<?> future,
+                      java.util.function.Consumer<Runnable> schedule) {
+        awaiting = true;
+        future.whenComplete((ignored, failure) -> schedule.accept(() -> {
+            awaiting = false;
+            if (failure != null) {
+                java.util.logging.Logger.getLogger("Abyss").warning("异步流程动作等待确认: " + failure.getMessage());
+                cancel();
+            }
+            else { successfulActions.incrementAndGet(); resume(); }
+        }));
+    }
     private final java.util.concurrent.CompletableFuture<Boolean> completion=new java.util.concurrent.CompletableFuture<>();
     public java.util.concurrent.CompletableFuture<Boolean> completion() {return completion;}
     private final AtomicInteger successfulActions=new AtomicInteger();

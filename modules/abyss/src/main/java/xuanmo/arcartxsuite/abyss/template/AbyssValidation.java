@@ -34,6 +34,7 @@ public final class AbyssValidation {
     public static void validate(Map<String,YamlConfiguration> files) throws IOException {
         files=new LinkedHashMap<>(files);
         for(String name:FILES)files.putIfAbsent(name,new YamlConfiguration());
+        EntryRequirements.load(files.get("config.yml").getConfigurationSection("requirements"));
         var floors=FloorConfig.load(files.get("floors.yml"),files.get("rooms.yml"));
         Set<String> floorIds=new HashSet<>();
         for(var floor:floors.floors()) {

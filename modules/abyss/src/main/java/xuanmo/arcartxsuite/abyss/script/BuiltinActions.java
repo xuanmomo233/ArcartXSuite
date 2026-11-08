@@ -674,8 +674,11 @@ final class BuiltinActions {
         reg.register("grant_reward", (ctx, args, s) -> {
             String[] parts = splitFirst(args, 1);
             String rewardName = ctx.replace(rest(parts, 1));
-            forEach(ctx, parts[0], p ->
-                service.get().rewards().grant(p, rewardName, ctx.getInstance()));
+            var futures = new java.util.ArrayList<java.util.concurrent.CompletableFuture<Void>>();
+            forEach(ctx, parts[0], player -> futures.add(service.get().rewards().grantAsync(
+                player, rewardName, ctx.getInstance(), service.get().runLedger())));
+            s.await(java.util.concurrent.CompletableFuture.allOf(futures.toArray(java.util.concurrent.CompletableFuture[]::new)),
+                task -> service.get().scheduleDelayedRaw(task, 1L));
         });
         reg.register("open_reward_game", (ctx, args, s) -> {
             String[] parts = splitFirst(args, 1);

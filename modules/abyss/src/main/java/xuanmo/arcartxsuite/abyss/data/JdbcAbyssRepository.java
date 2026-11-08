@@ -38,6 +38,7 @@ public final class JdbcAbyssRepository extends AbstractModuleRepository {
     private String tPlayer, tCooldowns, tRecords, tPending, tGlobals, tAdmission, tRunResults;
     private String tResultSequence, tResultFeed, tAdmissionArchive, tAdmissionReturns, tAdmissionAudit;
     private String tRewardGames;
+    private String tRunDocuments;
 
     public JdbcAbyssRepository(DataSource dataSource, StorageDescriptor descriptor,
                              File dataFolder, Logger logger) {
@@ -61,8 +62,12 @@ public final class JdbcAbyssRepository extends AbstractModuleRepository {
         tAdmissionReturns = p + "admission_returns";
         tAdmissionAudit = p + "admission_audit";
         tRewardGames = p + "reward_games";
+        tRunDocuments = p + "run_documents";
 
         try (Statement st = conn.createStatement()) {
+            st.executeUpdate("CREATE TABLE IF NOT EXISTS " + tRunDocuments
+                + " (document_key VARCHAR(192) PRIMARY KEY, run_id VARCHAR(36) NOT NULL,"
+                + " player_uuid VARCHAR(36), snapshot " + (sqlite ? "TEXT" : "LONGTEXT") + " NOT NULL)");
             st.executeUpdate("CREATE TABLE IF NOT EXISTS " + tAdmission
                 + " (owner VARCHAR(96) NOT NULL, request_id VARCHAR(36) NOT NULL,"
                 + " fingerprint VARCHAR(64) NOT NULL, snapshot TEXT NOT NULL, PRIMARY KEY (owner, request_id))");
@@ -167,7 +172,99 @@ public final class JdbcAbyssRepository extends AbstractModuleRepository {
         all.add(tAdmissionArchive);
         all.add(tAdmissionReturns);
         all.add(tAdmissionAudit);
+        all.add(tRunDocuments);
         return all;
+    }
+
+    @FunctionalInterface
+    public interface RunDocumentWork<T> { T execute(RunDocuments documents) throws Exception; }
+
+    /** Worker-thread only. The run row is the cross-process lock for its documents. */
+    public <T> T runTransaction(UUID run, RunDocumentWork<T> work) throws Exception {
+        try (Connection connection = getConnection()) {
+            connection.setAutoCommit(false);
+            try {
+                try (var lock = connection.prepareStatement("UPDATE " + tRunDocuments
+                        + " SET snapshot=snapshot WHERE document_key=?")) {
+                    lock.setString(1, "run/" + run);
+                    if (lock.executeUpdate() != 1) throw new IllegalStateException("UNKNOWN_RUN");
+                }
+                T result = work.execute(new RunDocuments(connection, run));
+                connection.commit();
+                return result;
+            } catch (Exception | Error failure) {
+                connection.rollback();
+                throw failure;
+            }
+        }
+    }
+
+    public String runDocument(String key) throws SQLException {
+        try (Connection connection = getConnection()) {
+            return new RunDocuments(connection, null).read(key);
+        }
+    }
+
+    public List<String> runDocuments(String prefix, int limit) throws SQLException {
+        try (Connection connection = getConnection(); var statement = connection.prepareStatement(
+                "SELECT snapshot FROM " + tRunDocuments + " WHERE document_key LIKE ? ORDER BY document_key LIMIT ?")) {
+            statement.setString(1, prefix + "%");
+            statement.setInt(2, limit);
+            var values = new ArrayList<String>();
+            try (var rows = statement.executeQuery()) { while (rows.next()) values.add(rows.getString(1)); }
+            return values;
+        }
+    }
+
+    public void initializeRunDocument(UUID run, String snapshot) throws SQLException {
+        try (Connection connection = getConnection(); var statement = connection.prepareStatement(
+                "INSERT INTO " + tRunDocuments + " (document_key,run_id,snapshot) VALUES (?,?,?)"
+                + (sqlite ? " ON CONFLICT(document_key) DO NOTHING" : " ON DUPLICATE KEY UPDATE document_key=document_key"))) {
+            statement.setString(1, "run/" + run);
+            statement.setString(2, run.toString());
+            statement.setString(3, snapshot);
+            statement.executeUpdate();
+        }
+    }
+
+    public final class RunDocuments {
+        private final Connection connection;
+        private final UUID run;
+        private RunDocuments(Connection connection, UUID run) { this.connection = connection; this.run = run; }
+        public String read(String key) throws SQLException {
+            try (var statement = connection.prepareStatement("SELECT snapshot FROM " + tRunDocuments + " WHERE document_key=?")) {
+                statement.setString(1, key);
+                try (var result = statement.executeQuery()) { return result.next() ? result.getString(1) : null; }
+            }
+        }
+        public void write(String key, UUID player, String snapshot) throws SQLException {
+            try (var statement = connection.prepareStatement("INSERT INTO " + tRunDocuments
+                    + " (document_key,run_id,player_uuid,snapshot) VALUES (?,?,?,?)"
+                    + (sqlite ? " ON CONFLICT(document_key) DO UPDATE SET snapshot=excluded.snapshot"
+                        : " ON DUPLICATE KEY UPDATE snapshot=VALUES(snapshot)"))) {
+                statement.setString(1, key);
+                statement.setString(2, run.toString());
+                statement.setString(3, player == null ? null : player.toString());
+                statement.setString(4, snapshot);
+                statement.executeUpdate();
+            }
+        }
+        public void insert(String key, UUID player, String snapshot) throws SQLException {
+            try (var statement = connection.prepareStatement("INSERT INTO " + tRunDocuments
+                    + " (document_key,run_id,player_uuid,snapshot) VALUES (?,?,?,?)")) {
+                statement.setString(1, key);
+                statement.setString(2, run.toString());
+                statement.setString(3, player == null ? null : player.toString());
+                statement.setString(4, snapshot);
+                statement.executeUpdate();
+            }
+        }
+        public void delete(String key) throws SQLException {
+            try (var statement = connection.prepareStatement("DELETE FROM " + tRunDocuments + " WHERE document_key=?")) {
+                statement.setString(1, key);
+                statement.executeUpdate();
+            }
+        }
     }
 
     public record AdmissionReceipt(String owner, String requestId, String fingerprint, String snapshot) { }

@@ -21,6 +21,9 @@ public interface AbyssRunAccess {
     record Operation(UUID operationId, UUID runId, long expectedRevision, String owner,
                      Action action, UUID playerId, String key, String value) { }
     record OperationResult(boolean applied, String code, long revision) { }
+    enum OperationState { ACCEPTED, COMPLETED, REJECTED, UNKNOWN, NOT_FOUND }
+    record OperationReceipt(UUID operationId, UUID runId, String owner, OperationState state,
+                            String code, long revision, long updatedAt) { }
     interface ObjectiveProvider {
         List<Objective> objectives(UUID runId);
         default boolean canComplete(UUID runId, List<Objective> current) { return false; }
@@ -31,5 +34,16 @@ public interface AbyssRunAccess {
     Entity entity(UUID entityId);
     List<UUID> audience(UUID runId);
     OperationResult execute(Operation operation);
+    /**
+     * Persistent LEAVE receipt. Call on the server thread, completion may occur on a database thread.
+     * Reuse the complete original operation on retry. Storage failures complete exceptionally.
+     */
+    default java.util.concurrent.CompletionStage<OperationReceipt> executeAsync(Operation operation) {
+        return java.util.concurrent.CompletableFuture.failedFuture(new UnsupportedOperationException());
+    }
+    /** Server-thread call. Retained receipts survive reloads and run cleanup. No side effects. */
+    default java.util.concurrent.CompletionStage<OperationReceipt> queryOperation(String owner, UUID runId, UUID operationId) {
+        return java.util.concurrent.CompletableFuture.failedFuture(new UnsupportedOperationException());
+    }
     AbyssAdmissionAccess.Registration registerObjectives(String owner, ObjectiveProvider provider);
 }

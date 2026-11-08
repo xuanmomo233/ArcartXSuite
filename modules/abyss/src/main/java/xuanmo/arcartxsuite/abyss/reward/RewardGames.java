@@ -45,7 +45,7 @@ public final class RewardGames implements AbyssRewardGameAccess {
         this.repository = repository;
         this.database = database;
         this.pending = pending;
-        this.claims = new RewardGameClaims(repository, pending);
+        this.claims = new RewardGameClaims(repository, pending, service == null ? null : service.runLedger());
     }
 
     @Override public Registration register(String id, boolean revealUnpicked, Strategy strategy) {
@@ -84,6 +84,7 @@ public final class RewardGames implements AbyssRewardGameAccess {
                     var offer = new RewardOffer(offerId, playerId, game.strategy(), game.title(),
                         RewardGameClaims.encode(deck), game.picks(), expires, 0, 0, false);
                     database.submitDatabase(() -> {
+                        service.runLedger().linkOffer(offerId, instance.getInstanceId());
                         repository.insertRewardOffer(offer);
                         return display(claims.process(repository.loadRewardOffer(offerId, playerId), System.currentTimeMillis()));
                     }).whenComplete((view, failure) -> service.runOnMain(() -> {

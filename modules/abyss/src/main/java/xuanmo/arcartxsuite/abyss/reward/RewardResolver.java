@@ -71,8 +71,10 @@ public final class RewardResolver {
             throw new IllegalStateException("奖励未确认保存，请保留结算记录并重试: " + rewardName);
     }
 
-    public record GamePrize(String label, List<PendingReward> rewards) {
-        public GamePrize { rewards = List.copyOf(rewards); }
+    public record GamePrize(String label, List<PendingReward> rewards,
+                            List<xuanmo.arcartxsuite.api.capability.AbyssRunLootAccess.LootEntry> loot) {
+        public GamePrize(String label, List<PendingReward> rewards) { this(label, rewards, List.of()); }
+        public GamePrize { rewards = List.copyOf(rewards); loot = List.copyOf(loot); }
     }
 
     public List<GamePrize> rollGame(Player player, AbyssInstance instance, RewardConfig.RewardGame game) {
@@ -87,7 +89,8 @@ public final class RewardResolver {
             collectSet(player, sets.get(picked), instance, 0, batch);
             totalEntries += batch.size();
             if (batch.isEmpty() || totalEntries > 1024) throw new IllegalArgumentException("奖励玩法内容为空或过大");
-            deck.add(new GamePrize(picked, batch));
+            deck.add(new GamePrize(picked, batch,
+                xuanmo.arcartxsuite.abyss.service.RunLedger.describe("slot/" + slot, "reward-game:" + picked, batch)));
             if (!game.repeat()) pool.removeIf(entry -> entry.rewardId().equals(picked));
         }
         return List.copyOf(deck);
@@ -154,6 +157,25 @@ public final class RewardResolver {
     private static PendingReward serialized(Player player, ItemStack item, String detail) {
         String bytes = java.util.Base64.getEncoder().encodeToString(xuanmo.arcartxsuite.api.util.ItemSerializer.serialize(item));
         return PendingReward.itemSerialized(player.getUniqueId(), "abyss", bytes, detail);
+    }
+
+    public java.util.concurrent.CompletableFuture<Void> grantAsync(Player player, String name, AbyssInstance instance,
+            xuanmo.arcartxsuite.abyss.service.RunLedger ledger) {
+        var set = instance.getTemplate().rewards().rewards().get(name);
+        if (set == null) throw new IllegalArgumentException("未知奖励集: " + name);
+        var batch = new ArrayList<PendingReward>();
+        collectSet(player, set, instance, 0, batch);
+        String key = "reward:" + instance.getInstanceId() + ":" + java.util.UUID.randomUUID();
+        return ledger.submit(instance.getInstanceId(), key, batch,
+            xuanmo.arcartxsuite.abyss.service.RunLedger.describe(key, "reward:" + name, batch));
+    }
+
+    public java.util.concurrent.CompletableFuture<Void> queueItemsAsync(Player player, List<ItemStack> items,
+            String key, AbyssInstance instance, xuanmo.arcartxsuite.abyss.service.RunLedger ledger) {
+        var batch = new ArrayList<PendingReward>();
+        for (var item : items) batch.add(serialized(player, requireItem(item, key), key));
+        return ledger.submit(instance.getInstanceId(), key, batch,
+            xuanmo.arcartxsuite.abyss.service.RunLedger.describe(key, "chest", batch));
     }
 
     public boolean queueItems(Player player, List<ItemStack> items, String requestKey) {

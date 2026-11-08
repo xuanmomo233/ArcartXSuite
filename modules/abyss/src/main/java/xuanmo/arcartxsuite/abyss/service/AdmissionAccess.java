@@ -123,6 +123,9 @@ final class AdmissionAccess implements AbyssAdmissionAccess {
         return new IntegrationInfo(1, generation, catalogRevision, running, running ? null : "UNAVAILABLE",
             Map.of("catalog", running ? "AVAILABLE" : "UNAVAILABLE",
                 "hostEntry", running && storage != null ? "AVAILABLE" : "UNAVAILABLE",
+                "reviveTransactions", running && storage != null ? "AVAILABLE" : "UNAVAILABLE",
+                "runLoot", running && storage != null ? "AVAILABLE" : "UNAVAILABLE",
+                "durableLeave", running && storage != null ? "AVAILABLE" : "UNAVAILABLE",
                 "remoteEntry", "UNSUPPORTED", "originalRunReconnect", running ? "SAME_PROCESS_OPT_IN" : "UNAVAILABLE",
                 "externalCost", running && storage != null ? "AVAILABLE" : "UNAVAILABLE"));
     }

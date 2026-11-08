@@ -427,13 +427,15 @@ public final class DesignManager {
         YamlConfiguration config = loadYaml(dir, "config.yml");
         var settlement = xuanmo.arcartxsuite.abyss.template.SettlementConfig.load(
             config == null ? null : config.getConfigurationSection("settlement"));
-        addSettlement(out, "settlement", "通关结算", settlement.complete());
-        addSettlement(out, "failure", "失败结算", settlement.failure());
+        int reviveLimit = config == null ? 0 : config.getInt("requirements.revive-limit", 0);
+        addSettlement(out, "settlement", "通关结算", settlement.complete(), reviveLimit);
+        addSettlement(out, "failure", "失败结算", settlement.failure(), reviveLimit);
     }
 
     private void addSettlement(List<DesignObject> out, String id, String label,
-                               xuanmo.arcartxsuite.abyss.template.SettlementConfig.Policy policy) {
+                               xuanmo.arcartxsuite.abyss.template.SettlementConfig.Policy policy, int reviveLimit) {
         Map<String, Object> values = new LinkedHashMap<>();
+        values.put("design-revive-limit", reviveLimit);
         values.put("exit-mode", policy.mode().name());
         values.put("exit-delay-seconds", policy.seconds());
         values.put("manual-timeout-seconds", policy.manualTimeoutSeconds());

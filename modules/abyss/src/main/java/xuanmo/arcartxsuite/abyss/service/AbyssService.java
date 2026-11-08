@@ -104,6 +104,13 @@ public final class AbyssService {
     private final EntryCosts entryCosts = new EntryCosts(this);
     private final RunResults runResults = new RunResults(this);
     private final RunIntegration runIntegration = new RunIntegration(this);
+    private RunLedger runLedger;
+    private RunOperations runOperations;
+    private ReviveTransactions revives;
+    RunOperations runOperations() { return runOperations; }
+    public RunLedger runLedger() { return runLedger; }
+    public xuanmo.arcartxsuite.api.capability.AbyssReviveAccess reviveAccess() { return revives; }
+    public xuanmo.arcartxsuite.api.capability.AbyssRunLootAccess runLootAccess() { return runLedger; }
     private final ExternalParties externalParties = new ExternalParties(this);
     private final RunReconnects reconnects = new RunReconnects(this);
     public AbyssAdmissionAccess admissionAccess() { return admission; }
@@ -276,6 +283,9 @@ public final class AbyssService {
         repository = new JdbcAbyssRepository(ds, desc, dataFolder, logger);
         repository.initialize();
         playerData = new PlayerDataManager(repository, logger, config.stamina().max());
+        runLedger = new RunLedger(this, repository, playerData);
+        runOperations = new RunOperations(this, runLedger);
+        revives = new ReviveTransactions(this, runLedger);
         runResults.configure(repository, playerData, dataFolder.toPath().resolve("run-result-outbox"));
         try {
             admission.load(repository, playerData);
@@ -368,6 +378,7 @@ public final class AbyssService {
         rewards = new RewardResolver(itemSourceRegistry, itemRewardDispatcher,
             pendingRewardService, currencyManager, logger, itemMatcher);
         rewardGames = new xuanmo.arcartxsuite.abyss.reward.RewardGames(this, repository, playerData, pendingRewardService);
+        runLedger.rewards(pendingRewardService);
         quests = new QuestManager(this::links, plugin, scheduler);
         stamina = new StaminaManager(config.stamina(), playerData);
         stats = new CombatStatisticsService(config.statistics());
@@ -1027,6 +1038,7 @@ public final class AbyssService {
     private void publishAdmission(AbyssInstance instance,List<Player> players) {
         instance.confirmAdmission();
         runResults.admitted(instance, admission.operation(instance));
+        runLedger.admitted(instance);
         AbyssTemplate template=instance.getTemplate();
         String resolvedPlan=(String)instance.getVariables().get("plan");
         publishEvent("axs.abyss.enter", players.get(0),
@@ -2123,6 +2135,7 @@ public final class AbyssService {
         instance.removePlayer(player.getUniqueId());
         instances.playerLeaveInstance(player);
         runResults.member(instance, player.getUniqueId(), AbyssRunResultAccess.MemberState.LEFT, reason.name(), null);
+        if (runLedger != null && instance.admitted() && !instance.designMode()) runLedger.departed(instance, player.getUniqueId());
         var admissionOperation = admission.operation(instance);
         if (admissionOperation != null && "RETURN_PENDING".equals(admissionOperation.outcomes.get(player.getUniqueId()))) {
             admissionOperation.outcomes.put(player.getUniqueId(), "RETURNED");
@@ -2413,7 +2426,19 @@ public final class AbyssService {
 
     /** 复活玩家（revive_player 动作）：回血+回出生点+恢复模式。 */
     public void revivePlayer(AbyssInstance instance, Player player) {
-        if (!instance.hasPlayer(player.getUniqueId())) return;
+        reviveAtSpawn(instance, player, false);
+    }
+
+    /** The member remains dead when the return-to-spawn teleport fails. */
+    public boolean tryRevivePlayer(AbyssInstance instance, Player player) {
+        return reviveAtSpawn(instance, player, true);
+    }
+
+    private boolean reviveAtSpawn(AbyssInstance instance, Player player, boolean requireDead) {
+        if (player == null || !instance.hasPlayer(player.getUniqueId())
+                || requireDead && !instance.isPlayerCurrentlyDead(player)) return false;
+        Location spawn = spawnLocation(instance);
+        if (spawn == null || !player.teleport(spawn)) return false;
         instance.revive(player);
         instance.restorePlayerGameMode(player);
         if (player.getGameMode() == GameMode.SPECTATOR) {
@@ -2421,9 +2446,8 @@ public final class AbyssService {
         }
         player.setHealth(player.getMaxHealth());
         player.setFoodLevel(20);
-        Location spawn = spawnLocation(instance);
-        if (spawn != null) player.teleport(spawn);
         player.sendMessage(msg("dungeon.revived"));
+        return true;
     }
 
     // ═══ 脚本 ═══
@@ -2653,14 +2677,22 @@ public final class AbyssService {
         return rewards.queueItems(player, items, requestKey);
     }
 
+    public java.util.concurrent.CompletableFuture<Void> dispatchRunItems(Player player, List<ItemStack> items,
+            String requestKey, AbyssInstance instance) {
+        return rewards.queueItemsAsync(player, items, requestKey, instance, runLedger);
+    }
+
     /** 默认宝箱：直接 roll 发放（UI 未接入时兜底）。 */
     private void defaultChestHandler(Player player,
                                      xuanmo.arcartxsuite.abyss.template.RewardConfig.ChestReward chest,
                                      AbyssInstance instance) {
         List<ItemStack> items = rewards.rollChestOptions(chest, Math.min(9, chest.rows() * 9));
-        if (!items.isEmpty() && dispatchItemsConfirmed(player, items,
-                "chest:" + instance.getInstanceId() + ":" + player.getUniqueId() + ":" + chest.name())) {
-            instance.markTriggeredOnce(chestClaimKey(chest.name(), player.getUniqueId()));
+        if (!items.isEmpty()) {
+            dispatchRunItems(player, items, "chest:" + instance.getInstanceId() + ":" + player.getUniqueId()
+                + ":" + chest.name(), instance).whenComplete((ignored, failure) -> runOnMain(() -> {
+                    if (failure == null) instance.markTriggeredOnce(chestClaimKey(chest.name(), player.getUniqueId()));
+                    else player.sendMessage("§c宝箱奖励正在等待确认，可稍后重试。");
+                }));
         }
     }
 
@@ -2922,6 +2954,7 @@ public final class AbyssService {
 
     private void watchdog() {
         if (rewardGames != null && running()) rewardGames.expire();
+        if (runLedger != null && running()) runLedger.replayRewards();
         runResults.replay();
         if (!started) return;
         for (AbyssInstance i : new ArrayList<>(instances.getAllInstances())) {

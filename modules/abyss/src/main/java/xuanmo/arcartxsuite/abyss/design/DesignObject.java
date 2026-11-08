@@ -259,6 +259,7 @@ public record DesignObject(
                 FieldSpec.yaml("next", "分支顺序"));
             case SCRIPT -> List.of(FieldSpec.script("script", "动作顺序"));
             case SETTLEMENT -> List.of(
+                FieldSpec.num("design-revive-limit", "每人本局救援额度"),
                 FieldSpec.cycle("exit-mode", "离开方式", "IMMEDIATE", "COUNTDOWN", "MANUAL"),
                 FieldSpec.num("exit-delay-seconds", "倒计时（秒）"),
                 FieldSpec.num("manual-timeout-seconds", "手动离开上限（秒）"),

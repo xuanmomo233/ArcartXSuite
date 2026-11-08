@@ -1957,40 +1957,29 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         }
     }
 
+    private final java.util.Set<UUID> chestClaims = new java.util.HashSet<>();
+
     private void claimChest(Player player, int index) {
         PendingChest pc = pendingChests.get(player.getUniqueId());
-        if (pc == null) return;
+        if (pc == null || chestClaims.contains(player.getUniqueId())) return;
         List<ItemStack> items = pc.items();
-        if (index < 0) {
-            String request = "chest:" + pc.instance().getInstanceId() + ":" + player.getUniqueId() + ":"
-                + pc.items().stream().map(pc::key).sorted().collect(java.util.stream.Collectors.joining(","));
-            if (!service.dispatchItemsConfirmed(player, List.copyOf(items), request)) {
-                player.sendMessage("§c奖励尚未确认保存，领取资格已保留，请稍后重试。");
-                return;
-            }
-            pendingChests.remove(player.getUniqueId());
-            pc.instance().markTriggeredOnce(
-                AbyssService.chestClaimKey(pc.chestName(), player.getUniqueId()));
-            if (available()) views.close(player, chestUi());
-            return;
-        }
-        if (index >= 0 && index < items.size()) {
-            ItemStack it = items.get(index);
-            if (it != null && !service.dispatchItemsConfirmed(player, List.of(it), pc.key(it))) {
-                player.sendMessage("§c奖励尚未确认保存，领取资格已保留，请稍后重试。");
-                return;
-            }
-            items.remove(index);
-            if (items.isEmpty()) {
-                pendingChests.remove(player.getUniqueId());
-                pc.instance().markTriggeredOnce(
-                    AbyssService.chestClaimKey(pc.chestName(), player.getUniqueId()));
-                if (available()) views.close(player, chestUi());
-            } else if (available()) {
-                // 回推剩余物品：已领槽位从 UI 上清掉
-                pushChestUpdate(player, pc);
-            }
-        }
+        if (index >= items.size()) return;
+        var selected = index < 0 ? List.copyOf(items) : List.of(items.get(index));
+        chestClaims.add(player.getUniqueId());
+        var accepted = java.util.concurrent.ConcurrentHashMap.<ItemStack>newKeySet();
+        var futures = selected.stream().map(item -> service.dispatchRunItems(player, List.of(item), pc.key(item),
+            pc.instance()).thenRun(() -> accepted.add(item))).toList();
+        java.util.concurrent.CompletableFuture.allOf(futures.toArray(java.util.concurrent.CompletableFuture[]::new))
+            .whenComplete((ignored, failure) -> service.runOnMain(() -> {
+                chestClaims.remove(player.getUniqueId());
+                items.removeAll(accepted);
+                if (failure != null) player.sendMessage("§c部分奖励等待确认，已确认的奖励不会重复发放。");
+                if (items.isEmpty()) {
+                    pendingChests.remove(player.getUniqueId(), pc);
+                    pc.instance().markTriggeredOnce(AbyssService.chestClaimKey(pc.chestName(), player.getUniqueId()));
+                    if (pendingChests.get(player.getUniqueId()) == null && available()) views.close(player, chestUi());
+                } else if (pendingChests.get(player.getUniqueId()) == pc && available()) pushChestUpdate(player, pc);
+            }));
     }
 
     /** 单格领取后重发 init：剩余物品前移，空出的尾部槽位填空气 JSON。 */

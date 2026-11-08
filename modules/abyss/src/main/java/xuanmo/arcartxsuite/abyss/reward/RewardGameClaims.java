@@ -15,10 +15,16 @@ import xuanmo.arcartxsuite.api.item.PendingRewardService.PendingReward;
 final class RewardGameClaims {
     private final JdbcAbyssRepository repository;
     private final PendingRewardService rewards;
+    private final xuanmo.arcartxsuite.abyss.service.RunLedger ledger;
 
     RewardGameClaims(JdbcAbyssRepository repository, PendingRewardService rewards) {
+        this(repository, rewards, null);
+    }
+    RewardGameClaims(JdbcAbyssRepository repository, PendingRewardService rewards,
+                    xuanmo.arcartxsuite.abyss.service.RunLedger ledger) {
         this.repository = repository;
         this.rewards = rewards;
+        this.ledger = ledger;
     }
 
     RewardOffer choose(RewardOffer offer, int expected, int slot, long now) throws Exception {
@@ -47,7 +53,9 @@ final class RewardGameClaims {
         for (int slot = 0; slot < deck.size(); slot++) {
             int bit = 1 << slot;
             if ((offer.picked() & bit) != 0 && (accepted & bit) == 0
-                && rewards.savePendingBatchConfirmed("reward-game:" + offer.id() + ":" + slot, deck.get(slot).rewards())) {
+                && (ledger == null
+                    ? rewards.savePendingBatchConfirmed("reward-game:" + offer.id() + ":" + slot, deck.get(slot).rewards())
+                    : ledger.submitGame(offer.id(), slot, offer.player(), deck.get(slot).rewards(), deck.get(slot).loot()))) {
                 accepted |= bit;
             }
         }
@@ -66,7 +74,8 @@ final class RewardGameClaims {
                 row.put("payload", reward.payload());
                 batch.add(row);
             }
-            cards.add(Map.of("label", prize.label(), "rewards", batch));
+            cards.add(Map.of("label", prize.label(), "rewards", batch,
+                "metadata", new com.google.gson.Gson().toJson(prize.loot())));
         }
         yaml.set("cards", cards);
         String snapshot = yaml.saveToString();
@@ -87,7 +96,12 @@ final class RewardGameClaims {
                     (String)raw.get("payload"), label, 0L, 0));
             }
             if (batch.isEmpty()) throw new IllegalStateException("Empty reward slot");
-            deck.add(new RewardResolver.GamePrize(label, batch));
+            String metadata = row.get("metadata") instanceof String text ? text : "[]";
+            java.lang.reflect.Type type = new com.google.gson.reflect.TypeToken<
+                List<xuanmo.arcartxsuite.api.capability.AbyssRunLootAccess.LootEntry>>() { }.getType();
+            List<xuanmo.arcartxsuite.api.capability.AbyssRunLootAccess.LootEntry> loot =
+                new com.google.gson.Gson().fromJson(metadata, type);
+            deck.add(new RewardResolver.GamePrize(label, batch, loot));
         }
         if (deck.size() < offer.limit() || deck.size() > 9 || offer.limit() <= 0)
             throw new IllegalStateException("Invalid reward offer snapshot");

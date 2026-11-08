@@ -115,7 +115,10 @@ public final class DesignWriter {
             YamlConfiguration yaml = files.get(o.file());
             if (o.kind() == DesignObject.Kind.SETTLEMENT) {
                 String prefix = join(o.path(), o.id());
-                o.values().forEach((key, value) -> yaml.set(prefix + "." + key, value));
+                o.values().forEach((key, value) -> {
+                    if (key.equals("design-revive-limit")) yaml.set("requirements.revive-limit", value);
+                    else yaml.set(prefix + "." + key, value);
+                });
                 continue;
             }
             String old = session.originalId(o.key());

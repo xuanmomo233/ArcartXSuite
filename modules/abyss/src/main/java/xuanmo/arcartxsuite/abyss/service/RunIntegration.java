@@ -57,6 +57,7 @@ final class RunIntegration implements AbyssRunAccess {
     @Override public OperationResult execute(Operation request) {
         requireMain();
         if (readingProvider) return denied("CALLBACK_REENTRANCY", 0);
+        if (request != null && request.action() == Action.LEAVE) return service.runOperations().begin(request);
         if (request == null || request.operationId() == null || request.runId() == null || request.action() == null)
             return denied("INVALID_REQUEST", 0);
         long now = System.currentTimeMillis();
@@ -94,6 +95,17 @@ final class RunIntegration implements AbyssRunAccess {
         }
         receipts.put(key, new Receipt(request, result, now + 300000L));
         return result;
+    }
+
+    @Override public java.util.concurrent.CompletionStage<OperationReceipt> executeAsync(Operation operation) {
+        requireMain();
+        if (readingProvider) return java.util.concurrent.CompletableFuture.failedFuture(new IllegalStateException("CALLBACK_REENTRANCY"));
+        return service.runOperations().execute(operation);
+    }
+
+    @Override public java.util.concurrent.CompletionStage<OperationReceipt> queryOperation(String owner, UUID runId, UUID operationId) {
+        requireMain();
+        return service.runOperations().query(owner, runId, operationId);
     }
 
     private String apply(Operation request, AbyssInstance run) {

@@ -158,7 +158,7 @@ public final class ScriptRunner {
             session.cancel();
             if(context.getTrigger()!=null)context.getTrigger().sendMessage("§c副本操作未完成，后续动作已停止，请联系管理员。");
         }
-        return false;
+        return session.awaiting();
     }
 
     private void evalInline(@Nullable Player player, ScriptActionKind kind, String code) {
