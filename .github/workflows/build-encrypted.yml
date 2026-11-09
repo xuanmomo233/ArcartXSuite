@@ -140,7 +140,6 @@ jobs:
           distribution: temurin
       - uses: gradle/actions/setup-gradle@v6
         with:
-          gradle-version: '8.10.2'
           cache-read-only: true
       - uses: actions/setup-python@v5
         with:
@@ -152,7 +151,7 @@ jobs:
       - name: Verify Abyss UI contracts
         run: python modules/abyss/src/test/ui/verify_abyss_ui.py
       - name: Test public API and Abyss transactions
-        run: gradle :axs-api:test :modules:abyss:test -PskipNativeCheck=true --no-build-cache
+        run: bash ./gradlew :axs-api:test :modules:abyss:test -PskipNativeCheck=true --no-build-cache
       - name: Upload regression reports
         if: always()
         uses: actions/upload-artifact@v5
@@ -495,7 +494,6 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v6
         with:
-          gradle-version: '8.10.2'
           cache-read-only: true
 
       - name: Build obfuscated JAR
@@ -503,7 +501,7 @@ jobs:
           # 只构建 :axs-core 任务链（shadowJar→proguard→strEnc→integrity→publishCoreJar），
           # 不再跑根 build——后者会连带构建全部 30 个模块+proxy，而本作业产物只需要本体 jar。
           # fresh runner 无历史产物，clean 为纯开销，省略；--parallel 并行编译 axs-api 等依赖。
-          gradle :axs-core:build --no-build-cache --parallel
+          bash ./gradlew :axs-core:build --no-build-cache --parallel
 
       - name: Ensure real-seed native libs intact in obfuscated JAR
         run: |
@@ -679,7 +677,7 @@ jobs:
 
       - name: Build proxy JARs (Bungee + Velocity)
         if: success() && needs.detect-changes.outputs.proxy_changed == 'true'
-        run: gradle :proxy:bungee:shadowJar :proxy:velocity:shadowJar --no-build-cache --parallel
+        run: bash ./gradlew :proxy:bungee:shadowJar :proxy:velocity:shadowJar --no-build-cache --parallel
 
       - name: Upload proxy JARs to cloud
         if: success() && needs.detect-changes.outputs.proxy_changed == 'true' && inputs.skip_upload != true
@@ -776,11 +774,10 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v6
         with:
-          gradle-version: '8.10.2'
           cache-read-only: true
 
       - name: Build proxy JARs
-        run: gradle :proxy:bungee:shadowJar :proxy:velocity:shadowJar --no-build-cache --parallel
+        run: bash ./gradlew :proxy:bungee:shadowJar :proxy:velocity:shadowJar --no-build-cache --parallel
 
       - name: Upload proxy JARs to cloud
         if: inputs.skip_upload != true
@@ -891,7 +888,6 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v6
         with:
-          gradle-version: '8.10.2'
           cache-read-only: true
 
       - name: Encrypt changed modules per-class (-Paxs.protectModules)
@@ -910,7 +906,7 @@ jobs:
           # -Paxs.protectModules：逐类 AES-GCM/ChaCha20 加密（与本体同一 canonical root_seed）
           #   encryptModuleClasses 内部以 --no-native 调 encrypt-jar.py，复用 keys/ 里的 root_seed，
           #   不需要本体 native 库；任务链 jar→obfuscate→stringEncrypt→encryptClasses→axb 可独立运行。
-          gradle $TASKS -Paxs.protectModules -PskipNativeCheck=true --no-build-cache --parallel
+          bash ./gradlew $TASKS -Paxs.protectModules -PskipNativeCheck=true --no-build-cache --parallel
           echo "=== 生成的 .axb ==="
           ls -la build/ArcartX-Suite/module-axb/ || echo "DIR NOT FOUND"
 
