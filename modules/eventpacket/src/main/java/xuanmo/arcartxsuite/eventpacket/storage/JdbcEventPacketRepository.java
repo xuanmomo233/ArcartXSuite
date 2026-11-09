@@ -1,6 +1,10 @@
 package xuanmo.arcartxsuite.eventpacket.storage;
 
 import java.io.File;
+import java.io.IOException;
+import java.nio.file.FileAlreadyExistsException;
+import java.nio.file.Files;
+import java.nio.file.StandardOpenOption;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -23,17 +27,28 @@ import xuanmo.arcartxsuite.api.storage.StorageDescriptor;
  * 以复用宿主统一的连接池与数据迁移基础设施。
  */
 public final class JdbcEventPacketRepository extends AbstractModuleRepository implements EventPacketRepository {
+    private final String ownerId;
 
     public JdbcEventPacketRepository(DataSource dataSource, StorageDescriptor descriptor,
-                                     File dataFolder, Logger logger) {
+                                     File dataFolder, Logger logger) throws IOException {
         super("AXS-EventPacket", dataSource, descriptor, dataFolder, logger);
+        Files.createDirectories(dataFolder.toPath());
+        var path = dataFolder.toPath().resolve("admission-inbox-node.id");
+        if (!Files.exists(path)) {
+            try {
+                Files.writeString(path, UUID.randomUUID().toString(), StandardOpenOption.CREATE_NEW);
+            } catch (FileAlreadyExistsException ignored) {
+                // Another initializer has already assigned this node its identity.
+            }
+        }
+        ownerId = UUID.fromString(Files.readString(path).trim()).toString();
     }
 
     @Override
     protected void onInitialize(Connection conn) throws SQLException {
         createTables(conn);
         try(Statement s=conn.createStatement()) {
-            s.executeUpdate("CREATE TABLE IF NOT EXISTS eventpacket_auth_inbox (fact_id VARCHAR(36) PRIMARY KEY,player_uuid VARCHAR(36) NOT NULL,plan TEXT NOT NULL,step INTEGER NOT NULL,state VARCHAR(16) NOT NULL,UNIQUE(player_uuid,state,fact_id))");
+            s.executeUpdate("CREATE TABLE IF NOT EXISTS eventpacket_auth_inbox (fact_id VARCHAR(36) PRIMARY KEY,player_uuid VARCHAR(36) NOT NULL,plan TEXT NOT NULL,step INTEGER NOT NULL,state VARCHAR(16) NOT NULL,owner_id VARCHAR(36) NOT NULL DEFAULT '',UNIQUE(player_uuid,state,fact_id))");
         }
     }
 
@@ -64,18 +79,27 @@ public final class JdbcEventPacketRepository extends AbstractModuleRepository im
         return new AuthFact(UUID.fromString(r.getString("fact_id")),UUID.fromString(r.getString("player_uuid")),r.getString("plan"),r.getInt("step"),r.getString("state"));
     }
     @Override public boolean claimAuthStep(UUID id,int step) throws SQLException {
-        try(Connection c=getConnection(); PreparedStatement s=c.prepareStatement("UPDATE eventpacket_auth_inbox SET state='RUNNING' WHERE fact_id=? AND step=? AND state='PENDING'")) {
-            s.setString(1,id.toString()); s.setInt(2,step); return s.executeUpdate()==1;
+        try(Connection c=getConnection(); PreparedStatement s=c.prepareStatement("UPDATE eventpacket_auth_inbox SET state='RUNNING',owner_id=? WHERE fact_id=? AND step=? AND state='PENDING'")) {
+            s.setString(1, ownerId);
+            s.setString(2, id.toString());
+            s.setInt(3, step);
+            return s.executeUpdate() == 1;
         }
     }
     @Override public void finishAuthStep(UUID id,int step,String state) throws SQLException {
         if(!java.util.Set.of("PENDING","DONE","REVIEW","RETRY").contains(state)) throw new IllegalArgumentException("Invalid inbox state");
-        try(Connection c=getConnection(); PreparedStatement s=c.prepareStatement("UPDATE eventpacket_auth_inbox SET state=?,step=? WHERE fact_id=? AND step=? AND state='RUNNING'")) {
-            s.setString(1,state.equals("RETRY")?"PENDING":state); s.setInt(2,step+(state.equals("PENDING")?1:0)); s.setString(3,id.toString()); s.setInt(4,step); s.executeUpdate();
+        try(Connection c=getConnection(); PreparedStatement s=c.prepareStatement("UPDATE eventpacket_auth_inbox SET state=?,step=?,owner_id='' WHERE fact_id=? AND step=? AND state='RUNNING' AND owner_id=?")) {
+            s.setString(1,state.equals("RETRY")?"PENDING":state); s.setInt(2,step+(state.equals("PENDING")?1:0)); s.setString(3,id.toString()); s.setInt(4,step);
+            s.setString(5, ownerId);
+            s.executeUpdate();
         }
     }
     @Override public void recoverAuthSteps() throws SQLException {
-        try(Connection c=getConnection(); Statement s=c.createStatement()) { s.executeUpdate("UPDATE eventpacket_auth_inbox SET state='REVIEW' WHERE state='RUNNING'"); }
+        try (Connection c = getConnection();
+             PreparedStatement s = c.prepareStatement("UPDATE eventpacket_auth_inbox SET state='REVIEW',owner_id='' WHERE state='RUNNING' AND owner_id=?")) {
+            s.setString(1, ownerId);
+            s.executeUpdate();
+        }
     }
     @Override public java.util.Set<UUID> pendingAuthProfiles() throws SQLException {
         var profiles=new java.util.HashSet<UUID>();

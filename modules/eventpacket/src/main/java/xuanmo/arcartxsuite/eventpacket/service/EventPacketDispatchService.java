@@ -66,9 +66,11 @@ public final class EventPacketDispatchService {
         if(configuration==null) throw new IllegalStateException("EventPacket closed");
         var context=EventPacketContext.fromSubjectTrigger(EventPacketTrigger.FIRST_ADMITTED,player);
         var plan=new ArrayList<FirstAdmissionInbox.Step>();
+        var questGps = questGpsProvider.get();
         for(var rule:configuration.rules()) {
             if(!rule.enabled() || rule.trigger()!=EventPacketTrigger.FIRST_ADMITTED) continue;
             if(ScriptConditionServices.evaluator().firstFailed(player,rule.conditions(),context.buildConditionVariables(player))!=null) continue;
+            if (questGps != null && questGps.eventRuleLocked(player, rule.id())) continue;
             for(var action:rule.actions()) {
                 plan.add(new FirstAdmissionInbox.Step(rule.id(),action));
             }

@@ -101,12 +101,14 @@ with sqlite3.connect(":memory:", isolation_level=None) as database:
     database.execute(enqueue, ("fact", "player", "original plan"))
     database.execute(enqueue, ("fact", "player", "replacement plan"))
     assert database.execute("SELECT plan FROM eventpacket_auth_inbox").fetchone()[0] == "original plan"
-    assert database.execute(claim, ("fact", 0)).rowcount == 1
-    database.execute(recover)
-    assert database.execute(claim, ("fact", 0)).rowcount == 0, "Interrupted side effects must not replay automatically"
+    assert database.execute(claim, ("node-a", "fact", 0)).rowcount == 1
+    assert database.execute(recover, ("node-b",)).rowcount == 0, "Another node may still be running the action"
+    assert database.execute(finish, ("DONE", 0, "fact", 0, "node-b")).rowcount == 0
+    assert database.execute(recover, ("node-a",)).rowcount == 1
+    assert database.execute(claim, ("node-b", "fact", 0)).rowcount == 0, "Interrupted side effects must not replay automatically"
     assert database.execute(resolve, (0, "fact")).rowcount == 1
-    assert database.execute(claim, ("fact", 0)).rowcount == 1
-    database.execute(finish, ("DONE", 0, "fact", 0))
-    assert database.execute(claim, ("fact", 0)).rowcount == 0
+    assert database.execute(claim, ("node-b", "fact", 0)).rowcount == 1
+    assert database.execute(finish, ("DONE", 0, "fact", 0, "node-b")).rowcount == 1
+    assert database.execute(claim, ("node-b", "fact", 0)).rowcount == 0
 
 print("PASS SQL fault checks: transactional progress/XP/receipt, duplicate facts, backlog ordering, durable inbox and crash review; no Java execution")
