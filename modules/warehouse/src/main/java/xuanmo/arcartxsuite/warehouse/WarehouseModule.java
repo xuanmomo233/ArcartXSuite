@@ -191,8 +191,9 @@ public final class WarehouseModule extends AbstractAXSModule implements ModuleCo
         }
         JdbcWarehouseRepository warehouseRepo = new JdbcWarehouseRepository(whDs, whDesc, dataFolder, logger);
         repository = warehouseRepo;
+        var noticeBridge=xuanmo.arcartxsuite.api.message.UiNoticeBridge.wrap(packetBridge,messages(),dataFolder);
         service = new WarehouseService(
-            plugin, logger, packetBridge, itemStackBridge, packetGuard, uiExporter, configuration,
+            plugin, logger, noticeBridge, itemStackBridge, packetGuard, uiExporter, configuration,
             warehouseRepo,
             itemSourceRegistry, itemMatcher, currencyManager,
             () -> getCapability(PickupNotifiable.class),
@@ -224,7 +225,7 @@ public final class WarehouseModule extends AbstractAXSModule implements ModuleCo
         materialService = new xuanmo.arcartxsuite.warehouse.service.WarehouseMaterials(service, plugin, dataFolder, whDesc.isMysql());
         org.bukkit.Bukkit.getPluginManager().registerEvents(materialService, plugin);
         registerCapability(xuanmo.arcartxsuite.api.capability.WarehouseMaterialAccess.class, materialService);
-        cursorPanel = new xuanmo.arcartxsuite.warehouse.service.WarehouseCursorPanel(service, packetBridge, logger);
+        cursorPanel = new xuanmo.arcartxsuite.warehouse.service.WarehouseCursorPanel(service, noticeBridge, logger);
         cursorPanel.registerClientEvents(plugin);
         org.bukkit.Bukkit.getPluginManager().registerEvents(cursorPanel, plugin);
         registerCapability(xuanmo.arcartxsuite.api.capability.WarehousePanelAccess.class, cursorPanel);

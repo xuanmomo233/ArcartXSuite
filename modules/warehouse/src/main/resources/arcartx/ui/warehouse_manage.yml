@@ -1,23 +1,18 @@
-# AXS Warehouse Manage - 重构版
-# 范式: 全屏玻璃底 + Adaptive(~top_center,1920x1080) + 顶栏贴顶铺满 + 左侧导航(含仓库列表) + 内容区(设置区+成员区)
-# 配色: 银灰金库 深底浅字 — 抬升面44,50,58 选中160,170,180 描边100,110,120 输入/网格底36,42,50
-# fontSize: 48(顶栏标题) / 36(区域标题/按钮/信息/输入/提示) — 全部标准档位
-
 ui:
   isHud: false
   defaultOpen: false
   hide:
-    - hotbar
-    - experience_bar
-    - crosshair
-    - item_name
-    - jump_bar
-    - mount_health
-    - player_state
-    - player_health
-    - armor_level
-    - food_level
-    - air_level
+  - hotbar
+  - experience_bar
+  - crosshair
+  - item_name
+  - jump_bar
+  - mount_health
+  - player_state
+  - player_health
+  - armor_level
+  - food_level
+  - air_level
   through: false
   background: false
   escClose: true
@@ -28,48 +23,6 @@ ui:
   itemSize: 16
   screenScale: true
   packetHandler:
-    # packetHandler: update
-    # 包字段:
-    #   - packetId: 包标识符（'AXS_WAREHOUSE'）
-    #   - action_token: 操作令牌（防重放）
-    #   - ownerType: 仓库所有者类型（personal / shared）
-    #   - ownerId: 所有者 ID
-    #   - warehouseId: 仓库 ID
-    #   - warehouseName: 仓库名称
-    #   - personalWarehouses: 个人仓库列表
-    #   - personalWarehouseTexts: 个人仓库显示文本
-    #   - manageWarehouses: 可管理的仓库列表
-    #   - manageWarehouseTexts: 可管理仓库显示文本
-    #   - manageWarehouseTypes: 可管理仓库类型
-    #   - manageWarehouseTargets: 可管理仓库目标
-    #   - manageWarehouseSelected: 当前选中的管理仓库索引
-    #   - sharedWarehouses: 共享仓库列表
-    #   - sharedWarehouseManageTexts: 共享仓库管理显示文本
-    #   - sharedCreateCostText: 创建共享仓库费用文本
-    #   - sharedRoleOwnerName: 共享仓库所有者角色名
-    #   - sharedRoleMemberName: 共享仓库成员角色名
-    #   - sharedRoleViewerName: 共享仓库观众角色名
-    #   - sharedMembers: 共享仓库成员列表
-    #   - sharedMemberTexts: 成员显示文本
-    #   - sharedMemberNames: 成员名称列表
-    #   - sharedMemberRoles: 成员角色列表
-    #   - unlocked: 二级密码是否已解锁
-    #   - hasPassword: 是否已设置二级密码
-    #   - readOnly: 是否只读模式
-    #   - lockOwner: 编辑锁持有者
-    #   - capacityText: 容量显示文本
-    #   - level: 仓库等级（仅共享仓库有意义；个人仓库逐格解锁恒为 1）
-    #   - canUpgrade: 是否可扩容（个人=还能再买一格，共享=可升下一级）
-    #   - slotPriceText: 个人仓库单格价格文本
-    #   - nextUpgradeText: 扩容提示文本（个人=槽位价格提示，共享=下一级信息）
-    #   - autoPickup: 是否启用自动拾取
-    #   - autoPickupMythic: 是否自动拾取 MythicMobs 掉落
-    #   - autoPickupNotify: 是否通知自动拾取
-    #   - serverAutoPickup: 服务器是否开启自动拾取入库（false 时隐藏整个拾取开关组）
-    #   - serverMythicLoot: 服务器是否开启 MythicMobs 掉落物入库（false 时隐藏怪物战利品开关）
-    #   - showcaseEnabled: 是否启用展示柜
-    #   - maxManageCount: 可管理仓库最大数量（用于动态创建控件）
-    #   - maxMemberCount: 成员最大数量
     update: |-
       // 保存旧数量，用于判断是否需要重建列表（首次 update 时旧数量为 0，数量从 0 变为 N 时触发重建）
       oldMaxManageCount = var.maxManageCount != none ? var.maxManageCount : 0
@@ -152,6 +105,17 @@ ui:
       var.pickupBusy = false
       var.mythicBusy = false
       var.notifyBusy = false
+    ui_notice: |-
+      noticeMessage = packet['message']
+      if(noticeMessage != none && noticeMessage != '' && !var.noticeActive){
+        var.noticeText = noticeMessage.replaceAll('(?i)[&§][0-9A-FK-ORX]', '')
+        noticeWrapped = var.noticeText.replaceAll('(.{22})(?=.)', '$1\n')
+        var.noticeLines = noticeWrapped.split('\n')
+        var.noticeCount = math.max(1, math.min(12, var.noticeLines.size()))
+        var.noticeFade.reset()
+        var.noticePeaked = false
+        var.noticeActive = true
+      }
   action:
     seconds: |-
       if(var.actionBusy){
@@ -233,9 +197,19 @@ ui:
       var.offX = (var.viewW - 1920) / 2
       var.contentW = var.viewW - 420
       var.halfW = (var.contentW - 24) / 2
+      var.noticeActive = false
+      var.noticeText = ''
+      var.noticeDetail = ''
+      var.noticeFade = Fade(80, 1000, 220)
+      var.noticePeaked = false
+      var.noticeLines = []
+      var.noticeCount = 1
     open: |-
+      var.noticeActive = false
+      var.noticePeaked = false
+      var.noticeText = ''
+      var.noticeDetail = ''
       Packet.send(var.packetId, 'refresh')
-    # 窗口尺寸变化后重算可用高宽
     resize: |-
       sx = Screen.getWidth() / 1920
       sy = Screen.getHeight() / 1080
@@ -245,17 +219,26 @@ ui:
       var.offX = (var.viewW - 1920) / 2
       var.contentW = var.viewW - 420
       var.halfW = (var.contentW - 24) / 2
+    tick: |2-
 
-# ─── 控件树 ────────────────────────────────────────────────────────
+
+      if(var.noticeActive){
+        var.noticeOpacity = var.noticeFade.get()
+        if(var.noticeOpacity > 0){ var.noticePeaked = true }
+        if(var.noticePeaked && var.noticeOpacity <= 0){
+          var.noticeActive = false
+          var.noticePeaked = false
+          var.noticeText = ''
+          var.noticeDetail = ''
+        }
+      }
 controls:
-  # 全屏毛玻璃底（真高斯模糊世界背景）
   全屏玻璃底:
     type: Texture
     attribute:
       point: ~stretch_all
       through: true
       normal: ~Frosted:24;20,24,28,110
-  # 自适配布局：宽高 = 设计分辨率(1920x1080)，顶部锚点使顶栏紧贴屏幕顶部
   自适应全局布局:
     type: Adaptive
     attribute:
@@ -263,13 +246,12 @@ controls:
       width: 1920
       height: 1080
     children:
-      # ── 顶栏（沿窗口整宽铺满）───────────────────────────
       顶栏:
         type: Canvas
         attribute:
           point: ~top_left
-          x: "-var.offX"
-          width: "var.viewW"
+          x: -var.offX
+          width: var.viewW
           height: 96
         children:
           顶栏底:
@@ -298,7 +280,7 @@ controls:
             attribute:
               point: ~middle_left
               x: 68
-              texts: "~&f仓库管理"
+              texts: ~&f仓库管理
               fontSize: 48
           标题竖线:
             type: Texture
@@ -313,7 +295,8 @@ controls:
             attribute:
               point: ~middle_left
               x: 288
-              texts: "'&f' + var.warehouseName + (var.ownerType == 'shared' ? '  &b共享仓库' : '  &a个人仓库') + (var.readOnly ? '  &c只读' : '') + (!var.hasPassword ? '  &e未设置密码' : (var.unlocked ? '  &a已解锁' : '  &e未解锁'))"
+              texts: '''&f'' + var.warehouseName + (var.ownerType == ''shared'' ? ''  &b共享仓库'' : ''  &a个人仓库'') + (var.readOnly ? ''  &c只读'' :
+                '''') + (!var.hasPassword ? ''  &e未设置密码'' : (var.unlocked ? ''  &a已解锁'' : ''  &e未解锁''))'
               fontSize: 36
           关闭按钮:
             type: Canvas
@@ -339,24 +322,22 @@ controls:
                 effect:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
+                    color: 'self.isHovered() ? ''220,230,240,255'' : ''100,110,120,220'''
               关闭文字:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  texts: "~&f✕"
+                  texts: ~&f✕
                   fontSize: 36
                   through: true
-
-      # ── 左侧导航（导航3项 + 仓库列表）──────────────────────
       左侧导航:
         type: Canvas
         attribute:
           point: ~top_left
-          x: "48 - var.offX"
+          x: 48 - var.offX
           y: 120
           width: 300
-          height: "var.viewH - 144"
+          height: var.viewH - 144
         children:
           导航底:
             type: Texture
@@ -378,8 +359,7 @@ controls:
               width: 272
               height: 58
             action:
-              clickLeft: |-
-                Packet.send(var.packetId, 'storage')
+              clickLeft: Packet.send(var.packetId, 'storage')
             children:
               仓库底:
                 type: Texture
@@ -390,16 +370,16 @@ controls:
                   shape: ~round_rect
                   radius: 10
                 effect:
-                  ripple:
+                  ripple: null
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
+                    color: 'self.isHovered() ? ''220,230,240,255'' : ''100,110,120,220'''
               仓库文字:
                 type: Text
                 attribute:
                   point: ~middle_left
                   x: 28
-                  texts: "~&f仓库"
+                  texts: ~&f仓库
                   fontSize: 36
                   through: true
           导航银行:
@@ -411,8 +391,7 @@ controls:
               width: 272
               height: 58
             action:
-              clickLeft: |-
-                Packet.send(var.packetId, 'bank')
+              clickLeft: Packet.send(var.packetId, 'bank')
             children:
               银行底:
                 type: Texture
@@ -423,16 +402,16 @@ controls:
                   shape: ~round_rect
                   radius: 10
                 effect:
-                  ripple:
+                  ripple: null
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
+                    color: 'self.isHovered() ? ''220,230,240,255'' : ''100,110,120,220'''
               银行文字:
                 type: Text
                 attribute:
                   point: ~middle_left
                   x: 28
-                  texts: "~&f银行"
+                  texts: ~&f银行
                   fontSize: 36
                   through: true
           导航管理:
@@ -470,7 +449,7 @@ controls:
                 attribute:
                   point: ~middle_left
                   x: 28
-                  texts: "~&0管理"
+                  texts: ~&0管理
                   fontSize: 36
           导航分隔线:
             type: Texture
@@ -487,7 +466,7 @@ controls:
               point: ~top_left
               x: 20
               y: 250
-              texts: "~&f仓库列表"
+              texts: ~&f仓库列表
               fontSize: 36
           新建名:
             type: Canvas
@@ -508,7 +487,7 @@ controls:
                 effect:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
+                    color: 'self.isHovered() ? ''220,230,240,255'' : ''100,110,120,220'''
               输入框:
                 type: TextBox
                 attribute:
@@ -520,8 +499,7 @@ controls:
                   emptyText: ~&7共享名
                   fontSize: 36
                 action:
-                  textChange: |-
-                    var.sharedName = self.getContent()
+                  textChange: var.sharedName = self.getContent()
           创建:
             type: Canvas
             attribute:
@@ -530,7 +508,7 @@ controls:
               y: 296
               width: 100
               height: 48
-              enable: "!var.actionBusy && var.actionToken != ''"
+              enable: '!var.actionBusy && var.actionToken != '''''
             action:
               clickLeft: |-
                 var.actionBusy = true
@@ -547,12 +525,12 @@ controls:
                 effect:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '220,230,240,255' : '160,170,180,255'"
+                    color: 'self.isHovered() ? ''220,230,240,255'' : ''160,170,180,255'''
               创建字:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  texts: "~&0新建"
+                  texts: ~&0新建
                   fontSize: 36
                   through: true
           创建费用:
@@ -561,7 +539,7 @@ controls:
               point: ~top_left
               x: 14
               y: 352
-              texts: "'&e' + var.sharedCreateCostText"
+              texts: '''&e'' + var.sharedCreateCostText'
               fontSize: 36
           仓库滑轨:
             type: Texture
@@ -570,7 +548,7 @@ controls:
               x: -12
               y: 396
               width: 10
-              height: "var.viewH - 590"
+              height: var.viewH - 590
               normal: ~40,44,52,225
               shape: ~round_rect
               radius: 5
@@ -588,7 +566,7 @@ controls:
               width: 10
               height: 50
               normal: ~180,190,200,255
-              maxDragY: "var.viewH - 640"
+              maxDragY: var.viewH - 640
               shape: ~round_rect
               radius: 5
           仓库滚动:
@@ -599,8 +577,8 @@ controls:
               x: 14
               y: 396
               width: 258
-              height: "var.viewH - 590"
-              moveY: "self.parent['仓库滑块'].getDragYRatio()"
+              height: var.viewH - 590
+              moveY: self.parent['仓库滑块'].getDragYRatio()
             action:
               wheel: |-
                 if(self.moveY >= 0 && self.wheelValue > 0){
@@ -639,18 +617,19 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: "var.manageWarehouseSelected[self.parent.entryKey] ? '64,72,82,225' : '44,50,58,245'"
+                          normal: 'var.manageWarehouseSelected[self.parent.entryKey] ? ''64,72,82,225'' : ''44,50,58,245'''
                           shape: ~round_rect
                           radius: 12
                         effect:
                           stroke:
                             width: 3
-                            color: "self.isHovered() ? '220,230,240,255' : (var.manageWarehouseSelected[self.parent.entryKey] ? '255,255,255,255' : '100,110,120,220')"
+                            color: 'self.isHovered() ? ''220,230,240,255'' : (var.manageWarehouseSelected[self.parent.entryKey] ? ''255,255,255,255''
+                              : ''100,110,120,220'')'
                       项文字:
                         type: Text
                         attribute:
                           point: ~middle_center
-                          texts: "'&f' + self.parent.entry['name']"
+                          texts: '''&f'' + self.parent.entry[''name'']'
                           fontSize: 36
                           through: true
           导航提示:
@@ -659,18 +638,16 @@ controls:
               point: ~bottom_left
               x: 20
               y: -20
-              texts: "~&fESC 关闭界面"
+              texts: ~&fESC 关闭界面
               fontSize: 36
-
-      # ── 内容区（设置区 + 成员区）──────────────────────────
       内容区:
         type: Canvas
         attribute:
           point: ~top_left
-          x: "372 - var.offX"
+          x: 372 - var.offX
           y: 120
-          width: "var.contentW"
-          height: "var.viewH - 144"
+          width: var.contentW
+          height: var.viewH - 144
         children:
           内容底:
             type: Texture
@@ -683,16 +660,14 @@ controls:
               stroke:
                 width: 3
                 color: ~100,110,120,220
-
-          # ── 设置区（左半）──────────────────────────────────
           设置区:
             type: Canvas
             attribute:
               point: ~top_left
               x: 20
               y: 20
-              width: "var.halfW - 20"
-              height: "var.viewH - 184"
+              width: var.halfW - 20
+              height: var.viewH - 184
             children:
               设置区底:
                 type: Texture
@@ -711,7 +686,7 @@ controls:
                   point: ~top_left
                   x: 20
                   y: 20
-                  texts: "~&f仓库设置"
+                  texts: ~&f仓库设置
                   fontSize: 36
               拾取标题:
                 type: Text
@@ -719,7 +694,7 @@ controls:
                   point: ~top_left
                   x: 20
                   y: 64
-                  texts: "var.pickupScannerActive ? '&f自动入库 · 扫描拾取模式' : '&f自动入库 · 自动拾取模式'"
+                  texts: 'var.pickupScannerActive ? ''&f自动入库 · 扫描拾取模式'' : ''&f自动入库 · 自动拾取模式'''
                   fontSize: 28
               拾取关闭提示:
                 type: Text
@@ -727,8 +702,8 @@ controls:
                   point: ~top_left
                   x: 20
                   y: 108
-                  visible: "!var.serverAutoPickup"
-                  texts: "~&7服务器未开启自动拾取入库功能"
+                  visible: '!var.serverAutoPickup'
+                  texts: ~&7服务器未开启自动拾取入库功能
                   fontSize: 36
               拾取组:
                 type: HStack
@@ -736,17 +711,17 @@ controls:
                   point: ~top_left
                   x: 20
                   y: 108
-                  width: "var.halfW - 60"
+                  width: var.halfW - 60
                   height: 48
                   spaceBetween: 8
-                  visible: "var.serverAutoPickup"
+                  visible: var.serverAutoPickup
                 children:
                   自动入库:
                     type: Canvas
                     attribute:
-                      width: "var.serverMythicLoot ? (var.halfW - 76) / 3 : (var.halfW - 68) / 2"
+                      width: 'var.serverMythicLoot ? (var.halfW - 76) / 3 : (var.halfW - 68) / 2'
                       height: 48
-                      enable: "!var.pickupBusy && var.actionToken != ''"
+                      enable: '!var.pickupBusy && var.actionToken != '''''
                     action:
                       clickLeft: |-
                         var.pickupBusy = true
@@ -757,27 +732,27 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: "var.autoPickup ? '64,72,82,225' : '44,50,58,245'"
+                          normal: 'var.autoPickup ? ''64,72,82,225'' : ''44,50,58,245'''
                           shape: ~round_rect
                           radius: 12
                         effect:
                           stroke:
                             width: 3
-                            color: "self.isHovered() ? '220,230,240,255' : (var.autoPickup ? '255,255,255,255' : '100,110,120,220')"
+                            color: 'self.isHovered() ? ''220,230,240,255'' : (var.autoPickup ? ''255,255,255,255'' : ''100,110,120,220'')'
                       自动入库字:
                         type: Text
                         attribute:
                           point: ~middle_center
-                          texts: "var.autoPickup ? '&a自动入库' : '&7自动入库'"
+                          texts: 'var.autoPickup ? ''&a自动入库'' : ''&7自动入库'''
                           fontSize: 36
                           through: true
                   怪物战利品:
                     type: Canvas
                     attribute:
-                      width: "(var.halfW - 76) / 3"
+                      width: (var.halfW - 76) / 3
                       height: 48
-                      visible: "var.serverMythicLoot"
-                      enable: "!var.mythicBusy && var.actionToken != ''"
+                      visible: var.serverMythicLoot
+                      enable: '!var.mythicBusy && var.actionToken != '''''
                     action:
                       clickLeft: |-
                         var.mythicBusy = true
@@ -788,26 +763,26 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: "var.autoPickupMythic ? '64,72,82,225' : '44,50,58,245'"
+                          normal: 'var.autoPickupMythic ? ''64,72,82,225'' : ''44,50,58,245'''
                           shape: ~round_rect
                           radius: 12
                         effect:
                           stroke:
                             width: 3
-                            color: "self.isHovered() ? '220,230,240,255' : (var.autoPickupMythic ? '255,255,255,255' : '100,110,120,220')"
+                            color: 'self.isHovered() ? ''220,230,240,255'' : (var.autoPickupMythic ? ''255,255,255,255'' : ''100,110,120,220'')'
                       怪物战利品字:
                         type: Text
                         attribute:
                           point: ~middle_center
-                          texts: "var.autoPickupMythic ? '&a怪物战利品' : '&7怪物战利品'"
+                          texts: 'var.autoPickupMythic ? ''&a怪物战利品'' : ''&7怪物战利品'''
                           fontSize: 36
                           through: true
                   入库通知:
                     type: Canvas
                     attribute:
-                      width: "var.serverMythicLoot ? (var.halfW - 76) / 3 : (var.halfW - 68) / 2"
+                      width: 'var.serverMythicLoot ? (var.halfW - 76) / 3 : (var.halfW - 68) / 2'
                       height: 48
-                      enable: "!var.notifyBusy && var.actionToken != ''"
+                      enable: '!var.notifyBusy && var.actionToken != '''''
                     action:
                       clickLeft: |-
                         var.notifyBusy = true
@@ -818,18 +793,18 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: "var.autoPickupNotify ? '64,72,82,225' : '44,50,58,245'"
+                          normal: 'var.autoPickupNotify ? ''64,72,82,225'' : ''44,50,58,245'''
                           shape: ~round_rect
                           radius: 12
                         effect:
                           stroke:
                             width: 3
-                            color: "self.isHovered() ? '220,230,240,255' : (var.autoPickupNotify ? '255,255,255,255' : '100,110,120,220')"
+                            color: 'self.isHovered() ? ''220,230,240,255'' : (var.autoPickupNotify ? ''255,255,255,255'' : ''100,110,120,220'')'
                       入库通知字:
                         type: Text
                         attribute:
                           point: ~middle_center
-                          texts: "var.autoPickupNotify ? '&a入库通知' : '&7入库通知'"
+                          texts: 'var.autoPickupNotify ? ''&a入库通知'' : ''&7入库通知'''
                           fontSize: 36
                           through: true
               分隔一:
@@ -838,7 +813,7 @@ controls:
                   point: ~top_left
                   x: 20
                   y: 172
-                  width: "var.halfW - 60"
+                  width: var.halfW - 60
                   height: 2
                   normal: ~100,110,120,220
               名称标题:
@@ -847,7 +822,7 @@ controls:
                   point: ~top_left
                   x: 20
                   y: 184
-                  texts: "~&f名称与展示"
+                  texts: ~&f名称与展示
                   fontSize: 36
               名称提示:
                 type: Text
@@ -855,7 +830,7 @@ controls:
                   point: ~top_left
                   x: 20
                   y: 220
-                  texts: "var.ownerType != none ? ('&e当前名称 ' + var.warehouseName) : '&e请先在左侧选择一个仓库'"
+                  texts: 'var.ownerType != none ? (''&e当前名称 '' + var.warehouseName) : ''&e请先在左侧选择一个仓库'''
                   fontSize: 36
               新名称:
                 type: Canvas
@@ -876,7 +851,7 @@ controls:
                     effect:
                       stroke:
                         width: 3
-                        color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
+                        color: 'self.isHovered() ? ''220,230,240,255'' : ''100,110,120,220'''
                   输入框:
                     type: TextBox
                     attribute:
@@ -888,8 +863,7 @@ controls:
                       emptyText: ~&7新名称
                       fontSize: 36
                     action:
-                      textChange: |-
-                        var.renameName = self.getContent()
+                      textChange: var.renameName = self.getContent()
               改名按钮:
                 type: Canvas
                 attribute:
@@ -898,7 +872,7 @@ controls:
                   y: 256
                   width: 140
                   height: 48
-                  enable: "!var.actionBusy && var.actionToken != ''"
+                  enable: '!var.actionBusy && var.actionToken != '''''
                 action:
                   clickLeft: |-
                     var.actionBusy = true
@@ -919,12 +893,12 @@ controls:
                     effect:
                       stroke:
                         width: 3
-                        color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
+                        color: 'self.isHovered() ? ''220,230,240,255'' : ''100,110,120,220'''
                   改名字:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      texts: "~&f改名"
+                      texts: ~&f改名
                       fontSize: 36
                       through: true
               展示按钮:
@@ -935,7 +909,7 @@ controls:
                   y: 256
                   width: 160
                   height: 48
-                  enable: "!var.actionBusy && var.actionToken != ''"
+                  enable: '!var.actionBusy && var.actionToken != '''''
                 action:
                   clickLeft: |-
                     var.actionBusy = true
@@ -950,18 +924,18 @@ controls:
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: "var.showcaseEnabled ? '64,72,82,225' : '44,50,58,245'"
+                      normal: 'var.showcaseEnabled ? ''64,72,82,225'' : ''44,50,58,245'''
                       shape: ~round_rect
                       radius: 12
                     effect:
                       stroke:
                         width: 3
-                        color: "self.isHovered() ? '220,230,240,255' : (var.showcaseEnabled ? '255,255,255,255' : '100,110,120,220')"
+                        color: 'self.isHovered() ? ''220,230,240,255'' : (var.showcaseEnabled ? ''255,255,255,255'' : ''100,110,120,220'')'
                   展示字:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      texts: "var.showcaseEnabled ? '&a展示 开' : '&7展示 关'"
+                      texts: 'var.showcaseEnabled ? ''&a展示 开'' : ''&7展示 关'''
                       fontSize: 36
                       through: true
               分隔二:
@@ -970,7 +944,7 @@ controls:
                   point: ~top_left
                   x: 20
                   y: 320
-                  width: "var.halfW - 60"
+                  width: var.halfW - 60
                   height: 2
                   normal: ~100,110,120,220
               扩充标题:
@@ -979,7 +953,7 @@ controls:
                   point: ~top_left
                   x: 20
                   y: 332
-                  texts: "~&f仓库扩充"
+                  texts: ~&f仓库扩充
                   fontSize: 36
               容量信息:
                 type: Text
@@ -987,7 +961,8 @@ controls:
                   point: ~top_left
                   x: 20
                   y: 368
-                  texts: "var.ownerType == 'shared' ? ('&f当前 Lv.' + var.level.round() + '   &e容量 ' + var.capacityText) : ('&e已解锁 ' + var.capacityText + ' 格')"
+                  texts: 'var.ownerType == ''shared'' ? (''&f当前 Lv.'' + var.level.round() + ''   &e容量 '' + var.capacityText) : (''&e已解锁 '' + var.capacityText
+                    + '' 格'')'
                   fontSize: 36
               扩充提示:
                 type: Text
@@ -995,7 +970,7 @@ controls:
                   point: ~top_left
                   x: 20
                   y: 404
-                  texts: "'&e' + var.nextUpgradeText"
+                  texts: '''&e'' + var.nextUpgradeText'
                   fontSize: 36
               密码状态:
                 type: Text
@@ -1003,7 +978,7 @@ controls:
                   point: ~top_left
                   x: 20
                   y: 440
-                  texts: "!var.hasPassword ? '&e首次使用请设置二级密码' : (var.unlocked ? '&a二级密码已解锁' : '&c扩充与成员操作需先解锁二级密码')"
+                  texts: '!var.hasPassword ? ''&e首次使用请设置二级密码'' : (var.unlocked ? ''&a二级密码已解锁'' : ''&c扩充与成员操作需先解锁二级密码'')'
                   fontSize: 36
               密码输入:
                 type: Canvas
@@ -1024,7 +999,7 @@ controls:
                     effect:
                       stroke:
                         width: 3
-                        color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
+                        color: 'self.isHovered() ? ''220,230,240,255'' : ''100,110,120,220'''
                   输入框:
                     type: TextBox
                     attribute:
@@ -1036,8 +1011,7 @@ controls:
                       emptyText: ~&7二级密码
                       fontSize: 36
                     action:
-                      textChange: |-
-                        var.passwordText = self.getContent()
+                      textChange: var.passwordText = self.getContent()
               解锁:
                 type: Canvas
                 attribute:
@@ -1046,8 +1020,8 @@ controls:
                   y: 476
                   width: 140
                   height: 48
-                  visible: "!var.unlocked || !var.hasPassword"
-                  enable: "!var.actionBusy && (var.hasPassword || var.actionToken != '')"
+                  visible: '!var.unlocked || !var.hasPassword'
+                  enable: '!var.actionBusy && (var.hasPassword || var.actionToken != '''')'
                 action:
                   clickLeft: |-
                     if(var.hasPassword){
@@ -1068,12 +1042,12 @@ controls:
                     effect:
                       stroke:
                         width: 3
-                        color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
+                        color: 'self.isHovered() ? ''220,230,240,255'' : ''100,110,120,220'''
                   解锁字:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      texts: "var.hasPassword ? '&f解锁' : '&f设置密码'"
+                      texts: 'var.hasPassword ? ''&f解锁'' : ''&f设置密码'''
                       fontSize: 36
                       through: true
               锁定:
@@ -1084,8 +1058,8 @@ controls:
                   y: 476
                   width: 140
                   height: 48
-                  visible: "var.unlocked && var.hasPassword"
-                  enable: "!var.actionBusy && var.actionToken != ''"
+                  visible: var.unlocked && var.hasPassword
+                  enable: '!var.actionBusy && var.actionToken != '''''
                 action:
                   clickLeft: |-
                     var.actionBusy = true
@@ -1102,12 +1076,12 @@ controls:
                     effect:
                       stroke:
                         width: 3
-                        color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
+                        color: 'self.isHovered() ? ''220,230,240,255'' : ''100,110,120,220'''
                   锁定字:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      texts: "~&f锁定"
+                      texts: ~&f锁定
                       fontSize: 36
                       through: true
               扩充:
@@ -1118,8 +1092,8 @@ controls:
                   y: 476
                   width: 160
                   height: 48
-                  visible: "var.ownerType == 'shared'"
-                  enable: "!var.actionBusy && var.actionToken != '' && var.canUpgrade"
+                  visible: var.ownerType == 'shared'
+                  enable: '!var.actionBusy && var.actionToken != '''' && var.canUpgrade'
                 action:
                   clickLeft: |-
                     var.actionBusy = true
@@ -1136,12 +1110,12 @@ controls:
                     effect:
                       stroke:
                         width: 3
-                        color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
+                        color: 'self.isHovered() ? ''220,230,240,255'' : ''100,110,120,220'''
                   扩充字:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      texts: "var.canUpgrade ? '&f升级仓库' : '&7不可扩充'"
+                      texts: 'var.canUpgrade ? ''&f升级仓库'' : ''&7不可扩充'''
                       fontSize: 36
                       through: true
               数量输入:
@@ -1152,7 +1126,7 @@ controls:
                   y: 536
                   width: 96
                   height: 48
-                  visible: "var.ownerType == 'personal'"
+                  visible: var.ownerType == 'personal'
                 children:
                   数量底:
                     type: Texture
@@ -1164,7 +1138,7 @@ controls:
                     effect:
                       stroke:
                         width: 3
-                        color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
+                        color: 'self.isHovered() ? ''220,230,240,255'' : ''100,110,120,220'''
                   数量框:
                     type: TextBox
                     attribute:
@@ -1174,11 +1148,10 @@ controls:
                       height: 36
                       length: 4
                       emptyText: ~&7数量
-                      inputPattern: "^[0-9]*$"
+                      inputPattern: ^[0-9]*$
                       fontSize: 36
                     action:
-                      textChange: |-
-                        var.buyAmount = self.getContent()
+                      textChange: var.buyAmount = self.getContent()
               购买:
                 type: Canvas
                 attribute:
@@ -1187,8 +1160,8 @@ controls:
                   y: 536
                   width: 120
                   height: 48
-                  visible: "var.ownerType == 'personal'"
-                  enable: "!var.actionBusy && var.actionToken != '' && var.canUpgrade"
+                  visible: var.ownerType == 'personal'
+                  enable: '!var.actionBusy && var.actionToken != '''' && var.canUpgrade'
                 action:
                   clickLeft: |-
                     var.actionBusy = true
@@ -1205,12 +1178,12 @@ controls:
                     effect:
                       stroke:
                         width: 3
-                        color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
+                        color: 'self.isHovered() ? ''220,230,240,255'' : ''100,110,120,220'''
                   购买字:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      texts: "var.canUpgrade ? '&f购买' : '&7槽位已满'"
+                      texts: 'var.canUpgrade ? ''&f购买'' : ''&7槽位已满'''
                       fontSize: 36
                       through: true
               价格明细:
@@ -1219,7 +1192,9 @@ controls:
                   point: ~top_left
                   x: 264
                   y: 546
-                  texts: "var.ownerType == 'personal' && var.canUpgrade ? '&7单价 &e' + var.slotPriceText + ' &7× &f' + var.buyAmount + ' &7格 = &a' + (var.slotPriceAmount * type.toNumber(var.buyAmount == '' ? '0' : var.buyAmount)).toInt() + ' ' + var.slotCurrencyName : ''"
+                  texts: 'var.ownerType == ''personal'' && var.canUpgrade ? ''&7单价 &e'' + var.slotPriceText + '' &7× &f'' + var.buyAmount + ''
+                    &7格 = &a'' + (var.slotPriceAmount * type.toNumber(var.buyAmount == '''' ? ''0'' : var.buyAmount)).toInt() + '' '' + var.slotCurrencyName
+                    : '''''
                   fontSize: 30
               分隔三:
                 type: Texture
@@ -1227,7 +1202,7 @@ controls:
                   point: ~top_left
                   x: 20
                   y: 600
-                  width: "var.halfW - 60"
+                  width: var.halfW - 60
                   height: 2
                   normal: ~100,110,120,220
               删除标题:
@@ -1236,7 +1211,7 @@ controls:
                   point: ~top_left
                   x: 20
                   y: 612
-                  texts: "~&f删除共享仓库"
+                  texts: ~&f删除共享仓库
                   fontSize: 36
               删除提示:
                 type: Text
@@ -1244,7 +1219,7 @@ controls:
                   point: ~top_left
                   x: 20
                   y: 648
-                  texts: "var.ownerType == 'shared' ? (var.deleteConfirm ? '&c输入二级密码后点击确认删除' : '&e点击删除后需要二级密码确认') : '&e请先在左侧选择一个共享仓库'"
+                  texts: 'var.ownerType == ''shared'' ? (var.deleteConfirm ? ''&c输入二级密码后点击确认删除'' : ''&e点击删除后需要二级密码确认'') : ''&e请先在左侧选择一个共享仓库'''
                   fontSize: 36
               删除密码:
                 type: Canvas
@@ -1265,7 +1240,7 @@ controls:
                     effect:
                       stroke:
                         width: 3
-                        color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
+                        color: 'self.isHovered() ? ''220,230,240,255'' : ''100,110,120,220'''
                   输入框:
                     type: TextBox
                     attribute:
@@ -1277,8 +1252,7 @@ controls:
                       emptyText: ~&7二级密码
                       fontSize: 36
                     action:
-                      textChange: |-
-                        var.deletePassword = self.getContent()
+                      textChange: var.deletePassword = self.getContent()
               删除按钮:
                 type: Canvas
                 attribute:
@@ -1287,8 +1261,8 @@ controls:
                   y: 684
                   width: 200
                   height: 48
-                  visible: "var.ownerType == 'shared'"
-                  enable: "!var.actionBusy || !var.deleteConfirm"
+                  visible: var.ownerType == 'shared'
+                  enable: '!var.actionBusy || !var.deleteConfirm'
                 action:
                   clickLeft: |-
                     if(var.deleteConfirm){
@@ -1309,24 +1283,22 @@ controls:
                     effect:
                       stroke:
                         width: 3
-                        color: "self.isHovered() ? '220,230,240,255' : (var.deleteConfirm ? '235,100,100,240' : '100,110,120,220')"
+                        color: 'self.isHovered() ? ''220,230,240,255'' : (var.deleteConfirm ? ''235,100,100,240'' : ''100,110,120,220'')'
                   删除字:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      texts: "var.deleteConfirm ? '&c确认删除' : '&f删除共享仓库'"
+                      texts: 'var.deleteConfirm ? ''&c确认删除'' : ''&f删除共享仓库'''
                       fontSize: 36
                       through: true
-
-          # ── 成员区（右半）──────────────────────────────────
           成员区:
             type: Canvas
             attribute:
               point: ~top_left
-              x: "var.halfW + 4"
+              x: var.halfW + 4
               y: 20
-              width: "var.halfW - 20"
-              height: "var.viewH - 184"
+              width: var.halfW - 20
+              height: var.viewH - 184
             children:
               成员区底:
                 type: Texture
@@ -1345,7 +1317,7 @@ controls:
                   point: ~top_left
                   x: 20
                   y: 20
-                  texts: "~&f成员管理"
+                  texts: ~&f成员管理
                   fontSize: 36
               邀请说明:
                 type: Text
@@ -1353,7 +1325,7 @@ controls:
                   point: ~top_left
                   x: 20
                   y: 56
-                  texts: "!var.hasPassword ? '&e需先设置二级密码才能邀请' : (var.unlocked ? '&e输入名称后点击邀请' : '&e需先解锁二级密码才能邀请')"
+                  texts: '!var.hasPassword ? ''&e需先设置二级密码才能邀请'' : (var.unlocked ? ''&e输入名称后点击邀请'' : ''&e需先解锁二级密码才能邀请'')'
                   fontSize: 36
               成员名:
                 type: Canvas
@@ -1361,7 +1333,7 @@ controls:
                   point: ~top_left
                   x: 20
                   y: 92
-                  width: "(var.halfW - 68) / 2"
+                  width: (var.halfW - 68) / 2
                   height: 48
                 children:
                   成员名底:
@@ -1374,29 +1346,28 @@ controls:
                     effect:
                       stroke:
                         width: 3
-                        color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
+                        color: 'self.isHovered() ? ''220,230,240,255'' : ''100,110,120,220'''
                   输入框:
                     type: TextBox
                     attribute:
                       x: 10
                       y: 6
-                      width: "(var.halfW - 68) / 2 - 20"
+                      width: (var.halfW - 68) / 2 - 20
                       height: 36
                       length: 24
                       emptyText: ~&7成员名
                       fontSize: 36
                     action:
-                      textChange: |-
-                        var.memberName = self.getContent()
+                      textChange: var.memberName = self.getContent()
               邀请:
                 type: Canvas
                 attribute:
                   point: ~top_left
-                  x: "20 + (var.halfW - 68) / 2 + 8"
+                  x: 20 + (var.halfW - 68) / 2 + 8
                   y: 92
-                  width: "(var.halfW - 68) / 2"
+                  width: (var.halfW - 68) / 2
                   height: 48
-                  enable: "!var.actionBusy && var.actionToken != ''"
+                  enable: '!var.actionBusy && var.actionToken != '''''
                 action:
                   clickLeft: |-
                     var.actionBusy = true
@@ -1413,12 +1384,12 @@ controls:
                     effect:
                       stroke:
                         width: 3
-                        color: "self.isHovered() ? '220,230,240,255' : '160,170,180,255'"
+                        color: 'self.isHovered() ? ''220,230,240,255'' : ''160,170,180,255'''
                   邀请字:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      texts: "~&0邀请成员"
+                      texts: ~&0邀请成员
                       fontSize: 36
                       through: true
               成员分隔:
@@ -1427,7 +1398,7 @@ controls:
                   point: ~top_left
                   x: 20
                   y: 148
-                  width: "var.halfW - 60"
+                  width: var.halfW - 60
                   height: 2
                   normal: ~100,110,120,220
               成员列表标题:
@@ -1436,7 +1407,7 @@ controls:
                   point: ~top_left
                   x: 20
                   y: 160
-                  texts: "~&f当前成员 &7(点击身份切换权限)"
+                  texts: ~&f当前成员 &7(点击身份切换权限)
                   fontSize: 36
               成员列表底:
                 type: Texture
@@ -1444,8 +1415,8 @@ controls:
                   point: ~top_left
                   x: 20
                   y: 192
-                  width: "var.halfW - 60"
-                  height: "var.viewH - 460"
+                  width: var.halfW - 60
+                  height: var.viewH - 460
                   normal: ~36,42,50,225
                   shape: ~round_rect
                   radius: 14
@@ -1460,7 +1431,7 @@ controls:
                   x: -28
                   y: 208
                   width: 10
-                  height: "var.viewH - 506"
+                  height: var.viewH - 506
                   normal: ~40,44,52,225
                   shape: ~round_rect
                   radius: 5
@@ -1478,7 +1449,7 @@ controls:
                   width: 10
                   height: 50
                   normal: ~180,190,200,255
-                  maxDragY: "var.viewH - 556"
+                  maxDragY: var.viewH - 556
                   shape: ~round_rect
                   radius: 5
               成员滚动:
@@ -1487,9 +1458,9 @@ controls:
                   point: ~top_left
                   x: 36
                   y: 208
-                  width: "var.halfW - 96"
-                  height: "var.viewH - 506"
-                  moveY: "self.parent['成员滑块'].getDragYRatio()"
+                  width: var.halfW - 96
+                  height: var.viewH - 506
+                  moveY: self.parent['成员滑块'].getDragYRatio()
                 action:
                   wheel: |-
                     if(self.moveY >= 0 && self.wheelValue > 0){
@@ -1503,7 +1474,7 @@ controls:
                     type: VStack
                     val: 成员列表
                     attribute:
-                      width: "var.halfW - 96"
+                      width: var.halfW - 96
                       spaceBetween: 8
                     children:
                       项:
@@ -1512,11 +1483,10 @@ controls:
                           entryKey: 0.round()
                           entry: var.sharedMembers[self.entryKey]
                           visible: self.entry != none
-                          width: "var.halfW - 96"
+                          width: var.halfW - 96
                           height: 58
                         action:
-                          clickLeft: |-
-                            var.memberName = var.sharedMemberNames[self.entryKey]
+                          clickLeft: var.memberName = var.sharedMemberNames[self.entryKey]
                         children:
                           项背景:
                             type: Texture
@@ -1529,13 +1499,14 @@ controls:
                             effect:
                               stroke:
                                 width: 3
-                                color: "self.isHovered() ? '220,230,240,255' : (var.memberName == var.sharedMemberNames[self.parent.entryKey] ? '255,255,255,255' : '100,110,120,220')"
+                                color: 'self.isHovered() ? ''220,230,240,255'' : (var.memberName == var.sharedMemberNames[self.parent.entryKey]
+                                  ? ''255,255,255,255'' : ''100,110,120,220'')'
                           成员名文字:
                             type: Text
                             attribute:
                               point: ~middle_left
                               x: 16
-                              texts: "'&f' + var.sharedMemberNames[self.parent.entryKey]"
+                              texts: '''&f'' + var.sharedMemberNames[self.parent.entryKey]'
                               fontSize: 36
                               through: true
                           身份切换:
@@ -1545,7 +1516,7 @@ controls:
                               x: -60
                               width: 110
                               height: 40
-                              enable: "!var.actionBusy"
+                              enable: '!var.actionBusy'
                             action:
                               clickLeft: |-
                                 currentRole = var.sharedMemberRoles[self.parent.entryKey]
@@ -1563,13 +1534,14 @@ controls:
                                   radius: 10
                                 effect:
                                   stroke:
-                                    width: 2
-                                    color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
+                                    width: 3
+                                    color: 'self.isHovered() ? ''220,230,240,255'' : ''100,110,120,220'''
                               身份文字:
                                 type: Text
                                 attribute:
                                   point: ~middle_center
-                                  texts: "var.sharedMemberRoles[self.parent.parent.entryKey] == 'viewer' ? '&f' + var.sharedRoleViewerName : '&f' + var.sharedRoleMemberName"
+                                  texts: 'var.sharedMemberRoles[self.parent.parent.entryKey] == ''viewer'' ? ''&f'' + var.sharedRoleViewerName
+                                    : ''&f'' + var.sharedRoleMemberName'
                                   fontSize: 36
                                   through: true
                           移除:
@@ -1579,7 +1551,7 @@ controls:
                               x: -12
                               width: 40
                               height: 40
-                              enable: "!var.actionBusy"
+                              enable: '!var.actionBusy'
                             action:
                               clickLeft: |-
                                 var.actionBusy = true
@@ -1595,13 +1567,13 @@ controls:
                                   radius: 10
                                 effect:
                                   stroke:
-                                    width: 2
-                                    color: "self.isHovered() ? '235,100,100,255' : '100,110,120,220'"
+                                    width: 3
+                                    color: 'self.isHovered() ? ''235,100,100,255'' : ''100,110,120,220'''
                               移除文字:
                                 type: Text
                                 attribute:
                                   point: ~middle_center
-                                  texts: "~&c✕"
+                                  texts: ~&c✕
                                   fontSize: 36
                                   through: true
               转让:
@@ -1610,9 +1582,9 @@ controls:
                   point: ~bottom_left
                   x: 20
                   y: -24
-                  width: "var.halfW - 60"
+                  width: var.halfW - 60
                   height: 48
-                  enable: "!var.actionBusy && var.actionToken != '' && var.unlocked && var.hasPassword"
+                  enable: '!var.actionBusy && var.actionToken != '''' && var.unlocked && var.hasPassword'
                 action:
                   clickLeft: |-
                     var.actionBusy = true
@@ -1629,11 +1601,199 @@ controls:
                     effect:
                       stroke:
                         width: 3
-                        color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
+                        color: 'self.isHovered() ? ''220,230,240,255'' : ''100,110,120,220'''
                   转让字:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      texts: "var.memberName != none ? '&f将所有权转让给 ' + var.memberName : '&e请先选中一个成员'"
+                      texts: 'var.memberName != none ? ''&f将所有权转让给 '' + var.memberName : ''&e请先选中一个成员'''
                       fontSize: 36
                       through: true
+      居中操作提示:
+        type: Canvas
+        attribute:
+          point: ~middle_center
+          x: 0
+          y: 0
+          width: 560
+          height: var.noticeCount * 28 + 36
+          visible: var.noticeActive
+          alpha: 'var.noticeFade == none ? 0 : var.noticeFade.get()'
+          through: true
+        children:
+          阴影:
+            type: Texture
+            attribute:
+              x: 2
+              y: 3
+              width: 560
+              height: self.parent.height
+              normal: ~0,0,0,48
+              shape: ~round_rect
+              radius: 6
+              through: true
+          底板:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~56,54,49,250
+              shape: ~round_rect
+              radius: 6
+              through: true
+            effect:
+              stroke:
+                width: 1
+                color: ~100,98,93,255
+          侧标:
+            type: Texture
+            attribute:
+              x: 12
+              y: 14
+              width: 2
+              height: self.parent.height - 28
+              normal: ~132,130,125,255
+              through: true
+          文字0:
+            type: Text
+            attribute:
+              point: ~top_center
+              x: 0
+              y: 18
+              texts: 'var.noticeCount > 0 ? ''&f'' + var.noticeLines.get(0.round()) : '''''
+              fontSize: 36
+              alignment: ~center
+              visible: var.noticeCount > 0
+              tip: var.noticeText
+              through: true
+          文字1:
+            type: Text
+            attribute:
+              point: ~top_center
+              x: 0
+              y: 46
+              texts: 'var.noticeCount > 1 ? ''&f'' + var.noticeLines.get(1.round()) : '''''
+              fontSize: 36
+              alignment: ~center
+              visible: var.noticeCount > 1
+              tip: var.noticeText
+              through: true
+          文字2:
+            type: Text
+            attribute:
+              point: ~top_center
+              x: 0
+              y: 74
+              texts: 'var.noticeCount > 2 ? ''&f'' + var.noticeLines.get(2.round()) : '''''
+              fontSize: 36
+              alignment: ~center
+              visible: var.noticeCount > 2
+              tip: var.noticeText
+              through: true
+          文字3:
+            type: Text
+            attribute:
+              point: ~top_center
+              x: 0
+              y: 102
+              texts: 'var.noticeCount > 3 ? ''&f'' + var.noticeLines.get(3.round()) : '''''
+              fontSize: 36
+              alignment: ~center
+              visible: var.noticeCount > 3
+              tip: var.noticeText
+              through: true
+          文字4:
+            type: Text
+            attribute:
+              point: ~top_center
+              x: 0
+              y: 130
+              texts: 'var.noticeCount > 4 ? ''&f'' + var.noticeLines.get(4.round()) : '''''
+              fontSize: 36
+              alignment: ~center
+              visible: var.noticeCount > 4
+              tip: var.noticeText
+              through: true
+          文字5:
+            type: Text
+            attribute:
+              point: ~top_center
+              x: 0
+              y: 158
+              texts: 'var.noticeCount > 5 ? ''&f'' + var.noticeLines.get(5.round()) : '''''
+              fontSize: 36
+              alignment: ~center
+              visible: var.noticeCount > 5
+              tip: var.noticeText
+              through: true
+          文字6:
+            type: Text
+            attribute:
+              point: ~top_center
+              x: 0
+              y: 186
+              texts: 'var.noticeCount > 6 ? ''&f'' + var.noticeLines.get(6.round()) : '''''
+              fontSize: 36
+              alignment: ~center
+              visible: var.noticeCount > 6
+              tip: var.noticeText
+              through: true
+          文字7:
+            type: Text
+            attribute:
+              point: ~top_center
+              x: 0
+              y: 214
+              texts: 'var.noticeCount > 7 ? ''&f'' + var.noticeLines.get(7.round()) : '''''
+              fontSize: 36
+              alignment: ~center
+              visible: var.noticeCount > 7
+              tip: var.noticeText
+              through: true
+          文字8:
+            type: Text
+            attribute:
+              point: ~top_center
+              x: 0
+              y: 242
+              texts: 'var.noticeCount > 8 ? ''&f'' + var.noticeLines.get(8.round()) : '''''
+              fontSize: 36
+              alignment: ~center
+              visible: var.noticeCount > 8
+              tip: var.noticeText
+              through: true
+          文字9:
+            type: Text
+            attribute:
+              point: ~top_center
+              x: 0
+              y: 270
+              texts: 'var.noticeCount > 9 ? ''&f'' + var.noticeLines.get(9.round()) : '''''
+              fontSize: 36
+              alignment: ~center
+              visible: var.noticeCount > 9
+              tip: var.noticeText
+              through: true
+          文字10:
+            type: Text
+            attribute:
+              point: ~top_center
+              x: 0
+              y: 298
+              texts: 'var.noticeCount > 10 ? ''&f'' + var.noticeLines.get(10.round()) : '''''
+              fontSize: 36
+              alignment: ~center
+              visible: var.noticeCount > 10
+              tip: var.noticeText
+              through: true
+          文字11:
+            type: Text
+            attribute:
+              point: ~top_center
+              x: 0
+              y: 326
+              texts: 'var.noticeCount > 11 ? ''&f'' + var.noticeLines.get(11.round()) : '''''
+              fontSize: 36
+              alignment: ~center
+              visible: var.noticeCount > 11
+              tip: var.noticeText
+              through: true

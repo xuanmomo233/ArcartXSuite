@@ -139,6 +139,7 @@ public final class WarehouseService implements Listener, WarehouseAccess {
     private final JavaPlugin plugin;
     private final Logger logger;
     private final PacketBridgeAPI packetBridge;
+    private final Map<UUID,String> noticeTargets=new java.util.concurrent.ConcurrentHashMap<>();
     final xuanmo.arcartxsuite.api.bridge.ItemBridgeAPI itemStackBridge;
     private final PacketGuardAPI packetGuard;
     private final UiResourceExporter uiResourceExporter;
@@ -352,6 +353,7 @@ public final class WarehouseService implements Listener, WarehouseAccess {
      */
     public void shutdown() {
         active = false;
+        noticeTargets.clear();
         pickupCandidates.clear();
         fullPickupRetry.clear();
         closingCrafting.clear();
@@ -1012,6 +1014,7 @@ public final class WarehouseService implements Listener, WarehouseAccess {
     }
 
     private void clearPlayerState(UUID playerUuid) {
+        noticeTargets.remove(playerUuid);
         pickupPreferences.remove(playerUuid);
         viewStates.remove(playerUuid);
         storageActionTokens.remove(playerUuid);
@@ -1128,7 +1131,7 @@ public final class WarehouseService implements Listener, WarehouseAccess {
                 // HUD 实际未显示且聊天栏被跳过的双重丢失。
                 boolean notify = pickupSettings.autoNotify();
                 if (notify) {
-                    player.sendMessage(PREFIX + ChatColor.GREEN + message("player.auto-deposited", result.storedAmount()));
+                    sendMessage(player,true,message("player.auto-deposited", result.storedAmount()));
                 }
                 PickupNotifiable pickupNotifiable = pickupNotifiableSupplier.get();
                 if (pickupNotifiable != null) {
@@ -1222,14 +1225,25 @@ public final class WarehouseService implements Listener, WarehouseAccess {
 
     @EventHandler(priority=EventPriority.HIGHEST)
     public void onCraftingOverflow(org.bukkit.event.inventory.InventoryCloseEvent event){
-        if(!(event.getPlayer() instanceof Player player) || !(event.getInventory() instanceof org.bukkit.inventory.CraftingInventory crafting)
-            || crafting.getSize()!=10 || !active || !configuration.pickup().enabled() || !closingCrafting.add(player.getUniqueId()))return;
+        int[] inputs=switch(event.getView().getType()){
+            case WORKBENCH -> new int[]{1,2,3,4,5,6,7,8,9};
+            case STONECUTTER -> new int[]{0};
+            case SMITHING -> new int[]{0,1,2};
+            case MERCHANT -> new int[]{0,1};
+            case ANVIL, ENCHANTING, GRINDSTONE, CARTOGRAPHY -> new int[]{0,1};
+            case LOOM -> new int[]{0,1,2};
+            case BEACON -> new int[]{0};
+            default -> new int[0];
+        };
+        if(inputs.length==0 || !(event.getPlayer() instanceof Player player)
+            || !active || !configuration.pickup().enabled() || !closingCrafting.add(player.getUniqueId()))return;
+        org.bukkit.inventory.Inventory crafting=event.getInventory();
         try {
             ItemStack[] simulated=java.util.Arrays.stream(player.getInventory().getStorageContents()).map(s->s==null?null:s.clone()).toArray(ItemStack[]::new);
             simulated=java.util.Arrays.copyOf(simulated,37);
             simulated[36]=player.getInventory().getItemInOffHand().clone();
             long stored=0L;
-            for(int i=1;i<=9;i++) {
+            for(int i:inputs) {
                 if(player.getOpenInventory()!=event.getView())break;
                 ItemStack source=crafting.getItem(i);
                 if(source==null || source.getType().isAir() || source.getAmount()<=0)continue;
@@ -1245,8 +1259,8 @@ public final class WarehouseService implements Listener, WarehouseAccess {
                 // Publish only after removing the committed part from its real source.
                 publishDepositEvent(player,requested,deposited);
             }
-            if(stored>0 && shouldNotifyAutoDeposit(player))player.sendMessage(PREFIX+ChatColor.GREEN+message("player.auto-deposited",stored));
-        }catch(RuntimeException exception){logger.warning("工作台退回溢出处理失败，剩余材料交由原版退回: "+exception.getMessage());}
+            if(stored>0 && shouldNotifyAutoDeposit(player))sendMessage(player,true,message("player.auto-deposited",stored));
+        }catch(RuntimeException exception){logger.warning("容器退回溢出处理失败，剩余材料交由原版退回: "+exception.getMessage());}
         finally{closingCrafting.remove(player.getUniqueId());}
     }
 
@@ -3070,7 +3084,7 @@ public final class WarehouseService implements Listener, WarehouseAccess {
             long taken=Math.min(current.amount(),requested);
             if(!repository.applySlotChanges(List.of(new WarehouseRepository.SlotChange(current,taken==current.amount()?null:withAmount(current,current.amount()-taken,System.currentTimeMillis())))))return 0;
             logger.warning("玩家 "+player.getUniqueId()+" 手动丢弃不可用仓库物品: "+current.ownerType()+"/"+current.ownerId()+"/"+current.warehouseId()+"#"+current.slot()+" 类型="+current.materialId()+" 数量="+taken+" hash="+current.itemHash());
-            player.sendMessage(PREFIX+ChatColor.RED+message("player.unavailable-discarded",taken));
+            sendMessage(player,false,message("player.unavailable-discarded",taken));
             return taken;
         }
     }
@@ -3698,8 +3712,19 @@ public final class WarehouseService implements Listener, WarehouseAccess {
     }
 
     private void sendMessage(Player player, boolean success, String message) {
+        if(packetBridge!=null){
+            String parent=noticeTargets.getOrDefault(player.getUniqueId(),"");
+            for(String ui:List.of(parent,storageRuntimeUiId,manageRuntimeUiId,bankRuntimeUiId))
+                if (!ui.isBlank() && packetBridge.isUiOpen(player, ui)
+                    && packetBridge.sendPacket(player, ui, "ui_notice", Map.of("message", ChatColor.stripColor(message)))) {
+                    return;
+                }
+        }
         player.sendMessage(PREFIX + (success ? ChatColor.GREEN : ChatColor.RED) + message);
     }
+
+    void noticeTarget(Player player,String ui){noticeTargets.put(player.getUniqueId(),ui);}
+    void forgetNoticeTarget(UUID player){noticeTargets.remove(player);}
 
     void debug(String message) {
         if (configuration.debug()) {

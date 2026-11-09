@@ -97,6 +97,7 @@ public final class WarehouseCursorPanel implements Listener, WarehousePanelAcces
         try {
             if ("open".equals(action) || "refresh".equals(action) && session == null) {
                 if (!bridge.isUiOpen(player, uiId)) return;
+                service.noticeTarget(player,uiId);
                 service.ensureEntitlements(player);
                 var owned = service.personalWarehouseMap(uuid);
                 String warehouseId = service.configuration.warehouses().keySet().stream()
@@ -219,7 +220,7 @@ public final class WarehouseCursorPanel implements Listener, WarehousePanelAcces
                     player.setItemOnCursor(result.itemStack());
                     session.rotateToken();
                 } else {
-                    player.sendMessage(result.message());
+                    notice(player,result.message());
                 }
             }
             render(player, session);
@@ -235,7 +236,7 @@ public final class WarehouseCursorPanel implements Listener, WarehousePanelAcces
         var result = service.depositStack(player, WarehouseService.OWNER_PERSONAL,
             player.getUniqueId().toString(), session.warehouseId, stack);
         if (!result.success()) {
-            player.sendMessage(result.message());
+            notice(player,result.message());
             return;
         }
         ItemStack remainder = stack.clone();
@@ -330,13 +331,23 @@ public final class WarehouseCursorPanel implements Listener, WarehousePanelAcces
 
     private boolean canWrite(Player player) {
         if (service.isSecondaryUnlocked(player)) return true;
-        player.sendMessage("仓库已锁定，请先解锁二级密码。");
+        notice(player,"仓库已锁定，请先解锁二级密码。");
         return false;
     }
 
     private void failed(Player player, Exception exception) {
         logger.log(Level.WARNING, "仓库面板操作失败", exception);
-        player.sendMessage("仓库操作失败，请刷新后重试。");
+        notice(player,"仓库操作失败，请刷新后重试。");
+    }
+
+    private void notice(Player player,String message){
+        Session session=sessions.get(player.getUniqueId());
+        if (message == null || message.isBlank()) return;
+        if (session != null && bridge.isUiOpen(player, session.uiId)
+            && bridge.sendPacket(player, session.uiId, "ui_notice", Map.of("message", org.bukkit.ChatColor.stripColor(message)))) {
+            return;
+        }
+        player.sendMessage(message);
     }
 
     @Override
@@ -347,10 +358,12 @@ public final class WarehouseCursorPanel implements Listener, WarehousePanelAcces
     @EventHandler
     public void onClose(InventoryCloseEvent event) {
         sessions.remove(event.getPlayer().getUniqueId());
+        service.forgetNoticeTarget(event.getPlayer().getUniqueId());
     }
 
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
+        service.forgetNoticeTarget(event.getPlayer().getUniqueId());
         sessions.remove(event.getPlayer().getUniqueId());
     }
 

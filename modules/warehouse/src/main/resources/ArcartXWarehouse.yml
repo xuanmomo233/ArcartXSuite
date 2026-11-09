@@ -82,7 +82,7 @@ warehouses:
     default-owned: true  # 玩家首次使用时是否自动创建
     # 逐格解锁模型：已解锁格数 = base-slots + 已购格数(extra_slots)，上限为 max-slots。
     # 注意：max-slots 是槽位【总数】上限（含初始格），不是"可再购买的格数"。
-    # 扩展背包（extrabackpack）与本仓库共用同一存储，两个入口看到同样的格子。
+    # Vanilla 随身背包的仓库区与个人仓库共用容量和物品。
     base-slots: 72  # 初始解锁槽位数
     max-slots: 720  # 槽位总数上限（含初始格）
     slot-price:
