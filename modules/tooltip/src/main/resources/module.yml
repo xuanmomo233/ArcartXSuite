@@ -1,8 +1,8 @@
 id: tooltip
 name: Tooltip
-version: 1.4.4
+version: 2.0.0
 main: xuanmo.arcartxsuite.tooltip.TooltipModule
-api-version: 2.0
+api-version: 3.0
 
 depends: []
 softdepends: []

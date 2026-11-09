@@ -74,7 +74,7 @@ public final class WarehouseModule extends AbstractAXSModule implements ModuleCo
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("warehouse")
             .name("Warehouse")
-            .version("1.5.1")
+            .version("2.0.0")
             .mainClass(getClass().getName())
             .build();
     }

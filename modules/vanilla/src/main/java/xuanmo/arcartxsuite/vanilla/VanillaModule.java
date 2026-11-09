@@ -75,7 +75,7 @@ public final class VanillaModule extends AbstractAXSModule implements Listener,x
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("vanilla")
             .name("VanillaUI")
-            .version("1.4.4")
+            .version("2.0.0")
             .mainClass(getClass().getName())
             .softDepends(List.of("warehouse"))
             .build();

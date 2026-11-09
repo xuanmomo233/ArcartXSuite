@@ -62,7 +62,7 @@ public final class MailModule extends AbstractAXSModule implements ModuleCommand
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("mail")
             .name("Mail")
-            .version("1.4.4")
+            .version("2.0.0")
             .mainClass(getClass().getName())
             .build();
     }

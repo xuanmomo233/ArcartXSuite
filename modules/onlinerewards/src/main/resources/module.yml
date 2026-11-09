@@ -1,8 +1,8 @@
 id: onlinerewards
 name: OnlineRewards
-version: 1.4.4
+version: 2.0.0
 main: xuanmo.arcartxsuite.onlinerewards.OnlineRewardsModule
-api-version: 2.0
+api-version: 3.0
 
 depends: []
 softdepends: []

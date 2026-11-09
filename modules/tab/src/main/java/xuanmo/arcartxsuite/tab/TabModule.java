@@ -54,7 +54,7 @@ public final class TabModule extends AbstractAXSModule implements ModuleCommandH
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("tab")
             .name("Tab")
-            .version("1.4.4")
+            .version("2.0.0")
             .mainClass(getClass().getName())
             .build();
     }

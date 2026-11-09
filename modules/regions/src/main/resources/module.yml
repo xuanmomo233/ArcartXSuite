@@ -1,8 +1,8 @@
 id: regions
 name: Regions
-version: 1.4.4
+version: 2.0.0
 main: xuanmo.arcartxsuite.regions.RegionsModule
-api-version: 2.0
+api-version: 3.0
 description: "区域保护与管理模块 - WorldGuard 替代方案"
 authors:
   - ArcartXSuite

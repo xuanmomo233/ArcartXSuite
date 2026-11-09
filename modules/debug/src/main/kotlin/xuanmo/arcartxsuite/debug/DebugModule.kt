@@ -42,7 +42,7 @@ class DebugModule : AbstractAXSModule(), ModuleCommandHandler {
     override fun descriptor(): ModuleDescriptor =
         ModuleDescriptor.builder("debug")
             .name("ArcartXSuite Debug Bridge")
-            .version("1.4.4")
+            .version("2.0.0")
             .mainClass(this::class.java.name)
             .build()
 

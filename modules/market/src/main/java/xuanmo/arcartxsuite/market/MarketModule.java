@@ -80,7 +80,7 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("market")
             .name("Market")
-            .version("1.4.4")
+            .version("2.0.0")
             .mainClass(getClass().getName())
             .softDepends(List.of("warehouse"))
             .build();

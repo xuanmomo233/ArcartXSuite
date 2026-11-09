@@ -64,7 +64,7 @@ public final class LotteryModule extends AbstractAXSModule implements ModuleComm
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("lottery")
             .name("Lottery")
-            .version("1.4.4")
+            .version("2.0.0")
             .mainClass(getClass().getName())
             .build();
     }

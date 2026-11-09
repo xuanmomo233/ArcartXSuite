@@ -61,7 +61,7 @@ public final class EventPacketModule extends AbstractAXSModule implements Module
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("eventpacket")
             .name("EventPacket")
-            .version("1.4.4")
+            .version("2.0.0")
             .mainClass(getClass().getName())
             .build();
     }

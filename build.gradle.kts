@@ -8,6 +8,11 @@ plugins {
     id("com.gradleup.shadow") version "8.3.5" apply false
 }
 
+// 宿主、公开 API、认证组件、模块与代理端使用同一套发布版本。
+allprojects {
+    version = rootProject.version
+}
+
 val distDir = rootProject.layout.buildDirectory.dir("ArcartX-Suite")
 
 // 混淆后的 core jar 路径（模块编译时依赖此产物，使得 bridge 等类被完全混淆后仍可链接）

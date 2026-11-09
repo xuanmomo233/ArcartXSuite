@@ -63,7 +63,7 @@ public final class AbyssModule extends AbstractAXSModule implements ModuleComman
     public xuanmo.arcartxsuite.api.ModuleDescriptor descriptor() {
         return xuanmo.arcartxsuite.api.ModuleDescriptor.builder("abyss")
             .name("Abyss")
-            .version("1.0.0")
+            .version("2.0.0")
             .mainClass(getClass().getName())
             .externalSoftDepends(List.of("MythicMobs", "MythicBukkit",
                 "FastAsyncWorldEdit", "WorldEdit", "Adyeshach", "Chemdah",

@@ -53,7 +53,7 @@ public final class ConversationModule extends AbstractAXSModule implements Modul
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("conversation")
             .name("Conversation")
-            .version("1.4.4")
+            .version("2.0.0")
             .mainClass(getClass().getName())
             .build();
     }

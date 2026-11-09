@@ -63,7 +63,7 @@ public final class CombatEffectModule extends AbstractAXSModule implements Modul
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("combateffect")
             .name("CombatEffect")
-            .version("1.4.4")
+            .version("2.0.0")
             .mainClass(getClass().getName())
             .build();
     }

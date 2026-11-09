@@ -102,7 +102,7 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("essentials")
             .name("Essentials")
-            .version("1.4.5")
+            .version("2.0.0")
             .mainClass(getClass().getName())
             .build();
     }

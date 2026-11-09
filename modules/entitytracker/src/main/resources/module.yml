@@ -1,8 +1,8 @@
 id: entitytracker
 name: EntityTracker
-version: 1.4.4
+version: 2.0.0
 main: xuanmo.arcartxsuite.entitytracker.EntityTrackerModule
-api-version: 2.0
+api-version: 3.0
 
 depends: []
 softdepends: []

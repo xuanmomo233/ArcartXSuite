@@ -1,8 +1,8 @@
 id: warehouse
 name: Warehouse
-version: 1.5.1
+version: 2.0.0
 main: xuanmo.arcartxsuite.warehouse.WarehouseModule
-api-version: 2.0
+api-version: 3.0
 
 depends: []
 softdepends: []

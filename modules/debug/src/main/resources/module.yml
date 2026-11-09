@@ -1,8 +1,8 @@
 id: debug
 name: ArcartXSuite Debug Bridge
-version: 1.4.4
+version: 2.0.0
 main: xuanmo.arcartxsuite.debug.DebugModule
-api-version: 2.0
+api-version: 3.0
 
 depends: []
 softdepends: []

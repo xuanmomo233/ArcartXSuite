@@ -55,7 +55,7 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("map")
             .name("Map")
-            .version("1.6.0")
+            .version("2.0.0")
             .mainClass(getClass().getName())
             .build();
     }

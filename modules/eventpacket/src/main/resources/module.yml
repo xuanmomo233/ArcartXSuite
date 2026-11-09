@@ -1,8 +1,8 @@
 id: eventpacket
 name: EventPacket
-version: 1.4.4
+version: 2.0.0
 main: xuanmo.arcartxsuite.eventpacket.EventPacketModule
-api-version: 2.0
+api-version: 3.0
 
 depends: []
 softdepends: []

@@ -19,11 +19,12 @@ class ModuleDescriptorParserTest {
     }
     @Test void rejectsOldContractBeforeLoadingAnyModuleClass() throws Exception {
         assertThrows(ModuleLoadException.class,()->ModuleDescriptorParser.parse(module("api-version: 1.0\n")));
+        assertThrows(ModuleLoadException.class,()->ModuleDescriptorParser.parse(module("api-version: 2.0\n")));
     }
     @Test void missingApiVersionDoesNotFallBackToLegacyContract() {
         assertThrows(ModuleLoadException.class,()->ModuleDescriptorParser.parse(module("")));
     }
     @Test void acceptsTheExplicitNewContract() throws Exception {
-        assertEquals("example",ModuleDescriptorParser.parse(module("api-version: 2.0\n")).id());
+        assertEquals("example",ModuleDescriptorParser.parse(module("api-version: 3.0\n")).id());
     }
 }

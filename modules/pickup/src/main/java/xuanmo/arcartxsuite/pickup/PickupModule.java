@@ -54,7 +54,7 @@ public final class PickupModule extends AbstractAXSModule {
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("pickup")
             .name("Pickup")
-            .version("1.5.0")
+            .version("2.0.0")
             .mainClass(getClass().getName())
             .build();
     }
