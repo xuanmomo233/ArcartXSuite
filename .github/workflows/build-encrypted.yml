@@ -643,7 +643,11 @@ jobs:
             [ -s "$RESP" ] && cat "$RESP" || true
           fi
           rm -f "$RESP"
-          # ── FlareCloud 镜像（故障转移）──
+          if [ "$PRIMARY_OK" -eq 1 ]; then
+            echo "主云已接收宿主，FlareCloud 由主云复制任务同步"
+            exit 0
+          fi
+          # 主云上传失败时才尝试直接写入处于接管状态的 FlareCloud。
           RESP_FLARE=$(mktemp)
           set +e
           curl -fS --http1.1 --retry 5 --retry-delay 5 --retry-all-errors --retry-max-time 300 --max-time 300 \
@@ -729,7 +733,11 @@ jobs:
               cat "$RESP" || true
             fi
             rm -f "$RESP"
-            # ── FlareCloud 镜像（故障转移）──
+            if [ "$PRIMARY_OK" -eq 1 ]; then
+              echo "主云已接收 proxy/$FLAVOR，FlareCloud 由主云复制任务同步"
+              return 0
+            fi
+            # 主云上传失败时才尝试直接写入处于接管状态的 FlareCloud。
             RESP_FLARE=$(mktemp)
             set +e
             curl -fS --http1.1 --retry 5 --retry-delay 5 --retry-all-errors --retry-max-time 300 --max-time 300 \
@@ -828,7 +836,11 @@ jobs:
               cat "$RESP" || true
             fi
             rm -f "$RESP"
-            # ── FlareCloud 镜像（故障转移）──
+            if [ "$PRIMARY_OK" -eq 1 ]; then
+              echo "主云已接收 proxy/$FLAVOR，FlareCloud 由主云复制任务同步"
+              return 0
+            fi
+            # 主云上传失败时才尝试直接写入处于接管状态的 FlareCloud。
             RESP_FLARE=$(mktemp)
             set +e
             curl -fS --http1.1 --retry 5 --retry-delay 5 --retry-all-errors --retry-max-time 300 --max-time 300 \
@@ -975,7 +987,11 @@ jobs:
               [ -s "$RESP" ] && cat "$RESP" || true
             fi
             rm -f "$RESP"
-            # ── FlareCloud 镜像（故障转移）──
+            if [ "$PRIMARY_OK" -eq 1 ]; then
+              echo "主云已接收 $module，FlareCloud 由主云复制任务同步"
+              continue
+            fi
+            # 主云上传失败时才尝试直接写入处于接管状态的 FlareCloud。
             RESP_FLARE=$(mktemp)
             set +e
             curl -fS --http1.1 --retry 5 --retry-delay 5 --retry-all-errors --retry-max-time 300 --max-time 300 \
