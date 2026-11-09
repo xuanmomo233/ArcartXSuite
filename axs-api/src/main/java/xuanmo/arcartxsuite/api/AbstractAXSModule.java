@@ -439,6 +439,13 @@ public abstract class AbstractAXSModule implements AXSModule {
         context.registerCapability(capabilityType, implementation);
     }
 
+    protected final void registerClientPacketHandler(PacketHandlerSpec spec) {
+        if (spec.handler() != null) {
+            context.registerClientPacketHandler(spec.handler(), spec.priority(),
+                spec.ownershipPacketId(), spec.guardModule());
+        }
+    }
+
     /** 按类型查找其他模块注册的能力接口 */
     @Nullable
     protected <T> T getCapability(Class<T> capabilityType) {

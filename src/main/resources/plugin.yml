@@ -29,9 +29,14 @@ commands:
     description: ArcartXSuite 管理命令
     usage: /axs help [module] | /axs <module> help | /axs status|reload
     aliases: [axs]
-    permission: arcartxsuite.admin
 permissions:
   arcartxsuite.admin:
+    default: op
+  arcartxsuite.market.exchange.admin:
+    default: op
+  arcartxsuite.vanilla.backpack.admin:
+    default: op
+  arcartxsuite.vanilla.recipe.admin:
     default: op
   arcartxsuite.title.use:
     default: true

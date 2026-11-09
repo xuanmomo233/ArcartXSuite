@@ -50,6 +50,13 @@ public final class ArcartXSuiteCommand implements CommandExecutor, TabCompleter 
             return handlePassword(sender, args);
         }
         if (!sender.hasPermission("arcartxsuite.admin")) {
+            ModuleRegistry registry = plugin.getModuleRegistry();
+            if (registry != null && args.length > 0) {
+                var handler = registry.getCommandHandler(args[0].toLowerCase(Locale.ROOT));
+                if (handler.isPresent() && handler.get().allowsWithoutSuiteAdmin(sender, args)) {
+                    return handler.get().onCommand(sender, label, args);
+                }
+            }
             sender.sendMessage(PREFIX + ChatColor.RED + "你没有权限执行这个命令。");
             return true;
         }

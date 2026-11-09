@@ -34,6 +34,11 @@ public interface ModuleCommandHandler {
         return List.of("help", "status", "reload");
     }
 
+    /** Allows a specific route to use the module's own authorization. */
+    default boolean allowsWithoutSuiteAdmin(@NotNull CommandSender sender, @NotNull String[] args) {
+        return false;
+    }
+
     /**
      * 执行子命令。
      *

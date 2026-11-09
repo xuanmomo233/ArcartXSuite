@@ -362,9 +362,9 @@ public final class ModuleRegistry {
             loaded.instance().onReload();
             LOGGER.info(loaded.descriptor().name() + " 模块已重载。");
             return true;
-        } catch (Exception exception) {
+        } catch (Exception | LinkageError exception) {
             LOGGER.log(Level.SEVERE, loaded.descriptor().name() + " 模块重载失败", exception);
-            if("loginview".equals(moduleId)) cleanupFailedModule(moduleId);
+            cleanupFailedModule(moduleId);
             return false;
         }
     }
@@ -859,7 +859,7 @@ public final class ModuleRegistry {
     private void disableModule(LoadedModule loaded) {
         try {
             loaded.instance().onDisable();
-        } catch (Exception exception) {
+        } catch (Exception | LinkageError exception) {
             LOGGER.log(Level.SEVERE, loaded.descriptor().name() + " 模块 onDisable 异常", exception);
         } finally {
             releaseLoginViewAuthentication(loaded.descriptor().id());
@@ -886,16 +886,15 @@ public final class ModuleRegistry {
         if (loaded == null) {
             return;
         }
-        releaseLoginViewAuthentication(moduleId);
-        clearModuleRegistrations(loaded);
+        loaded.setEnabled(false);
         try {
-            loaded.instance().onDisable();
-        } catch (Exception exception) {
-            LOGGER.warning("清理失败模块 " + loaded.descriptor().name() + " 时发生异常: " + exception.getMessage());
-        } catch (LinkageError error) {
-            LOGGER.warning("清理失败模块 " + loaded.descriptor().name() + " 时依赖不可用: " + error.getMessage());
+            try { releaseLoginViewAuthentication(moduleId); }
+            finally { clearModuleRegistrations(loaded); }
+        } finally {
+            try { loaded.instance().onDisable(); }
+            catch (Exception | LinkageError error) { LOGGER.warning("清理失败模块 " + loaded.descriptor().name() + " 时发生异常: " + error.getClass().getSimpleName()); }
+            finally { closeClassLoader(loaded); }
         }
-        closeClassLoader(loaded);
     }
 
     private void releaseLoginViewAuthentication(String moduleId) {
