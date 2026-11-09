@@ -175,6 +175,11 @@ public class MarketAdminCommand {
         sender.sendMessage(fullMsg("help.edit", cmd));
         sender.sendMessage(fullMsg("help.open", cmd));
         sender.sendMessage("§7"+cmd+" trades §f- 管理员交易管理面板（筛选、详情、关联流水）");
+        sender.sendMessage("§7"+cmd+" exchange open <兑换所ID> §f- 在绑定的 Adyeshach NPC 附近打开兑换");
+        if (sender.hasPermission("arcartxsuite.market.exchange.admin")) {
+            sender.sendMessage("§7"+cmd+" exchange edit [兑换所ID] §f- 编辑兑换所");
+            sender.sendMessage("§7"+cmd+" exchange ledger [玩家UUID] §f- 查看待核对兑换");
+        }
         sender.sendMessage("§7"+cmd+" ledger [页码] [状态] [玩家UUID] §f- 交易/交付流水");
         sender.sendMessage("§7"+cmd+" resolve <ID> <delivered|cancel|retry-confirmed> <说明> §f- 人工核对不确定结果");
     }

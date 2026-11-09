@@ -1,0 +1,1154 @@
+ui:
+  isHud: false
+  defaultOpen: false
+  background: true
+  escClose: true
+  closeDied: true
+  screenScale: true
+  through: false
+  jei: false
+  itemSize: 16
+  hide:
+  - hotbar
+  - crosshair
+  - player_state
+  - experience_bar
+  - chat_panel
+  action:
+    load: |-
+      var.whLayoutEnabled = false
+      var.rows = {}
+      var.keys = []
+      var.selection = ''
+      var.search = ''
+      var.page = 0
+      var.pageText = '1 / 1'
+      var.hasNext = false
+      var.dirtyRows = false
+      var.detailDirty = false
+      var.busy = false
+      var.token = ''
+      var.balances = ''
+      var.shopName = 'NPC 兑换所'
+      var.warehouse = false
+      var.resolved = false
+      var.catalogRevision = ''
+      var.detailsReady = false
+      var.confirmLabel = '&7选择兑换条目'
+      var.canEdit = false
+      var.noticeActive = false
+      var.noticeText = ''
+      var.noticeDetail = ''
+      var.noticeFade = Fade(80, 1000, 220)
+      var.noticePeaked = false
+      var.noticeLines = []
+      var.noticeCount = 1
+    open: |-
+      var.noticeActive = false
+      var.noticePeaked = false
+      var.noticeText = ''
+      var.noticeDetail = ''
+      Packet.send('AXS:market_exchange', 'refresh')
+    close: Packet.send('AXS:market_exchange', 'close')
+    tick: |-
+      if(var.dirtyRows && var.offerIcons != none){
+        var.dirtyRows = false
+        keys = []
+        for(key in var.rows.keys()){
+          row = var.rows[key]
+          if(var.search == '' || row['name'].contains(var.search) || row['cost'].contains(var.search) || row['reward'].contains(var.search)){ keys.add(key) }
+        }
+        var.keys = keys
+        pages = ((keys.size() + 11) / 12).toInt()
+        if(pages < 1){ pages = 1 }
+        if(var.page >= pages){ var.page = pages - 1 }
+        if(var.page < 0){ var.page = 0 }
+        var.pageText = (var.page + 1).toInt().round() + ' / ' + pages.round()
+        var.hasNext = var.page + 1 < pages
+        for(i in range(0, 11)){
+          index = (var.page * 12 + i).round()
+          row = index.toInt() < keys.size() ? var.rows[keys.get(index)] : none
+          var.offerIcons[i.round()].setItemIcon(row == none ? '' : row['icon'])
+        }
+      }
+      if(var.detailDirty && var.costIcons != none && var.rewardIcons != none){
+        var.detailDirty = false
+        row = var.rows[var.selection]
+        for(i in range(0, 7)){
+          idx = i.round()
+          cost = row == none ? none : row['costRows'][idx]
+          reward = row == none ? none : row['rewardRows'][idx]
+          var.costIcons[idx].setItemIcon(cost == none ? '' : cost['icon'])
+          var.rewardIcons[idx].setItemIcon(reward == none ? '' : reward['icon'])
+        }
+      }
+      if(var.noticeActive){
+        var.noticeOpacity = var.noticeFade.get()
+        if(var.noticeOpacity > 0){ var.noticePeaked = true }
+        if(var.noticePeaked && var.noticeOpacity <= 0){
+          var.noticeActive = false
+          var.noticePeaked = false
+          var.noticeText = ''
+          var.noticeDetail = ''
+        }
+      }
+  packetHandler:
+    npc_catalog: |-
+      var.rows = packet['rows']
+      var.shopName = packet['name']
+      var.token = packet['token']
+      var.balances = packet['balances']
+      var.warehouse = packet['warehouse']
+      var.canEdit = packet['admin']
+      var.resolved = true
+      var.catalogRevision = packet['revision']
+      var.detailsReady = false
+      var.busy = false
+      var.dirtyRows = true
+      var.detailDirty = true
+      if(var.rows[var.selection] == none){ var.selection = '' }
+      if(packet['lastResult'] != ''){
+      if(!var.noticeActive){
+        var.noticeText = packet['lastResult']
+        var.noticeDetail = ''
+        parts = var.noticeText.split('；凭证 ')
+        if(parts.size() > 1){var.noticeText = parts.get(0.round())
+      var.noticeDetail = '凭证 ' + parts.get(1.round())}
+        var.noticeFade.reset()
+        var.noticePeaked = false
+        var.noticeActive = true
+      }
+      }
+      if(var.rows[var.selection] != none){Packet.send('AXS:market_exchange', 'detail', var.rows[var.selection]['id'])}
+      var.confirmLabel = var.rows[var.selection] == none ? '&7选择兑换条目' : '&7读取兑换详情'
+    npc_detail: |-
+      if(packet['revision'] == var.catalogRevision && var.rows[var.selection] != none && var.rows[var.selection]['id'] == packet['id']){
+        var.rows[var.selection]['costRows'] = packet['costRows']
+        var.rows[var.selection]['rewardRows'] = packet['rewardRows']
+        var.detailsReady = packet['available']
+        var.confirmLabel = packet['available'] ? '&f确认兑换一次' : '&7兑换资产暂不可用'
+        var.detailDirty = true
+      }
+    npc_result: |-
+      var.busy = packet['busy']
+      var.token = packet['token']
+      if(packet['busy'] != true){
+        noticeMessage = packet['message']
+        if(noticeMessage != none && noticeMessage != '' && !var.noticeActive){
+          var.noticeText = noticeMessage.replaceAll('(?i)[&§][0-9A-FK-ORX]', '')
+          noticeWrapped = var.noticeText.replaceAll('(.{22})(?=.)', '$1\n')
+          var.noticeLines = noticeWrapped.split('\n')
+          var.noticeCount = math.max(1, math.min(12, var.noticeLines.size()))
+          var.noticeFade.reset()
+          var.noticePeaked = false
+          var.noticeActive = true
+        }
+      }
+    ui_notice: |-
+      noticeMessage = packet['message']
+      if(noticeMessage != none && noticeMessage != '' && !var.noticeActive){
+        var.noticeText = noticeMessage.replaceAll('(?i)[&§][0-9A-FK-ORX]', '')
+        noticeWrapped = var.noticeText.replaceAll('(.{22})(?=.)', '$1\n')
+        var.noticeLines = noticeWrapped.split('\n')
+        var.noticeCount = math.max(1, math.min(12, var.noticeLines.size()))
+        var.noticeFade.reset()
+        var.noticePeaked = false
+        var.noticeActive = true
+      }
+controls:
+  自适应:
+    type: Adaptive
+    attribute:
+      point: ~middle_center
+      width: 1920
+      height: 1080
+    children:
+      主窗口:
+        type: Canvas
+        attribute:
+          x: 0
+          y: 0
+          width: 1512
+          height: 940
+          point: ~middle_center
+        children:
+          外壳:
+            type: Texture
+            attribute:
+              x: 0
+              y: 0
+              width: 1512
+              height: 940
+              normal: ~20,25,31,253
+              through: true
+              shape: ~round_rect
+              radius: 12
+          顶栏:
+            type: Texture
+            attribute:
+              x: 12
+              y: 12
+              width: 1488
+              height: 82
+              normal: ~28,34,41,255
+              through: true
+              shape: ~round_rect
+              radius: 8
+          标题:
+            type: Text
+            attribute:
+              x: 32
+              y: 24
+              texts: ~&fNPC 兑换所
+              fontSize: 48
+              through: true
+          副标:
+            type: Text
+            attribute:
+              x: 34
+              y: 68
+              texts: ~&7NPC EXCHANGE / 物品与多货币兑换
+              fontSize: 28
+              through: true
+          顶栏线:
+            type: Texture
+            attribute:
+              x: 24
+              y: 94
+              width: 1464
+              height: 1
+              normal: ~83,99,111,255
+              through: true
+          店名:
+            type: Text
+            attribute:
+              x: 520
+              y: 30
+              texts: '''&e'' + var.shopName'
+              fontSize: 36
+              through: true
+              limit: 28
+          关闭:
+            type: Canvas
+            attribute:
+              x: 1436
+              y: 28
+              width: 52
+              height: 44
+              enable: 'true'
+              alpha: '(true) ? 1 : 0.45'
+            children:
+              底色:
+                type: Texture
+                attribute:
+                  x: 0
+                  y: 0
+                  width: 52
+                  height: 44
+                  normal: 'self.isHovered() ? ''62,79,91,255'' : ''45,59,69,255'''
+                  through: true
+                  shape: ~round_rect
+                  radius: 6
+                effect:
+                  stroke:
+                    width: 3
+                    color: ~83,99,111,255
+              文字:
+                type: Text
+                attribute:
+                  x: 0
+                  y: 0
+                  texts: ~&f×
+                  fontSize: 32
+                  through: true
+                  point: ~middle_center
+            action:
+              clickLeft: self.ui.close()
+          刷新:
+            type: Canvas
+            attribute:
+              x: 1270
+              y: 28
+              width: 148
+              height: 44
+              enable: 'true'
+              alpha: '(true) ? 1 : 0.45'
+            children:
+              底色:
+                type: Texture
+                attribute:
+                  x: 0
+                  y: 0
+                  width: 148
+                  height: 44
+                  normal: 'self.isHovered() ? ''62,79,91,255'' : ''45,59,69,255'''
+                  through: true
+                  shape: ~round_rect
+                  radius: 6
+                effect:
+                  stroke:
+                    width: 3
+                    color: ~83,99,111,255
+              文字:
+                type: Text
+                attribute:
+                  x: 0
+                  y: 0
+                  texts: ~&f刷新报价
+                  fontSize: 32
+                  through: true
+                  point: ~middle_center
+            action:
+              clickLeft: Packet.send('AXS:market_exchange', 'refresh')
+          管理:
+            type: Canvas
+            attribute:
+              x: 1090
+              y: 28
+              width: 164
+              height: 44
+              enable: 'true'
+              alpha: '(true) ? 1 : 0.45'
+              visible: var.canEdit
+            children:
+              底色:
+                type: Texture
+                attribute:
+                  x: 0
+                  y: 0
+                  width: 164
+                  height: 44
+                  normal: 'self.isHovered() ? ''62,79,91,255'' : ''45,59,69,255'''
+                  through: true
+                  shape: ~round_rect
+                  radius: 6
+                effect:
+                  stroke:
+                    width: 3
+                    color: ~83,99,111,255
+              文字:
+                type: Text
+                attribute:
+                  x: 0
+                  y: 0
+                  texts: ~&f编辑兑换所
+                  fontSize: 32
+                  through: true
+                  point: ~middle_center
+            action:
+              clickLeft: Packet.send('AXS:market_exchange', 'editor')
+          目录面板:
+            type: Canvas
+            attribute:
+              x: 24
+              y: 112
+              width: 850
+              height: 804
+            children:
+              边框:
+                type: Canvas
+                attribute:
+                  x: 0
+                  y: 0
+                  width: 850
+                  height: 804
+                  through: true
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 850
+                      height: 804
+                      normal: ~35,42,48,255
+                      through: true
+                      shape: ~round_rect
+                      radius: 10
+                    effect:
+                      stroke:
+                        width: 1
+                        color: ~83,99,111,255
+                  内沿:
+                    type: Texture
+                    attribute:
+                      x: 8
+                      y: 8
+                      width: 834
+                      height: 1
+                      normal: ~57,70,82,255
+                      through: true
+                  下沿:
+                    type: Texture
+                    attribute:
+                      x: 12
+                      y: 801
+                      width: 826
+                      height: 1
+                      normal: ~23,29,35,255
+                      through: true
+                  左上:
+                    type: Texture
+                    attribute:
+                      x: 4
+                      y: 4
+                      width: 16
+                      height: 2
+                      normal: ~199,185,133,255
+                      through: true
+                  右下:
+                    type: Texture
+                    attribute:
+                      x: 830
+                      y: 798
+                      width: 16
+                      height: 2
+                      normal: ~199,185,133,255
+                      through: true
+              标题:
+                type: Text
+                attribute:
+                  x: 24
+                  y: 20
+                  texts: ~&f兑换目录
+                  fontSize: 36
+                  through: true
+              余额:
+                type: Text
+                attribute:
+                  x: 24
+                  y: 64
+                  texts: 'var.balances == '''' ? ''&7物品兑换'' : ''&7'' + var.balances'
+                  fontSize: 28
+                  through: true
+                  limit: 64
+                  tip: var.balances
+              搜索:
+                type: Canvas
+                attribute:
+                  x: 24
+                  y: 100
+                  width: 802
+                  height: 40
+                children:
+                  底:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 802
+                      height: 40
+                      normal: ~23,29,35,255
+                      through: true
+                      shape: ~round_rect
+                      radius: 5
+                  输入:
+                    type: TextBox
+                    attribute:
+                      x: 10
+                      y: 7
+                      width: 782
+                      height: 26
+                      fontSize: 32
+                      length: 512
+                      emptyText: ~&7搜索名称、成本或奖励
+                      editable: (true) && !var.busy
+                    action:
+                      textChange: |-
+                        var.search = self.getContent()
+                        var.page = 0
+                        var.dirtyRows = true
+                    val: npcSearch
+              目录:
+                type: HGrid
+                attribute:
+                  x: 24
+                  y: 158
+                  width: 802
+                  height: 520
+                  column: 3
+                  spaceBetweenX: 14
+                  spaceBetweenY: 14
+                action:
+                  create: |-
+                    var.offerIcons = {}
+                    for(i in range(0, 11)){
+                      cell = self['条目']
+                      if(i > 0){ cell = cell.copy('兑换' + i.round()) }
+                      cell.index = i.round()
+                      var.offerIcons[i.round()] = cell['图标']
+                    }
+                children:
+                  条目:
+                    type: Canvas
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 258
+                      height: 116
+                      index: 0.round()
+                      entryKey: '(var.page * 12 + self.index.toInt()).toInt() < var.keys.size() ? var.keys.get((var.page * 12 + self.index.toInt()).round())
+                        : '''''
+                      entry: var.rows[self.entryKey]
+                      visible: self.entry != none
+                    children:
+                      底:
+                        type: Texture
+                        attribute:
+                          x: 0
+                          y: 0
+                          width: 258
+                          height: 116
+                          normal: 'self.parent.entryKey == var.selection && var.selection != '''' ? ''62,79,91,255'' : (self.isHovered() ? ''45,59,69,255''
+                            : ''23,29,35,255'')'
+                          through: true
+                          shape: ~round_rect
+                          radius: 7
+                        effect:
+                          stroke:
+                            width: 3
+                            color: ~83,99,111,255
+                      图标:
+                        type: Slot
+                        attribute:
+                          x: 12
+                          y: 14
+                          width: 54
+                          height: 54
+                          slotType: ~Icon
+                          normal: ~0,0,0,0
+                          through: true
+                          itemScale: 0.8
+                      名称:
+                        type: Text
+                        attribute:
+                          x: 78
+                          y: 16
+                          texts: 'self.parent.entry == none ? '''' : ''&f'' + self.parent.entry[''name'']'
+                          fontSize: 32
+                          through: true
+                          limit: 10
+                      奖励:
+                        type: Text
+                        attribute:
+                          x: 78
+                          y: 47
+                          texts: 'self.parent.entry == none ? '''' : ''&7'' + self.parent.entry[''reward'']'
+                          fontSize: 28
+                          through: true
+                          limit: 15
+                      成本:
+                        type: Text
+                        attribute:
+                          x: 12
+                          y: 84
+                          texts: 'self.parent.entry == none ? '''' : ''&7'' + self.parent.entry[''cost'']'
+                          fontSize: 28
+                          through: true
+                          limit: 21
+                      材料标记:
+                        type: Texture
+                        attribute:
+                          x: 12
+                          y: 110
+                          width: 234
+                          height: 2
+                          normal: 'self.parent.entry != none && self.parent.entry[''available''] ? ''140,185,154,255'' : ''83,99,111,255'''
+                          through: true
+                    action:
+                      clickLeft: |-
+                        if(self.entry != none && !var.busy){ var.selection = self.entryKey
+                        var.detailDirty = true
+                        var.detailsReady = false
+                        var.confirmLabel = '&7读取兑换详情'
+                        Packet.send('AXS:market_exchange', 'detail', self.entry['id']) }
+              空提示:
+                type: Text
+                attribute:
+                  x: 0
+                  y: 380
+                  texts: ~&7暂无匹配的兑换条目
+                  fontSize: 36
+                  through: true
+                  point: ~top_center
+                  visible: var.resolved && var.keys.size() == 0
+              说明:
+                type: Text
+                attribute:
+                  x: 24
+                  y: 692
+                  texts: ~&7绿色细线表示成本材料齐全；点击条目查看详情
+                  fontSize: 28
+                  through: true
+              上一页:
+                type: Canvas
+                attribute:
+                  x: 222
+                  y: 742
+                  width: 52
+                  height: 38
+                  enable: var.page > 0
+                  alpha: '(var.page > 0) ? 1 : 0.45'
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 52
+                      height: 38
+                      normal: 'self.isHovered() ? ''62,79,91,255'' : ''45,59,69,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~83,99,111,255
+                  文字:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: ~&f‹
+                      fontSize: 32
+                      through: true
+                      point: ~middle_center
+                action:
+                  clickLeft: |-
+                    var.page = var.page - 1
+                    var.dirtyRows = true
+              页码:
+                type: Text
+                attribute:
+                  x: 0
+                  y: 752
+                  texts: '''&f'' + var.pageText'
+                  fontSize: 28
+                  through: true
+                  point: ~top_center
+              下一页:
+                type: Canvas
+                attribute:
+                  x: 576
+                  y: 742
+                  width: 52
+                  height: 38
+                  enable: var.hasNext
+                  alpha: '(var.hasNext) ? 1 : 0.45'
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 52
+                      height: 38
+                      normal: 'self.isHovered() ? ''62,79,91,255'' : ''45,59,69,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~83,99,111,255
+                  文字:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: ~&f›
+                      fontSize: 32
+                      through: true
+                      point: ~middle_center
+                action:
+                  clickLeft: |-
+                    var.page = var.page + 1
+                    var.dirtyRows = true
+          详情面板:
+            type: Canvas
+            attribute:
+              x: 898
+              y: 112
+              width: 590
+              height: 804
+            children:
+              边框:
+                type: Canvas
+                attribute:
+                  x: 0
+                  y: 0
+                  width: 590
+                  height: 804
+                  through: true
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 590
+                      height: 804
+                      normal: ~35,42,48,255
+                      through: true
+                      shape: ~round_rect
+                      radius: 10
+                    effect:
+                      stroke:
+                        width: 1
+                        color: ~83,99,111,255
+                  内沿:
+                    type: Texture
+                    attribute:
+                      x: 8
+                      y: 8
+                      width: 574
+                      height: 1
+                      normal: ~57,70,82,255
+                      through: true
+                  下沿:
+                    type: Texture
+                    attribute:
+                      x: 12
+                      y: 801
+                      width: 566
+                      height: 1
+                      normal: ~23,29,35,255
+                      through: true
+                  左上:
+                    type: Texture
+                    attribute:
+                      x: 4
+                      y: 4
+                      width: 16
+                      height: 2
+                      normal: ~199,185,133,255
+                      through: true
+                  右下:
+                    type: Texture
+                    attribute:
+                      x: 570
+                      y: 798
+                      width: 16
+                      height: 2
+                      normal: ~199,185,133,255
+                      through: true
+              标题:
+                type: Text
+                attribute:
+                  x: 24
+                  y: 20
+                  texts: 'var.rows[var.selection] == none ? ''&f选择兑换条目'' : ''&f'' + var.rows[var.selection][''name'']'
+                  fontSize: 36
+                  through: true
+                  limit: 25
+              成本标题:
+                type: Text
+                attribute:
+                  x: 24
+                  y: 78
+                  texts: ~&e需要支付
+                  fontSize: 32
+                  through: true
+              成本线:
+                type: Texture
+                attribute:
+                  x: 24
+                  y: 111
+                  width: 542
+                  height: 1
+                  normal: ~83,99,111,255
+                  through: true
+              奖励标题:
+                type: Text
+                attribute:
+                  x: 24
+                  y: 366
+                  texts: ~&e兑换所得
+                  fontSize: 32
+                  through: true
+              奖励线:
+                type: Texture
+                attribute:
+                  x: 24
+                  y: 400
+                  width: 542
+                  height: 1
+                  normal: ~83,99,111,255
+                  through: true
+              cost列表:
+                type: HGrid
+                attribute:
+                  x: 24
+                  y: 130
+                  width: 542
+                  height: 224
+                  column: 2
+                  spaceBetweenX: 14
+                  spaceBetweenY: 10
+                action:
+                  create: |-
+                    var.costIcons = {}
+                    for(i in range(0, 7)){
+                      cell = self['资产']
+                      if(i > 0){ cell = cell.copy('资产' + i.round()) }
+                      cell.index = i.round()
+                      var.costIcons[i.round()] = cell['图标']
+                    }
+                children:
+                  资产:
+                    type: Canvas
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 264
+                      height: 46
+                      index: 0.round()
+                      entry: 'var.rows[var.selection] == none ? none : var.rows[var.selection][''costRows''][self.index]'
+                    children:
+                      底:
+                        type: Texture
+                        attribute:
+                          x: 0
+                          y: 0
+                          width: 264
+                          height: 46
+                          normal: ~23,29,35,255
+                          through: true
+                          shape: ~round_rect
+                          radius: 5
+                      图标:
+                        type: Slot
+                        attribute:
+                          x: 6
+                          y: 5
+                          width: 36
+                          height: 36
+                          slotType: ~Icon
+                          normal: ~0,0,0,0
+                          through: true
+                          itemScale: 0.8
+                      名称:
+                        type: Text
+                        attribute:
+                          x: 50
+                          y: 8
+                          texts: 'self.parent.entry == none ? '''' : ''&f'' + self.parent.entry[''name'']'
+                          fontSize: 28
+                          through: true
+                          limit: 13
+                      数量:
+                        type: Text
+                        attribute:
+                          x: -10
+                          y: 27
+                          texts: 'self.parent.entry == none ? '''' : ''&e×'' + self.parent.entry[''quantity'']'
+                          fontSize: 28
+                          through: true
+                          point: ~top_right
+              reward列表:
+                type: HGrid
+                attribute:
+                  x: 24
+                  y: 418
+                  width: 542
+                  height: 224
+                  column: 2
+                  spaceBetweenX: 14
+                  spaceBetweenY: 10
+                action:
+                  create: |-
+                    var.rewardIcons = {}
+                    for(i in range(0, 7)){
+                      cell = self['资产']
+                      if(i > 0){ cell = cell.copy('资产' + i.round()) }
+                      cell.index = i.round()
+                      var.rewardIcons[i.round()] = cell['图标']
+                    }
+                children:
+                  资产:
+                    type: Canvas
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 264
+                      height: 46
+                      index: 0.round()
+                      entry: 'var.rows[var.selection] == none ? none : var.rows[var.selection][''rewardRows''][self.index]'
+                    children:
+                      底:
+                        type: Texture
+                        attribute:
+                          x: 0
+                          y: 0
+                          width: 264
+                          height: 46
+                          normal: ~23,29,35,255
+                          through: true
+                          shape: ~round_rect
+                          radius: 5
+                      图标:
+                        type: Slot
+                        attribute:
+                          x: 6
+                          y: 5
+                          width: 36
+                          height: 36
+                          slotType: ~Icon
+                          normal: ~0,0,0,0
+                          through: true
+                          itemScale: 0.8
+                      名称:
+                        type: Text
+                        attribute:
+                          x: 50
+                          y: 8
+                          texts: 'self.parent.entry == none ? '''' : ''&f'' + self.parent.entry[''name'']'
+                          fontSize: 28
+                          through: true
+                          limit: 13
+                      数量:
+                        type: Text
+                        attribute:
+                          x: -10
+                          y: 27
+                          texts: 'self.parent.entry == none ? '''' : ''&e×'' + self.parent.entry[''quantity'']'
+                          fontSize: 28
+                          through: true
+                          point: ~top_right
+              来源:
+                type: Text
+                attribute:
+                  x: 24
+                  y: 670
+                  texts: 'var.whLayoutEnabled ? ''&7背包优先，可用仓库补足 · 奖励进入背包'' : ''&7使用背包材料 · 奖励进入背包'''
+                  fontSize: 28
+                  through: true
+              兑换:
+                type: Canvas
+                attribute:
+                  x: 24
+                  y: 724
+                  width: 542
+                  height: 48
+                  enable: var.rows[var.selection] != none && var.detailsReady && !var.busy && var.token != ''
+                  alpha: '(var.rows[var.selection] != none && var.detailsReady && !var.busy && var.token != '''') ? 1 : 0.45'
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 542
+                      height: 48
+                      normal: 'self.isHovered() ? ''62,79,91,255'' : ''45,59,69,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~83,99,111,255
+                  文字:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: 'var.busy ? ''&e正在结算…'' : var.confirmLabel'
+                      fontSize: 32
+                      through: true
+                      point: ~middle_center
+                action:
+                  clickLeft: |-
+                    if(var.rows[var.selection] != none){
+                      var.busy = true
+                      Packet.send('AXS:market_exchange', 'buy', var.rows[var.selection]['id'], var.token)
+                    }
+      居中操作提示:
+        type: Canvas
+        attribute:
+          point: ~middle_center
+          x: 0
+          y: 0
+          width: 560
+          height: var.noticeCount * 28 + 36
+          visible: var.noticeActive
+          alpha: 'var.noticeFade == none ? 0 : var.noticeFade.get()'
+          through: true
+        children:
+          阴影:
+            type: Texture
+            attribute:
+              x: 2
+              y: 3
+              width: 560
+              height: self.parent.height
+              normal: ~0,0,0,48
+              shape: ~round_rect
+              radius: 6
+              through: true
+          底板:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~32,37,43,250
+              shape: ~round_rect
+              radius: 6
+              through: true
+            effect:
+              stroke:
+                width: 1
+                color: ~76,81,87,255
+          侧标:
+            type: Texture
+            attribute:
+              x: 12
+              y: 14
+              width: 2
+              height: self.parent.height - 28
+              normal: ~108,113,119,255
+              through: true
+          文字0:
+            type: Text
+            attribute:
+              point: ~top_center
+              x: 0
+              y: 18
+              texts: 'var.noticeCount > 0 ? ''&f'' + var.noticeLines.get(0.round()) : '''''
+              fontSize: 36
+              alignment: ~center
+              visible: var.noticeCount > 0
+              tip: var.noticeText
+              through: true
+          文字1:
+            type: Text
+            attribute:
+              point: ~top_center
+              x: 0
+              y: 46
+              texts: 'var.noticeCount > 1 ? ''&f'' + var.noticeLines.get(1.round()) : '''''
+              fontSize: 36
+              alignment: ~center
+              visible: var.noticeCount > 1
+              tip: var.noticeText
+              through: true
+          文字2:
+            type: Text
+            attribute:
+              point: ~top_center
+              x: 0
+              y: 74
+              texts: 'var.noticeCount > 2 ? ''&f'' + var.noticeLines.get(2.round()) : '''''
+              fontSize: 36
+              alignment: ~center
+              visible: var.noticeCount > 2
+              tip: var.noticeText
+              through: true
+          文字3:
+            type: Text
+            attribute:
+              point: ~top_center
+              x: 0
+              y: 102
+              texts: 'var.noticeCount > 3 ? ''&f'' + var.noticeLines.get(3.round()) : '''''
+              fontSize: 36
+              alignment: ~center
+              visible: var.noticeCount > 3
+              tip: var.noticeText
+              through: true
+          文字4:
+            type: Text
+            attribute:
+              point: ~top_center
+              x: 0
+              y: 130
+              texts: 'var.noticeCount > 4 ? ''&f'' + var.noticeLines.get(4.round()) : '''''
+              fontSize: 36
+              alignment: ~center
+              visible: var.noticeCount > 4
+              tip: var.noticeText
+              through: true
+          文字5:
+            type: Text
+            attribute:
+              point: ~top_center
+              x: 0
+              y: 158
+              texts: 'var.noticeCount > 5 ? ''&f'' + var.noticeLines.get(5.round()) : '''''
+              fontSize: 36
+              alignment: ~center
+              visible: var.noticeCount > 5
+              tip: var.noticeText
+              through: true
+          文字6:
+            type: Text
+            attribute:
+              point: ~top_center
+              x: 0
+              y: 186
+              texts: 'var.noticeCount > 6 ? ''&f'' + var.noticeLines.get(6.round()) : '''''
+              fontSize: 36
+              alignment: ~center
+              visible: var.noticeCount > 6
+              tip: var.noticeText
+              through: true
+          文字7:
+            type: Text
+            attribute:
+              point: ~top_center
+              x: 0
+              y: 214
+              texts: 'var.noticeCount > 7 ? ''&f'' + var.noticeLines.get(7.round()) : '''''
+              fontSize: 36
+              alignment: ~center
+              visible: var.noticeCount > 7
+              tip: var.noticeText
+              through: true
+          文字8:
+            type: Text
+            attribute:
+              point: ~top_center
+              x: 0
+              y: 242
+              texts: 'var.noticeCount > 8 ? ''&f'' + var.noticeLines.get(8.round()) : '''''
+              fontSize: 36
+              alignment: ~center
+              visible: var.noticeCount > 8
+              tip: var.noticeText
+              through: true
+          文字9:
+            type: Text
+            attribute:
+              point: ~top_center
+              x: 0
+              y: 270
+              texts: 'var.noticeCount > 9 ? ''&f'' + var.noticeLines.get(9.round()) : '''''
+              fontSize: 36
+              alignment: ~center
+              visible: var.noticeCount > 9
+              tip: var.noticeText
+              through: true
+          文字10:
+            type: Text
+            attribute:
+              point: ~top_center
+              x: 0
+              y: 298
+              texts: 'var.noticeCount > 10 ? ''&f'' + var.noticeLines.get(10.round()) : '''''
+              fontSize: 36
+              alignment: ~center
+              visible: var.noticeCount > 10
+              tip: var.noticeText
+              through: true
+          文字11:
+            type: Text
+            attribute:
+              point: ~top_center
+              x: 0
+              y: 326
+              texts: 'var.noticeCount > 11 ? ''&f'' + var.noticeLines.get(11.round()) : '''''
+              fontSize: 36
+              alignment: ~center
+              visible: var.noticeCount > 11
+              tip: var.noticeText
+              through: true

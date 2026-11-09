@@ -468,6 +468,14 @@ public class MarketService {
     /**
      * 打开系统商店 UI，可预选商店（由下一个 shop_list 包消费）。
      */
+    public boolean openSystemShop(Player player, String id) {
+        if (shopService == null || id == null || !packetBridge.isAvailable()) return false;
+        var shop = shopService.getShop(id);
+        if (shop == null || (!shop.permission().isBlank() && !player.hasPermission(shop.permission()))) return false;
+        openShopUi(player, id);
+        return packetBridge.isUiOpen(player, config.ui().shopId());
+    }
+
     public void openShopUi(Player player, @Nullable String shopId) {
         if (shopService == null) { player.sendMessage(messages.get("player.shop-unavailable")); return; }
         if (shopId != null && !shopId.isBlank()) {

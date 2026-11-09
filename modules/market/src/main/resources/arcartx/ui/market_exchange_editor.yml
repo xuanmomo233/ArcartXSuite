@@ -1,0 +1,5432 @@
+ui:
+  isHud: false
+  defaultOpen: false
+  background: true
+  escClose: false
+  closeDied: true
+  screenScale: true
+  through: false
+  jei: false
+  itemSize: 16
+  hide:
+  - hotbar
+  - crosshair
+  - player_state
+  - experience_bar
+  - chat_panel
+  action:
+    load: |-
+      var.whLayoutEnabled = false
+      var.hydrating = true
+      var.dirty = false
+      var.busy = false
+      var.token = ''
+      var.mode = 'shop'
+      var.modal = ''
+      var.confirmKind = ''
+      var.shopNew = true
+      var.shopId = ''
+      var.shopName = ''
+      var.shopEnabled = false
+      var.shopPermission = ''
+      var.shopNpcs = ''
+      var.revision = '0'
+      var.shops = {}
+      var.shopCount = 0
+      var.shopPage = 0
+      var.offers = {}
+      var.offerCount = 0
+      var.offerPage = 0
+      var.offerId = ''
+      var.offerName = ''
+      var.offerPermission = ''
+      var.offerEnabled = true
+      var.offerNew = true
+      var.costs = {}
+      var.rewards = {}
+      var.costRows = {}
+      var.rewardRows = {}
+      var.costCount = 0
+      var.rewardCount = 0
+      var.assetSide = 'cost'
+      var.assetIndex = 0
+      var.asset = none
+      var.assetRowsDirty = false
+      var.assetPreviewDirty = false
+      var.inventory = {}
+      var.pickDirty = false
+      var.pickExact = false
+      var.currencies = {}
+      var.currencyCount = 0
+      var.currencyPage = 0
+      var.nearby = {}
+      var.nearbyCount = 0
+      var.nearbyPage = 0
+      var.ledgerRows = {}
+      var.ledgerCount = 0
+      var.ledgerPage = 0
+      var.ledgerSelection = ''
+      var.exportPath = ''
+      var.pendingShop = ''
+      var.pendingOffer = 0
+      var.shopPages = 1
+      var.offerPages = 1
+      var.currencyPages = 1
+      var.nearbyPages = 1
+      var.ledgerPages = 1
+      var.requestedOfferId = ''
+      var.session = ''
+      var.noticeActive = false
+      var.noticeText = ''
+      var.noticeDetail = ''
+      var.noticeFade = Fade(80, 1000, 220)
+      var.noticePeaked = false
+      var.noticeLines = []
+      var.noticeCount = 1
+    open: |-
+      var.noticeActive = false
+      var.noticePeaked = false
+      var.noticeText = ''
+      var.noticeDetail = ''
+      Packet.send('AXS:market_exchange_editor', 'list')
+    close: Packet.send('AXS:market_exchange_editor', 'close', var.session)
+    tick: |-
+      if(var.assetRowsDirty && var.assetIcons != none){
+        var.assetRowsDirty = false
+        for(i in range(0, 7)){
+          row = var.assetSide == 'cost' ? var.costRows[i.round()] : var.rewardRows[i.round()]
+          var.assetIcons[i.round()].setItemIcon(row == none ? '' : row['icon'])
+        }
+      }
+      if(var.assetPreviewDirty && val.assetPreview != none){
+        var.assetPreviewDirty = false
+        row = var.assetSide == 'cost' ? var.costRows[var.assetIndex.round()] : var.rewardRows[var.assetIndex.round()]
+        val.assetPreview.setItemIcon(row == none ? '' : row['icon'])
+      }
+      if(var.pickDirty && var.pickIcons != none){
+        var.pickDirty = false
+        for(i in range(0, 35)){
+          row = var.inventory[i.round()]
+          var.pickIcons[i.round()].setItemIcon(row == none ? '' : row['icon'])
+        }
+      }
+      if(var.noticeActive){
+        var.noticeOpacity = var.noticeFade.get()
+        if(var.noticeOpacity > 0){ var.noticePeaked = true }
+        if(var.noticePeaked && var.noticeOpacity <= 0){
+          var.noticeActive = false
+          var.noticePeaked = false
+          var.noticeText = ''
+          var.noticeDetail = ''
+        }
+      }
+  packetHandler:
+    editor_list: |-
+      var.shops = packet['shops']
+      var.shopCount = packet['shopCount']
+      var.token = packet['token']
+      var.session = packet['session']
+      var.currencies = packet['currencies']
+      var.currencyCount = packet['currencyCount']
+      var.inventory = packet['inventory']
+      var.nearby = packet['nearby']
+      var.nearbyCount = packet['nearbyCount']
+      var.pickDirty = true
+      var.hydrating = false
+      var.shopPages = 1
+      while(var.shopCount > var.shopPages * 8){var.shopPages = var.shopPages + 1}
+      if(var.shopPage >= var.shopPages){var.shopPage = var.shopPages - 1}
+      var.currencyPages = 1
+      while(var.currencyCount > var.currencyPages * 6){var.currencyPages = var.currencyPages + 1}
+      var.nearbyPages = 1
+      while(var.nearbyCount > var.nearbyPages * 6){var.nearbyPages = var.nearbyPages + 1}
+    editor_shop: |-
+      if(packet['selectOffer'] == ''){var.mode = 'shop'}
+      var.shopNew = false
+      var.shopId = packet['id']
+      var.shopName = packet['name']
+      var.shopEnabled = packet['enabled']
+      var.shopPermission = packet['permission']
+      var.shopNpcs = packet['npcs']
+      var.revision = packet['revision']
+      var.offers = packet['offers']
+      var.offerCount = packet['offerCount']
+      var.token = packet['token']
+      var.offerPage = 0
+      var.hydrating = true
+      val.shopIdInput.setContent(var.shopId)
+      val.shopNameInput.setContent(var.shopName)
+      val.shopPermissionInput.setContent(var.shopPermission)
+      val.shopNpcInput.setContent(var.shopNpcs)
+      var.hydrating = false
+      var.dirty = false
+      if(packet['selectOffer'] != ''){
+        for(key in var.offers.keys()){
+          if(var.offers[key]['id'] == packet['selectOffer']){ var.pendingOffer = key.toInt() }
+        }
+      }
+      var.offerPages = 1
+      while(var.offerCount > var.offerPages * 6){var.offerPages = var.offerPages + 1}
+      if(packet['selectOffer'] != ''){var.offerPage = (var.pendingOffer / 6).toInt()}
+      for(key in var.shops.keys()){if(var.shops[key]['id'] == var.shopId){var.shopPage = (key.toInt() / 8).toInt()}}
+      if(packet['selectOffer'] != ''){var.requestedOfferId = packet['selectOffer']
+      var.busy = true}else{var.busy = false}
+    editor_result: |-
+      var.token = packet['token']
+      var.busy = false
+      if(packet['saved'] == true){ var.dirty = false }
+      if(packet['busy'] != true){
+        noticeMessage = packet['message']
+        if(noticeMessage != none && noticeMessage != '' && !var.noticeActive){
+          var.noticeText = noticeMessage.replaceAll('(?i)[&§][0-9A-FK-ORX]', '')
+          noticeWrapped = var.noticeText.replaceAll('(.{22})(?=.)', '$1\n')
+          var.noticeLines = noticeWrapped.split('\n')
+          var.noticeCount = math.max(1, math.min(12, var.noticeLines.size()))
+          var.noticeFade.reset()
+          var.noticePeaked = false
+          var.noticeActive = true
+        }
+      }
+    editor_deleted: |-
+      var.mode = 'shop'
+      var.shopNew = true
+      var.shopId = ''
+      var.shopName = ''
+      var.shopEnabled = false
+      var.shopPermission = ''
+      var.shopNpcs = ''
+      var.revision = '0'
+      var.offers = {}
+      var.offerCount = 0
+      var.offerPages = 1
+      var.offerPage = 0
+      var.hydrating = true
+      val.shopIdInput.setContent('')
+      val.shopNameInput.setContent('')
+      val.shopPermissionInput.setContent('')
+      val.shopNpcInput.setContent('')
+      var.hydrating = false
+      var.dirty = false
+    editor_inventory: |-
+      var.inventory = packet['inventory']
+      var.pickDirty = true
+    editor_pick: |-
+      parts = packet['target'].split(':')
+      var.assetSide = parts.get(0.round())
+      var.assetIndex = parts.get(1.round()).toInt()
+      asset = var.pickExact ? packet['exactAsset'] : packet['asset']
+      row = {'name': packet['name'], 'icon': packet['icon'], 'quantity': '1'}
+      if(var.assetSide == 'cost'){
+        var.costs[var.assetIndex.round()] = asset
+        var.costRows[var.assetIndex.round()] = row
+      }else{
+        var.rewards[var.assetIndex.round()] = asset
+        var.rewardRows[var.assetIndex.round()] = row
+      }
+      var.pickExact = false
+      var.modal = ''
+      var.dirty = true
+      var.asset = var.assetSide == 'cost' ? var.costs[var.assetIndex.round()] : var.rewards[var.assetIndex.round()]
+      var.hydrating = true
+      val.assetIdInput.setContent(var.asset == none ? '' : var.asset['id'])
+      val.assetAmountInput.setContent(var.asset == none ? '' : var.asset['amount'])
+      var.hydrating = false
+      var.assetRowsDirty = true
+      var.assetPreviewDirty = true
+    editor_preview: |-
+      parts = packet['target'].split(':')
+      idx = parts.get(1.round()).toInt()
+      if(parts.get(0.round()) == 'cost'){ var.costRows[idx.round()] = packet['row'] }else{ var.rewardRows[idx.round()] = packet['row'] }
+      var.assetRowsDirty = true
+      var.assetPreviewDirty = true
+    editor_ledger: |-
+      var.ledgerRows = packet['rows']
+      var.ledgerCount = packet['count']
+      var.ledgerPage = 0
+      var.ledgerSelection = ''
+      var.modal = 'ledger'
+      var.busy = false
+      val.ledgerUuidInput.setContent('')
+      var.ledgerPages = 1
+      while(var.ledgerCount > var.ledgerPages * 6){var.ledgerPages = var.ledgerPages + 1}
+    editor_export: var.exportPath = packet['path']
+    editor_offer: |-
+      if(packet['shop'] == var.shopId && packet['offer']['id'] == var.requestedOfferId){
+        var.token = packet['token']
+        var.revision = packet['revision']
+        for(key in var.offers.keys()){
+          if(var.offers[key]['id'] == packet['offer']['id']){var.pendingOffer = key.toInt()}
+        }
+        var.offers[var.pendingOffer.round()]['offer'] = packet['offer']
+        var.offers[var.pendingOffer.round()]['costRows'] = packet['costRows']
+        var.offers[var.pendingOffer.round()]['rewardRows'] = packet['rewardRows']
+        var.busy = false
+      offerRow = var.offers[var.pendingOffer.round()]
+      if(offerRow != none){
+        offer = offerRow['offer']
+        var.mode = 'offer'
+        var.offerNew = false
+        var.offerId = offer['id']
+        var.offerName = offer['name']
+        var.offerEnabled = offer['enabled']
+        var.offerPermission = offer['permission']
+        var.costs = {}
+        var.rewards = {}
+        var.costCount = offer['costs'].size()
+        var.rewardCount = offer['rewards'].size()
+        for(i in range(0, 7)){
+          idx = i.round()
+          if(i < var.costCount){ var.costs[idx] = offer['costs'].get(idx) }
+          if(i < var.rewardCount){ var.rewards[idx] = offer['rewards'].get(idx) }
+        }
+        var.costRows = offerRow['costRows']
+        var.rewardRows = offerRow['rewardRows']
+        var.hydrating = true
+        val.offerIdInput.setContent(var.offerId)
+        val.offerNameInput.setContent(var.offerName)
+        val.offerPermissionInput.setContent(var.offerPermission)
+        var.hydrating = false
+        var.assetSide = 'cost'
+        var.assetIndex = 0
+        var.dirty = false
+      }
+      var.asset = var.assetSide == 'cost' ? var.costs[var.assetIndex.round()] : var.rewards[var.assetIndex.round()]
+      var.hydrating = true
+      val.assetIdInput.setContent(var.asset == none ? '' : var.asset['id'])
+      val.assetAmountInput.setContent(var.asset == none ? '' : var.asset['amount'])
+      var.hydrating = false
+      var.assetRowsDirty = true
+      var.assetPreviewDirty = true
+      var.offerPage = (var.pendingOffer / 6).toInt()
+      }
+    ui_notice: |-
+      noticeMessage = packet['message']
+      if(noticeMessage != none && noticeMessage != '' && !var.noticeActive){
+        var.noticeText = noticeMessage.replaceAll('(?i)[&§][0-9A-FK-ORX]', '')
+        noticeWrapped = var.noticeText.replaceAll('(.{22})(?=.)', '$1\n')
+        var.noticeLines = noticeWrapped.split('\n')
+        var.noticeCount = math.max(1, math.min(12, var.noticeLines.size()))
+        var.noticeFade.reset()
+        var.noticePeaked = false
+        var.noticeActive = true
+      }
+controls:
+  自适应:
+    type: Adaptive
+    attribute:
+      point: ~middle_center
+      width: 1920
+      height: 1080
+    children:
+      主窗口:
+        type: Canvas
+        attribute:
+          x: 0
+          y: 0
+          width: 1512
+          height: 940
+          point: ~middle_center
+        children:
+          外壳:
+            type: Texture
+            attribute:
+              x: 0
+              y: 0
+              width: 1512
+              height: 940
+              normal: ~20,25,31,253
+              through: true
+              shape: ~round_rect
+              radius: 12
+          顶栏:
+            type: Texture
+            attribute:
+              x: 12
+              y: 12
+              width: 1488
+              height: 82
+              normal: ~28,34,41,255
+              through: true
+              shape: ~round_rect
+              radius: 8
+          标题:
+            type: Text
+            attribute:
+              x: 32
+              y: 24
+              texts: ~&fNPC 兑换编辑
+              fontSize: 48
+              through: true
+          副标:
+            type: Text
+            attribute:
+              x: 34
+              y: 68
+              texts: ~&7CATALOG STUDIO / 真实选物 · 多货币 · NPC 绑定
+              fontSize: 28
+              through: true
+          顶栏线:
+            type: Texture
+            attribute:
+              x: 24
+              y: 94
+              width: 1464
+              height: 1
+              normal: ~83,99,111,255
+              through: true
+          关闭:
+            type: Canvas
+            attribute:
+              x: 1436
+              y: 28
+              width: 52
+              height: 44
+              enable: 'true'
+              alpha: '(true) ? 1 : 0.45'
+            children:
+              底色:
+                type: Texture
+                attribute:
+                  x: 0
+                  y: 0
+                  width: 52
+                  height: 44
+                  normal: 'self.isHovered() ? ''62,79,91,255'' : ''45,59,69,255'''
+                  through: true
+                  shape: ~round_rect
+                  radius: 6
+                effect:
+                  stroke:
+                    width: 3
+                    color: ~83,99,111,255
+              文字:
+                type: Text
+                attribute:
+                  x: 0
+                  y: 0
+                  texts: ~&f×
+                  fontSize: 32
+                  through: true
+                  point: ~middle_center
+            action:
+              clickLeft: |-
+                if(var.dirty){ var.confirmKind = 'close'
+                var.modal = 'confirm' }else{ self.ui.close() }
+          帮助:
+            type: Canvas
+            attribute:
+              x: 1304
+              y: 28
+              width: 116
+              height: 44
+              enable: 'true'
+              alpha: '(true) ? 1 : 0.45'
+            children:
+              底色:
+                type: Texture
+                attribute:
+                  x: 0
+                  y: 0
+                  width: 116
+                  height: 44
+                  normal: 'self.isHovered() ? ''62,79,91,255'' : ''45,59,69,255'''
+                  through: true
+                  shape: ~round_rect
+                  radius: 6
+                effect:
+                  stroke:
+                    width: 3
+                    color: ~83,99,111,255
+              文字:
+                type: Text
+                attribute:
+                  x: 0
+                  y: 0
+                  texts: ~&f帮助
+                  fontSize: 32
+                  through: true
+                  point: ~middle_center
+            action:
+              clickLeft: var.modal = 'help'
+          凭证:
+            type: Canvas
+            attribute:
+              x: 1124
+              y: 28
+              width: 164
+              height: 44
+              enable: 'true'
+              alpha: '(true) ? 1 : 0.45'
+            children:
+              底色:
+                type: Texture
+                attribute:
+                  x: 0
+                  y: 0
+                  width: 164
+                  height: 44
+                  normal: 'self.isHovered() ? ''62,79,91,255'' : ''45,59,69,255'''
+                  through: true
+                  shape: ~round_rect
+                  radius: 6
+                effect:
+                  stroke:
+                    width: 3
+                    color: ~83,99,111,255
+              文字:
+                type: Text
+                attribute:
+                  x: 0
+                  y: 0
+                  texts: ~&f交易核对
+                  fontSize: 32
+                  through: true
+                  point: ~middle_center
+            action:
+              clickLeft: Packet.send('AXS:market_exchange_editor', 'ledger', var.token)
+          未保存:
+            type: Text
+            attribute:
+              x: 824
+              y: 76
+              texts: 'var.dirty ? ''&e有未保存的修改'' : ''&7已与服务器同步'''
+              fontSize: 28
+              through: true
+          刷新:
+            type: Canvas
+            attribute:
+              x: 944
+              y: 28
+              width: 164
+              height: 44
+              enable: 'true'
+              alpha: '(true) ? 1 : 0.45'
+            children:
+              底色:
+                type: Texture
+                attribute:
+                  x: 0
+                  y: 0
+                  width: 164
+                  height: 44
+                  normal: 'self.isHovered() ? ''62,79,91,255'' : ''45,59,69,255'''
+                  through: true
+                  shape: ~round_rect
+                  radius: 6
+                effect:
+                  stroke:
+                    width: 3
+                    color: ~83,99,111,255
+              文字:
+                type: Text
+                attribute:
+                  x: 0
+                  y: 0
+                  texts: ~&f刷新配置
+                  fontSize: 32
+                  through: true
+                  point: ~middle_center
+            action:
+              clickLeft: |-
+                if(var.dirty){var.confirmKind = 'refresh'
+                var.modal = 'confirm'}else{Packet.send('AXS:market_exchange_editor', 'list', var.mode, var.offerId)}
+          兑换所列表:
+            type: Canvas
+            attribute:
+              x: 24
+              y: 112
+              width: 280
+              height: 804
+              enable: '!var.busy'
+            children:
+              边框:
+                type: Canvas
+                attribute:
+                  x: 0
+                  y: 0
+                  width: 280
+                  height: 804
+                  through: true
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 280
+                      height: 804
+                      normal: ~35,42,48,255
+                      through: true
+                      shape: ~round_rect
+                      radius: 10
+                    effect:
+                      stroke:
+                        width: 1
+                        color: ~83,99,111,255
+                  内沿:
+                    type: Texture
+                    attribute:
+                      x: 8
+                      y: 8
+                      width: 264
+                      height: 1
+                      normal: ~57,70,82,255
+                      through: true
+                  下沿:
+                    type: Texture
+                    attribute:
+                      x: 12
+                      y: 801
+                      width: 256
+                      height: 1
+                      normal: ~23,29,35,255
+                      through: true
+                  左上:
+                    type: Texture
+                    attribute:
+                      x: 4
+                      y: 4
+                      width: 16
+                      height: 2
+                      normal: ~199,185,133,255
+                      through: true
+                  右下:
+                    type: Texture
+                    attribute:
+                      x: 260
+                      y: 798
+                      width: 16
+                      height: 2
+                      normal: ~199,185,133,255
+                      through: true
+              标题:
+                type: Text
+                attribute:
+                  x: 24
+                  y: 20
+                  texts: ~&f兑换所
+                  fontSize: 36
+                  through: true
+              列表:
+                type: VStack
+                attribute:
+                  x: 16
+                  y: 72
+                  width: 248
+                  height: 600
+                  spaceBetween: 8
+                action:
+                  create: |-
+                    for(i in range(1, 7)){ cell = self['店铺'].copy('店铺' + i.round())
+                    cell.index = i.round() }
+                children:
+                  店铺:
+                    type: Canvas
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 248
+                      height: 66
+                      index: 0.round()
+                      entry: var.shops[(var.shopPage * 8 + self.index.toInt()).round()]
+                      visible: self.entry != none
+                    children:
+                      底:
+                        type: Texture
+                        attribute:
+                          x: 0
+                          y: 0
+                          width: 248
+                          height: 66
+                          normal: 'self.isHovered() ? ''62,79,91,255'' : ''23,29,35,255'''
+                          through: true
+                          shape: ~round_rect
+                          radius: 6
+                        effect:
+                          stroke:
+                            color: ~157,130,94,255
+                            width: 3
+                      名称:
+                        type: Text
+                        attribute:
+                          x: 12
+                          y: 12
+                          texts: 'self.parent.entry == none ? '''' : ''&f'' + self.parent.entry[''name'']'
+                          fontSize: 32
+                          through: true
+                          limit: 16
+                      状态:
+                        type: Text
+                        attribute:
+                          x: 12
+                          y: 42
+                          texts: 'self.parent.entry == none ? '''' : (self.parent.entry[''enabled''] ? ''&a已启用'' : ''&7未启用'')'
+                          fontSize: 28
+                          through: true
+                    action:
+                      clickLeft: |-
+                        if(self.entry != none){
+                          var.pendingShop = self.entry['id']
+                          if(var.dirty){ var.confirmKind = 'switch_shop'
+                        var.modal = 'confirm' }else{ Packet.send('AXS:market_exchange_editor', 'shop', var.pendingShop) }
+                        }
+              上一页:
+                type: Canvas
+                attribute:
+                  x: 16
+                  y: 686
+                  width: 44
+                  height: 36
+                  enable: var.shopPage > 0
+                  alpha: '(var.shopPage > 0) ? 1 : 0.45'
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 44
+                      height: 36
+                      normal: 'self.isHovered() ? ''62,79,91,255'' : ''45,59,69,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~83,99,111,255
+                  文字:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: ~&f‹
+                      fontSize: 32
+                      through: true
+                      point: ~middle_center
+                action:
+                  clickLeft: var.shopPage = var.shopPage - 1
+              页码:
+                type: Text
+                attribute:
+                  x: 0
+                  y: 698
+                  texts: '''&f'' + (var.shopPage + 1).toInt().round() + '' / '' + var.shopPages.toInt().round()'
+                  fontSize: 28
+                  through: true
+                  point: ~top_center
+              下一页:
+                type: Canvas
+                attribute:
+                  x: 220
+                  y: 686
+                  width: 44
+                  height: 36
+                  enable: (var.shopPage + 1) * 8 < var.shopCount
+                  alpha: '((var.shopPage + 1) * 8 < var.shopCount) ? 1 : 0.45'
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 44
+                      height: 36
+                      normal: 'self.isHovered() ? ''62,79,91,255'' : ''45,59,69,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~83,99,111,255
+                  文字:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: ~&f›
+                      fontSize: 32
+                      through: true
+                      point: ~middle_center
+                action:
+                  clickLeft: var.shopPage = var.shopPage + 1
+              新建:
+                type: Canvas
+                attribute:
+                  x: 16
+                  y: 742
+                  width: 248
+                  height: 40
+                  enable: 'true'
+                  alpha: '(true) ? 1 : 0.45'
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 248
+                      height: 40
+                      normal: 'self.isHovered() ? ''62,79,91,255'' : ''45,59,69,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~83,99,111,255
+                  文字:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: ~&f＋ 新建兑换所
+                      fontSize: 32
+                      through: true
+                      point: ~middle_center
+                action:
+                  clickLeft: |-
+                    if(var.dirty){ var.confirmKind = 'new_shop'
+                    var.modal = 'confirm' }else{
+                    var.mode = 'shop'
+                    var.shopNew = true
+                    var.shopId = ''
+                    var.shopName = ''
+                    var.shopEnabled = false
+                    var.shopPermission = ''
+                    var.shopNpcs = ''
+                    var.revision = '0'
+                    var.offers = {}
+                    var.offerCount = 0
+                    var.offerPages = 1
+                    var.offerPage = 0
+                    var.hydrating = true
+                    val.shopIdInput.setContent('')
+                    val.shopNameInput.setContent('')
+                    val.shopPermissionInput.setContent('')
+                    val.shopNpcInput.setContent('')
+                    var.hydrating = false
+                    var.dirty = false
+                    }
+          条目列表:
+            type: Canvas
+            attribute:
+              x: 328
+              y: 112
+              width: 500
+              height: 804
+              enable: '!var.busy'
+            children:
+              边框:
+                type: Canvas
+                attribute:
+                  x: 0
+                  y: 0
+                  width: 500
+                  height: 804
+                  through: true
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 500
+                      height: 804
+                      normal: ~35,42,48,255
+                      through: true
+                      shape: ~round_rect
+                      radius: 10
+                    effect:
+                      stroke:
+                        width: 1
+                        color: ~83,99,111,255
+                  内沿:
+                    type: Texture
+                    attribute:
+                      x: 8
+                      y: 8
+                      width: 484
+                      height: 1
+                      normal: ~57,70,82,255
+                      through: true
+                  下沿:
+                    type: Texture
+                    attribute:
+                      x: 12
+                      y: 801
+                      width: 476
+                      height: 1
+                      normal: ~23,29,35,255
+                      through: true
+                  左上:
+                    type: Texture
+                    attribute:
+                      x: 4
+                      y: 4
+                      width: 16
+                      height: 2
+                      normal: ~199,185,133,255
+                      through: true
+                  右下:
+                    type: Texture
+                    attribute:
+                      x: 480
+                      y: 798
+                      width: 16
+                      height: 2
+                      normal: ~199,185,133,255
+                      through: true
+              标题:
+                type: Text
+                attribute:
+                  x: 24
+                  y: 20
+                  texts: ~&f兑换条目
+                  fontSize: 36
+                  through: true
+              店名:
+                type: Text
+                attribute:
+                  x: 24
+                  y: 58
+                  texts: 'var.shopId == '''' ? ''&7先创建或选择兑换所'' : ''&7'' + var.shopName'
+                  fontSize: 28
+                  through: true
+                  limit: 32
+              列表:
+                type: VStack
+                attribute:
+                  x: 20
+                  y: 96
+                  width: 460
+                  height: 552
+                  spaceBetween: 10
+                action:
+                  create: |-
+                    for(i in range(1, 5)){ cell = self['商品'].copy('商品' + i.round())
+                    cell.index = i.round() }
+                children:
+                  商品:
+                    type: Canvas
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 460
+                      height: 82
+                      index: 0.round()
+                      entry: var.offers[(var.offerPage * 6 + self.index.toInt()).round()]
+                      visible: self.entry != none
+                    children:
+                      底:
+                        type: Texture
+                        attribute:
+                          x: 0
+                          y: 0
+                          width: 460
+                          height: 82
+                          normal: 'self.isHovered() ? ''62,79,91,255'' : ''23,29,35,255'''
+                          through: true
+                          shape: ~round_rect
+                          radius: 6
+                        effect:
+                          stroke:
+                            color: ~157,130,94,255
+                            width: 3
+                      名称:
+                        type: Text
+                        attribute:
+                          x: 14
+                          y: 12
+                          texts: 'self.parent.entry == none ? '''' : ''&f'' + self.parent.entry[''name'']'
+                          fontSize: 32
+                          through: true
+                          limit: 26
+                      成本:
+                        type: Text
+                        attribute:
+                          x: 14
+                          y: 42
+                          texts: 'self.parent.entry == none ? '''' : ''&7'' + self.parent.entry[''cost'']'
+                          fontSize: 28
+                          through: true
+                          limit: 34
+                    action:
+                      clickLeft: |-
+                        if(self.entry != none && !var.busy){
+                        var.pendingOffer = var.offerPage * 6 + self.index.toInt()
+                        if(var.dirty){ var.confirmKind = 'switch_offer'
+                        var.modal = 'confirm' }else{
+                        var.requestedOfferId = var.offers[var.pendingOffer.round()]['id']
+                        var.busy = true
+                        Packet.send('AXS:market_exchange_editor', 'offer', var.shopId, var.requestedOfferId)
+                        }
+                        }
+              上一页:
+                type: Canvas
+                attribute:
+                  x: 138
+                  y: 686
+                  width: 44
+                  height: 36
+                  enable: var.offerPage > 0
+                  alpha: '(var.offerPage > 0) ? 1 : 0.45'
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 44
+                      height: 36
+                      normal: 'self.isHovered() ? ''62,79,91,255'' : ''45,59,69,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~83,99,111,255
+                  文字:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: ~&f‹
+                      fontSize: 32
+                      through: true
+                      point: ~middle_center
+                action:
+                  clickLeft: var.offerPage = var.offerPage - 1
+              页码:
+                type: Text
+                attribute:
+                  x: 0
+                  y: 698
+                  texts: '''&f'' + (var.offerPage + 1).toInt().round() + '' / '' + var.offerPages.toInt().round()'
+                  fontSize: 28
+                  through: true
+                  point: ~top_center
+              下一页:
+                type: Canvas
+                attribute:
+                  x: 318
+                  y: 686
+                  width: 44
+                  height: 36
+                  enable: (var.offerPage + 1) * 6 < var.offerCount
+                  alpha: '((var.offerPage + 1) * 6 < var.offerCount) ? 1 : 0.45'
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 44
+                      height: 36
+                      normal: 'self.isHovered() ? ''62,79,91,255'' : ''45,59,69,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~83,99,111,255
+                  文字:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: ~&f›
+                      fontSize: 32
+                      through: true
+                      point: ~middle_center
+                action:
+                  clickLeft: var.offerPage = var.offerPage + 1
+              新建:
+                type: Canvas
+                attribute:
+                  x: 20
+                  y: 742
+                  width: 460
+                  height: 40
+                  enable: 'true'
+                  alpha: '(true) ? 1 : 0.45'
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 460
+                      height: 40
+                      normal: 'self.isHovered() ? ''62,79,91,255'' : ''45,59,69,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~83,99,111,255
+                  文字:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: ~&f＋ 新建兑换条目
+                      fontSize: 32
+                      through: true
+                      point: ~middle_center
+                action:
+                  clickLeft: |-
+                    if(var.revision == '0'){
+                    if(!var.noticeActive){
+                      var.noticeText = '请先保存兑换所'
+                      var.noticeDetail = ''
+                      parts = var.noticeText.split('；凭证 ')
+                      if(parts.size() > 1){var.noticeText = parts.get(0.round())
+                    var.noticeDetail = '凭证 ' + parts.get(1.round())}
+                      var.noticeFade.reset()
+                      var.noticePeaked = false
+                      var.noticeActive = true
+                    }
+                    }else{
+                    if(var.dirty){var.confirmKind = 'new_offer'
+                    var.modal = 'confirm'}else{
+                    var.mode = 'offer'
+                    var.offerNew = true
+                    var.offerId = ''
+                    var.offerName = ''
+                    var.offerEnabled = true
+                    var.offerPermission = ''
+                    var.costCount = 1
+                    var.rewardCount = 1
+                    var.costs = {}
+                    var.costs[0.round()] = {'kind': 'item', 'source': 'minecraft', 'id': 'EMERALD', 'amount': '1', 'snapshot': ''}
+                    var.rewards = {}
+                    var.rewards[0.round()] = {'kind': 'item', 'source': 'minecraft', 'id': 'IRON_INGOT', 'amount': '1', 'snapshot': ''}
+                    var.costRows = {}
+                    var.rewardRows = {}
+                    var.hydrating = true
+                    val.offerIdInput.setContent('')
+                    val.offerNameInput.setContent('')
+                    val.offerPermissionInput.setContent('')
+                    var.hydrating = false
+                    var.assetSide = 'cost'
+                    var.assetIndex = 0
+                    var.dirty = true
+                    var.asset = var.assetSide == 'cost' ? var.costs[var.assetIndex.round()] : var.rewards[var.assetIndex.round()]
+                    var.hydrating = true
+                    val.assetIdInput.setContent(var.asset == none ? '' : var.asset['id'])
+                    val.assetAmountInput.setContent(var.asset == none ? '' : var.asset['amount'])
+                    var.hydrating = false
+                    var.assetRowsDirty = true
+                    var.assetPreviewDirty = true
+                    }
+                    }
+          兑换所表单:
+            type: Canvas
+            attribute:
+              x: 852
+              y: 112
+              width: 636
+              height: 804
+              visible: var.mode == 'shop'
+              enable: '!var.busy'
+            children:
+              边框:
+                type: Canvas
+                attribute:
+                  x: 0
+                  y: 0
+                  width: 636
+                  height: 804
+                  through: true
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 636
+                      height: 804
+                      normal: ~35,42,48,255
+                      through: true
+                      shape: ~round_rect
+                      radius: 10
+                    effect:
+                      stroke:
+                        width: 1
+                        color: ~83,99,111,255
+                  内沿:
+                    type: Texture
+                    attribute:
+                      x: 8
+                      y: 8
+                      width: 620
+                      height: 1
+                      normal: ~57,70,82,255
+                      through: true
+                  下沿:
+                    type: Texture
+                    attribute:
+                      x: 12
+                      y: 801
+                      width: 612
+                      height: 1
+                      normal: ~23,29,35,255
+                      through: true
+                  左上:
+                    type: Texture
+                    attribute:
+                      x: 4
+                      y: 4
+                      width: 16
+                      height: 2
+                      normal: ~199,185,133,255
+                      through: true
+                  右下:
+                    type: Texture
+                    attribute:
+                      x: 616
+                      y: 798
+                      width: 16
+                      height: 2
+                      normal: ~199,185,133,255
+                      through: true
+              标题:
+                type: Text
+                attribute:
+                  x: 24
+                  y: 20
+                  texts: ~&f兑换所设置
+                  fontSize: 36
+                  through: true
+              ID标签:
+                type: Text
+                attribute:
+                  x: 24
+                  y: 64
+                  texts: ~&7兑换所 ID
+                  fontSize: 28
+                  through: true
+              名称标签:
+                type: Text
+                attribute:
+                  x: 324
+                  y: 64
+                  texts: ~&7显示名称
+                  fontSize: 28
+                  through: true
+              ID:
+                type: Canvas
+                attribute:
+                  x: 24
+                  y: 92
+                  width: 280
+                  height: 40
+                children:
+                  底:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 280
+                      height: 40
+                      normal: ~23,29,35,255
+                      through: true
+                      shape: ~round_rect
+                      radius: 5
+                  输入:
+                    type: TextBox
+                    attribute:
+                      x: 10
+                      y: 7
+                      width: 260
+                      height: 26
+                      fontSize: 32
+                      length: 512
+                      emptyText: ~&7英文 ID
+                      editable: (var.shopNew) && !var.busy
+                    action:
+                      textChange: |-
+                        var.shopId = self.getContent()
+                        if(!var.hydrating){ var.dirty = true }
+                    val: shopIdInput
+              名称:
+                type: Canvas
+                attribute:
+                  x: 324
+                  y: 92
+                  width: 288
+                  height: 40
+                children:
+                  底:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 288
+                      height: 40
+                      normal: ~23,29,35,255
+                      through: true
+                      shape: ~round_rect
+                      radius: 5
+                  输入:
+                    type: TextBox
+                    attribute:
+                      x: 10
+                      y: 7
+                      width: 268
+                      height: 26
+                      fontSize: 32
+                      length: 512
+                      emptyText: ~&7兑换所名称
+                      editable: (true) && !var.busy
+                    action:
+                      textChange: |-
+                        var.shopName = self.getContent()
+                        if(!var.hydrating){ var.dirty = true }
+                    val: shopNameInput
+              权限标签:
+                type: Text
+                attribute:
+                  x: 24
+                  y: 156
+                  texts: ~&7使用权限（留空则不限）
+                  fontSize: 28
+                  through: true
+              权限:
+                type: Canvas
+                attribute:
+                  x: 24
+                  y: 184
+                  width: 588
+                  height: 40
+                children:
+                  底:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 588
+                      height: 40
+                      normal: ~23,29,35,255
+                      through: true
+                      shape: ~round_rect
+                      radius: 5
+                  输入:
+                    type: TextBox
+                    attribute:
+                      x: 10
+                      y: 7
+                      width: 568
+                      height: 26
+                      fontSize: 32
+                      length: 512
+                      emptyText: ~&7权限节点
+                      editable: (true) && !var.busy
+                    action:
+                      textChange: |-
+                        var.shopPermission = self.getContent()
+                        if(!var.hydrating){ var.dirty = true }
+                    val: shopPermissionInput
+              绑定标签:
+                type: Text
+                attribute:
+                  x: 24
+                  y: 248
+                  texts: ~&7Adyeshach NPC 绑定（多项用逗号分隔）
+                  fontSize: 28
+                  through: true
+              绑定:
+                type: Canvas
+                attribute:
+                  x: 24
+                  y: 276
+                  width: 588
+                  height: 64
+                children:
+                  底:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 588
+                      height: 64
+                      normal: ~23,29,35,255
+                      through: true
+                      shape: ~round_rect
+                      radius: 5
+                  输入:
+                    type: TextBox
+                    attribute:
+                      x: 10
+                      y: 7
+                      width: 568
+                      height: 50
+                      fontSize: 32
+                      length: 512
+                      emptyText: ~&7ady:实体ID
+                      editable: (true) && !var.busy
+                    action:
+                      textChange: |-
+                        var.shopNpcs = self.getContent()
+                        if(!var.hydrating){ var.dirty = true }
+                    val: shopNpcInput
+              绑定说明:
+                type: Text
+                attribute:
+                  x: 24
+                  y: 358
+                  texts: ~&7可选择附近的 Adyeshach NPC，或填写 ady:实体ID
+                  fontSize: 28
+                  through: true
+              启用:
+                type: Canvas
+                attribute:
+                  x: 24
+                  y: 416
+                  width: 180
+                  height: 40
+                  enable: 'true'
+                  alpha: '(true) ? 1 : 0.45'
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 180
+                      height: 40
+                      normal: 'self.isHovered() ? ''62,79,91,255'' : ''45,59,69,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~83,99,111,255
+                  文字:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: 'var.shopEnabled ? ''&a已启用'' : ''&7未启用'''
+                      fontSize: 32
+                      through: true
+                      point: ~middle_center
+                action:
+                  clickLeft: |-
+                    var.shopEnabled = !var.shopEnabled
+                    var.dirty = true
+              附近:
+                type: Canvas
+                attribute:
+                  x: 220
+                  y: 416
+                  width: 188
+                  height: 40
+                  enable: 'true'
+                  alpha: '(true) ? 1 : 0.45'
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 188
+                      height: 40
+                      normal: 'self.isHovered() ? ''62,79,91,255'' : ''45,59,69,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~83,99,111,255
+                  文字:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: ~&f选择附近 NPC
+                      fontSize: 32
+                      through: true
+                      point: ~middle_center
+                action:
+                  clickLeft: |-
+                    var.modal = 'npcs'
+                    var.nearbyPage = 0
+              说明一:
+                type: Text
+                attribute:
+                  x: 24
+                  y: 504
+                  texts: ~&7成本与奖励均支持多种物品和多种货币。
+                  fontSize: 28
+                  through: true
+              说明二:
+                type: Text
+                attribute:
+                  x: 24
+                  y: 540
+                  texts: ~&7保存后立即生效，其他管理员的旧版本会被拒绝。
+                  fontSize: 28
+                  through: true
+              说明三:
+                type: Text
+                attribute:
+                  x: 24
+                  y: 576
+                  texts: ~&7兑换优先使用背包物品，再从可用仓库补足。
+                  fontSize: 28
+                  through: true
+              保存:
+                type: Canvas
+                attribute:
+                  x: 24
+                  y: 736
+                  width: 180
+                  height: 44
+                  enable: '!var.busy'
+                  alpha: '(!var.busy) ? 1 : 0.45'
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 180
+                      height: 44
+                      normal: 'self.isHovered() ? ''62,79,91,255'' : ''45,59,69,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~83,99,111,255
+                  文字:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: 'var.busy ? ''&e保存中…'' : ''&f保存兑换所'''
+                      fontSize: 32
+                      through: true
+                      point: ~middle_center
+                action:
+                  clickLeft: |-
+                    form = {'id': var.shopId, 'name': var.shopName, 'enabled': var.shopEnabled, 'permission': var.shopPermission, 'npcs': var.shopNpcs, 'revision': var.revision}
+                    var.busy = true
+                    Packet.send('AXS:market_exchange_editor', 'save_shop', json.stringify(form), var.token)
+              删除:
+                type: Canvas
+                attribute:
+                  x: 220
+                  y: 736
+                  width: 180
+                  height: 44
+                  enable: '!var.busy && !var.shopNew'
+                  alpha: '(!var.busy && !var.shopNew) ? 1 : 0.45'
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 180
+                      height: 44
+                      normal: 'self.isHovered() ? ''62,79,91,255'' : ''45,59,69,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~83,99,111,255
+                  文字:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: ~&c删除兑换所
+                      fontSize: 32
+                      through: true
+                      point: ~middle_center
+                action:
+                  clickLeft: |-
+                    var.confirmKind = 'delete_shop'
+                    var.modal = 'confirm'
+              预览:
+                type: Canvas
+                attribute:
+                  x: 416
+                  y: 736
+                  width: 196
+                  height: 44
+                  enable: '!var.busy && !var.dirty && var.shopEnabled && var.revision != ''0'''
+                  alpha: '(!var.busy && !var.dirty && var.shopEnabled && var.revision != ''0'') ? 1 : 0.45'
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 196
+                      height: 44
+                      normal: 'self.isHovered() ? ''62,79,91,255'' : ''45,59,69,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~83,99,111,255
+                  文字:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: ~&f打开兑换页
+                      fontSize: 32
+                      through: true
+                      point: ~middle_center
+                action:
+                  clickLeft: Packet.send('AXS:market_exchange_editor', 'preview_shop', var.shopId, var.token)
+          条目表单:
+            type: Canvas
+            attribute:
+              x: 852
+              y: 112
+              width: 636
+              height: 804
+              visible: var.mode == 'offer'
+              enable: '!var.busy'
+            children:
+              边框:
+                type: Canvas
+                attribute:
+                  x: 0
+                  y: 0
+                  width: 636
+                  height: 804
+                  through: true
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 636
+                      height: 804
+                      normal: ~35,42,48,255
+                      through: true
+                      shape: ~round_rect
+                      radius: 10
+                    effect:
+                      stroke:
+                        width: 1
+                        color: ~83,99,111,255
+                  内沿:
+                    type: Texture
+                    attribute:
+                      x: 8
+                      y: 8
+                      width: 620
+                      height: 1
+                      normal: ~57,70,82,255
+                      through: true
+                  下沿:
+                    type: Texture
+                    attribute:
+                      x: 12
+                      y: 801
+                      width: 612
+                      height: 1
+                      normal: ~23,29,35,255
+                      through: true
+                  左上:
+                    type: Texture
+                    attribute:
+                      x: 4
+                      y: 4
+                      width: 16
+                      height: 2
+                      normal: ~199,185,133,255
+                      through: true
+                  右下:
+                    type: Texture
+                    attribute:
+                      x: 616
+                      y: 798
+                      width: 16
+                      height: 2
+                      normal: ~199,185,133,255
+                      through: true
+              标题:
+                type: Text
+                attribute:
+                  x: 24
+                  y: 20
+                  texts: ~&f兑换条目设置
+                  fontSize: 36
+                  through: true
+              ID标签:
+                type: Text
+                attribute:
+                  x: 24
+                  y: 64
+                  texts: ~&7条目 ID
+                  fontSize: 28
+                  through: true
+              名称标签:
+                type: Text
+                attribute:
+                  x: 324
+                  y: 64
+                  texts: ~&7显示名称
+                  fontSize: 28
+                  through: true
+              ID:
+                type: Canvas
+                attribute:
+                  x: 24
+                  y: 92
+                  width: 280
+                  height: 40
+                children:
+                  底:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 280
+                      height: 40
+                      normal: ~23,29,35,255
+                      through: true
+                      shape: ~round_rect
+                      radius: 5
+                  输入:
+                    type: TextBox
+                    attribute:
+                      x: 10
+                      y: 7
+                      width: 260
+                      height: 26
+                      fontSize: 32
+                      length: 512
+                      emptyText: ~&7英文 ID
+                      editable: (var.offerNew) && !var.busy
+                    action:
+                      textChange: |-
+                        var.offerId = self.getContent()
+                        if(!var.hydrating){ var.dirty = true }
+                    val: offerIdInput
+              名称:
+                type: Canvas
+                attribute:
+                  x: 324
+                  y: 92
+                  width: 288
+                  height: 40
+                children:
+                  底:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 288
+                      height: 40
+                      normal: ~23,29,35,255
+                      through: true
+                      shape: ~round_rect
+                      radius: 5
+                  输入:
+                    type: TextBox
+                    attribute:
+                      x: 10
+                      y: 7
+                      width: 268
+                      height: 26
+                      fontSize: 32
+                      length: 512
+                      emptyText: ~&7条目名称
+                      editable: (true) && !var.busy
+                    action:
+                      textChange: |-
+                        var.offerName = self.getContent()
+                        if(!var.hydrating){ var.dirty = true }
+                    val: offerNameInput
+              权限标签:
+                type: Text
+                attribute:
+                  x: 24
+                  y: 146
+                  texts: ~&7条目权限（留空则不限）
+                  fontSize: 28
+                  through: true
+              权限:
+                type: Canvas
+                attribute:
+                  x: 24
+                  y: 174
+                  width: 588
+                  height: 40
+                children:
+                  底:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 588
+                      height: 40
+                      normal: ~23,29,35,255
+                      through: true
+                      shape: ~round_rect
+                      radius: 5
+                  输入:
+                    type: TextBox
+                    attribute:
+                      x: 10
+                      y: 7
+                      width: 568
+                      height: 26
+                      fontSize: 32
+                      length: 512
+                      emptyText: ~&7权限节点
+                      editable: (true) && !var.busy
+                    action:
+                      textChange: |-
+                        var.offerPermission = self.getContent()
+                        if(!var.hydrating){ var.dirty = true }
+                    val: offerPermissionInput
+              启用:
+                type: Canvas
+                attribute:
+                  x: 24
+                  y: 232
+                  width: 180
+                  height: 38
+                  enable: 'true'
+                  alpha: '(true) ? 1 : 0.45'
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 180
+                      height: 38
+                      normal: 'self.isHovered() ? ''62,79,91,255'' : ''45,59,69,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~83,99,111,255
+                  文字:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: 'var.offerEnabled ? ''&a条目启用'' : ''&7条目停用'''
+                      fontSize: 32
+                      through: true
+                      point: ~middle_center
+                action:
+                  clickLeft: |-
+                    var.offerEnabled = !var.offerEnabled
+                    var.dirty = true
+              成本:
+                type: Canvas
+                attribute:
+                  x: 220
+                  y: 232
+                  width: 188
+                  height: 38
+                  enable: 'true'
+                  alpha: '(true) ? 1 : 0.45'
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 188
+                      height: 38
+                      normal: 'var.assetSide == ''cost'' ? ''62,79,91,255'' : (self.isHovered() ? ''62,79,91,255'' : ''45,59,69,255'')'
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~83,99,111,255
+                  文字:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: '''&f成本 '' + var.costCount.toInt().round()'
+                      fontSize: 32
+                      through: true
+                      point: ~middle_center
+                action:
+                  clickLeft: |-
+                    var.assetSide = 'cost'
+                    var.assetIndex = 0
+                    var.asset = var.assetSide == 'cost' ? var.costs[var.assetIndex.round()] : var.rewards[var.assetIndex.round()]
+                    var.hydrating = true
+                    val.assetIdInput.setContent(var.asset == none ? '' : var.asset['id'])
+                    val.assetAmountInput.setContent(var.asset == none ? '' : var.asset['amount'])
+                    var.hydrating = false
+                    var.assetRowsDirty = true
+                    var.assetPreviewDirty = true
+              奖励:
+                type: Canvas
+                attribute:
+                  x: 424
+                  y: 232
+                  width: 188
+                  height: 38
+                  enable: 'true'
+                  alpha: '(true) ? 1 : 0.45'
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 188
+                      height: 38
+                      normal: 'var.assetSide == ''reward'' ? ''62,79,91,255'' : (self.isHovered() ? ''62,79,91,255'' : ''45,59,69,255'')'
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~83,99,111,255
+                  文字:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: '''&f奖励 '' + var.rewardCount.toInt().round()'
+                      fontSize: 32
+                      through: true
+                      point: ~middle_center
+                action:
+                  clickLeft: |-
+                    var.assetSide = 'reward'
+                    var.assetIndex = 0
+                    var.asset = var.assetSide == 'cost' ? var.costs[var.assetIndex.round()] : var.rewards[var.assetIndex.round()]
+                    var.hydrating = true
+                    val.assetIdInput.setContent(var.asset == none ? '' : var.asset['id'])
+                    val.assetAmountInput.setContent(var.asset == none ? '' : var.asset['amount'])
+                    var.hydrating = false
+                    var.assetRowsDirty = true
+                    var.assetPreviewDirty = true
+              资产列表:
+                type: HGrid
+                attribute:
+                  x: 24
+                  y: 286
+                  width: 588
+                  height: 212
+                  column: 2
+                  spaceBetweenX: 12
+                  spaceBetweenY: 8
+                action:
+                  create: |-
+                    var.assetIcons = {}
+                    for(i in range(0, 7)){ cell = self['资产']
+                    if(i > 0){cell = cell.copy('资产' + i.round())}
+                    cell.index = i.round()
+                    var.assetIcons[i.round()] = cell['图标']
+                    }
+                children:
+                  资产:
+                    type: Canvas
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 288
+                      height: 46
+                      index: 0.round()
+                      entry: 'var.assetSide == ''cost'' ? var.costs[self.index] : var.rewards[self.index]'
+                    children:
+                      底:
+                        type: Texture
+                        attribute:
+                          x: 0
+                          y: 0
+                          width: 288
+                          height: 46
+                          normal: 'self.parent.entry != none && self.parent.index.toInt() == var.assetIndex ? ''62,79,91,255'' : (self.isHovered()
+                            ? ''45,59,69,255'' : ''23,29,35,255'')'
+                          through: true
+                          shape: ~round_rect
+                          radius: 5
+                        effect:
+                          stroke:
+                            color: ~157,130,94,255
+                            width: 3
+                      图标:
+                        type: Slot
+                        attribute:
+                          x: 6
+                          y: 5
+                          width: 36
+                          height: 36
+                          slotType: ~Icon
+                          normal: ~0,0,0,0
+                          through: true
+                          itemScale: 0.8
+                      名称:
+                        type: Text
+                        attribute:
+                          x: 50
+                          y: 8
+                          texts: 'self.parent.entry == none ? '''' : ''&f'' + self.parent.entry[''id'']'
+                          fontSize: 28
+                          through: true
+                          limit: 17
+                      数量:
+                        type: Text
+                        attribute:
+                          x: -10
+                          y: 27
+                          texts: 'self.parent.entry == none ? '''' : ''&e×'' + self.parent.entry[''amount'']'
+                          fontSize: 28
+                          through: true
+                          point: ~top_right
+                    action:
+                      clickLeft: |-
+                        if(self.entry != none){ var.assetIndex = self.index.toInt()
+                        var.asset = var.assetSide == 'cost' ? var.costs[var.assetIndex.round()] : var.rewards[var.assetIndex.round()]
+                        var.hydrating = true
+                        val.assetIdInput.setContent(var.asset == none ? '' : var.asset['id'])
+                        val.assetAmountInput.setContent(var.asset == none ? '' : var.asset['amount'])
+                        var.hydrating = false
+                        var.assetRowsDirty = true
+                        var.assetPreviewDirty = true
+                        }
+              添加物品:
+                type: Canvas
+                attribute:
+                  x: 24
+                  y: 510
+                  width: 180
+                  height: 36
+                  enable: '!var.busy && (var.assetSide == ''cost'' ? var.costCount : var.rewardCount) < 8'
+                  alpha: '(!var.busy && (var.assetSide == ''cost'' ? var.costCount : var.rewardCount) < 8) ? 1 : 0.45'
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 180
+                      height: 36
+                      normal: 'self.isHovered() ? ''62,79,91,255'' : ''45,59,69,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~83,99,111,255
+                  文字:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: ~&f＋ 物品
+                      fontSize: 32
+                      through: true
+                      point: ~middle_center
+                action:
+                  clickLeft: |-
+                    count = var.assetSide == 'cost' ? var.costCount : var.rewardCount
+                    if(count < 8){
+                    var.assetIndex = count
+                    if(var.assetSide == 'cost'){var.costs[count.round()] = {'kind': 'item', 'source': 'minecraft', 'id': 'EMERALD', 'amount': '1', 'snapshot': ''}
+                    var.costCount = count + 1}else{var.rewards[count.round()] = {'kind': 'item', 'source': 'minecraft', 'id': 'EMERALD', 'amount': '1', 'snapshot': ''}
+                    var.rewardCount = count + 1}
+                    var.dirty = true
+                    var.asset = var.assetSide == 'cost' ? var.costs[var.assetIndex.round()] : var.rewards[var.assetIndex.round()]
+                    var.hydrating = true
+                    val.assetIdInput.setContent(var.asset == none ? '' : var.asset['id'])
+                    val.assetAmountInput.setContent(var.asset == none ? '' : var.asset['amount'])
+                    var.hydrating = false
+                    var.assetRowsDirty = true
+                    var.assetPreviewDirty = true
+                    }
+              添加货币:
+                type: Canvas
+                attribute:
+                  x: 220
+                  y: 510
+                  width: 180
+                  height: 36
+                  enable: '!var.busy && (var.assetSide == ''cost'' ? var.costCount : var.rewardCount) < 8'
+                  alpha: '(!var.busy && (var.assetSide == ''cost'' ? var.costCount : var.rewardCount) < 8) ? 1 : 0.45'
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 180
+                      height: 36
+                      normal: 'self.isHovered() ? ''62,79,91,255'' : ''45,59,69,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~83,99,111,255
+                  文字:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: ~&f＋ 货币
+                      fontSize: 32
+                      through: true
+                      point: ~middle_center
+                action:
+                  clickLeft: |-
+                    count = var.assetSide == 'cost' ? var.costCount : var.rewardCount
+                    if(count < 8){
+                    var.assetIndex = count
+                    if(var.assetSide == 'cost'){var.costs[count.round()] = {'kind': 'currency', 'source': '', 'id': '', 'amount': '1', 'snapshot': ''}
+                    var.costCount = count + 1}else{var.rewards[count.round()] = {'kind': 'currency', 'source': '', 'id': '', 'amount': '1', 'snapshot': ''}
+                    var.rewardCount = count + 1}
+                    var.dirty = true
+                    var.asset = var.assetSide == 'cost' ? var.costs[var.assetIndex.round()] : var.rewards[var.assetIndex.round()]
+                    var.hydrating = true
+                    val.assetIdInput.setContent(var.asset == none ? '' : var.asset['id'])
+                    val.assetAmountInput.setContent(var.asset == none ? '' : var.asset['amount'])
+                    var.hydrating = false
+                    var.assetRowsDirty = true
+                    var.assetPreviewDirty = true
+                    }
+              移除资产:
+                type: Canvas
+                attribute:
+                  x: 416
+                  y: 510
+                  width: 196
+                  height: 36
+                  enable: var.asset != none && !var.busy
+                  alpha: '(var.asset != none && !var.busy) ? 1 : 0.45'
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 196
+                      height: 36
+                      normal: 'self.isHovered() ? ''62,79,91,255'' : ''45,59,69,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~83,99,111,255
+                  文字:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: ~&c移除此项
+                      fontSize: 32
+                      through: true
+                      point: ~middle_center
+                action:
+                  clickLeft: |-
+                    count = var.assetSide == 'cost' ? var.costCount : var.rewardCount
+                    if(count > 0){
+                      i = var.assetIndex
+                      while(i < count - 1){
+                        if(var.assetSide == 'cost'){var.costs[i.round()] = var.costs[(i + 1).round()]
+                    var.costRows[i.round()] = var.costRows[(i + 1).round()]}else{var.rewards[i.round()] = var.rewards[(i + 1).round()]
+                    var.rewardRows[i.round()] = var.rewardRows[(i + 1).round()]}
+                        i = i + 1
+                      }
+                      if(var.assetSide == 'cost'){var.costs[(count - 1).round()] = none
+                    var.costRows[(count - 1).round()] = none
+                    var.costCount = count - 1}else{var.rewards[(count - 1).round()] = none
+                    var.rewardRows[(count - 1).round()] = none
+                    var.rewardCount = count - 1}
+                      var.assetIndex = 0
+                      var.dirty = true
+                    }
+                    var.asset = var.assetSide == 'cost' ? var.costs[var.assetIndex.round()] : var.rewards[var.assetIndex.round()]
+                    var.hydrating = true
+                    val.assetIdInput.setContent(var.asset == none ? '' : var.asset['id'])
+                    val.assetAmountInput.setContent(var.asset == none ? '' : var.asset['amount'])
+                    var.hydrating = false
+                    var.assetRowsDirty = true
+                    var.assetPreviewDirty = true
+              来源:
+                type: Canvas
+                attribute:
+                  x: 24
+                  y: 564
+                  width: 180
+                  height: 38
+                  enable: var.asset != none
+                  alpha: '(var.asset != none) ? 1 : 0.45'
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 180
+                      height: 38
+                      normal: 'self.isHovered() ? ''62,79,91,255'' : ''45,59,69,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~83,99,111,255
+                  文字:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: 'var.asset == none ? ''&7选择资产项'' : (var.asset[''kind''] == ''currency'' ? ''&f选择货币'' : ''&f物品来源'')'
+                      fontSize: 32
+                      through: true
+                      point: ~middle_center
+                action:
+                  clickLeft: 'if(var.asset != none){var.modal = var.asset[''kind''] == ''currency'' ? ''currency'' : ''source''}'
+              数量:
+                type: Canvas
+                attribute:
+                  x: 220
+                  y: 564
+                  width: 128
+                  height: 38
+                children:
+                  底:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 128
+                      height: 38
+                      normal: ~23,29,35,255
+                      through: true
+                      shape: ~round_rect
+                      radius: 5
+                  输入:
+                    type: TextBox
+                    attribute:
+                      x: 10
+                      y: 7
+                      width: 108
+                      height: 24
+                      fontSize: 32
+                      length: 512
+                      emptyText: ~&7数量 / 金额
+                      editable: (true) && !var.busy
+                    action:
+                      textChange: |-
+                        if(!var.hydrating && var.asset != none){var.asset['amount'] = self.getContent()
+                        var.dirty = true}
+                    val: assetAmountInput
+              选物:
+                type: Canvas
+                attribute:
+                  x: 364
+                  y: 564
+                  width: 248
+                  height: 38
+                  enable: var.asset != none && var.asset['kind'] == 'item'
+                  alpha: '(var.asset != none && var.asset[''kind''] == ''item'') ? 1 : 0.45'
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 248
+                      height: 38
+                      normal: 'self.isHovered() ? ''62,79,91,255'' : ''45,59,69,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~83,99,111,255
+                  文字:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: ~&f从真实背包选物
+                      fontSize: 32
+                      through: true
+                      point: ~middle_center
+                action:
+                  clickLeft: |-
+                    if(var.asset != none){var.pickExact = false
+                    var.modal = 'pick'
+                    Packet.send('AXS:market_exchange_editor', 'inventory', var.token)
+                    }
+              资产ID:
+                type: Canvas
+                attribute:
+                  x: 24
+                  y: 618
+                  width: 416
+                  height: 38
+                children:
+                  底:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 416
+                      height: 38
+                      normal: ~23,29,35,255
+                      through: true
+                      shape: ~round_rect
+                      radius: 5
+                  输入:
+                    type: TextBox
+                    attribute:
+                      x: 10
+                      y: 7
+                      width: 396
+                      height: 24
+                      fontSize: 32
+                      length: 512
+                      emptyText: ~&7物品库 ID / 货币 ID
+                      editable: (var.asset != none && var.asset['source'] != 'snapshot') && !var.busy
+                    action:
+                      textChange: |-
+                        if(!var.hydrating && var.asset != none){var.asset['id'] = self.getContent()
+                        var.dirty = true}
+                    val: assetIdInput
+              预览资产:
+                type: Canvas
+                attribute:
+                  x: 456
+                  y: 618
+                  width: 156
+                  height: 38
+                  enable: var.asset != none
+                  alpha: '(var.asset != none) ? 1 : 0.45'
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 156
+                      height: 38
+                      normal: 'self.isHovered() ? ''62,79,91,255'' : ''45,59,69,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~83,99,111,255
+                  文字:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: ~&f更新预览
+                      fontSize: 32
+                      through: true
+                      point: ~middle_center
+                action:
+                  clickLeft: Packet.send('AXS:market_exchange_editor', 'preview', json.stringify(var.asset), var.assetSide + ':' + var.assetIndex.toInt().round(),
+                    var.token)
+              预览图标:
+                type: Slot
+                attribute:
+                  x: 24
+                  y: 670
+                  width: 54
+                  height: 54
+                  slotType: ~Icon
+                  normal: ~0,0,0,0
+                  through: true
+                  itemScale: 0.8
+                val: assetPreview
+              预览说明:
+                type: Text
+                attribute:
+                  x: 96
+                  y: 678
+                  texts: 'var.asset == none ? ''&7每侧最多 8 项，可混合物品与货币'' : (var.asset[''kind''] == ''currency'' ? ''&7统一货币，金额遵循币种精度'' : ''&7物品来源：''
+                    + var.asset[''source''])'
+                  fontSize: 28
+                  through: true
+                  limit: 38
+              保存:
+                type: Canvas
+                attribute:
+                  x: 24
+                  y: 736
+                  width: 180
+                  height: 44
+                  enable: '!var.busy'
+                  alpha: '(!var.busy) ? 1 : 0.45'
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 180
+                      height: 44
+                      normal: 'self.isHovered() ? ''62,79,91,255'' : ''45,59,69,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~83,99,111,255
+                  文字:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: 'var.busy ? ''&e保存中…'' : ''&f保存兑换条目'''
+                      fontSize: 32
+                      through: true
+                      point: ~middle_center
+                action:
+                  clickLeft: |-
+                    costs = []
+                    rewards = []
+                    i = 0
+                    while(i < var.costCount){ costs.add(var.costs[i.round()])
+                    i = i + 1 }
+                    i = 0
+                    while(i < var.rewardCount){ rewards.add(var.rewards[i.round()])
+                    i = i + 1 }
+                    form = {'id': var.offerId, 'name': var.offerName, 'enabled': var.offerEnabled, 'permission': var.offerPermission, 'revision': var.revision, 'costs': costs, 'rewards': rewards}
+                    var.busy = true
+                    Packet.send('AXS:market_exchange_editor', 'save_offer', var.shopId, json.stringify(form), var.token)
+              删除:
+                type: Canvas
+                attribute:
+                  x: 220
+                  y: 736
+                  width: 180
+                  height: 44
+                  enable: '!var.offerNew && !var.busy'
+                  alpha: '(!var.offerNew && !var.busy) ? 1 : 0.45'
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 180
+                      height: 44
+                      normal: 'self.isHovered() ? ''62,79,91,255'' : ''45,59,69,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~83,99,111,255
+                  文字:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: ~&c删除条目
+                      fontSize: 32
+                      through: true
+                      point: ~middle_center
+                action:
+                  clickLeft: |-
+                    var.confirmKind = 'delete_offer'
+                    var.modal = 'confirm'
+              返回:
+                type: Canvas
+                attribute:
+                  x: 416
+                  y: 736
+                  width: 196
+                  height: 44
+                  enable: 'true'
+                  alpha: '(true) ? 1 : 0.45'
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 196
+                      height: 44
+                      normal: 'self.isHovered() ? ''62,79,91,255'' : ''45,59,69,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~83,99,111,255
+                  文字:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: ~&f兑换所设置
+                      fontSize: 32
+                      through: true
+                      point: ~middle_center
+                action:
+                  clickLeft: |-
+                    if(var.dirty){var.pendingShop = var.shopId
+                    var.confirmKind = 'switch_shop'
+                    var.modal = 'confirm'}else{var.mode = 'shop'}
+      弹窗:
+        type: Canvas
+        attribute:
+          x: 0
+          y: 0
+          width: 1920
+          height: 1080
+          point: ~middle_center
+          visible: var.modal != ''
+        children:
+          遮罩:
+            type: Texture
+            attribute:
+              x: 0
+              y: 0
+              width: 1920
+              height: 1080
+              normal: ~0,0,0,165
+              through: true
+          pick:
+            type: Canvas
+            attribute:
+              x: 0
+              y: 0
+              width: 940
+              height: 566
+              point: ~middle_center
+              visible: var.modal == 'pick'
+            children:
+              边框:
+                type: Canvas
+                attribute:
+                  x: 0
+                  y: 0
+                  width: 940
+                  height: 566
+                  through: true
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 940
+                      height: 566
+                      normal: ~35,42,48,255
+                      through: true
+                      shape: ~round_rect
+                      radius: 10
+                    effect:
+                      stroke:
+                        width: 1
+                        color: ~83,99,111,255
+                  内沿:
+                    type: Texture
+                    attribute:
+                      x: 8
+                      y: 8
+                      width: 924
+                      height: 1
+                      normal: ~57,70,82,255
+                      through: true
+                  下沿:
+                    type: Texture
+                    attribute:
+                      x: 12
+                      y: 563
+                      width: 916
+                      height: 1
+                      normal: ~23,29,35,255
+                      through: true
+                  左上:
+                    type: Texture
+                    attribute:
+                      x: 4
+                      y: 4
+                      width: 16
+                      height: 2
+                      normal: ~199,185,133,255
+                      through: true
+                  右下:
+                    type: Texture
+                    attribute:
+                      x: 920
+                      y: 560
+                      width: 16
+                      height: 2
+                      normal: ~199,185,133,255
+                      through: true
+              标题:
+                type: Text
+                attribute:
+                  x: 28
+                  y: 24
+                  texts: ~&f从真实背包选择物品
+                  fontSize: 36
+                  through: true
+              关闭:
+                type: Canvas
+                attribute:
+                  x: 868
+                  y: 20
+                  width: 44
+                  height: 36
+                  enable: 'true'
+                  alpha: '(true) ? 1 : 0.45'
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 44
+                      height: 36
+                      normal: 'self.isHovered() ? ''62,79,91,255'' : ''45,59,69,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~83,99,111,255
+                  文字:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: ~&f×
+                      fontSize: 32
+                      through: true
+                      point: ~middle_center
+                action:
+                  clickLeft: var.modal = ''
+              说明:
+                type: Text
+                attribute:
+                  x: 28
+                  y: 66
+                  texts: ~&7自动识别物品库；选择完整快照时保留当前属性
+                  fontSize: 28
+                  through: true
+              背包:
+                type: HGrid
+                attribute:
+                  x: 28
+                  y: 112
+                  width: 884
+                  height: 404
+                  column: 9
+                  spaceBetweenX: 10
+                  spaceBetweenY: 10
+                action:
+                  create: |-
+                    var.pickIcons = {}
+                    for(i in range(0, 35)){cell = self['物品']
+                    if(i > 0){cell = cell.copy('背包' + i.round())}
+                    raw = i < 27 ? i + 9 : i - 27
+                    cell.raw = raw.round()
+                    var.pickIcons[raw.round()] = cell['图标']
+                    }
+                children:
+                  物品:
+                    type: Canvas
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 88
+                      height: 88
+                      raw: 9.round()
+                    children:
+                      底:
+                        type: Texture
+                        attribute:
+                          x: 0
+                          y: 0
+                          width: 88
+                          height: 88
+                          normal: 'self.isHovered() ? ''62,79,91,255'' : ''23,29,35,255'''
+                          through: true
+                          shape: ~round_rect
+                          radius: 6
+                        effect:
+                          stroke:
+                            color: ~157,130,94,255
+                            width: 3
+                      图标:
+                        type: Slot
+                        attribute:
+                          x: 4
+                          y: 4
+                          width: 80
+                          height: 80
+                          slotType: ~Icon
+                          normal: ~0,0,0,0
+                          through: true
+                          itemScale: 0.8
+                    action:
+                      clickLeft: Packet.send('AXS:market_exchange_editor', 'pick', self.raw, var.assetSide + ':' + var.assetIndex.toInt().round(),
+                        var.token)
+          source:
+            type: Canvas
+            attribute:
+              x: 0
+              y: 0
+              width: 620
+              height: 580
+              point: ~middle_center
+              visible: var.modal == 'source'
+            children:
+              边框:
+                type: Canvas
+                attribute:
+                  x: 0
+                  y: 0
+                  width: 620
+                  height: 580
+                  through: true
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 620
+                      height: 580
+                      normal: ~35,42,48,255
+                      through: true
+                      shape: ~round_rect
+                      radius: 10
+                    effect:
+                      stroke:
+                        width: 1
+                        color: ~83,99,111,255
+                  内沿:
+                    type: Texture
+                    attribute:
+                      x: 8
+                      y: 8
+                      width: 604
+                      height: 1
+                      normal: ~57,70,82,255
+                      through: true
+                  下沿:
+                    type: Texture
+                    attribute:
+                      x: 12
+                      y: 577
+                      width: 596
+                      height: 1
+                      normal: ~23,29,35,255
+                      through: true
+                  左上:
+                    type: Texture
+                    attribute:
+                      x: 4
+                      y: 4
+                      width: 16
+                      height: 2
+                      normal: ~199,185,133,255
+                      through: true
+                  右下:
+                    type: Texture
+                    attribute:
+                      x: 600
+                      y: 574
+                      width: 16
+                      height: 2
+                      normal: ~199,185,133,255
+                      through: true
+              标题:
+                type: Text
+                attribute:
+                  x: 28
+                  y: 24
+                  texts: ~&f选择物品来源
+                  fontSize: 36
+                  through: true
+              关闭:
+                type: Canvas
+                attribute:
+                  x: 548
+                  y: 20
+                  width: 44
+                  height: 36
+                  enable: 'true'
+                  alpha: '(true) ? 1 : 0.45'
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 44
+                      height: 36
+                      normal: 'self.isHovered() ? ''62,79,91,255'' : ''45,59,69,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~83,99,111,255
+                  文字:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: ~&f×
+                      fontSize: 32
+                      through: true
+                      point: ~middle_center
+                action:
+                  clickLeft: var.modal = ''
+              minecraft:
+                type: Canvas
+                attribute:
+                  x: 28
+                  y: 86
+                  width: 564
+                  height: 54
+                  enable: 'true'
+                  alpha: '(true) ? 1 : 0.45'
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 564
+                      height: 54
+                      normal: 'self.isHovered() ? ''62,79,91,255'' : ''45,59,69,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~83,99,111,255
+                  文字:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: ~&f原版物品
+                      fontSize: 32
+                      through: true
+                      point: ~middle_center
+                action:
+                  clickLeft: |-
+                    var.asset['kind'] = 'item'
+                    var.asset['source'] = 'minecraft'
+                    var.asset['snapshot'] = ''
+                    var.modal = ''
+                    var.dirty = true
+                    var.asset = var.assetSide == 'cost' ? var.costs[var.assetIndex.round()] : var.rewards[var.assetIndex.round()]
+                    var.hydrating = true
+                    val.assetIdInput.setContent(var.asset == none ? '' : var.asset['id'])
+                    val.assetAmountInput.setContent(var.asset == none ? '' : var.asset['amount'])
+                    var.hydrating = false
+                    var.assetRowsDirty = true
+                    var.assetPreviewDirty = true
+              mythic:
+                type: Canvas
+                attribute:
+                  x: 28
+                  y: 158
+                  width: 564
+                  height: 54
+                  enable: 'true'
+                  alpha: '(true) ? 1 : 0.45'
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 564
+                      height: 54
+                      normal: 'self.isHovered() ? ''62,79,91,255'' : ''45,59,69,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~83,99,111,255
+                  文字:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: ~&fMythicMobs
+                      fontSize: 32
+                      through: true
+                      point: ~middle_center
+                action:
+                  clickLeft: |-
+                    var.asset['kind'] = 'item'
+                    var.asset['source'] = 'mythic'
+                    var.asset['snapshot'] = ''
+                    var.modal = ''
+                    var.dirty = true
+                    var.asset = var.assetSide == 'cost' ? var.costs[var.assetIndex.round()] : var.rewards[var.assetIndex.round()]
+                    var.hydrating = true
+                    val.assetIdInput.setContent(var.asset == none ? '' : var.asset['id'])
+                    val.assetAmountInput.setContent(var.asset == none ? '' : var.asset['amount'])
+                    var.hydrating = false
+                    var.assetRowsDirty = true
+                    var.assetPreviewDirty = true
+              neige:
+                type: Canvas
+                attribute:
+                  x: 28
+                  y: 230
+                  width: 564
+                  height: 54
+                  enable: 'true'
+                  alpha: '(true) ? 1 : 0.45'
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 564
+                      height: 54
+                      normal: 'self.isHovered() ? ''62,79,91,255'' : ''45,59,69,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~83,99,111,255
+                  文字:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: ~&fNeigeItems
+                      fontSize: 32
+                      through: true
+                      point: ~middle_center
+                action:
+                  clickLeft: |-
+                    var.asset['kind'] = 'item'
+                    var.asset['source'] = 'neige'
+                    var.asset['snapshot'] = ''
+                    var.modal = ''
+                    var.dirty = true
+                    var.asset = var.assetSide == 'cost' ? var.costs[var.assetIndex.round()] : var.rewards[var.assetIndex.round()]
+                    var.hydrating = true
+                    val.assetIdInput.setContent(var.asset == none ? '' : var.asset['id'])
+                    val.assetAmountInput.setContent(var.asset == none ? '' : var.asset['amount'])
+                    var.hydrating = false
+                    var.assetRowsDirty = true
+                    var.assetPreviewDirty = true
+              overture:
+                type: Canvas
+                attribute:
+                  x: 28
+                  y: 302
+                  width: 564
+                  height: 54
+                  enable: 'true'
+                  alpha: '(true) ? 1 : 0.45'
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 564
+                      height: 54
+                      normal: 'self.isHovered() ? ''62,79,91,255'' : ''45,59,69,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~83,99,111,255
+                  文字:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: ~&fOverture
+                      fontSize: 32
+                      through: true
+                      point: ~middle_center
+                action:
+                  clickLeft: |-
+                    var.asset['kind'] = 'item'
+                    var.asset['source'] = 'overture'
+                    var.asset['snapshot'] = ''
+                    var.modal = ''
+                    var.dirty = true
+                    var.asset = var.assetSide == 'cost' ? var.costs[var.assetIndex.round()] : var.rewards[var.assetIndex.round()]
+                    var.hydrating = true
+                    val.assetIdInput.setContent(var.asset == none ? '' : var.asset['id'])
+                    val.assetAmountInput.setContent(var.asset == none ? '' : var.asset['amount'])
+                    var.hydrating = false
+                    var.assetRowsDirty = true
+                    var.assetPreviewDirty = true
+              mmoitems:
+                type: Canvas
+                attribute:
+                  x: 28
+                  y: 374
+                  width: 564
+                  height: 54
+                  enable: 'true'
+                  alpha: '(true) ? 1 : 0.45'
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 564
+                      height: 54
+                      normal: 'self.isHovered() ? ''62,79,91,255'' : ''45,59,69,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~83,99,111,255
+                  文字:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: ~&fMMOItems
+                      fontSize: 32
+                      through: true
+                      point: ~middle_center
+                action:
+                  clickLeft: |-
+                    var.asset['kind'] = 'item'
+                    var.asset['source'] = 'mmoitems'
+                    var.asset['snapshot'] = ''
+                    var.modal = ''
+                    var.dirty = true
+                    var.asset = var.assetSide == 'cost' ? var.costs[var.assetIndex.round()] : var.rewards[var.assetIndex.round()]
+                    var.hydrating = true
+                    val.assetIdInput.setContent(var.asset == none ? '' : var.asset['id'])
+                    val.assetAmountInput.setContent(var.asset == none ? '' : var.asset['amount'])
+                    var.hydrating = false
+                    var.assetRowsDirty = true
+                    var.assetPreviewDirty = true
+              snapshot:
+                type: Canvas
+                attribute:
+                  x: 28
+                  y: 446
+                  width: 564
+                  height: 54
+                  enable: 'true'
+                  alpha: '(true) ? 1 : 0.45'
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 564
+                      height: 54
+                      normal: 'self.isHovered() ? ''62,79,91,255'' : ''45,59,69,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~83,99,111,255
+                  文字:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: ~&f完整物品快照
+                      fontSize: 32
+                      through: true
+                      point: ~middle_center
+                action:
+                  clickLeft: |-
+                    var.pickExact = true
+                    var.modal = 'pick'
+                    Packet.send('AXS:market_exchange_editor', 'inventory', var.token)
+          currency:
+            type: Canvas
+            attribute:
+              x: 0
+              y: 0
+              width: 760
+              height: 620
+              point: ~middle_center
+              visible: var.modal == 'currency'
+            children:
+              边框:
+                type: Canvas
+                attribute:
+                  x: 0
+                  y: 0
+                  width: 760
+                  height: 620
+                  through: true
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 760
+                      height: 620
+                      normal: ~35,42,48,255
+                      through: true
+                      shape: ~round_rect
+                      radius: 10
+                    effect:
+                      stroke:
+                        width: 1
+                        color: ~83,99,111,255
+                  内沿:
+                    type: Texture
+                    attribute:
+                      x: 8
+                      y: 8
+                      width: 744
+                      height: 1
+                      normal: ~57,70,82,255
+                      through: true
+                  下沿:
+                    type: Texture
+                    attribute:
+                      x: 12
+                      y: 617
+                      width: 736
+                      height: 1
+                      normal: ~23,29,35,255
+                      through: true
+                  左上:
+                    type: Texture
+                    attribute:
+                      x: 4
+                      y: 4
+                      width: 16
+                      height: 2
+                      normal: ~199,185,133,255
+                      through: true
+                  右下:
+                    type: Texture
+                    attribute:
+                      x: 740
+                      y: 614
+                      width: 16
+                      height: 2
+                      normal: ~199,185,133,255
+                      through: true
+              标题:
+                type: Text
+                attribute:
+                  x: 28
+                  y: 24
+                  texts: ~&f选择统一货币
+                  fontSize: 36
+                  through: true
+              关闭:
+                type: Canvas
+                attribute:
+                  x: 688
+                  y: 20
+                  width: 44
+                  height: 36
+                  enable: 'true'
+                  alpha: '(true) ? 1 : 0.45'
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 44
+                      height: 36
+                      normal: 'self.isHovered() ? ''62,79,91,255'' : ''45,59,69,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~83,99,111,255
+                  文字:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: ~&f×
+                      fontSize: 32
+                      through: true
+                      point: ~middle_center
+                action:
+                  clickLeft: var.modal = ''
+              行0:
+                type: Canvas
+                attribute:
+                  x: 28
+                  y: 86
+                  width: 704
+                  height: 60
+                  entry: var.currencies[(var.currencyPage * 6 + 0).round()]
+                  visible: self.entry != none
+                children:
+                  底:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 704
+                      height: 60
+                      normal: 'self.isHovered() ? ''62,79,91,255'' : ''23,29,35,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        color: ~157,130,94,255
+                        width: 3
+                  名称:
+                    type: Text
+                    attribute:
+                      x: 14
+                      y: 8
+                      texts: 'self.parent.entry == none ? '''' : ''&f'' + self.parent.entry[''name'']'
+                      fontSize: 32
+                      through: true
+                      limit: 34
+                  标识:
+                    type: Text
+                    attribute:
+                      x: 14
+                      y: 36
+                      texts: 'self.parent.entry == none ? '''' : ''&7'' + self.parent.entry[''id''] + (self.parent.entry[''available''] ? '' ·
+                        已接入'' : '' · 暂不可用'')'
+                      fontSize: 28
+                      through: true
+                      limit: 45
+                action:
+                  clickLeft: |-
+                    if(self.entry != none){var.asset['kind'] = 'currency'
+                    var.asset['source'] = ''
+                    var.asset['id'] = self.entry['id']
+                    var.asset['snapshot'] = ''
+                    var.modal = ''
+                    var.dirty = true
+                    var.asset = var.assetSide == 'cost' ? var.costs[var.assetIndex.round()] : var.rewards[var.assetIndex.round()]
+                    var.hydrating = true
+                    val.assetIdInput.setContent(var.asset == none ? '' : var.asset['id'])
+                    val.assetAmountInput.setContent(var.asset == none ? '' : var.asset['amount'])
+                    var.hydrating = false
+                    var.assetRowsDirty = true
+                    var.assetPreviewDirty = true
+                    }
+              行1:
+                type: Canvas
+                attribute:
+                  x: 28
+                  y: 158
+                  width: 704
+                  height: 60
+                  entry: var.currencies[(var.currencyPage * 6 + 1).round()]
+                  visible: self.entry != none
+                children:
+                  底:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 704
+                      height: 60
+                      normal: 'self.isHovered() ? ''62,79,91,255'' : ''23,29,35,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        color: ~157,130,94,255
+                        width: 3
+                  名称:
+                    type: Text
+                    attribute:
+                      x: 14
+                      y: 8
+                      texts: 'self.parent.entry == none ? '''' : ''&f'' + self.parent.entry[''name'']'
+                      fontSize: 32
+                      through: true
+                      limit: 34
+                  标识:
+                    type: Text
+                    attribute:
+                      x: 14
+                      y: 36
+                      texts: 'self.parent.entry == none ? '''' : ''&7'' + self.parent.entry[''id''] + (self.parent.entry[''available''] ? '' ·
+                        已接入'' : '' · 暂不可用'')'
+                      fontSize: 28
+                      through: true
+                      limit: 45
+                action:
+                  clickLeft: |-
+                    if(self.entry != none){var.asset['kind'] = 'currency'
+                    var.asset['source'] = ''
+                    var.asset['id'] = self.entry['id']
+                    var.asset['snapshot'] = ''
+                    var.modal = ''
+                    var.dirty = true
+                    var.asset = var.assetSide == 'cost' ? var.costs[var.assetIndex.round()] : var.rewards[var.assetIndex.round()]
+                    var.hydrating = true
+                    val.assetIdInput.setContent(var.asset == none ? '' : var.asset['id'])
+                    val.assetAmountInput.setContent(var.asset == none ? '' : var.asset['amount'])
+                    var.hydrating = false
+                    var.assetRowsDirty = true
+                    var.assetPreviewDirty = true
+                    }
+              行2:
+                type: Canvas
+                attribute:
+                  x: 28
+                  y: 230
+                  width: 704
+                  height: 60
+                  entry: var.currencies[(var.currencyPage * 6 + 2).round()]
+                  visible: self.entry != none
+                children:
+                  底:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 704
+                      height: 60
+                      normal: 'self.isHovered() ? ''62,79,91,255'' : ''23,29,35,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        color: ~157,130,94,255
+                        width: 3
+                  名称:
+                    type: Text
+                    attribute:
+                      x: 14
+                      y: 8
+                      texts: 'self.parent.entry == none ? '''' : ''&f'' + self.parent.entry[''name'']'
+                      fontSize: 32
+                      through: true
+                      limit: 34
+                  标识:
+                    type: Text
+                    attribute:
+                      x: 14
+                      y: 36
+                      texts: 'self.parent.entry == none ? '''' : ''&7'' + self.parent.entry[''id''] + (self.parent.entry[''available''] ? '' ·
+                        已接入'' : '' · 暂不可用'')'
+                      fontSize: 28
+                      through: true
+                      limit: 45
+                action:
+                  clickLeft: |-
+                    if(self.entry != none){var.asset['kind'] = 'currency'
+                    var.asset['source'] = ''
+                    var.asset['id'] = self.entry['id']
+                    var.asset['snapshot'] = ''
+                    var.modal = ''
+                    var.dirty = true
+                    var.asset = var.assetSide == 'cost' ? var.costs[var.assetIndex.round()] : var.rewards[var.assetIndex.round()]
+                    var.hydrating = true
+                    val.assetIdInput.setContent(var.asset == none ? '' : var.asset['id'])
+                    val.assetAmountInput.setContent(var.asset == none ? '' : var.asset['amount'])
+                    var.hydrating = false
+                    var.assetRowsDirty = true
+                    var.assetPreviewDirty = true
+                    }
+              行3:
+                type: Canvas
+                attribute:
+                  x: 28
+                  y: 302
+                  width: 704
+                  height: 60
+                  entry: var.currencies[(var.currencyPage * 6 + 3).round()]
+                  visible: self.entry != none
+                children:
+                  底:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 704
+                      height: 60
+                      normal: 'self.isHovered() ? ''62,79,91,255'' : ''23,29,35,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        color: ~157,130,94,255
+                        width: 3
+                  名称:
+                    type: Text
+                    attribute:
+                      x: 14
+                      y: 8
+                      texts: 'self.parent.entry == none ? '''' : ''&f'' + self.parent.entry[''name'']'
+                      fontSize: 32
+                      through: true
+                      limit: 34
+                  标识:
+                    type: Text
+                    attribute:
+                      x: 14
+                      y: 36
+                      texts: 'self.parent.entry == none ? '''' : ''&7'' + self.parent.entry[''id''] + (self.parent.entry[''available''] ? '' ·
+                        已接入'' : '' · 暂不可用'')'
+                      fontSize: 28
+                      through: true
+                      limit: 45
+                action:
+                  clickLeft: |-
+                    if(self.entry != none){var.asset['kind'] = 'currency'
+                    var.asset['source'] = ''
+                    var.asset['id'] = self.entry['id']
+                    var.asset['snapshot'] = ''
+                    var.modal = ''
+                    var.dirty = true
+                    var.asset = var.assetSide == 'cost' ? var.costs[var.assetIndex.round()] : var.rewards[var.assetIndex.round()]
+                    var.hydrating = true
+                    val.assetIdInput.setContent(var.asset == none ? '' : var.asset['id'])
+                    val.assetAmountInput.setContent(var.asset == none ? '' : var.asset['amount'])
+                    var.hydrating = false
+                    var.assetRowsDirty = true
+                    var.assetPreviewDirty = true
+                    }
+              行4:
+                type: Canvas
+                attribute:
+                  x: 28
+                  y: 374
+                  width: 704
+                  height: 60
+                  entry: var.currencies[(var.currencyPage * 6 + 4).round()]
+                  visible: self.entry != none
+                children:
+                  底:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 704
+                      height: 60
+                      normal: 'self.isHovered() ? ''62,79,91,255'' : ''23,29,35,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        color: ~157,130,94,255
+                        width: 3
+                  名称:
+                    type: Text
+                    attribute:
+                      x: 14
+                      y: 8
+                      texts: 'self.parent.entry == none ? '''' : ''&f'' + self.parent.entry[''name'']'
+                      fontSize: 32
+                      through: true
+                      limit: 34
+                  标识:
+                    type: Text
+                    attribute:
+                      x: 14
+                      y: 36
+                      texts: 'self.parent.entry == none ? '''' : ''&7'' + self.parent.entry[''id''] + (self.parent.entry[''available''] ? '' ·
+                        已接入'' : '' · 暂不可用'')'
+                      fontSize: 28
+                      through: true
+                      limit: 45
+                action:
+                  clickLeft: |-
+                    if(self.entry != none){var.asset['kind'] = 'currency'
+                    var.asset['source'] = ''
+                    var.asset['id'] = self.entry['id']
+                    var.asset['snapshot'] = ''
+                    var.modal = ''
+                    var.dirty = true
+                    var.asset = var.assetSide == 'cost' ? var.costs[var.assetIndex.round()] : var.rewards[var.assetIndex.round()]
+                    var.hydrating = true
+                    val.assetIdInput.setContent(var.asset == none ? '' : var.asset['id'])
+                    val.assetAmountInput.setContent(var.asset == none ? '' : var.asset['amount'])
+                    var.hydrating = false
+                    var.assetRowsDirty = true
+                    var.assetPreviewDirty = true
+                    }
+              行5:
+                type: Canvas
+                attribute:
+                  x: 28
+                  y: 446
+                  width: 704
+                  height: 60
+                  entry: var.currencies[(var.currencyPage * 6 + 5).round()]
+                  visible: self.entry != none
+                children:
+                  底:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 704
+                      height: 60
+                      normal: 'self.isHovered() ? ''62,79,91,255'' : ''23,29,35,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        color: ~157,130,94,255
+                        width: 3
+                  名称:
+                    type: Text
+                    attribute:
+                      x: 14
+                      y: 8
+                      texts: 'self.parent.entry == none ? '''' : ''&f'' + self.parent.entry[''name'']'
+                      fontSize: 32
+                      through: true
+                      limit: 34
+                  标识:
+                    type: Text
+                    attribute:
+                      x: 14
+                      y: 36
+                      texts: 'self.parent.entry == none ? '''' : ''&7'' + self.parent.entry[''id''] + (self.parent.entry[''available''] ? '' ·
+                        已接入'' : '' · 暂不可用'')'
+                      fontSize: 28
+                      through: true
+                      limit: 45
+                action:
+                  clickLeft: |-
+                    if(self.entry != none){var.asset['kind'] = 'currency'
+                    var.asset['source'] = ''
+                    var.asset['id'] = self.entry['id']
+                    var.asset['snapshot'] = ''
+                    var.modal = ''
+                    var.dirty = true
+                    var.asset = var.assetSide == 'cost' ? var.costs[var.assetIndex.round()] : var.rewards[var.assetIndex.round()]
+                    var.hydrating = true
+                    val.assetIdInput.setContent(var.asset == none ? '' : var.asset['id'])
+                    val.assetAmountInput.setContent(var.asset == none ? '' : var.asset['amount'])
+                    var.hydrating = false
+                    var.assetRowsDirty = true
+                    var.assetPreviewDirty = true
+                    }
+              上一页:
+                type: Canvas
+                attribute:
+                  x: 220
+                  y: 550
+                  width: 52
+                  height: 38
+                  enable: var.currencyPage > 0
+                  alpha: '(var.currencyPage > 0) ? 1 : 0.45'
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 52
+                      height: 38
+                      normal: 'self.isHovered() ? ''62,79,91,255'' : ''45,59,69,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~83,99,111,255
+                  文字:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: ~&f‹
+                      fontSize: 32
+                      through: true
+                      point: ~middle_center
+                action:
+                  clickLeft: var.currencyPage = var.currencyPage - 1
+              下一页:
+                type: Canvas
+                attribute:
+                  x: 488
+                  y: 550
+                  width: 52
+                  height: 38
+                  enable: (var.currencyPage + 1) * 6 < var.currencyCount
+                  alpha: '((var.currencyPage + 1) * 6 < var.currencyCount) ? 1 : 0.45'
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 52
+                      height: 38
+                      normal: 'self.isHovered() ? ''62,79,91,255'' : ''45,59,69,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~83,99,111,255
+                  文字:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: ~&f›
+                      fontSize: 32
+                      through: true
+                      point: ~middle_center
+                action:
+                  clickLeft: var.currencyPage = var.currencyPage + 1
+              页码:
+                type: Text
+                attribute:
+                  x: 0
+                  y: 562
+                  texts: '''&f'' + (var.currencyPage + 1).toInt().round() + '' / '' + var.currencyPages.toInt().round()'
+                  fontSize: 28
+                  through: true
+                  point: ~top_center
+              空提示:
+                type: Text
+                attribute:
+                  x: 0
+                  y: -20
+                  texts: ~&7尚未配置统一货币
+                  fontSize: 36
+                  through: true
+                  point: ~middle_center
+                  visible: var.currencyCount == 0
+          npcs:
+            type: Canvas
+            attribute:
+              x: 0
+              y: 0
+              width: 760
+              height: 620
+              point: ~middle_center
+              visible: var.modal == 'npcs'
+            children:
+              边框:
+                type: Canvas
+                attribute:
+                  x: 0
+                  y: 0
+                  width: 760
+                  height: 620
+                  through: true
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 760
+                      height: 620
+                      normal: ~35,42,48,255
+                      through: true
+                      shape: ~round_rect
+                      radius: 10
+                    effect:
+                      stroke:
+                        width: 1
+                        color: ~83,99,111,255
+                  内沿:
+                    type: Texture
+                    attribute:
+                      x: 8
+                      y: 8
+                      width: 744
+                      height: 1
+                      normal: ~57,70,82,255
+                      through: true
+                  下沿:
+                    type: Texture
+                    attribute:
+                      x: 12
+                      y: 617
+                      width: 736
+                      height: 1
+                      normal: ~23,29,35,255
+                      through: true
+                  左上:
+                    type: Texture
+                    attribute:
+                      x: 4
+                      y: 4
+                      width: 16
+                      height: 2
+                      normal: ~199,185,133,255
+                      through: true
+                  右下:
+                    type: Texture
+                    attribute:
+                      x: 740
+                      y: 614
+                      width: 16
+                      height: 2
+                      normal: ~199,185,133,255
+                      through: true
+              标题:
+                type: Text
+                attribute:
+                  x: 28
+                  y: 24
+                  texts: ~&f选择附近 NPC
+                  fontSize: 36
+                  through: true
+              关闭:
+                type: Canvas
+                attribute:
+                  x: 688
+                  y: 20
+                  width: 44
+                  height: 36
+                  enable: 'true'
+                  alpha: '(true) ? 1 : 0.45'
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 44
+                      height: 36
+                      normal: 'self.isHovered() ? ''62,79,91,255'' : ''45,59,69,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~83,99,111,255
+                  文字:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: ~&f×
+                      fontSize: 32
+                      through: true
+                      point: ~middle_center
+                action:
+                  clickLeft: var.modal = ''
+              行0:
+                type: Canvas
+                attribute:
+                  x: 28
+                  y: 86
+                  width: 704
+                  height: 60
+                  entry: var.nearby[(var.nearbyPage * 6 + 0).round()]
+                  visible: self.entry != none
+                children:
+                  底:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 704
+                      height: 60
+                      normal: 'self.isHovered() ? ''62,79,91,255'' : ''23,29,35,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        color: ~157,130,94,255
+                        width: 3
+                  名称:
+                    type: Text
+                    attribute:
+                      x: 14
+                      y: 8
+                      texts: 'self.parent.entry == none ? '''' : ''&f'' + self.parent.entry[''name'']'
+                      fontSize: 32
+                      through: true
+                      limit: 34
+                  标识:
+                    type: Text
+                    attribute:
+                      x: 14
+                      y: 36
+                      texts: 'self.parent.entry == none ? '''' : ''&7'' + self.parent.entry[''key'']'
+                      fontSize: 28
+                      through: true
+                      limit: 45
+                action:
+                  clickLeft: |-
+                    if(self.entry != none){
+                    if(var.shopNpcs == ''){var.shopNpcs = self.entry['key']}else{var.shopNpcs = var.shopNpcs + ',' + self.entry['key']}
+                    val.shopNpcInput.setContent(var.shopNpcs)
+                    var.dirty = true
+                    var.modal = ''
+                    }
+              行1:
+                type: Canvas
+                attribute:
+                  x: 28
+                  y: 158
+                  width: 704
+                  height: 60
+                  entry: var.nearby[(var.nearbyPage * 6 + 1).round()]
+                  visible: self.entry != none
+                children:
+                  底:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 704
+                      height: 60
+                      normal: 'self.isHovered() ? ''62,79,91,255'' : ''23,29,35,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        color: ~157,130,94,255
+                        width: 3
+                  名称:
+                    type: Text
+                    attribute:
+                      x: 14
+                      y: 8
+                      texts: 'self.parent.entry == none ? '''' : ''&f'' + self.parent.entry[''name'']'
+                      fontSize: 32
+                      through: true
+                      limit: 34
+                  标识:
+                    type: Text
+                    attribute:
+                      x: 14
+                      y: 36
+                      texts: 'self.parent.entry == none ? '''' : ''&7'' + self.parent.entry[''key'']'
+                      fontSize: 28
+                      through: true
+                      limit: 45
+                action:
+                  clickLeft: |-
+                    if(self.entry != none){
+                    if(var.shopNpcs == ''){var.shopNpcs = self.entry['key']}else{var.shopNpcs = var.shopNpcs + ',' + self.entry['key']}
+                    val.shopNpcInput.setContent(var.shopNpcs)
+                    var.dirty = true
+                    var.modal = ''
+                    }
+              行2:
+                type: Canvas
+                attribute:
+                  x: 28
+                  y: 230
+                  width: 704
+                  height: 60
+                  entry: var.nearby[(var.nearbyPage * 6 + 2).round()]
+                  visible: self.entry != none
+                children:
+                  底:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 704
+                      height: 60
+                      normal: 'self.isHovered() ? ''62,79,91,255'' : ''23,29,35,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        color: ~157,130,94,255
+                        width: 3
+                  名称:
+                    type: Text
+                    attribute:
+                      x: 14
+                      y: 8
+                      texts: 'self.parent.entry == none ? '''' : ''&f'' + self.parent.entry[''name'']'
+                      fontSize: 32
+                      through: true
+                      limit: 34
+                  标识:
+                    type: Text
+                    attribute:
+                      x: 14
+                      y: 36
+                      texts: 'self.parent.entry == none ? '''' : ''&7'' + self.parent.entry[''key'']'
+                      fontSize: 28
+                      through: true
+                      limit: 45
+                action:
+                  clickLeft: |-
+                    if(self.entry != none){
+                    if(var.shopNpcs == ''){var.shopNpcs = self.entry['key']}else{var.shopNpcs = var.shopNpcs + ',' + self.entry['key']}
+                    val.shopNpcInput.setContent(var.shopNpcs)
+                    var.dirty = true
+                    var.modal = ''
+                    }
+              行3:
+                type: Canvas
+                attribute:
+                  x: 28
+                  y: 302
+                  width: 704
+                  height: 60
+                  entry: var.nearby[(var.nearbyPage * 6 + 3).round()]
+                  visible: self.entry != none
+                children:
+                  底:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 704
+                      height: 60
+                      normal: 'self.isHovered() ? ''62,79,91,255'' : ''23,29,35,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        color: ~157,130,94,255
+                        width: 3
+                  名称:
+                    type: Text
+                    attribute:
+                      x: 14
+                      y: 8
+                      texts: 'self.parent.entry == none ? '''' : ''&f'' + self.parent.entry[''name'']'
+                      fontSize: 32
+                      through: true
+                      limit: 34
+                  标识:
+                    type: Text
+                    attribute:
+                      x: 14
+                      y: 36
+                      texts: 'self.parent.entry == none ? '''' : ''&7'' + self.parent.entry[''key'']'
+                      fontSize: 28
+                      through: true
+                      limit: 45
+                action:
+                  clickLeft: |-
+                    if(self.entry != none){
+                    if(var.shopNpcs == ''){var.shopNpcs = self.entry['key']}else{var.shopNpcs = var.shopNpcs + ',' + self.entry['key']}
+                    val.shopNpcInput.setContent(var.shopNpcs)
+                    var.dirty = true
+                    var.modal = ''
+                    }
+              行4:
+                type: Canvas
+                attribute:
+                  x: 28
+                  y: 374
+                  width: 704
+                  height: 60
+                  entry: var.nearby[(var.nearbyPage * 6 + 4).round()]
+                  visible: self.entry != none
+                children:
+                  底:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 704
+                      height: 60
+                      normal: 'self.isHovered() ? ''62,79,91,255'' : ''23,29,35,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        color: ~157,130,94,255
+                        width: 3
+                  名称:
+                    type: Text
+                    attribute:
+                      x: 14
+                      y: 8
+                      texts: 'self.parent.entry == none ? '''' : ''&f'' + self.parent.entry[''name'']'
+                      fontSize: 32
+                      through: true
+                      limit: 34
+                  标识:
+                    type: Text
+                    attribute:
+                      x: 14
+                      y: 36
+                      texts: 'self.parent.entry == none ? '''' : ''&7'' + self.parent.entry[''key'']'
+                      fontSize: 28
+                      through: true
+                      limit: 45
+                action:
+                  clickLeft: |-
+                    if(self.entry != none){
+                    if(var.shopNpcs == ''){var.shopNpcs = self.entry['key']}else{var.shopNpcs = var.shopNpcs + ',' + self.entry['key']}
+                    val.shopNpcInput.setContent(var.shopNpcs)
+                    var.dirty = true
+                    var.modal = ''
+                    }
+              行5:
+                type: Canvas
+                attribute:
+                  x: 28
+                  y: 446
+                  width: 704
+                  height: 60
+                  entry: var.nearby[(var.nearbyPage * 6 + 5).round()]
+                  visible: self.entry != none
+                children:
+                  底:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 704
+                      height: 60
+                      normal: 'self.isHovered() ? ''62,79,91,255'' : ''23,29,35,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        color: ~157,130,94,255
+                        width: 3
+                  名称:
+                    type: Text
+                    attribute:
+                      x: 14
+                      y: 8
+                      texts: 'self.parent.entry == none ? '''' : ''&f'' + self.parent.entry[''name'']'
+                      fontSize: 32
+                      through: true
+                      limit: 34
+                  标识:
+                    type: Text
+                    attribute:
+                      x: 14
+                      y: 36
+                      texts: 'self.parent.entry == none ? '''' : ''&7'' + self.parent.entry[''key'']'
+                      fontSize: 28
+                      through: true
+                      limit: 45
+                action:
+                  clickLeft: |-
+                    if(self.entry != none){
+                    if(var.shopNpcs == ''){var.shopNpcs = self.entry['key']}else{var.shopNpcs = var.shopNpcs + ',' + self.entry['key']}
+                    val.shopNpcInput.setContent(var.shopNpcs)
+                    var.dirty = true
+                    var.modal = ''
+                    }
+              上一页:
+                type: Canvas
+                attribute:
+                  x: 220
+                  y: 550
+                  width: 52
+                  height: 38
+                  enable: var.nearbyPage > 0
+                  alpha: '(var.nearbyPage > 0) ? 1 : 0.45'
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 52
+                      height: 38
+                      normal: 'self.isHovered() ? ''62,79,91,255'' : ''45,59,69,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~83,99,111,255
+                  文字:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: ~&f‹
+                      fontSize: 32
+                      through: true
+                      point: ~middle_center
+                action:
+                  clickLeft: var.nearbyPage = var.nearbyPage - 1
+              下一页:
+                type: Canvas
+                attribute:
+                  x: 488
+                  y: 550
+                  width: 52
+                  height: 38
+                  enable: (var.nearbyPage + 1) * 6 < var.nearbyCount
+                  alpha: '((var.nearbyPage + 1) * 6 < var.nearbyCount) ? 1 : 0.45'
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 52
+                      height: 38
+                      normal: 'self.isHovered() ? ''62,79,91,255'' : ''45,59,69,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~83,99,111,255
+                  文字:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: ~&f›
+                      fontSize: 32
+                      through: true
+                      point: ~middle_center
+                action:
+                  clickLeft: var.nearbyPage = var.nearbyPage + 1
+              页码:
+                type: Text
+                attribute:
+                  x: 0
+                  y: 562
+                  texts: '''&f'' + (var.nearbyPage + 1).toInt().round() + '' / '' + var.nearbyPages.toInt().round()'
+                  fontSize: 28
+                  through: true
+                  point: ~top_center
+              空提示:
+                type: Text
+                attribute:
+                  x: 0
+                  y: -20
+                  texts: ~&7附近没有可绑定的 Adyeshach NPC
+                  fontSize: 36
+                  through: true
+                  point: ~middle_center
+                  visible: var.nearbyCount == 0
+          confirm:
+            type: Canvas
+            attribute:
+              x: 0
+              y: 0
+              width: 720
+              height: 290
+              point: ~middle_center
+              visible: var.modal == 'confirm'
+            children:
+              边框:
+                type: Canvas
+                attribute:
+                  x: 0
+                  y: 0
+                  width: 720
+                  height: 290
+                  through: true
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 720
+                      height: 290
+                      normal: ~35,42,48,255
+                      through: true
+                      shape: ~round_rect
+                      radius: 10
+                    effect:
+                      stroke:
+                        width: 1
+                        color: ~83,99,111,255
+                  内沿:
+                    type: Texture
+                    attribute:
+                      x: 8
+                      y: 8
+                      width: 704
+                      height: 1
+                      normal: ~57,70,82,255
+                      through: true
+                  下沿:
+                    type: Texture
+                    attribute:
+                      x: 12
+                      y: 287
+                      width: 696
+                      height: 1
+                      normal: ~23,29,35,255
+                      through: true
+                  左上:
+                    type: Texture
+                    attribute:
+                      x: 4
+                      y: 4
+                      width: 16
+                      height: 2
+                      normal: ~199,185,133,255
+                      through: true
+                  右下:
+                    type: Texture
+                    attribute:
+                      x: 700
+                      y: 284
+                      width: 16
+                      height: 2
+                      normal: ~199,185,133,255
+                      through: true
+              标题:
+                type: Text
+                attribute:
+                  x: 28
+                  y: 24
+                  texts: ~&f请确认操作
+                  fontSize: 36
+                  through: true
+              关闭:
+                type: Canvas
+                attribute:
+                  x: 648
+                  y: 20
+                  width: 44
+                  height: 36
+                  enable: 'true'
+                  alpha: '(true) ? 1 : 0.45'
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 44
+                      height: 36
+                      normal: 'self.isHovered() ? ''62,79,91,255'' : ''45,59,69,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~83,99,111,255
+                  文字:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: ~&f×
+                      fontSize: 32
+                      through: true
+                      point: ~middle_center
+                action:
+                  clickLeft: var.modal = ''
+              说明:
+                type: Text
+                attribute:
+                  x: 28
+                  y: 90
+                  texts: 'var.confirmKind == ''resolve'' ? ''&e人工结案不会补发或退回任何资产'' : ''&e当前操作会删除配置或放弃尚未保存的修改'''
+                  fontSize: 32
+                  through: true
+                  limit: 40
+              确认:
+                type: Canvas
+                attribute:
+                  x: 28
+                  y: 208
+                  width: 320
+                  height: 48
+                  enable: 'true'
+                  alpha: '(true) ? 1 : 0.45'
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 320
+                      height: 48
+                      normal: 'self.isHovered() ? ''62,79,91,255'' : ''45,59,69,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~83,99,111,255
+                  文字:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: ~&e确认执行
+                      fontSize: 32
+                      through: true
+                      point: ~middle_center
+                action:
+                  clickLeft: |-
+                    kind = var.confirmKind
+                    var.modal = ''
+                    if(kind == 'close'){self.ui.close()}
+                    if(kind == 'switch_shop'){var.dirty = false
+                    Packet.send('AXS:market_exchange_editor', 'shop', var.pendingShop)
+                    }
+                    if(kind == 'switch_offer'){
+                    var.requestedOfferId = var.offers[var.pendingOffer.round()]['id']
+                    var.busy = true
+                    Packet.send('AXS:market_exchange_editor', 'offer', var.shopId, var.requestedOfferId)
+                    }
+                    if(kind == 'new_shop'){
+                    var.mode = 'shop'
+                    var.shopNew = true
+                    var.shopId = ''
+                    var.shopName = ''
+                    var.shopEnabled = false
+                    var.shopPermission = ''
+                    var.shopNpcs = ''
+                    var.revision = '0'
+                    var.offers = {}
+                    var.offerCount = 0
+                    var.offerPages = 1
+                    var.offerPage = 0
+                    var.hydrating = true
+                    val.shopIdInput.setContent('')
+                    val.shopNameInput.setContent('')
+                    val.shopPermissionInput.setContent('')
+                    val.shopNpcInput.setContent('')
+                    var.hydrating = false
+                    var.dirty = false
+                    }
+                    if(kind == 'new_offer'){
+                    var.mode = 'offer'
+                    var.offerNew = true
+                    var.offerId = ''
+                    var.offerName = ''
+                    var.offerEnabled = true
+                    var.offerPermission = ''
+                    var.costCount = 1
+                    var.rewardCount = 1
+                    var.costs = {}
+                    var.costs[0.round()] = {'kind': 'item', 'source': 'minecraft', 'id': 'EMERALD', 'amount': '1', 'snapshot': ''}
+                    var.rewards = {}
+                    var.rewards[0.round()] = {'kind': 'item', 'source': 'minecraft', 'id': 'IRON_INGOT', 'amount': '1', 'snapshot': ''}
+                    var.costRows = {}
+                    var.rewardRows = {}
+                    var.hydrating = true
+                    val.offerIdInput.setContent('')
+                    val.offerNameInput.setContent('')
+                    val.offerPermissionInput.setContent('')
+                    var.hydrating = false
+                    var.assetSide = 'cost'
+                    var.assetIndex = 0
+                    var.dirty = true
+                    var.asset = var.assetSide == 'cost' ? var.costs[var.assetIndex.round()] : var.rewards[var.assetIndex.round()]
+                    var.hydrating = true
+                    val.assetIdInput.setContent(var.asset == none ? '' : var.asset['id'])
+                    val.assetAmountInput.setContent(var.asset == none ? '' : var.asset['amount'])
+                    var.hydrating = false
+                    var.assetRowsDirty = true
+                    var.assetPreviewDirty = true
+                    }
+                    if(kind == 'delete_shop'){var.busy = true
+                    Packet.send('AXS:market_exchange_editor', 'delete_shop', var.shopId, var.revision, 'confirm', var.token)
+                    }
+                    if(kind == 'delete_offer'){var.busy = true
+                    Packet.send('AXS:market_exchange_editor', 'delete_offer', var.shopId, var.offerId, var.revision, 'confirm', var.token)
+                    }
+                    if(kind == 'resolve'){
+                    Packet.send('AXS:market_exchange_editor', 'resolve', var.ledgerSelection, 'confirm', var.token)
+                    }
+                    if(kind == 'refresh'){var.dirty = false
+                    Packet.send('AXS:market_exchange_editor', 'list', var.mode, var.offerId)
+                    }
+              取消:
+                type: Canvas
+                attribute:
+                  x: 372
+                  y: 208
+                  width: 320
+                  height: 48
+                  enable: 'true'
+                  alpha: '(true) ? 1 : 0.45'
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 320
+                      height: 48
+                      normal: 'self.isHovered() ? ''62,79,91,255'' : ''45,59,69,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~83,99,111,255
+                  文字:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: ~&f返回编辑
+                      fontSize: 32
+                      through: true
+                      point: ~middle_center
+                action:
+                  clickLeft: var.modal = ''
+          ledger:
+            type: Canvas
+            attribute:
+              x: 0
+              y: 0
+              width: 1040
+              height: 660
+              point: ~middle_center
+              visible: var.modal == 'ledger'
+            children:
+              边框:
+                type: Canvas
+                attribute:
+                  x: 0
+                  y: 0
+                  width: 1040
+                  height: 660
+                  through: true
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 1040
+                      height: 660
+                      normal: ~35,42,48,255
+                      through: true
+                      shape: ~round_rect
+                      radius: 10
+                    effect:
+                      stroke:
+                        width: 1
+                        color: ~83,99,111,255
+                  内沿:
+                    type: Texture
+                    attribute:
+                      x: 8
+                      y: 8
+                      width: 1024
+                      height: 1
+                      normal: ~57,70,82,255
+                      through: true
+                  下沿:
+                    type: Texture
+                    attribute:
+                      x: 12
+                      y: 657
+                      width: 1016
+                      height: 1
+                      normal: ~23,29,35,255
+                      through: true
+                  左上:
+                    type: Texture
+                    attribute:
+                      x: 4
+                      y: 4
+                      width: 16
+                      height: 2
+                      normal: ~199,185,133,255
+                      through: true
+                  右下:
+                    type: Texture
+                    attribute:
+                      x: 1020
+                      y: 654
+                      width: 16
+                      height: 2
+                      normal: ~199,185,133,255
+                      through: true
+              标题:
+                type: Text
+                attribute:
+                  x: 28
+                  y: 24
+                  texts: ~&f待核对兑换凭证
+                  fontSize: 36
+                  through: true
+              关闭:
+                type: Canvas
+                attribute:
+                  x: 968
+                  y: 20
+                  width: 44
+                  height: 36
+                  enable: 'true'
+                  alpha: '(true) ? 1 : 0.45'
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 44
+                      height: 36
+                      normal: 'self.isHovered() ? ''62,79,91,255'' : ''45,59,69,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~83,99,111,255
+                  文字:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: ~&f×
+                      fontSize: 32
+                      through: true
+                      point: ~middle_center
+                action:
+                  clickLeft: var.modal = ''
+              说明:
+                type: Text
+                attribute:
+                  x: 28
+                  y: 72
+                  texts: ~&7先导出并核对实际资产，再人工结案；不会自动补发
+                  fontSize: 28
+                  through: true
+              凭证0:
+                type: Canvas
+                attribute:
+                  x: 28
+                  y: 114
+                  width: 984
+                  height: 52
+                  entry: var.ledgerRows[(var.ledgerPage * 6 + 0).round()]
+                children:
+                  底:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 984
+                      height: 52
+                      normal: 'self.isHovered() ? ''62,79,91,255'' : ''23,29,35,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 5
+                    effect:
+                      stroke:
+                        color: ~157,130,94,255
+                        width: 3
+                  编号:
+                    type: Text
+                    attribute:
+                      x: 14
+                      y: 8
+                      texts: 'self.parent.entry == none ? '''' : ''&e'' + self.parent.entry[''id'']'
+                      fontSize: 28
+                      through: true
+                  玩家:
+                    type: Text
+                    attribute:
+                      x: 14
+                      y: 30
+                      texts: 'self.parent.entry == none ? '''' : ''&7'' + self.parent.entry[''player'']'
+                      fontSize: 28
+                      through: true
+                action:
+                  clickLeft: |-
+                    if(self.entry != none){var.ledgerSelection = self.entry['id']
+                    val.ledgerUuidInput.setContent(var.ledgerSelection)}
+              凭证1:
+                type: Canvas
+                attribute:
+                  x: 28
+                  y: 178
+                  width: 984
+                  height: 52
+                  entry: var.ledgerRows[(var.ledgerPage * 6 + 1).round()]
+                children:
+                  底:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 984
+                      height: 52
+                      normal: 'self.isHovered() ? ''62,79,91,255'' : ''23,29,35,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 5
+                    effect:
+                      stroke:
+                        color: ~157,130,94,255
+                        width: 3
+                  编号:
+                    type: Text
+                    attribute:
+                      x: 14
+                      y: 8
+                      texts: 'self.parent.entry == none ? '''' : ''&e'' + self.parent.entry[''id'']'
+                      fontSize: 28
+                      through: true
+                  玩家:
+                    type: Text
+                    attribute:
+                      x: 14
+                      y: 30
+                      texts: 'self.parent.entry == none ? '''' : ''&7'' + self.parent.entry[''player'']'
+                      fontSize: 28
+                      through: true
+                action:
+                  clickLeft: |-
+                    if(self.entry != none){var.ledgerSelection = self.entry['id']
+                    val.ledgerUuidInput.setContent(var.ledgerSelection)}
+              凭证2:
+                type: Canvas
+                attribute:
+                  x: 28
+                  y: 242
+                  width: 984
+                  height: 52
+                  entry: var.ledgerRows[(var.ledgerPage * 6 + 2).round()]
+                children:
+                  底:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 984
+                      height: 52
+                      normal: 'self.isHovered() ? ''62,79,91,255'' : ''23,29,35,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 5
+                    effect:
+                      stroke:
+                        color: ~157,130,94,255
+                        width: 3
+                  编号:
+                    type: Text
+                    attribute:
+                      x: 14
+                      y: 8
+                      texts: 'self.parent.entry == none ? '''' : ''&e'' + self.parent.entry[''id'']'
+                      fontSize: 28
+                      through: true
+                  玩家:
+                    type: Text
+                    attribute:
+                      x: 14
+                      y: 30
+                      texts: 'self.parent.entry == none ? '''' : ''&7'' + self.parent.entry[''player'']'
+                      fontSize: 28
+                      through: true
+                action:
+                  clickLeft: |-
+                    if(self.entry != none){var.ledgerSelection = self.entry['id']
+                    val.ledgerUuidInput.setContent(var.ledgerSelection)}
+              凭证3:
+                type: Canvas
+                attribute:
+                  x: 28
+                  y: 306
+                  width: 984
+                  height: 52
+                  entry: var.ledgerRows[(var.ledgerPage * 6 + 3).round()]
+                children:
+                  底:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 984
+                      height: 52
+                      normal: 'self.isHovered() ? ''62,79,91,255'' : ''23,29,35,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 5
+                    effect:
+                      stroke:
+                        color: ~157,130,94,255
+                        width: 3
+                  编号:
+                    type: Text
+                    attribute:
+                      x: 14
+                      y: 8
+                      texts: 'self.parent.entry == none ? '''' : ''&e'' + self.parent.entry[''id'']'
+                      fontSize: 28
+                      through: true
+                  玩家:
+                    type: Text
+                    attribute:
+                      x: 14
+                      y: 30
+                      texts: 'self.parent.entry == none ? '''' : ''&7'' + self.parent.entry[''player'']'
+                      fontSize: 28
+                      through: true
+                action:
+                  clickLeft: |-
+                    if(self.entry != none){var.ledgerSelection = self.entry['id']
+                    val.ledgerUuidInput.setContent(var.ledgerSelection)}
+              凭证4:
+                type: Canvas
+                attribute:
+                  x: 28
+                  y: 370
+                  width: 984
+                  height: 52
+                  entry: var.ledgerRows[(var.ledgerPage * 6 + 4).round()]
+                children:
+                  底:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 984
+                      height: 52
+                      normal: 'self.isHovered() ? ''62,79,91,255'' : ''23,29,35,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 5
+                    effect:
+                      stroke:
+                        color: ~157,130,94,255
+                        width: 3
+                  编号:
+                    type: Text
+                    attribute:
+                      x: 14
+                      y: 8
+                      texts: 'self.parent.entry == none ? '''' : ''&e'' + self.parent.entry[''id'']'
+                      fontSize: 28
+                      through: true
+                  玩家:
+                    type: Text
+                    attribute:
+                      x: 14
+                      y: 30
+                      texts: 'self.parent.entry == none ? '''' : ''&7'' + self.parent.entry[''player'']'
+                      fontSize: 28
+                      through: true
+                action:
+                  clickLeft: |-
+                    if(self.entry != none){var.ledgerSelection = self.entry['id']
+                    val.ledgerUuidInput.setContent(var.ledgerSelection)}
+              凭证5:
+                type: Canvas
+                attribute:
+                  x: 28
+                  y: 434
+                  width: 984
+                  height: 52
+                  entry: var.ledgerRows[(var.ledgerPage * 6 + 5).round()]
+                children:
+                  底:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 984
+                      height: 52
+                      normal: 'self.isHovered() ? ''62,79,91,255'' : ''23,29,35,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 5
+                    effect:
+                      stroke:
+                        color: ~157,130,94,255
+                        width: 3
+                  编号:
+                    type: Text
+                    attribute:
+                      x: 14
+                      y: 8
+                      texts: 'self.parent.entry == none ? '''' : ''&e'' + self.parent.entry[''id'']'
+                      fontSize: 28
+                      through: true
+                  玩家:
+                    type: Text
+                    attribute:
+                      x: 14
+                      y: 30
+                      texts: 'self.parent.entry == none ? '''' : ''&7'' + self.parent.entry[''player'']'
+                      fontSize: 28
+                      through: true
+                action:
+                  clickLeft: |-
+                    if(self.entry != none){var.ledgerSelection = self.entry['id']
+                    val.ledgerUuidInput.setContent(var.ledgerSelection)}
+              选中:
+                type: Canvas
+                attribute:
+                  x: 28
+                  y: 510
+                  width: 984
+                  height: 40
+                children:
+                  底:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 984
+                      height: 40
+                      normal: ~23,29,35,255
+                      through: true
+                      shape: ~round_rect
+                      radius: 5
+                  输入:
+                    type: TextBox
+                    attribute:
+                      x: 10
+                      y: 7
+                      width: 964
+                      height: 26
+                      fontSize: 32
+                      length: 512
+                      emptyText: ~&7选择记录或粘贴凭证 UUID
+                      editable: (true) && !var.busy
+                    action:
+                      textChange: var.ledgerSelection = self.getContent()
+                    val: ledgerUuidInput
+              导出:
+                type: Canvas
+                attribute:
+                  x: 28
+                  y: 570
+                  width: 188
+                  height: 44
+                  enable: var.ledgerSelection != ''
+                  alpha: '(var.ledgerSelection != '''') ? 1 : 0.45'
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 188
+                      height: 44
+                      normal: 'self.isHovered() ? ''62,79,91,255'' : ''45,59,69,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~83,99,111,255
+                  文字:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: ~&f导出完整凭证
+                      fontSize: 32
+                      through: true
+                      point: ~middle_center
+                action:
+                  clickLeft: Packet.send('AXS:market_exchange_editor', 'export', var.ledgerSelection, var.token)
+              结案:
+                type: Canvas
+                attribute:
+                  x: 232
+                  y: 570
+                  width: 188
+                  height: 44
+                  enable: var.ledgerSelection != ''
+                  alpha: '(var.ledgerSelection != '''') ? 1 : 0.45'
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 188
+                      height: 44
+                      normal: 'self.isHovered() ? ''62,79,91,255'' : ''45,59,69,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~83,99,111,255
+                  文字:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: ~&e人工结案
+                      fontSize: 32
+                      through: true
+                      point: ~middle_center
+                action:
+                  clickLeft: |-
+                    var.confirmKind = 'resolve'
+                    var.modal = 'confirm'
+              刷新:
+                type: Canvas
+                attribute:
+                  x: 436
+                  y: 570
+                  width: 156
+                  height: 44
+                  enable: 'true'
+                  alpha: '(true) ? 1 : 0.45'
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 156
+                      height: 44
+                      normal: 'self.isHovered() ? ''62,79,91,255'' : ''45,59,69,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~83,99,111,255
+                  文字:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: ~&f刷新记录
+                      fontSize: 32
+                      through: true
+                      point: ~middle_center
+                action:
+                  clickLeft: Packet.send('AXS:market_exchange_editor', 'ledger', var.token)
+              上一页:
+                type: Canvas
+                attribute:
+                  x: 712
+                  y: 570
+                  width: 52
+                  height: 44
+                  enable: var.ledgerPage > 0
+                  alpha: '(var.ledgerPage > 0) ? 1 : 0.45'
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 52
+                      height: 44
+                      normal: 'self.isHovered() ? ''62,79,91,255'' : ''45,59,69,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~83,99,111,255
+                  文字:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: ~&f‹
+                      fontSize: 32
+                      through: true
+                      point: ~middle_center
+                action:
+                  clickLeft: var.ledgerPage = var.ledgerPage - 1
+              下一页:
+                type: Canvas
+                attribute:
+                  x: 960
+                  y: 570
+                  width: 52
+                  height: 44
+                  enable: (var.ledgerPage + 1) * 6 < var.ledgerCount
+                  alpha: '((var.ledgerPage + 1) * 6 < var.ledgerCount) ? 1 : 0.45'
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 52
+                      height: 44
+                      normal: 'self.isHovered() ? ''62,79,91,255'' : ''45,59,69,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~83,99,111,255
+                  文字:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: ~&f›
+                      fontSize: 32
+                      through: true
+                      point: ~middle_center
+                action:
+                  clickLeft: var.ledgerPage = var.ledgerPage + 1
+              页码:
+                type: Text
+                attribute:
+                  x: 792
+                  y: 584
+                  texts: '''&f'' + (var.ledgerPage + 1).toInt().round() + '' / '' + var.ledgerPages.toInt().round()'
+                  fontSize: 28
+                  through: true
+              导出位置:
+                type: Text
+                attribute:
+                  x: 28
+                  y: 628
+                  texts: ~&7导出目录：data/vanilla/npc-trade-evidence/
+                  fontSize: 28
+                  through: true
+                  visible: var.exportPath != ''
+                  tip: var.exportPath
+          help:
+            type: Canvas
+            attribute:
+              x: 0
+              y: 0
+              width: 920
+              height: 530
+              point: ~middle_center
+              visible: var.modal == 'help'
+            children:
+              边框:
+                type: Canvas
+                attribute:
+                  x: 0
+                  y: 0
+                  width: 920
+                  height: 530
+                  through: true
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 920
+                      height: 530
+                      normal: ~35,42,48,255
+                      through: true
+                      shape: ~round_rect
+                      radius: 10
+                    effect:
+                      stroke:
+                        width: 1
+                        color: ~83,99,111,255
+                  内沿:
+                    type: Texture
+                    attribute:
+                      x: 8
+                      y: 8
+                      width: 904
+                      height: 1
+                      normal: ~57,70,82,255
+                      through: true
+                  下沿:
+                    type: Texture
+                    attribute:
+                      x: 12
+                      y: 527
+                      width: 896
+                      height: 1
+                      normal: ~23,29,35,255
+                      through: true
+                  左上:
+                    type: Texture
+                    attribute:
+                      x: 4
+                      y: 4
+                      width: 16
+                      height: 2
+                      normal: ~199,185,133,255
+                      through: true
+                  右下:
+                    type: Texture
+                    attribute:
+                      x: 900
+                      y: 524
+                      width: 16
+                      height: 2
+                      normal: ~199,185,133,255
+                      through: true
+              标题:
+                type: Text
+                attribute:
+                  x: 28
+                  y: 24
+                  texts: ~&f编辑与兑换说明
+                  fontSize: 36
+                  through: true
+              关闭:
+                type: Canvas
+                attribute:
+                  x: 848
+                  y: 20
+                  width: 44
+                  height: 36
+                  enable: 'true'
+                  alpha: '(true) ? 1 : 0.45'
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 44
+                      height: 36
+                      normal: 'self.isHovered() ? ''62,79,91,255'' : ''45,59,69,255'''
+                      through: true
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~83,99,111,255
+                  文字:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: ~&f×
+                      fontSize: 32
+                      through: true
+                      point: ~middle_center
+                action:
+                  clickLeft: var.modal = ''
+              说明0:
+                type: Text
+                attribute:
+                  x: 28
+                  y: 96
+                  texts: ~&7先创建并保存兑换所，再添加兑换条目。
+                  fontSize: 28
+                  through: true
+              说明1:
+                type: Text
+                attribute:
+                  x: 28
+                  y: 140
+                  texts: ~&7成本与奖励各最多八项，可混合多种货币与物品。
+                  fontSize: 28
+                  through: true
+              说明2:
+                type: Text
+                attribute:
+                  x: 28
+                  y: 184
+                  texts: ~&7背包选物自动识别物品库，完整快照可固定物品属性。
+                  fontSize: 28
+                  through: true
+              说明3:
+                type: Text
+                attribute:
+                  x: 28
+                  y: 228
+                  texts: ~&7填写 ady:实体ID 或从附近的 Adyeshach NPC 中选择。
+                  fontSize: 28
+                  through: true
+              说明4:
+                type: Text
+                attribute:
+                  x: 28
+                  y: 272
+                  texts: ~&7右键已绑定的 NPC 打开兑换，也可在它附近使用兑换命令。
+                  fontSize: 28
+                  through: true
+              说明5:
+                type: Text
+                attribute:
+                  x: 28
+                  y: 316
+                  texts: ~&7配置保存于 data/vanilla/npc-trades.yml。
+                  fontSize: 28
+                  through: true
+              说明6:
+                type: Text
+                attribute:
+                  x: 28
+                  y: 360
+                  texts: ~&7兑换中断时保留凭证，不自动重复扣款或补发。
+                  fontSize: 28
+                  through: true
+              说明7:
+                type: Text
+                attribute:
+                  x: 28
+                  y: 404
+                  texts: ~&7结案前请核对背包、仓库与货币记录。
+                  fontSize: 28
+                  through: true
+      居中操作提示:
+        type: Canvas
+        attribute:
+          point: ~middle_center
+          x: 0
+          y: 0
+          width: 560
+          height: var.noticeCount * 28 + 36
+          visible: var.noticeActive
+          alpha: 'var.noticeFade == none ? 0 : var.noticeFade.get()'
+          through: true
+        children:
+          阴影:
+            type: Texture
+            attribute:
+              x: 2
+              y: 3
+              width: 560
+              height: self.parent.height
+              normal: ~0,0,0,48
+              shape: ~round_rect
+              radius: 6
+              through: true
+          底板:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~32,37,43,250
+              shape: ~round_rect
+              radius: 6
+              through: true
+            effect:
+              stroke:
+                width: 1
+                color: ~76,81,87,255
+          侧标:
+            type: Texture
+            attribute:
+              x: 12
+              y: 14
+              width: 2
+              height: self.parent.height - 28
+              normal: ~108,113,119,255
+              through: true
+          文字0:
+            type: Text
+            attribute:
+              point: ~top_center
+              x: 0
+              y: 18
+              texts: 'var.noticeCount > 0 ? ''&f'' + var.noticeLines.get(0.round()) : '''''
+              fontSize: 36
+              alignment: ~center
+              visible: var.noticeCount > 0
+              tip: var.noticeText
+              through: true
+          文字1:
+            type: Text
+            attribute:
+              point: ~top_center
+              x: 0
+              y: 46
+              texts: 'var.noticeCount > 1 ? ''&f'' + var.noticeLines.get(1.round()) : '''''
+              fontSize: 36
+              alignment: ~center
+              visible: var.noticeCount > 1
+              tip: var.noticeText
+              through: true
+          文字2:
+            type: Text
+            attribute:
+              point: ~top_center
+              x: 0
+              y: 74
+              texts: 'var.noticeCount > 2 ? ''&f'' + var.noticeLines.get(2.round()) : '''''
+              fontSize: 36
+              alignment: ~center
+              visible: var.noticeCount > 2
+              tip: var.noticeText
+              through: true
+          文字3:
+            type: Text
+            attribute:
+              point: ~top_center
+              x: 0
+              y: 102
+              texts: 'var.noticeCount > 3 ? ''&f'' + var.noticeLines.get(3.round()) : '''''
+              fontSize: 36
+              alignment: ~center
+              visible: var.noticeCount > 3
+              tip: var.noticeText
+              through: true
+          文字4:
+            type: Text
+            attribute:
+              point: ~top_center
+              x: 0
+              y: 130
+              texts: 'var.noticeCount > 4 ? ''&f'' + var.noticeLines.get(4.round()) : '''''
+              fontSize: 36
+              alignment: ~center
+              visible: var.noticeCount > 4
+              tip: var.noticeText
+              through: true
+          文字5:
+            type: Text
+            attribute:
+              point: ~top_center
+              x: 0
+              y: 158
+              texts: 'var.noticeCount > 5 ? ''&f'' + var.noticeLines.get(5.round()) : '''''
+              fontSize: 36
+              alignment: ~center
+              visible: var.noticeCount > 5
+              tip: var.noticeText
+              through: true
+          文字6:
+            type: Text
+            attribute:
+              point: ~top_center
+              x: 0
+              y: 186
+              texts: 'var.noticeCount > 6 ? ''&f'' + var.noticeLines.get(6.round()) : '''''
+              fontSize: 36
+              alignment: ~center
+              visible: var.noticeCount > 6
+              tip: var.noticeText
+              through: true
+          文字7:
+            type: Text
+            attribute:
+              point: ~top_center
+              x: 0
+              y: 214
+              texts: 'var.noticeCount > 7 ? ''&f'' + var.noticeLines.get(7.round()) : '''''
+              fontSize: 36
+              alignment: ~center
+              visible: var.noticeCount > 7
+              tip: var.noticeText
+              through: true
+          文字8:
+            type: Text
+            attribute:
+              point: ~top_center
+              x: 0
+              y: 242
+              texts: 'var.noticeCount > 8 ? ''&f'' + var.noticeLines.get(8.round()) : '''''
+              fontSize: 36
+              alignment: ~center
+              visible: var.noticeCount > 8
+              tip: var.noticeText
+              through: true
+          文字9:
+            type: Text
+            attribute:
+              point: ~top_center
+              x: 0
+              y: 270
+              texts: 'var.noticeCount > 9 ? ''&f'' + var.noticeLines.get(9.round()) : '''''
+              fontSize: 36
+              alignment: ~center
+              visible: var.noticeCount > 9
+              tip: var.noticeText
+              through: true
+          文字10:
+            type: Text
+            attribute:
+              point: ~top_center
+              x: 0
+              y: 298
+              texts: 'var.noticeCount > 10 ? ''&f'' + var.noticeLines.get(10.round()) : '''''
+              fontSize: 36
+              alignment: ~center
+              visible: var.noticeCount > 10
+              tip: var.noticeText
+              through: true
+          文字11:
+            type: Text
+            attribute:
+              point: ~top_center
+              x: 0
+              y: 326
+              texts: 'var.noticeCount > 11 ? ''&f'' + var.noticeLines.get(11.round()) : '''''
+              fontSize: 36
+              alignment: ~center
+              visible: var.noticeCount > 11
+              tip: var.noticeText
+              through: true

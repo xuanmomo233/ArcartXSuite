@@ -46,6 +46,9 @@ public interface AxsMarketService {
      */
     void openUi(@NotNull Player player, @NotNull MarketView view);
 
+    /** Opens a named system shop if it is available to this player. */
+    default boolean openSystemShop(@NotNull Player player, @NotNull String id) { return false; }
+
     /** 打开指定拍品的独立竞价厅；主线程调用。旧实现可返回 false 表示不支持。 */
     default boolean openAuctionLot(@NotNull Player player,long listingId) { return false; }
 

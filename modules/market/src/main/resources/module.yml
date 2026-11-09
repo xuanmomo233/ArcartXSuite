@@ -5,9 +5,8 @@ main: xuanmo.arcartxsuite.market.MarketModule
 api-version: 2.0
 
 depends: []
-softdepends: []
+softdepends: [warehouse]
 external-depends:
   - PlaceholderAPI
 
-external-softdepends:
-
+external-softdepends: [Adyeshach]

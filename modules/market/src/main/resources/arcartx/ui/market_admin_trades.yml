@@ -182,7 +182,7 @@ ui:
       var.detailTime = ''
       var.detailQuantity = 0
       var.air = '{"id":"minecraft:air","Count":1b}'
-      var.typeLabels = {'ALL':'全部','AUCTION':'拍卖','PSHOP':'玩家店铺','SHOP':'系统商店','RECYCLE':'回收','OTHER':'其他'}
+      var.typeLabels = {'ALL':'全部','AUCTION':'拍卖','PSHOP':'玩家店铺','SHOP':'系统商店','RECYCLE':'回收','EXCHANGE':'NPC 兑换','OTHER':'其他'}
       var.stateLabels = {'ALL':'全部','PENDING':'待发放','ISSUES':'失败与待核对','PREPARED':'已准备','READY':'待执行','RUNNING':'处理中','REVIEW':'需核对','DONE':'处理结束','FAILED':'明确失败','CANCELLED':'已取消','EXPIRED':'已到期'}
       var.notes = {}
       var.noteCount = 0
@@ -798,6 +798,9 @@ controls:
                       var.type = 'RECYCLE'
                     }
                     else if(var.type == 'RECYCLE'){
+                      var.type = 'EXCHANGE'
+                    }
+                    else if(var.type == 'EXCHANGE'){
                       var.type = 'OTHER'
                     }
                     else {

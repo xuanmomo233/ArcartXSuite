@@ -252,10 +252,10 @@ public final class MarketManagementController implements AutoCloseable {
         if(json.length()>4096)throw new IllegalArgumentException("筛选参数过长");Map<String,Object> form=xuanmo.arcartxsuite.api.util.SimpleJsonParser.parse(json);
         String actor=text(form,"player").trim(),item=text(form,"item").trim(),type=text(form,"type"),state=text(form,"state"),scope=text(form,"scope");
         if(actor.length()>64 || item.length()>100)throw new IllegalArgumentException("玩家或物品关键词过长");
-        if(!Set.of("ALL","AUCTION","PSHOP","SHOP","RECYCLE","OTHER").contains(type))throw new IllegalArgumentException("交易类型无效");
+        if(!Set.of("ALL","AUCTION","PSHOP","SHOP","RECYCLE","EXCHANGE","OTHER").contains(type))throw new IllegalArgumentException("交易类型无效");
         if(!Set.of("ALL","PENDING","ISSUES","PREPARED","READY","RUNNING","REVIEW","DONE","FAILED","CANCELLED","EXPIRED").contains(state))throw new IllegalArgumentException("记录状态无效");
         if(!Set.of("history","operations").contains(scope))throw new IllegalArgumentException("记录来源无效");
-        if(Set.of("PENDING","ISSUES","PREPARED","READY","RUNNING","REVIEW","FAILED").contains(state))scope="operations";
+        if("EXCHANGE".equals(type) || Set.of("PENDING","ISSUES","PREPARED","READY","RUNNING","REVIEW","FAILED").contains(state))scope="operations";
         long from=date(text(form,"from").trim(),false),until=date(text(form,"until").trim(),true);if(from>=until)throw new IllegalArgumentException("开始时间必须早于结束时间");
         final long start=from,end=until;
         final String requestedScope=scope;
@@ -266,12 +266,13 @@ public final class MarketManagementController implements AutoCloseable {
         },entry->renderAudit(player,entry.getKey(),entry.getValue()));
     }
     private void queryAudit(Player player,MarketAuditFilter filter){readAdmin(player,"list",()->repository.searchMarketAudit(filter),page->renderAudit(player,filter,page));}
-    private String category(String kind){return kind.startsWith("AUCTION") || Set.of("BID_WIN","BUY_NOW").contains(kind)?"拍卖":kind.startsWith("PSHOP")?"玩家店铺":kind.startsWith("SHOP")?"系统商店":kind.startsWith("RECYCLE")?"回收":"其他";}
+    private String category(String kind){return kind.startsWith("AUCTION") || Set.of("BID_WIN","BUY_NOW").contains(kind)?"拍卖":kind.startsWith("PSHOP")?"玩家店铺":kind.startsWith("SHOP")?"系统商店":kind.startsWith("RECYCLE")?"回收":"NPC_EXCHANGE".equals(kind)?"NPC 兑换":"其他";}
     private String stateText(MarketAuditRow row){
         if("HISTORY".equals(row.source()) && "DONE".equals(row.state()))return "业务已记录";
         String label=switch(row.state()){
             case "PREPARED" -> "已准备";case "READY" -> "待执行";case "RUNNING" -> "处理中";
             case "REVIEW" -> "需核对";case "DONE" -> "本条已完成";case "FAILED" -> "明确失败";
+            case "APPLIED" -> "已交付";case "CONFIRMED" -> "已核对";
             case "CANCELLED" -> "已取消";case "EXPIRED" -> "已到期";default -> row.state();
         };
         return label+"（"+row.state()+"）";

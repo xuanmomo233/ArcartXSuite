@@ -2684,9 +2684,38 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
             +"'业务历史记录；发放结果请查看关联处理流水' AS note,h.item_data AS item_data,h.timestamp AS created_at,h.timestamp AS updated_at FROM "+table+" h"
             +" LEFT JOIN "+tMarketPlayers+" seller ON seller.player=h.seller LEFT JOIN "+tMarketPlayers+" buyer ON buyer.player=h.buyer LEFT JOIN "+tOperations+" root ON root.id=h.trade_id";
     }
+    private String exchangeOperationsTable;
+
+    public void includeExchangeOperations(String table) {
+        if (!table.matches("[A-Za-z0-9_]+")) throw new IllegalArgumentException("兑换账本表名无效");
+        exchangeOperationsTable = table;
+    }
+
+    public void includeExchangeOperationsIfPresent(String table) throws SQLException {
+        try (Connection connection = getConnection();
+             ResultSet rows = connection.getMetaData().getTables(connection.getCatalog(), null, table, new String[]{"TABLE"})) {
+            while (rows.next()) {
+                if (table.equals(rows.getString("TABLE_NAME"))) {
+                    includeExchangeOperations(table);
+                    return;
+                }
+            }
+        }
+    }
+
     private String auditSource(String scope){
         String history=auditHistorySql(tHistory,"history:a:",false)+" UNION ALL "+auditHistorySql(tPlayerShopHistory,"history:p:",true);
-        if("history".equals(scope))return history;if("operations".equals(scope))return auditOperationsSql();return auditOperationsSql()+" UNION ALL "+history;
+        if ("history".equals(scope)) return history;
+        String operations = auditOperationsSql();
+        if (exchangeOperationsTable != null) {
+            operations += " UNION ALL SELECT " + auditConcat("'op:exchange:'", "e.id")
+                + " AS id,e.id AS trade_id,'OPERATION' AS source,'NPC_EXCHANGE' AS kind,'NPC_EXCHANGE' AS business_type,"
+                + "e.state,e.player_uuid AS player,NULL AS other_player,COALESCE(p.name,'') AS player_name,"
+                + "'' AS other_name,'NPC 兑换' AS item_name,'' AS material,'' AS currency,'' AS amount,"
+                + "'完整凭证可由兑换管理员导出' AS note,'' AS item_data,e.updated_at AS created_at,e.updated_at"
+                + " FROM " + exchangeOperationsTable + " e LEFT JOIN " + tMarketPlayers + " p ON p.player=e.player_uuid";
+        }
+        return "operations".equals(scope) ? operations : operations + " UNION ALL " + history;
     }
     private List<String> auditItemTerms(String item){
         List<String> terms=new ArrayList<>();terms.add(item);
@@ -2717,7 +2746,7 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
             where.append(')');
         }
         String category="CASE WHEN business_type LIKE 'AUCTION%' OR business_type IN ('BID_WIN','BUY_NOW') THEN 'AUCTION' WHEN business_type LIKE 'PSHOP%' THEN 'PSHOP' "
-            +"WHEN business_type LIKE 'SHOP%' THEN 'SHOP' WHEN business_type LIKE 'RECYCLE%' THEN 'RECYCLE' ELSE 'OTHER' END";
+            +"WHEN business_type LIKE 'SHOP%' THEN 'SHOP' WHEN business_type LIKE 'RECYCLE%' THEN 'RECYCLE' WHEN business_type='NPC_EXCHANGE' THEN 'EXCHANGE' ELSE 'OTHER' END";
         if(!"ALL".equals(filter.type())){where.append(" AND (").append(category).append(")=?");args.add(filter.type());}
         if("PENDING".equals(filter.state()))where.append(" AND state IN ('READY','PREPARED','RUNNING') AND kind IN ('ITEM','CURRENCY','COMMAND')");
         else if("ISSUES".equals(filter.state()))where.append(" AND state IN ('FAILED','REVIEW')");

@@ -2,7 +2,16 @@ package xuanmo.arcartxsuite.market;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
+import org.bukkit.entity.Player;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
+import xuanmo.arcartxsuite.api.capability.WarehouseMaterialAccess;
+import xuanmo.arcartxsuite.api.event.ModuleLifecycleEvent;
+import xuanmo.arcartxsuite.market.exchange.NpcTradeRepository;
+import xuanmo.arcartxsuite.market.exchange.NpcTradingService;
 import java.util.List;
 import java.util.Map;
 import org.bukkit.command.CommandSender;
@@ -42,7 +51,7 @@ import org.bukkit.Bukkit;
  * 负责配置加载、UI 资源导出、JDBC 仓储初始化、命令绑定与 PlaceholderAPI 注册。
  * 实现 {@link MailDispatchable} 与 {@link PlayerDataPurgeable} 以支持邮件发货与玩家数据清理。
  */
-public final class MarketModule extends AbstractAXSModule implements ModuleCommandHandler {
+public final class MarketModule extends AbstractAXSModule implements ModuleCommandHandler, Listener {
 
     private static final String SHOP_UI_RESOURCE_PATH = "arcartx/ui/market_shop.yml";
     private static final String SHOP_UI_FILE_PATH = "ui/market_shop.yml";
@@ -64,6 +73,8 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
     private MarketModuleConfiguration configuration;
     private MarketService service;
     private MarketAdminCommand adminCommand;
+    private NpcTradingService exchange;
+    private boolean exchangeEnabled;
 
     @Override
     public ModuleDescriptor descriptor() {
@@ -71,6 +82,7 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
             .name("Market")
             .version("1.4.4")
             .mainClass(getClass().getName())
+            .softDepends(List.of("warehouse"))
             .build();
     }
 
@@ -150,6 +162,12 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
     @Override
     protected @NotNull PacketHandlerSpec createPacketHandlerSpec() {
         return PacketHandlerSpec.of((player, packetId, data) -> {
+            NpcTradingService exchangeService = exchange;
+            if (exchangeService != null && exchangeService.ownsPacket(packetId)) {
+                if (Bukkit.isPrimaryThread()) exchangeService.handle(player, packetId, data);
+                else Bukkit.getScheduler().runTask(plugin, () -> exchangeService.handle(player, packetId, data));
+                return true;
+            }
             MarketService current = service;
             if (current == null || !current.ownsPacket(packetId)) {
                 return false;
@@ -171,8 +189,10 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
         if (configFile == null) {
             throw new IllegalStateException("ArcartXMarket.yml 配置文件缺失");
         }
+        YamlConfiguration yaml = YamlConfiguration.loadConfiguration(configFile);
+        exchangeEnabled = yaml.getBoolean("exchange.enabled", false);
         configuration = MarketModuleConfiguration.load(
-            YamlConfiguration.loadConfiguration(configFile),
+            yaml,
             MessageProvider.loadYamlWithBundledDefaults(
                 new File(configFile.getParentFile(), configSpec().messagesFileName()),
                 configSpec().messagesFileName(),
@@ -306,8 +326,14 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
             }
         });
 
+        if (exchangeEnabled) startExchange(marketDs, marketDesc, marketRepo);
+        else marketRepo.includeExchangeOperationsIfPresent(marketDesc.tablePrefix() + NpcTradeRepository.OPERATIONS_TABLE_SUFFIX);
         registerCapability(xuanmo.arcartxsuite.api.capability.AxsMarketService.class,
             new xuanmo.arcartxsuite.api.capability.AxsMarketService() {
+                @Override public boolean openSystemShop(Player player, String id) {
+                    return service != null && service.openSystemShop(player, id);
+                }
+
                 @Override public void openUi(@NotNull org.bukkit.entity.Player player,
                         @NotNull MarketView view) {
                     if (service == null) return;
@@ -419,8 +445,39 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
         }
     }
 
+    private void startExchange(javax.sql.DataSource source,
+                               xuanmo.arcartxsuite.api.storage.StorageDescriptor marketDescriptor,
+                               JdbcMarketRepository marketRepository) throws Exception {
+        var buyer = registerModuleUi("arcartx/ui/market_exchange.yml", "ui/market_exchange.yml", "AXS:market_exchange", true);
+        var editor = registerModuleUi("arcartx/ui/market_exchange_editor.yml", "ui/market_exchange_editor.yml", "AXS:market_exchange_editor", true);
+        var repository = new NpcTradeRepository(source, marketDescriptor, dataFolder, logger);
+        repository.initialize();
+        marketRepository.includeExchangeOperations(repository.operationsTable());
+        PacketBridgeAPI notices = xuanmo.arcartxsuite.api.message.UiNoticeBridge.wrap(packetBridge, messages(), dataFolder);
+        exchange = new NpcTradingService(plugin, dataFolder, notices, currencyManager, itemSourceRegistry,
+            itemStackBridge, vanillaItemNameBridge, createAdyeshachNpcBridge(),
+            () -> getCapability(WarehouseMaterialAccess.class), repository, buyer.runtimeUiId(), editor.runtimeUiId(), logger);
+    }
+
+    @Override
+    protected @NotNull List<Listener> createListeners() {
+        return exchange == null ? List.of() : List.of(this, exchange);
+    }
+
+    @EventHandler
+    public void onWarehouseLifecycle(ModuleLifecycleEvent event) {
+        if (exchange != null && "warehouse".equals(event.moduleId())
+            && event.phase() == ModuleLifecycleEvent.Phase.DISABLING) {
+            exchange.warehouseChanged();
+        }
+    }
+
     @Override
     protected void stopService() {
+        if (exchange != null) {
+            exchange.close();
+            exchange = null;
+        }
         if (service != null) {
             service.shutdown();
             service = null;
@@ -446,17 +503,46 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
 
     @Override public String commandId() { return "market"; }
 
+    @Override
+    public boolean allowsWithoutSuiteAdmin(@NotNull CommandSender sender, @NotNull String[] args) {
+        return args.length > 1 && "exchange".equalsIgnoreCase(args[1])
+            && ((args.length > 2 && "open".equalsIgnoreCase(args[2]))
+                || sender.hasPermission(NpcTradingService.ADMIN));
+    }
+
     @Override public List<String> actions() {
-        return adminCommand != null ? adminCommand.actions() : List.of("help", "status");
+        List<String> actions = new ArrayList<>(adminCommand != null ? adminCommand.actions() : List.of("help", "status"));
+        actions.add("exchange");
+        return List.copyOf(actions);
     }
 
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull String label, @NotNull String[] args) {
+        if (args.length > 1 && "exchange".equalsIgnoreCase(args[1])) {
+            if (exchange == null) sender.sendMessage("NPC 兑换未启用");
+            else try {
+                return exchange.command(sender, Arrays.copyOfRange(args, 1, args.length));
+            } catch (IllegalArgumentException exception) {
+                sender.sendMessage("§c" + exception.getMessage());
+            }
+            return true;
+        }
         return adminCommand != null && adminCommand.onCommand(sender, label, args);
     }
 
     @Override
     public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull String[] args) {
+        if (args.length == 2) return actions().stream().filter(action -> action.startsWith(args[1])).toList();
+        if (args.length >= 3 && "exchange".equalsIgnoreCase(args[1])) {
+            if (args.length == 3) {
+                List<String> actions = sender.hasPermission(NpcTradingService.ADMIN)
+                    ? List.of("open", "edit", "ledger", "evidence", "confirm") : List.of("open");
+                return actions.stream().filter(action -> action.startsWith(args[2])).toList();
+            }
+            if (exchange != null && args.length == 4 && List.of("open", "edit").contains(args[2])) {
+                return exchange.shopIds().stream().filter(id -> id.startsWith(args[3])).toList();
+            }
+        }
         return adminCommand != null ? adminCommand.onTabComplete(sender, args) : null;
     }
 }
