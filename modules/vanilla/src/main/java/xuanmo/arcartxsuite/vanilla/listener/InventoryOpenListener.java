@@ -27,7 +27,7 @@ public final class InventoryOpenListener implements Listener {
         this.furnaceTask = furnaceTask;
     }
 
-    @EventHandler(priority = EventPriority.MONITOR)
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onInventoryOpen(InventoryOpenEvent event) {
         if (furnaceTask == null) return;
         if (!(event.getPlayer() instanceof Player)) {
@@ -35,15 +35,10 @@ public final class InventoryOpenListener implements Listener {
         }
         Player player = (Player) event.getPlayer();
 
-        Inventory topInv = event.getInventory();
-        if (topInv instanceof FurnaceInventory) {
-            FurnaceInventory furnaceInv = (FurnaceInventory) topInv;
-            if (furnaceInv.getHolder() instanceof Furnace) {
-                Furnace furnace = (Furnace) furnaceInv.getHolder();
-                String key = FurnaceStateTask.buildFurnaceKey(furnace.getLocation());
-                furnaceTask.trackPlayer(player.getUniqueId(), key);
+        for (var type : xuanmo.arcartxsuite.vanilla.recipe.WorkshopType.values())
+            if (type.processing() && event.getView().getType().name().equals(type.name())) {
+                furnaceTask.track(player, type); break;
             }
-        }
     }
 
     @EventHandler(priority = EventPriority.MONITOR)

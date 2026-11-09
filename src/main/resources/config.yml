@@ -139,7 +139,7 @@ storage:
   pool-size: 8
 
 # ========== 统一二级密码（本体管控）==========
-# 由本体统一提供的全服二级密码服务，warehouse / extrabackpack 等模块共用同一个密码。
+# 由本体统一提供的全服二级密码服务，Warehouse 与 Vanilla 随身背包共用同一个密码。
 # 存储：默认独立 SQLite（plugins/ArcartX-Suite/secondary-password.db）；跨服群组可切换 MySQL 共享同一份密码。
 # 密码以 PBKDF2 加盐哈希存储，不存明文。
 # 设置 / 解锁 / 清除：推荐在模块 UI 中输入；也可用后备命令 /axs password set|unlock|clear。
@@ -856,13 +856,6 @@ modules:
     enabled: true
     # Lottery 抽奖系统
     # 功能：CS 开箱动画、原神祈愿卡池（单抽 / 十连）、保底机制（大小保底）、磨损度系统（影响物品外观价值）。
-
-  extrabackpack:
-    enabled: true
-    # ExtraBackpack 扩展背包
-    # 功能：分类背包（装备 / 材料 / 杂物等），按 NBT 标签自动归类存放，按槽位付费扩展容量，支持 SQLite / MySQL 持久化。
-    # 软依赖：warehouse（共享仓库联动）；无依赖也可独立运行。
-    # 配置文件：ArcartXExtraBackpack.yml（分类定义、槽位上限与每格定价），修改后执行 /axs extrabackpack reload。
 
   vanilla:
     enabled: true

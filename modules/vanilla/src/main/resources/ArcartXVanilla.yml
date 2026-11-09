@@ -1,6 +1,6 @@
 # ArcartXSuite Vanilla - 原版界面替换模块配置
-# 替换原版工作台和熔炉界面为 ArcartX UI 纯色块风格界面。
-# 重载: /axs vanilla reload
+# 替换工作台、熔炼类、切石机、锻造台、酿造台、交易、铁砧与附魔台界面。
+# 重载: /axs reload vanilla
 
 # 配置版本号（请勿手动修改）
 config-version: 2
@@ -11,6 +11,22 @@ ui:
   crafting-ui-id: "AXS:vanilla_crafting"
   # 熔炉 UI id（与 vanilla_furnace.yml 文件名对应）
   furnace-ui-id: "AXS:vanilla_furnace"
+  blast-furnace-ui-id: "AXS:vanilla_blast_furnace"
+  smoker-ui-id: "AXS:vanilla_smoker"
+  stonecutter-ui-id: "AXS:vanilla_stonecutter"
+  smithing-ui-id: "AXS:vanilla_smithing"
+  brewing-ui-id: "AXS:vanilla_brewing"
+  merchant-ui-id: "AXS:vanilla_merchant"
+  anvil-ui-id: "AXS:vanilla_anvil"
+  enchanting-ui-id: "AXS:vanilla_enchanting"
+  grindstone-ui-id: "AXS:vanilla_grindstone"
+  loom-ui-id: "AXS:vanilla_loom"
+  cartography-ui-id: "AXS:vanilla_cartography"
+  beacon-ui-id: "AXS:vanilla_beacon"
+  hopper-ui-id: "AXS:vanilla_hopper"
+  dispenser-ui-id: "AXS:vanilla_dispenser"
+  container-ui-id: "AXS:vanilla_container"
+  shulker-box-ui-id: "AXS:vanilla_shulker_box"
   # 是否覆盖用户已修改的 UI 文件
   overwrite-ui-files: false
 
@@ -25,3 +41,65 @@ furnace:
   enabled: true
   # 熔炉状态推送间隔（tick），每秒 20 tick，默认 2 tick（每秒 10 次）
   push-interval-ticks: 2
+
+# 高炉、烟熏炉使用各自原版配方，不与普通熔炉混用。
+blast-furnace:
+  enabled: true
+  push-interval-ticks: 2
+smoker:
+  enabled: true
+  push-interval-ticks: 2
+stonecutter:
+  enabled: true
+smithing:
+  enabled: true
+brewing:
+  enabled: true
+  push-interval-ticks: 2
+merchant:
+  enabled: true
+anvil:
+  enabled: true
+  push-interval-ticks: 2
+enchanting:
+  enabled: true
+  push-interval-ticks: 2
+grindstone:
+  enabled: true
+  push-interval-ticks: 2
+loom:
+  enabled: true
+  push-interval-ticks: 2
+cartography:
+  enabled: true
+  push-interval-ticks: 2
+beacon:
+  enabled: true
+  push-interval-ticks: 2
+hopper:
+  enabled: true
+  push-interval-ticks: 2
+# 发射器与投掷器在客户端共用同一种界面，由服务端识别实际容器。
+dispenser:
+  enabled: true
+  push-interval-ticks: 2
+# 普通容器界面共用模板，按实际 1～6 行布局；包含箱子、木桶与末影箱。
+container:
+  enabled: true
+  push-interval-ticks: 2
+shulker-box:
+  enabled: true
+  push-interval-ticks: 2
+
+# 随身背包独立启用，仓库容量和物品由 Warehouse 管理。
+# 从独立背包升级时，可将旧配置的 extra-backpack.categories 和 ui 复制到下方对应位置。
+backpack:
+  enabled: false
+  ui:
+    register-ui-on-enable: true
+    overwrite-ui-files: false
+  categories: {}
+
+# 自定义原版配方，定义保存于 data/vanilla/recipes.yml。
+recipes:
+  enabled: true

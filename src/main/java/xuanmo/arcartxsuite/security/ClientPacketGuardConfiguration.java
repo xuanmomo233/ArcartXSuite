@@ -82,11 +82,7 @@ public record ClientPacketGuardConfiguration(
     }
 
     private static <T> T rulesForModule(Map<String, T> rules, String module) {
-        T result = rules.get(module);
-        if (result == null && "extrabackpack".equals(module)) {
-            result = rules.get("backpack");
-        }
-        return result;
+        return rules.get(module);
     }
 
     private static LinkedHashMap<String, ClientPacketGuardRule> buildModuleRules(

@@ -1,323 +1,203 @@
 package xuanmo.arcartxsuite.vanilla.service;
 
-import org.bukkit.Material;
+import java.util.*;
+import java.util.function.Supplier;
+import java.util.logging.Logger;
 import org.bukkit.entity.Player;
-import org.bukkit.inventory.Inventory;
-import org.bukkit.inventory.CraftingInventory;
-import org.bukkit.inventory.FurnaceInventory;
-import org.bukkit.inventory.ItemStack;
+import org.bukkit.NamespacedKey;
 import xuanmo.arcartxsuite.api.capability.WarehousePanelAccess;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge;
 import xuanmo.arcartxsuite.vanilla.config.VanillaConfiguration;
-import xuanmo.arcartxsuite.vanilla.recipe.RecipeCollector;
+import xuanmo.arcartxsuite.vanilla.recipe.*;
 
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.logging.Logger;
-
-/**
- * Vanilla UI 业务服务：配方书推送、一键填充材料、熔炉状态管理。
- */
-public final class VanillaService {
-
-    private final PacketBridgeAPI packetBridge;
-    private final VanillaItemNameBridge nameBridge;
+/** Shared screen dispatch; every request is checked against its exact native container. */
+public final class VanillaService implements org.bukkit.event.Listener {
+    private final PacketBridgeAPI bridge;
     private final VanillaConfiguration configuration;
-    private final Logger logger;
-
-    private final RecipeCollector recipeCollector;
+    private final RecipeCollector collector;
+    private final NativeOfferBook nativeOffers;
+    private final EquipmentWorkbenchService equipment;
+    private final ArtisanWorkbenchService artisan;
+    private final UtilityWorkbenchService utility;
+    private final org.bukkit.plugin.Plugin plugin;
+    private final Map<UUID,org.bukkit.scheduler.BukkitTask> refreshTasks=new HashMap<>();
+    private final Map<WorkshopType, String> uiIds = new EnumMap<>(WorkshopType.class);
+    private final Map<UUID, Boolean> bookState = new HashMap<>();
+    private final Map<UUID, Map<NamespacedKey, Long>> bookRevisions = new HashMap<>();
+    private VanillaRecipeRegistry customRecipes;
+    private RecipeEditor recipeEditor;
+    private Supplier<WarehousePanelAccess> warehousePanel = () -> null;
     private boolean stopped;
-    private String craftingUiId;
-    private String furnaceUiId;
-    private java.util.function.Supplier<WarehousePanelAccess> warehousePanel = () -> null;
 
-    private final Map<UUID, Boolean> craftingBookState = new ConcurrentHashMap<>();
-    private final Map<UUID, Boolean> furnaceBookState = new ConcurrentHashMap<>();
-
-    public VanillaService(PacketBridgeAPI packetBridge, VanillaItemNameBridge nameBridge,
-                          VanillaConfiguration configuration, Logger logger) {
-        this.packetBridge = packetBridge;
-        this.nameBridge = nameBridge;
-        this.configuration = configuration;
-        this.logger = logger;
-        this.recipeCollector = new RecipeCollector(nameBridge);
-        this.craftingUiId = configuration.ui().craftingUiId();
-        this.furnaceUiId = configuration.ui().furnaceUiId();
+    public VanillaService(org.bukkit.plugin.Plugin plugin,PacketBridgeAPI bridge, xuanmo.arcartxsuite.api.bridge.ItemBridgeAPI items,VanillaItemNameBridge names, VanillaConfiguration configuration, Logger logger) {
+        this.bridge = bridge; this.configuration = configuration; this.collector = new RecipeCollector(names);
+        this.plugin=plugin;this.nativeOffers=new NativeOfferBook(items,names);
+        for (WorkshopType type : WorkshopType.values()) uiIds.put(type, configuration.uiId(type));
+        equipment=new EquipmentWorkbenchService(plugin,bridge,names,configuration,materialPlanner(),uiIds::get,player->materialPlanner().busy(player));
+        artisan=new ArtisanWorkbenchService(plugin,bridge,items,names,configuration,materialPlanner(),uiIds::get,player->materialPlanner().busy(player));
+        utility=new UtilityWorkbenchService(plugin,bridge,configuration,materialPlanner(),uiIds::get,player->materialPlanner().busy(player));
+        utility.setWarehouseRefresh((player,id)->{var panel=warehousePanel.get();if(panel!=null)panel.handle(player,id,List.of("refresh"));});
+    }
+    public EquipmentWorkbenchService equipment(){return equipment;}
+    public ArtisanWorkbenchService artisan(){return artisan;}
+    public UtilityWorkbenchService utility(){return utility;}
+    public void setWarehousePanel(Supplier<WarehousePanelAccess> supplier) { warehousePanel = supplier; }
+    public RecipeMaterialPlanner materialPlanner() { return collector.materialPlanner(); }
+    public void setRuntimeUiId(WorkshopType type, String id) { uiIds.put(type, id); }
+    public void setCustomRecipes(VanillaRecipeRegistry recipes, RecipeEditor editor) {
+        customRecipes = recipes;
+        recipeEditor = editor;
     }
 
-    public void setWarehousePanel(java.util.function.Supplier<WarehousePanelAccess> supplier) {
-        warehousePanel = supplier;
+    public boolean ownsPacket(String id) {
+        return uiIds.values().stream().anyMatch(ui -> ui.equalsIgnoreCase(id))
+            || Arrays.stream(WorkshopType.values()).anyMatch(type -> type.uiId().equalsIgnoreCase(id));
     }
-    public xuanmo.arcartxsuite.vanilla.recipe.RecipeMaterialPlanner materialPlanner() {
-        return recipeCollector.materialPlanner();
-    }
-
-    public void setCraftingRuntimeUiId(String uiId) {
-        craftingUiId = uiId;
-    }
-
-    public void setFurnaceRuntimeUiId(String uiId) {
-        furnaceUiId = uiId;
-    }
-
-    /**
-     * 处理客户端发来的自定义包。
-     *
-     * @param packetId UI id（vanilla_crafting 或 vanilla_furnace）
-     * @param data     数据负载，data.get(0) 为 action
-     * @return true 表示已消费
-     */
-    public boolean handleClientPacket(Player player, String packetId, List<String> data) {
-        if (data == null || data.isEmpty()) return false;
-        String action = data.get(0);
-        String extra = data.size() > 1 ? data.get(1) : "";
-
-        if (craftingUiId.equalsIgnoreCase(packetId) || "AXS:vanilla_crafting".equalsIgnoreCase(packetId)) {
-            if (!configuration.crafting().enabled()
-                || !(player.getOpenInventory().getTopInventory() instanceof CraftingInventory crafting)
-                || crafting.getSize() != 10) return true;
-            if ("warehouse_panel".equals(action)) return handleWarehousePanel(player, craftingUiId, data);
-            return handleCraftingPacket(player, action, extra);
-        } else if (furnaceUiId.equalsIgnoreCase(packetId) || "AXS:vanilla_furnace".equalsIgnoreCase(packetId)) {
-            if (!configuration.furnace().enabled()
-                || !(player.getOpenInventory().getTopInventory() instanceof FurnaceInventory)) return true;
-            if ("warehouse_panel".equals(action)) return handleWarehousePanel(player, furnaceUiId, data);
-            return handleFurnacePacket(player, action, extra);
+    public boolean notice(Player player,String message){
+        if (bridge == null || message == null || message.isBlank()) return false;
+        for (String ui : uiIds.values()) {
+            if (bridge.isUiOpen(player, ui)
+                && bridge.sendPacket(player, ui, "ui_notice", Map.of("message", org.bukkit.ChatColor.stripColor(message)))) {
+                return true;
+            }
         }
         return false;
     }
-
-    private boolean handleWarehousePanel(Player player, String uiId, List<String> data) {
-        WarehousePanelAccess panel = warehousePanel.get();
-        if (panel != null) {
-            panel.handle(player, uiId, data.subList(1, data.size()));
-        } else {
-            packetBridge.sendPacket(player, uiId, "warehouse_panel", Map.of("available", false));
-        }
-        return true;
+    @org.bukkit.event.EventHandler
+    public void onClose(org.bukkit.event.inventory.InventoryCloseEvent event) {
+        bookState.remove(event.getPlayer().getUniqueId());
+        bookRevisions.remove(event.getPlayer().getUniqueId());
+        if(event.getPlayer() instanceof Player player)nativeOffers.close(player);
+        var task=refreshTasks.remove(event.getPlayer().getUniqueId());if(task!=null)task.cancel();
     }
-
-    private boolean handleCraftingPacket(Player player, String action, String extra) {
-        switch (action) {
-            case "toggle_recipe_book" -> {
-                handleCraftingRecipeBook(player);
-                return true;
-            }
-            case "request_recipe_book" -> {
-                handleRequestCraftingRecipeBook(player);
-                return true;
-            }
-            case "show_recipe_book" -> {
-                sendCraftingRecipeBookPacket(player, true);
-                return true;
-            }
-            case "place_ingredients" -> {
-                handlePlaceIngredients(player, extra);
-                return true;
-            }
-            default -> {
-                return false;
-            }
-        }
+    @org.bukkit.event.EventHandler
+    public void onQuit(org.bukkit.event.player.PlayerQuitEvent event) {
+        bookState.remove(event.getPlayer().getUniqueId());
+        bookRevisions.remove(event.getPlayer().getUniqueId());
     }
-
-    private boolean handleFurnacePacket(Player player, String action, String extra) {
-        switch (action) {
-            case "toggle_recipe_book" -> {
-                handleFurnaceRecipeBook(player);
-                return true;
-            }
-            case "request_recipe_book" -> {
-                handleRequestFurnaceRecipeBook(player);
-                return true;
-            }
-            case "show_recipe_book" -> {
-                sendFurnaceRecipeBookPacket(player, true);
-                return true;
-            }
-            case "place_ingredients" -> {
-                handlePlaceFurnaceIngredient(player, extra);
-                return true;
-            }
-            default -> {
-                return false;
-            }
-        }
+    @org.bukkit.event.EventHandler(priority=org.bukkit.event.EventPriority.MONITOR,ignoreCancelled=true)
+    public void onInput(org.bukkit.event.inventory.InventoryClickEvent event){
+        if(!(event.getWhoClicked() instanceof Player player))return;
+        var view=event.getView();
+        WorkshopType type=WorkshopType.MERCHANT.matches(view)?WorkshopType.MERCHANT:WorkshopType.BREWING.matches(view)?WorkshopType.BREWING:null;
+        if(type==null||!configuration.enabled(type)||refreshTasks.containsKey(player.getUniqueId()))return;
+        refreshTasks.put(player.getUniqueId(),org.bukkit.Bukkit.getScheduler().runTaskLater(plugin,()->{
+            refreshTasks.remove(player.getUniqueId());
+            if(!stopped&&player.isOnline()&&player.getOpenInventory()==view&&!materialPlanner().busy(player)&&bridge.isUiOpen(player,uiIds.get(type)))sendBook(player,type,true);
+        },3L));
     }
-
-    // ── 工作台配方书 ──────────────────────────────────────
-
-    private void handleCraftingRecipeBook(Player player) {
-        boolean open = !craftingBookState.getOrDefault(player.getUniqueId(), false);
-        craftingBookState.put(player.getUniqueId(), open);
-        sendCraftingRecipeBookPacket(player, open);
-    }
-
-    private void handleRequestCraftingRecipeBook(Player player) {
-        boolean open = craftingBookState.getOrDefault(player.getUniqueId(), false);
-        sendCraftingRecipeBookPacket(player, open);
-    }
-
-    private void sendCraftingRecipeBookPacket(Player player,boolean open){
-        if(stopped)return;
-        var view=player.getOpenInventory();
-        if(!open){packetBridge.sendPacket(player,craftingUiId,"recipe_book_toggle",Map.of("open",false,"catIcons",recipeCollector.craftingCategoryIcons()));return;}
-        materialPlanner().stockAsync(player,stock->{
-            if(stopped || !player.isOnline() || player.getOpenInventory()!=view || !packetBridge.isUiOpen(player,craftingUiId))return;
-            Map<String,Object> packet=new LinkedHashMap<>();
-            packet.put("open",true);packet.put("catIcons",recipeCollector.craftingCategoryIcons());
-            Map<String,Object> recipes=recipeCollector.collectCraftingRecipes(player,stock);
-            packet.put("recipes",recipes);packet.put("recipeCount",recipes.size());
-            packetBridge.sendPacket(player,craftingUiId,"recipe_book_toggle",packet);
-        });
-    }
-
-    // ── 熔炉配方书 ────────────────────────────────────────
-
-    private void handleFurnaceRecipeBook(Player player) {
-        boolean open = !furnaceBookState.getOrDefault(player.getUniqueId(), false);
-        furnaceBookState.put(player.getUniqueId(), open);
-        sendFurnaceRecipeBookPacket(player, open);
-    }
-
-    private void handleRequestFurnaceRecipeBook(Player player) {
-        boolean open = furnaceBookState.getOrDefault(player.getUniqueId(), false);
-        sendFurnaceRecipeBookPacket(player, open);
-    }
-
-    private void sendFurnaceRecipeBookPacket(Player player,boolean open){
-        if(stopped)return;
-        var view=player.getOpenInventory();
-        if(!open){packetBridge.sendPacket(player,furnaceUiId,"recipe_book_toggle",Map.of("open",false,"catIcons",recipeCollector.furnaceCategoryIcons()));return;}
-        materialPlanner().stockAsync(player,stock->{
-            if(stopped || !player.isOnline() || player.getOpenInventory()!=view || !packetBridge.isUiOpen(player,furnaceUiId))return;
-            Map<String,Object> packet=new LinkedHashMap<>();
-            packet.put("open",true);packet.put("catIcons",recipeCollector.furnaceCategoryIcons());
-            Map<String,Object> recipes=recipeCollector.collectFurnaceRecipes(player,stock);
-            packet.put("recipes",recipes);packet.put("recipeCount",recipes.size());
-            packetBridge.sendPacket(player,furnaceUiId,"recipe_book_toggle",packet);
-        });
-    }
-
-    // ── 一键填充材料 ──────────────────────────────────────
-
-    private void handlePlaceIngredients(Player player,String recipeKey) { placeMaterials(player,recipeKey,false); }
-    private void handlePlaceFurnaceIngredient(Player player,String recipeKey) { placeMaterials(player,recipeKey,true); }
-
-    private void placeMaterials(Player player,String recipeKey,boolean furnace) {
-        String ui=furnace?furnaceUiId:craftingUiId;
-        var view=player.getOpenInventory();
-        if(materialPlanner().busy(player)) return;
-        packetBridge.sendPacket(player,ui,"placement_state",Map.of("busy",true,"message","正在准备材料"));
-        materialPlanner().fill(player,recipeKey,furnace,message->{
-            if(!player.isOnline() || player.getOpenInventory()!=view || !packetBridge.isUiOpen(player,ui))return;
-            packetBridge.sendPacket(player,ui,"placement_state",Map.of("busy",false,"message",message));
-            if(!message.isEmpty())player.sendMessage("§e"+message);
-            if(furnace)sendFurnaceRecipeBookPacket(player,true);else sendCraftingRecipeBookPacket(player,true);
-            WarehousePanelAccess panel=warehousePanel.get();
-            if(panel!=null)panel.handle(player,ui,List.of("refresh"));
-        });
-    }
-
-    private void placeFromInventory(Player player, Inventory topInv, int slot, Material mat) {
-        if (mat == Material.AIR) return;
-        var playerInv = player.getInventory();
-        for (int i = 0; i < playerInv.getStorageContents().length; i++) {
-            ItemStack item = playerInv.getItem(i);
-            if (item != null && item.getType() == mat) {
-                ItemStack placed = item.clone();
-                placed.setAmount(1);
-                topInv.setItem(slot, placed);
-                item.setAmount(item.getAmount() - 1);
-                if (item.getAmount() <= 0) {
-                    playerInv.setItem(i, null);
-                } else {
-                    playerInv.setItem(i, item);
+    public boolean handleClientPacket(Player player, String packetId, List<String> data) {
+        if (stopped || data == null || data.isEmpty()) return false;
+        for (WorkshopType type : WorkshopType.values()) {
+            String ui = uiIds.get(type);
+            if (!ui.equalsIgnoreCase(packetId) && !type.uiId().equalsIgnoreCase(packetId)) continue;
+            if (!configuration.enabled(type) || !type.matches(player.getOpenInventory())) return true;
+            String action = data.get(0);
+            if(type.equipment()&&!"warehouse_panel".equals(action))return equipment.handle(player,type,action,data);
+            if(type.artisan()&&!"warehouse_panel".equals(action))return artisan.handle(player,type,action,data);
+            if(type.utility()&&!"warehouse_panel".equals(action))return utility.handle(player,type,action,data);
+            switch (action) {
+                case "warehouse_panel" -> {
+                    WarehousePanelAccess panel = warehousePanel.get();
+                    if (panel != null) panel.handle(player, ui, data.subList(1, data.size()));
+                    else bridge.sendPacket(player, ui, "warehouse_panel", Map.of("available", false));
                 }
-                return;
-            }
-        }
-    }
-
-    private void addToSlotFromInventory(Player player, Inventory topInv, int slot, Material mat, int maxAdd) {
-        addToSlotFromInventory(player, topInv, slot, mat, maxAdd, false);
-    }
-
-    private void addToSlotFromInventory(Player player, Inventory topInv, int slot, Material mat, int maxAdd, boolean silent) {
-        if (mat == Material.AIR || maxAdd <= 0) return;
-        var playerInv = player.getInventory();
-        ItemStack existing = topInv.getItem(slot);
-        for (int i = 0; i < playerInv.getStorageContents().length; i++) {
-            ItemStack item = playerInv.getItem(i);
-            if (item != null && item.getType() == mat && (existing == null || existing.isSimilar(item))) {
-                int toAdd = Math.min(maxAdd, item.getAmount());
-                if (existing != null) {
-                    if (silent) {
-                        // 直接修改 amount 不调用 setItem，避免重置熔炉燃烧进度
-                        existing.setAmount(existing.getAmount() + toAdd);
-                    } else {
-                        // 复制后修改再 setItem，确保 Bukkit 感知到变化
-                        ItemStack copy = existing.clone();
-                        copy.setAmount(existing.getAmount() + toAdd);
-                        topInv.setItem(slot, copy);
+                case "show_recipe_book" -> sendBook(player, type, true);
+                case "request_recipe_book" -> sendBook(player, type, bookState.getOrDefault(player.getUniqueId(), false));
+                case "toggle_recipe_book" -> sendBook(player, type, !bookState.getOrDefault(player.getUniqueId(), false));
+                case "recipe_admin_status" -> {
+                    if (type == WorkshopType.CRAFTING) {
+                        bridge.sendPacket(player, ui, "recipe_admin_access",
+                            Map.of("enabled", recipeEditor != null && player.hasPermission(RecipeEditor.ADMIN)));
                     }
-                } else {
-                    ItemStack copy = item.clone();
-                    copy.setAmount(toAdd);
-                    topInv.setItem(slot, copy);
                 }
-                item.setAmount(item.getAmount() - toAdd);
-                if (item.getAmount() <= 0) {
-                    playerInv.setItem(i, null);
-                } else {
-                    playerInv.setItem(i, item);
+                case "open_recipe_editor" -> {
+                    if (type == WorkshopType.CRAFTING && recipeEditor != null && !materialPlanner().busy(player)) {
+                        if (!recipeEditor.open(player)) notice(player, "请放下光标上的物品并确认配方管理权限");
+                    }
                 }
-                return;
+                case "place_ingredients" -> { if (data.size() > 1) place(player, type, data.get(1)); }
+                case "select_recipe" -> {
+                    if(data.size()>1 && type==WorkshopType.STONECUTTER)selectStonecutting(player,type,data.get(1));
+                    else if(data.size()>1 && type==WorkshopType.MERCHANT && !materialPlanner().busy(player))nativeOffers.selectMerchant(player,data.get(1));
+                }
+                default -> { return false; }
             }
+            return true;
         }
+        return false;
     }
-
-    private boolean returnToBackpack(Player player, Inventory inventory, int slot, ItemStack item) {
-        ItemStack remainder = player.getInventory().addItem(item.clone()).get(0);
-        inventory.setItem(slot, remainder);
-        return remainder == null;
+    private void sendBook(Player player, WorkshopType type, boolean open) {
+        if (stopped) return;
+        String ui = uiIds.get(type);
+        bookState.put(player.getUniqueId(), open);
+        if (!open) { bridge.sendPacket(player, ui, "recipe_book_toggle", Map.of("open", false)); return; }
+        var view = player.getOpenInventory();
+        materialPlanner().stockAsync(player, stock -> {
+            if (stopped || !player.isOnline() || player.getOpenInventory() != view || !type.matches(view) || !bridge.isUiOpen(player, ui)) return;
+            Map<String, Object> recipes = new LinkedHashMap<>(type==WorkshopType.BREWING||type==WorkshopType.MERCHANT
+                ? nativeOffers.collect(player,type,stock) : collector.collectRecipes(player, type, stock));
+            if (customRecipes != null && type != WorkshopType.BREWING && type != WorkshopType.MERCHANT) {
+                Map<NamespacedKey, Long> revisions = new HashMap<>();
+                recipes.keySet().removeIf(key -> {
+                    NamespacedKey id = NamespacedKey.fromString(key);
+                    if (id == null || !customRecipes.managed(id)) return false;
+                    var entry = customRecipes.recipe(id).orElse(null);
+                    if (entry == null || !customRecipes.allowed(player, entry)) return true;
+                    revisions.put(id, entry.revision());
+                    return false;
+                });
+                bookRevisions.put(player.getUniqueId(), Map.copyOf(revisions));
+            }
+            bridge.sendPacket(player, ui, "recipe_book_toggle", Map.of("open", true, "recipes", recipes, "recipeCount", recipes.size()));
+        });
     }
-
-    private Material parseMaterialFromJson(String json) {
-        if (json == null || json.isEmpty()) return Material.AIR;
-        String id = json.replace("{\"id\":\"", "").replace("\"Count\":1b}", "");
-        id = id.split("\"")[0];
-        if (id.equals("minecraft:air")) return Material.AIR;
-        try {
-            return Material.valueOf(id.replace("minecraft:", "").toUpperCase());
-        } catch (IllegalArgumentException e) {
-            warnMaterialParseOnce(id);
-            return Material.AIR;
+    private void place(Player player, WorkshopType type, String key) {
+        String ui = uiIds.get(type);
+        var view = player.getOpenInventory();
+        if (materialPlanner().busy(player)){notice(player,"上一笔材料或兑换仍在处理，请稍候");return;}
+        if(type==WorkshopType.MERCHANT&&!nativeOffers.selectMerchant(player,key)){
+            bridge.sendPacket(player,ui,"placement_state",Map.of("busy",false,"message","交易已变化、售罄或被其他插件取消，请重新选择"));sendBook(player,type,true);return;
         }
-    }
-
-    /** 解析失败的材料 id 一次性告警集合（避免刷屏）。 */
-    private final java.util.Set<String> materialParseWarned = java.util.concurrent.ConcurrentHashMap.newKeySet();
-
-    private void warnMaterialParseOnce(String id) {
-        if (materialParseWarned.add(id)) {
-            logger.warning("[Vanilla] 无法解析物品材料 id '" + id + "'（可能为新版/Mod 物品），按 AIR 处理");
+        if (type == WorkshopType.STONECUTTER && !StonecutterSelection.available(view)) {
+            bridge.sendPacket(player, ui, "placement_state", Map.of("busy", false, "message", "当前服务端不支持切石配方选择，未取材料"));
+            return;
         }
+        bridge.sendPacket(player, ui, "placement_state", Map.of("busy", true, "message", "正在准备材料"));
+        java.util.function.Consumer<String> done = message -> {
+            if (!player.isOnline() || player.getOpenInventory() != view || !bridge.isUiOpen(player, ui)) return;
+            if (message.isEmpty() && type == WorkshopType.STONECUTTER && !StonecutterSelection.select(player, key))
+                message = "材料已填入，配方选择未完成；请重新选择配方";
+            bridge.sendPacket(player, ui, "placement_state", Map.of("busy", false, "message", message.isEmpty()?"材料已填入":message));
+            sendBook(player, type, true);
+            WarehousePanelAccess panel = warehousePanel.get();
+            if (panel != null) panel.handle(player, ui, List.of("refresh"));
+        };
+        if (type == WorkshopType.BREWING || type == WorkshopType.MERCHANT) {
+            materialPlanner().fillCustom(player, type, stock -> nativeOffers.demand(player, key), done);
+            return;
+        }
+        NamespacedKey id = NamespacedKey.fromString(key);
+        if (id != null && customRecipes != null && customRecipes.managed(id)) {
+            long revision = bookRevisions.getOrDefault(player.getUniqueId(), Map.of()).getOrDefault(id, -1L);
+            customRecipes.fill(player, id, revision).thenAccept(receipt -> done.accept(receipt.message()));
+        } else materialPlanner().fill(player,key,type,done);
     }
-
+    private void selectStonecutting(Player player, WorkshopType type, String key) {
+        if (materialPlanner().busy(player)) return;
+        boolean selected = StonecutterSelection.select(player, key);
+        bridge.sendPacket(player, uiIds.get(type), "placement_state", Map.of("busy", false, "message", selected ? "" : "先填入对应石材，再选择配方"));
+    }
     public void shutdown() {
-        stopped=true;
-        materialPlanner().close();
+        stopped = true; materialPlanner().close();
+        bookRevisions.clear();
+        equipment.close();
+        artisan.close();
+        utility.close();
+        refreshTasks.values().forEach(org.bukkit.scheduler.BukkitTask::cancel);refreshTasks.clear();nativeOffers.clear();
         WarehousePanelAccess panel = warehousePanel.get();
-        if (panel != null) {
-            panel.close(craftingUiId);
-            panel.close(furnaceUiId);
-        }
-        craftingBookState.clear();
-        furnaceBookState.clear();
+        if (panel != null) for (String ui : uiIds.values()) panel.close(ui);
+        bookState.clear();
     }
 }

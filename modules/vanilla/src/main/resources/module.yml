@@ -7,4 +7,4 @@ api-version: 2.0
 depends: []
 softdepends: [warehouse]
 external-depends: []
-external-softdepends: []
+external-softdepends: [PlaceholderAPI]

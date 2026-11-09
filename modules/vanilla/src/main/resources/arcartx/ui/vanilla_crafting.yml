@@ -1,4 +1,3 @@
-# 材料凭证与可发现置顶入口。
 ui:
   isHud: false
   match:
@@ -8,7 +7,8 @@ ui:
   escClose: true
   closeDied: true
   screenScale: true
-  through: var.whLayoutEnabled && var.whAvailable && !var.carrying && !var.recipeOpen && val.warehouseGrid != none && val.warehouseGrid.isHovered() && var.whMenu == '' && !var.whPinHovered
+  through: var.whLayoutEnabled && var.whAvailable && !var.carrying && !var.recipeOpen && val.warehouseGrid != none && val.warehouseGrid.isHovered()
+    && var.whMenu == '' && !var.whPinHovered
   jei: false
   itemSize: 16
   hide:
@@ -35,6 +35,7 @@ ui:
       var.whHasNext = false
       var.whCount = '—'
       var.recipeOpen = !var.whLayoutEnabled
+      var.recipeAdmin = false
       var.recipeResolved = false
       var.recipeHasNext = false
       var.recipes = {}
@@ -62,13 +63,25 @@ ui:
       var.whPinHovered = false
       var.fillBusy = false
       var.fillMessage = ''
+      var.noticeActive = false
+      var.noticeText = ''
+      var.noticeDetail = ''
+      var.noticeFade = Fade(80, 1000, 220)
+      var.noticePeaked = false
+      var.noticeLines = []
+      var.noticeCount = 1
     open: |-
+      var.noticeActive = false
+      var.noticePeaked = false
+      var.noticeText = ''
+      var.noticeDetail = ''
       if(var.whLayoutEnabled){
         Packet.send('AXS:vanilla_crafting', 'warehouse_panel', 'open')
       }else{
         Packet.send('AXS:vanilla_crafting', 'show_recipe_book')
       }
       val.workshopHeaderIcon.setItemIcon('{"id":"minecraft:crafting_table","Count":1b}')
+      Packet.send('AXS:vanilla_crafting', 'recipe_admin_status')
     close: Packet.send('AXS:vanilla_crafting', 'warehouse_panel', 'close', var.whToken)
     tick: |-
       carried = self.getCarriedItemStack()
@@ -151,7 +164,19 @@ ui:
           if(pinCell != none && pinCell['置顶按钮'].isHovered()){ var.whPinHovered = true }
         }
       }
+
+      if(var.noticeActive){
+        var.noticeOpacity = var.noticeFade.get()
+        if(var.noticeOpacity > 0){ var.noticePeaked = true }
+        if(var.noticePeaked && var.noticeOpacity <= 0){
+          var.noticeActive = false
+          var.noticePeaked = false
+          var.noticeText = ''
+          var.noticeDetail = ''
+        }
+      }
   packetHandler:
+    recipe_admin_access: var.recipeAdmin = packet['enabled']
     warehouse_panel: |-
       var.whAvailable = packet['available']
       var.whResolved = true
@@ -186,6 +211,29 @@ ui:
     placement_state: |-
       var.fillBusy = packet['busy']
       var.fillMessage = packet['message']
+      if(!packet['busy']){
+        noticeMessage = packet['message']
+        if(noticeMessage != none && noticeMessage != '' && !var.noticeActive){
+          var.noticeText = noticeMessage.replaceAll('(?i)[&§][0-9A-FK-ORX]', '')
+          noticeWrapped = var.noticeText.replaceAll('(.{22})(?=.)', '$1\n')
+          var.noticeLines = noticeWrapped.split('\n')
+          var.noticeCount = math.max(1, math.min(12, var.noticeLines.size()))
+          var.noticeFade.reset()
+          var.noticePeaked = false
+          var.noticeActive = true
+        }
+      }
+    ui_notice: |-
+      noticeMessage = packet['message']
+      if(noticeMessage != none && noticeMessage != '' && !var.noticeActive){
+        var.noticeText = noticeMessage.replaceAll('(?i)[&§][0-9A-FK-ORX]', '')
+        noticeWrapped = var.noticeText.replaceAll('(.{22})(?=.)', '$1\n')
+        var.noticeLines = noticeWrapped.split('\n')
+        var.noticeCount = math.max(1, math.min(12, var.noticeLines.size()))
+        var.noticeFade.reset()
+        var.noticePeaked = false
+        var.noticeActive = true
+      }
 controls:
   自适应:
     type: Adaptive
@@ -208,14 +256,14 @@ controls:
               y: 0
               width: 1512
               height: 940
-              normal: ~18,29,37,253
+              normal: ~86,64,46,253
               through: true
               shape: ~round_rect
               radius: 14
             effect:
               stroke:
                 width: 1
-                color: ~72,101,114,255
+                color: ~125,99,68,255
           顶栏:
             type: Texture
             attribute:
@@ -223,7 +271,7 @@ controls:
               y: 12
               width: 1488
               height: 82
-              normal: ~24,38,47,255
+              normal: ~86,60,40,255
               through: true
               shape: ~round_rect
               radius: 8
@@ -234,7 +282,7 @@ controls:
               y: 94
               width: 1464
               height: 1
-              normal: ~72,101,114,255
+              normal: ~125,99,68,255
               through: true
           标题底座:
             type: Texture
@@ -243,7 +291,7 @@ controls:
               y: 23
               width: 56
               height: 56
-              normal: ~40,65,78,255
+              normal: ~128,91,57,255
               through: true
               shape: ~round_rect
               radius: 8
@@ -280,9 +328,44 @@ controls:
             attribute:
               x: 760
               y: 40
-              texts: ~&bCRAFTING WORKSHOP
+              texts: ~&6CRAFTING WORKSHOP
               fontSize: 28
               through: true
+          配方管理:
+            type: Canvas
+            attribute:
+              x: 1042
+              y: 32
+              width: 174
+              height: 44
+              visible: var.recipeAdmin
+            action:
+              clickLeft: Packet.send('AXS:vanilla_crafting', 'open_recipe_editor')
+            children:
+              底色:
+                type: Texture
+                attribute:
+                  x: 0
+                  y: 0
+                  width: 174
+                  height: 44
+                  normal: 'self.isHovered() ? ''158,118,73,255'' : ''128,91,57,255'''
+                  through: true
+                  shape: ~round_rect
+                  radius: 6
+                effect:
+                  stroke:
+                    width: 3
+                    color: ~125,99,68,255
+              文字:
+                type: Text
+                attribute:
+                  x: 0
+                  y: 0
+                  texts: ~&f配方管理
+                  fontSize: 32
+                  through: true
+                  point: ~middle_center
           切换配方:
             type: Canvas
             attribute:
@@ -304,14 +387,14 @@ controls:
                   y: 0
                   width: 188
                   height: 44
-                  normal: 'self.isHovered() ? ''54,89,101,255'' : ''40,65,78,255'''
+                  normal: 'self.isHovered() ? ''158,118,73,255'' : ''128,91,57,255'''
                   through: true
                   shape: ~round_rect
                   radius: 6
                 effect:
                   stroke:
-                    width: 1
-                    color: ~72,101,114,255
+                    width: 3
+                    color: ~125,99,68,255
               文字:
                 type: Text
                 attribute:
@@ -338,14 +421,14 @@ controls:
                   y: 0
                   width: 48
                   height: 44
-                  normal: 'self.isHovered() ? ''54,89,101,255'' : ''40,65,78,255'''
+                  normal: 'self.isHovered() ? ''158,118,73,255'' : ''128,91,57,255'''
                   through: true
                   shape: ~round_rect
                   radius: 6
                 effect:
                   stroke:
-                    width: 1
-                    color: ~72,101,114,255
+                    width: 3
+                    color: ~125,99,68,255
               文字:
                 type: Text
                 attribute:
@@ -380,14 +463,14 @@ controls:
                       y: 0
                       width: 760
                       height: 388
-                      normal: ~29,44,54,255
+                      normal: ~201,181,151,255
                       through: true
                       shape: ~round_rect
                       radius: 10
                     effect:
                       stroke:
                         width: 1
-                        color: ~72,101,114,255
+                        color: ~125,99,68,255
                   内沿:
                     type: Texture
                     attribute:
@@ -395,7 +478,7 @@ controls:
                       y: 8
                       width: 744
                       height: 1
-                      normal: ~57,82,96,255
+                      normal: ~157,130,94,255
                       through: true
                   底沿:
                     type: Texture
@@ -404,7 +487,7 @@ controls:
                       y: 386
                       width: 736
                       height: 1
-                      normal: ~18,31,40,255
+                      normal: ~177,151,116,255
                       through: true
                   左上横:
                     type: Texture
@@ -413,7 +496,7 @@ controls:
                       y: 5
                       width: 14
                       height: 2
-                      normal: ~101,190,200,255
+                      normal: ~149,108,57,255
                       through: true
                   左上竖:
                     type: Texture
@@ -422,7 +505,7 @@ controls:
                       y: 5
                       width: 2
                       height: 14
-                      normal: ~101,190,200,255
+                      normal: ~149,108,57,255
                       through: true
                   右上横:
                     type: Texture
@@ -431,7 +514,7 @@ controls:
                       y: 5
                       width: 14
                       height: 2
-                      normal: ~101,190,200,255
+                      normal: ~149,108,57,255
                       through: true
                   右上竖:
                     type: Texture
@@ -440,7 +523,7 @@ controls:
                       y: 5
                       width: 2
                       height: 14
-                      normal: ~101,190,200,255
+                      normal: ~149,108,57,255
                       through: true
                   左下横:
                     type: Texture
@@ -449,7 +532,7 @@ controls:
                       y: 383
                       width: 14
                       height: 2
-                      normal: ~101,190,200,255
+                      normal: ~149,108,57,255
                       through: true
                   左下竖:
                     type: Texture
@@ -458,7 +541,7 @@ controls:
                       y: 369
                       width: 2
                       height: 14
-                      normal: ~101,190,200,255
+                      normal: ~149,108,57,255
                       through: true
                   右下横:
                     type: Texture
@@ -467,7 +550,7 @@ controls:
                       y: 383
                       width: 14
                       height: 2
-                      normal: ~101,190,200,255
+                      normal: ~149,108,57,255
                       through: true
                   右下竖:
                     type: Texture
@@ -476,14 +559,14 @@ controls:
                       y: 369
                       width: 2
                       height: 14
-                      normal: ~101,190,200,255
+                      normal: ~149,108,57,255
                       through: true
               标题:
                 type: Text
                 attribute:
                   x: 24
                   y: 20
-                  texts: ~&f合成区
+                  texts: ~&0合成区
                   fontSize: 36
                   through: true
               标题线:
@@ -493,14 +576,14 @@ controls:
                   y: 52
                   width: 712
                   height: 1
-                  normal: ~72,101,114,255
+                  normal: ~125,99,68,255
                   through: true
               副标:
                 type: Text
                 attribute:
                   x: -24
                   y: 24
-                  texts: ~&73 × 3
+                  texts: ~&83 × 3
                   fontSize: 28
                   through: true
                   point: ~top_right
@@ -511,7 +594,7 @@ controls:
                   y: 74
                   width: 292
                   height: 292
-                  normal: ~18,31,40,255
+                  normal: ~177,151,116,255
                   through: true
                   shape: ~round_rect
                   radius: 8
@@ -530,14 +613,14 @@ controls:
                       y: 0
                       width: 80
                       height: 80
-                      normal: 'self.isHovered() ? ''40,70,82,255'' : ''18,31,40,255'''
+                      normal: 'self.isHovered() ? ''193,169,131,255'' : ''177,151,116,255'''
                       through: true
                       shape: ~round_rect
                       radius: 6
                     effect:
                       stroke:
                         width: 1
-                        color: 'self.isHovered() ? ''101,190,200,255'' : ''72,101,114,255'''
+                        color: 'self.isHovered() ? ''149,108,57,255'' : ''125,99,68,255'''
                     children:
                       上暗线:
                         type: Texture
@@ -546,7 +629,7 @@ controls:
                           y: 1
                           width: 68
                           height: 1
-                          normal: ~10,15,18,160
+                          normal: ~92,67,42,140
                           through: true
                       下亮线:
                         type: Texture
@@ -555,7 +638,7 @@ controls:
                           y: 78
                           width: 68
                           height: 1
-                          normal: ~57,82,96,255
+                          normal: ~157,130,94,255
                           through: true
                   槽位:
                     type: Slot
@@ -583,14 +666,14 @@ controls:
                       y: 0
                       width: 80
                       height: 80
-                      normal: 'self.isHovered() ? ''40,70,82,255'' : ''18,31,40,255'''
+                      normal: 'self.isHovered() ? ''193,169,131,255'' : ''177,151,116,255'''
                       through: true
                       shape: ~round_rect
                       radius: 6
                     effect:
                       stroke:
                         width: 1
-                        color: 'self.isHovered() ? ''101,190,200,255'' : ''72,101,114,255'''
+                        color: 'self.isHovered() ? ''149,108,57,255'' : ''125,99,68,255'''
                     children:
                       上暗线:
                         type: Texture
@@ -599,7 +682,7 @@ controls:
                           y: 1
                           width: 68
                           height: 1
-                          normal: ~10,15,18,160
+                          normal: ~92,67,42,140
                           through: true
                       下亮线:
                         type: Texture
@@ -608,7 +691,7 @@ controls:
                           y: 78
                           width: 68
                           height: 1
-                          normal: ~57,82,96,255
+                          normal: ~157,130,94,255
                           through: true
                   槽位:
                     type: Slot
@@ -636,14 +719,14 @@ controls:
                       y: 0
                       width: 80
                       height: 80
-                      normal: 'self.isHovered() ? ''40,70,82,255'' : ''18,31,40,255'''
+                      normal: 'self.isHovered() ? ''193,169,131,255'' : ''177,151,116,255'''
                       through: true
                       shape: ~round_rect
                       radius: 6
                     effect:
                       stroke:
                         width: 1
-                        color: 'self.isHovered() ? ''101,190,200,255'' : ''72,101,114,255'''
+                        color: 'self.isHovered() ? ''149,108,57,255'' : ''125,99,68,255'''
                     children:
                       上暗线:
                         type: Texture
@@ -652,7 +735,7 @@ controls:
                           y: 1
                           width: 68
                           height: 1
-                          normal: ~10,15,18,160
+                          normal: ~92,67,42,140
                           through: true
                       下亮线:
                         type: Texture
@@ -661,7 +744,7 @@ controls:
                           y: 78
                           width: 68
                           height: 1
-                          normal: ~57,82,96,255
+                          normal: ~157,130,94,255
                           through: true
                   槽位:
                     type: Slot
@@ -689,14 +772,14 @@ controls:
                       y: 0
                       width: 80
                       height: 80
-                      normal: 'self.isHovered() ? ''40,70,82,255'' : ''18,31,40,255'''
+                      normal: 'self.isHovered() ? ''193,169,131,255'' : ''177,151,116,255'''
                       through: true
                       shape: ~round_rect
                       radius: 6
                     effect:
                       stroke:
                         width: 1
-                        color: 'self.isHovered() ? ''101,190,200,255'' : ''72,101,114,255'''
+                        color: 'self.isHovered() ? ''149,108,57,255'' : ''125,99,68,255'''
                     children:
                       上暗线:
                         type: Texture
@@ -705,7 +788,7 @@ controls:
                           y: 1
                           width: 68
                           height: 1
-                          normal: ~10,15,18,160
+                          normal: ~92,67,42,140
                           through: true
                       下亮线:
                         type: Texture
@@ -714,7 +797,7 @@ controls:
                           y: 78
                           width: 68
                           height: 1
-                          normal: ~57,82,96,255
+                          normal: ~157,130,94,255
                           through: true
                   槽位:
                     type: Slot
@@ -742,14 +825,14 @@ controls:
                       y: 0
                       width: 80
                       height: 80
-                      normal: 'self.isHovered() ? ''40,70,82,255'' : ''18,31,40,255'''
+                      normal: 'self.isHovered() ? ''193,169,131,255'' : ''177,151,116,255'''
                       through: true
                       shape: ~round_rect
                       radius: 6
                     effect:
                       stroke:
                         width: 1
-                        color: 'self.isHovered() ? ''101,190,200,255'' : ''72,101,114,255'''
+                        color: 'self.isHovered() ? ''149,108,57,255'' : ''125,99,68,255'''
                     children:
                       上暗线:
                         type: Texture
@@ -758,7 +841,7 @@ controls:
                           y: 1
                           width: 68
                           height: 1
-                          normal: ~10,15,18,160
+                          normal: ~92,67,42,140
                           through: true
                       下亮线:
                         type: Texture
@@ -767,7 +850,7 @@ controls:
                           y: 78
                           width: 68
                           height: 1
-                          normal: ~57,82,96,255
+                          normal: ~157,130,94,255
                           through: true
                   槽位:
                     type: Slot
@@ -795,14 +878,14 @@ controls:
                       y: 0
                       width: 80
                       height: 80
-                      normal: 'self.isHovered() ? ''40,70,82,255'' : ''18,31,40,255'''
+                      normal: 'self.isHovered() ? ''193,169,131,255'' : ''177,151,116,255'''
                       through: true
                       shape: ~round_rect
                       radius: 6
                     effect:
                       stroke:
                         width: 1
-                        color: 'self.isHovered() ? ''101,190,200,255'' : ''72,101,114,255'''
+                        color: 'self.isHovered() ? ''149,108,57,255'' : ''125,99,68,255'''
                     children:
                       上暗线:
                         type: Texture
@@ -811,7 +894,7 @@ controls:
                           y: 1
                           width: 68
                           height: 1
-                          normal: ~10,15,18,160
+                          normal: ~92,67,42,140
                           through: true
                       下亮线:
                         type: Texture
@@ -820,7 +903,7 @@ controls:
                           y: 78
                           width: 68
                           height: 1
-                          normal: ~57,82,96,255
+                          normal: ~157,130,94,255
                           through: true
                   槽位:
                     type: Slot
@@ -848,14 +931,14 @@ controls:
                       y: 0
                       width: 80
                       height: 80
-                      normal: 'self.isHovered() ? ''40,70,82,255'' : ''18,31,40,255'''
+                      normal: 'self.isHovered() ? ''193,169,131,255'' : ''177,151,116,255'''
                       through: true
                       shape: ~round_rect
                       radius: 6
                     effect:
                       stroke:
                         width: 1
-                        color: 'self.isHovered() ? ''101,190,200,255'' : ''72,101,114,255'''
+                        color: 'self.isHovered() ? ''149,108,57,255'' : ''125,99,68,255'''
                     children:
                       上暗线:
                         type: Texture
@@ -864,7 +947,7 @@ controls:
                           y: 1
                           width: 68
                           height: 1
-                          normal: ~10,15,18,160
+                          normal: ~92,67,42,140
                           through: true
                       下亮线:
                         type: Texture
@@ -873,7 +956,7 @@ controls:
                           y: 78
                           width: 68
                           height: 1
-                          normal: ~57,82,96,255
+                          normal: ~157,130,94,255
                           through: true
                   槽位:
                     type: Slot
@@ -901,14 +984,14 @@ controls:
                       y: 0
                       width: 80
                       height: 80
-                      normal: 'self.isHovered() ? ''40,70,82,255'' : ''18,31,40,255'''
+                      normal: 'self.isHovered() ? ''193,169,131,255'' : ''177,151,116,255'''
                       through: true
                       shape: ~round_rect
                       radius: 6
                     effect:
                       stroke:
                         width: 1
-                        color: 'self.isHovered() ? ''101,190,200,255'' : ''72,101,114,255'''
+                        color: 'self.isHovered() ? ''149,108,57,255'' : ''125,99,68,255'''
                     children:
                       上暗线:
                         type: Texture
@@ -917,7 +1000,7 @@ controls:
                           y: 1
                           width: 68
                           height: 1
-                          normal: ~10,15,18,160
+                          normal: ~92,67,42,140
                           through: true
                       下亮线:
                         type: Texture
@@ -926,7 +1009,7 @@ controls:
                           y: 78
                           width: 68
                           height: 1
-                          normal: ~57,82,96,255
+                          normal: ~157,130,94,255
                           through: true
                   槽位:
                     type: Slot
@@ -954,14 +1037,14 @@ controls:
                       y: 0
                       width: 80
                       height: 80
-                      normal: 'self.isHovered() ? ''40,70,82,255'' : ''18,31,40,255'''
+                      normal: 'self.isHovered() ? ''193,169,131,255'' : ''177,151,116,255'''
                       through: true
                       shape: ~round_rect
                       radius: 6
                     effect:
                       stroke:
                         width: 1
-                        color: 'self.isHovered() ? ''101,190,200,255'' : ''72,101,114,255'''
+                        color: 'self.isHovered() ? ''149,108,57,255'' : ''125,99,68,255'''
                     children:
                       上暗线:
                         type: Texture
@@ -970,7 +1053,7 @@ controls:
                           y: 1
                           width: 68
                           height: 1
-                          normal: ~10,15,18,160
+                          normal: ~92,67,42,140
                           through: true
                       下亮线:
                         type: Texture
@@ -979,7 +1062,7 @@ controls:
                           y: 78
                           width: 68
                           height: 1
-                          normal: ~57,82,96,255
+                          normal: ~157,130,94,255
                           through: true
                   槽位:
                     type: Slot
@@ -999,7 +1082,7 @@ controls:
                   y: 214
                   width: 1
                   height: 10
-                  normal: ~57,82,96,255
+                  normal: ~157,130,94,255
                   through: true
                   visible: var.recipeSelection == ''
               刻度1:
@@ -1009,7 +1092,7 @@ controls:
                   y: 214
                   width: 1
                   height: 5
-                  normal: ~57,82,96,255
+                  normal: ~157,130,94,255
                   through: true
                   visible: var.recipeSelection == ''
               刻度2:
@@ -1019,7 +1102,7 @@ controls:
                   y: 214
                   width: 1
                   height: 5
-                  normal: ~57,82,96,255
+                  normal: ~157,130,94,255
                   through: true
                   visible: var.recipeSelection == ''
               刻度3:
@@ -1029,7 +1112,7 @@ controls:
                   y: 214
                   width: 1
                   height: 10
-                  normal: ~57,82,96,255
+                  normal: ~157,130,94,255
                   through: true
                   visible: var.recipeSelection == ''
               刻度4:
@@ -1039,7 +1122,7 @@ controls:
                   y: 214
                   width: 1
                   height: 5
-                  normal: ~57,82,96,255
+                  normal: ~157,130,94,255
                   through: true
                   visible: var.recipeSelection == ''
               刻度5:
@@ -1049,7 +1132,7 @@ controls:
                   y: 214
                   width: 1
                   height: 5
-                  normal: ~57,82,96,255
+                  normal: ~157,130,94,255
                   through: true
                   visible: var.recipeSelection == ''
               刻度6:
@@ -1059,7 +1142,7 @@ controls:
                   y: 214
                   width: 1
                   height: 10
-                  normal: ~57,82,96,255
+                  normal: ~157,130,94,255
                   through: true
                   visible: var.recipeSelection == ''
               刻度7:
@@ -1069,7 +1152,7 @@ controls:
                   y: 214
                   width: 1
                   height: 5
-                  normal: ~57,82,96,255
+                  normal: ~157,130,94,255
                   through: true
                   visible: var.recipeSelection == ''
               刻度8:
@@ -1079,7 +1162,7 @@ controls:
                   y: 214
                   width: 1
                   height: 5
-                  normal: ~57,82,96,255
+                  normal: ~157,130,94,255
                   through: true
                   visible: var.recipeSelection == ''
               刻度9:
@@ -1089,7 +1172,7 @@ controls:
                   y: 214
                   width: 1
                   height: 10
-                  normal: ~57,82,96,255
+                  normal: ~157,130,94,255
                   through: true
                   visible: var.recipeSelection == ''
               导向线:
@@ -1099,7 +1182,7 @@ controls:
                   y: 208
                   width: 160
                   height: 2
-                  normal: ~101,190,200,255
+                  normal: ~149,108,57,255
                   through: true
               箭头上:
                 type: Texture
@@ -1108,7 +1191,7 @@ controls:
                   y: 203
                   width: 14
                   height: 2
-                  normal: ~101,190,200,255
+                  normal: ~149,108,57,255
                   through: true
                   rotate: 40
               箭头下:
@@ -1118,7 +1201,7 @@ controls:
                   y: 213
                   width: 14
                   height: 2
-                  normal: ~101,190,200,255
+                  normal: ~149,108,57,255
                   through: true
                   rotate: -40
               步骤提示:
@@ -1126,7 +1209,7 @@ controls:
                 attribute:
                   x: 364
                   y: 252
-                  texts: ~&7按配方摆放材料
+                  texts: ~&8按配方摆放材料
                   fontSize: 28
                   through: true
                   visible: var.recipeSelection == ''
@@ -1135,7 +1218,7 @@ controls:
                 attribute:
                   x: 364
                   y: 278
-                  texts: ~&7从右侧取出成品
+                  texts: ~&8从右侧取出成品
                   fontSize: 28
                   through: true
                   visible: var.recipeSelection == ''
@@ -1164,14 +1247,14 @@ controls:
                           y: 0
                           width: 148
                           height: 148
-                          normal: ~29,44,54,255
+                          normal: ~201,181,151,255
                           through: true
                           shape: ~round_rect
                           radius: 10
                         effect:
                           stroke:
                             width: 1
-                            color: ~72,101,114,255
+                            color: ~125,99,68,255
                       内沿:
                         type: Texture
                         attribute:
@@ -1179,7 +1262,7 @@ controls:
                           y: 8
                           width: 132
                           height: 1
-                          normal: ~57,82,96,255
+                          normal: ~157,130,94,255
                           through: true
                       底沿:
                         type: Texture
@@ -1188,7 +1271,7 @@ controls:
                           y: 146
                           width: 124
                           height: 1
-                          normal: ~18,31,40,255
+                          normal: ~177,151,116,255
                           through: true
                       左上横:
                         type: Texture
@@ -1197,7 +1280,7 @@ controls:
                           y: 5
                           width: 14
                           height: 2
-                          normal: ~101,190,200,255
+                          normal: ~149,108,57,255
                           through: true
                       左上竖:
                         type: Texture
@@ -1206,7 +1289,7 @@ controls:
                           y: 5
                           width: 2
                           height: 14
-                          normal: ~101,190,200,255
+                          normal: ~149,108,57,255
                           through: true
                       右上横:
                         type: Texture
@@ -1215,7 +1298,7 @@ controls:
                           y: 5
                           width: 14
                           height: 2
-                          normal: ~101,190,200,255
+                          normal: ~149,108,57,255
                           through: true
                       右上竖:
                         type: Texture
@@ -1224,7 +1307,7 @@ controls:
                           y: 5
                           width: 2
                           height: 14
-                          normal: ~101,190,200,255
+                          normal: ~149,108,57,255
                           through: true
                       左下横:
                         type: Texture
@@ -1233,7 +1316,7 @@ controls:
                           y: 143
                           width: 14
                           height: 2
-                          normal: ~101,190,200,255
+                          normal: ~149,108,57,255
                           through: true
                       左下竖:
                         type: Texture
@@ -1242,7 +1325,7 @@ controls:
                           y: 129
                           width: 2
                           height: 14
-                          normal: ~101,190,200,255
+                          normal: ~149,108,57,255
                           through: true
                       右下横:
                         type: Texture
@@ -1251,7 +1334,7 @@ controls:
                           y: 143
                           width: 14
                           height: 2
-                          normal: ~101,190,200,255
+                          normal: ~149,108,57,255
                           through: true
                       右下竖:
                         type: Texture
@@ -1260,7 +1343,7 @@ controls:
                           y: 129
                           width: 2
                           height: 14
-                          normal: ~101,190,200,255
+                          normal: ~149,108,57,255
                           through: true
               产物:
                 type: Canvas
@@ -1277,14 +1360,14 @@ controls:
                       y: 0
                       width: 112
                       height: 112
-                      normal: 'self.isHovered() ? ''40,70,82,255'' : ''18,31,40,255'''
+                      normal: 'self.isHovered() ? ''193,169,131,255'' : ''177,151,116,255'''
                       through: true
                       shape: ~round_rect
                       radius: 6
                     effect:
                       stroke:
                         width: 1
-                        color: 'self.isHovered() ? ''101,190,200,255'' : ''72,101,114,255'''
+                        color: 'self.isHovered() ? ''149,108,57,255'' : ''125,99,68,255'''
                     children:
                       上暗线:
                         type: Texture
@@ -1293,7 +1376,7 @@ controls:
                           y: 1
                           width: 100
                           height: 1
-                          normal: ~10,15,18,160
+                          normal: ~92,67,42,140
                           through: true
                       下亮线:
                         type: Texture
@@ -1302,7 +1385,7 @@ controls:
                           y: 110
                           width: 100
                           height: 1
-                          normal: ~57,82,96,255
+                          normal: ~157,130,94,255
                           through: true
                   槽位:
                     type: Slot
@@ -1320,7 +1403,7 @@ controls:
                 attribute:
                   x: 584
                   y: 310
-                  texts: ~&f合成结果
+                  texts: ~&0合成结果
                   fontSize: 32
                   through: true
               配方预览标题:
@@ -1328,7 +1411,7 @@ controls:
                 attribute:
                   x: 372
                   y: 220
-                  texts: ~&7材料预览
+                  texts: ~&8材料预览
                   fontSize: 28
                   through: true
                   visible: var.recipeSelection != ''
@@ -1367,14 +1450,14 @@ controls:
                           y: 0
                           width: 40
                           height: 40
-                          normal: ~18,31,40,255
+                          normal: ~177,151,116,255
                           through: true
                           shape: ~round_rect
                           radius: 6
                         effect:
                           stroke:
                             width: 1
-                            color: ~72,101,114,255
+                            color: ~125,99,68,255
                       图标:
                         type: Slot
                         attribute:
@@ -1408,14 +1491,14 @@ controls:
                       y: 0
                       width: 760
                       height: 396
-                      normal: ~29,44,54,255
+                      normal: ~201,181,151,255
                       through: true
                       shape: ~round_rect
                       radius: 10
                     effect:
                       stroke:
                         width: 1
-                        color: ~72,101,114,255
+                        color: ~125,99,68,255
                   内沿:
                     type: Texture
                     attribute:
@@ -1423,7 +1506,7 @@ controls:
                       y: 8
                       width: 744
                       height: 1
-                      normal: ~57,82,96,255
+                      normal: ~157,130,94,255
                       through: true
                   底沿:
                     type: Texture
@@ -1432,7 +1515,7 @@ controls:
                       y: 394
                       width: 736
                       height: 1
-                      normal: ~18,31,40,255
+                      normal: ~177,151,116,255
                       through: true
                   左上横:
                     type: Texture
@@ -1441,7 +1524,7 @@ controls:
                       y: 5
                       width: 14
                       height: 2
-                      normal: ~101,190,200,255
+                      normal: ~149,108,57,255
                       through: true
                   左上竖:
                     type: Texture
@@ -1450,7 +1533,7 @@ controls:
                       y: 5
                       width: 2
                       height: 14
-                      normal: ~101,190,200,255
+                      normal: ~149,108,57,255
                       through: true
                   右上横:
                     type: Texture
@@ -1459,7 +1542,7 @@ controls:
                       y: 5
                       width: 14
                       height: 2
-                      normal: ~101,190,200,255
+                      normal: ~149,108,57,255
                       through: true
                   右上竖:
                     type: Texture
@@ -1468,7 +1551,7 @@ controls:
                       y: 5
                       width: 2
                       height: 14
-                      normal: ~101,190,200,255
+                      normal: ~149,108,57,255
                       through: true
                   左下横:
                     type: Texture
@@ -1477,7 +1560,7 @@ controls:
                       y: 391
                       width: 14
                       height: 2
-                      normal: ~101,190,200,255
+                      normal: ~149,108,57,255
                       through: true
                   左下竖:
                     type: Texture
@@ -1486,7 +1569,7 @@ controls:
                       y: 377
                       width: 2
                       height: 14
-                      normal: ~101,190,200,255
+                      normal: ~149,108,57,255
                       through: true
                   右下横:
                     type: Texture
@@ -1495,7 +1578,7 @@ controls:
                       y: 391
                       width: 14
                       height: 2
-                      normal: ~101,190,200,255
+                      normal: ~149,108,57,255
                       through: true
                   右下竖:
                     type: Texture
@@ -1504,14 +1587,14 @@ controls:
                       y: 377
                       width: 2
                       height: 14
-                      normal: ~101,190,200,255
+                      normal: ~149,108,57,255
                       through: true
               标题:
                 type: Text
                 attribute:
                   x: 24
                   y: 20
-                  texts: ~&f玩家背包
+                  texts: ~&0玩家背包
                   fontSize: 36
                   through: true
               标题线:
@@ -1521,14 +1604,14 @@ controls:
                   y: 52
                   width: 712
                   height: 1
-                  normal: ~72,101,114,255
+                  normal: ~125,99,68,255
                   through: true
               副标:
                 type: Text
                 attribute:
                   x: -24
                   y: 24
-                  texts: ~&727 格 / 快捷栏 9 格
+                  texts: ~&827 格 / 快捷栏 9 格
                   fontSize: 28
                   through: true
                   point: ~top_right
@@ -1564,14 +1647,14 @@ controls:
                           y: 0
                           width: 64
                           height: 64
-                          normal: 'self.isHovered() ? ''40,70,82,255'' : ''18,31,40,255'''
+                          normal: 'self.isHovered() ? ''193,169,131,255'' : ''177,151,116,255'''
                           through: true
                           shape: ~round_rect
                           radius: 6
                         effect:
                           stroke:
                             width: 1
-                            color: 'self.isHovered() ? ''101,190,200,255'' : ''72,101,114,255'''
+                            color: 'self.isHovered() ? ''149,108,57,255'' : ''125,99,68,255'''
                         children:
                           上暗线:
                             type: Texture
@@ -1580,7 +1663,7 @@ controls:
                               y: 1
                               width: 52
                               height: 1
-                              normal: ~10,15,18,160
+                              normal: ~92,67,42,140
                               through: true
                           下亮线:
                             type: Texture
@@ -1589,7 +1672,7 @@ controls:
                               y: 62
                               width: 52
                               height: 1
-                              normal: ~57,82,96,255
+                              normal: ~157,130,94,255
                               through: true
                       槽位:
                         type: Slot
@@ -1634,14 +1717,14 @@ controls:
                           y: 0
                           width: 64
                           height: 64
-                          normal: 'self.isHovered() ? ''40,70,82,255'' : ''18,31,40,255'''
+                          normal: 'self.isHovered() ? ''193,169,131,255'' : ''177,151,116,255'''
                           through: true
                           shape: ~round_rect
                           radius: 6
                         effect:
                           stroke:
                             width: 1
-                            color: 'self.isHovered() ? ''101,190,200,255'' : ''72,101,114,255'''
+                            color: 'self.isHovered() ? ''149,108,57,255'' : ''125,99,68,255'''
                         children:
                           上暗线:
                             type: Texture
@@ -1650,7 +1733,7 @@ controls:
                               y: 1
                               width: 52
                               height: 1
-                              normal: ~10,15,18,160
+                              normal: ~92,67,42,140
                               through: true
                           下亮线:
                             type: Texture
@@ -1659,7 +1742,7 @@ controls:
                               y: 62
                               width: 52
                               height: 1
-                              normal: ~57,82,96,255
+                              normal: ~157,130,94,255
                               through: true
                       槽位:
                         type: Slot
@@ -1677,7 +1760,7 @@ controls:
                 attribute:
                   x: 44
                   y: 290
-                  texts: ~&7快捷栏
+                  texts: ~&8快捷栏
                   fontSize: 28
                   through: true
               快捷分隔:
@@ -1687,7 +1770,7 @@ controls:
                   y: 298
                   width: 588
                   height: 1
-                  normal: ~72,101,114,255
+                  normal: ~125,99,68,255
                   through: true
           仓库面板:
             type: Canvas
@@ -1715,14 +1798,14 @@ controls:
                       y: 0
                       width: 680
                       height: 804
-                      normal: ~29,44,54,255
+                      normal: ~201,181,151,255
                       through: true
                       shape: ~round_rect
                       radius: 10
                     effect:
                       stroke:
                         width: 1
-                        color: ~72,101,114,255
+                        color: ~125,99,68,255
                   内沿:
                     type: Texture
                     attribute:
@@ -1730,7 +1813,7 @@ controls:
                       y: 8
                       width: 664
                       height: 1
-                      normal: ~57,82,96,255
+                      normal: ~157,130,94,255
                       through: true
                   底沿:
                     type: Texture
@@ -1739,7 +1822,7 @@ controls:
                       y: 802
                       width: 656
                       height: 1
-                      normal: ~18,31,40,255
+                      normal: ~177,151,116,255
                       through: true
                   左上横:
                     type: Texture
@@ -1748,7 +1831,7 @@ controls:
                       y: 5
                       width: 14
                       height: 2
-                      normal: ~101,190,200,255
+                      normal: ~149,108,57,255
                       through: true
                   左上竖:
                     type: Texture
@@ -1757,7 +1840,7 @@ controls:
                       y: 5
                       width: 2
                       height: 14
-                      normal: ~101,190,200,255
+                      normal: ~149,108,57,255
                       through: true
                   右上横:
                     type: Texture
@@ -1766,7 +1849,7 @@ controls:
                       y: 5
                       width: 14
                       height: 2
-                      normal: ~101,190,200,255
+                      normal: ~149,108,57,255
                       through: true
                   右上竖:
                     type: Texture
@@ -1775,7 +1858,7 @@ controls:
                       y: 5
                       width: 2
                       height: 14
-                      normal: ~101,190,200,255
+                      normal: ~149,108,57,255
                       through: true
                   左下横:
                     type: Texture
@@ -1784,7 +1867,7 @@ controls:
                       y: 799
                       width: 14
                       height: 2
-                      normal: ~101,190,200,255
+                      normal: ~149,108,57,255
                       through: true
                   左下竖:
                     type: Texture
@@ -1793,7 +1876,7 @@ controls:
                       y: 785
                       width: 2
                       height: 14
-                      normal: ~101,190,200,255
+                      normal: ~149,108,57,255
                       through: true
                   右下横:
                     type: Texture
@@ -1802,7 +1885,7 @@ controls:
                       y: 799
                       width: 14
                       height: 2
-                      normal: ~101,190,200,255
+                      normal: ~149,108,57,255
                       through: true
                   右下竖:
                     type: Texture
@@ -1811,14 +1894,14 @@ controls:
                       y: 785
                       width: 2
                       height: 14
-                      normal: ~101,190,200,255
+                      normal: ~149,108,57,255
                       through: true
               标题:
                 type: Text
                 attribute:
                   x: 24
                   y: 20
-                  texts: ~&f个人仓库
+                  texts: ~&0个人仓库
                   fontSize: 36
                   through: true
               标题线:
@@ -1828,14 +1911,14 @@ controls:
                   y: 52
                   width: 632
                   height: 1
-                  normal: ~72,101,114,255
+                  normal: ~125,99,68,255
                   through: true
               副标:
                 type: Text
                 attribute:
                   x: -24
                   y: 24
-                  texts: '''&7已用 '' + var.whCount + '' 格'''
+                  texts: '''&8已用 '' + var.whCount + '' 格'''
                   fontSize: 28
                   through: true
                   point: ~top_right
@@ -1855,14 +1938,14 @@ controls:
                       y: 0
                       width: 456
                       height: 40
-                      normal: ~18,31,40,255
+                      normal: 'self.parent[''输入''].getContent() == '''' ? ''177,151,116,255'' : ''86,60,40,255'''
                       through: true
                       shape: ~round_rect
                       radius: 6
                     effect:
                       stroke:
                         width: 1
-                        color: ~72,101,114,255
+                        color: ~125,99,68,255
                   输入:
                     type: TextBox
                     attribute:
@@ -1871,9 +1954,9 @@ controls:
                       width: 428
                       height: 26
                       length: 32
-                      emptyText: ~&7搜索物品
+                      emptyText: ~&8搜索物品
                       fontSize: 32
-                      cursorColor: ~101,190,200,255
+                      cursorColor: 'self.getContent() == '''' ? ''149,108,57,255'' : ''249,245,235,255'''
                     action:
                       textChange: |-
                         var.whMenu = ''
@@ -1906,14 +1989,14 @@ controls:
                       y: 0
                       width: 88
                       height: 40
-                      normal: 'self.isHovered() ? ''54,89,101,255'' : ''40,65,78,255'''
+                      normal: 'self.isHovered() ? ''158,118,73,255'' : ''128,91,57,255'''
                       through: true
                       shape: ~round_rect
                       radius: 6
                     effect:
                       stroke:
-                        width: 1
-                        color: ~72,101,114,255
+                        width: 3
+                        color: ~125,99,68,255
                   文字:
                     type: Text
                     attribute:
@@ -1942,14 +2025,14 @@ controls:
                       y: 0
                       width: 64
                       height: 40
-                      normal: 'self.isHovered() ? ''54,89,101,255'' : ''40,65,78,255'''
+                      normal: 'self.isHovered() ? ''158,118,73,255'' : ''128,91,57,255'''
                       through: true
                       shape: ~round_rect
                       radius: 6
                     effect:
                       stroke:
-                        width: 1
-                        color: ~72,101,114,255
+                        width: 3
+                        color: ~125,99,68,255
                   文字:
                     type: Text
                     attribute:
@@ -1982,14 +2065,14 @@ controls:
                       y: 0
                       width: 196
                       height: 36
-                      normal: 'self.isHovered() ? ''54,89,101,255'' : ''40,65,78,255'''
+                      normal: 'self.isHovered() ? ''158,118,73,255'' : ''128,91,57,255'''
                       through: true
                       shape: ~round_rect
                       radius: 6
                     effect:
                       stroke:
-                        width: 1
-                        color: ~72,101,114,255
+                        width: 3
+                        color: ~125,99,68,255
                   文字:
                     type: Text
                     attribute:
@@ -2023,14 +2106,14 @@ controls:
                       y: 0
                       width: 260
                       height: 36
-                      normal: 'self.isHovered() ? ''54,89,101,255'' : ''40,65,78,255'''
+                      normal: 'self.isHovered() ? ''158,118,73,255'' : ''128,91,57,255'''
                       through: true
                       shape: ~round_rect
                       radius: 6
                     effect:
                       stroke:
-                        width: 1
-                        color: ~72,101,114,255
+                        width: 3
+                        color: ~125,99,68,255
                   文字:
                     type: Text
                     attribute:
@@ -2046,7 +2129,7 @@ controls:
                 attribute:
                   x: 514
                   y: 143
-                  texts: ~&7点击 ☆ 置顶
+                  texts: ~&8点击 ☆ 置顶
                   fontSize: 28
                   through: true
               仓库网格:
@@ -2090,14 +2173,14 @@ controls:
                           y: 0
                           width: 92
                           height: 92
-                          normal: 'self.isHovered() ? ''40,70,82,255'' : ''18,31,40,255'''
+                          normal: 'self.isHovered() ? ''193,169,131,255'' : ''177,151,116,255'''
                           through: true
                           shape: ~round_rect
                           radius: 6
                         effect:
                           stroke:
                             width: 1
-                            color: 'self.isHovered() ? ''101,190,200,255'' : ''72,101,114,255'''
+                            color: 'self.isHovered() ? ''149,108,57,255'' : ''125,99,68,255'''
                         children:
                           上暗线:
                             type: Texture
@@ -2106,7 +2189,7 @@ controls:
                               y: 1
                               width: 80
                               height: 1
-                              normal: ~10,15,18,160
+                              normal: ~92,67,42,140
                               through: true
                           下亮线:
                             type: Texture
@@ -2115,7 +2198,7 @@ controls:
                               y: 90
                               width: 80
                               height: 1
-                              normal: ~57,82,96,255
+                              normal: ~157,130,94,255
                               through: true
                       Hit:
                         type: Slot
@@ -2144,7 +2227,9 @@ controls:
                         attribute:
                           x: -7
                           y: -5
-                          texts: 'self.parent.entry == none ? none : (self.parent.entry[''amount''] >= 100000000 ? ''&f'' + ((self.parent.entry[''amount''] / 1000000).round() / 100) + ''亿'' : (self.parent.entry[''amount''] >= 10000 ? ''&f'' + ((self.parent.entry[''amount''] / 100).round() / 100) + ''万'' : ''&f'' + self.parent.entry[''amount''].round()))'
+                          texts: 'self.parent.entry == none ? none : (self.parent.entry[''amount''] >= 100000000 ? ''&0'' + ((self.parent.entry[''amount'']
+                            / 1000000).round() / 100) + ''亿'' : (self.parent.entry[''amount''] >= 10000 ? ''&0'' + ((self.parent.entry[''amount'']
+                            / 100).round() / 100) + ''万'' : ''&0'' + self.parent.entry[''amount''].round()))'
                           fontSize: 28
                           through: true
                           point: ~bottom_right
@@ -2168,15 +2253,19 @@ controls:
                             attribute:
                               width: 20
                               height: 20
-                              normal: 'self.isHovered() ? ''54,89,101,255'' : ''40,65,78,255'''
+                              normal: 'self.isHovered() ? ''158,118,73,255'' : ''128,91,57,255'''
                               through: true
                               shape: ~round_rect
                               radius: 4
+                            effect:
+                              stroke:
+                                color: ~157,130,94,255
+                                width: 3
                           星标:
                             type: Text
                             attribute:
                               point: ~middle_center
-                              texts: 'self.parent.parent.entry[''pinned''] ? ''&b★'' : (var.whSort == ''默认 · 存入顺序'' ? ''&f☆'' : ''&8☆'')'
+                              texts: 'self.parent.parent.entry[''pinned''] ? ''&6★'' : (var.whSort == ''默认 · 存入顺序'' ? ''&f☆'' : ''&7☆'')'
                               fontSize: 28
                               through: true
                 val: warehouseGrid
@@ -2197,20 +2286,20 @@ controls:
                       y: 0
                       width: 612
                       height: 404
-                      normal: 'self.isHovered() ? ''40,70,82,255'' : ''18,31,40,255'''
+                      normal: 'self.isHovered() ? ''193,169,131,255'' : ''177,151,116,255'''
                       through: true
                       shape: ~round_rect
                       radius: 8
                     effect:
                       stroke:
-                        width: 1
-                        color: ~101,190,200,255
+                        width: 3
+                        color: ~149,108,57,255
                   图形:
                     type: Text
                     attribute:
                       x: 0
                       y: -58
-                      texts: ~&b＋
+                      texts: ~&6＋
                       fontSize: 72
                       through: true
                       point: ~middle_center
@@ -2219,7 +2308,7 @@ controls:
                     attribute:
                       x: 0
                       y: -4
-                      texts: ~&f存入仓库
+                      texts: ~&0存入仓库
                       fontSize: 48
                       through: true
                       point: ~middle_center
@@ -2228,7 +2317,7 @@ controls:
                     attribute:
                       x: 0
                       y: 42
-                      texts: ~&7点击存入光标物品，同类物品自动合并
+                      texts: ~&8点击存入光标物品，同类物品自动合并
                       fontSize: 32
                       through: true
                       point: ~middle_center
@@ -2251,7 +2340,7 @@ controls:
                       y: 0
                       width: 612
                       height: 404
-                      normal: ~18,31,40,255
+                      normal: ~177,151,116,255
                       through: true
                       shape: ~round_rect
                       radius: 8
@@ -2260,7 +2349,7 @@ controls:
                     attribute:
                       x: 0
                       y: -16
-                      texts: '!var.whAvailable ? ''&f仓库暂不可用'' : ''&f当前没有匹配物品'''
+                      texts: '!var.whAvailable ? ''&0仓库暂不可用'' : ''&0当前没有匹配物品'''
                       fontSize: 36
                       through: true
                       point: ~middle_center
@@ -2269,7 +2358,7 @@ controls:
                     attribute:
                       x: 0
                       y: 24
-                      texts: ~&7更换分类或搜索词，亦可拿起物品存入
+                      texts: ~&8更换分类或搜索词，亦可拿起物品存入
                       fontSize: 28
                       through: true
                       point: ~middle_center
@@ -2278,7 +2367,7 @@ controls:
                 attribute:
                   x: 34
                   y: 622
-                  texts: ~&7左键取一组 · 右键取半组
+                  texts: ~&8左键取一组 · 右键取半组
                   fontSize: 28
                   through: true
               页码:
@@ -2295,7 +2384,7 @@ controls:
                     attribute:
                       x: 0
                       y: 0
-                      texts: '''&f'' + var.whPage'
+                      texts: '''&0'' + var.whPage'
                       fontSize: 32
                       through: true
                       point: ~middle_center
@@ -2318,14 +2407,14 @@ controls:
                       y: 0
                       width: 48
                       height: 40
-                      normal: 'self.isHovered() ? ''54,89,101,255'' : ''40,65,78,255'''
+                      normal: 'self.isHovered() ? ''158,118,73,255'' : ''128,91,57,255'''
                       through: true
                       shape: ~round_rect
                       radius: 6
                     effect:
                       stroke:
-                        width: 1
-                        color: ~72,101,114,255
+                        width: 3
+                        color: ~125,99,68,255
                   文字:
                     type: Text
                     attribute:
@@ -2354,14 +2443,14 @@ controls:
                       y: 0
                       width: 48
                       height: 40
-                      normal: 'self.isHovered() ? ''54,89,101,255'' : ''40,65,78,255'''
+                      normal: 'self.isHovered() ? ''158,118,73,255'' : ''128,91,57,255'''
                       through: true
                       shape: ~round_rect
                       radius: 6
                     effect:
                       stroke:
-                        width: 1
-                        color: ~72,101,114,255
+                        width: 3
+                        color: ~125,99,68,255
                   文字:
                     type: Text
                     attribute:
@@ -2378,14 +2467,14 @@ controls:
                   y: 714
                   width: 632
                   height: 1
-                  normal: ~72,101,114,255
+                  normal: ~125,99,68,255
                   through: true
               页脚标题:
                 type: Text
                 attribute:
                   x: 34
                   y: 738
-                  texts: ~&f随取随补
+                  texts: ~&0随取随补
                   fontSize: 32
                   through: true
               页脚说明:
@@ -2393,7 +2482,7 @@ controls:
                 attribute:
                   x: 34
                   y: 768
-                  texts: ~&7共享仓库存储，物品总量显示在图标右下角
+                  texts: ~&8共享仓库存储，物品总量显示在图标右下角
                   fontSize: 28
                   through: true
               菜单外点击层:
@@ -2422,20 +2511,20 @@ controls:
                       y: 0
                       width: 632
                       height: 286
-                      normal: ~24,38,47,255
+                      normal: ~86,60,40,255
                       through: true
                       shape: ~round_rect
                       radius: 6
                     effect:
                       stroke:
                         width: 1
-                        color: ~101,190,200,255
+                        color: ~149,108,57,255
                   标题:
                     type: Text
                     attribute:
                       x: 16
                       y: 16
-                      texts: 'var.whMenu == ''category'' ? ''&f选择分类'' : ''&f选择排序'''
+                      texts: 'var.whMenu == ''category'' ? ''&0选择分类'' : ''&0选择排序'''
                       fontSize: 32
                       through: true
                   关闭:
@@ -2453,14 +2542,14 @@ controls:
                           y: 0
                           width: 36
                           height: 32
-                          normal: 'self.isHovered() ? ''54,89,101,255'' : ''40,65,78,255'''
+                          normal: 'self.isHovered() ? ''158,118,73,255'' : ''128,91,57,255'''
                           through: true
                           shape: ~round_rect
                           radius: 6
                         effect:
                           stroke:
-                            width: 1
-                            color: ~72,101,114,255
+                            width: 3
+                            color: ~125,99,68,255
                       文字:
                         type: Text
                         attribute:
@@ -2497,7 +2586,8 @@ controls:
                           width: 192
                           height: 36
                           index: 0.round()
-                          entry: 'var.whMenu == ''category'' ? var.whCategories[(var.whMenuPage * 12 + self.index).round()] : var.whSortOptions[(var.whMenuPage * 12 + self.index).round()]'
+                          entry: 'var.whMenu == ''category'' ? var.whCategories[(var.whMenuPage * 12 + self.index).round()] : var.whSortOptions[(var.whMenuPage
+                            * 12 + self.index).round()]'
                           visible: self.entry != none
                         children:
                           底色:
@@ -2507,10 +2597,15 @@ controls:
                               y: 0
                               width: 192
                               height: 36
-                              normal: 'self.parent.entry != none && self.parent.entry[''active''] ? ''54,89,101,255'' : (self.isHovered() ? ''54,89,101,255'' : ''40,65,78,255'')'
+                              normal: 'self.parent.entry != none && self.parent.entry[''active''] ? ''158,118,73,255'' : (self.isHovered() ? ''158,118,73,255''
+                                : ''128,91,57,255'')'
                               through: true
                               shape: ~round_rect
                               radius: 6
+                            effect:
+                              stroke:
+                                color: ~157,130,94,255
+                                width: 3
                           名称:
                             type: Text
                             attribute:
@@ -2543,14 +2638,14 @@ controls:
                           y: 0
                           width: 100
                           height: 32
-                          normal: 'self.isHovered() ? ''54,89,101,255'' : ''40,65,78,255'''
+                          normal: 'self.isHovered() ? ''158,118,73,255'' : ''128,91,57,255'''
                           through: true
                           shape: ~round_rect
                           radius: 6
                         effect:
                           stroke:
-                            width: 1
-                            color: ~72,101,114,255
+                            width: 3
+                            color: ~125,99,68,255
                       文字:
                         type: Text
                         attribute:
@@ -2576,7 +2671,7 @@ controls:
                         attribute:
                           x: 0
                           y: 0
-                          texts: '''&7'' + (var.whMenuPage + 1).round() + '' / '' + ((var.whMenuCount + 11) / 12).toInt().round()'
+                          texts: '''&8'' + (var.whMenuPage + 1).round() + '' / '' + ((var.whMenuCount + 11) / 12).toInt().round()'
                           fontSize: 28
                           through: true
                           point: ~middle_center
@@ -2596,14 +2691,14 @@ controls:
                           y: 0
                           width: 100
                           height: 32
-                          normal: 'self.isHovered() ? ''54,89,101,255'' : ''40,65,78,255'''
+                          normal: 'self.isHovered() ? ''158,118,73,255'' : ''128,91,57,255'''
                           through: true
                           shape: ~round_rect
                           radius: 6
                         effect:
                           stroke:
-                            width: 1
-                            color: ~72,101,114,255
+                            width: 3
+                            color: ~125,99,68,255
                       文字:
                         type: Text
                         attribute:
@@ -2640,14 +2735,14 @@ controls:
                       y: 0
                       width: 680
                       height: 804
-                      normal: ~29,44,54,255
+                      normal: ~201,181,151,255
                       through: true
                       shape: ~round_rect
                       radius: 10
                     effect:
                       stroke:
                         width: 1
-                        color: ~72,101,114,255
+                        color: ~125,99,68,255
                   内沿:
                     type: Texture
                     attribute:
@@ -2655,7 +2750,7 @@ controls:
                       y: 8
                       width: 664
                       height: 1
-                      normal: ~57,82,96,255
+                      normal: ~157,130,94,255
                       through: true
                   底沿:
                     type: Texture
@@ -2664,7 +2759,7 @@ controls:
                       y: 802
                       width: 656
                       height: 1
-                      normal: ~18,31,40,255
+                      normal: ~177,151,116,255
                       through: true
                   左上横:
                     type: Texture
@@ -2673,7 +2768,7 @@ controls:
                       y: 5
                       width: 14
                       height: 2
-                      normal: ~101,190,200,255
+                      normal: ~149,108,57,255
                       through: true
                   左上竖:
                     type: Texture
@@ -2682,7 +2777,7 @@ controls:
                       y: 5
                       width: 2
                       height: 14
-                      normal: ~101,190,200,255
+                      normal: ~149,108,57,255
                       through: true
                   右上横:
                     type: Texture
@@ -2691,7 +2786,7 @@ controls:
                       y: 5
                       width: 14
                       height: 2
-                      normal: ~101,190,200,255
+                      normal: ~149,108,57,255
                       through: true
                   右上竖:
                     type: Texture
@@ -2700,7 +2795,7 @@ controls:
                       y: 5
                       width: 2
                       height: 14
-                      normal: ~101,190,200,255
+                      normal: ~149,108,57,255
                       through: true
                   左下横:
                     type: Texture
@@ -2709,7 +2804,7 @@ controls:
                       y: 799
                       width: 14
                       height: 2
-                      normal: ~101,190,200,255
+                      normal: ~149,108,57,255
                       through: true
                   左下竖:
                     type: Texture
@@ -2718,7 +2813,7 @@ controls:
                       y: 785
                       width: 2
                       height: 14
-                      normal: ~101,190,200,255
+                      normal: ~149,108,57,255
                       through: true
                   右下横:
                     type: Texture
@@ -2727,7 +2822,7 @@ controls:
                       y: 799
                       width: 14
                       height: 2
-                      normal: ~101,190,200,255
+                      normal: ~149,108,57,255
                       through: true
                   右下竖:
                     type: Texture
@@ -2736,14 +2831,14 @@ controls:
                       y: 785
                       width: 2
                       height: 14
-                      normal: ~101,190,200,255
+                      normal: ~149,108,57,255
                       through: true
               标题:
                 type: Text
                 attribute:
                   x: 24
                   y: 20
-                  texts: ~&f合成配方
+                  texts: ~&0合成配方
                   fontSize: 36
                   through: true
               标题线:
@@ -2753,14 +2848,14 @@ controls:
                   y: 52
                   width: 632
                   height: 1
-                  normal: ~72,101,114,255
+                  normal: ~125,99,68,255
                   through: true
               副标:
                 type: Text
                 attribute:
                   x: -24
                   y: 24
-                  texts: ~&7选择后填入材料
+                  texts: ~&8选择后填入材料
                   fontSize: 28
                   through: true
                   point: ~top_right
@@ -2779,14 +2874,14 @@ controls:
                       y: 0
                       width: 456
                       height: 40
-                      normal: ~18,31,40,255
+                      normal: 'self.parent[''输入''].getContent() == '''' ? ''177,151,116,255'' : ''86,60,40,255'''
                       through: true
                       shape: ~round_rect
                       radius: 6
                     effect:
                       stroke:
                         width: 1
-                        color: ~72,101,114,255
+                        color: ~125,99,68,255
                   输入:
                     type: TextBox
                     attribute:
@@ -2795,9 +2890,9 @@ controls:
                       width: 428
                       height: 26
                       length: 32
-                      emptyText: ~&7搜索物品
+                      emptyText: ~&8搜索物品
                       fontSize: 32
-                      cursorColor: ~101,190,200,255
+                      cursorColor: 'self.getContent() == '''' ? ''149,108,57,255'' : ''249,245,235,255'''
                     action:
                       textChange: |-
                         var.recipeSearch = self.getContent()
@@ -2823,14 +2918,14 @@ controls:
                       y: 0
                       width: 164
                       height: 40
-                      normal: 'self.isHovered() ? ''54,89,101,255'' : ''40,65,78,255'''
+                      normal: 'self.isHovered() ? ''158,118,73,255'' : ''128,91,57,255'''
                       through: true
                       shape: ~round_rect
                       radius: 6
                     effect:
                       stroke:
-                        width: 1
-                        color: ~72,101,114,255
+                        width: 3
+                        color: ~125,99,68,255
                   文字:
                     type: Text
                     attribute:
@@ -2845,7 +2940,7 @@ controls:
                 attribute:
                   x: 34
                   y: 143
-                  texts: 'var.carrying ? ''&7放下光标物品后可填入材料'' : ''&7左键预览配方 · 右键填入材料'''
+                  texts: 'var.carrying ? ''&8放下光标物品后可填入材料'' : ''&8左键预览配方 · 右键填入材料'''
                   fontSize: 28
                   through: true
               配方网格:
@@ -2888,14 +2983,15 @@ controls:
                           y: 0
                           width: 92
                           height: 92
-                          normal: 'self.parent.entry != none && self.parent.entryKey == var.recipeSelection ? ''54,89,101,255'' : (self.isHovered() ? ''40,70,82,255'' : ''18,31,40,255'')'
+                          normal: 'self.parent.entry != none && self.parent.entryKey == var.recipeSelection ? ''158,118,73,255'' : (self.isHovered()
+                            ? ''193,169,131,255'' : ''177,151,116,255'')'
                           through: true
                           shape: ~round_rect
                           radius: 6
                         effect:
                           stroke:
                             width: 1
-                            color: 'self.isHovered() ? ''101,190,200,255'' : ''72,101,114,255'''
+                            color: 'self.isHovered() ? ''149,108,57,255'' : ''125,99,68,255'''
                         children:
                           上暗线:
                             type: Texture
@@ -2904,7 +3000,7 @@ controls:
                               y: 1
                               width: 80
                               height: 1
-                              normal: ~10,15,18,160
+                              normal: ~92,67,42,140
                               through: true
                           下亮线:
                             type: Texture
@@ -2913,7 +3009,7 @@ controls:
                               y: 90
                               width: 80
                               height: 1
-                              normal: ~57,82,96,255
+                              normal: ~157,130,94,255
                               through: true
                       图标:
                         type: Slot
@@ -2944,7 +3040,7 @@ controls:
                           y: 85
                           width: 68
                           height: 2
-                          normal: 'self.parent.entry != none && self.parent.entry[''canCraft''] == 1 ? ''123,176,137,255'' : ''72,101,114,255'''
+                          normal: 'self.parent.entry != none && self.parent.entry[''canCraft''] == 1 ? ''123,176,137,255'' : ''125,99,68,255'''
                           through: true
                           visible: self.parent.entry != none
               空提示:
@@ -2952,7 +3048,7 @@ controls:
                 attribute:
                   x: 34
                   y: 622
-                  texts: 'var.recipeResolved && var.recipeKeys[0.round()] == none ? ''&7没有匹配的配方，请调整搜索或筛选'' : ''&7绿色细线表示材料可用'''
+                  texts: 'var.recipeResolved && var.recipeKeys[0.round()] == none ? ''&8没有匹配的配方，请调整搜索或筛选'' : ''&8绿色细线表示材料可用'''
                   fontSize: 28
                   through: true
               上一页:
@@ -2976,14 +3072,14 @@ controls:
                       y: 0
                       width: 48
                       height: 40
-                      normal: 'self.isHovered() ? ''54,89,101,255'' : ''40,65,78,255'''
+                      normal: 'self.isHovered() ? ''158,118,73,255'' : ''128,91,57,255'''
                       through: true
                       shape: ~round_rect
                       radius: 6
                     effect:
                       stroke:
-                        width: 1
-                        color: ~72,101,114,255
+                        width: 3
+                        color: ~125,99,68,255
                   文字:
                     type: Text
                     attribute:
@@ -3014,14 +3110,14 @@ controls:
                       y: 0
                       width: 48
                       height: 40
-                      normal: 'self.isHovered() ? ''54,89,101,255'' : ''40,65,78,255'''
+                      normal: 'self.isHovered() ? ''158,118,73,255'' : ''128,91,57,255'''
                       through: true
                       shape: ~round_rect
                       radius: 6
                     effect:
                       stroke:
-                        width: 1
-                        color: ~72,101,114,255
+                        width: 3
+                        color: ~125,99,68,255
                   文字:
                     type: Text
                     attribute:
@@ -3045,7 +3141,7 @@ controls:
                     attribute:
                       x: 0
                       y: 0
-                      texts: '''&f'' + var.recipePageText'
+                      texts: '''&0'' + var.recipePageText'
                       fontSize: 32
                       through: true
                       point: ~middle_center
@@ -3056,7 +3152,7 @@ controls:
                   y: 722
                   width: 632
                   height: 60
-                  normal: ~24,38,47,255
+                  normal: ~86,60,40,255
                   through: true
                   shape: ~round_rect
                   radius: 6
@@ -3065,7 +3161,7 @@ controls:
                 attribute:
                   x: 40
                   y: 744
-                  texts: '''&f'' + var.recipeName'
+                  texts: '''&0'' + var.recipeName'
                   fontSize: 32
                   through: true
                   limit: 22
@@ -3088,14 +3184,14 @@ controls:
                       y: 0
                       width: 180
                       height: 40
-                      normal: 'self.isHovered() ? ''54,89,101,255'' : ''40,65,78,255'''
+                      normal: 'self.isHovered() ? ''158,118,73,255'' : ''128,91,57,255'''
                       through: true
                       shape: ~round_rect
                       radius: 6
                     effect:
                       stroke:
-                        width: 1
-                        color: ~72,101,114,255
+                        width: 3
+                        color: ~125,99,68,255
                   文字:
                     type: Text
                     attribute:
@@ -3110,7 +3206,7 @@ controls:
                 attribute:
                   x: -232
                   y: 746
-                  texts: 'var.recipes[var.recipeSelection] == none ? none : ''&f×'' + var.recipes[var.recipeSelection][''resultAmount''].round()'
+                  texts: 'var.recipes[var.recipeSelection] == none ? none : ''&0×'' + var.recipes[var.recipeSelection][''resultAmount''].round()'
                   fontSize: 28
                   through: true
                   point: ~top_right
@@ -3129,14 +3225,14 @@ controls:
                       y: 0
                       width: 134
                       height: 36
-                      normal: 'self.isHovered() ? ''54,89,101,255'' : ''40,65,78,255'''
+                      normal: 'self.isHovered() ? ''158,118,73,255'' : ''128,91,57,255'''
                       through: true
                       shape: ~round_rect
                       radius: 6
                     effect:
                       stroke:
-                        width: 1
-                        color: ~72,101,114,255
+                        width: 3
+                        color: ~125,99,68,255
                   文字:
                     type: Text
                     attribute:
@@ -3148,22 +3244,191 @@ controls:
                       point: ~middle_center
                 action:
                   clickLeft: Packet.send('AXS:vanilla_crafting', 'show_recipe_book')
-          材料处理状态:
-            type: Canvas
+      居中操作提示:
+        type: Canvas
+        attribute:
+          point: ~middle_center
+          x: 0
+          y: 0
+          width: 560
+          height: var.noticeCount * 28 + 36
+          visible: var.noticeActive
+          alpha: 'var.noticeFade == none ? 0 : var.noticeFade.get()'
+          through: true
+        children:
+          阴影:
+            type: Texture
             attribute:
-              x: 760
-              y: 65
-              width: 456
-              height: 24
-              tip: var.fillMessage
-              visible: var.fillMessage != ''
-            children:
-              文字:
-                type: Text
-                attribute:
-                  x: 0
-                  y: 0
-                  texts: '''&7'' + var.fillMessage'
-                  fontSize: 28
-                  limit: 31
-                  through: true
+              x: 2
+              y: 3
+              width: 560
+              height: self.parent.height
+              normal: ~0,0,0,48
+              shape: ~round_rect
+              radius: 6
+              through: true
+          底板:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~98,76,58,250
+              shape: ~round_rect
+              radius: 6
+              through: true
+            effect:
+              stroke:
+                width: 1
+                color: ~142,120,102,255
+          侧标:
+            type: Texture
+            attribute:
+              x: 12
+              y: 14
+              width: 2
+              height: self.parent.height - 28
+              normal: ~174,152,134,255
+              through: true
+          文字0:
+            type: Text
+            attribute:
+              point: ~top_center
+              x: 0
+              y: 18
+              texts: 'var.noticeCount > 0 ? ''&f'' + var.noticeLines.get(0.round()) : '''''
+              fontSize: 36
+              alignment: ~center
+              visible: var.noticeCount > 0
+              tip: var.noticeText
+              through: true
+          文字1:
+            type: Text
+            attribute:
+              point: ~top_center
+              x: 0
+              y: 46
+              texts: 'var.noticeCount > 1 ? ''&f'' + var.noticeLines.get(1.round()) : '''''
+              fontSize: 36
+              alignment: ~center
+              visible: var.noticeCount > 1
+              tip: var.noticeText
+              through: true
+          文字2:
+            type: Text
+            attribute:
+              point: ~top_center
+              x: 0
+              y: 74
+              texts: 'var.noticeCount > 2 ? ''&f'' + var.noticeLines.get(2.round()) : '''''
+              fontSize: 36
+              alignment: ~center
+              visible: var.noticeCount > 2
+              tip: var.noticeText
+              through: true
+          文字3:
+            type: Text
+            attribute:
+              point: ~top_center
+              x: 0
+              y: 102
+              texts: 'var.noticeCount > 3 ? ''&f'' + var.noticeLines.get(3.round()) : '''''
+              fontSize: 36
+              alignment: ~center
+              visible: var.noticeCount > 3
+              tip: var.noticeText
+              through: true
+          文字4:
+            type: Text
+            attribute:
+              point: ~top_center
+              x: 0
+              y: 130
+              texts: 'var.noticeCount > 4 ? ''&f'' + var.noticeLines.get(4.round()) : '''''
+              fontSize: 36
+              alignment: ~center
+              visible: var.noticeCount > 4
+              tip: var.noticeText
+              through: true
+          文字5:
+            type: Text
+            attribute:
+              point: ~top_center
+              x: 0
+              y: 158
+              texts: 'var.noticeCount > 5 ? ''&f'' + var.noticeLines.get(5.round()) : '''''
+              fontSize: 36
+              alignment: ~center
+              visible: var.noticeCount > 5
+              tip: var.noticeText
+              through: true
+          文字6:
+            type: Text
+            attribute:
+              point: ~top_center
+              x: 0
+              y: 186
+              texts: 'var.noticeCount > 6 ? ''&f'' + var.noticeLines.get(6.round()) : '''''
+              fontSize: 36
+              alignment: ~center
+              visible: var.noticeCount > 6
+              tip: var.noticeText
+              through: true
+          文字7:
+            type: Text
+            attribute:
+              point: ~top_center
+              x: 0
+              y: 214
+              texts: 'var.noticeCount > 7 ? ''&f'' + var.noticeLines.get(7.round()) : '''''
+              fontSize: 36
+              alignment: ~center
+              visible: var.noticeCount > 7
+              tip: var.noticeText
+              through: true
+          文字8:
+            type: Text
+            attribute:
+              point: ~top_center
+              x: 0
+              y: 242
+              texts: 'var.noticeCount > 8 ? ''&f'' + var.noticeLines.get(8.round()) : '''''
+              fontSize: 36
+              alignment: ~center
+              visible: var.noticeCount > 8
+              tip: var.noticeText
+              through: true
+          文字9:
+            type: Text
+            attribute:
+              point: ~top_center
+              x: 0
+              y: 270
+              texts: 'var.noticeCount > 9 ? ''&f'' + var.noticeLines.get(9.round()) : '''''
+              fontSize: 36
+              alignment: ~center
+              visible: var.noticeCount > 9
+              tip: var.noticeText
+              through: true
+          文字10:
+            type: Text
+            attribute:
+              point: ~top_center
+              x: 0
+              y: 298
+              texts: 'var.noticeCount > 10 ? ''&f'' + var.noticeLines.get(10.round()) : '''''
+              fontSize: 36
+              alignment: ~center
+              visible: var.noticeCount > 10
+              tip: var.noticeText
+              through: true
+          文字11:
+            type: Text
+            attribute:
+              point: ~top_center
+              x: 0
+              y: 326
+              texts: 'var.noticeCount > 11 ? ''&f'' + var.noticeLines.get(11.round()) : '''''
+              fontSize: 36
+              alignment: ~center
+              visible: var.noticeCount > 11
+              tip: var.noticeText
+              through: true

@@ -1,5 +1,6 @@
 package xuanmo.arcartxsuite.vanilla.recipe;
 
+import xuanmo.arcartxsuite.api.inventory.MaterialStock;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
@@ -34,10 +35,51 @@ public final class RecipeCollector {
         this.nameBridge = nameBridge;
     }
 
+    public Map<String, Object> collectRecipes(Player player, WorkshopType type, MaterialStock stock) {
+        if (type == WorkshopType.CRAFTING) return collectCraftingRecipes(player, stock);
+        Map<String, Object> recipes = new LinkedHashMap<>();
+        Iterator<Recipe> iterator = Bukkit.recipeIterator();
+        while (iterator.hasNext()) {
+            Recipe recipe = iterator.next();
+            if (!type.visibleTo(player, recipe)) continue;
+            Map<String, Object> entry;
+            if (recipe instanceof org.bukkit.inventory.CookingRecipe<?> cooking) {
+                entry = buildCookingEntry(cooking.getResult(), sample(cooking.getInputChoice()), type.key());
+            } else if (recipe instanceof org.bukkit.inventory.StonecuttingRecipe stone) {
+                entry = buildCookingEntry(stone.getResult(), sample(stone.getInputChoice()), type.key());
+            } else if (recipe instanceof org.bukkit.inventory.SmithingRecipe smith) {
+                org.bukkit.inventory.RecipeChoice template = recipe instanceof org.bukkit.inventory.SmithingTransformRecipe transform
+                    ? transform.getTemplate() : ((org.bukkit.inventory.SmithingTrimRecipe) recipe).getTemplate();
+                ItemStack equipment = player.getOpenInventory().getTopInventory().getItem(1);
+                ItemStack base = equipment != null && smith.getBase().test(equipment) ? equipment.clone() : sample(smith.getBase());
+                base.setAmount(1);
+                ItemStack result = recipe instanceof org.bukkit.inventory.SmithingTrimRecipe ? sample(template) : smith.getResult();
+                entry = buildCookingEntry(result, sample(template), type.key());
+                entry.put("previewGrid", List.of(serializeItemWithLore(sample(template)), serializeItemWithLore(base), serializeItemWithLore(sample(smith.getAddition()))));
+                entry.put("previewAmounts", List.of(1, 1, 1));
+                if (recipe instanceof org.bukkit.inventory.SmithingTrimRecipe) {
+                    entry.put("resultZhName", "纹饰 · " + translate(result.getType()));
+                    entry.put("resultName", "armor trim " + result.getType().name().toLowerCase());
+                }
+            } else continue;
+            entry.put("canCraft", planner.canMake(player, recipe, stock) ? 1 : 0);
+            recipes.put(((org.bukkit.Keyed) recipe).getKey().toString(), entry);
+        }
+        return recipes;
+    }
+
+    private static ItemStack sample(org.bukkit.inventory.RecipeChoice choice) {
+        ItemStack item = choice instanceof org.bukkit.inventory.RecipeChoice.ExactChoice exact
+            ? exact.getChoices().get(0).clone()
+            : new ItemStack(((org.bukkit.inventory.RecipeChoice.MaterialChoice) choice).getChoices().get(0));
+        item.setAmount(1);
+        return item;
+    }
+
     public Map<String, Object> collectCraftingRecipes(Player player) {
         return collectCraftingRecipes(player, planner.stock(player));
     }
-    public Map<String, Object> collectCraftingRecipes(Player player, RecipeMaterialPlanner.Stock stock) {
+    public Map<String, Object> collectCraftingRecipes(Player player, MaterialStock stock) {
         Map<String, Object> recipes = new LinkedHashMap<>();
         Set<NamespacedKey> discovered = player.getDiscoveredRecipes();
         Iterator<Recipe> it = Bukkit.recipeIterator();
@@ -63,7 +105,7 @@ public final class RecipeCollector {
     public Map<String, Object> collectFurnaceRecipes(Player player) {
         return collectFurnaceRecipes(player, planner.stock(player));
     }
-    public Map<String, Object> collectFurnaceRecipes(Player player, RecipeMaterialPlanner.Stock stock) {
+    public Map<String, Object> collectFurnaceRecipes(Player player, MaterialStock stock) {
         // 只收集 FurnaceRecipe，还原原版行为：熔炉配方书只显示熔炉配方。
         // SmokingRecipe / BlastingRecipe 留给将来烟熏炉/高炉 UI 替换使用。
         Map<String, Object> recipes = new LinkedHashMap<>();

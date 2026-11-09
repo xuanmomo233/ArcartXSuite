@@ -1,120 +1,66 @@
 package xuanmo.arcartxsuite.vanilla.task;
 
+import java.util.*;
 import org.bukkit.Bukkit;
 import org.bukkit.block.Furnace;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.scheduler.BukkitTask;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
+import xuanmo.arcartxsuite.vanilla.config.VanillaConfiguration;
+import xuanmo.arcartxsuite.vanilla.recipe.WorkshopType;
 
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
-
-/**
- * 每 tick 轮询玩家打开的熔炉 BlockEntity 状态，通过 PacketBridgeAPI 推送到 UI。
- */
+/** Polls active viewers of enabled cooking screens without loading chunks. */
 public final class FurnaceStateTask {
-
     private final Plugin plugin;
-    private final PacketBridgeAPI packetBridge;
-    private final String furnaceUiId;
+    private final PacketBridgeAPI bridge;
+    private final Map<WorkshopType, String> uiIds;
+    private final VanillaConfiguration configuration;
+    private final Map<UUID, WorkshopType> viewers = new HashMap<>();
+    private final Map<UUID, Integer> maxBurn = new HashMap<>();
+    private final Map<UUID, Integer> previousBurn = new HashMap<>();
+    private final Map<UUID, Long> lastPush = new HashMap<>();
     private BukkitTask task;
-
-    // 玩家 UUID -> 熔炉方块坐标 key
-    private final Map<UUID, String> trackedFurnaces = new ConcurrentHashMap<>();
-    // 熔炉方块坐标 key -> 最大燃烧时间
-    private final Map<String, Integer> maxBurnTimes = new ConcurrentHashMap<>();
-
-    public FurnaceStateTask(Plugin plugin, PacketBridgeAPI packetBridge, String furnaceUiId) {
-        this.plugin = plugin;
-        this.packetBridge = packetBridge;
-        this.furnaceUiId = furnaceUiId;
+    private long ticks;
+    public FurnaceStateTask(Plugin plugin, PacketBridgeAPI bridge, Map<WorkshopType, String> uiIds, VanillaConfiguration configuration) {
+        this.plugin = plugin; this.bridge = bridge; this.uiIds = Map.copyOf(uiIds); this.configuration = configuration;
     }
-
-    public void start(int intervalTicks) {
-        if (task != null) {
-            task.cancel();
-        }
-        task = Bukkit.getScheduler().runTaskTimer(plugin, this::tick, intervalTicks, intervalTicks);
+    public void start() {
+        stop();
+        int interval = uiIds.keySet().stream().mapToInt(configuration::interval).min().orElse(2);
+        task = Bukkit.getScheduler().runTaskTimer(plugin, () -> { ticks += interval; tick(); }, interval, interval);
     }
-
     public void stop() {
-        if (task != null) {
-            task.cancel();
-            task = null;
-        }
-        trackedFurnaces.clear();
-        maxBurnTimes.clear();
+        if (task != null) { task.cancel(); task = null; }
+        viewers.clear(); maxBurn.clear(); previousBurn.clear(); lastPush.clear();
     }
-
-    public void trackPlayer(UUID playerId, String furnaceKey) {
-        trackedFurnaces.put(playerId, furnaceKey);
+    public void track(Player player, WorkshopType type) {
+        if (uiIds.containsKey(type)) { viewers.put(player.getUniqueId(), type); lastPush.remove(player.getUniqueId()); }
     }
-
-    public void untrackPlayer(UUID playerId) {
-        trackedFurnaces.remove(playerId);
-    }
-
+    public void untrackPlayer(UUID id) { viewers.remove(id); maxBurn.remove(id); previousBurn.remove(id); lastPush.remove(id); }
     private void tick() {
-        for (Map.Entry<UUID, String> entry : trackedFurnaces.entrySet()) {
-            UUID playerId = entry.getKey();
-            String furnaceKey = entry.getValue();
-            Player player = Bukkit.getPlayer(playerId);
-            if (player == null || !player.isOnline()) {
-                trackedFurnaces.remove(playerId);
+        for (UUID id : List.copyOf(viewers.keySet())) {
+            Player player = Bukkit.getPlayer(id);
+            WorkshopType type = viewers.get(id);
+            if (player == null || !player.isOnline() || !type.matches(player.getOpenInventory())) { untrackPlayer(id); continue; }
+            if (ticks - lastPush.getOrDefault(id, -100L) < configuration.interval(type)) continue;
+            lastPush.put(id, ticks);
+            var location = player.getOpenInventory().getTopInventory().getLocation();
+            if (location == null || !location.getWorld().isChunkLoaded(location.getBlockX() >> 4, location.getBlockZ() >> 4)) continue;
+            if(type==WorkshopType.BREWING){
+                if(location.getBlock().getState() instanceof org.bukkit.block.BrewingStand stand){
+                    bridge.sendPacket(player,uiIds.get(type),"brewing_state",Map.of("remaining",stand.getBrewingTime(),"total",400,"fuel",stand.getFuelLevel()));
+                }
                 continue;
             }
-
-            Furnace furnace = resolveFurnace(furnaceKey);
-            if (furnace == null) {
-                continue;
-            }
-
-            int burnTime = furnace.getBurnTime();
-            int prevMax = maxBurnTimes.getOrDefault(furnaceKey, 0);
-            // burnTime 增大说明新燃料被添加，更新最大值
-            if (burnTime > prevMax || burnTime == 0) {
-                maxBurnTimes.put(furnaceKey, burnTime);
-                prevMax = burnTime;
-            }
-
-            Map<String, Object> packet = new LinkedHashMap<>();
-            packet.put("burnTime", burnTime);
-            packet.put("burnTimeTotal", Math.max(prevMax, 1));
-            packet.put("cookTime", furnace.getCookTime());
-            packet.put("cookTimeTotal", Math.max(furnace.getCookTimeTotal(), 1));
-            // 火焰图标可见性：burnTime > 0 表示正在燃烧
-            packet.put("burning", burnTime > 0);
-            packetBridge.sendPacket(player, furnaceUiId, "furnace_state", packet);
+            if (!(location.getBlock().getState() instanceof Furnace furnace)) continue;
+            int burn = furnace.getBurnTime();
+            int total = burn == 0 ? 0 : (burn > previousBurn.getOrDefault(id, -1) ? burn : maxBurn.getOrDefault(id, burn));
+            previousBurn.put(id, burn);
+            maxBurn.put(id, total);
+            bridge.sendPacket(player, uiIds.get(type), "furnace_state", Map.of(
+                "burnTime", burn, "burnTimeTotal", Math.max(1, total),
+                "cookTime", furnace.getCookTime(), "cookTimeTotal", Math.max(1, furnace.getCookTimeTotal()), "burning", burn > 0));
         }
-    }
-
-    private Furnace resolveFurnace(String key) {
-        // key 格式: worldName,x,y,z
-        String[] parts = key.split(",");
-        if (parts.length != 4) {
-            return null;
-        }
-        try {
-            var world = Bukkit.getWorld(parts[0]);
-            if (world == null) {
-                return null;
-            }
-            int x = Integer.parseInt(parts[1]);
-            int y = Integer.parseInt(parts[2]);
-            int z = Integer.parseInt(parts[3]);
-            var block = world.getBlockAt(x, y, z);
-            if (block.getState() instanceof Furnace) {
-                return (Furnace) block.getState();
-            }
-        } catch (Exception ignored) {
-        }
-        return null;
-    }
-
-    public static String buildFurnaceKey(org.bukkit.Location loc) {
-        return loc.getWorld().getName() + "," + loc.getBlockX() + "," + loc.getBlockY() + "," + loc.getBlockZ();
     }
 }

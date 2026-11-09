@@ -404,7 +404,7 @@ public final class WarehouseCursorPanel implements Listener, WarehousePanelAcces
         }
 
         boolean backpack() {
-            return "AXS:extrabackpack".equalsIgnoreCase(uiId);
+            return "AXS:vanilla_backpack".equalsIgnoreCase(uiId);
         }
     }
 }
