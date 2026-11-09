@@ -108,8 +108,13 @@ jobs:
           fi
           echo "proxy_changed=$PROXY_CHANGED" >> $GITHUB_OUTPUT
 
-          # 模块：仅收集 modules/<name>/ 下变更的模块（排除 debug 模块，无 encryptModuleAxb 任务）
-          CHANGED_MODULES=$(grep -E '^modules/' /tmp/changed_files.txt | cut -d'/' -f2 | sort -u | grep -v '^debug$' | jq -R -s -c 'split("\n") | map(select(. != ""))')
+          # 只构建当前仍存在的模块。差异中可以包含已删除模块的文件。
+          CHANGED_MODULES=$(awk -F/ '$1 == "modules" && NF > 2 { print $2 }' /tmp/changed_files.txt | sort -u |
+            while IFS= read -r module; do
+              if [ "$module" != debug ] && [ -f "modules/$module/build.gradle.kts" ]; then
+                printf '%s\n' "$module"
+              fi
+            done | jq -R -s -c 'split("\n") | map(select(. != ""))')
           echo "changed_modules=$CHANGED_MODULES" >> $GITHUB_OUTPUT
           if [ "$CHANGED_MODULES" != "[]" ]; then
             echo "module_changed=true" >> $GITHUB_OUTPUT
