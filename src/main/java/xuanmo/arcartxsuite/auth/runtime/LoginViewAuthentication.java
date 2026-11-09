@@ -15,6 +15,7 @@ public final class LoginViewAuthentication implements HostAuthentication {
     private final Supplier<HostAuthentication> authenticationFactory;
     private volatile HostAuthentication delegate;
     private boolean loginViewEnabled;
+    private java.util.concurrent.CompletableFuture<Void> retired=java.util.concurrent.CompletableFuture.completedFuture(null);
 
     LoginViewAuthentication(Supplier<HostAuthentication> serverFactory,Supplier<HostAuthentication> authenticationFactory) {
         this.serverFactory=serverFactory;
@@ -32,6 +33,8 @@ public final class LoginViewAuthentication implements HostAuthentication {
         var admitted=Bukkit.getOnlinePlayers().stream().map(player->previous.snapshot(player.getUniqueId()))
             .filter(AuthSnapshot::admitted).toList();
         previous.close();
+        retired=java.util.concurrent.CompletableFuture.allOf(retired,previous.drained().toCompletableFuture());
+        next.awaitPrevious(retired);
         delegate=next;
         loginViewEnabled=enabled;
         try {
@@ -39,6 +42,7 @@ public final class LoginViewAuthentication implements HostAuthentication {
         } catch(RuntimeException | LinkageError e) {
             try { next.close(); }
             finally {
+                retired=java.util.concurrent.CompletableFuture.allOf(retired,next.drained().toCompletableFuture());
                 delegate=serverFactory.get();
                 loginViewEnabled=false;
                 delegate.start();

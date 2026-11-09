@@ -8,11 +8,12 @@ import net.md_5.bungee.api.plugin.Plugin;
 import xuanmo.arcartxsuite.proxy.common.auth.AuthlibInjectorDetector;
 import xuanmo.arcartxsuite.proxy.common.auth.AuthlibInjectorManager;
 import xuanmo.arcartxsuite.proxy.common.config.ProxyConfig;
+import xuanmo.arcartxsuite.proxy.common.auth.ProxyProofForwarding;
 
 /**
  * ArcartXSuite BungeeCord 代理端伴侣插件。
  * <p>
- * 提供离线玩家拦截 + authlib-injector 混合登录管理。
+ * 提供离线玩家拦截、authlib-injector 混合登录管理和可信认证证明转发。
  * 混合登录通过 /axsproxy auth setup 生成启动脚本，脚本先启动本地 Yggdrasil 混合代理，
  * 再启动 BungeeCord（带 -javaagent:authlib-injector.jar=http://127.0.0.1:25599）。
  */
@@ -20,6 +21,7 @@ public class ArcartXSuiteBungee extends Plugin {
 
     private ProxyConfig config;
     private BungeeAuthListener authListener;
+    private BungeeProofForwarder proofForwarder;
 
     @Override
     public void onEnable() {
@@ -32,8 +34,12 @@ public class ArcartXSuiteBungee extends Plugin {
         // 加载配置
         config = new ProxyConfig(logger, getDataFolder());
         config.load("proxy-config.yml");
-        if(Boolean.TRUE.equals(config.authForwarding().get("enabled")))
-            throw new IllegalArgumentException("首批签名转发仅支持 Velocity；Bungee 请勿启用 auth-forwarding");
+        try {
+            var forwarding = new ProxyProofForwarding(getDataFolder().toPath(), config.authForwarding(), logger);
+            proofForwarder = new BungeeProofForwarder(this, forwarding);
+        } catch (Exception e) {
+            throw new IllegalStateException("可信代理转发初始化失败，请检查启动参数、节点密钥与网关配置", e);
+        }
 
         // 注册事件监听器
         authListener = new BungeeAuthListener(this, config, logger);
@@ -50,6 +56,7 @@ public class ArcartXSuiteBungee extends Plugin {
 
     @Override
     public void onDisable() {
+        if (proofForwarder != null) proofForwarder.close();
         getLogger().info("ArcartXSuite Proxy (BungeeCord) 已关闭。");
     }
 
@@ -87,7 +94,7 @@ public class ArcartXSuiteBungee extends Plugin {
         // 检测混合代理连通性
         if (mgr.isMixedProxyReachable()) {
             logger.info("[Auth] 本地混合代理已就绪 (端口 " + config.mixedProxyPort() + ")。");
-            logger.info("[Auth] 后端子服可通过此端口查询权威账号类型。");
+            logger.info("[Auth] auth-forwarding 启用后，向已登记子服传递当前连接的认证证明。");
         } else {
             logger.warning("[Auth] 本地混合代理未启动 (端口 " + config.mixedProxyPort() + ")！");
             logger.warning("[Auth] 请使用 start-mixed-auth 脚本启动 BungeeCord，");

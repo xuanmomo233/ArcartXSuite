@@ -26,9 +26,14 @@ public final class CenterClient implements AutoCloseable {
         byte[] body=JSON.toJson(request).getBytes(StandardCharsets.UTF_8);
         if(body.length>32768) { Arrays.fill(body,(byte)0); throw new IOException("Request too large"); }
         HttpURLConnection connection=null;
+        byte[] callKey=null;
         long deadline=System.nanoTime()+4_000_000_000L;
         UUID nonce=UUID.randomUUID();
         try {
+            synchronized(this) {
+                if(closed) throw new IOException("Center client closed");
+                callKey=key.clone();
+            }
             connection=(HttpURLConnection)endpoint.toURL().openConnection(Proxy.NO_PROXY);
             connection.setInstanceFollowRedirects(false); connection.setConnectTimeout(2000); connection.setReadTimeout(2000);
             connection.setRequestMethod("POST"); connection.setDoOutput(true); connection.setFixedLengthStreamingMode(body.length);
@@ -36,7 +41,7 @@ public final class CenterClient implements AutoCloseable {
             connection.setRequestProperty("Content-Type","application/json; charset=utf-8");
             connection.setRequestProperty("X-AXS-Node",node); connection.setRequestProperty("X-AXS-Time",Long.toString(time));
             connection.setRequestProperty("X-AXS-Nonce",nonce.toString());
-            connection.setRequestProperty("X-AXS-Signature",RpcAuthentication.request(key,node,time,nonce,body));
+            connection.setRequestProperty("X-AXS-Signature",RpcAuthentication.request(callKey,node,time,nonce,body));
             try(OutputStream out=connection.getOutputStream()) { out.write(body); }
             if(connection.getResponseCode()!=200) throw new IOException("Center request rejected: HTTP "+connection.getResponseCode());
             byte[] response;
@@ -50,14 +55,14 @@ public final class CenterClient implements AutoCloseable {
                 response=output.toByteArray();
             }
             try {
-                if(!RpcAuthentication.matches(RpcAuthentication.response(key,nonce,response),connection.getHeaderField("X-AXS-Signature")))
+                if(!RpcAuthentication.matches(RpcAuthentication.response(callKey,nonce,response),connection.getHeaderField("X-AXS-Signature")))
                     throw new IOException("Center response authentication failed");
                 Reply reply=JSON.fromJson(new String(response,StandardCharsets.UTF_8),Reply.class);
                 if(reply==null || reply.code()==null) throw new IOException("Invalid center reply");
                 return reply;
             } finally { Arrays.fill(response,(byte)0); }
         } catch(RuntimeException e) { throw new IOException("Invalid center response",e); }
-        finally { Arrays.fill(body,(byte)0); if(connection!=null) connection.disconnect(); }
+        finally { Arrays.fill(body,(byte)0); if(callKey!=null) Arrays.fill(callKey,(byte)0); if(connection!=null) connection.disconnect(); }
     }
-    @Override public void close() { closed=true; Arrays.fill(key,(byte)0); }
+    @Override public synchronized void close() { closed=true; Arrays.fill(key,(byte)0); }
 }

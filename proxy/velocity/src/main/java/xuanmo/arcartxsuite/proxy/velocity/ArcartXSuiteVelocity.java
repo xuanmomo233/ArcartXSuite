@@ -113,7 +113,7 @@ public class ArcartXSuiteVelocity {
 
         if (mgr.isMixedProxyReachable()) {
             logger.info("[Auth] 本地混合代理已就绪 (端口 " + config.mixedProxyPort() + ")。");
-            logger.info("[Auth] 后端子服可通过此端口查询权威账号类型。");
+            logger.info("[Auth] auth-forwarding 启用后，向已登记子服传递当前连接的认证证明。");
         } else {
             logger.warning("[Auth] 本地混合代理未启动 (端口 " + config.mixedProxyPort() + ")！");
             logger.warning("[Auth] 请使用 start-mixed-auth 脚本启动 Velocity，");

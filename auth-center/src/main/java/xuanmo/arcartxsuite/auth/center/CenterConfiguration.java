@@ -6,14 +6,18 @@ import java.util.*;
 import com.google.gson.*;
 import xuanmo.arcartxsuite.auth.protocol.*;
 
-record CenterConfiguration(int port,Path database,Map<String,AuthWire.Policy> realms,Map<String,Node> nodes,ExternalConfiguration external) {
+record CenterConfiguration(int port,Path database,Map<String,AuthWire.Policy> realms,Map<String,Node> nodes,ExternalConfiguration external,int nonceCapacityPerNode,int commandCapacityPerNode) {
     record Node(String id,String realm,String audience,byte[] key,Set<String> scopes) {}
     static CenterConfiguration load(Path path) throws Exception {
         if(Files.size(path)>65536) throw new IllegalArgumentException("Center configuration too large");
         JsonObject root=JsonParser.parseString(Files.readString(path,StandardCharsets.UTF_8)).getAsJsonObject();
-        keys(root,Set.of("schemaVersion","port","database","realms","nodes","external"));
+        keys(root,Set.of("schemaVersion","port","database","realms","nodes","external","nonceCapacityPerNode","commandCapacityPerNode"));
         if(integer(root,"schemaVersion")!=1) throw new IllegalArgumentException("Unsupported center schema");
         int port=integer(root,"port");
+        int nonceCapacity=integer(root,"nonceCapacityPerNode");
+        if(nonceCapacity<10_000 || nonceCapacity>1_000_000) throw new IllegalArgumentException("nonceCapacityPerNode must be between 10000 and 1000000");
+        int commandCapacity=integer(root,"commandCapacityPerNode");
+        if(commandCapacity<10_000 || commandCapacity>10_000_000) throw new IllegalArgumentException("Invalid commandCapacityPerNode");
         if(port<1024 || port>65535) throw new IllegalArgumentException("Invalid center port");
         Path database=path.toAbsolutePath().getParent().resolve(string(root,"database")).normalize();
         if(!database.getFileName().toString().endsWith(".sqlite")) throw new IllegalArgumentException("P3 requires a SQLite database");
@@ -59,7 +63,7 @@ record CenterConfiguration(int port,Path database,Map<String,AuthWire.Policy> re
         if(external!=null) realms.replaceAll((realm,policy)->new AuthWire.Policy(policy.minLength(),policy.maxLength(),
             policy.requireTerms(),policy.termsVersion(),policy.termsLines(),policy.requireBinding(),policy.timezone(),
             policy.loginTimeoutSeconds(),policy.gamePasswordEnabled(),external.providers().containsKey(realm)));
-        return new CenterConfiguration(port,database,Map.copyOf(realms),Map.copyOf(nodes),external);
+        return new CenterConfiguration(port,database,Map.copyOf(realms),Map.copyOf(nodes),external,nonceCapacity,commandCapacity);
     }
     static String identifier(String value) { if(!value.matches("[a-zA-Z0-9_-]{1,64}")) throw new IllegalArgumentException("Invalid identifier"); return value; }
     static void keys(JsonObject value,Set<String> keys) { if(!keys.equals(value.keySet())) throw new IllegalArgumentException("Missing or unknown configuration fields"); }

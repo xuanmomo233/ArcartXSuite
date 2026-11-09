@@ -15,6 +15,11 @@ import xuanmo.arcartxsuite.battlepass.model.PlayerTaskInstance;
  * 由 {@link JdbcBattlePassRepository} 提供 JDBC 实现，支持 SQLite 和 MySQL 两种存储模式。
  */
 public interface BattlePassRepository {
+    @FunctionalInterface interface Write<T> { T run() throws SQLException; }
+    /** Worker-only serialization of cache snapshots and authentication receipts for a player. */
+    <T> T withPlayerWrite(UUID player,Write<T> work) throws SQLException;
+    boolean receivedAuthFact(UUID player,String season,String fact) throws SQLException;
+    void saveAuthFact(String fact,BattlePassPlayerProgress progress,List<PlayerTaskInstance> tasks,boolean changed) throws SQLException;
 
     /**
      * 加载玩家在指定赛季的进度数据。

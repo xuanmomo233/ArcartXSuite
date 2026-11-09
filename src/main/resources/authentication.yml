@@ -8,10 +8,11 @@ timezone: Asia/Shanghai
 login-timeout-seconds: 300
 ingress:
   # password、local-mixed 或 signed-proxy。
+  # 游戏内密码要求直连 online-mode=true 的加密连接；离线后端不接受密码。
   # local-mixed 要求本机直连 online-mode=true；signed-proxy 要求正确配置可信玩家信息转发。
   type: password
   gateway-url: http://127.0.0.1:25599
-  # 非 password 入口默认禁止密码登录；如确需并用，显式设置 password-login: true。
+  # 非 password 入口默认禁止密码登录；仅直连 online-mode=true 时可以显式启用。
   audience: local-node
   # signed-proxy 必须填入代理启动日志中的公钥。可以为轮换期配置多个公钥，最多8项。
   # - issuer: proxy-main

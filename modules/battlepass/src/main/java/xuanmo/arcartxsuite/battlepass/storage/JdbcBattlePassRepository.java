@@ -30,6 +30,12 @@ import xuanmo.arcartxsuite.battlepass.model.PlayerTaskInstance;
  * 同时实现数据库迁移和玩家数据清理能力。
  */
 public final class JdbcBattlePassRepository extends AbstractModuleRepository implements BattlePassRepository {
+    private final java.util.concurrent.locks.ReentrantLock[] playerWrites=new java.util.concurrent.locks.ReentrantLock[256];
+    { java.util.Arrays.setAll(playerWrites,index->new java.util.concurrent.locks.ReentrantLock()); }
+    @Override public <T> T withPlayerWrite(UUID player,Write<T> work) throws SQLException {
+        var lock=playerWrites[Math.floorMod(player.hashCode(),playerWrites.length)];
+        lock.lock(); try { return work.run(); } finally { lock.unlock(); }
+    }
 
     public JdbcBattlePassRepository(DataSource dataSource, StorageDescriptor descriptor,
                                     File dataFolder, Logger logger) {
@@ -44,15 +50,18 @@ public final class JdbcBattlePassRepository extends AbstractModuleRepository imp
 
     @Override
     protected java.util.List<String> playerDataTables() {
-        return java.util.List.of("bp_player_progress", "bp_task_progress", "bp_claimed_rewards", "bp_player_tasks");
+        return java.util.List.of("bp_player_progress", "bp_task_progress", "bp_claimed_rewards", "bp_player_tasks", "bp_auth_receipts");
     }
 
     @Override
     protected java.util.List<String> allTables() {
-        return java.util.List.of("bp_player_progress", "bp_task_progress", "bp_claimed_rewards", "bp_player_tasks", "bp_season_settlement");
+        return java.util.List.of("bp_player_progress", "bp_task_progress", "bp_claimed_rewards", "bp_player_tasks", "bp_season_settlement", "bp_auth_receipts");
     }
 
     private void createTables(Connection conn) throws SQLException {
+        try(Statement statement=conn.createStatement()) {
+            statement.executeUpdate("CREATE TABLE IF NOT EXISTS bp_auth_receipts (player_uuid VARCHAR(36) NOT NULL,season_id VARCHAR(64) NOT NULL,fact_id VARCHAR(36) NOT NULL,PRIMARY KEY(player_uuid,season_id,fact_id))");
+        }
         String progressTable;
         if (!isMysql()) {
             progressTable = """
@@ -207,6 +216,7 @@ public final class JdbcBattlePassRepository extends AbstractModuleRepository imp
 
     @Override
     public BattlePassPlayerProgress loadProgress(UUID playerUuid, String seasonId) throws SQLException {
+        BattlePassPlayerProgress row=null;
         try (Connection connection = getConnection();
              PreparedStatement stmt = connection.prepareStatement(
                  "SELECT current_level, current_xp, pass_tier, unlocked_premium, last_daily_reset_date, last_weekly_reset_date, current_week_number FROM bp_player_progress WHERE player_uuid = ? AND season_id = ?"
@@ -223,14 +233,14 @@ public final class JdbcBattlePassRepository extends AbstractModuleRepository imp
                         }
                     } catch (IllegalArgumentException ignored) {}
 
-                    return new BattlePassPlayerProgress(
+                    row=new BattlePassPlayerProgress(
                         playerUuid,
                         seasonId,
                         rs.getInt("current_level"),
                         rs.getInt("current_xp"),
                         tier,
-                        loadTaskProgresses(playerUuid, seasonId),
-                        loadClaimedRewards(playerUuid, seasonId),
+                        Map.of(),
+                        Set.of(),
                         parseDate(rs.getString("last_daily_reset_date")),
                         parseDate(rs.getString("last_weekly_reset_date")),
                         rs.getInt("current_week_number")
@@ -238,11 +248,23 @@ public final class JdbcBattlePassRepository extends AbstractModuleRepository imp
                 }
             }
         }
-        return new BattlePassPlayerProgress(playerUuid, seasonId);
+        if(row==null) return new BattlePassPlayerProgress(playerUuid, seasonId);
+        // Release the first connection before loading child rows; SQLite pools may contain one connection.
+        return new BattlePassPlayerProgress(playerUuid,seasonId,row.currentLevel(),row.currentXp(),row.passTier(),
+            loadTaskProgresses(playerUuid,seasonId),loadClaimedRewards(playerUuid,seasonId),row.lastDailyResetDate(),row.lastWeeklyResetDate(),row.currentWeekNumber());
     }
 
     @Override
     public void saveProgress(BattlePassPlayerProgress progress) throws SQLException {
+        try(Connection connection=getConnection()) { saveProgressRow(connection,progress); }
+        for (Map.Entry<String, Integer> entry : progress.taskProgresses().entrySet()) {
+            saveTaskProgress(progress.playerUuid(), progress.seasonId(), entry.getKey(), entry.getValue());
+        }
+        for (String rewardId : progress.claimedRewards()) {
+            saveClaimedReward(progress.playerUuid(), progress.seasonId(), rewardId);
+        }
+    }
+    private void saveProgressRow(Connection connection,BattlePassPlayerProgress progress) throws SQLException {
         String sql;
         if (!isMysql()) {
             sql = """
@@ -271,8 +293,7 @@ public final class JdbcBattlePassRepository extends AbstractModuleRepository imp
                 current_week_number = VALUES(current_week_number)
                 """;
         }
-        try (Connection connection = getConnection();
-             PreparedStatement stmt = connection.prepareStatement(sql)) {
+        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
             stmt.setString(1, progress.playerUuid().toString());
             stmt.setString(2, progress.seasonId());
             stmt.setInt(3, progress.currentLevel());
@@ -284,11 +305,36 @@ public final class JdbcBattlePassRepository extends AbstractModuleRepository imp
             stmt.setInt(9, progress.currentWeekNumber());
             stmt.executeUpdate();
         }
-        for (Map.Entry<String, Integer> entry : progress.taskProgresses().entrySet()) {
-            saveTaskProgress(progress.playerUuid(), progress.seasonId(), entry.getKey(), entry.getValue());
+    }
+    @Override public boolean receivedAuthFact(UUID player,String season,String fact) throws SQLException {
+        try(Connection c=getConnection()) {
+            // A locking primary read waits for an ambiguous earlier MySQL commit to finish.
+            // A snapshot read could report absence while that transaction still owns the receipt row.
+            if(isMysql()) c.setAutoCommit(false);
+            try(PreparedStatement s=c.prepareStatement("SELECT 1 FROM bp_auth_receipts WHERE player_uuid=? AND season_id=? AND fact_id=?"+(isMysql()?" FOR UPDATE":""))) {
+                s.setString(1,player.toString()); s.setString(2,season); s.setString(3,fact);
+                boolean found;
+                try(ResultSet r=s.executeQuery()) { found=r.next(); }
+                if(isMysql()) c.commit();
+                return found;
+            } catch(SQLException e) { if(isMysql()) c.rollback(); throw e; }
         }
-        for (String rewardId : progress.claimedRewards()) {
-            saveClaimedReward(progress.playerUuid(), progress.seasonId(), rewardId);
+    }
+    @Override public void saveAuthFact(String fact,BattlePassPlayerProgress progress,List<PlayerTaskInstance> tasks,boolean changed) throws SQLException {
+        try(Connection c=getConnection()) {
+            c.setAutoCommit(false);
+            try {
+                try(PreparedStatement s=c.prepareStatement("INSERT INTO bp_auth_receipts (player_uuid,season_id,fact_id) VALUES (?,?,?)")) {
+                    s.setString(1,progress.playerUuid().toString()); s.setString(2,progress.seasonId()); s.setString(3,fact); s.executeUpdate();
+                }
+                if(changed) {
+                saveProgressRow(c,progress);
+                try(PreparedStatement s=c.prepareStatement(playerTaskUpsertSql())) {
+                    for(var task:tasks) { bindPlayerTask(s,progress.playerUuid(),progress.seasonId(),task); s.addBatch(); } s.executeBatch();
+                }
+                }
+                c.commit();
+            } catch(SQLException | RuntimeException e) { c.rollback(); throw e; }
         }
     }
 

@@ -51,6 +51,11 @@ public final class EventPacketModule extends AbstractAXSModule implements Module
     private EntityCleanupService cleanupService;
     private ScheduledCommandService scheduledCommandService;
     private ChemdahEventBridge chemdahBridge;
+    private xuanmo.arcartxsuite.eventpacket.service.FirstAdmissionInbox authInbox;
+    private xuanmo.arcartxsuite.api.capability.EventBusCapability authBus;
+    private String authSubscription;
+    private String serverAdmissionSubscription;
+    private xuanmo.arcartxsuite.api.auth.AuthConsumerStore authStore;
 
     @Override
     public ModuleDescriptor descriptor() {
@@ -143,6 +148,7 @@ public final class EventPacketModule extends AbstractAXSModule implements Module
 
     @Override
     protected void startService() throws Exception {
+        xuanmo.arcartxsuite.api.auth.AuthConsumerStore.requireReady("eventpacket");
 
         // 共享模式：使用本体统一数据源，模块只需提供表前缀
         // 若模块配置了独立 storage 节（mode=mysql 等），则走自建模式（向后兼容）
@@ -157,7 +163,8 @@ public final class EventPacketModule extends AbstractAXSModule implements Module
             epDs = storageManager.resolveModuleDataSource("eventpacket",
                 configuration.storage().sqliteFileName(), dataFolder, null);
         }
-        jdbcRepo = new JdbcEventPacketRepository(epDs, epDesc, dataFolder, logger);
+        authStore=xuanmo.arcartxsuite.api.auth.AuthConsumerStore.open("eventpacket",epDs);
+        jdbcRepo = new JdbcEventPacketRepository(authStore, epDesc, dataFolder, logger);
         jdbcRepo.initialize();
         repository = jdbcRepo;
 
@@ -175,6 +182,20 @@ public final class EventPacketModule extends AbstractAXSModule implements Module
             () -> "",
             () -> repository
         );
+        authInbox=new xuanmo.arcartxsuite.eventpacket.service.FirstAdmissionInbox(plugin,repository,dispatchService,logger);
+        dispatchService.authInbox(authInbox);
+        authBus=getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class);
+        if(authBus==null) throw new IllegalStateException("Authentication event bus unavailable");
+        authSubscription=authBus.subscribeConfirmed("eventpacket/first-admission","axs.auth.profile_first_admitted",authInbox::accept);
+        var inbox = authInbox;
+        serverAdmissionSubscription = authBus.subscribe("axs.auth.profile_first_admitted", event -> {
+            if ("server".equals(event.payload().get("provider"))) {
+                inbox.accept(event).exceptionally(error -> {
+                    logger.log(java.util.logging.Level.WARNING, "保存服务器首次进入动作失败", error);
+                    return null;
+                });
+            }
+        });
 
         // 注入账号类型解析器，使规则可使用 {account_type} / {account_type_display} / {account_premium}
         EventPacketContext.setAccountInfoResolver((uuidStr, name) -> {
@@ -282,6 +303,13 @@ public final class EventPacketModule extends AbstractAXSModule implements Module
 
     @Override
     protected void stopService() {
+        if (authBus != null) {
+            if (authSubscription != null) authBus.unsubscribe(authSubscription);
+            if (serverAdmissionSubscription != null) authBus.unsubscribe(serverAdmissionSubscription);
+        }
+        serverAdmissionSubscription = null;
+        authSubscription=null; authBus=null;
+        if(authInbox!=null) { authInbox.close(); authInbox=null; }
         EventPacketContext.setAccountInfoResolver(null);
         if (chemdahBridge != null) {
             chemdahBridge.unregister();
@@ -312,7 +340,11 @@ public final class EventPacketModule extends AbstractAXSModule implements Module
             repository = null;
         }
         configuration = null;
-        storageManager.closeModuleDataSource("eventpacket");
+        if(authStore!=null) {
+            authStore.retire(()->storageManager.closeModuleDataSource("eventpacket"))
+                .whenComplete((ignored,error)->{ if(error!=null) logger.warning("EventPacket 数据源释放失败，请重启后重试"); });
+            authStore=null;
+        }
     }
 
     @Nullable

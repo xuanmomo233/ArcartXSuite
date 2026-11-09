@@ -14,15 +14,28 @@ final class CenterLedger {
     record Flow(UUID id,String node,Context context,UUID account,long version,long expires,String method) {}
     record Lease(UUID id,Flow flow,long expires) {}
     private final JdbcAuthStore.Connections connections;
-    CenterLedger(JdbcAuthStore.Connections connections) { this.connections=connections; }
+    private final java.util.function.LongSupplier nonceClock;
+    private final int commandCapacity;
+    private record NonceCount(long checked,int count) {}
+    private final Map<String,NonceCount> nonceCounts=new HashMap<>();
+    private final Map<String,NonceCount> commandCounts=new HashMap<>();
+    enum CommandStatus { STARTED,REPLAYED,FULL }
+    CenterLedger(JdbcAuthStore.Connections connections) { this(connections,System::currentTimeMillis); }
+    CenterLedger(JdbcAuthStore.Connections connections,java.util.function.LongSupplier nonceClock) { this(connections,nonceClock,1_000_000); }
+    CenterLedger(JdbcAuthStore.Connections connections,java.util.function.LongSupplier nonceClock,int commandCapacity) {
+        this.connections=connections; this.nonceClock=nonceClock; this.commandCapacity=commandCapacity;
+    }
     void initialize() throws SQLException {
         try(Connection c=connections.open(); Statement s=c.createStatement()) {
             s.executeUpdate("CREATE TABLE IF NOT EXISTS axs_center_flows_v2 (id TEXT PRIMARY KEY,node TEXT NOT NULL,realm TEXT NOT NULL,audience TEXT NOT NULL,profile TEXT NOT NULL,name TEXT NOT NULL,connection_id TEXT NOT NULL,account TEXT NOT NULL,version BIGINT NOT NULL,expires BIGINT NOT NULL,method TEXT NOT NULL,UNIQUE(node,connection_id))");
             s.executeUpdate("CREATE TABLE IF NOT EXISTS axs_center_tickets_v1 (hash TEXT PRIMARY KEY,flow TEXT NOT NULL,expires BIGINT NOT NULL,redeemed_request TEXT,session_id TEXT)");
             s.executeUpdate("CREATE TABLE IF NOT EXISTS axs_center_sessions_v1 (id TEXT PRIMARY KEY,flow TEXT NOT NULL UNIQUE,expires BIGINT NOT NULL)");
             s.executeUpdate("CREATE TABLE IF NOT EXISTS axs_center_commands_v1 (id TEXT PRIMARY KEY,node TEXT NOT NULL,operation TEXT NOT NULL,fingerprint TEXT NOT NULL,created BIGINT NOT NULL,result TEXT NOT NULL)");
-            s.executeUpdate("CREATE TABLE IF NOT EXISTS axs_center_nonces_v1 (id TEXT PRIMARY KEY,expires BIGINT NOT NULL)");
-            s.executeUpdate("CREATE INDEX IF NOT EXISTS axs_center_nonces_expiry_v1 ON axs_center_nonces_v1(expires)");
+            s.executeUpdate("CREATE INDEX IF NOT EXISTS axs_center_commands_node_created_v1 ON axs_center_commands_v1(node,created)");
+            s.executeUpdate("CREATE INDEX IF NOT EXISTS axs_center_commands_created_v1 ON axs_center_commands_v1(created)");
+            s.executeUpdate("CREATE TABLE IF NOT EXISTS axs_center_nonces_v2 (node TEXT NOT NULL,id TEXT NOT NULL,expires BIGINT NOT NULL,PRIMARY KEY(node,id))");
+            s.executeUpdate("CREATE INDEX IF NOT EXISTS axs_center_nonces_expiry_v2 ON axs_center_nonces_v2(node,expires)");
+            s.executeUpdate("CREATE INDEX IF NOT EXISTS axs_center_nonces_all_expiry_v2 ON axs_center_nonces_v2(expires)");
             s.executeUpdate("CREATE TABLE IF NOT EXISTS axs_center_binding_codes_v1 (hash TEXT PRIMARY KEY,realm TEXT NOT NULL,account TEXT NOT NULL,qq BIGINT NOT NULL,expires BIGINT NOT NULL,UNIQUE(realm,account),UNIQUE(realm,qq))");
         }
     }
@@ -35,28 +48,47 @@ final class CenterLedger {
     private static void bind(PreparedStatement s,Object... values) throws SQLException {
         for(int index=0;index<values.length;index++) s.setObject(index+1,values[index] instanceof UUID?values[index].toString():values[index]);
     }
-    boolean claimNonce(String node,UUID nonce) throws SQLException {
-        long now=System.currentTimeMillis();
-        update("DELETE FROM axs_center_nonces_v1 WHERE expires<=?",now);
-        try(Connection c=connections.open(); Statement count=c.createStatement(); ResultSet r=count.executeQuery("SELECT COUNT(*) FROM axs_center_nonces_v1")) {
-            if(r.next() && r.getLong(1)>=20_000) return false;
+    boolean claimNonce(String node,UUID nonce,int capacity) throws SQLException {
+        long now=nonceClock.getAsLong();
+        NonceCount budget=nonceCounts.get(node);
+        if(budget==null || now-budget.checked()>=1000 || now<budget.checked()) {
+            update("DELETE FROM axs_center_nonces_v2 WHERE node=? AND expires<=?",node,now);
+            try(Connection c=connections.open(); PreparedStatement count=c.prepareStatement("SELECT COUNT(*) FROM axs_center_nonces_v2 WHERE node=?")) {
+                count.setString(1,node);
+                try(ResultSet r=count.executeQuery()) { r.next(); budget=new NonceCount(now,r.getInt(1)); }
+            }
         }
-        return update("INSERT INTO axs_center_nonces_v1 (id,expires) VALUES (?,?) ON CONFLICT(id) DO NOTHING",node+":"+nonce,now+60_000)==1;
+        nonceCounts.put(node,budget);
+        if(budget.count()>=capacity) return false;
+        // Requests accept +/-30 seconds, inclusive. Retain beyond the entire 60-second boundary.
+        boolean accepted=update("INSERT INTO axs_center_nonces_v2 (node,id,expires) VALUES (?,?,?) ON CONFLICT(node,id) DO NOTHING",node,nonce,now+61_000)==1;
+        if(accepted) nonceCounts.put(node,new NonceCount(budget.checked(),budget.count()+1));
+        return accepted;
     }
-    boolean beginCommand(CenterConfiguration.Node node,Request request) throws SQLException {
+    CommandStatus beginCommand(CenterConfiguration.Node node,Request request) throws SQLException {
         String fingerprint=RpcAuthentication.sign(node.key(),"AXS-COMMAND-FINGERPRINT-V1\n"+JSON.toJson(request));
         try(Connection c=connections.open(); PreparedStatement find=c.prepareStatement("SELECT node,fingerprint FROM axs_center_commands_v1 WHERE id=?")) {
             find.setString(1,request.requestId().toString());
             try(ResultSet r=find.executeQuery()) {
                 if(r.next()) {
                     if(!node.id().equals(r.getString(1)) || !fingerprint.equals(r.getString(2))) throw new SecurityException("Request identity collision");
-                    return false;
+                    return CommandStatus.REPLAYED;
                 }
             }
         }
+        long now=System.currentTimeMillis(); NonceCount budget=commandCounts.get(node.id());
+        if(budget==null || now-budget.checked()>=1000 || now<budget.checked()) {
+            try(Connection c=connections.open(); PreparedStatement s=c.prepareStatement("SELECT COUNT(*) FROM axs_center_commands_v1 WHERE node=? AND created>=?")) {
+                bind(s,node.id(),now-86_400_000L);
+                try(ResultSet r=s.executeQuery()) { r.next(); budget=new NonceCount(now,r.getInt(1)); }
+            }
+        }
+        commandCounts.put(node.id(),budget);
+        if(budget.count()>=commandCapacity) return CommandStatus.FULL;
         update("INSERT INTO axs_center_commands_v1 (id,node,operation,fingerprint,created,result) VALUES (?,?,?,?,?,?)",
             request.requestId(),node.id(),request.operation().name(),fingerprint,System.currentTimeMillis(),"OUTCOME_UNKNOWN");
-        return true;
+        commandCounts.put(node.id(),new NonceCount(budget.checked(),budget.count()+1));
+        return CommandStatus.STARTED;
     }
     void finishCommand(Request request,String code) throws SQLException { update("UPDATE axs_center_commands_v1 SET result=? WHERE id=?",code,request.requestId()); }
     Flow find(String node,Context context) throws SQLException {
@@ -163,14 +195,12 @@ final class CenterLedger {
     }
     void cleanup() throws SQLException {
         long now=System.currentTimeMillis();
+        update("DELETE FROM axs_center_nonces_v2 WHERE expires<=?",now);
         update("DELETE FROM axs_center_binding_codes_v1 WHERE expires<=?",now);
         update("DELETE FROM axs_center_tickets_v1 WHERE expires<=?",now);
         update("DELETE FROM axs_center_sessions_v1 WHERE expires<=?",now);
         update("DELETE FROM axs_center_flows_v2 WHERE expires<=? AND NOT EXISTS (SELECT 1 FROM axs_center_sessions_v1 WHERE flow=axs_center_flows_v2.id)",now);
         update("DELETE FROM axs_center_commands_v1 WHERE created<?",now-86_400_000);
-        try(Connection c=connections.open(); Statement s=c.createStatement(); ResultSet r=s.executeQuery("SELECT COUNT(*) FROM axs_center_commands_v1")) {
-            if(r.next() && r.getLong(1)>100_000) throw new SQLException("Center command journal capacity exceeded");
-        }
     }
     private static String hash(String value) {
         if(value==null || value.length()>128) throw new SecurityException("Invalid secret");

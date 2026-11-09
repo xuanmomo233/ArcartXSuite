@@ -19,6 +19,8 @@ public final class SimpleEventBus implements EventBusCapability {
     private final ConcurrentHashMap<String, CopyOnWriteArrayList<Subscription>> subscriptions = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Subscription> subscriptionById = new ConcurrentHashMap<>();
     private final Set<String> publisherTopics = ConcurrentHashMap.newKeySet();
+    private record ConfirmedSubscription(String consumer,String topic,ConfirmedHandler handler) {}
+    private final ConcurrentHashMap<String,ConfirmedSubscription> confirmed=new ConcurrentHashMap<>();
 
     public SimpleEventBus(Logger logger) {
         this.logger = logger;
@@ -48,6 +50,32 @@ public final class SimpleEventBus implements EventBusCapability {
                 }
             }
         }
+        if(payload instanceof java.util.Map<?,?> && isAuthFact(topic)) {
+            @SuppressWarnings("unchecked") var fact=(java.util.Map<String,String>)payload;
+            publishConfirmed(topic,player,fact);
+        }
+    }
+    private static boolean isAuthFact(String topic) {
+        return topic.equals("axs.auth.profile_first_admitted") || topic.equals("axs.auth.presence_day_started");
+    }
+    @Override public String subscribeConfirmed(String consumer,String topic,ConfirmedHandler handler) {
+        if(!isAuthFact(topic) || consumer==null || !consumer.matches("[a-zA-Z0-9_.:/-]{1,192}")) throw new IllegalArgumentException("Invalid confirmed subscription");
+        String id="confirmed:"+topic+":"+consumer;
+        if(confirmed.putIfAbsent(id,new ConfirmedSubscription(consumer,topic,java.util.Objects.requireNonNull(handler)))!=null)
+            throw new IllegalStateException("Duplicate confirmed consumer");
+        return id;
+    }
+    @Override public java.util.concurrent.CompletionStage<Boolean> publishConfirmed(String topic,Player player,java.util.Map<String,String> payload) {
+        if(!isAuthFact(topic) || !payload.containsKey("event_id")) throw new IllegalArgumentException("Invalid authentication fact");
+        var receipts=new java.util.ArrayList<java.util.concurrent.CompletableFuture<Void>>();
+        var event=new BusEvent(topic,player,java.util.Map.copyOf(payload),System.currentTimeMillis());
+        confirmed.values().stream().filter(sub->sub.topic().equals(topic)).forEach(sub->{
+            try { receipts.add(java.util.Objects.requireNonNull(sub.handler().handle(event)).toCompletableFuture()); }
+            catch(Exception | LinkageError e) { receipts.add(java.util.concurrent.CompletableFuture.failedFuture(e)); }
+        });
+        if(receipts.isEmpty()) return java.util.concurrent.CompletableFuture.completedFuture(false);
+        return java.util.concurrent.CompletableFuture.allOf(receipts.toArray(java.util.concurrent.CompletableFuture[]::new))
+            .handle((ignored,error)->error==null);
     }
 
     @Override
@@ -61,6 +89,7 @@ public final class SimpleEventBus implements EventBusCapability {
     }
     @Override
     public boolean hasSubscribers(@NotNull String topic) {
+        if(confirmed.values().stream().anyMatch(sub->sub.topic().equals(topic))) return true;
         var exact=subscriptions.get(topic);
         if(exact!=null && !exact.isEmpty()) return true;
         return subscriptions.entrySet().stream().anyMatch(entry -> entry.getKey().endsWith(".*")
@@ -78,6 +107,7 @@ public final class SimpleEventBus implements EventBusCapability {
 
     @Override
     public void unsubscribe(@NotNull String subscriptionId) {
+        confirmed.remove(subscriptionId);
         Subscription sub = subscriptionById.remove(subscriptionId);
         if (sub != null) {
             CopyOnWriteArrayList<Subscription> list = subscriptions.get(sub.topic);
@@ -91,13 +121,14 @@ public final class SimpleEventBus implements EventBusCapability {
     }
 
     public int subscriptionCount() {
-        return subscriptionById.size();
+        return subscriptionById.size()+confirmed.size();
     }
 
     public void clear() {
         subscriptions.clear();
         subscriptionById.clear();
         publisherTopics.clear();
+        confirmed.clear();
     }
 
     private void dispatch(Subscription sub, BusEvent event) {

@@ -58,6 +58,29 @@ public final class EventPacketDispatchService {
 
     private final Set<String> firedRulesCache = ConcurrentHashMap.newKeySet();
     private final ConcurrentMap<String, Long> cooldowns = new ConcurrentHashMap<>();
+    private FirstAdmissionInbox authInbox;
+    public void authInbox(FirstAdmissionInbox inbox) { authInbox=inbox; }
+    public FirstAdmissionInbox authInbox() { return authInbox; }
+    public List<FirstAdmissionInbox.Step> firstAdmissionPlan(Player player) {
+        var configuration=configurationProvider.get();
+        if(configuration==null) throw new IllegalStateException("EventPacket closed");
+        var context=EventPacketContext.fromSubjectTrigger(EventPacketTrigger.FIRST_ADMITTED,player);
+        var plan=new ArrayList<FirstAdmissionInbox.Step>();
+        for(var rule:configuration.rules()) {
+            if(!rule.enabled() || rule.trigger()!=EventPacketTrigger.FIRST_ADMITTED) continue;
+            if(ScriptConditionServices.evaluator().firstFailed(player,rule.conditions(),context.buildConditionVariables(player))!=null) continue;
+            for(var action:rule.actions()) {
+                plan.add(new FirstAdmissionInbox.Step(rule.id(),action));
+            }
+        }
+        if(plan.size()>128) throw new IllegalArgumentException("First admission plan exceeds 128 actions");
+        return List.copyOf(plan);
+    }
+    public boolean executeFirstAdmissionStep(Player player,FirstAdmissionInbox.Step step) {
+        var rule=new EventPacketRule(step.rule(),true,EventPacketTrigger.FIRST_ADMITTED,"","",java.math.BigDecimal.ZERO,false,0,
+            Set.of(),Set.of(),Set.of(),false,0,List.of(),List.of(step.action()));
+        return executeAction(rule,step.action(),player,EventPacketContext.fromSubjectTrigger(EventPacketTrigger.FIRST_ADMITTED,player));
+    }
 
     public EventPacketDispatchService(
         Logger logger,

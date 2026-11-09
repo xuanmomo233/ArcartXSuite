@@ -8,6 +8,35 @@ import org.junit.jupiter.api.io.TempDir;
 import static org.junit.jupiter.api.Assertions.*;
 
 class JdbcAuthStoreTest {
+    @Test void concurrentFailuresCannotOverwriteOneAnothersAttemptCounters() throws Exception {
+        var store=store("realm"); var account=store.create("Alice",UUID.randomUUID(),"hash");
+        var workers=java.util.concurrent.Executors.newFixedThreadPool(8);
+        var ready=new java.util.concurrent.CountDownLatch(8); var start=new java.util.concurrent.CountDownLatch(1);
+        var results=new java.util.ArrayList<java.util.concurrent.Future<?>>();
+        long now=System.currentTimeMillis();
+        try {
+            for(int index=0;index<8;index++) results.add(workers.submit(()->{
+                ready.countDown(); start.await(); store.failure(account,now,20,60000); return null;
+            }));
+            assertTrue(ready.await(2,java.util.concurrent.TimeUnit.SECONDS)); start.countDown();
+            for(var result:results) result.get(5,java.util.concurrent.TimeUnit.SECONDS);
+            assertEquals(8,store.findById(account.id()).failures());
+        } finally { start.countDown(); workers.shutdownNow(); }
+    }
+    @Test void securityVersionBatchesObserveRevocationAndCannotGrowWithoutBound() throws Exception {
+        var store=store("realm"); var account=store.create("Alice",UUID.randomUUID(),"hash");
+        assertEquals(1L,store.versions(java.util.List.of(account.id())).get(account.id()).longValue());
+        store.invalidate(account.id());
+        assertEquals(2L,store.versions(java.util.List.of(account.id())).get(account.id()).longValue());
+        assertThrows(IllegalArgumentException.class,()->store.versions(java.util.List.of()));
+        assertThrows(IllegalArgumentException.class,()->store.versions(java.util.Collections.nCopies(257,account.id())));
+    }
+    @Test void repeatedTransportLoginDoesNotRewriteAnUnchangedName() throws Exception {
+        var store=store("realm"); var account=store.create("Alice",UUID.randomUUID(),"hash");
+        assertFalse(store.renameVerifiedProfile(account,"Alice"));
+        assertTrue(store.renameVerifiedProfile(account,"AliceNew"));
+        assertFalse(store.renameVerifiedProfile(account,"AliceNew"));
+    }
     @TempDir Path temp;
     private JdbcAuthStore store(String realm) throws Exception {
         String url="jdbc:sqlite:"+temp.resolve("auth.sqlite");
@@ -46,6 +75,16 @@ class JdbcAuthStoreTest {
         restarted.acknowledgeDay(account.id(),"2026-11-05");
         assertFalse(store.pendingDay(account.id(),"2026-11-05"));
         assertTrue(store.pendingDay(account.id(),"2026-11-06"));
+    }
+    @Test void undeliveredBusinessDaysReplayInOrderAfterRestart() throws Exception {
+        var store=store("realm"); var account=store.create("Alice",UUID.randomUUID(),"hash");
+        store.pendingDay(account.id(),"2026-10-01"); store.pendingDay(account.id(),"2026-11-08");
+        var restarted=store("realm");
+        assertEquals("2026-10-01",restarted.nextPendingDay(account.id(),"2026-11-08"));
+        restarted.acknowledgeDay(account.id(),"2026-10-01");
+        assertEquals("2026-11-08",restarted.nextPendingDay(account.id(),"2026-11-08"));
+        restarted.acknowledgeDay(account.id(),"2026-11-08");
+        assertNull(restarted.nextPendingDay(account.id(),"2026-11-08"));
     }
     @Test void verifiedSubjectSurvivesRenameWithoutMergingDifferentProvider() throws Exception {
         var store=store("realm"); UUID profile=UUID.randomUUID();

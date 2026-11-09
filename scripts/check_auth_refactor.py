@@ -25,11 +25,14 @@ for folder in (
     "axs-api/src/test/java/xuanmo/arcartxsuite/api/auth",
     "axs-core/src/test/java/xuanmo/arcartxsuite/auth/runtime",
     "auth-minecraft/src/test/java",
+    "proxy/common/src/test/java/xuanmo/arcartxsuite/proxy/common/auth",
+    "proxy/bungee/src/test/java/xuanmo/arcartxsuite/proxy/bungee",
 ):
     paths.extend((ROOT / folder).rglob("*.java"))
 for relative in (
     "axs-api/src/main/java/xuanmo/arcartxsuite/api/capability/AuthRuntimeCapability.java",
     "axs-api/src/main/java/xuanmo/arcartxsuite/api/capability/BindingService.java",
+    "axs-api/src/main/java/xuanmo/arcartxsuite/api/capability/EventBusCapability.java",
 ):
     paths.append(ROOT / relative)
 for relative in (
@@ -37,7 +40,16 @@ for relative in (
     "modules/chat/src/main/java/xuanmo/arcartxsuite/chat/service/RedPacketService.java",
     "modules/eventpacket/src/main/java/xuanmo/arcartxsuite/eventpacket/listener/PlayerEventPacketListener.java",
     "modules/eventpacket/src/main/java/xuanmo/arcartxsuite/eventpacket/service/EventPacketDispatchService.java",
+    "modules/eventpacket/src/main/java/xuanmo/arcartxsuite/eventpacket/service/FirstAdmissionInbox.java",
+    "modules/eventpacket/src/main/java/xuanmo/arcartxsuite/eventpacket/storage/JdbcEventPacketRepository.java",
+    "modules/eventpacket/src/main/java/xuanmo/arcartxsuite/eventpacket/storage/EventPacketRepository.java",
+    "modules/eventpacket/src/main/java/xuanmo/arcartxsuite/eventpacket/EventPacketModule.java",
+    "modules/eventpacket/src/main/java/xuanmo/arcartxsuite/eventpacket/command/EventPacketAdminCommand.java",
     "modules/battlepass/src/main/java/xuanmo/arcartxsuite/battlepass/service/BattlePassTaskEngine.java",
+    "modules/battlepass/src/main/java/xuanmo/arcartxsuite/battlepass/service/BattlePassService.java",
+    "modules/battlepass/src/main/java/xuanmo/arcartxsuite/battlepass/storage/BattlePassRepository.java",
+    "modules/battlepass/src/main/java/xuanmo/arcartxsuite/battlepass/storage/JdbcBattlePassRepository.java",
+    "modules/battlepass/src/main/java/xuanmo/arcartxsuite/battlepass/BattlePassModule.java",
     "modules/qqbot/src/main/java/xuanmo/arcartxsuite/qqbot/service/QQBotBindService.java",
     "modules/qqbot/src/main/java/xuanmo/arcartxsuite/qqbot/service/QQBotCommandRouter.java",
     "modules/qqbot/src/main/java/xuanmo/arcartxsuite/qqbot/service/QQBotUiService.java",
@@ -61,6 +73,8 @@ for relative in (
     "axs-core/src/test/java/xuanmo/arcartxsuite/module/ModuleDescriptorParserTest.java",
     "axs-core/src/test/java/xuanmo/arcartxsuite/module/SimpleEventBusSubscriberTest.java",
     "proxy/velocity/src/main/java/xuanmo/arcartxsuite/proxy/velocity/VelocityProofForwarder.java",
+    "proxy/bungee/src/main/java/xuanmo/arcartxsuite/proxy/bungee/BungeeProofForwarder.java",
+    "proxy/common/src/main/java/xuanmo/arcartxsuite/proxy/common/auth/ProxyProofForwarding.java",
     "proxy/velocity/src/main/java/xuanmo/arcartxsuite/proxy/velocity/ArcartXSuiteVelocity.java",
     "proxy/bungee/src/main/java/xuanmo/arcartxsuite/proxy/bungee/ArcartXSuiteBungee.java",
     "proxy/common/src/main/java/xuanmo/arcartxsuite/proxy/common/config/ProxyConfig.java",
@@ -130,8 +144,8 @@ for path in (ROOT / "modules").rglob("module.yml"):
     if "build" in path.parts:
         continue
     manifest = yaml.safe_load(path.read_text(encoding="utf-8-sig"))
-    if str(manifest.get("api-version")) != "2.0":
-        errors.append(f"{path.relative_to(ROOT)}: module must declare API 2.0")
+    if str(manifest.get("api-version")) != "3.0":
+        errors.append(f"{path.relative_to(ROOT)}: module must declare API 3.0")
 
 gateway_prefix = "xuanmo.arcartxsuite.auth.minecraft."
 for relative in ("scripts/encrypt-jar.py", "gradle/encryption-tasks.gradle.kts", ".github/workflows/build-encrypted.yml"):
@@ -195,8 +209,12 @@ for relative in sql_sources:
     for expression in re.findall(sql_literal + r'(?:\s*\+\s*' + sql_literal + r')*', source):
         statement = "".join(json.loads(literal) for literal in re.findall(sql_literal, expression)).strip()
         if re.match(r"^(CREATE TABLE|CREATE INDEX|SELECT|INSERT|UPDATE|DELETE)\s", statement):
-            if statement.endswith(" AND"):
-                for predicate in ("lower_name=?", "account_id=?", "profile_id=?", "profile_id=? AND identity_provider=?"):
+            if statement.endswith(" IN ("):
+                for count in (1, 256):
+                    sql_statements.add(statement + ",".join(["?"] * count) + ")")
+            elif statement.endswith(" AND"):
+                predicates = ("account_id=?", "profile_id=?", "qq_id=?") if "FROM axs_auth_bindings_v1" in statement else ("lower_name=?", "account_id=?", "profile_id=?", "profile_id=? AND identity_provider=?")
+                for predicate in predicates:
                     sql_statements.add(statement + " " + predicate)
             else:
                 sql_statements.add(statement)

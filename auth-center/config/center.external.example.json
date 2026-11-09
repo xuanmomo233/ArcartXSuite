@@ -1,5 +1,7 @@
 {
   "schemaVersion": 1,
+  "nonceCapacityPerNode": 120000,
+  "commandCapacityPerNode": 1000000,
   "port": 25600,
   "database": "data/auth-center.sqlite",
   "external": {

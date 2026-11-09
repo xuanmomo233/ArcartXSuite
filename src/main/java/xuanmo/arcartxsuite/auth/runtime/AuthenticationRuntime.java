@@ -15,7 +15,8 @@ import xuanmo.arcartxsuite.api.storage.StorageManager;
 
 /** Host-owned standalone backend. Neither UI lifetime nor account classification can grant admission. */
 public final class AuthenticationRuntime implements HostAuthentication, Listener {
-    private record Connection(Player player, AuthSession session, java.util.concurrent.atomic.AtomicLong loginDeadline) {}
+    private record Connection(Player player, AuthSession session, java.util.concurrent.atomic.AtomicLong loginDeadline,
+            java.util.concurrent.atomic.AtomicLong authorityDeadline) {}
     private final JavaPlugin plugin;
     private final JdbcAuthStore store;
     private final Argon2Passwords passwords = new Argon2Passwords();
@@ -27,6 +28,12 @@ public final class AuthenticationRuntime implements HostAuthentication, Listener
     private final Set<CompletableFuture<BindingService.BindingResult>> bindingFutures = ConcurrentHashMap.newKeySet();
     private final Set<CompletableFuture<Void>> revocationFutures = ConcurrentHashMap.newKeySet();
     private final ExecutorService worker;
+    private final ExecutorService securityChecks=new ThreadPoolExecutor(1,1,0,TimeUnit.MILLISECONDS,new ArrayBlockingQueue<>(1),
+        r->{ Thread t=new Thread(r,"AXS-AuthVersionCheck"); t.setDaemon(true); return t; },new ThreadPoolExecutor.AbortPolicy());
+    private final java.util.concurrent.atomic.AtomicBoolean checkingVersions=new java.util.concurrent.atomic.AtomicBoolean();
+    private long nextVersionCheck;
+    private final CompletableFuture<Void> drained=new CompletableFuture<>();
+    private CompletionStage<Void> predecessor=CompletableFuture.completedFuture(null);
     private final Supplier<EventBusCapability> events;
     private final int minLength, maxLength, maxAttempts;
     private final long cooldown;
@@ -43,15 +50,23 @@ public final class AuthenticationRuntime implements HostAuthentication, Listener
     private final Object bindingLock = new Object();
     private final Object invalidationLock = new Object();
     private volatile List<BindingService.Binding> bindings = List.of();
+    private volatile long bindingsDeadline;
+    private final java.util.concurrent.atomic.AtomicBoolean refreshingBindings=new java.util.concurrent.atomic.AtomicBoolean();
     private record Challenge(UUID account,long qq,long expires) {}
     private final Map<String,Challenge> challenges = new ConcurrentHashMap<>();
     private final Map<UUID,JdbcAuthStore.Account> verifiedAccounts = new ConcurrentHashMap<>();
     private final Map<UUID,Long> invalidVersions = new ConcurrentHashMap<>();
+    private final Map<UUID,Long> pendingRevocations=new ConcurrentHashMap<>();
+    private final Map<UUID,Integer> securityWriters=new ConcurrentHashMap<>();
+    private final Set<UUID> reconciling=ConcurrentHashMap.newKeySet();
+    private final java.util.concurrent.atomic.AtomicLong revocationSequence=new java.util.concurrent.atomic.AtomicLong();
     private volatile CompletableFuture<Void> initialized = new CompletableFuture<>();
     private volatile boolean active = true;
     private final java.time.ZoneId timezone;
     private final Map<UUID,String> presenceDates = new HashMap<>();
     private final Map<UUID,AuthSnapshot> pendingPresence = new HashMap<>();
+    private final Map<UUID,JdbcAuthStore.Account> pendingFirst=new HashMap<>();
+    private final Set<UUID> firstBusy=new HashSet<>();
     private org.bukkit.scheduler.BukkitTask presenceTask;
 
     AuthenticationRuntime(JavaPlugin plugin, StorageManager storage, Supplier<EventBusCapability> events,AuthenticationSettings settings) {
@@ -65,16 +80,23 @@ public final class AuthenticationRuntime implements HostAuthentication, Listener
         int workers=settings.performance().workers(),capacity=settings.performance().queueCapacity();
         worker = new ThreadPoolExecutor(workers, workers, 0, TimeUnit.MILLISECONDS, new ArrayBlockingQueue<>(capacity), r -> {
             Thread t = new Thread(r, "AXS-Auth"); t.setDaemon(true); return t;
-        }, new ThreadPoolExecutor.AbortPolicy());
+        }, new ThreadPoolExecutor.AbortPolicy()) {
+            @Override protected void terminated() { drained.complete(null); }
+        };
         store = new JdbcAuthStore(storage::getHostConnection, realm);
     }
 
     public void start() {
         if(!trustedProxies.isEmpty()) { proxyIngress=new ProxyProofIngress(plugin,this); proxyIngress.start(); }
-        worker.execute(() -> {
-            try {
-                store.initialize(); bindings=bindingProjection(); initialized.complete(null);
-            } catch(Exception e) { initialized.completeExceptionally(e); plugin.getLogger().severe("认证存储初始化失败"); }
+        predecessor.whenComplete((ignored,failure)->{
+            if(!active) return;
+            if(failure!=null) { initialized.completeExceptionally(failure); return; }
+            try { worker.execute(() -> {
+                try {
+                    if(!active) throw new CancellationException("Runtime closed");
+                    store.initialize(); refreshBindingProjection(); initialized.complete(null);
+                } catch(Exception | LinkageError e) { initialized.completeExceptionally(e); plugin.getLogger().severe("认证存储初始化失败"); }
+            }); } catch(RejectedExecutionException e) { initialized.completeExceptionally(e); }
         });
         Bukkit.getPluginManager().registerEvents(this, plugin);
         for (Player player : Bukkit.getOnlinePlayers()) attach(player);
@@ -82,9 +104,17 @@ public final class AuthenticationRuntime implements HostAuthentication, Listener
     }
     private void presence() {
         if(proxyIngress!=null) proxyIngress.tick();
+        if(System.nanoTime()-nextVersionCheck>=0) { nextVersionCheck=System.nanoTime()+5_000_000_000L; checkVersions(); }
+        for(UUID account:pendingRevocations.keySet()) if(!securityWriters.containsKey(account) && reconciling.add(account)) {
+            try { worker.execute(()->{ try { reconcileRevocation(account); } finally { reconciling.remove(account); } }); }
+            catch(RejectedExecutionException e) { reconciling.remove(account); }
+        }
         for(Connection connection:connections.values()) {
+            if(connection.session().snapshot().identityVerified() && System.nanoTime()-connection.authorityDeadline().get()>=0)
+                restrict(connection,"STORAGE_LEASE_EXPIRED");
             if(!snapshot(connection.player().getUniqueId()).admitted() && System.nanoTime()-connection.loginDeadline().get()>0
                     && connection.player().isOnline()) connection.player().kickPlayer("登录验证已超时，请重新连接。");
+            if(snapshot(connection.player().getUniqueId()).admitted()) deliverFirst(connection);
         }
         EventBusCapability currentBus=events.get();
         if(currentBus==null || !currentBus.hasSubscribers("axs.auth.presence_day_started")) return;
@@ -96,41 +126,73 @@ public final class AuthenticationRuntime implements HostAuthentication, Listener
             try {
                 worker.execute(()->{
                     try {
-                        boolean pending=store.pendingDay(account,date);
+                        store.pendingDay(account,date);
+                        String next=store.nextPendingDay(account,date);
+                        boolean pending=next!=null;
+                        String deliveryDate=pending?next:date;
                         main(()->{
-                            pendingPresence.remove(uuid,state);
                             AuthSnapshot current=snapshot(uuid);
                             if(connections.get(uuid)!=c || !current.admitted() || current.generation()!=state.generation()
-                                    || !Objects.equals(current.accountId(),account)) return;
+                                    || !Objects.equals(current.accountId(),account)) { pendingPresence.remove(uuid,state); return; }
                             EventBusCapability bus=events.get();
-                            if(bus==null || !bus.hasSubscribers("axs.auth.presence_day_started")) return;
-                            if(pending) bus.publish("axs.auth.presence_day_started",c.player(),Map.of("account_id",account.toString(),
-                                "business_date",date,"timezone",timezone.getId(),"event_id",account+":"+date));
-                            try {
-                                worker.execute(()->{
-                                    try { store.acknowledgeDay(account,date); }
-                                    catch(Exception e) { main(()->{ if(connections.get(uuid)==c) presenceDates.remove(uuid,date); }); }
-                                });
-                                presenceDates.put(uuid,date);
-                            } catch(RejectedExecutionException e) { /* Retry on next interval. */ }
+                            if(bus==null) { pendingPresence.remove(uuid,state); return; }
+                            CompletionStage<Boolean> receipt=pending?bus.publishConfirmed("axs.auth.presence_day_started",c.player(),Map.of("account_id",account.toString(),
+                                "business_date",deliveryDate,"timezone",timezone.getId(),"event_id",realm+":"+account+":"+deliveryDate)):CompletableFuture.completedFuture(true);
+                            receipt.whenComplete((confirmed,error)->{
+                                if(error!=null || !Boolean.TRUE.equals(confirmed)) { main(()->pendingPresence.remove(uuid,state)); return; }
+                                try { worker.execute(()->{
+                                    boolean accepted=false;
+                                    try { if(active) { store.acknowledgeDay(account,deliveryDate); accepted=true; } }
+                                    catch(Exception ignored) { }
+                                    boolean acknowledged=accepted;
+                                    main(()->{ pendingPresence.remove(uuid,state); if(acknowledged && deliveryDate.equals(date) && connections.get(uuid)==c) presenceDates.put(uuid,date); });
+                                }); } catch(RejectedExecutionException e) { main(()->pendingPresence.remove(uuid,state)); }
+                            });
                         });
                     } catch(Exception e) { main(()->pendingPresence.remove(uuid,state)); }
                 });
             } catch(RejectedExecutionException e) { pendingPresence.remove(uuid,state); }
         }
     }
+    private void checkVersions() {
+        if(!active || verifiedAccounts.isEmpty() || !checkingVersions.compareAndSet(false,true)) return;
+        var expected=Map.copyOf(verifiedAccounts);
+        try { securityChecks.execute(()->{
+            try {
+                var grouped=new HashMap<UUID,List<Map.Entry<UUID,JdbcAuthStore.Account>>>();
+                expected.entrySet().forEach(entry->grouped.computeIfAbsent(entry.getValue().id(),ignored->new ArrayList<>()).add(entry));
+                var accounts=List.copyOf(grouped.keySet());
+                for(int from=0;from<accounts.size() && active;from+=256) {
+                    var batch=accounts.subList(from,Math.min(from+256,accounts.size()));
+                    long checkedAt=System.nanoTime(); var versions=store.versions(batch);
+                    main(()->{
+                        for(UUID id:batch) for(var entry:grouped.get(id)) {
+                            var account=entry.getValue(); Connection c=connections.get(entry.getKey());
+                            if(c==null || verifiedAccounts.get(entry.getKey())!=account) continue;
+                            Long version=versions.get(account.id());
+                            if(version==null || version!=account.version()) { restrict(c,"SECURITY_VERSION_CHANGED"); continue; }
+                            if(!pendingRevocations.containsKey(account.id()) && c.session().snapshot().identityVerified()
+                                    && System.nanoTime()-c.authorityDeadline().get()<0) c.authorityDeadline().set(checkedAt+15_000_000_000L);
+                        }
+                    });
+                }
+            } catch(Exception | LinkageError ignored) { /* Expiry is enforced by snapshots, including storage outages. */ }
+            finally { checkingVersions.set(false); }
+        }); } catch(RejectedExecutionException e) { checkingVersions.set(false); }
+    }
     @Override public AuthSnapshot snapshot(UUID playerId) {
         Connection c = connections.get(playerId);
         if(c==null) return AuthSnapshot.absent(playerId);
         var snapshot=c.session().snapshot();
         var account=verifiedAccounts.get(playerId);
-        if(account!=null && account.version()<=invalidVersions.getOrDefault(account.id(),0L) && snapshot.identityVerified())
+        if(account!=null && (System.nanoTime()-c.authorityDeadline().get()>=0 || pendingRevocations.containsKey(account.id()) || account.version()<=invalidVersions.getOrDefault(account.id(),0L)) && snapshot.identityVerified())
             return new AuthSnapshot(playerId,snapshot.connectionId(),snapshot.generation(),null,snapshot.registration(),
                 AuthSnapshot.Stage.RESTRICTED,"",Set.of(),"REVOKED");
         return snapshot;
     }
     private void restrict(Connection connection,String reason) {
         var before=connection.session().snapshot();
+        connection.session().pauseEligibilityAt(connection.authorityDeadline().get());
         connection.session().revoke();
         connection.loginDeadline().set(System.nanoTime()+loginTimeoutNanos);
         verifiedAccounts.remove(before.playerId());
@@ -152,10 +214,11 @@ public final class AuthenticationRuntime implements HostAuthentication, Listener
     }
     private boolean completeIdentity(Connection c,JdbcAuthStore.Account account,String provider,Set<AuthSnapshot.Requirement> pending) {
         synchronized(invalidationLock) {
-            if(account.version()<=invalidVersions.getOrDefault(account.id(),0L)) return false;
+            if(pendingRevocations.containsKey(account.id()) || account.version()<=invalidVersions.getOrDefault(account.id(),0L)) return false;
             var snapshot=c.session().snapshot();
             var operation=new AuthSession.Operation(snapshot.connectionId(),snapshot.generation());
             if(!c.session().verified(operation,account.id(),provider,pending)) return false;
+            c.authorityDeadline().set(System.nanoTime()+15_000_000_000L);
             verifiedAccounts.put(snapshot.playerId(),account);
             return !pending.isEmpty() || c.session().admit(operation);
         }
@@ -163,7 +226,7 @@ public final class AuthenticationRuntime implements HostAuthentication, Listener
     private Result completeRequirement(Connection c,JdbcAuthStore.Account account,AuthSnapshot.Requirement requirement) {
         UUID uuid=c.player().getUniqueId();
         synchronized(invalidationLock) {
-            if(account.version()<=invalidVersions.getOrDefault(account.id(),0L)) return result(uuid,false,"STALE_CREDENTIALS");
+            if(pendingRevocations.containsKey(account.id()) || account.version()<=invalidVersions.getOrDefault(account.id(),0L)) return result(uuid,false,"STALE_CREDENTIALS");
             if(c.session().snapshot().admitted()) return result(uuid,true,"BOUND");
             if(!c.session().satisfy(requirement)) return result(uuid,false,"INVALID_STATE");
             var snapshot=c.session().snapshot();
@@ -176,7 +239,7 @@ public final class AuthenticationRuntime implements HostAuthentication, Listener
     }
     @Override public long eligibleNanos(UUID playerId) {
         Connection c = connections.get(playerId);
-        return c == null ? 0 : c.session().eligibleNanos();
+        return c == null ? 0 : c.session().eligibleNanosUntil(c.authorityDeadline().get());
     }
     @Override public Terms terms() { return terms; }
     @Override public boolean passwordRegistrationAllowed() { return passwordAllowed; }
@@ -218,7 +281,7 @@ public final class AuthenticationRuntime implements HostAuthentication, Listener
             synchronized(bindingLock) {
                 if(!active) throw new IllegalStateException("Runtime closed");
                 if(initialized.isCompletedExceptionally()) {
-                    store.initialize(); bindings=bindingProjection();
+                    store.initialize(); refreshBindingProjection();
                     initialized=CompletableFuture.completedFuture(null);
                 }
             }
@@ -231,7 +294,6 @@ public final class AuthenticationRuntime implements HostAuthentication, Listener
         if(verified!=null && snapshot(uuid).identityVerified()
                 && c.session().snapshot().requirements().contains(AuthSnapshot.Requirement.QQ_BINDING)) {
             return submit(c,()->{
-                synchronized(bindingLock) { bindings=bindingProjection(); }
                 boolean bound=store.isBound(verified.id());
                 if(bound && c.session().snapshot().requirements().size()==1 && !store.admit(verified))
                     throw new IllegalStateException("Credentials changed");
@@ -256,6 +318,13 @@ public final class AuthenticationRuntime implements HostAuthentication, Listener
         if (!active) return;
         Bukkit.getScheduler().runTask(plugin, () -> { if (active) action.run(); });
     }
+    private void executeReady(Runnable action,java.util.function.Consumer<RuntimeException> rejected) {
+        initialized.whenComplete((ignored,error)->{
+            if(!active) { rejected.accept(new CancellationException("Runtime closed")); return; }
+            try { worker.execute(action); }
+            catch(RejectedExecutionException e) { rejected.accept(e); }
+        });
+    }
     private <T> CompletionStage<Result> submit(Connection c, Callable<T> operation,
             java.util.function.Function<T, Result> completion, char[]... secrets) {
         UUID uuid = c.player().getUniqueId();
@@ -273,23 +342,23 @@ public final class AuthenticationRuntime implements HostAuthentication, Listener
         }
         futures.add(future);
         secretBuffers.put(future,secrets);
-        try {
-            worker.execute(() -> {
+        executeReady(() -> {
                 running.add(future);
-                T value = null; Exception failure = null;
+                T value = null; Throwable failure = null;
                 try { if (active && c.session().current(ticket)) value = operation.call(); }
-                catch (Exception e) { failure = e; }
+                catch (Exception | LinkageError e) { failure = e; }
                 finally {
                     for (char[] secret : secrets) Arrays.fill(secret, '\0');
                     secretBuffers.remove(future); running.remove(future);
                 }
-                final T answer = value; final Exception error = failure;
+                final T answer = value; final Throwable error = failure;
                 if (!active) { future.complete(result(uuid, false, "CLOSED")); futures.remove(future); return; }
                 main(() -> {
                     try {
                         if (connections.get(uuid) != c || !c.session().current(ticket)) {
                             future.complete(result(uuid, false, "STALE_CONNECTION"));
                         } else if (error != null) {
+                            if(c.session().snapshot().identityVerified()) restrict(c,"AUTHORITY_UNAVAILABLE");
                             c.session().note(ticket,"UNAVAILABLE");
                             plugin.getLogger().warning("认证操作失败: " + error.getClass().getSimpleName());
                             future.complete(result(uuid, false, "UNAVAILABLE"));
@@ -297,13 +366,12 @@ public final class AuthenticationRuntime implements HostAuthentication, Listener
                     } catch (Exception e) { future.completeExceptionally(e); }
                     finally { if (connections.get(uuid) == c) busy.remove(uuid); futures.remove(future); }
                 });
-            });
-        } catch (RejectedExecutionException e) {
+            }, e -> {
             busy.remove(uuid); futures.remove(future);
             secretBuffers.remove(future);
             for (char[] secret : secrets) Arrays.fill(secret, '\0');
             future.complete(result(uuid, false, "OVERLOADED"));
-        }
+        });
         return future;
     }
     private void attach(Player player) {
@@ -313,9 +381,9 @@ public final class AuthenticationRuntime implements HostAuthentication, Listener
         UUID uuid = player.getUniqueId();
         Connection previous = connections.remove(uuid);
         if (previous != null) previous.session().close();
-        verifiedAccounts.remove(uuid); presenceDates.remove(uuid); pendingPresence.remove(uuid);
+        verifiedAccounts.remove(uuid); presenceDates.remove(uuid); pendingPresence.remove(uuid); pendingFirst.remove(uuid); firstBusy.remove(uuid);
         busy.remove(uuid);
-        Connection c = new Connection(player, new AuthSession(uuid),new java.util.concurrent.atomic.AtomicLong(System.nanoTime()+loginTimeoutNanos));
+        Connection c = new Connection(player, new AuthSession(uuid),new java.util.concurrent.atomic.AtomicLong(System.nanoTime()+loginTimeoutNanos),new java.util.concurrent.atomic.AtomicLong());
         connections.put(uuid, c);
         String name = player.getName();
         submit(c, () -> { ensureInitialized(); return store.find(name); }, account -> {
@@ -331,7 +399,7 @@ public final class AuthenticationRuntime implements HostAuthentication, Listener
         if (c != null && c.player() == event.getPlayer() && connections.remove(uuid, c)) {
             c.session().close(); busy.remove(uuid);
             verifiedAccounts.remove(uuid);
-            presenceDates.remove(uuid); pendingPresence.remove(uuid);
+            presenceDates.remove(uuid); pendingPresence.remove(uuid); pendingFirst.remove(uuid); firstBusy.remove(uuid);
         }
     }
 
@@ -356,7 +424,9 @@ public final class AuthenticationRuntime implements HostAuthentication, Listener
             var account = store.find(name);
             if (register) {
                 if (account != null) return null;
-                account = store.create(name, uuid, passwords.hash(password));
+                String hash=passwords.hash(password);
+                if(!active) throw new CancellationException("Runtime closed");
+                account = store.create(name, uuid, hash);
             } else {
                 if (account == null || !account.provider().equals("local-password") || !account.profile().equals(uuid) || account.blockedUntil() > System.currentTimeMillis()) return null;
                 if (!passwords.verify(password, account.hash())) {
@@ -394,9 +464,11 @@ public final class AuthenticationRuntime implements HostAuthentication, Listener
             if (!passwords.verify(oldPassword, account.hash())) {
                 store.failure(account, System.currentTimeMillis(), maxAttempts, cooldown); return false;
             }
-            boolean changed=store.changePassword(account, passwords.hash(newPassword));
-            if(changed) invalidateVersion(account.id(),account.version());
-            return changed;
+            String hash=passwords.hash(newPassword);
+            if(!active) throw new CancellationException("Runtime closed");
+            beginSecurityWrite(account.id(),c);
+            try { return store.changePassword(account,hash); }
+            finally { endSecurityWrite(account.id()); }
         }, changed -> {
             if (changed) restrict(c,"password_changed");
             return result(uuid, changed, changed ? "PASSWORD_CHANGED" : "CREDENTIALS_REJECTED");
@@ -416,7 +488,7 @@ public final class AuthenticationRuntime implements HostAuthentication, Listener
             synchronized(bindingLock) {
                 store.bind(account,name,challenge.qq());
                 publishBinding(account,true);
-                bindings=bindingProjection();
+                updateBinding(account.id());
                 if(!c.session().snapshot().requirements().contains(AuthSnapshot.Requirement.TERMS) && !store.admit(account))
                     throw new IllegalStateException("Credentials changed");
             }
@@ -430,7 +502,7 @@ public final class AuthenticationRuntime implements HostAuthentication, Listener
         if(named!=null && (account==null || !named.id().equals(account.id())))
             return new IdentityVerification(null,"",Set.of(),"IDENTITY_LINK_REQUIRED");
         if(account==null) account=store.createIdentity(name,uuid,"",namespace);
-        synchronized(bindingLock) { store.renameVerifiedProfile(account,name); bindings=bindingProjection(); }
+        synchronized(bindingLock) { if(store.renameVerifiedProfile(account,name)) updateBinding(account.id()); }
         Set<AuthSnapshot.Requirement> pending=new HashSet<>();
         if(requireTerms && !store.acceptedTerms(account.id(),terms.version())) pending.add(AuthSnapshot.Requirement.TERMS);
         if(requireBinding && !store.isBound(account.id())) pending.add(AuthSnapshot.Requirement.QQ_BINDING);
@@ -472,45 +544,74 @@ public final class AuthenticationRuntime implements HostAuthentication, Listener
     }
     private void publishAdmission(Connection connection,JdbcAuthStore.Account account) {
         var snapshot=connection.session().snapshot();
-        Bukkit.getPluginManager().callEvent(new AuthAdmissionEvent(snapshot,!account.firstAdmitted()));
+        Bukkit.getPluginManager().callEvent(new AuthAdmissionEvent(snapshot));
         EventBusCapability bus=events.get();
         if(bus!=null) {
             var payload=Map.of("account_id",account.id().toString(),"connection_id",snapshot.connectionId().toString(),
                 "event_id",snapshot.connectionId().toString(),"provider",snapshot.provider());
             bus.publish("axs.auth.admission_granted",connection.player(),payload);
-            if(!account.firstAdmitted()) bus.publish("axs.auth.profile_first_admitted",connection.player(),Map.of(
-                "account_id",account.id().toString(),"event_id",account.id()+":first:"+account.profile(),"provider",snapshot.provider()));
         }
-        if(!account.firstAdmitted()) {
+        if(!account.firstAdmitted()) { pendingFirst.put(snapshot.playerId(),account); deliverFirst(connection); }
+    }
+    private void deliverFirst(Connection connection) {
+        UUID profile=connection.player().getUniqueId(); var account=pendingFirst.get(profile); var bus=events.get();
+        if(account==null || bus==null || !snapshot(profile).admitted() || !firstBusy.add(profile)) return;
+        var state=snapshot(profile);
+        bus.publishConfirmed("axs.auth.profile_first_admitted",connection.player(),Map.of("account_id",account.id().toString(),
+            "event_id",realm+":"+account.id()+":first","provider",state.provider())).whenComplete((confirmed,error)->{
+            if(error!=null || !Boolean.TRUE.equals(confirmed)) { main(()->firstBusy.remove(profile)); return; }
             try { worker.execute(()->{
-                try { store.acknowledgeFirst(account); }
-                catch(Exception e) { plugin.getLogger().warning("首次准入回执待重试"); }
-            }); } catch(RejectedExecutionException e) { /* The pending fact remains durable. */ }
-        }
+                boolean accepted=false;
+                try { if(active) { store.acknowledgeFirst(account); accepted=true; } }
+                catch(Exception ignored) { }
+                boolean acknowledged=accepted;
+                main(()->{ firstBusy.remove(profile); if(acknowledged) pendingFirst.remove(profile,account); });
+            }); } catch(RejectedExecutionException e) { main(()->firstBusy.remove(profile)); }
+        });
     }
 
     private List<BindingService.Binding> bindingProjection() throws java.sql.SQLException {
         return store.bindings().stream().map(b->new BindingService.Binding(b.accountId(),b.profileId(),b.profileName(),b.qqId(),b.boundAt())).toList();
     }
-    @Override public List<BindingService.Binding> snapshot() { return bindings; }
+    private void refreshBindingProjection() throws java.sql.SQLException {
+        long checkedAt=System.nanoTime(); bindings=bindingProjection(); bindingsDeadline=checkedAt+15_000_000_000L;
+    }
+    private void updateBinding(UUID account) throws java.sql.SQLException {
+        var value=store.bindingByAccount(account);
+        var updated=new ArrayList<>(bindings);
+        updated.removeIf(binding->binding.accountId().equals(account));
+        if(value!=null) updated.add(new BindingService.Binding(value.accountId(),value.profileId(),value.profileName(),value.qqId(),value.boundAt()));
+        bindings=List.copyOf(updated);
+    }
+    @Override public List<BindingService.Binding> snapshot() {
+        if(!active) return List.of();
+        long now=System.nanoTime();
+        if(now-bindingsDeadline>=-5_000_000_000L && refreshingBindings.compareAndSet(false,true)) {
+            bindingWork(()->{
+                refreshBindingProjection();
+                return new BindingService.BindingResult(true,"");
+            }).whenComplete((ignored,error)->refreshingBindings.set(false));
+        }
+        return now-bindingsDeadline<0?bindings:List.of();
+    }
     private CompletionStage<BindingService.BindingResult> bindingWork(Callable<BindingService.BindingResult> work) {
         var future=new CompletableFuture<BindingService.BindingResult>();
         if(!active) return CompletableFuture.completedFuture(new BindingService.BindingResult(false,"认证服务已关闭"));
         bindingFutures.add(future);
         future.whenComplete((r,e)->bindingFutures.remove(future));
-        try { worker.execute(()->{
+        executeReady(()->{
             try {
                 ensureInitialized();
                 BindingService.BindingResult result;
-                synchronized(bindingLock) { bindings=bindingProjection(); result=work.call(); }
+                synchronized(bindingLock) { if(!active) throw new CancellationException("Runtime closed"); result=work.call(); }
                 if(active) main(()->future.complete(result));
                 else future.complete(new BindingService.BindingResult(false,"认证服务已关闭"));
             }
-            catch(Exception e) {
+            catch(Exception | LinkageError e) {
                 var failed=new BindingService.BindingResult(false,"绑定服务暂时不可用");
                 if(active) main(()->future.complete(failed)); else future.complete(failed);
             }
-        }); } catch(RejectedExecutionException e) { future.complete(new BindingService.BindingResult(false,"服务繁忙，请稍后重试")); }
+        },e->future.complete(new BindingService.BindingResult(false,"服务繁忙，请稍后重试")));
         return future;
     }
     @Override public CompletionStage<BindingService.BindingResult> requestFromQq(long qqId,String name) {
@@ -518,7 +619,7 @@ public final class AuthenticationRuntime implements HostAuthentication, Listener
             if(qqId<=0 || name==null || !name.matches("[\\p{L}\\p{N}_]{1,16}")) return new BindingService.BindingResult(false,"请求无效");
             var account=store.find(name);
             if(account==null) return new BindingService.BindingResult(false,"请先在游戏内注册并验证身份");
-            if(store.isBound(account.id()) || bindings.stream().anyMatch(b->b.qqId()==qqId)) return new BindingService.BindingResult(false,"账号或QQ已经绑定");
+            if(store.isBound(account.id()) || store.bindingByQq(qqId)!=null) return new BindingService.BindingResult(false,"账号或QQ已经绑定");
             long now=System.currentTimeMillis();
             challenges.entrySet().removeIf(e->e.getValue().expires()<now);
             if(challenges.size()>=1024) return new BindingService.BindingResult(false,"绑定请求过多，请稍后重试");
@@ -541,9 +642,13 @@ public final class AuthenticationRuntime implements HostAuthentication, Listener
     private BindingService.BindingResult removeBinding(BindingService.Binding binding) throws Exception {
         if(binding==null) return new BindingService.BindingResult(false,"未找到绑定");
         var before=store.findById(binding.accountId());
-        if(before!=null) invalidateVersion(before.id(),before.version());
+        if(before==null) return new BindingService.BindingResult(false,"未找到账号");
+        beginSecurityWrite(before.id());
+        bindings=bindings.stream().filter(value->!value.accountId().equals(binding.accountId())).toList();
         challenges.entrySet().removeIf(entry->entry.getValue().account().equals(binding.accountId()) || entry.getValue().qq()==binding.qqId());
-        store.unbind(binding.accountId()); bindings=bindingProjection();
+        try { store.unbind(binding.accountId()); }
+        finally { endSecurityWrite(before.id()); }
+        updateBinding(binding.accountId());
         var updated=store.findById(binding.accountId());
         if(updated!=null) invalidateVersion(updated.id(),updated.version()-1);
         if(updated!=null) publishBinding(updated,false);
@@ -553,41 +658,84 @@ public final class AuthenticationRuntime implements HostAuthentication, Listener
         return new BindingService.BindingResult(true,binding.profileName());
     }
     @Override public CompletionStage<BindingService.BindingResult> revokeByQq(long qq) {
-        return bindingWork(()->removeBinding(bindings.stream().filter(b->b.qqId()==qq).findFirst().orElse(null)));
+        return bindingWork(()->removeBinding(project(store.bindingByQq(qq))));
     }
     @Override public CompletionStage<BindingService.BindingResult> revokeByProfile(UUID profile) {
-        return bindingWork(()->removeBinding(bindings.stream().filter(b->b.profileId().equals(profile)).findFirst().orElse(null)));
+        return bindingWork(()->removeBinding(project(store.bindingByProfile(profile))));
     }
     @Override public CompletionStage<Void> revoke(UUID account, String reason) {
         CompletableFuture<Void> done = new CompletableFuture<>();
         if (!active) return CompletableFuture.failedFuture(new IllegalStateException("Runtime closed"));
         revocationFutures.add(done);
         done.whenComplete((result,error)->revocationFutures.remove(done));
-        try { worker.execute(()->{
+        executeReady(()->{
             try {
                 ensureInitialized();
                 var before=store.findById(account);
-                if(before!=null) invalidateVersion(account,before.version());
-                long version=store.invalidate(account);
-                invalidateVersion(account,version-1);
+                if(before==null) throw new IllegalArgumentException("Account not found");
+                beginSecurityWrite(account);
+                try { store.invalidate(account); }
+                finally { endSecurityWrite(account); }
                 if(!active) { done.completeExceptionally(new IllegalStateException("Runtime closed")); return; }
                 main(()->{
                     for(Connection c:connections.values()) if(account.equals(c.session().snapshot().accountId())) restrict(c,reason);
                     done.complete(null);
                 });
-            } catch(Exception e) { done.completeExceptionally(e); }
-        }); } catch(RejectedExecutionException e) { done.completeExceptionally(e); }
+            } catch(Exception | LinkageError e) { done.completeExceptionally(e); }
+        },done::completeExceptionally);
         return done;
     }
+    private static BindingService.Binding project(JdbcAuthStore.Binding value) {
+        return value==null?null:new BindingService.Binding(value.accountId(),value.profileId(),value.profileName(),value.qqId(),value.boundAt());
+    }
+    private void beginSecurityWrite(UUID account) {
+        beginSecurityWrite(account,null);
+    }
+    private void beginSecurityWrite(UUID account,Connection initiator) {
+        synchronized(invalidationLock) {
+            securityWriters.merge(account,1,Integer::sum);
+            pendingRevocations.put(account,revocationSequence.incrementAndGet());
+            for(var entry:verifiedAccounts.entrySet()) if(entry.getValue().id().equals(account)) {
+                Connection connection=connections.get(entry.getKey());
+                if(connection==null) continue;
+                var state=connection.session().snapshot();
+                connection.session().pauseEligibility();
+                if(connection!=initiator) main(()->{ if(connection.session().current(new AuthSession.Operation(state.connectionId(),state.generation()))) restrict(connection,"SECURITY_CHANGE_PENDING"); });
+            }
+        }
+    }
+    private void endSecurityWrite(UUID account) {
+        securityWriters.computeIfPresent(account,(key,count)->count==1?null:count-1);
+        reconcileRevocation(account);
+    }
+    /** A failed commit may be ambiguous. Keep admission closed until an authoritative version can be read. */
+    private void reconcileRevocation(UUID account) {
+        Long epoch=pendingRevocations.get(account);
+        if(epoch==null || securityWriters.containsKey(account)) return;
+        try {
+            var current=store.findById(account);
+            if(current==null) return;
+            synchronized(bindingLock) { updateBinding(account); }
+            synchronized(invalidationLock) {
+                if(!securityWriters.containsKey(account) && Objects.equals(epoch,pendingRevocations.get(account))) {
+                    invalidateVersion(account,current.version()-1);
+                    pendingRevocations.remove(account,epoch);
+                }
+            }
+        } catch(Exception e) { /* Timer retries; uncertain commits never restore an old authority. */ }
+    }
+    @Override public void awaitPrevious(CompletionStage<Void> previous) { predecessor=previous; }
+    @Override public CompletionStage<Void> drained() { return drained; }
     @Override public void close() {
         active = false;
+        pendingFirst.clear(); firstBusy.clear(); pendingPresence.clear();
         initialized.completeExceptionally(new IllegalStateException("Runtime closed"));
         if (presenceTask != null) presenceTask.cancel();
         if(proxyIngress!=null) proxyIngress.close();
         HandlerList.unregisterAll(this);
         connections.values().forEach(c -> c.session().close()); connections.clear(); busy.clear();
         for (var f : futures) f.complete(new Result(false, "CLOSED", AuthSnapshot.absent(new UUID(0, 0))));
-        futures.clear(); worker.shutdownNow();
+        futures.clear(); worker.shutdownNow(); securityChecks.shutdownNow();
         secretBuffers.forEach((future,buffers)->{
             if(!running.contains(future)) for(char[] buffer:buffers) Arrays.fill(buffer,'\0');
         });

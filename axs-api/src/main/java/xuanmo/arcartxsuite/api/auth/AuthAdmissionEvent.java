@@ -3,17 +3,14 @@ package xuanmo.arcartxsuite.api.auth;
 import org.bukkit.event.Event;
 import org.bukkit.event.HandlerList;
 
-/** Fires on the server thread once per successful connection admission. */
+/** Per-connection server-thread notification. First-admission business facts use confirmed EventBus delivery. */
 public final class AuthAdmissionEvent extends Event {
     private static final HandlerList HANDLERS = new HandlerList();
     private final AuthSnapshot snapshot;
-    private final boolean firstAdmission;
-    public AuthAdmissionEvent(AuthSnapshot snapshot, boolean firstAdmission) {
+    public AuthAdmissionEvent(AuthSnapshot snapshot) {
         this.snapshot = snapshot;
-        this.firstAdmission = firstAdmission;
     }
     public AuthSnapshot snapshot() { return snapshot; }
-    public boolean firstAdmission() { return firstAdmission; }
     @Override public HandlerList getHandlers() { return HANDLERS; }
     public static HandlerList getHandlerList() { return HANDLERS; }
 }

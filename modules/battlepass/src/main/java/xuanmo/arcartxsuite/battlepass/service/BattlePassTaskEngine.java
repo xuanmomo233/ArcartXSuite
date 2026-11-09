@@ -102,7 +102,24 @@ public final class BattlePassTaskEngine {
 
             if (useEventBus) {
                 // 使用 EventBus
-                String subId = eventBus.subscribe(topic, event -> {
+                String subId;
+                if(topic.equals("axs.auth.presence_day_started") || topic.equals("axs.auth.profile_first_admitted")) {
+                    String consumer="battlepass/"+UUID.nameUUIDFromBytes((configuration.season().seasonId()+"/"+task.taskId()).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                    subscriptionIds.add(eventBus.subscribe(topic, event -> {
+                        var player = event.player();
+                        if ("server".equals(event.payload().get("provider")) && player != null && player.isOnline()) {
+                            handleEvent(player, task, event.payload());
+                        }
+                    }));
+                    subId=eventBus.subscribeConfirmed(consumer,topic,event->{
+                        var player=event.player();
+                        if(!active || player==null || !player.isOnline() || !xuanmo.arcartxsuite.api.auth.AuthAccess.admitted(player.getUniqueId()))
+                            return java.util.concurrent.CompletableFuture.failedFuture(new IllegalStateException("Player unavailable"));
+                        if(!task.matchesConditions(player,event.payload())) return java.util.concurrent.CompletableFuture.completedFuture(null);
+                        var date=event.payload().containsKey("business_date")?java.time.LocalDate.parse(event.payload().get("business_date")):java.time.LocalDate.now();
+                        return service.acceptAuthFact(player,task.taskId(),Math.max(0,task.calculateIncrement(player,event.payload())),event.payload().get("event_id"),date);
+                    });
+                } else subId = eventBus.subscribe(topic, event -> {
                     if (event.player() == null || !event.player().isOnline()) return;
                     handleEvent(event.player(), task, event.payload());
                 });

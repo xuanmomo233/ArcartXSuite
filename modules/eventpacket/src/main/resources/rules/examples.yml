@@ -3,7 +3,7 @@
 # 同名规则以最后加载的文件为准；目录文件按文件名排序加载。
 # trigger 可选值:
 # - admitted 玩家加入服务器。
-# - first-admitted 玩家首次加入服务器。
+# - first-admitted 首次准入事实，先异步保存动作计划，再确认接收。
 # - quit 玩家退出服务器。
 # - placeholder-increase / papi-increase 指定 PAPI 数值增加时触发。
 # - placeholder-decrease / papi-decrease 指定 PAPI 数值减少时触发。
@@ -22,7 +22,8 @@
 #
 # 默认每个玩家只触发一次；repeatable: true 可重复触发，cooldown 支持 10s / 5m / 2h / 1d。
 # conditions 与 prop 模块相同，格式为 "%placeholder% operator value"，支持 == != >= <= > < contains regex。
-# 动作按顺序执行，单个动作失败不会中断后续动作。
+# 普通触发的动作按顺序执行，单个动作失败不会中断后续动作。
+# first-admitted 动作执行失败或执行中断时暂停，使用 /axs eventpacket auth-receipt 核对；不盲目重放。
 # 动作变量（{变量名} 形式，渲染时未匹配的占位符原样保留）:
 #
 # ── 玩家主体（触发者；player_* 与 subject_* 等价，推荐用 player_*）──

@@ -16,7 +16,7 @@ record AuthenticationSettings(String realm,java.time.ZoneId timezone,long loginT
         boolean passwordAllowed,PasswordPolicy passwordPolicy,boolean requireBinding,
         AuthRuntimeCapability.Terms terms,Performance performance,CenterEndpoint center) {
     record PasswordPolicy(int minLength,int maxLength,int maxAttempts,long cooldownMillis) {}
-    record Performance(int workers,int queueCapacity) {}
+    record Performance(int workers,int queueCapacity,int renewalWorkers,int renewalQueueCapacity) {}
     record CenterEndpoint(String url,String nodeId,String keyEnvironment) {}
     AuthenticationSettings { trustedProxies=List.copyOf(trustedProxies); }
     static AuthenticationSettings load(JavaPlugin plugin) {
@@ -56,6 +56,8 @@ record AuthenticationSettings(String realm,java.time.ZoneId timezone,long loginT
             throw new IllegalArgumentException("terms.lines 必须为字符串列表");
         boolean passwordAllowed=config.getBoolean("ingress.password-login",ingress.equals("password"));
         if(ingress.equals("password") && !passwordAllowed) throw new IllegalArgumentException("password 入口不能关闭唯一的身份验证方式");
+        if(passwordAllowed && !Bukkit.getOnlineMode())
+            throw new IllegalArgumentException("游戏内密码认证要求直连 online-mode=true 的加密连接；离线后端须关闭 password-login 并使用可信代理证明");
         String audience=config.getString("ingress.audience","");
         var trusts=new ArrayList<xuanmo.arcartxsuite.auth.minecraft.ProxyProofs.Trust>();
         if(ingress.equals("signed-proxy")) {
@@ -111,7 +113,7 @@ record AuthenticationSettings(String realm,java.time.ZoneId timezone,long loginT
         if (workers < 1 || workers > 8 || capacity < 1 || capacity > 1024) throw new IllegalArgumentException("认证队列配置无效");
         return new AuthenticationSettings(realm,timezone,loginTimeoutNanos,nativeGateway,trustedProxies,audience,
             passwordAllowed,new PasswordPolicy(minLength,maxLength,maxAttempts,cooldown),requireBinding,terms,
-            new Performance(workers,capacity),null);
+            new Performance(workers,capacity,2,4096),null);
     }
     private static AuthenticationSettings center(YamlConfiguration config) {
         if(!Set.of("schema-version","backend","realm-id","ingress","performance","center").equals(config.getKeys(false)))
@@ -122,20 +124,23 @@ record AuthenticationSettings(String realm,java.time.ZoneId timezone,long loginT
         if(ingress==null || remote==null || performance==null
                 || !Set.of("type","audience").equals(ingress.getKeys(false))
                 || !Set.of("url","node-id","key-environment").equals(remote.getKeys(false))
-                || !Set.of("workers","queue-capacity").equals(performance.getKeys(false)))
+                || !Set.of("workers","queue-capacity","renewal-workers","renewal-queue-capacity").equals(performance.getKeys(false)))
             throw new IllegalArgumentException("中心节点配置缺少字段或包含未知字段");
         for(String path:List.of("backend","realm-id","ingress.type","ingress.audience","center.url","center.node-id","center.key-environment"))
             if(!(config.get(path) instanceof String)) throw new IllegalArgumentException(path+" 必须为字符串");
         if(!(config.get("schema-version") instanceof Integer) || !(config.get("performance.workers") instanceof Integer)
-                || !(config.get("performance.queue-capacity") instanceof Integer)) throw new IllegalArgumentException("节点版本和队列策略必须为整数");
+                || !(config.get("performance.queue-capacity") instanceof Integer) || !(config.get("performance.renewal-workers") instanceof Integer)
+                || !(config.get("performance.renewal-queue-capacity") instanceof Integer)) throw new IllegalArgumentException("节点版本和队列策略必须为整数");
         if(!"password".equals(ingress.getString("type"))) throw new IllegalArgumentException("P3 中心节点当前仅支持 password 入口；混合入口不能隐式降级");
         String realm=config.getString("realm-id"),audience=ingress.getString("audience"),node=remote.getString("node-id"),environment=remote.getString("key-environment");
         if(!realm.matches("[a-zA-Z0-9_-]{1,64}") || !audience.matches("[a-zA-Z0-9_-]{1,64}") || !node.matches("[a-zA-Z0-9_-]{1,64}")
                 || !environment.matches("[A-Z][A-Z0-9_]{0,127}")) throw new IllegalArgumentException("中心节点标识无效");
         int workers=performance.getInt("workers"),capacity=performance.getInt("queue-capacity");
+        int renewalWorkers=performance.getInt("renewal-workers"),renewalCapacity=performance.getInt("renewal-queue-capacity");
         if(workers<1 || workers>8 || capacity<1 || capacity>1024) throw new IllegalArgumentException("认证队列配置无效");
+        if(renewalWorkers<1 || renewalWorkers>16 || renewalCapacity<128 || renewalCapacity>16384) throw new IllegalArgumentException("租约续期队列配置无效");
         return new AuthenticationSettings(realm,java.time.ZoneId.of("UTC"),TimeUnit.SECONDS.toNanos(300),null,List.of(),audience,true,
-            new PasswordPolicy(8,128,5,300_000),false,new AuthRuntimeCapability.Terms(false,"",List.of()),new Performance(workers,capacity),
+            new PasswordPolicy(8,128,5,300_000),false,new AuthRuntimeCapability.Terms(false,"",List.of()),new Performance(workers,capacity,renewalWorkers,renewalCapacity),
             new CenterEndpoint(remote.getString("url"),node,environment));
     }
 }

@@ -8,6 +8,9 @@ ingress:
 performance:
   workers: 2
   queue-capacity: 128
+  # 续期队列独立于登录队列；积压超过3秒的请求不会继续访问中心。
+  renewal-workers: 2
+  renewal-queue-capacity: 4096
 center:
   # 远程地址必须为 HTTPS；仅同机 127.0.0.1 允许 HTTP。
   url: http://127.0.0.1:25600

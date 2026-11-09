@@ -20,4 +20,20 @@ class ProxyKeysTest {
         assertThrows(Exception.class,()->ProxyKeys.loadOrCreate(directory));
         assertEquals("invalid",Files.readString(directory.resolve("auth-forwarding-key.json")));
     }
+    @Test void restoredKeyWithAnotherReadersAccessIsRejectedWithoutChangingIt() throws Exception {
+        ProxyKeys.loadOrCreate(directory);
+        Path key=directory.resolve("auth-forwarding-key.json");
+        byte[] original=Files.readAllBytes(key);
+        var posix=Files.getFileAttributeView(key,java.nio.file.attribute.PosixFileAttributeView.class);
+        org.junit.jupiter.api.Assumptions.assumeTrue(posix!=null);
+        Files.setPosixFilePermissions(key,java.nio.file.attribute.PosixFilePermissions.fromString("rw-r--r--"));
+        assertThrows(IllegalStateException.class,()->ProxyKeys.loadOrCreate(directory));
+        assertArrayEquals(original,Files.readAllBytes(key));
+    }
+    @Test void restoredAclCannotGrantAnotherPrincipalAccess() {
+        java.nio.file.attribute.UserPrincipal owner=()->"service",other=()->"other";
+        var entry=java.nio.file.attribute.AclEntry.newBuilder().setType(java.nio.file.attribute.AclEntryType.ALLOW)
+            .setPrincipal(other).setPermissions(java.nio.file.attribute.AclEntryPermission.READ_DATA).build();
+        assertThrows(IllegalStateException.class,()->ProxyKeys.requirePrivateAcl(owner,java.util.List.of(entry)));
+    }
 }

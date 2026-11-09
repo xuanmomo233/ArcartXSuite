@@ -30,6 +30,8 @@ class AuthenticationSettingsTest {
         performance:
           workers: 2
           queue-capacity: 128
+          renewal-workers: 2
+          renewal-queue-capacity: 4096
         center:
           url: http://127.0.0.1:25600
           node-id: lobby
@@ -47,11 +49,20 @@ class AuthenticationSettingsTest {
         assertThrows(IllegalArgumentException.class,()->document(CENTER+"requirements:\n  terms: false\n"));
     }
     @Test void standaloneDefaultsHaveOneUsableIdentityMethod() throws Exception {
+        try(var bukkit=mockStatic(org.bukkit.Bukkit.class)) {
+        bukkit.when(org.bukkit.Bukkit::getOnlineMode).thenReturn(true);
         var settings=load("");
         assertTrue(settings.passwordAllowed());
         assertNull(settings.nativeGateway());
         assertTrue(settings.trustedProxies().isEmpty());
         assertFalse(settings.terms().enabled());
+        }
+    }
+    @Test void passwordIngressRejectsUnencryptedOfflineTransport() {
+        try(var bukkit=mockStatic(org.bukkit.Bukkit.class)) {
+            bukkit.when(org.bukkit.Bukkit::getOnlineMode).thenReturn(false);
+            assertThrows(IllegalArgumentException.class,()->load(""));
+        }
     }
     @Test void futureBackendAndUnknownPoliciesAreRejected() {
         assertThrows(IllegalArgumentException.class,()->load("client-integrity: true\n"));

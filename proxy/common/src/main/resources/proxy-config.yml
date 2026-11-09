@@ -10,14 +10,14 @@ kick-offline-message: "&c本服务器仅支持正版/LittleSkin 账号登录"
 # 是否为离线玩家自动分配 UUID（通常保持 true）
 auto-assign-uuid: true
 
-# 首批签名桥接支持 Velocity。代理私钥只保存在代理数据目录，不下发给客户端或后端。
+# Velocity 与 BungeeCord 共用本节。代理私钥只保存在代理数据目录，不下发给客户端或后端。
 # 后端使用 authentication.yml 的 signed-proxy、相同 realm/audience 与代理公钥。
 # 仍须限制后端直连；跨机游戏链路应通过私网或加密隧道保护。
 auth-forwarding:
   enabled: false
   issuer: proxy-main
   gateway-url: http://127.0.0.1:25599
-  # 键必须与 Velocity 注册的后端名称一致。
+  # 键必须与代理注册的后端名称一致。
   targets:
     lobby:
       realm: network
@@ -33,7 +33,7 @@ auth-forwarding:
 #   3. 玩家连接时，authlib-injector 向本地代理发 hasJoined 请求
 #      网关验证本次 hasJoined 请求；profile 查询不产生登录证明。
 #   4. 后端使用 authentication.yml 管理准入，不能查询 UUID 来源缓存授予免密。
-#      代理证明的端到端传递仍需接入对应的可信连接适配器。
+#      启用 auth-forwarding 并登记目标子服后，代理关联本次握手并传递证明。
 #   后端应限制直连并正确配置可信玩家信息转发。
 
 auth:

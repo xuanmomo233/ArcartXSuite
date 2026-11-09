@@ -9,6 +9,8 @@ import java.util.concurrent.CompletionStage;
 public interface BindingService {
     record Binding(UUID accountId,UUID profileId,String profileName,long qqId,long boundAt) {}
     record BindingResult(boolean success,String message) {}
+    /** Current bounded-lifetime authorization projection. Expired/unavailable data yields an empty list;
+     * callers must obtain a fresh snapshot for each decision rather than retaining it as authority. */
     List<Binding> snapshot();
     CompletionStage<BindingResult> requestFromQq(long qqId,String profileName);
     CompletionStage<BindingResult> revokeByQq(long verifiedQqId);

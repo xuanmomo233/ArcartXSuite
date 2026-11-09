@@ -3,6 +3,7 @@ package xuanmo.arcartxsuite.auth.center;
 import com.google.gson.*;
 import java.time.*;
 import java.util.*;
+import java.util.concurrent.Semaphore;
 import xuanmo.arcartxsuite.auth.engine.*;
 import static xuanmo.arcartxsuite.auth.protocol.AuthWire.*;
 
@@ -13,17 +14,31 @@ final class CenterService {
     private final CenterLedger ledger;
     private final CenterOutbox outbox;
     private final GameExternalStore external;
-    private final Argon2Passwords passwords=new Argon2Passwords();
+    private final Argon2Passwords passwords;
+    private final Semaphore passwordSlots=new Semaphore(2);
+    private final Map<String,PasswordWork> passwordWork=new HashMap<>();
+    private record PasswordWork(JdbcAuthStore.Account account,CenterLedger.Flow flow,char[] password,char[] replacement,
+            boolean register,String terms) implements AutoCloseable {
+        @Override public void close() { Arrays.fill(password,'\0'); Arrays.fill(replacement,'\0'); }
+    }
+    private static final class RejectedPassword extends RuntimeException {
+        final Reply reply;
+        RejectedPassword(Reply reply) { this.reply=reply; }
+    }
     private long nextCleanup=System.nanoTime();
     CenterService(CenterConfiguration config,JdbcAuthStore.Connections connections) throws Exception {
-        this.config=config; ledger=new CenterLedger(connections); ledger.initialize(); outbox=new CenterOutbox(connections);
+        this(config,connections,new Argon2Passwords());
+    }
+    CenterService(CenterConfiguration config,JdbcAuthStore.Connections connections,Argon2Passwords passwords) throws Exception {
+        this.passwords=Objects.requireNonNull(passwords);
+        this.config=config; ledger=new CenterLedger(connections,System::currentTimeMillis,config.commandCapacityPerNode()); ledger.initialize(); outbox=new CenterOutbox(connections);
         external=config.external()==null?null:new GameExternalStore(connections);
         for(String realm:config.realms().keySet()) {
             JdbcAuthStore store=new JdbcAuthStore(connections,realm); store.initialize(); stores.put(realm,store);
         }
     }
-    synchronized boolean claimNonce(String node,UUID nonce) throws java.sql.SQLException { return ledger.claimNonce(node,nonce); }
-    synchronized Reply execute(CenterConfiguration.Node node,Request request) throws Exception {
+    synchronized boolean claimNonce(String node,UUID nonce) throws java.sql.SQLException { return ledger.claimNonce(node,nonce,config.nonceCapacityPerNode()); }
+    Reply execute(CenterConfiguration.Node node,Request request) throws Exception {
         validate(node,request);
         String scope=switch(request.operation()) {
             case BINDINGS -> "binding-read";
@@ -32,19 +47,106 @@ final class CenterService {
             default -> "auth";
         };
         if(!node.scopes().contains(scope)) return Reply.fail("NODE_SCOPE_DENIED");
+        boolean journal=switch(request.operation()) { case OPEN,CHECK,BINDINGS,PRESENCE,EXCHANGE,OUTBOX -> false; default -> true; };
+        PasswordWork prepared;
+        String operationKey=node.id()+":"+request.context().connection();
+        synchronized(this) {
         if(System.nanoTime()-nextCleanup>=0) {
             ledger.cleanup();
             outbox.prune();
             if(external!=null) external.prune();
             nextCleanup=System.nanoTime()+60_000_000_000L;
         }
-        boolean journal=switch(request.operation()) { case OPEN,CHECK,BINDINGS,PRESENCE,EXCHANGE,OUTBOX -> false; default -> true; };
-        if(journal && !ledger.beginCommand(node,request)) return Reply.fail("OUTCOME_UNKNOWN");
-        Reply reply;
-        try { reply=dispatch(node,request); }
-        catch(SecurityException e) { reply=Reply.fail("CREDENTIALS_REJECTED"); }
+        if(journal) {
+            var status=ledger.beginCommand(node,request);
+            if(status==CenterLedger.CommandStatus.REPLAYED) return Reply.fail("OUTCOME_UNKNOWN");
+            if(status==CenterLedger.CommandStatus.FULL) return Reply.fail("NODE_COMMAND_CAPACITY");
+        }
+        if(request.operation()!=Operation.PASSWORD && request.operation()!=Operation.CHANGE_PASSWORD) {
+            if(request.operation()==Operation.CLOSE) passwordWork.remove(operationKey);
+            Reply reply;
+            try { reply=dispatch(node,request); }
+            catch(SecurityException e) { reply=Reply.fail("CREDENTIALS_REJECTED"); }
+            return finish(request,reply,journal);
+        }
+        if(!passwordSlots.tryAcquire()) return finish(request,Reply.fail("BUSY"),journal);
+        try { prepared=preparePassword(node,request); }
+        catch(RejectedPassword e) { passwordSlots.release(); return finish(request,e.reply,journal); }
+        catch(Exception | LinkageError e) { passwordSlots.release(); throw e; }
+        passwordWork.put(operationKey,prepared);
+        }
+        // Password computation owns no service/SQLite monitor. Two RPC workers remain available to renew/revoke.
+        try(prepared) {
+            boolean verified=prepared.register() || passwords.verify(prepared.password(),prepared.account().hash());
+            String hash=verified && (prepared.register() || request.operation()==Operation.CHANGE_PASSWORD)
+                ?passwords.hash(prepared.register()?prepared.password():prepared.replacement()):null;
+            synchronized(this) {
+                Reply reply=passwordWork.get(operationKey)==prepared?commitPassword(node,request,prepared,verified,hash):Reply.fail("STALE_CONNECTION");
+                return finish(request,reply,journal);
+            }
+        } finally {
+            synchronized(this) { passwordWork.remove(operationKey,prepared); }
+            passwordSlots.release();
+        }
+    }
+    private Reply finish(Request request,Reply reply,boolean journal) throws java.sql.SQLException {
         if(journal) ledger.finishCommand(request,reply.code());
         return reply;
+    }
+    private static void rejectPassword(String code) { throw new RejectedPassword(Reply.fail(code)); }
+    private PasswordWork preparePassword(CenterConfiguration.Node node,Request request) throws Exception {
+        var store=stores.get(node.realm()); var policy=config.realms().get(node.realm());
+        if(!policy.gamePasswordEnabled()) { rejectPassword("PASSWORD_ENTRY_DISABLED"); }
+        char[] password=secret(request.data(),"password"),replacement=new char[0];
+        boolean accepted=false;
+        try {
+            var account=store.find(request.context().name());
+            boolean register=request.operation()==Operation.PASSWORD && CenterConfiguration.bool(request.data(),"register");
+            String terms=""; CenterLedger.Flow flow=null;
+            if(request.operation()==Operation.PASSWORD) {
+                if(password.length<(register?policy.minLength():1) || password.length>policy.maxLength()) rejectPassword("PASSWORD_LENGTH");
+                terms=CenterConfiguration.string(request.data(),"termsVersion");
+                if(policy.requireTerms() && (!CenterConfiguration.bool(request.data(),"agreed") || !policy.termsVersion().equals(terms)))
+                    throw new RejectedPassword(new Reply(false,"TERMS_REQUIRED",null,policy,List.of(),""));
+                if(register && account!=null) rejectPassword("CREDENTIALS_REJECTED");
+            } else {
+                replacement=secret(request.data(),"newPassword");
+                if(password.length<1 || replacement.length<policy.minLength() || replacement.length>policy.maxLength()) rejectPassword("PASSWORD_LENGTH");
+                flow=ledger.find(node.id(),request.context());
+                if(!recentPassword(flow,account,request.context())) rejectPassword("INVALID_STATE");
+            }
+            if(!register && (account==null || !account.profile().equals(request.context().profile()) || !"local-password".equals(account.provider())
+                    || account.blockedUntil()>System.currentTimeMillis())) rejectPassword("CREDENTIALS_REJECTED");
+            accepted=true;
+            return new PasswordWork(account,flow,password,replacement,register,terms);
+        } finally { if(!accepted) { Arrays.fill(password,'\0'); Arrays.fill(replacement,'\0'); } }
+    }
+    private Reply commitPassword(CenterConfiguration.Node node,Request request,PasswordWork prepared,boolean verified,String hash) throws Exception {
+        var store=stores.get(node.realm()); var policy=config.realms().get(node.realm()); var context=request.context();
+        var current=store.find(context.name()); var expected=prepared.account();
+        if(prepared.register()?current!=null:current==null || !current.id().equals(expected.id()) || current.version()!=expected.version()
+                || !current.hash().equals(expected.hash())) return Reply.fail("STALE_CREDENTIALS");
+        if(current!=null && current.blockedUntil()>System.currentTimeMillis()) return Reply.fail("CREDENTIALS_REJECTED");
+        if(!verified) { store.failure(current,System.currentTimeMillis(),5,300_000); return Reply.fail("CREDENTIALS_REJECTED"); }
+        if(request.operation()==Operation.CHANGE_PASSWORD) {
+            var flow=ledger.find(node.id(),context);
+            if(!Objects.equals(flow,prepared.flow()) || !recentPassword(flow,current,context)) return Reply.fail("STALE_CONNECTION");
+            boolean changed=outbox.transaction(c->{
+                if(!store.changePassword(c,current,hash)) return false;
+                ledger.clearBindingCodes(c,node.realm(),current.id());
+                CenterOutbox.append(c,node.realm(),current.id()+":security:"+(current.version()+1),EventType.PASSWORD_CHANGED,current,current.version()+1,null,"");
+                return true;
+            });
+            return changed?Reply.ok("PASSWORD_CHANGED"):Reply.fail("STALE_CREDENTIALS");
+        }
+        var account=current;
+        if(prepared.register()) account=outbox.transaction(c->{
+            var created=store.createIdentity(c,context.name(),context.profile(),hash,"local-password");
+            CenterOutbox.append(c,node.realm(),created.id()+":created",EventType.ACCOUNT_CREATED,created,created.version(),null,""); return created;
+        });
+        if(policy.requireTerms()) recordTerms(node.realm(),store,account,prepared.terms());
+        if(external!=null) external.cancel(node.id(),context);
+        return view(ledger.create(node.id(),context,account),account,store,policy);
     }
     private static void validate(CenterConfiguration.Node node,Request request) {
         if(request==null || request.version()!=1 || request.requestId()==null || request.operation()==null || request.context()==null || request.data()==null)
@@ -53,6 +155,7 @@ final class CenterService {
         if(!node.realm().equals(context.realm()) || !node.audience().equals(context.audience()) || context.profile()==null
                 || context.connection()==null || context.name()==null || !context.name().matches("[\\p{L}\\p{N}_]{1,16}")) throw new SecurityException("Node target mismatch");
         Set<String> allowed=switch(request.operation()) {
+            case BINDINGS -> Set.of("after");
             case PASSWORD -> Set.of("password","register","agreed","termsVersion");
             case TERMS -> Set.of("version"); case BIND -> Set.of("code"); case EXCHANGE -> Set.of("ticket");
             case CHECK -> Set.of("session"); case CHANGE_PASSWORD -> Set.of("password","newPassword");
@@ -116,34 +219,13 @@ final class CenterService {
                     return Reply.fail("IDENTITY_LINK_REQUIRED");
                 }
             }
-            case PASSWORD: {
-                if(!policy.gamePasswordEnabled()) return Reply.fail("PASSWORD_ENTRY_DISABLED");
-                char[] password=secret(data,"password");
-                try {
-                    boolean register=CenterConfiguration.bool(data,"register"),agreed=CenterConfiguration.bool(data,"agreed");
-                    if(password.length<(register?policy.minLength():1) || password.length>policy.maxLength()) return Reply.fail("PASSWORD_LENGTH");
-                    String consent=CenterConfiguration.string(data,"termsVersion");
-                    if(policy.requireTerms() && (!agreed || !policy.termsVersion().equals(consent))) return new Reply(false,"TERMS_REQUIRED",null,policy,List.of(),"");
-                    var account=store.find(context.name());
-                    if(register) {
-                        if(account!=null) return Reply.fail("CREDENTIALS_REJECTED");
-                        String hash=passwords.hash(password);
-                        account=outbox.transaction(c->{
-                            var created=store.createIdentity(c,context.name(),context.profile(),hash,"local-password");
-                            CenterOutbox.append(c,node.realm(),created.id()+":created",EventType.ACCOUNT_CREATED,created,created.version(),null,"");
-                            return created;
-                        });
-                    } else {
-                        if(account==null || !account.profile().equals(context.profile()) || !account.provider().equals("local-password")
-                                || account.blockedUntil()>System.currentTimeMillis()) return Reply.fail("CREDENTIALS_REJECTED");
-                        if(!passwords.verify(password,account.hash())) { store.failure(account,System.currentTimeMillis(),5,300_000); return Reply.fail("CREDENTIALS_REJECTED"); }
-                    }
-                    if(policy.requireTerms()) recordTerms(node.realm(),store,account,policy.termsVersion());
-                    if(external!=null) external.cancel(node.id(),context);
-                    return view(ledger.create(node.id(),context,account),account,store,policy);
-                } finally { Arrays.fill(password,'\0'); }
+            case BINDINGS: {
+                String after=CenterConfiguration.string(data,"after");
+                if(!after.isEmpty()) UUID.fromString(after);
+                var page=store.bindingsPage(after,256);
+                return new Reply(true,"READY",null,null,page.stream().map(value->new Binding(value.accountId(),value.profileId(),value.profileName(),value.qqId(),value.boundAt())).toList(),
+                    page.size()==256?page.get(page.size()-1).accountId().toString():"");
             }
-            case BINDINGS: return new Reply(true,"READY",null,null,bindings(store),"");
             case OUTBOX: {
                 JsonElement cursor=data.get("cursor");
                 if(!cursor.isJsonPrimitive() || !cursor.getAsJsonPrimitive().isNumber() || !cursor.getAsString().matches("-1|[0-9]{1,19}")) throw new IllegalArgumentException("Invalid outbox cursor");
@@ -153,14 +235,14 @@ final class CenterService {
                 long qq=qq(data); String name=CenterConfiguration.string(data,"name");
                 if(!name.matches("[\\p{L}\\p{N}_]{1,16}")) return Reply.fail("INVALID_BINDING_REQUEST");
                 var account=store.find(name);
-                if(account==null || store.isBound(account.id()) || store.bindings().stream().anyMatch(binding->binding.qqId()==qq)) return Reply.fail("BINDING_CONFLICT");
+                if(account==null || store.isBound(account.id()) || store.bindingByQq(qq)!=null) return Reply.fail("BINDING_CONFLICT");
                 String code=ledger.bindingCode(node.realm(),account.id(),qq);
                 if(code==null) return Reply.fail("BINDING_PENDING");
                 return new Reply(true,"BINDING_CODE",null,null,List.of(),code);
             }
             case UNBIND_QQ,UNBIND_PROFILE: {
-                var binding=store.bindings().stream().filter(value->request.operation()==Operation.UNBIND_QQ
-                    ?value.qqId()==qq(data):value.profileId().equals(UUID.fromString(CenterConfiguration.string(data,"profile")))).findFirst().orElse(null);
+                var binding=request.operation()==Operation.UNBIND_QQ?store.bindingByQq(qq(data))
+                    :store.bindingByProfile(UUID.fromString(CenterConfiguration.string(data,"profile")));
                 if(binding==null) return Reply.fail("NOT_BOUND");
                 var account=store.findById(binding.accountId());
                 if(account==null) return Reply.fail("ACCOUNT_UNKNOWN");
@@ -214,39 +296,21 @@ final class CenterService {
                 lease=ledger.renew(flow,UUID.fromString(CenterConfiguration.string(data,"session")));
                 return admitted(flow,account,policy,lease);
             }
-            case CHANGE_PASSWORD -> {
-                if(!live || !"local-password".equals(flow.method())) return Reply.fail("INVALID_STATE");
-                char[] old=secret(data,"password"),replacement=new char[0];
-                try {
-                    replacement=secret(data,"newPassword");
-                    if(replacement.length<policy.minLength() || replacement.length>policy.maxLength()) return Reply.fail("PASSWORD_LENGTH");
-                    if(account.blockedUntil()>System.currentTimeMillis()) return Reply.fail("CREDENTIALS_REJECTED");
-                    if(!passwords.verify(old,account.hash())) {
-                        store.failure(account,System.currentTimeMillis(),5,300_000); return Reply.fail("CREDENTIALS_REJECTED");
-                    }
-                    String hash=passwords.hash(replacement);
-                    boolean changed=outbox.transaction(c->{
-                        if(!store.changePassword(c,account,hash)) return false;
-                        ledger.clearBindingCodes(c,node.realm(),account.id()); long version=account.version()+1;
-                        CenterOutbox.append(c,node.realm(),account.id()+":security:"+version,EventType.PASSWORD_CHANGED,account,version,null,""); return true;
-                    });
-                    return changed?Reply.ok("PASSWORD_CHANGED"):Reply.fail("STALE_CREDENTIALS");
-                } finally { Arrays.fill(old,'\0'); Arrays.fill(replacement,'\0'); }
-            }
             case PRESENCE -> {
                 if(!live) return Reply.fail("INVALID_STATE");
                 String date=LocalDate.now(ZoneId.of(policy.timezone())).toString();
-                boolean pending=outbox.transaction(c->{
+                outbox.transaction(c->{
                     if(!store.pendingDay(c,account.id(),date)) return false;
                     CenterOutbox.append(c,node.realm(),account.id()+":day:"+date,EventType.PRESENCE_DAY,account,account.version(),null,date); return true;
                 });
-                return new Reply(true,"PRESENCE",null,null,List.of(),date+":"+pending);
+                String next=store.nextPendingDay(account.id(),date);
+                return new Reply(true,"PRESENCE",null,null,List.of(),(next==null?date:next)+":"+(next!=null));
             }
             case ACK_PRESENCE -> {
                 if(!live) return Reply.fail("INVALID_STATE");
                 LocalDate date=LocalDate.parse(CenterConfiguration.string(data,"date"));
                 LocalDate today=LocalDate.now(ZoneId.of(policy.timezone()));
-                if(date.isAfter(today) || date.isBefore(today.minusDays(1))) return Reply.fail("INVALID_DATE");
+                if(date.isAfter(today)) return Reply.fail("INVALID_DATE");
                 store.acknowledgeDay(account.id(),date.toString()); return Reply.ok("ACKNOWLEDGED");
             }
             case ACK_FIRST -> { if(!live) return Reply.fail("INVALID_STATE"); store.acknowledgeFirst(account); return Reply.ok("ACKNOWLEDGED"); }
@@ -361,10 +425,5 @@ final class CenterService {
     private static Reply admitted(CenterLedger.Flow flow,JdbcAuthStore.Account account,Policy policy,CenterLedger.Lease lease) {
         long remaining=Math.max(0,Math.min(CenterLedger.LEASE_MILLIS,lease.expires()-System.currentTimeMillis()));
         return new Reply(true,"ADMITTED",new State(true,account.id(),account.version(),provider(flow),Set.of(),flow.id(),"",lease.id(),remaining,!account.firstAdmitted()),policy,List.of(),"");
-    }
-    private static List<Binding> bindings(JdbcAuthStore store) throws Exception {
-        var values=store.bindings();
-        if(values.size()>1000) throw new IllegalStateException("Binding projection exceeds P3 limit; pagination required");
-        return values.stream().map(value->new Binding(value.accountId(),value.profileId(),value.profileName(),value.qqId(),value.boundAt())).toList();
     }
 }

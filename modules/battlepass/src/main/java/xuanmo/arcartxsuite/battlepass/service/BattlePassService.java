@@ -71,6 +71,17 @@ public final class BattlePassService {
     private BukkitTask saveTask;
     private BukkitTask resetTask;
     private volatile boolean active;
+    private final java.util.concurrent.CompletableFuture<Void> authDrained=new java.util.concurrent.CompletableFuture<>();
+    private final java.util.concurrent.ExecutorService authFacts=new java.util.concurrent.ThreadPoolExecutor(2,2,0,java.util.concurrent.TimeUnit.MILLISECONDS,
+        new java.util.concurrent.ArrayBlockingQueue<>(128),r->{ Thread t=new Thread(r,"AXS-BattlePassAuth"); t.setDaemon(true); return t; },new java.util.concurrent.ThreadPoolExecutor.AbortPolicy()) {
+            @Override protected void terminated() { authDrained.complete(null); }
+        };
+    private final Set<java.util.concurrent.CompletableFuture<Void>> authReceipts=ConcurrentHashMap.newKeySet();
+    private final Set<UUID> uncertainAuthWrites=ConcurrentHashMap.newKeySet();
+    private record AuthTaskDelta(String instance,int increment,int completionXp) {}
+    private record AuthProjection(BattlePassPlayerProgress progress,List<PlayerTaskInstance> tasks,List<AuthTaskDelta> deltas) {}
+    // Accessed only under repository.withPlayerWrite; an ambiguous commit fences all ordinary snapshot writers.
+    private final Map<UUID,Map<String,List<AuthTaskDelta>>> pendingAuthApply=new ConcurrentHashMap<>();
 
     private volatile UiRefreshListener uiRefreshListener;
 
@@ -164,8 +175,10 @@ public final class BattlePassService {
         resetTask = Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, this::checkResets, 6000L, 6000L);
     }
 
-    public void shutdown() {
+    public java.util.concurrent.CompletionStage<Void> shutdown() {
         active = false;
+        authFacts.shutdownNow();
+        authReceipts.forEach(future->future.completeExceptionally(new java.util.concurrent.CancellationException("BattlePass closed")));
         taskEngine.shutdown();
         if (saveTask != null) {
             saveTask.cancel();
@@ -175,6 +188,9 @@ public final class BattlePassService {
             resetTask.cancel();
             resetTask = null;
         }
+        return authDrained;
+    }
+    public void finishShutdown() {
         flushDirtyProgress();
         cachedProgress.clear();
         cachedInstances.clear();
@@ -184,6 +200,7 @@ public final class BattlePassService {
         dirtyPlayers.clear();
         dirtyInstances.clear();
         failedLoads.clear();
+        pendingAuthApply.clear(); uncertainAuthWrites.clear();
     }
 
     public BattlePassPlayerProgress getProgress(Player player) {
@@ -322,13 +339,17 @@ public final class BattlePassService {
     /** 进服预热缓存（异步线程调用，避免主线程 DB IO）。 */
     public void preload(Player player) {
         if (!active) return;
-        getProgress(player);
-        getTaskInstances(player);
+        try { repository.withPlayerWrite(player.getUniqueId(),()->{ getProgress(player); getTaskInstances(player); return null; }); }
+        catch(SQLException e) { logger.warning("战令缓存等待存储恢复: " + player.getUniqueId()); }
         // 赛季结算奖励补发已由本体统一 PendingRewardService 在 PlayerJoinEvent 中自动处理
     }
 
     /** 退服时落盘并驱逐缓存。 */
     public void handleQuit(UUID uuid) {
+        try { repository.withPlayerWrite(uuid,()->{ evictPlayer(uuid); return null; }); }
+        catch(SQLException e) { logger.warning("战令退服保存失败: " + uuid); }
+    }
+    private void evictPlayer(UUID uuid) {
         flushPlayer(uuid);
         cachedProgress.remove(uuid);
         cachedInstances.remove(uuid);
@@ -340,6 +361,7 @@ public final class BattlePassService {
                 taskEngine.clearPlayerLimits(uuid);
 
 failedLoads.remove(uuid);
+        pendingAuthApply.remove(uuid); uncertainAuthWrites.remove(uuid);
     }
 
     public List<PlayerTaskInstance> getActiveTaskInstances(Player player) {
@@ -384,8 +406,7 @@ failedLoads.remove(uuid);
 
     public void updateTaskProgress(Player player, String taskId, int increment) {
         if (!active || increment <= 0) return;
-        UUID uuid = player.getUniqueId();
-        boolean changed = false;
+        UUID uuid=player.getUniqueId(); String playerName=player.getName();
         synchronized (playerLock(uuid)) {
             List<PlayerTaskInstance> instances = cachedInstances.get(uuid);
             Map<String, Integer> indexes = instanceIndexes.get(uuid);
@@ -400,7 +421,7 @@ failedLoads.remove(uuid);
                 PlayerTaskInstance current = instances.get(index);
                 if (current.completed()) continue;
                 PlayerTaskInstance updated = current.withProgress(
-                    Math.min(current.currentProgress() + increment, current.targetCount()));
+                    (int)Math.min((long)current.currentProgress() + increment, current.targetCount()));
                 if (updated.currentProgress() >= updated.targetCount()) {
                     updated = updated.withCompleted(true);
                     completedNow = true;
@@ -410,13 +431,93 @@ failedLoads.remove(uuid);
                         int xp = Math.round(task.totalXpReward() * progress.xpMultiplier());
                         cachedProgress.put(uuid, addXp(progress, xp));
                         dirtyPlayers.add(uuid);
-                        logger.fine("任务完成: " + player.getName() + " task=" + task.taskId() + " xp=" + xp);
+                        logger.fine("任务完成: " + playerName + " task=" + task.taskId() + " xp=" + xp);
                     }
                 }
                 instances.set(index, updated);
                 markDirtyInstance(uuid, updated.instanceId());
             }
             if (completedNow) persistProgressAsync(uuid);
+        }
+    }
+    /** Receipt, task progress and XP commit together; no SQL or waiting on the publishing server thread. */
+    public java.util.concurrent.CompletionStage<Void> acceptAuthFact(Player player,String task,int increment,String eventId,LocalDate businessDate) {
+        UUID uuid=player.getUniqueId(); String season=configuration.season().seasonId();
+        String fact=UUID.nameUUIDFromBytes((season+"/"+task+"/"+eventId).getBytes(java.nio.charset.StandardCharsets.UTF_8)).toString();
+        var result=new java.util.concurrent.CompletableFuture<Void>(); authReceipts.add(result);
+        result.whenComplete((ignored,error)->authReceipts.remove(result));
+        try { authFacts.execute(()->{
+            try {
+                repository.withPlayerWrite(uuid,()->{
+                    if(!active) throw new SQLException("BattlePass closed");
+                    if(!cachedProgress.containsKey(uuid) || !cachedInstances.containsKey(uuid)) {
+                        getProgress(player); getTaskInstances(player);
+                    }
+                    var pending=pendingAuthApply.computeIfAbsent(uuid,key->new HashMap<>());
+                    // Resolve prior ambiguous commits before another cache snapshot may be stored.
+                    for(var entry:new ArrayList<>(pending.entrySet())) {
+                        if(repository.receivedAuthFact(uuid,season,entry.getKey())) {
+                            applyAuthDeltas(uuid,entry.getValue());
+                        }
+                        pending.remove(entry.getKey());
+                    }
+                    uncertainAuthWrites.remove(uuid);
+                    if(repository.receivedAuthFact(uuid,season,fact)) return null;
+                    resetPeriods(uuid,true,true);
+                    AuthProjection projection=projectAuthFact(uuid,task,increment,businessDate);
+                    pending.put(fact,projection.deltas());
+                    try {
+                        repository.saveAuthFact(fact,projection.progress(),projection.tasks(),!projection.deltas().isEmpty());
+                        applyAuthDeltas(uuid,projection.deltas());
+                        pending.remove(fact);
+                    } catch(SQLException | RuntimeException e) { uncertainAuthWrites.add(uuid); throw e; }
+                    return null;
+                });
+                result.complete(null);
+            } catch(Exception e) { result.completeExceptionally(e); }
+        }); } catch(java.util.concurrent.RejectedExecutionException e) { result.completeExceptionally(e); }
+        return result;
+    }
+    private AuthProjection projectAuthFact(UUID uuid,String taskId,int increment,LocalDate date) throws SQLException {
+        synchronized(playerLock(uuid)) {
+            var progress=cachedProgress.get(uuid); var instances=cachedInstances.get(uuid);
+            if(failedLoads.contains(uuid) || progress==null || instances==null) throw new SQLException("Player cache is not ready");
+            var updated=new ArrayList<PlayerTaskInstance>();
+            var deltas=new ArrayList<AuthTaskDelta>();
+            boolean seasonDate=!date.isBefore(configuration.season().startDate()) && !date.isAfter(configuration.season().endDate());
+            for(var current:instances) {
+                boolean periodDate=current.category()==BattlePassTask.TaskCategory.SEASON || current.assignedDate()!=null
+                    && (current.category()==BattlePassTask.TaskCategory.DAILY?date.equals(current.assignedDate())
+                        :!date.isBefore(current.assignedDate()) && date.isBefore(current.assignedDate().plusDays(7)));
+                if(!seasonDate || !periodDate || increment<=0 || !current.templateId().equals(taskId) || current.completed()) { updated.add(current); continue; }
+                var template=findTask(taskId);
+                int completionXp=template==null?0:Math.round(template.totalXpReward()*progress.xpMultiplier());
+                var task=current.withProgress((int)Math.min((long)current.currentProgress()+increment,current.targetCount()));
+                if(task.currentProgress()>=task.targetCount()) {
+                    task=task.withCompleted(true); progress=addXp(progress,completionXp);
+                }
+                deltas.add(new AuthTaskDelta(current.instanceId(),task.currentProgress()-current.currentProgress(),completionXp));
+                updated.add(task);
+            }
+            return new AuthProjection(progress,List.copyOf(updated),List.copyOf(deltas));
+        }
+    }
+    private void applyAuthDeltas(UUID uuid,List<AuthTaskDelta> deltas) {
+        synchronized(playerLock(uuid)) {
+            var instances=cachedInstances.get(uuid); var indexes=instanceIndexes.get(uuid);
+            if(instances==null || indexes==null) return;
+            for(var delta:deltas) {
+                Integer index=indexes.get(delta.instance());
+                if(index==null || index<0 || index>=instances.size()) continue;
+                var current=instances.get(index);
+                if(current.completed()) continue;
+                var updated=current.withProgress((int)Math.min((long)current.currentProgress()+delta.increment(),current.targetCount()));
+                if(updated.currentProgress()>=updated.targetCount()) {
+                    updated=updated.withCompleted(true); var progress=cachedProgress.get(uuid);
+                    if(progress!=null) { cachedProgress.put(uuid,addXp(progress,delta.completionXp())); dirtyPlayers.add(uuid); }
+                }
+                instances.set(index,updated); markDirtyInstance(uuid,updated.instanceId());
+            }
         }
     }
 
@@ -547,13 +648,21 @@ failedLoads.remove(uuid);
         if (progress == null) return;
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
-                repository.saveProgress(progress);
+                saveCurrentProgress(uuid);
                 if (cachedProgress.get(uuid) == progress) {
                     dirtyPlayers.remove(uuid);
                 }
             } catch (SQLException e) {
                 logger.warning("即时保存战令进度失败 [" + uuid + "]: " + e.getMessage());
             }
+        });
+    }
+    private void saveCurrentProgress(UUID uuid) throws SQLException {
+        repository.withPlayerWrite(uuid,()->{
+            if(uncertainAuthWrites.contains(uuid)) throw new SQLException("Authentication fact commit requires reconciliation");
+            var current=cachedProgress.get(uuid);
+            if(current!=null) repository.saveProgress(current);
+            return null;
         });
     }
 
@@ -733,7 +842,7 @@ failedLoads.remove(playerUuid);
             BattlePassPlayerProgress progress = cachedProgress.get(uuid);
             if (progress == null) continue;
             try {
-                repository.saveProgress(progress);
+                saveCurrentProgress(uuid);
             } catch (SQLException e) {
                 dirtyPlayers.add(uuid);
                 logger.warning("进度保存失败 [" + uuid + "]: " + e.getMessage());
@@ -759,6 +868,12 @@ failedLoads.remove(playerUuid);
     }
 
     private void flushDirtyInstances(UUID uuid) {
+        try { repository.withPlayerWrite(uuid,()->{
+            if(uncertainAuthWrites.contains(uuid)) throw new SQLException("Authentication fact commit requires reconciliation");
+            flushDirtyInstancesLocked(uuid); return null;
+        }); } catch(SQLException e) { logger.warning("任务保存等待认证事件确认: " + uuid); }
+    }
+    private void flushDirtyInstancesLocked(UUID uuid) {
         if (failedLoads.contains(uuid)) return;
         List<PlayerTaskInstance> instances;
         Set<String> ids;
@@ -799,7 +914,7 @@ failedLoads.remove(playerUuid);
         BattlePassPlayerProgress progress = cachedProgress.get(uuid);
         if (progress != null && dirtyPlayers.contains(uuid)) {
             try {
-                repository.saveProgress(progress);
+                saveCurrentProgress(uuid);
                 dirtyPlayers.remove(uuid);
             } catch (SQLException e) {
                 logger.warning("玩家进度保存失败 [" + uuid + "]: " + e.getMessage());
@@ -830,176 +945,50 @@ failedLoads.remove(playerUuid);
         }
     }
 
-    private void performReset(UUID playerUuid, boolean daily, boolean weekly) {
+    private void performReset(UUID playerUuid,boolean daily,boolean weekly) {
+        try { resetPeriods(playerUuid,daily,weekly); }
+        catch(SQLException e) { logger.warning("任务周期重置待重试 ["+playerUuid+"]: "+e.getMessage()); }
+    }
 
-        synchronized (playerLock(playerUuid)) {
-
-            BattlePassPlayerProgress progress = cachedProgress.get(playerUuid);
-
-            if (progress == null) return;
-
-            String seasonId = configuration.season().seasonId();
-
-            LocalDate today = LocalDate.now();
-
-
-
-            if (daily) {
-
-                try {
-
-                    repository.deletePlayerTasksByCategory(
-
-                        playerUuid, seasonId, BattlePassTask.TaskCategory.DAILY);
-
-                } catch (SQLException e) {
-
-                    logger.warning("删除旧每日任务失败: " + e.getMessage());
-
+    private void resetPeriods(UUID playerUuid,boolean requestedDaily,boolean requestedWeekly) throws SQLException {
+        boolean changed=repository.withPlayerWrite(playerUuid,()->{
+            if(!active || uncertainAuthWrites.contains(playerUuid)) throw new SQLException("Authentication writes have not drained");
+            var before=cachedProgress.get(playerUuid);
+            if(before==null) return false;
+            LocalDate today=LocalDate.now();
+            boolean daily=requestedDaily && !today.equals(before.lastDailyResetDate());
+            boolean weekly=requestedWeekly && (before.lastWeeklyResetDate()==null || ChronoUnit.DAYS.between(before.lastWeeklyResetDate(),today)>=7);
+            if(!daily && !weekly) return false;
+            String season=configuration.season().seasonId();
+            // Database work owns only the worker-side write fence, never the lock used by game-thread mutations.
+            if(daily) repository.deletePlayerTasksByCategory(playerUuid,season,BattlePassTask.TaskCategory.DAILY);
+            if(weekly) repository.deletePlayerTasksByCategory(playerUuid,season,BattlePassTask.TaskCategory.WEEKLY);
+            synchronized(playerLock(playerUuid)) {
+                if(!active) throw new SQLException("BattlePass closed");
+                var progress=cachedProgress.get(playerUuid);
+                if(progress==null) return false;
+                var tasks=new ArrayList<>(cachedInstances.getOrDefault(playerUuid,List.of()));
+                if(daily) {
+                    tasks.removeIf(task->task.category()==BattlePassTask.TaskCategory.DAILY);
+                    var assigned=assignmentService.assignDailyTasks(playerUuid,configuration.tasks().daily(),configuration.tasks().dailyCount(),today);
+                    tasks.addAll(assigned);
+                    assigned.forEach(task->markDirtyInstance(playerUuid,task.instanceId()));
+                    progress=progress.withDailyReset(today);
                 }
-
-                List<PlayerTaskInstance> dailyInstances = assignmentService.assignDailyTasks(
-
-                    playerUuid, configuration.tasks().daily(), configuration.tasks().dailyCount(), today
-
-                );
-
-                List<PlayerTaskInstance> allInstances = new ArrayList<>(dailyInstances);
-
-                List<PlayerTaskInstance> existing =
-
-                    cachedInstances.getOrDefault(playerUuid, Collections.emptyList());
-
-                for (PlayerTaskInstance inst : existing) {
-
-                    if (inst.category() != BattlePassTask.TaskCategory.DAILY) {
-
-                        allInstances.add(inst);
-
-                    }
-
+                if(weekly) {
+                    tasks.removeIf(task->task.category()==BattlePassTask.TaskCategory.WEEKLY);
+                    int week=progress.currentWeekNumber()+1;
+                    var assigned=assignmentService.assignWeeklyTasks(playerUuid,configuration.tasks().weekly(),configuration.tasks().weeklyCount(),week,today);
+                    tasks.addAll(assigned);
+                    assigned.forEach(task->markDirtyInstance(playerUuid,task.instanceId()));
+                    progress=progress.withWeeklyReset(today,week);
                 }
-
-                cacheInstances(playerUuid, allInstances);
-
-                for (PlayerTaskInstance instance : dailyInstances) {
-
-                    markDirtyInstance(playerUuid, instance.instanceId());
-
-                }
-
-                progress = progress.withDailyReset(today);
-
+                tasks.sort(Comparator.comparingInt(task->task.category().ordinal()));
+                cacheInstances(playerUuid,tasks); cachedProgress.put(playerUuid,progress); dirtyPlayers.add(playerUuid);
             }
-
-
-
-            if (weekly) {
-
-                try {
-
-                    repository.deletePlayerTasksByCategory(
-
-                        playerUuid, seasonId, BattlePassTask.TaskCategory.WEEKLY);
-
-                } catch (SQLException e) {
-
-                    logger.warning("删除旧每周任务失败: " + e.getMessage());
-
-                }
-
-                int newWeek = progress.currentWeekNumber() + 1;
-
-                List<PlayerTaskInstance> weeklyInstances = assignmentService.assignWeeklyTasks(
-
-                    playerUuid, configuration.tasks().weekly(), configuration.tasks().weeklyCount(),
-
-                    newWeek, today
-
-                );
-
-                List<PlayerTaskInstance> allInstances = new ArrayList<>(weeklyInstances);
-
-                List<PlayerTaskInstance> existing =
-
-                    cachedInstances.getOrDefault(playerUuid, Collections.emptyList());
-
-                for (PlayerTaskInstance inst : existing) {
-
-                    if (inst.category() != BattlePassTask.TaskCategory.WEEKLY) {
-
-                        allInstances.add(inst);
-
-                    }
-
-                }
-
-                cacheInstances(playerUuid, allInstances);
-
-                for (PlayerTaskInstance instance : weeklyInstances) {
-
-                    markDirtyInstance(playerUuid, instance.instanceId());
-
-                }
-
-                progress = progress.withWeeklyReset(today, newWeek);
-
-            }
-
-
-
-            cachedProgress.put(playerUuid, progress);
-
-            dirtyPlayers.add(playerUuid);
-
-            List<PlayerTaskInstance> instances = cachedInstances.get(playerUuid);
-
-            List<PlayerTaskInstance> toSave = new ArrayList<>();
-
-            if (instances != null) {
-
-                for (PlayerTaskInstance instance : instances) {
-
-                    if ((daily && instance.category() == BattlePassTask.TaskCategory.DAILY)
-
-                        || (weekly && instance.category() == BattlePassTask.TaskCategory.WEEKLY)) {
-
-                        toSave.add(instance);
-
-                    }
-
-                }
-
-            }
-
-            if (!toSave.isEmpty()) {
-
-                try {
-
-                    repository.savePlayerTasks(playerUuid, seasonId, toSave);
-
-                    for (PlayerTaskInstance instance : toSave) {
-
-                        dirtyInstances.computeIfPresent(playerUuid, (ignored, dirty) -> {
-
-                            dirty.remove(instance.instanceId());
-
-                            return dirty.isEmpty() ? null : dirty;
-
-                        });
-
-                    }
-
-                } catch (SQLException e) {
-
-                    logger.warning("重置后任务实例保存失败 [" + playerUuid + "]: " + e.getMessage());
-
-                }
-
-            }
-
-        }
-
-        notifyUiRefresh(playerUuid, true);
-}
+            saveCurrentProgress(playerUuid); flushDirtyInstances(playerUuid);
+            return true;
+        });
+        if(changed && active) Bukkit.getScheduler().runTask(plugin,()->{ if(active) notifyUiRefresh(playerUuid,true); });
+    }
 }

@@ -50,13 +50,6 @@ public final class PlayerEventPacketListener implements Listener {
             player,
             EventPacketContext.fromSubjectTrigger(EventPacketTrigger.ADMITTED, player)
         );
-        if (event.firstAdmission()) {
-            dispatchService.dispatchAll(
-                EventPacketTrigger.FIRST_ADMITTED,
-                player,
-                EventPacketContext.fromSubjectTrigger(EventPacketTrigger.FIRST_ADMITTED, player)
-            );
-        }
     }
 
     /**

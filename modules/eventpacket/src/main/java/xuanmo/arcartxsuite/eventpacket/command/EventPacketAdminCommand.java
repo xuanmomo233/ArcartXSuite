@@ -27,7 +27,7 @@ import xuanmo.arcartxsuite.eventpacket.service.EventPacketDispatchService;
  */
 public final class EventPacketAdminCommand implements ModuleCommandHandler {
 
-    private static final List<String> ACTIONS = List.of("help", "status", "fire", "clearlag", "list", "run");
+    private static final List<String> ACTIONS = List.of("help", "status", "fire", "clearlag", "list", "run", "auth-receipt");
 
     private final Supplier<EventPacketDispatchService> serviceProvider;
     private final Supplier<EntityCleanupService> cleanupProvider;
@@ -65,6 +65,11 @@ public final class EventPacketAdminCommand implements ModuleCommandHandler {
             case "clearlag" -> handleClearlag(sender);
             case "list" -> handleList(sender);
             case "run" -> handleRun(sender, args);
+            case "auth-receipt" -> {
+                var service=serviceProvider.get();
+                if(service!=null && service.authInbox()!=null) service.authInbox().reviewCommand(sender,args);
+                else sender.sendMessage(msg("common.service-down"));
+            }
             default -> sender.sendMessage(msg("common.unknown", label));
         }
         return true;

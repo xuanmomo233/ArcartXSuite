@@ -89,6 +89,15 @@ public interface EventBusCapability {
     boolean hasPublisher(@NotNull String topic);
     /** Whether at least one current exact or wildcard subscriber accepts this topic. Not a delivery acknowledgement. */
     boolean hasSubscribers(@NotNull String topic);
+    /** Authentication facts only. Complete true after every current confirmed subscriber commits its receipt.
+     * No subscribers, rejection, exceptions and failed persistence return false and leave the fact pending. */
+    java.util.concurrent.CompletionStage<Boolean> publishConfirmed(@NotNull String topic,@Nullable Player player,@NotNull Map<String,String> payload);
+    /** Stable consumer identity. The handler must deduplicate event_id with its durable business write.
+     * Called on the publishing thread; storage work must be asynchronous. */
+    String subscribeConfirmed(@NotNull String consumer,@NotNull String topic,@NotNull ConfirmedHandler handler);
+    @FunctionalInterface interface ConfirmedHandler {
+        java.util.concurrent.CompletionStage<Void> handle(@NotNull BusEvent event);
+    }
 
     /**
      * 订阅一个事件主题。

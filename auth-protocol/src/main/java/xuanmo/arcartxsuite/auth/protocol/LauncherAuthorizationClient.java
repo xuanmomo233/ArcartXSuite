@@ -10,6 +10,15 @@ import static java.nio.charset.StandardCharsets.*;
 
 /** A native launcher opens the system browser and owns the registered loopback listener. */
 public final class LauncherAuthorizationClient {
+    public static final class RateLimitedException extends IOException {
+        private final int retryAfterSeconds;
+        RateLimitedException(int seconds) { super("Launcher authorization rate limited"); retryAfterSeconds=seconds; }
+        public int retryAfterSeconds() { return retryAfterSeconds; }
+    }
+    static int retryAfter(String header) {
+        if(header!=null && header.matches("[0-9]{1,2}")) return Math.max(1,Math.min(60,Integer.parseInt(header)));
+        return 5;
+    }
     private static final SecureRandom RANDOM = new SecureRandom();
     private final URI origin, redirect;
     private final String clientId;
@@ -172,7 +181,9 @@ public final class LauncherAuthorizationClient {
             connection.setFixedLengthStreamingMode(body.length);
             long deadline=System.nanoTime()+5_000_000_000L;
             try (var output=connection.getOutputStream()) { output.write(body); }
-            if (connection.getResponseCode()!=200) throw new IOException("Launcher request failed: HTTP "+connection.getResponseCode());
+            int status=connection.getResponseCode();
+            if(status==429) throw new RateLimitedException(retryAfter(connection.getHeaderField("Retry-After")));
+            if(status!=200) throw new IOException("Launcher request failed: HTTP "+status);
             try (var input=connection.getInputStream(); var response=new ByteArrayOutputStream()) {
                 byte[] bytes=new byte[1024];
                 int count;

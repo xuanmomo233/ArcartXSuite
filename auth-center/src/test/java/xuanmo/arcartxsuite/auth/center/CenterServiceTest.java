@@ -12,6 +12,56 @@ import static xuanmo.arcartxsuite.auth.protocol.AuthWire.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 class CenterServiceTest {
+    @Test void fullMutationJournalDoesNotBlockActiveLeaseChecks() throws Exception {
+        service=new CenterService(new CenterConfiguration(25600,configuration.database(),configuration.realms(),configuration.nodes(),null,120000,1),connections);
+        var verified=password(true); var admitted=service.execute(node,exchange(verified.state().ticket()));
+        var data=new JsonObject(); data.addProperty("password","correct-password"); data.addProperty("newPassword","replacement-password");
+        assertEquals("NODE_COMMAND_CAPACITY",service.execute(node,request(Operation.CHANGE_PASSWORD,data)).code());
+        var check=new JsonObject(); check.addProperty("session",admitted.state().session().toString());
+        assertTrue(service.execute(node,request(Operation.CHECK,check)).success());
+    }
+    @Test void slowPasswordVerificationCannotBlockRevocationAndCannotCommitAcrossIt() throws Exception {
+        var ready=password(true); service.execute(node,exchange(ready.state().ticket()));
+        var entered=new java.util.concurrent.CountDownLatch(1); var release=new java.util.concurrent.CountDownLatch(1);
+        var hasher=org.mockito.Mockito.mock(xuanmo.arcartxsuite.auth.engine.Argon2Passwords.class);
+        org.mockito.Mockito.when(hasher.verify(org.mockito.ArgumentMatchers.any(),org.mockito.ArgumentMatchers.anyString())).thenAnswer(call->{
+            entered.countDown(); if(!release.await(5,java.util.concurrent.TimeUnit.SECONDS)) throw new IllegalStateException("Test timeout"); return true;
+        });
+        org.mockito.Mockito.when(hasher.hash(org.mockito.ArgumentMatchers.any())).thenReturn("replacement-hash");
+        service=new CenterService(configuration,connections,hasher);
+        var changing=new JsonObject(); changing.addProperty("password","correct-password"); changing.addProperty("newPassword","replacement-password");
+        var command=request(Operation.CHANGE_PASSWORD,changing);
+        var executor=java.util.concurrent.Executors.newFixedThreadPool(2);
+        try {
+            var result=executor.submit(()->service.execute(node,command));
+            assertTrue(entered.await(2,java.util.concurrent.TimeUnit.SECONDS));
+            JsonObject revoke=new JsonObject(); revoke.addProperty("account",ready.state().account().toString());
+            var control=executor.submit(()->service.execute(node,request(Operation.REVOKE,revoke)));
+            assertTrue(control.get(1,java.util.concurrent.TimeUnit.SECONDS).success());
+            release.countDown();
+            assertEquals("STALE_CREDENTIALS",result.get(2,java.util.concurrent.TimeUnit.SECONDS).code());
+        } finally { release.countDown(); executor.shutdownNow(); }
+    }
+    @Test void bindingsArePagedBeyondOneThousandWithoutDroppingRows() throws Exception {
+        var store=new JdbcAuthStore(connections,"realm");
+        try(var c=connections.open()) {
+            c.setAutoCommit(false);
+            for(int index=0;index<1100;index++) {
+                var account=store.createIdentity(c,"Player"+index,UUID.randomUUID(),"hash","local-password");
+                store.bind(c,account,"Player"+index,123450000L+index);
+            }
+            c.commit();
+        }
+        Set<UUID> seen=new HashSet<>(); String after="";
+        do {
+            var data=new JsonObject(); data.addProperty("after",after);
+            var page=service.execute(node,request(Operation.BINDINGS,data));
+            assertTrue(page.success()); assertTrue(page.bindings().size()<=256);
+            for(var row:page.bindings()) assertTrue(seen.add(row.accountId()));
+            after=page.value();
+        } while(!after.isEmpty());
+        assertEquals(1100,seen.size());
+    }
     @TempDir Path directory;
     private JdbcAuthStore.Connections connections;
     private CenterConfiguration configuration;
@@ -22,7 +72,7 @@ class CenterServiceTest {
         connections=()->DriverManager.getConnection("jdbc:sqlite:"+directory.resolve("center.sqlite"));
         node=new CenterConfiguration.Node("lobby","realm","lobby-node",new byte[32],Set.of("auth","binding-read","binding-write","account-revoke"));
         var policy=new Policy(8,128,true,"1",List.of("条款"),false,"Asia/Shanghai",300,true,false);
-        configuration=new CenterConfiguration(25600,directory.resolve("center.sqlite"),Map.of("realm",policy),Map.of(node.id(),node),null);
+        configuration=new CenterConfiguration(25600,directory.resolve("center.sqlite"),Map.of("realm",policy),Map.of(node.id(),node),null,120000,1000000);
         service=new CenterService(configuration,connections);
         context=new Context("realm","lobby-node",UUID.randomUUID(),"Alice",UUID.randomUUID());
     }
@@ -37,7 +87,7 @@ class CenterServiceTest {
         var provider=new ExternalConfiguration.Provider(issuer,issuer.resolve("/authorize"),issuer.resolve("/token"),"center","test","test",null);
         var external=new ExternalConfiguration(25601,URI.create("https://center.example"),Map.of("realm",provider),Map.of());
         var policy=new Policy(8,128,true,"1",List.of("条款"),false,"Asia/Shanghai",300,passwords,true);
-        service=new CenterService(new CenterConfiguration(25600,configuration.database(),Map.of("realm",policy),configuration.nodes(),external),connections);
+        service=new CenterService(new CenterConfiguration(25600,configuration.database(),Map.of("realm",policy),configuration.nodes(),external,120000,1000000),connections);
     }
     private ExternalPrompt prompt(Operation operation) throws Exception {
         Reply reply=service.execute(node,request(operation,new JsonObject()));
@@ -138,13 +188,14 @@ class CenterServiceTest {
     }
     @Test void nodeScopesPreventPrivilegedOperations() throws Exception {
         var restricted=new CenterConfiguration.Node(node.id(),node.realm(),node.audience(),node.key(),Set.of("auth"));
-        assertEquals("NODE_SCOPE_DENIED",service.execute(restricted,request(Operation.BINDINGS,new JsonObject())).code());
+        JsonObject page=new JsonObject(); page.addProperty("after","");
+        assertEquals("NODE_SCOPE_DENIED",service.execute(restricted,request(Operation.BINDINGS,page)).code());
         JsonObject revoke=new JsonObject(); revoke.addProperty("account",UUID.randomUUID().toString());
         assertEquals("NODE_SCOPE_DENIED",service.execute(restricted,request(Operation.REVOKE,revoke)).code());
     }
     @Test void canonicalBindingPolicyPreventsTicketIssuanceUntilConfirmed() throws Exception {
         Policy bindingPolicy=new Policy(8,128,true,"1",List.of("条款"),true,"Asia/Shanghai",300,true,false);
-        var bindingConfig=new CenterConfiguration(25600,configuration.database(),Map.of("realm",bindingPolicy),configuration.nodes(),null);
+        var bindingConfig=new CenterConfiguration(25600,configuration.database(),Map.of("realm",bindingPolicy),configuration.nodes(),null,120000,1000000);
         service=new CenterService(bindingConfig,connections);
         Reply verified=password(true);
         assertEquals(Set.of("QQ_BINDING"),verified.state().requirements()); assertEquals("",verified.state().ticket());
@@ -189,7 +240,7 @@ class CenterServiceTest {
     }
     @Test void gamePasswordsRequireCenterOptIn() throws Exception {
         Policy disabled=new Policy(8,128,true,"1",List.of("条款"),false,"Asia/Shanghai",300,false,false);
-        service=new CenterService(new CenterConfiguration(25600,configuration.database(),Map.of("realm",disabled),configuration.nodes(),null),connections);
+        service=new CenterService(new CenterConfiguration(25600,configuration.database(),Map.of("realm",disabled),configuration.nodes(),null,120000,1000000),connections);
         assertEquals("PASSWORD_ENTRY_DISABLED",service.execute(node,request(Operation.OPEN,new JsonObject())).code());
         assertEquals("PASSWORD_ENTRY_DISABLED",password(true).code());
     }

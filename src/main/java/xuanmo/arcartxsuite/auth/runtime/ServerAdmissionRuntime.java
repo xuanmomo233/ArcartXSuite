@@ -50,7 +50,7 @@ final class ServerAdmissionRuntime implements HostAuthentication,Listener {
         presenceDates.remove(profile);
         Bukkit.getScheduler().runTask(plugin,()->{
             if(!active || connections.get(profile)!=connection || !player.isOnline()) return;
-            Bukkit.getPluginManager().callEvent(new AuthAdmissionEvent(state,firstJoin));
+            Bukkit.getPluginManager().callEvent(new AuthAdmissionEvent(state));
             var bus=events.get();
             if(bus!=null) {
                 bus.publish("axs.auth.admission_granted",player,Map.of("profile_id",profile.toString(),

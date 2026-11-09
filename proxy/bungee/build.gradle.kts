@@ -7,6 +7,10 @@ dependencies {
     implementation(project(":proxy:common"))
     compileOnly("net.md-5:bungeecord-api:1.20-R0.2")
     compileOnly("org.jetbrains:annotations:24.1.0")
+    testImplementation(platform("org.junit:junit-bom:5.10.2"))
+    testImplementation("org.junit.jupiter:junit-jupiter")
+    testImplementation("org.mockito:mockito-core:5.12.0")
+    testImplementation("net.md-5:bungeecord-api:1.20-R0.2")
 }
 
 tasks.compileJava {
@@ -51,3 +55,5 @@ val publishProxyJar by tasks.registering {
 tasks.build {
     dependsOn(publishProxyJar)
 }
+
+tasks.test { useJUnitPlatform() }

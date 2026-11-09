@@ -11,6 +11,15 @@ import java.util.UUID;
  * 由 {@code JdbcEventPacketRepository} 提供 JDBC 实现。
  */
 public interface EventPacketRepository {
+    record AuthFact(UUID id,UUID player,String plan,int step,String state) {}
+    void enqueueAuthFact(UUID id,UUID player,String plan) throws SQLException;
+    AuthFact nextAuthFact(UUID player) throws SQLException;
+    boolean claimAuthStep(UUID id,int step) throws SQLException;
+    void finishAuthStep(UUID id,int step,String state) throws SQLException;
+    void recoverAuthSteps() throws SQLException;
+    java.util.Set<UUID> pendingAuthProfiles() throws SQLException;
+    java.util.List<AuthFact> reviewAuthFacts(UUID player) throws SQLException;
+    boolean resolveAuthStep(UUID id,boolean retry) throws SQLException;
 
     /**
      * 初始化仓储，创建所需的数据表结构。

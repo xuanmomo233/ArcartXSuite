@@ -25,16 +25,29 @@ public final class JdbcAuthStore {
                 + "PRIMARY KEY(realm_id,account_id,business_date))");
             s.executeUpdate("CREATE TABLE IF NOT EXISTS axs_auth_bindings_v1 (realm_id VARCHAR(64) NOT NULL,"
                 + "account_id VARCHAR(36) NOT NULL,profile_id VARCHAR(36) NOT NULL,profile_name VARCHAR(64) NOT NULL,"
-                + "qq_id BIGINT NOT NULL,bound_at BIGINT NOT NULL,PRIMARY KEY(realm_id,account_id),UNIQUE(realm_id,qq_id))");
+                + "qq_id BIGINT NOT NULL,bound_at BIGINT NOT NULL,PRIMARY KEY(realm_id,account_id),UNIQUE(realm_id,qq_id),UNIQUE(realm_id,profile_id))");
             s.executeUpdate("CREATE TABLE IF NOT EXISTS axs_auth_terms_v1 (realm_id VARCHAR(64) NOT NULL,account_id VARCHAR(36) NOT NULL,"
                 + "terms_version VARCHAR(64) NOT NULL,accepted_at BIGINT NOT NULL,PRIMARY KEY(realm_id,account_id,terms_version))");
         }
+        // Existing UNIQUE(realm_id,account_id) and UNIQUE(realm_id,qq_id) serve account/QQ lookups.
     }
     public Account find(String name) throws SQLException { return query("lower_name=?",java.util.List.of(name.toLowerCase(Locale.ROOT))); }
     public Account findById(UUID account) throws SQLException { return query("account_id=?",java.util.List.of(account.toString())); }
     public Account findByProfile(UUID profile) throws SQLException { return query("profile_id=?",java.util.List.of(profile.toString())); }
     public Account findIdentity(UUID profile,String provider) throws SQLException {
         return query("profile_id=? AND identity_provider=?",java.util.List.of(profile.toString(),provider));
+    }
+    /** Bounded version-only projection; never loads credential hashes. */
+    public java.util.Map<UUID,Long> versions(java.util.List<UUID> accounts) throws SQLException {
+        if(accounts.isEmpty() || accounts.size()>256) throw new IllegalArgumentException("Invalid security version batch");
+        var result=new java.util.HashMap<UUID,Long>();
+        String placeholders=String.join(",",java.util.Collections.nCopies(accounts.size(),"?"));
+        try(Connection c=storage.open(); PreparedStatement s=c.prepareStatement(
+                "SELECT account_id,security_version FROM axs_auth_accounts_v1 WHERE realm_id=? AND account_id IN ("+placeholders+")")) {
+            s.setString(1,realm); for(int index=0;index<accounts.size();index++) s.setString(index+2,accounts.get(index).toString());
+            try(ResultSet r=s.executeQuery()) { while(r.next()) result.put(UUID.fromString(r.getString(1)),r.getLong(2)); }
+        }
+        return java.util.Map.copyOf(result);
     }
     private Account query(String predicate,java.util.List<String> values) throws SQLException {
         try(Connection c=storage.open(); PreparedStatement s=c.prepareStatement(
@@ -49,10 +62,19 @@ public final class JdbcAuthStore {
             }
         }
     }
-    public void renameVerifiedProfile(Account account,String name) throws SQLException {
+    public boolean renameVerifiedProfile(Account account,String name) throws SQLException {
         try(Connection c=storage.open()) {
             boolean auto=c.getAutoCommit(); c.setAutoCommit(false);
             try {
+                boolean changed;
+                try(PreparedStatement s=c.prepareStatement("SELECT lower_name FROM axs_auth_accounts_v1 WHERE realm_id=? AND account_id=? AND security_version=?")) {
+                    s.setString(1,realm); s.setString(2,account.id().toString()); s.setLong(3,account.version());
+                    try(ResultSet r=s.executeQuery()) {
+                        if(!r.next()) throw new SQLException("Credentials changed");
+                        changed=!r.getString(1).equals(name.toLowerCase(Locale.ROOT));
+                    }
+                }
+                if(!changed) { c.rollback(); return false; }
                 try(PreparedStatement s=c.prepareStatement("UPDATE axs_auth_accounts_v1 SET lower_name=? WHERE realm_id=? AND account_id=? AND security_version=?")) {
                     s.setString(1,name.toLowerCase(Locale.ROOT)); s.setString(2,realm); s.setString(3,account.id().toString()); s.setLong(4,account.version());
                     if(s.executeUpdate()!=1) throw new SQLException("Credentials changed");
@@ -61,6 +83,7 @@ public final class JdbcAuthStore {
                     s.setString(1,name); s.setString(2,realm); s.setString(3,account.id().toString()); s.executeUpdate();
                 }
                 c.commit();
+                return true;
             } catch(SQLException e) { c.rollback(); throw e; }
             finally { c.setAutoCommit(auto); }
         }
@@ -97,6 +120,31 @@ public final class JdbcAuthStore {
             }
         }
         return java.util.List.copyOf(result);
+    }
+    /** Keyset page. The cursor is the last account ID; no OFFSET scans or fixed realm-size limit. */
+    public java.util.List<Binding> bindingsPage(String after,int limit) throws SQLException {
+        if(limit<1 || limit>256) throw new IllegalArgumentException("Invalid binding page size");
+        var result=new java.util.ArrayList<Binding>();
+        try(Connection c=storage.open(); PreparedStatement s=c.prepareStatement(
+                "SELECT * FROM axs_auth_bindings_v1 WHERE realm_id=? AND account_id>? ORDER BY account_id LIMIT ?")) {
+            s.setString(1,realm); s.setString(2,after); s.setInt(3,limit);
+            try(ResultSet r=s.executeQuery()) { while(r.next()) result.add(binding(r)); }
+        }
+        return java.util.List.copyOf(result);
+    }
+    public Binding bindingByAccount(UUID account) throws SQLException { return binding("account_id",account.toString()); }
+    public Binding bindingByProfile(UUID profile) throws SQLException { return binding("profile_id",profile.toString()); }
+    public Binding bindingByQq(long qq) throws SQLException { return binding("qq_id",qq); }
+    private Binding binding(String column,Object value) throws SQLException {
+        try(Connection c=storage.open(); PreparedStatement s=c.prepareStatement(
+                "SELECT * FROM axs_auth_bindings_v1 WHERE realm_id=? AND "+column+"=?")) {
+            s.setString(1,realm); s.setObject(2,value);
+            try(ResultSet r=s.executeQuery()) { return r.next()?binding(r):null; }
+        }
+    }
+    private static Binding binding(ResultSet r) throws SQLException {
+        return new Binding(UUID.fromString(r.getString("account_id")),UUID.fromString(r.getString("profile_id")),
+            r.getString("profile_name"),r.getLong("qq_id"),r.getLong("bound_at"));
     }
     public boolean isBound(UUID account) throws SQLException {
         try(Connection c=storage.open(); PreparedStatement s=c.prepareStatement(
@@ -157,12 +205,20 @@ public final class JdbcAuthStore {
         }
     }
     public void failure(Account account, long now, int maxAttempts, long cooldown) throws SQLException {
-        try (Connection c = storage.open(); PreparedStatement s = c.prepareStatement(
-            "UPDATE axs_auth_accounts_v1 SET failures=?,blocked_until=? WHERE realm_id=? AND account_id=? AND security_version=?")) {
-            int attempts = account.blockedUntil() > 0 && account.blockedUntil() <= now ? 1 : account.failures()+1;
-            s.setInt(1,attempts); s.setLong(2, attempts >= maxAttempts ? now+cooldown : 0);
-            s.setString(3,realm); s.setString(4,account.id().toString()); s.setLong(5,account.version()); s.executeUpdate();
+        Account current=account;
+        for(int retry=0;retry<32;retry++) {
+            if(current==null || current.version()!=account.version() || current.blockedUntil()>now) return;
+            int attempts=current.blockedUntil()>0?1:current.failures()+1;
+            try(Connection c=storage.open(); PreparedStatement s=c.prepareStatement(
+                    "UPDATE axs_auth_accounts_v1 SET failures=?,blocked_until=? WHERE realm_id=? AND account_id=? AND security_version=? AND failures=? AND blocked_until=?")) {
+                s.setInt(1,attempts); s.setLong(2,attempts>=maxAttempts?now+cooldown:0);
+                s.setString(3,realm); s.setString(4,account.id().toString()); s.setLong(5,account.version());
+                s.setInt(6,current.failures()); s.setLong(7,current.blockedUntil());
+                if(s.executeUpdate()==1) return;
+            }
+            current=findById(account.id());
         }
+        throw new SQLException("Concurrent credential failure updates exceeded retry budget");
     }
     public boolean admit(Account account) throws SQLException {
         try(Connection c=storage.open()) { return admit(c,account); }
@@ -201,6 +257,13 @@ public final class JdbcAuthStore {
         try(Connection c=storage.open(); PreparedStatement s=c.prepareStatement(
             "UPDATE axs_auth_presence_v1 SET delivered=1 WHERE realm_id=? AND account_id=? AND business_date=?")) {
             s.setString(1,realm); s.setString(2,account.toString()); s.setString(3,date); s.executeUpdate();
+        }
+    }
+    public String nextPendingDay(UUID account,String through) throws SQLException {
+        try(Connection c=storage.open(); PreparedStatement s=c.prepareStatement(
+                "SELECT business_date FROM axs_auth_presence_v1 WHERE realm_id=? AND account_id=? AND delivered=0 AND business_date<=? ORDER BY business_date LIMIT 1")) {
+            s.setString(1,realm); s.setString(2,account.toString()); s.setString(3,through);
+            try(ResultSet r=s.executeQuery()) { return r.next()?r.getString(1):null; }
         }
     }
     public boolean changePassword(Account account, String hash) throws SQLException {

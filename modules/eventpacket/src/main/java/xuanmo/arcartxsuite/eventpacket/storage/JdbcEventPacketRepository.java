@@ -32,19 +32,70 @@ public final class JdbcEventPacketRepository extends AbstractModuleRepository im
     @Override
     protected void onInitialize(Connection conn) throws SQLException {
         createTables(conn);
+        try(Statement s=conn.createStatement()) {
+            s.executeUpdate("CREATE TABLE IF NOT EXISTS eventpacket_auth_inbox (fact_id VARCHAR(36) PRIMARY KEY,player_uuid VARCHAR(36) NOT NULL,plan TEXT NOT NULL,step INTEGER NOT NULL,state VARCHAR(16) NOT NULL,UNIQUE(player_uuid,state,fact_id))");
+        }
     }
 
     @Override
     protected List<String> playerDataTables() {
-        return List.of("eventpacket_kill_progress", "eventpacket_fired_rules");
+        return List.of("eventpacket_kill_progress", "eventpacket_fired_rules", "eventpacket_auth_inbox");
     }
 
     @Override
     protected List<String> allTables() {
-        return List.of("eventpacket_kill_progress", "eventpacket_fired_rules");
+        return List.of("eventpacket_kill_progress", "eventpacket_fired_rules", "eventpacket_auth_inbox");
     }
 
     // ─── Kill count ──────────────────────────────────────────
+    @Override public void enqueueAuthFact(UUID id,UUID player,String plan) throws SQLException {
+        String sql=isMysql()?"INSERT IGNORE INTO eventpacket_auth_inbox (fact_id,player_uuid,plan,step,state) VALUES (?,?,?,0,'PENDING')"
+            :"INSERT INTO eventpacket_auth_inbox (fact_id,player_uuid,plan,step,state) VALUES (?,?,?,0,'PENDING') ON CONFLICT(fact_id) DO NOTHING";
+        try(Connection c=getConnection(); PreparedStatement s=c.prepareStatement(sql)) {
+            s.setString(1,id.toString()); s.setString(2,player.toString()); s.setString(3,plan); s.executeUpdate();
+        }
+    }
+    @Override public AuthFact nextAuthFact(UUID player) throws SQLException {
+        try(Connection c=getConnection(); PreparedStatement s=c.prepareStatement("SELECT * FROM eventpacket_auth_inbox WHERE player_uuid=? AND state='PENDING' ORDER BY fact_id LIMIT 1")) {
+            s.setString(1,player.toString()); try(ResultSet r=s.executeQuery()) { return r.next()?authFact(r):null; }
+        }
+    }
+    private static AuthFact authFact(ResultSet r) throws SQLException {
+        return new AuthFact(UUID.fromString(r.getString("fact_id")),UUID.fromString(r.getString("player_uuid")),r.getString("plan"),r.getInt("step"),r.getString("state"));
+    }
+    @Override public boolean claimAuthStep(UUID id,int step) throws SQLException {
+        try(Connection c=getConnection(); PreparedStatement s=c.prepareStatement("UPDATE eventpacket_auth_inbox SET state='RUNNING' WHERE fact_id=? AND step=? AND state='PENDING'")) {
+            s.setString(1,id.toString()); s.setInt(2,step); return s.executeUpdate()==1;
+        }
+    }
+    @Override public void finishAuthStep(UUID id,int step,String state) throws SQLException {
+        if(!java.util.Set.of("PENDING","DONE","REVIEW","RETRY").contains(state)) throw new IllegalArgumentException("Invalid inbox state");
+        try(Connection c=getConnection(); PreparedStatement s=c.prepareStatement("UPDATE eventpacket_auth_inbox SET state=?,step=? WHERE fact_id=? AND step=? AND state='RUNNING'")) {
+            s.setString(1,state.equals("RETRY")?"PENDING":state); s.setInt(2,step+(state.equals("PENDING")?1:0)); s.setString(3,id.toString()); s.setInt(4,step); s.executeUpdate();
+        }
+    }
+    @Override public void recoverAuthSteps() throws SQLException {
+        try(Connection c=getConnection(); Statement s=c.createStatement()) { s.executeUpdate("UPDATE eventpacket_auth_inbox SET state='REVIEW' WHERE state='RUNNING'"); }
+    }
+    @Override public java.util.Set<UUID> pendingAuthProfiles() throws SQLException {
+        var profiles=new java.util.HashSet<UUID>();
+        try(Connection c=getConnection(); Statement s=c.createStatement(); ResultSet r=s.executeQuery("SELECT DISTINCT player_uuid FROM eventpacket_auth_inbox WHERE state='PENDING'")) {
+            while(r.next()) profiles.add(UUID.fromString(r.getString(1)));
+        }
+        return java.util.Set.copyOf(profiles);
+    }
+    @Override public java.util.List<AuthFact> reviewAuthFacts(UUID player) throws SQLException {
+        var result=new java.util.ArrayList<AuthFact>();
+        try(Connection c=getConnection(); PreparedStatement s=c.prepareStatement("SELECT * FROM eventpacket_auth_inbox WHERE player_uuid=? AND state IN ('REVIEW','RUNNING') ORDER BY fact_id LIMIT 32")) {
+            s.setString(1,player.toString()); try(ResultSet r=s.executeQuery()) { while(r.next()) result.add(authFact(r)); }
+        }
+        return java.util.List.copyOf(result);
+    }
+    @Override public boolean resolveAuthStep(UUID id,boolean retry) throws SQLException {
+        try(Connection c=getConnection(); PreparedStatement s=c.prepareStatement("UPDATE eventpacket_auth_inbox SET state='PENDING',step=step+? WHERE fact_id=? AND state='REVIEW'")) {
+            s.setInt(1,retry?0:1); s.setString(2,id.toString()); return s.executeUpdate()==1;
+        }
+    }
 
     /**
      * 查询指定玩家在某条规则下的累计击杀数。

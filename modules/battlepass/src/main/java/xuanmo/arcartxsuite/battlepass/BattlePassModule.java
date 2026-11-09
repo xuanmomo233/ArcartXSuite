@@ -54,6 +54,7 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
 
     private BattlePassModuleConfiguration configuration;
     private BattlePassService service;
+    private xuanmo.arcartxsuite.api.auth.AuthConsumerStore authStore;
     private JdbcBattlePassRepository repository;
     private BattlePassAdminCommand adminCommand;
     private BattlePassPacketHandler packetHandler;
@@ -164,6 +165,7 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
 
     @Override
     protected void startService() throws Exception {
+        xuanmo.arcartxsuite.api.auth.AuthConsumerStore.requireReady("battlepass");
         xuanmo.arcartxsuite.api.storage.StorageDescriptor bpDesc;
         javax.sql.DataSource bpDs;
         if (configuration.storage().hasOverride()) {
@@ -174,7 +176,8 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
             bpDs = storageManager.resolveModuleDataSource("battlepass",
                 configuration.storage().sqliteFileName(), dataFolder, null);
         }
-        JdbcBattlePassRepository repo = new JdbcBattlePassRepository(bpDs, bpDesc, dataFolder, logger);
+        authStore=xuanmo.arcartxsuite.api.auth.AuthConsumerStore.open("battlepass",bpDs);
+        JdbcBattlePassRepository repo = new JdbcBattlePassRepository(authStore, bpDesc, dataFolder, logger);
         repo.initialize();
         repository = repo;
 
@@ -266,17 +269,19 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
 
     @Override
     protected void stopService() {
+        BattlePassService retiringService=service;
+        java.util.concurrent.CompletionStage<Void> drained=java.util.concurrent.CompletableFuture.completedFuture(null);
         if (service != null) {
-            service.shutdown();
+            drained=service.shutdown();
             service = null;
         }
         if (repository != null) {
-            try {
-                storageManager.closeModuleDataSource("battlepass");
-            } catch (Exception e) {
-                logger.warning("BattlePass 仓储关闭失败: " + e.getMessage());
-            }
             repository = null;
+        }
+        if(authStore!=null) {
+            authStore.retire(drained,retiringService==null?null:retiringService::finishShutdown,()->storageManager.closeModuleDataSource("battlepass"))
+                .whenComplete((ignored,error)->{ if(error!=null) logger.warning("BattlePass 数据源释放失败，请重启后重试"); else logger.fine("BattlePass 数据源已释放"); });
+            authStore=null;
         }
         packetHandler = null;
         adminCommand = null;

@@ -20,8 +20,10 @@ final class ExternalAuthServer implements AutoCloseable {
     private final ExecutorService workers = new ThreadPoolExecutor(4,4,0,TimeUnit.MILLISECONDS,new ArrayBlockingQueue<>(32),new ThreadPoolExecutor.AbortPolicy());
     private final ScheduledExecutorService deadlines = Executors.newSingleThreadScheduledExecutor();
     private final java.util.concurrent.atomic.AtomicBoolean closed = new java.util.concurrent.atomic.AtomicBoolean();
-    private long window = System.nanoTime();
-    private int requests;
+    private final ExternalRequestBudget budget=new ExternalRequestBudget();
+    private final Semaphore starts=new Semaphore(2);
+    private final Semaphore completions=new Semaphore(2);
+    private final Set<String> inFlight=ConcurrentHashMap.newKeySet();
 
     ExternalAuthServer(ExternalConfiguration config, CenterService center) throws IOException {
         this.config = config;
@@ -32,29 +34,38 @@ final class ExternalAuthServer implements AutoCloseable {
     }
     void start() { server.start(); }
 
-    private synchronized boolean withinBudget() {
-        long now = System.nanoTime();
-        if (now - window >= 60_000_000_000L) { window = now; requests = 0; }
-        if (requests >= 600) return false;
-        requests++;
-        return true;
-    }
-
     private void handle(HttpExchange exchange) throws IOException {
         var deadline = deadlines.schedule(exchange::close,8,TimeUnit.SECONDS);
+        Semaphore slot=null;
+        String sourceSlot=null;
         try {
             var headers = exchange.getResponseHeaders();
             headers.set("Cache-Control","no-store");
             headers.set("Referrer-Policy","no-referrer");
             headers.set("Content-Security-Policy","default-src 'none'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'");
             headers.set("X-Content-Type-Options","nosniff");
-            if (!withinBudget()) {
+            String path = exchange.getRequestURI().getRawPath();
+            String method = exchange.getRequestMethod();
+            if(!Set.of(PATH+"/verify",PATH+"/device",PATH+"/launcher/authorize",PATH+"/callback",PATH+"/confirm",
+                    PATH+"/launcher/start",PATH+"/launcher/exchange",PATH+"/launcher/pair",PATH+"/launcher/device/start",
+                    PATH+"/launcher/device/poll",PATH+"/launcher/device/cancel").contains(path)) { html(exchange,404,"未找到该入口。"); return; }
+            var forwarded=exchange.getRequestHeaders().get("X-AXS-Client-IP");
+            if(!exchange.getRemoteAddress().getAddress().isLoopbackAddress() || forwarded==null || forwarded.size()!=1)
+                throw new SecurityException("Trusted proxy client address required");
+            String source=ExternalRequestBudget.source(forwarded.get(0));
+            String group=path.endsWith("/callback") || path.endsWith("/confirm") || path.endsWith("/exchange") || path.endsWith("/pair")
+                || path.endsWith("/cancel")?"complete":path.endsWith("/poll")?"poll":"start";
+            // Completion routes are already bounded by single-use state/code/token ownership. Anonymous input
+            // must never spend a valid flow's minute allowance, including clients behind the same NAT.
+            if (!group.equals("complete") && !budget.acquire(source,group,group.equals("poll")?240:60)) {
                 headers.set("Retry-After","60");
                 html(exchange,429,"请求过多，请稍候再试。");
                 return;
             }
-            String path = exchange.getRequestURI().getRawPath();
-            String method = exchange.getRequestMethod();
+            sourceSlot=source+"/"+group;
+            if(!inFlight.add(sourceSlot)) { sourceSlot=null; headers.set("Retry-After","1"); html(exchange,429,"当前来源已有正在处理的请求。"); return; }
+            slot=group.equals("complete")?completions:starts;
+            if(!slot.tryAcquire()) { slot=null; headers.set("Retry-After","1"); html(exchange,429,"认证繁忙，请稍后重试。"); return; }
             switch (method+" "+path) {
                 case "GET "+PATH+"/verify" -> {
                     String realm = required(parameters(exchange.getRequestURI().getRawQuery()),"realm");
@@ -108,17 +119,17 @@ final class ExternalAuthServer implements AutoCloseable {
                     else html(exchange,200,"授权核对码 <strong>"+escape(result.confirmation())+"</strong>。返回游戏刷新，核对后确认。");
                 }
                 case "POST "+PATH+"/launcher/start", "POST "+PATH+"/launcher/exchange", "POST "+PATH+"/launcher/pair",
-                     "POST "+PATH+"/launcher/device/start", "POST "+PATH+"/launcher/device/poll", "POST "+PATH+"/launcher/device/cancel" -> launcher(exchange,path);
+                     "POST "+PATH+"/launcher/device/start", "POST "+PATH+"/launcher/device/poll", "POST "+PATH+"/launcher/device/cancel" -> launcher(exchange,path,source);
                 default -> html(exchange,404,"未找到该入口。");
             }
         } catch (IllegalArgumentException | SecurityException e) {
             html(exchange,400,"授权请求无效、已过期或已使用。");
         } catch (Exception e) {
             html(exchange,503,"认证暂时不可用，请重新发起授权。");
-        } finally { deadline.cancel(false); exchange.close(); }
+        } finally { if(slot!=null) slot.release(); if(sourceSlot!=null) inFlight.remove(sourceSlot); deadline.cancel(false); exchange.close(); }
     }
 
-    private void launcher(HttpExchange exchange, String path) throws IOException {
+    private void launcher(HttpExchange exchange, String path,String source) throws IOException {
         String requestId = "";
         try {
             String type = exchange.getRequestHeaders().getFirst("Content-Type");
@@ -128,6 +139,10 @@ final class ExternalAuthServer implements AutoCloseable {
             requestId = UUID.fromString(string(json,"requestId")).toString();
             if (integer(json,"version")!=1) { json(exchange,400,requestId,"UNSUPPORTED_VERSION",null); return; }
             String client = string(json,"clientId");
+            if(!config.launchers().containsKey(client)) throw new SecurityException("Unknown launcher");
+            if(path.endsWith("/start") && !budget.acquire(source+"/client:"+client,"start",30)) {
+                exchange.getResponseHeaders().set("Retry-After","60"); json(exchange,429,requestId,"RATE_LIMITED",null); return;
+            }
             String value;
             switch (path) {
                 case PATH+"/launcher/start" -> {
