@@ -12,6 +12,7 @@ on:
 permissions:
   contents: read
 env:
+  PYTHONUTF8: '1'
   AXS_PRODUCTION: 'ON'
 jobs:
   native-public-keys:
@@ -101,7 +102,7 @@ jobs:
         run: |
           set -eu
           work=$(mktemp -d)
-          javac -d "$work" native/selfcheck/SelfCheckHarness.java native/selfcheck/xuanmo/arcartxsuite/security/NativeBridge.java
+          javac -encoding UTF-8 -d "$work" native/selfcheck/SelfCheckHarness.java native/selfcheck/xuanmo/arcartxsuite/security/NativeBridge.java
           java -cp "$work" SelfCheckHarness src/main/resources/native/libaxs-native.so expect_pass
           python3 scripts/make-tampered-copy.py src/main/resources/native/libaxs-native.so "$work/tampered.so"
           java -cp "$work" SelfCheckHarness "$work/tampered.so" expect_tamper
@@ -192,7 +193,7 @@ jobs:
           $original = Join-Path $work 'axs-native.dll'
           Copy-Item -LiteralPath 'src/main/resources/native/axs-native.dll' -Destination $original
           $tampered = Join-Path $work 'tampered.dll'
-          javac -d $work native/selfcheck/SelfCheckHarness.java native/selfcheck/xuanmo/arcartxsuite/security/NativeBridge.java
+          javac -encoding UTF-8 -d $work native/selfcheck/SelfCheckHarness.java native/selfcheck/xuanmo/arcartxsuite/security/NativeBridge.java
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           java -cp $work SelfCheckHarness $original expect_pass
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
