@@ -29,10 +29,6 @@ public class SelfCheckHarness {
         try {
             System.load(lib);
         } catch (Throwable t) {
-            if ("expect_tamper".equals(mode)) {
-                System.out.println("PASS(load-rejected): tampered library refused at load: " + t);
-                System.exit(0);
-            }
             System.err.println("FAIL: could not load library: " + t);
             System.exit(1);
             return;
@@ -42,8 +38,8 @@ public class SelfCheckHarness {
         System.out.println("n5(initProtection) returned " + r);
 
         if ("expect_pass".equals(mode)) {
-            if (r == -1) {
-                System.err.println("FAIL: self-check REJECTED an untampered, correctly-injected library (r=-1)");
+            if (r != 0 && r != -2) {
+                System.err.println("FAIL: untampered native library did not pass self-check (r=" + r + ")");
                 System.exit(1);
             }
             System.out.println("PASS: untampered library accepted by self-check (r=" + r + "; -1 would mean tamper)");
