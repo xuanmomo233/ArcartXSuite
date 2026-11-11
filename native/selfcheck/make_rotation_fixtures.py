@@ -24,6 +24,10 @@ def write_signatures(directory, label, data, env_name, public_key_file):
         public = key.public_key()
         raw = public.public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
         assert (raw == public_key_file.read_bytes()) == (role == "new")
+        if role == "old":
+            old_keys = public_key_file.parent / "old"
+            old_keys.mkdir(exist_ok=True)
+            (old_keys / public_key_file.name).write_bytes(raw)
         signature = key.sign(data)
         public.verify(signature, data)
         (directory / (label + "-" + role + ".sig")).write_bytes(signature)

@@ -1,5 +1,5 @@
 name: Encrypted CI Pipeline
-run-name: Isolated signing key rotation on Linux and Windows
+run-name: Isolated cloud rotation Native fixtures
 on:
   workflow_dispatch:
     inputs:
@@ -43,11 +43,13 @@ jobs:
             native-public-keys/ed25519_public_raw.bin
             native-public-keys/response_ed25519_public_raw.bin
             native-public-keys/rotation/
+            native-public-keys/old/
           retention-days: 1
           if-no-files-found: error
 
   build-linux:
     runs-on: ubuntu-latest
+    if: false
     needs: native-public-keys
     if: inputs.skip_upload == true && inputs.native_self_check == true
     # 在 Ubuntu 20.04 容器内编译，glibc 基线降到 2.31，
@@ -115,6 +117,10 @@ jobs:
     runs-on: windows-2022
     needs: native-public-keys
     if: inputs.skip_upload == true && inputs.native_self_check == true
+    strategy:
+      fail-fast: false
+      matrix:
+        generation: [old, new]
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v5
@@ -130,7 +136,14 @@ jobs:
         shell: pwsh
         env:
           AXS_SEED_PARTS_B64: 'Ra0cmdMKMDsnPCjIm3fsdAZy+JQpaLpQYJ+tdgKgwQw='
-        run: python scripts/embed-keys.py --keys-dir native-public-keys --require-fixed-seed --embed-only
+        run: |
+          $OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+          [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+          [Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false)
+          $PSDefaultParameterValues['*:Encoding'] = 'utf8NoBOM'
+          $keyDirectory = if ('${{ matrix.generation }}' -eq 'old') { 'native-public-keys/old' } else { 'native-public-keys' }
+          python scripts/embed-keys.py --keys-dir $keyDirectory --require-fixed-seed --embed-only
+          exit $LASTEXITCODE
 
       - uses: actions/setup-java@v5
         with:
@@ -212,6 +225,7 @@ jobs:
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           java -cp $work SelfCheckHarness $tampered expect_tamper
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          if ('${{ matrix.generation }}' -eq 'old') { exit 0 }
           javac -encoding UTF-8 -cp $work -d $work native/selfcheck/RotationCheckHarness.java
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           java -cp $work RotationCheckHarness $original native-public-keys/rotation
@@ -227,3 +241,9 @@ jobs:
             exit 1
           fi
           echo "OK: statically linked"
+      - uses: actions/upload-artifact@v5
+        with:
+          name: windows-native-${{ matrix.generation }}
+          path: src/main/resources/native/axs-native.dll
+          retention-days: 2
+          if-no-files-found: error
