@@ -49,9 +49,8 @@ jobs:
 
   build-linux:
     runs-on: ubuntu-latest
-    if: false
     needs: native-public-keys
-    if: inputs.skip_upload == true && inputs.native_self_check == true
+    if: ${{ false }}
     # 在 Ubuntu 20.04 容器内编译，glibc 基线降到 2.31，
     # 避免 ubuntu-latest（glibc 2.39）产物在低版本 glibc 服务器上 UnsatisfiedLinkError
     container:
