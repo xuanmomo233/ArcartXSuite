@@ -1,5 +1,5 @@
 name: Encrypted CI Pipeline
-run-name: Native self-check on Linux and Windows
+run-name: Isolated signing key rotation on Linux and Windows
 on:
   workflow_dispatch:
     inputs:
@@ -32,7 +32,9 @@ jobs:
         env:
           AXB_SIGN_SEED_B64: 'zGctf3oHPK6sK0fERPmx3a7HG9oU57QyKa5boe11ZxE='
           AXB_RESP_SIGN_SEED_B64: 'z2V96IugMtmBP/SvKRZtpW4Pz4Gkmx51BShxz7z6Fno='
-        run: python scripts/generate-keys.py --public-only --output native-public-keys
+        run: |
+          python scripts/generate-keys.py --public-only --output native-public-keys
+          python native/selfcheck/make_rotation_fixtures.py
 
       - uses: actions/upload-artifact@v5
         with:
@@ -40,6 +42,7 @@ jobs:
           path: |
             native-public-keys/ed25519_public_raw.bin
             native-public-keys/response_ed25519_public_raw.bin
+            native-public-keys/rotation/
           retention-days: 1
           if-no-files-found: error
 
@@ -106,6 +109,8 @@ jobs:
           java -cp "$work" SelfCheckHarness src/main/resources/native/libaxs-native.so expect_pass
           python3 scripts/make-tampered-copy.py src/main/resources/native/libaxs-native.so "$work/tampered.so"
           java -cp "$work" SelfCheckHarness "$work/tampered.so" expect_tamper
+          javac -encoding UTF-8 -cp "$work" -d "$work" native/selfcheck/RotationCheckHarness.java
+          java -cp "$work" RotationCheckHarness src/main/resources/native/libaxs-native.so native-public-keys/rotation
   build-windows:
     runs-on: windows-2022
     needs: native-public-keys
@@ -206,6 +211,10 @@ jobs:
           python scripts/make-tampered-copy.py $original $tampered
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           java -cp $work SelfCheckHarness $tampered expect_tamper
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          javac -encoding UTF-8 -cp $work -d $work native/selfcheck/RotationCheckHarness.java
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          java -cp $work RotationCheckHarness $original native-public-keys/rotation
           exit $LASTEXITCODE
 
       - name: Verify no MinGW runtime dependency
