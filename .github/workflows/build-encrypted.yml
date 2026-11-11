@@ -189,17 +189,21 @@ jobs:
           [Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false)
           $PSDefaultParameterValues['*:Encoding'] = 'utf8NoBOM'
           $work = Join-Path $env:RUNNER_TEMP 'AXS-自校验'
+          $classes = Join-Path $env:RUNNER_TEMP 'axs-native-selfcheck-classes'
           New-Item -ItemType Directory -Path $work -Force | Out-Null
+          New-Item -ItemType Directory -Path $classes -Force | Out-Null
           $original = Join-Path $work 'axs-native.dll'
           Copy-Item -LiteralPath 'src/main/resources/native/axs-native.dll' -Destination $original
           $tampered = Join-Path $work 'tampered.dll'
-          javac -encoding UTF-8 -d $work native/selfcheck/SelfCheckHarness.java native/selfcheck/xuanmo/arcartxsuite/security/NativeBridge.java
+          javac -encoding UTF-8 -d $classes native/selfcheck/SelfCheckHarness.java native/selfcheck/xuanmo/arcartxsuite/security/NativeBridge.java
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          java -cp $work SelfCheckHarness $original expect_pass
+          $env:AXS_SELF_CHECK_LIBRARY = $original
+          java -cp $classes SelfCheckHarness --env-library expect_pass
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python scripts/make-tampered-copy.py $original $tampered
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          java -cp $work SelfCheckHarness $tampered expect_tamper
+          $env:AXS_SELF_CHECK_LIBRARY = $tampered
+          java -cp $classes SelfCheckHarness --env-library expect_tamper
           exit $LASTEXITCODE
 
       - name: Verify no MinGW runtime dependency

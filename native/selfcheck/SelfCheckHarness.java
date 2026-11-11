@@ -17,7 +17,13 @@ public class SelfCheckHarness {
             System.err.println("usage: SelfCheckHarness <libpath> <expect_pass|expect_tamper>");
             System.exit(2);
         }
-        String lib = new File(args[0]).getAbsolutePath();
+        // Use the environment for Unicode paths on older Windows Java launchers.
+        String path = "--env-library".equals(args[0]) ? System.getenv("AXS_SELF_CHECK_LIBRARY") : args[0];
+        if (path == null || path.isEmpty()) {
+            System.err.println("Missing native library path");
+            System.exit(2);
+        }
+        String lib = new File(path).getAbsolutePath();
         String mode = args[1];
 
         // 确保 NativeBridge 已被应用类加载器定义，供 JNI_OnLoad 的 FindClass 命中。
