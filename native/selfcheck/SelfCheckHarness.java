@@ -12,17 +12,12 @@ import xuanmo.arcartxsuite.security.NativeBridge;
  * 用法：java SelfCheckHarness <libpath> <expect_pass|expect_tamper>
  */
 public class SelfCheckHarness {
-    public static void main(String[] args) throws java.io.IOException {
+    public static void main(String[] args) {
         if (args.length < 2) {
             System.err.println("usage: SelfCheckHarness <libpath> <expect_pass|expect_tamper>");
             System.exit(2);
         }
-        // An UTF-8 path file avoids code-page conversion by the Windows launcher.
-        String prefix = "path-file:";
-        String path = args[0].startsWith(prefix)
-            ? java.nio.file.Files.readString(java.nio.file.Path.of(args[0].substring(prefix.length())), java.nio.charset.StandardCharsets.UTF_8)
-            : args[0];
-        File library = new File(path).getAbsoluteFile();
+        File library = new File(args[0]).getAbsoluteFile();
         if (!library.isFile()) {
             System.err.println("Native library path does not identify a file");
             System.exit(2);
