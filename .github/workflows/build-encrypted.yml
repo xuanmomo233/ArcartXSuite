@@ -180,6 +180,11 @@ jobs:
           fi
           file src/main/resources/native/axs-native.dll
 
+      - name: Inspect Windows DLL imports
+        if: env.AXS_PRODUCTION == 'ON'
+        shell: msys2 {0}
+        run: objdump -p src/main/resources/native/axs-native.dll | grep 'DLL Name:'
+
       - name: Verify Windows native self-integrity
         if: env.AXS_PRODUCTION == 'ON'
         shell: pwsh
@@ -197,13 +202,18 @@ jobs:
           $tampered = Join-Path $work 'tampered.dll'
           javac -encoding UTF-8 -d $classes native/selfcheck/SelfCheckHarness.java native/selfcheck/xuanmo/arcartxsuite/security/NativeBridge.java
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          $env:AXS_SELF_CHECK_LIBRARY = $original
-          java -cp $classes SelfCheckHarness --env-library expect_pass
+          $asciiOriginal = (Resolve-Path -LiteralPath 'src/main/resources/native/axs-native.dll').Path
+          java -cp $classes SelfCheckHarness $asciiOriginal expect_pass
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $pathFile = Join-Path $classes 'library-path.txt'
+          $pathArg = 'path-file:' + $pathFile
+          [IO.File]::WriteAllText($pathFile, $original, [Text.UTF8Encoding]::new($false))
+          java -cp $classes SelfCheckHarness $pathArg expect_pass
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python scripts/make-tampered-copy.py $original $tampered
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          $env:AXS_SELF_CHECK_LIBRARY = $tampered
-          java -cp $classes SelfCheckHarness --env-library expect_tamper
+          [IO.File]::WriteAllText($pathFile, $tampered, [Text.UTF8Encoding]::new($false))
+          java -cp $classes SelfCheckHarness $pathArg expect_tamper
           exit $LASTEXITCODE
 
       - name: Verify no MinGW runtime dependency
