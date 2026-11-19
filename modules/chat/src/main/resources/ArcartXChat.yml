@@ -67,7 +67,7 @@ storage:
 
 # ── 跨服设置 ─────────────────────────────────────────
 cross-server:
-  enabled: false            # 是否启用跨服聊天转发；需要 Redis 支持
+  enabled: false            # 跨服聊天需各节点使用同一 MySQL 数据库
 
 # ── 聊天卡片设置 ─────────────────────────────────────
 cards:
@@ -111,7 +111,7 @@ function:
 # ── 红包 ───────────────────────────────────────────
 # 玩家命令: /chat redpacket <normal|lucky> <总金额> <个数> [祝福语]  /chat grab <红包ID>
 # 管理员命令: /axs chat redpacket <normal|lucky> <金额> <个数> [祝福语]  /axs chat redpacket <预设ID> [个数]
-# 跨服说明: 红包跨服可见/可抢需要频道开启 cross-server 且存储为共享 MySQL；
+# 跨服说明: 红包跨服可见/可抢需要同一 MySQL 数据库，且两端频道的跨服及接收权限配置一致；
 #           SQLite 存储下红包仅本服有效。
 redpacket:
   # 功能总开关。

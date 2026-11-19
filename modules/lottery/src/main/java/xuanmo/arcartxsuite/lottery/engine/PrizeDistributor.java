@@ -10,9 +10,6 @@ import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.capability.MailDispatchable;
-import xuanmo.arcartxsuite.api.capability.mail.MailPresetRequest;
-import xuanmo.arcartxsuite.api.capability.mail.MailSendResult;
-import xuanmo.arcartxsuite.api.item.ItemRewardDispatcher;
 import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
 import xuanmo.arcartxsuite.api.util.ItemSerializer;
 import xuanmo.arcartxsuite.lottery.model.PoolItem;
@@ -21,14 +18,12 @@ import xuanmo.arcartxsuite.lottery.model.PoolItem;
  * 奖品发放器。
  * <p>
  * 根据 {@link PoolItem.DeliveryType} 将奖品以直接发放、命令执行或邮件发送的方式
- * 投递给玩家。DIRECT 类型物品发放统一通过 {@link ItemRewardDispatcher}
- * （放入背包→背包满转邮件→无邮件则掉落），投递失败时返回失败结果供上层入队待领取。
+ * 投递给玩家。DIRECT 类型的物品由抽奖业务流程交接到持久待发队列。
  */
 public class PrizeDistributor {
 
     private final ItemSourceRegistry itemSourceRegistry;
     private final Supplier<MailDispatchable> mailSupplier;
-    private final ItemRewardDispatcher itemRewardDispatcher;
     private final Logger logger;
     private final org.bukkit.plugin.java.JavaPlugin plugin;
 
@@ -37,18 +32,15 @@ public class PrizeDistributor {
      *
      * @param itemSourceRegistry 物品来源注册表
      * @param mailSupplier       邮件能力延迟供应器
-     * @param itemRewardDispatcher 统一物品奖励发放器
      * @param logger             日志记录器
      */
     public PrizeDistributor(org.bukkit.plugin.java.JavaPlugin plugin,
                             ItemSourceRegistry itemSourceRegistry,
                             Supplier<MailDispatchable> mailSupplier,
-                            ItemRewardDispatcher itemRewardDispatcher,
                             Logger logger) {
         this.plugin = plugin;
         this.itemSourceRegistry = itemSourceRegistry;
         this.mailSupplier = mailSupplier;
-        this.itemRewardDispatcher = itemRewardDispatcher;
         this.logger = logger;
     }
 
@@ -62,34 +54,14 @@ public class PrizeDistributor {
     @NotNull
     public DistributionResult distribute(@NotNull Player player, @NotNull PoolItem item) {
         DistributionResult result = switch (item.delivery()) {
-            case DIRECT -> giveDirectItem(player, item);
+            case DIRECT -> throw new IllegalArgumentException("直接物品由抽奖凭证交接");
             case COMMAND -> executeCommands(player, item);
             case MAIL -> sendMail(player, item);
         };
-        if (result.success()) executeExtraCommands(player, item);
+        if (result.success() && !executeExtraCommands(player, item)) {
+            return DistributionResult.failure(null, "附加命令执行失败，奖品已发放");
+        }
         return result;
-    }
-
-    private DistributionResult giveDirectItem(Player player, PoolItem item) {
-        ItemStack stack = generateItem(item, player);
-        if (stack == null) {
-            logger.warning("无法生成物品: " + item.id() + " (source=" + item.source() + ")");
-            return DistributionResult.failure(null, "物品生成失败");
-        }
-
-        ItemRewardDispatcher.DispatchOptions options = ItemRewardDispatcher.DispatchOptions.builder("lottery")
-            .sourceDetail("prize:" + item.key())
-            .overflowMailSubject("抽奖奖励溢出物品")
-            .overflowMailBody("您的背包已满，抽奖奖励物品通过邮件补发。")
-            .overflowMailSenderName("抽奖")
-            .build();
-        ItemRewardDispatcher.DispatchResult result = itemRewardDispatcher.dispatchItem(player, stack, options);
-        if (result.success()) {
-            if (result.mailedCount() > 0) return DistributionResult.mailSent(stack);
-            if (result.pendingCount() > 0) return DistributionResult.pendingSaved(stack);
-            return DistributionResult.success(stack);
-        }
-        return DistributionResult.failure(stack, result.message());
     }
 
     private DistributionResult executeCommands(Player player, PoolItem item) {
@@ -103,8 +75,10 @@ public class PrizeDistributor {
         return DistributionResult.failure(null, "部分命令执行失败");
     }
 
-    private void executeExtraCommands(Player player, PoolItem item) {
-        for (String command : item.extraCommands()) dispatchCommand(player, item, command);
+    public boolean executeExtraCommands(Player player, PoolItem item) {
+        boolean confirmed = true;
+        for (String command : item.extraCommands()) confirmed &= dispatchCommand(player, item, command);
+        return confirmed;
     }
 
     private boolean dispatchCommand(Player player, PoolItem item, String command) {
@@ -183,7 +157,7 @@ public class PrizeDistributor {
      * @param failureReason 失败原因，成功时为空字符串
      */
     public record DistributionResult(boolean success, @Nullable ItemStack item,
-                                     boolean mailSent, boolean pendingSaved,
+                                     boolean mailSent,
                                      @NotNull String failureReason) {
         /**
          * 构造直接发放成功的结果。
@@ -192,7 +166,7 @@ public class PrizeDistributor {
          * @return 成功结果实例
          */
         public static DistributionResult success(@Nullable ItemStack item) {
-            return new DistributionResult(true, item, false, false, "");
+            return new DistributionResult(true, item, false, "");
         }
 
         /**
@@ -202,17 +176,7 @@ public class PrizeDistributor {
          * @return 邮件发送结果实例
          */
         public static DistributionResult mailSent(@Nullable ItemStack item) {
-            return new DistributionResult(true, item, true, false, "");
-        }
-
-        /**
-         * 构造物品已暂存待发放的结果。
-         *
-         * @param item 涉及的物品堆
-         * @return 暂存结果实例
-         */
-        public static DistributionResult pendingSaved(@Nullable ItemStack item) {
-            return new DistributionResult(true, item, false, true, "");
+            return new DistributionResult(true, item, true, "");
         }
 
         /**
@@ -223,7 +187,7 @@ public class PrizeDistributor {
          * @return 失败结果实例
          */
         public static DistributionResult failure(@Nullable ItemStack item, @NotNull String reason) {
-            return new DistributionResult(false, item, false, false, reason);
+            return new DistributionResult(false, item, false, reason);
         }
     }
 }

@@ -3,6 +3,7 @@ package xuanmo.arcartxsuite.security.protection;
 import xuanmo.arcartxsuite.security.NativeBridge;
 import xuanmo.arcartxsuite.security.protection.ProtectionEnvironment;
 import xuanmo.arcartxsuite.util.HashUtils;
+import xuanmo.arcartxsuite.bootstrap.RuntimeBootstrap;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -51,6 +52,16 @@ public final class ProtectedClassLoader extends ClassLoader {
     private final ConcurrentHashMap<String, Class<?>> loadedClasses = new ConcurrentHashMap<>();
     private final ThreadLocal<byte[]> readBuffer = ThreadLocal.withInitial(() -> new byte[8192]);
     private volatile boolean protectionActive = true;
+    private RuntimeBootstrap.Loader runtime;
+
+    public void attachRuntime(RuntimeBootstrap.Loader runtime) { this.runtime = runtime; }
+
+    public void closeRuntime() {
+        if (runtime != null) {
+            try { runtime.close(); }
+            catch (IOException e) { LOGGER.warning("Runtime shutdown failed: " + e.getMessage()); }
+        }
+    }
 
     /**
      * 本加载器所定义类的 ProtectionDomain。
@@ -78,6 +89,7 @@ public final class ProtectedClassLoader extends ClassLoader {
      * ClassNotFoundException，让 PluginClassLoader 自行 findClass 完成跨插件查找。
      */
     private final ThreadLocal<Boolean> delegatingToPlugin = ThreadLocal.withInitial(() -> Boolean.FALSE);
+    private final ThreadLocal<Boolean> definingApiInPlugin = ThreadLocal.withInitial(() -> Boolean.FALSE);
 
     public ProtectedClassLoader(ClassLoader originalParent, JarFile protectedJar,
                                 Map<String, Class<?>> capturedClasses, ClassLoader pluginClassLoader,
@@ -132,6 +144,22 @@ public final class ProtectedClassLoader extends ClassLoader {
 
     @Override
     protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
+        if (name.startsWith("xuanmo.arcartxsuite.api.") && pluginClassLoader != null
+                && protectedJar.getJarEntry(encEntryPath(name)) == null) {
+            if (protectedJar.getJarEntry(classEntryPath(name)) == null) {
+                throw new ClassNotFoundException("Suite API not present in this host: " + name);
+            }
+            // Delegate outside this loader's lock: other plugins enter PluginClassLoader first.
+            // Holding the two loaders' locks in opposite orders would deadlock cold API lookups.
+            if (definingApiInPlugin.get()) throw new ClassNotFoundException(name);
+            definingApiInPlugin.set(Boolean.TRUE);
+            try {
+                Class<?> shared = pluginClassLoader.loadClass(name);
+                loadedClasses.put(name, shared);
+                if (resolve) resolveClass(shared);
+                return shared;
+            } finally { definingApiInPlugin.remove(); }
+        }
         synchronized (getClassLoadingLock(name)) {
             Class<?> c = findLoadedClass(name);
             if (c == null) c = loadedClasses.get(name);
@@ -146,8 +174,14 @@ public final class ProtectedClassLoader extends ClassLoader {
                     JarEntry plain = protectedJar.getJarEntry(classEntryPath(name));
                     if (plain != null) {
                         c = definePlain(name, plain);
+                    } else if (name.startsWith("xuanmo.arcartxsuite.api.")) {
+                        throw new ClassNotFoundException("Suite API not present in this host: " + name);
                     }
                 }
+            }
+
+            if (c == null && runtime != null && runtime.ownsClass(name)) {
+                c = runtime.loadClass(name);
             }
 
             if (c == null) {
@@ -256,6 +290,27 @@ public final class ProtectedClassLoader extends ClassLoader {
         URL u = findResource(name);
         if (u == null) return Collections.emptyEnumeration();
         return Collections.enumeration(java.util.List.of(u));
+    }
+
+    @Override public URL getResource(String name) {
+        URL own = findResource(name);
+        if (own != null) return own;
+        if (runtime != null) {
+            URL library = runtime.runtimeResource(name);
+            if (library != null || runtime.ownsResource(name)) return library;
+        }
+        return getParent().getResource(name);
+    }
+
+    @Override public Enumeration<URL> getResources(String name) throws IOException {
+        java.util.Set<URL> resources = new java.util.LinkedHashSet<>();
+        URL own = findResource(name);
+        if (own != null) resources.add(own);
+        if (runtime != null) runtime.runtimeResources(name).asIterator().forEachRemaining(resources::add);
+        if (runtime == null || !runtime.ownsResource(name)) {
+            getParent().getResources(name).asIterator().forEachRemaining(resources::add);
+        }
+        return Collections.enumeration(resources);
     }
 
     private void definePackageIfNeeded(String name) {

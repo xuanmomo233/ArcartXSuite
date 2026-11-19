@@ -6,8 +6,10 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.Set;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.CompletionStage;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 import org.bukkit.Bukkit;
@@ -20,6 +22,7 @@ import org.bukkit.plugin.Plugin;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.abyss.config.AbyssModuleConfiguration;
 import xuanmo.arcartxsuite.abyss.template.AbyssTemplate;
+import xuanmo.arcartxsuite.api.scheduler.ModuleExecutor;
 
 /**
  * 世界池：每个实例复制一份模板世界 → 加载 → 配置 → 用完卸载删目录。
@@ -33,11 +36,14 @@ public final class AbyssWorldPool {
     private final Plugin plugin;
     private final AbyssModuleConfiguration.AbyssSection cfg;
     private final Logger logger;
-    private final ExecutorService ioExecutor;
+    private final ModuleExecutor ioExecutor;
     private final xuanmo.arcartxsuite.api.scheduler.SchedulerAPI scheduler;
     private final Map<UUID,Integer> removalAttempts=new ConcurrentHashMap<>();
     private final java.util.Set<xuanmo.arcartxsuite.api.scheduler.ScheduledTask> cleanupTasks=ConcurrentHashMap.newKeySet();
     private volatile boolean closing;
+    private boolean shutdownStarted;
+    private final Set<CompletableFuture<Prepared>> materializing = ConcurrentHashMap.newKeySet();
+    private final Set<CompletableFuture<Void>> fileDeletes = ConcurrentHashMap.newKeySet();
     private final java.util.concurrent.atomic.AtomicLong preloadGeneration=new java.util.concurrent.atomic.AtomicLong();
     private final Map<UUID, CompletableFuture<Void>> worldWrites = new ConcurrentHashMap<>();
     private volatile NmsWorldLoader nmsLoader;
@@ -67,7 +73,7 @@ public final class AbyssWorldPool {
         this.cfg = cfg;
         this.logger = logger;
         this.scheduler=scheduler;
-        this.ioExecutor = Executors.newFixedThreadPool(2, r -> {
+        this.ioExecutor = new ModuleExecutor(2, 2, 0, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>(), r -> {
             Thread t = new Thread(r, "Abyss-WorldIO");
             t.setDaemon(true);
             return t;
@@ -104,6 +110,7 @@ public final class AbyssWorldPool {
     }
 
     public World resumeAfterSnapshot(UUID instanceId, AbyssTemplate template) {
+        if (closing) throw new IllegalStateException("世界池已停止");
         String name = instanceWorldNames.get(instanceId);
         if (name == null) throw new IllegalStateException("设计实例已被回收");
         return loadAndConfigure(name, template);
@@ -111,9 +118,10 @@ public final class AbyssWorldPool {
 
     /** 在世界池 IO 线程跑任务（设计模式世界回拷用）。 */
     public CompletableFuture<Void> runIo(UUID instanceId, Runnable r) {
+        if (closing) return CompletableFuture.failedFuture(new CancellationException("Abyss world pool stopped"));
         CompletableFuture<Void> future = CompletableFuture.runAsync(r, ioExecutor);
-        worldWrites.put(instanceId, future);
-        return future;
+        worldWrites.merge(instanceId, future, (previous, next) -> CompletableFuture.allOf(previous, next));
+        return future.copy();
     }
 
     /**
@@ -122,6 +130,7 @@ public final class AbyssWorldPool {
      * @return CompletableFuture&lt;World&gt;（主线程回调后获得），失败 exceptional
      */
     public CompletableFuture<World> acquireWorld(AbyssTemplate template, UUID instanceId) {
+        if (closing) return CompletableFuture.failedFuture(new CancellationException("Abyss world pool stopped"));
         // 预热接管：世界已建好，跳过整个创建路径
         Prepared pre = takePrepared(template.id());
         if (pre != null) {
@@ -160,12 +169,16 @@ public final class AbyssWorldPool {
     }
 
     private CompletableFuture<Prepared> materialize(AbyssTemplate template, String name) {
+        if (closing) return CompletableFuture.failedFuture(new CancellationException("Abyss world pool stopped"));
         CompletableFuture<Prepared> future = new CompletableFuture<>();
+        materializing.add(future);
+        future.whenComplete((prepared, failure) -> materializing.remove(future));
         File dir = worldDir(name);
 
         AbyssTemplate.WorldSource src = template.worldSource();
         if (src.kind() == AbyssTemplate.WorldSource.Kind.VOID) {
             runSync(() -> {
+                if (closing) return;
                 try {
                     World w = schematicService.createVoidWorld(name, cfg, nmsLoader);
                     configureWorld(w, template);
@@ -178,6 +191,7 @@ public final class AbyssWorldPool {
         }
         if (src.kind() == AbyssTemplate.WorldSource.Kind.SCHEMATIC) {
             runSync(() -> {
+                if (closing) return;
                 try {
                     World w = schematicService.createVoidWorld(name, cfg, nmsLoader);
                     configureWorld(w, template);
@@ -198,9 +212,12 @@ public final class AbyssWorldPool {
         }
 
         Runnable copyTask = () -> {
+            if (closing) return;
             try {
                 WorldCopyUtil.copyWorldFolder(src.file(), dir);
+                if (closing) return; // The next world pool can reclaim the directory after this worker exits.
                 runSync(() -> {
+                    if (closing) return;
                     try {
                         World w = loadAndConfigure(name, template);
                         future.complete(new Prepared(name, dir, w, null));
@@ -269,7 +286,7 @@ public final class AbyssWorldPool {
         String name = cfg.worldPrefix() + "pre_" + template.id() + "_" + UUID.randomUUID().toString().substring(0,8);
         materialize(template, name).whenComplete((pre, err) -> {
             if (err != null) {
-                logger.warning("[abyss] 预热失败 " + template.id() + ": " + err.getMessage());
+                if (!closing) logger.warning("[abyss] 预热失败 " + template.id() + ": " + err.getMessage());
                 return;
             }
             acceptPrepared(template,pre,generation);
@@ -377,6 +394,7 @@ public final class AbyssWorldPool {
      * 回收世界：卸载 + 删目录 + 清 schematic 会话。必须在主线程调用。
      */
     public void releaseWorld(UUID instanceId) {
+        if (shutdownStarted) return;
         String name = instanceWorldNames.get(instanceId);
         if (name == null) name = worldName(instanceId);
         World world = Bukkit.getWorld(name);
@@ -414,8 +432,7 @@ public final class AbyssWorldPool {
         final File toDelete = dir;
         // 删除目录异步化（大目录删除也耗时）
         CompletableFuture<Void> pending = worldWrites.remove(instanceId);
-        if (pending == null) deleteLater(toDelete);
-        else pending.whenComplete((v, error) -> deleteLater(toDelete));
+        deleteAfterWrite(toDelete, pending);
     }
 
     /** 启动时扫描并回收残留世界（上次非正常关服的副本世界）。 */
@@ -462,8 +479,17 @@ public final class AbyssWorldPool {
     }
 
     private void deleteLater(File directory) {
-        try{ioExecutor.submit(()->WorldCopyUtil.deleteRecursively(directory));}
-        catch(java.util.concurrent.RejectedExecutionException stopped){logger.warning("[abyss] IO已停止，目录留待后续安全回收: "+directory.getName());}
+        deleteAfterWrite(directory, null);
+    }
+
+    private void deleteAfterWrite(File directory, CompletableFuture<Void> pending) {
+        var ready = pending == null ? CompletableFuture.completedFuture(null) : pending.handle((value, failure) -> null);
+        var deletion = ready.thenRunAsync(() -> WorldCopyUtil.deleteRecursively(directory), ioExecutor);
+        fileDeletes.add(deletion);
+        deletion.whenComplete((value, failure) -> {
+            fileDeletes.remove(deletion);
+            if (failure != null) logger.warning("[abyss] 世界目录留待后续清理: " + directory.getName() + ": " + failure.getMessage());
+        });
     }
 
     static boolean unloadForDeletion(World world) {
@@ -480,15 +506,28 @@ public final class AbyssWorldPool {
         if(task[0]!=null)cleanupTasks.add(task[0]);
     }
 
-    public void shutdown() {
-        closing=true;
-        for(var task:cleanupTasks)try{task.cancel();}catch(RuntimeException ignored){}
+    public void stopAdmission() {
+        if (closing) return;
+        closing = true;
+        for (var future : materializing) future.cancel(false);
+        for (var task : cleanupTasks) try { task.cancel(); } catch (RuntimeException ignored) {}
         cleanupTasks.clear();
-        ioExecutor.shutdown();
+    }
+
+    public void shutdown() {
+        if (shutdownStarted) return;
+        stopAdmission();
         try {
-            ioExecutor.awaitTermination(10, TimeUnit.SECONDS);
-        } catch (InterruptedException ignored) {
-            Thread.currentThread().interrupt();
+            releasePreload();
+        } finally {
+            shutdownStarted = true;
+            // Some releases are waiting for a design snapshot to finish before submitting deletion.
+            CompletableFuture.allOf(fileDeletes.toArray(CompletableFuture<?>[]::new))
+                .whenComplete((ignored, failure) -> ioExecutor.shutdown());
         }
+    }
+
+    public CompletionStage<Void> stopped() {
+        return ioExecutor.stopped();
     }
 }

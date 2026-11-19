@@ -1,6 +1,8 @@
 package xuanmo.arcartxsuite.qqbot.storage;
 
+import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.jetbrains.annotations.Nullable;
 
@@ -133,8 +135,8 @@ public interface QQBotRepository {
 
     // ─── 群活跃度 ────────────────────────────────────────
 
-    /** 记录一次发言 */
-    void recordActivity(long qqId, long groupId, String date);
+    /** 按群、发言者和日期原子提交一批增量。 */
+    void recordActivities(Map<ActivityKey, Integer> increments);
 
     /** 获取本月/本周活跃度排行（按发言次数降序） */
     List<ActivityRecord> getActivityLeaderboard(String dateStart, String dateEnd, int limit);
@@ -172,6 +174,8 @@ public interface QQBotRepository {
         long createdAt
     ) {}
 
+    record ActivityKey(long qqId, long groupId, LocalDate date) {}
+
     record ActivityRecord(
         long qqId,
         int messageCount
@@ -201,6 +205,15 @@ public interface QQBotRepository {
 
     /** A storage failure must never be mistaken for a successful points mutation. */
     final class StorageFailure extends RuntimeException {
-        public StorageFailure(String operation, Throwable cause) { super(operation, cause); }
+        private final boolean uncommitted;
+
+        public StorageFailure(String operation, Throwable cause) { this(operation, cause, false); }
+
+        StorageFailure(String operation, Throwable cause, boolean uncommitted) {
+            super(operation, cause);
+            this.uncommitted = uncommitted;
+        }
+
+        public boolean uncommitted() { return uncommitted; }
     }
 }

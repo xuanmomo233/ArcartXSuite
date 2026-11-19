@@ -3,58 +3,38 @@ package xuanmo.arcartxsuite.questgps.service;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
+import java.util.Set;
+import java.util.TreeSet;
+import java.util.function.Supplier;
 import xuanmo.arcartxsuite.questgps.QuestGpsCategory;
 import xuanmo.arcartxsuite.questgps.QuestGpsPage;
 
 /**
- * 任务导航快照构造器，按分类与页码对任务列表分桶、排序并生成分页快照。
+ * 排序当前任务列表，生成选中任务的详情和菜单快照。
  * <p>
  * 输出 {@link BuildResult} 供 UI 数据包发送。
  */
 public final class QuestGpsSnapshotBuilder {
 
-    public BuildResult build(
-        Collection<QuestDescriptor> descriptors,
-        QuestGpsCategory requestedCategory,
-        QuestGpsPage requestedPage,
+    BuildResult build(
+        QuestGpsPresentationService.MenuPage menuPage,
+        QuestGpsCategory category,
+        QuestGpsPage page,
         String preferredQuestId,
         Collection<QuestGpsNavigationService.TrackingState> trackingStates
     ) {
-        Objects.requireNonNull(descriptors, "descriptors");
-        QuestGpsCategory category = requestedCategory;
-        QuestGpsPage page = requestedPage == null ? QuestGpsPage.AVAILABLE : requestedPage;
         Collection<QuestGpsNavigationService.TrackingState> safeTracking = trackingStates == null
             ? List.of()
             : trackingStates;
 
-        Map<QuestGpsPage, List<QuestDescriptor>> buckets = new HashMap<>();
-        Map<QuestGpsPage, Integer> counts = new HashMap<>();
-        for (QuestGpsPage value : QuestGpsPage.values()) {
-            buckets.put(value, new ArrayList<>());
-            counts.put(value, 0);
-        }
-
-        for (QuestDescriptor descriptor : descriptors) {
-            if (category == null || descriptor.category() == null || !descriptor.category().equals(category)) {
-                continue;
-            }
-            buckets.get(descriptor.page()).add(descriptor);
-            counts.put(descriptor.page(), counts.get(descriptor.page()) + 1);
-        }
-        for (List<QuestDescriptor> bucket : buckets.values()) {
-            bucket.sort(Comparator
-                .comparingInt(QuestDescriptor::sortOrder)
-                .thenComparing(QuestDescriptor::displayName, String.CASE_INSENSITIVE_ORDER)
-                .thenComparing(QuestDescriptor::questId, String.CASE_INSENSITIVE_ORDER));
-        }
-
-        List<QuestDescriptor> currentPage = List.copyOf(buckets.get(page));
-        String selectedQuestId = chooseSelectedQuestId(currentPage, preferredQuestId);
-        QuestDescriptor selectedDescriptor = findById(currentPage, selectedQuestId);
+        List<QuestDescriptor> currentPage = new ArrayList<>(menuPage.quests());
+        currentPage.sort(Comparator
+            .comparingInt(QuestDescriptor::sortOrder)
+            .thenComparing(QuestDescriptor::displayName, String.CASE_INSENSITIVE_ORDER)
+            .thenComparing(QuestDescriptor::questId, String.CASE_INSENSITIVE_ORDER));
+        QuestDescriptor selected = selectQuest(currentPage, preferredQuestId);
 
         List<ListRow> rows = new ArrayList<>(currentPage.size());
         for (QuestDescriptor descriptor : currentPage) {
@@ -63,29 +43,38 @@ public final class QuestGpsSnapshotBuilder {
                     descriptor.questId(),
                     descriptor.displayName(),
                     descriptor.summaryText(),
-                    descriptor.stateText(),
+                    page.displayName(),
                     descriptor.questTrackAvailable(),
-                    descriptor.questId().equalsIgnoreCase(selectedQuestId)
+                    selected != null && descriptor.questId().equalsIgnoreCase(selected.questId())
                 )
             );
         }
 
-        DetailSnapshot detail = selectedDescriptor == null
+        DetailSnapshot detail = selected == null
             ? DetailSnapshot.empty(safeTracking)
-            : buildDetail(selectedDescriptor, safeTracking);
-        return new BuildResult(category, page, Map.copyOf(counts), List.copyOf(rows), detail);
+            : buildDetail(selected, page, safeTracking);
+        return new BuildResult(category, page, Map.copyOf(menuPage.counts()), List.copyOf(rows), detail);
     }
 
-    private DetailSnapshot buildDetail(QuestDescriptor descriptor, Collection<QuestGpsNavigationService.TrackingState> trackingStates) {
-        List<TaskRow> taskRows = new ArrayList<>(descriptor.tasks().size());
-        for (TaskDescriptor task : descriptor.tasks()) {
-            boolean taskTracked = false;
-            for (QuestGpsNavigationService.TrackingState state : trackingStates) {
-                if (state.matchesTask(descriptor.questId(), task.taskId())) {
-                    taskTracked = true;
-                    break;
-                }
+    private DetailSnapshot buildDetail(
+        QuestDescriptor descriptor,
+        QuestGpsPage page,
+        Collection<QuestGpsNavigationService.TrackingState> trackingStates
+    ) {
+        QuestDetail detail = descriptor.detail().get();
+        Set<String> trackedTasks = trackingStates.isEmpty() ? Set.of() : new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
+        boolean questTracked = false;
+        String questId = descriptor.questId();
+        String taskQuestId = questId == null ? "" : questId.trim();
+        for (var state : trackingStates) {
+            if (!state.active()) continue;
+            if (state.questId().equalsIgnoreCase(questId)) questTracked = true;
+            if (state.mode() == QuestGpsNavigationService.TrackingMode.TASK && state.questId().equalsIgnoreCase(taskQuestId)) {
+                trackedTasks.add(state.taskId());
             }
+        }
+        List<TaskRow> taskRows = new ArrayList<>(detail.tasks().size());
+        for (TaskDescriptor task : detail.tasks()) {
             taskRows.add(
                 new TaskRow(
                     task.taskId(),
@@ -94,13 +83,13 @@ public final class QuestGpsSnapshotBuilder {
                     task.statusText(),
                     task.completed(),
                     task.trackAvailable(),
-                    taskTracked
+                    trackedTasks.contains(task.taskId() == null ? "" : task.taskId().trim())
                 )
             );
         }
 
-        List<RewardRow> rewardRows = new ArrayList<>(descriptor.rewards().size());
-        for (QuestGpsRewardPreviewResolver.ResolvedRewardPreview reward : descriptor.rewards()) {
+        List<RewardRow> rewardRows = new ArrayList<>(detail.rewards().size());
+        for (QuestGpsRewardPreviewResolver.ResolvedRewardPreview reward : detail.rewards()) {
             rewardRows.add(
                 new RewardRow(
                     reward.rewardId(),
@@ -114,56 +103,37 @@ public final class QuestGpsSnapshotBuilder {
             );
         }
 
-        boolean questTracked = false;
-        for (QuestGpsNavigationService.TrackingState state : trackingStates) {
-            if (state.active() && state.questId().equalsIgnoreCase(descriptor.questId())) {
-                questTracked = true;
-                break;
-            }
-        }
-
         return new DetailSnapshot(
             descriptor.questId(),
             descriptor.displayName(),
-            descriptor.stateText(),
-            descriptor.path(),
-            descriptor.descriptionLines(),
+            page.displayName(),
+            detail.path(),
+            detail.descriptionLines(),
             List.copyOf(taskRows),
             List.copyOf(rewardRows),
-            descriptor.canAccept(),
-            descriptor.canAbandon(),
+            detail.canAccept(),
+            detail.canAbandon(),
             descriptor.questTrackAvailable(),
-            descriptor.page() == QuestGpsPage.ACTIVE,
+            page == QuestGpsPage.ACTIVE,
             !trackingStates.isEmpty(),
             questTracked,
             buildTrackingText(trackingStates)
         );
     }
 
-    static String chooseSelectedQuestId(List<QuestDescriptor> descriptors, String preferredQuestId) {
+    private static QuestDescriptor selectQuest(List<QuestDescriptor> descriptors, String preferredQuestId) {
         if (descriptors.isEmpty()) {
-            return "";
+            return null;
         }
         if (preferredQuestId != null && !preferredQuestId.isBlank()) {
+            String preferredId = preferredQuestId.trim();
             for (QuestDescriptor descriptor : descriptors) {
-                if (descriptor.questId().equalsIgnoreCase(preferredQuestId.trim())) {
-                    return descriptor.questId();
+                if (descriptor.questId().equalsIgnoreCase(preferredId)) {
+                    return descriptor;
                 }
             }
         }
-        return descriptors.get(0).questId();
-    }
-
-    private static QuestDescriptor findById(List<QuestDescriptor> descriptors, String questId) {
-        if (questId == null || questId.isBlank()) {
-            return null;
-        }
-        for (QuestDescriptor descriptor : descriptors) {
-            if (descriptor.questId().equalsIgnoreCase(questId.trim())) {
-                return descriptor;
-            }
-        }
-        return null;
+        return descriptors.get(0);
     }
 
     private static String buildTrackingText(Collection<QuestGpsNavigationService.TrackingState> trackingStates) {
@@ -188,32 +158,31 @@ public final class QuestGpsSnapshotBuilder {
     ) {
     }
 
-    public record QuestDescriptor(
+    record QuestDescriptor(
         String questId,
-        QuestGpsCategory category,
-        QuestGpsPage page,
         String displayName,
         String summaryText,
-        String stateText,
+        boolean questTrackAvailable,
+        int sortOrder,
+        Supplier<QuestDetail> detail
+    ) {}
+
+    record QuestDetail(
         String path,
         List<String> descriptionLines,
         List<TaskDescriptor> tasks,
         List<QuestGpsRewardPreviewResolver.ResolvedRewardPreview> rewards,
         boolean canAccept,
-        boolean canAbandon,
-        boolean questTrackAvailable,
-        int sortOrder
-    ) {
-    }
+        boolean canAbandon
+    ) {}
 
-    public record TaskDescriptor(
+    record TaskDescriptor(
         String taskId,
         String text,
         String descriptionText,
         String statusText,
         boolean completed,
-        boolean trackAvailable,
-        int sortOrder
+        boolean trackAvailable
     ) {
     }
 

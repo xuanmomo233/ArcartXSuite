@@ -55,6 +55,9 @@ public final class QQBotUiService {
     private final ActionTokenGuard tokens = new ActionTokenGuard();
     private final Map<UUID, Session> sessions = new HashMap<>();
     private final Set<BukkitTask> tasks = ConcurrentHashMap.newKeySet();
+    private final Set<CompletableFuture<?>> pendingQueries = ConcurrentHashMap.newKeySet();
+    private final xuanmo.arcartxsuite.api.scheduler.ModuleCallback queryCallbacks =
+        new xuanmo.arcartxsuite.api.scheduler.ModuleCallback(() -> {});
     private final Set<Player> readyClients = ConcurrentHashMap.newKeySet();
     private final Deque<Map<String, Object>> recentMessages = new ArrayDeque<>();
     private volatile boolean closed;
@@ -364,12 +367,24 @@ public final class QQBotUiService {
     private <T> CompletableFuture<T> submit(Supplier<T> work) {
         CompletableFuture<T> future = new CompletableFuture<>();
         if (closed) { future.cancel(false); return future; }
-        BukkitTask task = Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            if (closed) { future.cancel(false); return; }
-            try { future.complete(work.get()); } catch (Throwable error) { future.completeExceptionally(error); }
-        });
-        tasks.add(task);
-        future.whenComplete((value, error) -> tasks.remove(task));
+        pendingQueries.add(future);
+        future.whenComplete((value, failure) -> pendingQueries.remove(future));
+        if (closed) { future.cancel(false); return future; }
+        try {
+            BukkitTask task = Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+                boolean ran = queryCallbacks.call(() -> {
+                    if (closed) future.cancel(false);
+                    else try { future.complete(work.get()); } catch (Throwable error) { future.completeExceptionally(error); }
+                    return true;
+                }, false);
+                if (!ran) future.cancel(false);
+            });
+            tasks.add(task);
+            if (closed) { task.cancel(); future.cancel(false); }
+            future.whenComplete((value, error) -> tasks.remove(task));
+        } catch (RuntimeException unavailable) {
+            future.completeExceptionally(unavailable);
+        }
         return future;
     }
     private void onMain(Runnable work) {
@@ -418,11 +433,14 @@ public final class QQBotUiService {
     public void clearAllTokens() { sessions.clear(); tokens.clearAll(); }
     public void shutdown() {
         closed = true;
+        queryCallbacks.close();
+        pendingQueries.forEach(future -> future.cancel(false));
         for (BukkitTask task : tasks) task.cancel();
         tasks.clear(); clearAllTokens(); readyClients.clear();
         synchronized (recentMessages) { recentMessages.clear(); }
         sendPlayerMessageCallback = null; serviceConnectedSupplier = null;
     }
+    public CompletionStage<Void> stopped() { return queryCallbacks.stopped(); }
     private boolean isServiceConnected() { return serviceConnectedSupplier != null && Boolean.TRUE.equals(serviceConnectedSupplier.get()); }
     private static String argument(List<String> data, int index) { return data != null && data.size() > index && data.get(index) != null ? data.get(index) : ""; }
     private static String time(long millis) { return millis > 0 ? TIME_FMT.format(Instant.ofEpochMilli(millis)) : ""; }

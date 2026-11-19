@@ -14,6 +14,7 @@ import static org.mockito.Mockito.*;
 import xuanmo.arcartxsuite.abyss.config.AbyssModuleConfiguration;
 import xuanmo.arcartxsuite.abyss.design.*;
 import xuanmo.arcartxsuite.abyss.instance.*;
+import xuanmo.arcartxsuite.abyss.mob.MonsterGroupManager;
 import xuanmo.arcartxsuite.abyss.party.PartyManager;
 import xuanmo.arcartxsuite.abyss.service.AbyssService;
 import xuanmo.arcartxsuite.abyss.stats.CombatStatisticsService;
@@ -76,13 +77,73 @@ class AbyssPacketPayloadTest {
     Map<String,Object> flush(){var jobs=List.copyOf(deferred);deferred.clear();jobs.forEach(Runnable::run);return packets.get(packets.size()-1);}
     void assertClientFields(String name,Map<String,Object> payload)throws Exception {
         var yaml=new YamlConfiguration();yaml.load(Path.of("src/main/resources/arcartx/ui/abyss_"+name+".yml").toFile());
-        String handler=yaml.getString("ui.packetHandler.init");
+        String handler=yaml.getString("ui.packetHandler."+(name.equals("hud")?"update":"init"));
         var matcher=Pattern.compile("packet\\['([^']+)'\\]").matcher(handler);
         while(matcher.find())assertTrue(payload.containsKey(matcher.group(1)),name+" missing "+matcher.group(1));
     }
     @Test void emptyBrowserAndLobbySupplyAllClientFields()throws Exception {
         ui.openBrowser(player);assertClientFields("browser",flush());
         ui.openLobby(player);assertClientFields("lobby",flush());
+    }
+
+    @Test void hudReusesOneSnapshotAndSkipsUnchangedOrStaleRecipients() throws Exception {
+        Player teammate = mock(Player.class);
+        UUID teammateId = UUID.randomUUID();
+        when(teammate.getUniqueId()).thenReturn(teammateId);
+        when(teammate.isOnline()).thenReturn(true);
+        when(((Server) serverField.get(null)).getPlayer(teammateId)).thenReturn(teammate);
+        instance.addPlayer(teammate);
+        var players = instance.getPlayers();
+        var groups = mock(MonsterGroupManager.class, withSettings().mockMaker(org.mockito.MockMakers.INLINE));
+        when(groups.groupProgress(instance)).thenReturn(new int[] {2, 0}, new int[] {2, 0}, new int[] {2, 1});
+        set("mobGroups", groups);
+
+        ui.openHud(instance, players);
+        assertClientFields("hud", flush());
+        assertEquals(2, packets.size());
+        assertNotEquals(packets.get(0).get("view_nonce"), packets.get(1).get("view_nonce"));
+        verify(groups).groupProgress(instance);
+        ui.pushHudUpdate(instance, players);
+        assertEquals(2, packets.size());
+        ui.pushHudUpdate(instance, players);
+        assertEquals(4, packets.size());
+        assertSame(packets.get(2), packets.get(3));
+        assertEquals(1, packets.get(2).get("groupDone"));
+        verify(groups, times(3)).groupProgress(instance);
+        verify(groups, times(3)).activeGroupName(instance);
+        verify(groups, times(3)).totalAlive(instance);
+
+        var previousRun = new AbyssInstance(UUID.randomUUID(), template, null);
+        ui.pushHudUpdate(previousRun, players);
+        verifyNoMoreInteractions(groups);
+        assertEquals(4, packets.size());
+        ui.closeHud(teammate);
+        when(groups.groupProgress(instance)).thenReturn(new int[] {2, 2});
+        ui.pushHudUpdate(instance, players);
+        assertEquals(5, packets.size());
+        verify(bridge, times(2)).sendPacket(eq(teammate), anyString(), eq("update"), any());
+    }
+
+    @Test void teamSettlementBuildsRowsOnceAndKeepsIndividualTokens() throws Exception {
+        Player teammate = mock(Player.class);
+        UUID teammateId = UUID.randomUUID();
+        when(teammate.getUniqueId()).thenReturn(teammateId);
+        when(teammate.isOnline()).thenReturn(true);
+        when(teammate.getName()).thenReturn("Teammate");
+        when(((Server) serverField.get(null)).getPlayer(teammateId)).thenReturn(teammate);
+        instance.addPlayer(teammate);
+        var stats = mock(CombatStatisticsService.class, withSettings().mockMaker(org.mockito.MockMakers.INLINE));
+        when(stats.summary(eq(instance), any())).thenReturn(Map.of("damage", 2.0, "damage_taken", 0.0, "healing", 0.0));
+        set("stats", stats);
+
+        var displays = ui.prepareSettlementViews(instance, instance.getPlayers(), true);
+        displays.values().forEach(Runnable::run);
+        assertClientFields("stats", flush());
+        verify(stats).summary(instance, player.getUniqueId());
+        verify(stats).summary(instance, teammateId);
+        assertEquals(2, packets.size());
+        assertSame(packets.get(0).get("statRows"), packets.get(1).get("statRows"));
+        assertNotEquals(packets.get(0).get("action_token"), packets.get(1).get("action_token"));
     }
     @Test void nativeRunPanelInitialisesAndRejectsPacketsFromAnOlderWindow() throws Exception {
         var nativeGame = mock(xuanmo.arcartxsuite.abyss.service.NativeRunGameplay.class,
@@ -213,7 +274,8 @@ class AbyssPacketPayloadTest {
     @Test void settlementSnapshotSurvivesExitAndRuntimeCleanup() {
         instance.recordKill(player.getUniqueId());instance.recordKill(player.getUniqueId());
         instance.transitionTo(AbyssStatus.PREPARING,AbyssStatus.COMPLETED);
-        Runnable presentation=ui.captureSettlementStats(player,instance);instance.removePlayer(player.getUniqueId());instance.clearRuntime();
+        Runnable presentation=ui.prepareSettlementViews(instance, List.of(player), true).get(player.getUniqueId());
+        instance.removePlayer(player.getUniqueId());instance.clearRuntime();
         presentation.run();var payload=flush();
         @SuppressWarnings("unchecked") var rows=(Map<String,Map<String,Object>>)payload.get("statRows");
         assertEquals(2,rows.get("0").get("kills"));assertEquals(false,payload.get("canLeave"));assertTrue(ui.openRecentStats(player));

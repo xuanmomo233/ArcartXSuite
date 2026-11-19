@@ -1,0 +1,6 @@
+id: light_rod
+# 发放物品时将 PDC 字符串 arcartx-suite:axs_fishing_rod_id 设为 light_rod。
+line-strength: 0.9
+turn-response: 1.35
+green-bar-height-bonus: 5
+catch-duration-bonus: 60

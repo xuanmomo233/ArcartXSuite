@@ -105,12 +105,7 @@ public final class AfkRewardPlaceholderExpansion extends PlaceholderExpansion {
                     yield resolveAreaPlaceholder(service, player, id);
                 }
                 if (id.equals("total_all")) {
-                    int total = 0;
-                    for (var area : service.areas().values()) {
-                        var ast = service.getAreaStats(player.getUniqueId(), area.name());
-                        total += ast.totalSeconds();
-                    }
-                    yield formatTime(total);
+                    yield formatTime(service.getTrackedAreaSeconds(player.getUniqueId()));
                 }
                 yield null;
             }

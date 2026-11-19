@@ -1,57 +1,48 @@
 #
 # ArcartXSuite CombatEffect - 连击特效 HUD
-# 本 UI 作为 HUD 常驻显示，同时支持两种 combo 数据来源：
-#   1. packetHandler "combo" / "combo_milestone" — 服务端包触发（达到阈值时）
-#   2. server.combo_count 服务器变量 — 实时同步（需开启 sync-variable）
-#
-# 推荐方式: 开启 sync-variable 后直接用 {server.combo_count} 显示实时数字，
-# packetHandler 仅用于里程碑动画（如 5 连击闪光、10 连击特效）。
+# combo_sync 接收实时计数，0 表示结束。combo / combo_milestone 保留阈值提示。
 #
 ui:
   isHud: true
   defaultOpen: true
   packetHandler:
+    combo_sync: |-
+      var.combo_count = Cast.toInt(packet)
+      var.combo_live = var.combo_count > 0
+      var.combo_until = none
+      if (var.combo_count <= 1) {
+        var.milestone_until = none
+      }
     # packetHandler: combo
     # 包字段:
     #   - combo_count: 当前连击数（整数字符串，由服务端 {combo_count} 变量替换后传入）
-    # 说明: 普通连击处理器，更新连击数字并显示；
-    #       3 秒内无新连击则自动隐藏并清零
+    # 说明: 连击变量未启用时，普通提示显示 3 秒。
     combo: |-
       var.combo_count = Cast.toInt(packet['combo_count'])
-      var.combo_show = true
-      var.combo_time = Time.currentTime()
-      async {
-        while (true) {
-          Thread.sleep(500)
-          if (Time.currentTime() - var.combo_time > 3000) {
-            var.combo_show = false
-            var.combo_count = 0
-            break
-          }
-        }
+      if (var.combo_live != true) {
+        var.combo_until = Time.currentTime() + 3000
       }
     # packetHandler: combo_milestone
     # 包字段:
     #   - combo_count: 当前连击数（整数字符串，由服务端 {combo_count} 变量替换后传入）
-    # 说明: 里程碑连击处理器，更新连击数字并播放里程碑特效动画（显示 2 秒）；
-    #       3 秒内无新连击则自动隐藏并清零
+    # 说明: 里程碑高亮持续 2 秒，连续触发时从最近一次重新计时。
     combo_milestone: |-
       var.combo_count = Cast.toInt(packet['combo_count'])
-      var.combo_show = true
-      var.combo_time = Time.currentTime()
-      val.milestone_fx.visible = true
-      async {
-        Thread.sleep(2000)
-        val.milestone_fx.visible = false
+      now = Time.currentTime()
+      var.milestone_until = now + 2000
+      if (var.combo_live != true) {
+        var.combo_until = now + 3000
       }
-      async {
-        while (true) {
-          Thread.sleep(500)
-          if (Time.currentTime() - var.combo_time > 3000) {
-            var.combo_show = false
-            var.combo_count = 0
-            break
-          }
+  action:
+    tick: |-
+      if (var.combo_until != none || var.milestone_until != none) {
+        now = Time.currentTime()
+        if (var.milestone_until != none && now >= var.milestone_until) {
+          var.milestone_until = none
+        }
+        if (var.combo_until != none && now >= var.combo_until) {
+          var.combo_until = none
+          var.combo_count = 0
         }
       }
 
@@ -72,6 +63,7 @@ controls:
           x: 1560
           y: 350
           point: ~top_left
+          visible: "var.combo_count != none && var.combo_count > 0"
         children:
 
           连击背景:
@@ -83,19 +75,17 @@ controls:
               width: 300
               height: 120
               point: ~top_left
-              visible: "server.combo_count > 0 || var.combo_show"
 
           连击数字:
             type: Text
             attribute:
-              texts: "~&f{server.combo_count}"
+              texts: "(var.milestone_until != none ? '&6' : '&f') + (var.combo_count ?? 0).round()"
               shadow: false
               fontSize: 72
               center: true
               x: 150
               y: 8
               point: ~top_left
-              visible: "server.combo_count > 0 || var.combo_show"
 
           连击标签:
             type: Text
@@ -107,15 +97,18 @@ controls:
               x: 150
               y: 80
               point: ~top_left
-              visible: "server.combo_count > 0 || var.combo_show"
 
           里程碑特效:
             type: Texture
-            val: milestone_fx
             attribute:
-              normal: ~combat_effect/combo_milestone.png
-              middleScale: 1
+              normal: ~0,0,0,0
+              shape: ~round_rect
+              radius: ~8
               width: 300
               height: 120
               point: ~top_left
-              visible: false
+              visible: "var.milestone_until != none"
+            effect:
+              stroke:
+                width: 2
+                color: ~255,200,84,235

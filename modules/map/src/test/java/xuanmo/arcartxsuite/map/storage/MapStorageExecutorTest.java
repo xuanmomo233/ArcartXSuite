@@ -50,7 +50,8 @@ class MapStorageExecutorTest {
             AtomicInteger charges = new AtomicInteger();
             AtomicInteger rollbacks = new AtomicInteger();
             var result = MapUnlockTransaction.execute(storage, () -> false, () -> true,
-                () -> { charges.incrementAndGet(); return OK; }, () -> { rollbacks.incrementAndGet(); return null; }, FAIL, FAIL);
+                () -> { charges.incrementAndGet(); return OK; }, () -> fail("must not publish"),
+                () -> { rollbacks.incrementAndGet(); return null; }, () -> FAIL, FAIL);
             await(storage, result);
             assertFalse(result.join().success());
             assertEquals(0, charges.get());
@@ -66,7 +67,9 @@ class MapStorageExecutorTest {
             CountDownLatch releaseRollback = new CountDownLatch(1);
             var result = MapUnlockTransaction.execute(storage, () -> { row.set(true); return true; }, () -> true,
                 () -> { charged.incrementAndGet(); charged.decrementAndGet(); return FAIL; },
-                () -> { rollbackEntered.countDown(); releaseRollback.await(2, TimeUnit.SECONDS); row.set(false); return null; }, FAIL, FAIL);
+                () -> fail("must not publish"),
+                () -> { rollbackEntered.countDown(); releaseRollback.await(2, TimeUnit.SECONDS); row.set(false); return null; },
+                () -> FAIL, FAIL);
             long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
             while (rollbackEntered.getCount() != 0 && System.nanoTime() < deadline) { storage.pump(); Thread.sleep(1); }
             assertEquals(0, rollbackEntered.getCount());
@@ -79,28 +82,80 @@ class MapStorageExecutorTest {
         }
     }
 
-    @Test void stoppingAfterReservationRollsBackWithoutCharging() throws Exception {
-        var storage = new MapStorageExecutor();
+    @Test void stoppingWithSqlInFlightReturnsBeforeRollbackAndNeedsNoMoreTicks() throws Exception {
         AtomicBoolean row = new AtomicBoolean();
         AtomicInteger charges = new AtomicInteger();
-        CountDownLatch reserved = new CountDownLatch(1);
-        var result = MapUnlockTransaction.execute(storage, () -> { row.set(true); reserved.countDown(); return true; },
-            () -> !storage.isClosing(), () -> { charges.incrementAndGet(); return OK; },
-            () -> { row.set(false); return null; }, FAIL, FAIL);
-        assertTrue(reserved.await(2, TimeUnit.SECONDS));
-        storage.close();
-        assertTrue(result.isDone());
-        assertFalse(result.join().success());
-        assertFalse(row.get());
-        assertEquals(0, charges.get());
+        CountDownLatch entered = new CountDownLatch(1), release = new CountDownLatch(1);
+        Thread main = Thread.currentThread();
+        try (var storage = new MapStorageExecutor()) {
+            var result = MapUnlockTransaction.execute(storage,
+                () -> { entered.countDown(); assertTrue(release.await(3, TimeUnit.SECONDS)); row.set(true); return true; },
+                () -> true, () -> { charges.incrementAndGet(); return OK; },
+                () -> fail("must not publish"),
+                () -> { assertNotSame(main, Thread.currentThread()); row.set(false); return null; }, () -> FAIL, FAIL);
+            AtomicBoolean read = new AtomicBoolean();
+            var abandoned = storage.query(() -> { read.set(true); return null; });
+            AtomicBoolean written = new AtomicBoolean();
+            var write = storage.write(() -> { written.set(true); return null; });
+            try {
+                assertTrue(entered.await(2, TimeUnit.SECONDS));
+                storage.close();
+                assertFalse(storage.stopped().toCompletableFuture().isDone());
+                assertFalse(result.isDone());
+                assertTrue(abandoned.isCompletedExceptionally());
+                assertTrue(storage.query(() -> 1).isCompletedExceptionally());
+            } finally {
+                release.countDown();
+            }
+            storage.stopped().toCompletableFuture().get(3, TimeUnit.SECONDS);
+            assertFalse(result.join().success());
+            write.join();
+            assertTrue(written.get());
+            assertFalse(read.get());
+            assertFalse(row.get());
+            assertEquals(0, charges.get());
+        }
+    }
+
+    @Test void rollbackFailureDuringRetirementIsVisibleToTheHost() throws Exception {
+        try (var storage = new MapStorageExecutor()) {
+            CountDownLatch nextJob = new CountDownLatch(1);
+            var result = MapUnlockTransaction.execute(storage, () -> true, () -> true, () -> fail("must not charge"),
+                () -> fail("must not publish"), () -> { throw new java.sql.SQLException("rollback failed"); }, () -> FAIL, FAIL);
+            storage.query(() -> { nextJob.countDown(); return null; });
+            assertTrue(nextJob.await(2, TimeUnit.SECONDS)); // reserve result is already waiting for the old pump
+            storage.close();
+            var failure = assertThrows(java.util.concurrent.ExecutionException.class,
+                () -> storage.stopped().toCompletableFuture().get(3, TimeUnit.SECONDS));
+            assertEquals("rollback failed", failure.getCause().getMessage());
+            assertTrue(result.isCompletedExceptionally());
+        }
     }
 
     @Test void rollbackErrorsRemainExceptionalAndDoNotReportSuccess() throws Exception {
         try (var storage = new MapStorageExecutor()) {
             var result = MapUnlockTransaction.execute(storage, () -> true, () -> false, () -> OK,
-                () -> { throw new java.sql.SQLException("rollback failed"); }, FAIL, FAIL);
+                () -> fail("must not publish"), () -> { throw new java.sql.SQLException("rollback failed"); }, () -> FAIL, FAIL);
             await(storage, result);
             assertTrue(result.isCompletedExceptionally());
+        }
+    }
+
+    @Test void failedPublicationAfterPaymentDoesNotReleaseTheReservation() throws Exception {
+        try (var storage = new MapStorageExecutor()) {
+            var charged = new AtomicBoolean();
+            var rolledBack = new AtomicBoolean();
+            var result = MapUnlockTransaction.execute(storage, () -> true, () -> true,
+                () -> { charged.set(true); return OK; },
+                () -> {
+                    assertTrue(charged.get());
+                    throw new java.sql.SQLException("publication failed");
+                },
+                () -> { rolledBack.set(true); return null; }, () -> FAIL, FAIL);
+            await(storage, result);
+            assertTrue(result.isCompletedExceptionally());
+            assertTrue(charged.get());
+            assertFalse(rolledBack.get());
         }
     }
 

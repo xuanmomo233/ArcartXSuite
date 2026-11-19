@@ -23,49 +23,20 @@ public class RankingRewardRecordDao {
     }
 
     /**
-     * 检查是否已成功发放过相同 Boss/周期/玩家/名次的奖励。
-     */
-    public boolean hasSuccessfulIssuance(
-        String bossId,
-        String periodType,
-        LocalDateTime periodStart,
-        String playerUuid,
-        int rank
-    ) throws SQLException {
-        String sql = """
-            SELECT 1 FROM ranking_reward_records
-            WHERE boss_id = ? AND reward_type = ? AND period_start = ? AND player_uuid = ? AND rank = ? AND status = 'success'
-            LIMIT 1
-            """;
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-            stmt.setString(1, bossId);
-            stmt.setString(2, periodType);
-            stmt.setTimestamp(3, Timestamp.valueOf(periodStart));
-            stmt.setString(4, playerUuid);
-            stmt.setInt(5, rank);
-            try (ResultSet rs = stmt.executeQuery()) {
-                return rs.next();
-            }
-        }
-    }
-
-    /**
      * 插入奖励发放记录
      */
-    public int insert(RankingRewardRecord record) throws SQLException {
+    void insert(Connection conn, RankingRewardRecord record, long batchStart) throws SQLException {
         String sql = """
             INSERT INTO ranking_reward_records 
             (reward_config_id, reward_type, ranking_type, boss_id, 
              period_start, period_end, player_uuid, player_name, 
-             rank, score, reward_items, reward_commands, 
+             `rank`, score, reward_items, reward_commands,
              reward_money, reward_dkp, status, issued_time, 
-             failure_reason, retry_count, server_name)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             failure_reason, retry_count, server_name, batch_start_ms, reward_plan)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """;
 
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
             
             stmt.setInt(1, record.getRewardConfigId());
             stmt.setString(2, record.getRewardType());
@@ -86,18 +57,11 @@ public class RankingRewardRecordDao {
             stmt.setString(17, record.getFailureReason());
             stmt.setInt(18, record.getRetryCount() != null ? record.getRetryCount() : 0);
             stmt.setString(19, record.getServerName());
+            stmt.setLong(20, batchStart);
+            stmt.setString(21, record.getRewardPlan());
             
-            int affectedRows = stmt.executeUpdate();
-            if (affectedRows == 0) {
+            if (stmt.executeUpdate() != 1) {
                 throw new SQLException("插入奖励记录失败");
-            }
-            
-            try (ResultSet generatedKeys = stmt.getGeneratedKeys()) {
-                if (generatedKeys.next()) {
-                    return generatedKeys.getInt(1);
-                } else {
-                    throw new SQLException("插入奖励记录失败，无法获取ID");
-                }
             }
         }
     }
@@ -105,23 +69,49 @@ public class RankingRewardRecordDao {
     /**
      * 更新奖励记录
      */
-    public boolean update(RankingRewardRecord record) throws SQLException {
+    public boolean updateAction(int id, int action, String expected, String status,
+                                int nextAction, String reason, boolean retry,
+                                String expectedAttempt, String nextAttempt) throws SQLException {
         String sql = """
             UPDATE ranking_reward_records 
-            SET status = ?, issued_time = ?, failure_reason = ?, retry_count = ?
-            WHERE id = ?
-            """;
+            SET status = ?, issued_time = ?, failure_reason = ?, next_action = ?, retry_count = retry_count + ?,
+                claim_attempt = ?
+            WHERE id = ? AND reward_config_id = -1 AND status = ? AND next_action = ?
+            """ + (expectedAttempt == null ? " AND claim_attempt IS NULL" : " AND claim_attempt = ?");
 
         try (Connection conn = dataSource.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             
-            stmt.setString(1, record.getStatus());
-            stmt.setTimestamp(2, record.getIssuedTime() != null ? Timestamp.valueOf(record.getIssuedTime()) : null);
-            stmt.setString(3, record.getFailureReason());
-            stmt.setInt(4, record.getRetryCount() != null ? record.getRetryCount() : 0);
-            stmt.setInt(5, record.getId());
+            stmt.setString(1, status);
+            stmt.setTimestamp(2, Timestamp.valueOf(LocalDateTime.now()));
+            stmt.setString(3, reason);
+            stmt.setInt(4, nextAction);
+            stmt.setInt(5, retry ? 1 : 0);
+            stmt.setString(6, nextAttempt);
+            stmt.setInt(7, id);
+            stmt.setString(8, expected);
+            stmt.setInt(9, action);
+            if (expectedAttempt != null) stmt.setString(10, expectedAttempt);
             
             return stmt.executeUpdate() > 0;
+        }
+    }
+
+    public List<RankingRewardRecord> pendingPeriod(String bossId, String type, long start) throws SQLException {
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement stmt = conn.prepareStatement("""
+                 SELECT * FROM ranking_reward_records
+                 WHERE boss_id = ? AND reward_type = ? AND batch_start_ms = ? AND reward_config_id = -1
+                   AND status IN ('pending', 'mail_issuing') ORDER BY `rank`
+                 """)) {
+            stmt.setString(1, bossId);
+            stmt.setString(2, type);
+            stmt.setLong(3, start);
+            List<RankingRewardRecord> records = new ArrayList<>();
+            try (ResultSet rows = stmt.executeQuery()) {
+                while (rows.next()) records.add(mapResultSetToEntity(rows));
+            }
+            return records;
         }
     }
 
@@ -132,9 +122,9 @@ public class RankingRewardRecordDao {
         String sql = """
             SELECT id, reward_config_id, reward_type, ranking_type, boss_id, 
                    period_start, period_end, player_uuid, player_name, 
-                   rank, score, reward_items, reward_commands, 
+                   `rank`, score, reward_items, reward_commands, next_action, reward_plan, claim_attempt,
                    reward_money, reward_dkp, status, issued_time, 
-                   failure_reason, server_name
+                   failure_reason, retry_count, server_name
             FROM ranking_reward_records 
             WHERE id = ?
             """;
@@ -160,9 +150,9 @@ public class RankingRewardRecordDao {
         String sql = """
             SELECT id, reward_config_id, reward_type, ranking_type, boss_id, 
                    period_start, period_end, player_uuid, player_name, 
-                   rank, score, reward_items, reward_commands, 
+                   `rank`, score, reward_items, reward_commands, next_action, reward_plan, claim_attempt,
                    reward_money, reward_dkp, status, issued_time, 
-                   failure_reason, server_name
+                   failure_reason, retry_count, server_name
             FROM ranking_reward_records 
             WHERE player_uuid = ?
             ORDER BY issued_time DESC
@@ -192,9 +182,9 @@ public class RankingRewardRecordDao {
         StringBuilder sql = new StringBuilder("""
             SELECT id, reward_config_id, reward_type, ranking_type, boss_id, 
                    period_start, period_end, player_uuid, player_name, 
-                   rank, score, reward_items, reward_commands, 
+                   `rank`, score, reward_items, reward_commands, next_action, reward_plan, claim_attempt,
                    reward_money, reward_dkp, status, issued_time, 
-                   failure_reason, server_name
+                   failure_reason, retry_count, server_name
             FROM ranking_reward_records 
             WHERE 1=1
             """);
@@ -206,7 +196,9 @@ public class RankingRewardRecordDao {
             params.add(rewardType);
         }
 
-        if (status != null && !status.isEmpty()) {
+        if ("failed".equals(status)) {
+            sql.append(" AND status IN ('failed', 'review', 'issuing', 'mail_issuing')");
+        } else if (status != null && !status.isEmpty()) {
             sql.append(" AND status = ?");
             params.add(status);
         }
@@ -268,9 +260,9 @@ public class RankingRewardRecordDao {
         String sql = """
             SELECT id, reward_config_id, reward_type, ranking_type, boss_id, 
                    period_start, period_end, player_uuid, player_name, 
-                   rank, score, reward_items, reward_commands, 
+                   `rank`, score, reward_items, reward_commands, next_action, reward_plan, claim_attempt,
                    reward_money, reward_dkp, status, issued_time, 
-                   failure_reason, server_name
+                   failure_reason, retry_count, server_name
             FROM ranking_reward_records 
             WHERE status = 'failed'
             ORDER BY issued_time DESC
@@ -315,6 +307,9 @@ public class RankingRewardRecordDao {
         record.setPlayerUuid(rs.getString("player_uuid"));
         record.setPlayerName(rs.getString("player_name"));
         record.setRank(rs.getInt("rank"));
+        record.setNextAction(rs.getInt("next_action"));
+        record.setRewardPlan(rs.getString("reward_plan"));
+        record.setClaimAttempt(rs.getString("claim_attempt"));
         record.setScore(rs.getInt("score"));
         record.setRewardItems(rs.getString("reward_items"));
         record.setRewardCommands(rs.getString("reward_commands"));

@@ -64,12 +64,9 @@ public final class QQBotPlayerCommand implements TabExecutor {
             }
             case "info" -> {
                 java.util.UUID profileId = player.getUniqueId();
-                Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-                    try {
-                        var result = binding.findByPlayer(profileId);
-                        reply(player, service, result == null ? message("player.info.none") : message("player.info.bind", result.qqId()));
-                    } catch (RuntimeException error) { reply(player, service, message("common.operation-failed")); }
-                });
+                service.submitIo(() -> binding.findByPlayer(profileId)).whenComplete((result, failure) ->
+                    reply(player, service, failure != null ? message("common.operation-failed")
+                        : result == null ? message("player.info.none") : message("player.info.bind", result.qqId())));
             }
             case "admin" -> {
                 if (!player.hasPermission("arcartxsuite.qqbot.admin")) {

@@ -89,7 +89,8 @@ public final class PropModule extends AbstractAXSModule implements ModuleCommand
         Map<String, PropDefinition> definitions = PropDefinitionLoader.load(
             new File(dataFolder, "props"), logger);
 
-        service = new PropService(plugin, logger, configuration, propBridge, keyMapping, language, definitions, attributeBridge, messages(), vanillaItemNameBridge);
+        service = new PropService(plugin, logger, configuration, propBridge, keyMapping, language, definitions,
+            attributeBridge, modAttributes, ariaBridge, placeholderResolver, messages(), vanillaItemNameBridge);
         service.setEventBusProvider(() -> getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
         service.start();
         adminCommand = new PropAdminCommand(() -> service, messages());
@@ -112,7 +113,7 @@ public final class PropModule extends AbstractAXSModule implements ModuleCommand
             "Prop 模块已载入，props=" + service.propCount()
                 + " | keys=" + service.registeredKeyCount()
                 + " | category=" + service.keyCategory()
-                + " | mythiclib=" + service.mythicLibHooked()
+                + " | attributes=" + service.attributeProviders()
                 + " | debug=" + configuration.debug()
         );
     }

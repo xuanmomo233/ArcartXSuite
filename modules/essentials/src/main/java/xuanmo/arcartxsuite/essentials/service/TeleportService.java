@@ -1,8 +1,9 @@
 package xuanmo.arcartxsuite.essentials.service;
 
-import java.sql.SQLException;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
@@ -15,16 +16,26 @@ import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
 import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerTeleportEvent;
+import org.bukkit.event.entity.PlayerDeathEvent;
+import org.bukkit.event.entity.EntityDamageEvent;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.scheduler.BukkitTask;
+import xuanmo.arcartxsuite.api.auth.AuthAccess;
+import xuanmo.arcartxsuite.api.auth.AuthSnapshot;
 import xuanmo.arcartxsuite.essentials.config.EssentialsConfiguration;
+import xuanmo.arcartxsuite.essentials.command.EssentialsCommandDelegate;
+import xuanmo.arcartxsuite.api.capability.AbyssAdmissionAccess;
+import xuanmo.arcartxsuite.api.capability.RegionQueryable;
 import xuanmo.arcartxsuite.essentials.storage.EssentialsRepository;
 
 /**
@@ -42,13 +53,28 @@ public final class TeleportService implements Listener {
     private final EssentialsRepository repository;
     private final PlayerManagementService playerService;
     private final Logger logger;
+    private final EssentialsWork work;
+    private final Map<UUID, HomeNames> homeNames = new java.util.HashMap<>();
+    private record TpaLookup(UUID sender, UUID target) {}
+    private final Map<TpaLookup, Object> tpaLookups = new java.util.HashMap<>();
 
     // TPA 请求: target -> sender
-    private final Map<UUID, TpaRequest> pendingTpa = new ConcurrentHashMap<>();
+    private final TpaRequests pendingTpa;
+    private final WarpDirectory warps;
     // 传送等待中的玩家
-    private final Map<UUID, Integer> warmups = new ConcurrentHashMap<>();
+    private final Map<UUID, Warmup> warmups = new ConcurrentHashMap<>();
+    private final Map<UUID, Long> lastDamage = new java.util.HashMap<>();
+    private final Map<UUID, Long> unstuckCooldowns = new java.util.HashMap<>();
+    private final java.util.function.Supplier<AbyssAdmissionAccess> abyss;
+    private final java.util.function.Supplier<RegionQueryable> regions;
+    private BukkitTask tpaExpiryTask;
+    private final xuanmo.arcartxsuite.api.scheduler.ModuleCallback tpaPulse =
+        new xuanmo.arcartxsuite.api.scheduler.ModuleCallback(this::expireTpa);
+    private final xuanmo.arcartxsuite.api.scheduler.ModuleCallback callbacks =
+        new xuanmo.arcartxsuite.api.scheduler.ModuleCallback(()->{});
+    private boolean running;
     // 出生点后端（懒加载，按 MV 是否激活动态选择）
-    private volatile SpawnBackend localSpawnBackend;
+    private volatile LocalSpawnBackend localSpawnBackend;
     private volatile SpawnBackend multiverseSpawnBackend;
 
     /**
@@ -61,32 +87,55 @@ public final class TeleportService implements Listener {
      * @param logger        日志器
      */
     public TeleportService(JavaPlugin plugin, EssentialsConfiguration config,
-                           EssentialsRepository repository, PlayerManagementService playerService, Logger logger) {
+                           EssentialsRepository repository, PlayerManagementService playerService, Logger logger,
+                           WarpDirectory warps,
+                           java.util.function.Supplier<AbyssAdmissionAccess> abyss,
+                           java.util.function.Supplier<RegionQueryable> regions,
+                           EssentialsWork work) {
         this.plugin = plugin;
         this.config = config;
         this.repository = repository;
         this.playerService = playerService;
         this.logger = logger;
+        this.work = work;
+        this.abyss = abyss;
+        this.regions = regions;
+        this.pendingTpa = new TpaRequests(config.features().tpa());
+        this.warps = warps;
     }
 
     /**
      * 注册事件监听器。
      */
     public void start() {
+        running = true;
         Bukkit.getPluginManager().registerEvents(this, plugin);
+        if(config.features().tpa().enabled() || config.spawn().respawnAtSpawn() || config.features().unstuck().enabled())
+            tpaExpiryTask = Bukkit.getScheduler().runTaskTimer(plugin, tpaPulse, 20L, 20L);
+        if (!multiverseActive() && config.spawn().respawnAtSpawn()) localSpawnBackend().refreshIfDue();
+        for (Player player : Bukkit.getOnlinePlayers()) preloadHomeNames(player);
     }
 
     /**
      * 注销事件监听器，取消全部预热任务并清空待处理 TPA 请求。
      */
     public void shutdown() {
+        running = false;
+        tpaPulse.close();
+        callbacks.close();
         HandlerList.unregisterAll(this);
-        for (int taskId : warmups.values()) {
-            Bukkit.getScheduler().cancelTask(taskId);
-        }
+        if (tpaExpiryTask != null) tpaExpiryTask.cancel();
+        warmups.values().forEach(warmup -> warmup.task().cancel());
         warmups.clear();
         pendingTpa.clear();
+        homeNames.clear();
+        tpaLookups.clear();
+        lastDamage.clear();
+        unstuckCooldowns.clear();
     }
+
+    public java.util.concurrent.CompletionStage<Void> stopped(){return java.util.concurrent.CompletableFuture.allOf(
+        tpaPulse.stopped().toCompletableFuture(),callbacks.stopped().toCompletableFuture());}
 
     // ─── Home ───
 
@@ -97,27 +146,19 @@ public final class TeleportService implements Listener {
      * @param name   家名称
      */
     public void setHome(Player player, String name) {
-        try {
-            int count = repository.homeCount(player.getUniqueId());
-            int max = config.teleport().maxHomes();
-            // 检查权限覆盖: axs.essentials.homes.<number>
-            for (int i = 100; i > max; i--) {
-                if (player.hasPermission("axs.essentials.homes." + i)) {
-                    max = i;
-                    break;
-                }
-            }
-            Location existing = repository.getHome(player.getUniqueId(), name);
-            if (existing == null && count >= max) {
-                player.sendMessage(prefix() + config.messages().homeLimit().replace("{max}", String.valueOf(max)));
-                return;
-            }
-            repository.setHome(player.getUniqueId(), name, player.getLocation());
-            player.sendMessage(prefix() + config.messages().homeSet().replace("{name}", name));
-        } catch (SQLException e) {
-            logError("setHome", e);
-            player.sendMessage(prefix() + ChatColor.RED + "设置家失败。");
+        if (!validName(player, name)) return;
+        int maximum = config.teleport().maxHomes();
+        for (int i = 100; i > maximum; i--) {
+            if (player.hasPermission("axs.essentials.homes." + i)) { maximum = i; break; }
         }
+        int limit = maximum;
+        UUID id = player.getUniqueId();
+        var position = capture(player.getLocation());
+        background(player, "sethome", () -> repository.setHome(id, name, position, limit), saved -> {
+            cacheNames(player, saved.names());
+            player.sendMessage(prefix() + (saved.saved() ? config.messages().homeSet().replace("{name}", name)
+                : config.messages().homeLimit().replace("{max}", String.valueOf(limit))));
+        }, "设置家失败。");
     }
 
     /**
@@ -127,17 +168,15 @@ public final class TeleportService implements Listener {
      * @param name   家名称
      */
     public void deleteHome(Player player, String name) {
-        try {
-            Location loc = repository.getHome(player.getUniqueId(), name);
-            if (loc == null) {
-                player.sendMessage(prefix() + config.messages().homeNotFound().replace("{name}", name));
-                return;
-            }
-            repository.deleteHome(player.getUniqueId(), name);
-            player.sendMessage(prefix() + config.messages().homeDeleted().replace("{name}", name));
-        } catch (SQLException e) {
-            logError("deleteHome", e);
-        }
+        if (!validName(player, name)) return;
+        UUID id = player.getUniqueId();
+        background(player, "delhome", () -> repository.deleteHome(id, name), removed -> {
+            HomeNames cached = homeNames.get(id);
+            if (removed && cached != null) cached.names = cached.names.stream()
+                .filter(item -> !item.equals(name.toLowerCase(java.util.Locale.ROOT))).toList();
+            player.sendMessage(prefix() + (removed ? config.messages().homeDeleted() : config.messages().homeNotFound())
+                .replace("{name}", name));
+        }, "删除家失败。");
     }
 
     /**
@@ -147,16 +186,22 @@ public final class TeleportService implements Listener {
      * @param name   家名称
      */
     public void teleportHome(Player player, String name) {
-        try {
-            Location loc = repository.getHome(player.getUniqueId(), name);
-            if (loc == null) {
+        if (!validName(player, name)) return;
+        UUID id = player.getUniqueId();
+        AuthSnapshot admission = AuthAccess.snapshot(id);
+        if (!currentAdmission(player, admission)) return;
+        query(player, "home", () -> repository.getHome(id, name), position -> {
+            if (!currentAdmission(player, admission)) return;
+            Location location = resolve(position);
+            if (location == null) {
                 player.sendMessage(prefix() + config.messages().homeNotFound().replace("{name}", name));
                 return;
             }
-            delayedTeleport(player, loc, config.messages().homeTeleported().replace("{name}", name));
-        } catch (SQLException e) {
-            logError("teleportHome", e);
-        }
+            int delay = player.hasPermission("axs.essentials.teleport.bypass-delay") ? 0 : config.teleport().teleportDelay();
+            scheduleWarmup(player, admission, delay, false, () -> {
+                if (current(player, "home")) executeTeleport(player, location, config.messages().homeTeleported().replace("{name}", name), null);
+            });
+        }, "读取家失败。");
     }
 
     /**
@@ -166,11 +211,86 @@ public final class TeleportService implements Listener {
      * @return 家名称不可变列表，查询失败时返回空列表
      */
     public List<String> getHomeNames(Player player) {
-        try {
-            return List.copyOf(repository.getHomes(player.getUniqueId()).keySet());
-        } catch (SQLException e) {
-            return List.of();
-        }
+        if (!running || !player.isOnline()) return List.of();
+        preloadHomeNames(player);
+        HomeNames cached = homeNames.get(player.getUniqueId());
+        return cached == null ? List.of() : cached.names;
+    }
+
+    private void preloadHomeNames(Player player) {
+        if (!running || !(config.features().actionEnabled("home") && player.hasPermission("axs.essentials.home")
+            || config.features().actionEnabled("delhome") && player.hasPermission("axs.essentials.delhome"))) return;
+        UUID id = player.getUniqueId();
+        HomeNames existing = homeNames.get(id);
+        if (existing != null && existing.player == player) return;
+        HomeNames cached = new HomeNames(player);
+        homeNames.put(id, cached);
+        work.read(() -> repository.listHomeNames(id)).whenComplete((names, failure) -> work.onMain(() -> {
+            if (homeNames.get(id) != cached || !sameSession(player)) return;
+            if (failure != null) { homeNames.remove(id, cached); return; }
+            cached.names = names;
+        }));
+    }
+
+    private void cacheNames(Player player, List<String> names) {
+        HomeNames cached = homeNames.computeIfAbsent(player.getUniqueId(), id -> new HomeNames(player));
+        cached.names = names;
+    }
+
+    private static final class HomeNames {
+        private final Player player;
+        private List<String> names = List.of();
+        private HomeNames(Player player) { this.player = player; }
+    }
+
+    private <T> void background(Player player, String action, java.util.concurrent.Callable<T> operation,
+                                java.util.function.Consumer<T> reply, String failureMessage) {
+        if (!current(player, action)) return;
+        complete(player, action, work.submit(operation), reply, failureMessage);
+    }
+
+    private <T> void query(Player player, String action, java.util.concurrent.Callable<T> operation,
+                           java.util.function.Consumer<T> reply, String failureMessage) {
+        if (!current(player, action)) return;
+        complete(player, action, work.read(operation), reply, failureMessage);
+    }
+
+    private <T> void complete(Player player, String action, java.util.concurrent.CompletionStage<T> pending,
+                              java.util.function.Consumer<T> reply, String failureMessage) {
+        pending.whenComplete((value, failure) -> work.onMain(() -> {
+            if (!current(player, action)) return;
+            if (failure != null) {
+                logger.log(Level.WARNING, "Essentials." + action + " 失败", failure);
+                player.sendMessage(prefix() + ChatColor.RED + failureMessage);
+            } else reply.accept(value);
+        }));
+    }
+
+    private boolean sameSession(Player player) {
+        return running && player.isOnline() && Bukkit.getPlayer(player.getUniqueId()) == player;
+    }
+
+    private boolean currentAdmission(Player player, AuthSnapshot admission) {
+        if (!admission.admitted() || !sameSession(player)) return false;
+        AuthSnapshot current = AuthAccess.snapshot(player.getUniqueId());
+        return current.admitted() && current.generation() == admission.generation()
+            && Objects.equals(current.connectionId(), admission.connectionId());
+    }
+
+    private boolean current(Player player, String action) {
+        return sameSession(player) && config.features().actionEnabled(action)
+            && EssentialsCommandDelegate.hasActionPermission(player, action);
+    }
+
+    static EssentialsRepository.Position capture(Location location) {
+        return new EssentialsRepository.Position(location.getWorld().getName(), location.getX(), location.getY(), location.getZ(),
+            location.getYaw(), location.getPitch());
+    }
+
+    static Location resolve(EssentialsRepository.Position position) {
+        if (position == null) return null;
+        World world = Bukkit.getWorld(position.world());
+        return world == null ? null : new Location(world, position.x(), position.y(), position.z(), position.yaw(), position.pitch());
     }
 
     // ─── Warp ───
@@ -182,12 +302,13 @@ public final class TeleportService implements Listener {
      * @param name   传送点名称
      */
     public void setWarp(Player player, String name) {
-        try {
-            repository.setWarp(name, player.getLocation());
+        var location = capture(player.getLocation());
+        background(player, "setwarp", () -> {
+            warps.setWarp(name, location.world(), location.x(), location.y(), location.z(), location.yaw(), location.pitch());
+            return true;
+        }, ignored -> {
             player.sendMessage(prefix() + config.messages().warpSet().replace("{name}", name));
-        } catch (SQLException e) {
-            logError("setWarp", e);
-        }
+        }, "无法保存传送点，请查看服务端日志。");
     }
 
     /**
@@ -197,17 +318,13 @@ public final class TeleportService implements Listener {
      * @param name   传送点名称
      */
     public void deleteWarp(Player player, String name) {
-        try {
-            Location loc = repository.getWarp(name);
-            if (loc == null) {
+        background(player, "delwarp", () -> warps.deleteWarp(name), removed -> {
+            if (!removed) {
                 player.sendMessage(prefix() + config.messages().warpNotFound().replace("{name}", name));
                 return;
             }
-            repository.deleteWarp(name);
             player.sendMessage(prefix() + config.messages().warpDeleted().replace("{name}", name));
-        } catch (SQLException e) {
-            logError("deleteWarp", e);
-        }
+        }, "无法保存传送点，请查看服务端日志。");
     }
 
     /**
@@ -217,29 +334,23 @@ public final class TeleportService implements Listener {
      * @param name   传送点名称
      */
     public void teleportWarp(Player player, String name) {
-        try {
-            Location loc = repository.getWarp(name);
-            if (loc == null) {
-                player.sendMessage(prefix() + config.messages().warpNotFound().replace("{name}", name));
-                return;
-            }
-            delayedTeleport(player, loc, config.messages().warpTeleported().replace("{name}", name));
-        } catch (SQLException e) {
-            logError("teleportWarp", e);
+        AuthSnapshot admission = AuthAccess.snapshot(player.getUniqueId());
+        if (!currentAdmission(player, admission) || !current(player, "warp")) return;
+        if (warps.destination(player, name) == null) {
+            player.sendMessage(prefix() + config.messages().warpNotFound().replace("{name}", name));
+            return;
         }
+        int delay = player.hasPermission("axs.essentials.teleport.bypass-delay") ? 0 : config.teleport().teleportDelay();
+        scheduleWarmup(player, admission, delay, false, () -> {
+            if (!current(player, "warp")) return;
+            Location destination = warps.destination(player, name);
+            if (destination != null) executeTeleport(player, destination, config.messages().warpTeleported().replace("{name}", name), null);
+            else player.sendMessage(prefix() + config.messages().warpNotFound().replace("{name}", name));
+        });
     }
 
-    /**
-     * 返回全部公共传送点名称列表。
-     *
-     * @return 传送点名称不可变列表，查询失败时返回空列表
-     */
-    public List<String> getWarpNames() {
-        try {
-            return repository.getWarpNames();
-        } catch (SQLException e) {
-            return List.of();
-        }
+    public WarpDirectory warps() {
+        return warps;
     }
 
     // ─── Spawn ───
@@ -253,10 +364,11 @@ public final class TeleportService implements Listener {
      * @param player 执行者
      */
     public void setSpawn(Player player) {
-        boolean success = spawnBackend().setSpawn(player.getLocation());
-        player.sendMessage(prefix() + (success
-            ? config.messages().spawnSet()
-            : config.messages().spawnFailed()));
+        if (!current(player, "setspawn")) return;
+        spawnBackend().setSpawn(player.getLocation()).whenComplete((success, failure) -> work.onMain(() -> {
+            if (current(player, "setspawn")) player.sendMessage(prefix() + (failure == null && Boolean.TRUE.equals(success)
+                ? config.messages().spawnSet() : config.messages().spawnFailed()));
+        }));
     }
 
     /**
@@ -269,8 +381,8 @@ public final class TeleportService implements Listener {
      * @param world 上下文世界（MV 后端按世界取 spawn；本地后端忽略）
      * @return 出生点位置，未设置或查询失败返回 {@code null}
      */
-    public @Nullable Location getSpawn(@NotNull World world) {
-        return spawnBackend().getSpawn(world);
+    public java.util.concurrent.CompletionStage<Location> getSpawn(@NotNull World world) {
+        return work.main(this::spawnBackend).thenCompose(backend -> backend.getSpawn(world));
     }
 
     /**
@@ -279,11 +391,17 @@ public final class TeleportService implements Listener {
      * @param player 目标玩家
      */
     public void teleportSpawn(Player player) {
-        Location loc = spawnBackend().getSpawn(player.getWorld());
-        if (loc == null) {
-            loc = player.getWorld().getSpawnLocation();
-        }
-        delayedTeleport(player, loc, config.messages().spawnTeleported());
+        AuthSnapshot admission = AuthAccess.snapshot(player.getUniqueId());
+        if (!current(player, "spawn") || !currentAdmission(player, admission)) return;
+        getSpawn(player.getWorld()).whenComplete((location, failure) -> work.onMain(() -> {
+            if (!current(player, "spawn") || !currentAdmission(player, admission)) return;
+            if (failure != null) { player.sendMessage(prefix() + config.messages().spawnFailed()); return; }
+            Location target = location == null ? player.getWorld().getSpawnLocation() : location;
+            int delay = player.hasPermission("axs.essentials.teleport.bypass-delay") ? 0 : config.teleport().teleportDelay();
+            scheduleWarmup(player, admission, delay, false, () -> {
+                if (current(player, "spawn")) executeTeleport(player, target, config.messages().spawnTeleported(), null);
+            });
+        }));
     }
 
     /**
@@ -312,10 +430,10 @@ public final class TeleportService implements Listener {
      *
      * @return 本地后端实例
      */
-    private SpawnBackend localSpawnBackend() {
-        SpawnBackend backend = localSpawnBackend;
+    private LocalSpawnBackend localSpawnBackend() {
+        LocalSpawnBackend backend = localSpawnBackend;
         if (backend == null) {
-            backend = new LocalSpawnBackend(repository, logger);
+            backend = new LocalSpawnBackend(repository, work);
             localSpawnBackend = backend;
         }
         return backend;
@@ -347,64 +465,162 @@ public final class TeleportService implements Listener {
      * @param here   {@code true} 为 tpahere（请求对方过来），{@code false} 为 tpa（请求过去）
      */
     public void sendTpa(Player sender, Player target, boolean here) {
-        UUID targetUuid = target.getUniqueId();
-        pendingTpa.put(targetUuid, new TpaRequest(sender.getUniqueId(), here, System.currentTimeMillis()));
+        if (!config.features().tpa().enabled()) return;
+        if (sender.equals(target)) {
+            sender.sendMessage(prefix() + ChatColor.RED + "不能向自己发送传送请求。");
+            return;
+        }
+        if (!playerService.canSee(sender, target) || !playerService.canSee(target, sender)
+            || !target.hasPermission("axs.essentials.tpa")) {
+            sender.sendMessage(prefix() + config.messages().playerNotFound().replace("{player}", target.getName()));
+            return;
+        }
+        AuthSnapshot senderAdmission = AuthAccess.snapshot(sender.getUniqueId());
+        AuthSnapshot targetAdmission = AuthAccess.snapshot(target.getUniqueId());
+        if (!tpaEligible(sender, target, here, senderAdmission, targetAdmission)) return;
+        TpaLookup key = new TpaLookup(sender.getUniqueId(), target.getUniqueId());
+        Object token = new Object();
+        if (tpaLookups.putIfAbsent(key, token) != null) {
+            sender.sendMessage(prefix() + "该请求正在检查接收设置，请稍后。"); return;
+        }
+        work.read(() -> repository.receivesTpa(key.target())).whenComplete((receiving, failure) -> work.onMain(() -> {
+            if (!tpaLookups.remove(key, token) || !tpaEligible(sender, target, here, senderAdmission, targetAdmission)) return;
+            if (failure != null) { logger.log(Level.WARNING, "Essentials 读取传送请求设置失败", failure); sender.sendMessage(prefix() + "暂时无法检查对方的接收设置。"); return; }
+            if (!receiving) { sender.sendMessage(prefix() + "对方已关闭传送请求。"); return; }
+            finishTpa(sender, target, here, senderAdmission, targetAdmission);
+        }));
+    }
+
+    private boolean tpaEligible(Player sender, Player target, boolean here,
+                                AuthSnapshot senderAdmission, AuthSnapshot targetAdmission) {
+        return config.features().tpa().enabled() && currentAdmission(sender, senderAdmission)
+            && currentAdmission(target, targetAdmission) && current(sender, here ? "tpahere" : "tpa")
+            && target.hasPermission("axs.essentials.tpa") && playerService.canSee(sender, target)
+            && playerService.canSee(target, sender);
+    }
+
+    private void finishTpa(Player sender, Player target, boolean here,
+                           AuthSnapshot senderAdmission, AuthSnapshot targetAdmission) {
+        var result = pendingTpa.send(senderAdmission, targetAdmission, here,
+            System.currentTimeMillis(), config.teleport().tpaTimeout() * 1000L);
+        if (result != TpaRequests.SendResult.SENT) {
+            sender.sendMessage(prefix() + ChatColor.RED + switch (result) {
+                case COOLDOWN -> "传送请求发送过快，请稍后再试。";
+                case INCOMING_FULL -> "对方的待处理请求已满。";
+                case OUTGOING_FULL -> "你已发出过多待处理请求。";
+                case SENT -> throw new IllegalStateException();
+            });
+            return;
+        }
         sender.sendMessage(prefix() + config.messages().tpaSent().replace("{player}", target.getName()));
         target.sendMessage(prefix() + (here
             ? config.messages().tpaHereReceived().replace("{player}", sender.getName())
             : config.messages().tpaReceived().replace("{player}", sender.getName())));
+        target.sendMessage(prefix() + "使用 /ess tpaccept " + sender.getName() + " 或 /ess tpdeny " + sender.getName() + "。");
+    }
 
-        // 自动过期
-        Bukkit.getScheduler().runTaskLater(plugin, () -> {
-            TpaRequest req = pendingTpa.get(targetUuid);
-            if (req != null && req.sender().equals(sender.getUniqueId())) {
-                pendingTpa.remove(targetUuid);
-                Player s = Bukkit.getPlayer(req.sender());
-                if (s != null) s.sendMessage(prefix() + config.messages().tpaExpired());
+    private void expireTpa() {
+        if (config.spawn().respawnAtSpawn() && !Bukkit.getOnlinePlayers().isEmpty() && !multiverseActive())
+            localSpawnBackend().refreshIfDue();
+        long now = System.currentTimeMillis();
+        unstuckCooldowns.values().removeIf(until -> until <= now);
+        lastDamage.values().removeIf(at -> at + config.features().unstuck().combatSeconds() * 1000L <= now);
+        pendingTpa.expire(now, request -> {
+            Player sender = Bukkit.getPlayer(request.sender());
+            Player target = Bukkit.getPlayer(request.target());
+            if (sender != null && target != null && playerService.canSee(sender, target)) {
+                sender.sendMessage(prefix() + config.messages().tpaExpired());
             }
-        }, config.teleport().tpaTimeout() * 20L);
+        });
     }
 
-    /**
-     * 接受当前待处理的 TPA 请求并执行延迟传送。
-     *
-     * @param player 请求接收者
-     */
-    public void acceptTpa(Player player) {
-        TpaRequest req = pendingTpa.remove(player.getUniqueId());
-        if (req == null) {
+    public void toggleTpa(Player player) {
+        UUID id = player.getUniqueId();
+        background(player, "tptoggle", () -> {
+            boolean receiving = !repository.receivesTpa(id);
+            repository.setReceivesTpa(id, receiving);
+            return receiving;
+        }, receiving -> {
+            if (!receiving) pendingTpa.clearIncoming(id);
+            player.sendMessage(prefix() + (receiving ? "已开启接收传送请求。" : "已关闭接收传送请求。"));
+        }, "无法保存传送请求设置。");
+    }
+
+    public void cancelTpa(Player player, String name) {
+        Player target = name.isBlank() ? null : Bukkit.getPlayerExact(name);
+        if (!name.isBlank() && (target == null || !playerService.canSee(player, target))) {
+            player.sendMessage(prefix() + config.messages().playerNotFound().replace("{player}", name));
+            return;
+        }
+        var cancelled = pendingTpa.cancelOutgoing(player.getUniqueId(), target == null ? null : target.getUniqueId(),
+            System.currentTimeMillis());
+        int waiting = tpaLookups.size();
+        UUID targetId = target == null ? null : target.getUniqueId();
+        tpaLookups.keySet().removeIf(key -> key.sender().equals(player.getUniqueId()) && (targetId == null || key.target().equals(targetId)));
+        int total = cancelled.size() + waiting - tpaLookups.size();
+        for (var request : cancelled) {
+            Player recipient = Bukkit.getPlayer(request.target());
+            if (recipient != null && playerService.canSee(recipient, player)) {
+                recipient.sendMessage(prefix() + player.getName() + " 取消了传送请求。");
+            }
+        }
+        player.sendMessage(prefix() + (total == 0 ? "没有可取消的传送请求。" : "已取消 " + total + " 条传送请求。"));
+    }
+
+    public void respondTpa(Player player, String name, boolean accept) {
+        var requests = new LinkedHashMap<Player, TpaRequests.Request>();
+        for (var request : pendingTpa.received(player.getUniqueId(), System.currentTimeMillis())) {
+            Player sender = visibleSender(player, request);
+            if (sender != null && (name.isBlank() || sender.getName().equalsIgnoreCase(name))) {
+                requests.put(sender, request);
+            }
+        }
+        if (requests.isEmpty()) {
             player.sendMessage(prefix() + config.messages().tpaNoPending());
             return;
         }
-        Player sender = Bukkit.getPlayer(req.sender());
-        if (sender == null || !sender.isOnline()) {
-            player.sendMessage(prefix() + config.messages().playerNotFound().replace("{player}", "请求者"));
+        if (requests.size() > 1) {
+            player.sendMessage(prefix() + "有多条传送请求，请指定玩家：" + String.join("、",
+                requests.keySet().stream().map(Player::getName).toList()));
             return;
         }
-        player.sendMessage(prefix() + config.messages().tpaAccepted());
-        sender.sendMessage(prefix() + config.messages().tpaAccepted());
-        if (req.here()) {
-            delayedTeleport(player, sender.getLocation(), null);
-        } else {
-            delayedTeleport(sender, player.getLocation(), null);
-        }
+        var selected = requests.entrySet().iterator().next();
+        var request = selected.getValue();
+        Player sender = selected.getKey();
+        pendingTpa.remove(request);
+        String result = accept ? config.messages().tpaAccepted() : config.messages().tpaDenied();
+        player.sendMessage(prefix() + result);
+        sender.sendMessage(prefix() + result);
+        if (!accept) return;
+        Player traveler = request.here() ? player : sender;
+        Location destination = (request.here() ? sender : player).getLocation().clone();
+        AuthSnapshot travelerAdmission = request.here() ? request.targetAdmission() : request.senderAdmission();
+        int delay = traveler.hasPermission("axs.essentials.teleport.bypass-delay") ? 0 : config.teleport().teleportDelay();
+        scheduleWarmup(traveler, travelerAdmission, delay, false, () -> {
+            if (current(player, "tpaccept")
+                && tpaEligible(sender, player, request.here(), request.senderAdmission(), request.targetAdmission())) {
+                executeTeleport(traveler, destination, null, null);
+            }
+        });
     }
 
-    /**
-     * 拒绝当前待处理的 TPA 请求并通知双方。
-     *
-     * @param player 请求接收者
-     */
-    public void denyTpa(Player player) {
-        TpaRequest req = pendingTpa.remove(player.getUniqueId());
-        if (req == null) {
-            player.sendMessage(prefix() + config.messages().tpaNoPending());
-            return;
+    public List<TpaView> tpaRequests(Player player) {
+        long now = System.currentTimeMillis();
+        var result = new java.util.ArrayList<TpaView>();
+        for (var request : pendingTpa.received(player.getUniqueId(), now)) {
+            Player sender = visibleSender(player, request);
+            if (sender != null) result.add(new TpaView(sender.getName(), request.here(), (request.expiresAt() - now + 999) / 1000));
         }
-        player.sendMessage(prefix() + config.messages().tpaDenied());
-        Player sender = Bukkit.getPlayer(req.sender());
-        if (sender != null) sender.sendMessage(prefix() + config.messages().tpaDenied());
+        return result;
     }
+
+    private Player visibleSender(Player player, TpaRequests.Request request) {
+        Player sender = Bukkit.getPlayer(request.sender());
+        return sender != null && tpaEligible(sender, player, request.here(), request.senderAdmission(),
+            request.targetAdmission()) ? sender : null;
+    }
+
+    public record TpaView(String sender, boolean here, long seconds) {}
 
     // ─── /top ───
 
@@ -417,7 +633,7 @@ public final class TeleportService implements Listener {
         Location loc = player.getLocation();
         int highestY = loc.getWorld().getHighestBlockYAt(loc.getBlockX(), loc.getBlockZ());
         Location top = new Location(loc.getWorld(), loc.getX(), highestY + 1, loc.getZ(), loc.getYaw(), loc.getPitch());
-        delayedTeleport(player, top, ChatColor.GREEN + "已传送到最高方块。");
+        scheduleTeleport(player, "top", top, ChatColor.GREEN + "已传送到最高方块。", null);
     }
 
     // ─── /back ───
@@ -428,12 +644,12 @@ public final class TeleportService implements Listener {
      * @param player 目标玩家
      */
     public void back(Player player) {
-        Location loc = playerService.popBackLocation(player);
+        Location loc = playerService.peekBackLocation(player);
         if (loc == null) {
             player.sendMessage(prefix() + config.messages().backNone());
             return;
         }
-        delayedTeleport(player, loc, config.messages().backTeleported());
+        scheduleTeleport(player, "back", loc, config.messages().backTeleported(), loc);
     }
 
     // ─── Teleport with delay ───
@@ -448,48 +664,215 @@ public final class TeleportService implements Listener {
      * @param successMessage 传送成功后的提示消息，为 null 或空则不发送
      */
     public void delayedTeleport(Player player, Location target, String successMessage) {
-        int delay = config.teleport().teleportDelay();
-        if (delay <= 0 || player.hasPermission("axs.essentials.teleport.bypass-delay")) {
-            executeTeleport(player, target, successMessage);
+        scheduleTeleport(player, "tppos", target, successMessage, null);
+    }
+
+    private void scheduleTeleport(Player player, String action, Location target, String successMessage, Location backRecord) {
+        if (!current(player, action)) return;
+        int delay = player.hasPermission("axs.essentials.teleport.bypass-delay") ? 0 : config.teleport().teleportDelay();
+        Location destination = target.clone();
+        scheduleWarmup(player, AuthAccess.snapshot(player.getUniqueId()), delay, false, () -> {
+            if (current(player, action)) executeTeleport(player, destination, successMessage, backRecord);
+        });
+    }
+
+    private void scheduleWarmup(Player player, AuthSnapshot admission, int delay, boolean forceCancelOnMove, Runnable attempt) {
+        if (!currentAdmission(player, admission)) return;
+        UUID id = player.getUniqueId();
+        cancelWarmup(id);
+        if (delay <= 0) {
+            attempt.run();
             return;
         }
 
         player.sendMessage(prefix() + config.messages().teleportWarmup()
             .replace("{seconds}", String.valueOf(delay)));
 
-        Location startLoc = player.getLocation().clone();
-        int taskId = Bukkit.getScheduler().runTaskLater(plugin, () -> {
-            warmups.remove(player.getUniqueId());
-            if (player.isOnline()) {
-                executeTeleport(player, target, successMessage);
-            }
-        }, delay * 20L).getTaskId();
-
-        warmups.put(player.getUniqueId(), taskId);
+        BukkitTask task = Bukkit.getScheduler().runTaskLater(plugin, () -> callbacks.call(() -> {
+            warmups.remove(id);
+            if (currentAdmission(player, admission) && !player.isDead()) attempt.run();
+            return null;
+        }, null), delay * 20L);
+        warmups.put(id, new Warmup(task, forceCancelOnMove));
     }
 
-    private void executeTeleport(Player player, Location target, String message) {
-        playerService.pushBackLocation(player);
-        Location safe = config.teleport().safeTeleport() ? findSafeLocation(target) : target;
-        player.teleport(safe);
-        if (message != null && !message.isBlank()) {
-            player.sendMessage(prefix() + message);
+    public void unstuck(Player player) {
+        AuthSnapshot admission = AuthAccess.snapshot(player.getUniqueId());
+        if (!currentAdmission(player, admission)) return;
+        Location origin = player.getLocation();
+        if (!canUnstuck(player, origin)) return;
+        if (findUnstuckDestination(origin) == null) {
+            player.sendMessage(prefix() + ChatColor.RED + "附近没有符合脱困条件的安全位置。");
+            return;
         }
+        scheduleWarmup(player, admission, config.features().unstuck().warmupSeconds(), true, () -> {
+            Location current = player.getLocation();
+            if (!canUnstuck(player, current)) return;
+            Location destination = findUnstuckDestination(current);
+            if (destination == null) {
+                player.sendMessage(prefix() + ChatColor.RED + "附近没有符合脱困条件的安全位置。");
+                return;
+            }
+            if (executeTeleport(player, destination, ChatColor.GREEN + "已传送到附近安全位置。", null)) {
+                unstuckCooldowns.put(player.getUniqueId(), System.currentTimeMillis()
+                    + config.features().unstuck().cooldownSeconds() * 1000L);
+            }
+        });
     }
 
-    private Location findSafeLocation(Location loc) {
-        Block block = loc.getBlock();
-        if (block.getType().isSolid()) {
-            // 往上找安全位置
-            for (int i = 1; i < 10; i++) {
-                Block above = block.getRelative(0, i, 0);
-                Block aboveHead = above.getRelative(0, 1, 0);
-                if (!above.getType().isSolid() && !aboveHead.getType().isSolid()) {
-                    return above.getLocation().add(0.5, 0, 0.5).setDirection(loc.getDirection());
+    private boolean canUnstuck(Player player, Location origin) {
+        var settings = config.features().unstuck();
+        UUID id = player.getUniqueId();
+        long now = System.currentTimeMillis();
+        if (!settings.enabled() || !player.hasPermission("axs.essentials.unstuck") || player.isInsideVehicle()
+            || !settings.allowsWorld(origin.getWorld().getName())) {
+            player.sendMessage(prefix() + ChatColor.RED + "当前无法使用脱困。");
+            return false;
+        }
+        AbyssAdmissionAccess access = abyss.get();
+        if (access != null && !"IDLE".equals(access.playerState(id).state())) {
+            player.sendMessage(prefix() + ChatColor.RED + "副本流程中无法使用脱困。");
+            return false;
+        }
+        long until = Math.max(unstuckCooldowns.getOrDefault(id, 0L),
+            lastDamage.getOrDefault(id, 0L) + settings.combatSeconds() * 1000L);
+        if (until > now) {
+            player.sendMessage(prefix() + ChatColor.RED + "脱困还需等待 " + ((until - now + 999) / 1000) + " 秒。");
+            return false;
+        }
+        if (settings.onlyWhenStuck() && safeStandingPosition(origin) && canWalkOut(origin)) {
+            player.sendMessage(prefix() + ChatColor.YELLOW + "当前位置有可行走的出口。");
+            return false;
+        }
+        return true;
+    }
+
+    private boolean canWalkOut(Location origin) {
+        for (var face : List.of(org.bukkit.block.BlockFace.NORTH, org.bukkit.block.BlockFace.SOUTH,
+            org.bukkit.block.BlockFace.WEST, org.bukkit.block.BlockFace.EAST)) {
+            for (int y = -1; y <= 1; y++) {
+                if (safeLoadedPosition(origin.clone().add(face.getModX(), y, face.getModZ()))) return true;
+            }
+        }
+        return false;
+    }
+
+    private Location findUnstuckDestination(Location origin) {
+        var settings = config.features().unstuck();
+        World world = origin.getWorld();
+        RegionQueryable query = regions.get();
+        List<RegionQueryable.RegionInfo> worldRegions = query == null ? List.of() : query.regionsInWorld(world.getName());
+        var originRegions = regionsAt(worldRegions, origin);
+        Location best = null;
+        double bestDistance = Double.POSITIVE_INFINITY;
+        for (int x = -settings.radius(); x <= settings.radius(); x++) {
+            for (int z = -settings.radius(); z <= settings.radius(); z++) {
+                if (x * x + z * z > settings.radius() * settings.radius()) continue;
+                for (int y = -settings.verticalRange(); y <= settings.verticalRange(); y++) {
+                    if (x == 0 && y == 0 && z == 0) continue;
+                    Location candidate = new Location(world, origin.getBlockX() + x + 0.5, origin.getBlockY() + y,
+                        origin.getBlockZ() + z + 0.5, origin.getYaw(), origin.getPitch());
+                    double distance = candidate.distanceSquared(origin);
+                    if (distance < bestDistance && safeLoadedPosition(candidate) && originRegions.equals(regionsAt(worldRegions, candidate))) {
+                        best = candidate;
+                        bestDistance = distance;
+                    }
                 }
             }
         }
-        return loc;
+        return best;
+    }
+
+    private static java.util.Set<String> regionsAt(List<RegionQueryable.RegionInfo> regions, Location loc) {
+        return regions.stream().filter(region -> region.contains(loc.getWorld().getName(), loc.getBlockX(),
+            loc.getBlockY(), loc.getBlockZ())).map(RegionQueryable.RegionInfo::id).collect(java.util.stream.Collectors.toSet());
+    }
+
+    private static boolean safeLoadedPosition(Location loc) {
+        World world = loc.getWorld();
+        return world.isChunkLoaded(loc.getBlockX() >> 4, loc.getBlockZ() >> 4)
+            && world.getWorldBorder().isInside(loc) && safeStandingPosition(loc);
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onDamage(EntityDamageEvent event) {
+        if (!running || !config.features().unstuck().enabled()) return;
+        long now = System.currentTimeMillis();
+        if (event.getEntity() instanceof Player player && event.getFinalDamage() > 0) {
+            lastDamage.put(player.getUniqueId(), now);
+        }
+        if (event instanceof org.bukkit.event.entity.EntityDamageByEntityEvent attack && event.getFinalDamage() > 0) {
+            var damager = attack.getDamager();
+            if (damager instanceof Player player) lastDamage.put(player.getUniqueId(), now);
+            else if (damager instanceof org.bukkit.entity.Projectile projectile && projectile.getShooter() instanceof Player player) {
+                lastDamage.put(player.getUniqueId(), now);
+            }
+        }
+    }
+
+    private record Warmup(BukkitTask task, boolean forceCancelOnMove) {}
+
+    public boolean teleportNow(Player player, Location target) {
+        cancelWarmup(player.getUniqueId());
+        return executeTeleport(player, target, null, null);
+    }
+
+    private boolean executeTeleport(Player player, Location target, String message, Location backRecord) {
+        Location safe = validTarget(target) ? (config.teleport().safeTeleport() ? findSafeLocation(target) : target) : null;
+        if (safe == null) {
+            player.sendMessage(prefix() + ChatColor.RED + "目标附近没有安全的传送位置。");
+            return false;
+        }
+        Location origin = player.getLocation();
+        if (!player.teleport(safe)) {
+            player.sendMessage(prefix() + config.messages().teleportCancelled());
+            return false;
+        }
+        if (backRecord == null) playerService.pushBackLocation(player, origin);
+        else playerService.consumeBackLocation(player, backRecord);
+        if (message != null && !message.isBlank()) {
+            player.sendMessage(prefix() + message);
+        }
+        return true;
+    }
+
+    private Location findSafeLocation(Location loc) {
+        World world = loc.getWorld();
+        if (!world.getWorldBorder().isInside(loc)) return null;
+        if (safeStandingPosition(loc)) return loc;
+        for (int offset = 1; offset <= 8; offset++) {
+            Location above = loc.clone().add(0, offset, 0);
+            if (safeStandingPosition(above)) return above;
+            Location below = loc.clone().subtract(0, offset, 0);
+            if (safeStandingPosition(below)) return below;
+        }
+        return null;
+    }
+
+    private static boolean validTarget(Location loc) {
+        return loc.isWorldLoaded() && loc.getWorld() != null
+            && Double.isFinite(loc.getX()) && Double.isFinite(loc.getY()) && Double.isFinite(loc.getZ())
+            && Math.abs(loc.getX()) < 30_000_000 && Math.abs(loc.getY()) < 30_000_000
+            && Math.abs(loc.getZ()) < 30_000_000;
+    }
+
+    private static boolean safeStandingPosition(Location loc) {
+        World world = loc.getWorld();
+        int y = loc.getBlockY();
+        if (y <= world.getMinHeight() || y >= world.getMaxHeight() - 1) return false;
+        Block feet = loc.getBlock();
+        Block head = feet.getRelative(0, 1, 0);
+        Block support = feet.getRelative(0, -1, 0);
+        return feet.isPassable() && head.isPassable() && !feet.isLiquid() && !head.isLiquid()
+            && support.getType().isSolid() && !hazardous(feet) && !hazardous(head) && !hazardous(support);
+    }
+
+    private static boolean hazardous(Block block) {
+        return switch (block.getType()) {
+            case LAVA, FIRE, SOUL_FIRE, CACTUS, MAGMA_BLOCK, CAMPFIRE, SOUL_CAMPFIRE, POWDER_SNOW, SWEET_BERRY_BUSH,
+                WITHER_ROSE, POINTED_DRIPSTONE -> true;
+            default -> false;
+        };
     }
 
     // ─── Events ───
@@ -502,10 +885,11 @@ public final class TeleportService implements Listener {
      */
     @EventHandler
     public void onRespawn(PlayerRespawnEvent event) {
+        if(!running)return;
         if (multiverseActive() || !config.spawn().respawnAtSpawn()) return;
         if (config.spawn().respectPersonalSpawn()
             && (event.isBedSpawn() || event.isAnchorSpawn())) return;
-        Location spawn = localSpawnBackend().getSpawn(event.getPlayer().getWorld());
+        Location spawn = localSpawnBackend().snapshot();
         if (spawn != null) {
             event.setRespawnLocation(spawn);
         }
@@ -519,46 +903,63 @@ public final class TeleportService implements Listener {
      */
     @EventHandler
     public void onFirstJoin(PlayerJoinEvent event) {
+        if(!running)return;
         Player player = event.getPlayer();
+        preloadHomeNames(player);
         if (multiverseActive() || !config.spawn().firstJoinAtSpawn()
             || player.hasPlayedBefore()) return;
-        Location spawn = localSpawnBackend().getSpawn(player.getWorld());
-        if (spawn == null) return;
-        Bukkit.getScheduler().runTaskLater(plugin, () -> {
-            if (player.isOnline()) {
-                player.teleport(spawn);
-            }
-        }, 1L);
+        getSpawn(player.getWorld()).whenComplete((spawn, failure) -> work.onMain(() -> {
+            if (failure == null && spawn != null && sameSession(player) && !multiverseActive()) player.teleport(spawn);
+        }));
     }
 
     @EventHandler(ignoreCancelled = true)
     public void onMove(PlayerMoveEvent event) {
-        if (!config.teleport().cancelOnMove()) return;
         Player player = event.getPlayer();
         UUID uuid = player.getUniqueId();
-        if (!warmups.containsKey(uuid)) return;
+        Warmup warmup = warmups.get(uuid);
+        if (warmup == null || (!warmup.forceCancelOnMove() && !config.teleport().cancelOnMove())) return;
 
         if (event.getTo() != null && !event.getFrom().getBlock().equals(event.getTo().getBlock())) {
-            int taskId = warmups.remove(uuid);
-            Bukkit.getScheduler().cancelTask(taskId);
-            player.sendMessage(prefix() + config.messages().teleportCancelled());
+            if (cancelWarmup(uuid)) player.sendMessage(prefix() + config.messages().teleportCancelled());
         }
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onTeleport(PlayerTeleportEvent event) {
+        cancelWarmup(event.getPlayer().getUniqueId());
+    }
+
+    @EventHandler
+    public void onDeath(PlayerDeathEvent event) {
+        cancelWarmup(event.getEntity().getUniqueId());
     }
 
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
         UUID uuid = event.getPlayer().getUniqueId();
-        pendingTpa.remove(uuid);
-        Integer taskId = warmups.remove(uuid);
-        if (taskId != null) Bukkit.getScheduler().cancelTask(taskId);
+        homeNames.remove(uuid);
+        tpaLookups.keySet().removeIf(key -> key.sender().equals(uuid) || key.target().equals(uuid));
+        pendingTpa.clearIncoming(uuid);
+        pendingTpa.cancelOutgoing(uuid, null, System.currentTimeMillis());
+        cancelWarmup(uuid);
+    }
+
+    private boolean cancelWarmup(UUID uuid) {
+        Warmup warmup = warmups.remove(uuid);
+        if (warmup == null) return false;
+        warmup.task().cancel();
+        return true;
+    }
+
+    private boolean validName(Player player, String name) {
+        if (!name.isBlank() && name.length() <= 64 && name.chars().noneMatch(Character::isISOControl)) return true;
+        player.sendMessage(prefix() + ChatColor.RED + "名称须为 1 至 64 个字符，且不能包含控制字符。");
+        return false;
     }
 
     private String prefix() {
         return ChatColor.GRAY + "[" + ChatColor.GREEN + "Essentials" + ChatColor.GRAY + "] " + ChatColor.RESET;
-    }
-
-    private void logError(String method, Exception e) {
-        logger.log(Level.WARNING, "Essentials." + method + " 失败", e);
     }
 
     /**
@@ -568,5 +969,4 @@ public final class TeleportService implements Listener {
      * @param here      是否为 tpahere（请求对方过来）
      * @param timestamp 请求创建时间戳（毫秒）
      */
-    public record TpaRequest(UUID sender, boolean here, long timestamp) {}
 }

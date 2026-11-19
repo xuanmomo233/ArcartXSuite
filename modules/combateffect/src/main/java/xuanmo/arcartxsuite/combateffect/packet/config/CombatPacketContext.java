@@ -5,7 +5,6 @@ import java.util.Map;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
-import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import xuanmo.arcartxsuite.api.combat.EntityCombatMetadata;
 
 /**
@@ -66,12 +65,12 @@ public final class CombatPacketContext {
      * @param event    Bukkit 实体间伤害事件
      * @return 战斗数据包上下文
      */
-    public static CombatPacketContext fromAttack(Player attacker, LivingEntity target, EntityDamageByEntityEvent event) {
+    public static CombatPacketContext fromAttack(Player attacker, LivingEntity target, double damage) {
         return new CombatPacketContext(
             attacker, target,
             resolveMythicMobId(target),
             target.getType(),
-            event.getFinalDamage(),
+            damage,
             ""
         );
     }
@@ -83,12 +82,12 @@ public final class CombatPacketContext {
      * @param killer 击杀者
      * @return 战斗数据包上下文
      */
-    public static CombatPacketContext fromDeath(Player victim, Player killer) {
+    public static CombatPacketContext fromDeath(Player victim, Player killer, double damage) {
         return new CombatPacketContext(
             killer, victim,
             "",
             victim.getType(),
-            0.0,
+            damage,
             ""
         );
     }

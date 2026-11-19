@@ -41,6 +41,10 @@ class LoginViewAuthenticationTest {
             lifecycle.start();
             lifecycle.setLoginViewEnabled(true);
             assertTrue(lifecycle.requiresAdmission());
+            doAnswer(call -> {
+                assertSame(admitted, lifecycle.snapshot(profile));
+                return null;
+            }).when(restored).start();
             lifecycle.setLoginViewEnabled(false);
             assertFalse(lifecycle.requiresAdmission());
             assertSame(admitted,lifecycle.snapshot(profile));
@@ -66,6 +70,27 @@ class LoginViewAuthenticationTest {
             assertFalse(lifecycle.requiresAdmission());
             verify(backend).close();
             verify(restored).start();
+        }
+    }
+
+    @Test void invalidAuthenticationConfigurationLeavesOrdinaryAdmissionRunning() {
+        HostAuthentication ordinary = runtime(), recovered = runtime();
+        when(recovered.requiresAdmission()).thenReturn(true);
+        @SuppressWarnings("unchecked") Supplier<HostAuthentication> backend = mock(Supplier.class);
+        when(backend.get()).thenThrow(new IllegalArgumentException("invalid configuration")).thenReturn(recovered);
+        try (var bukkit = mockStatic(Bukkit.class)) {
+            bukkit.when(Bukkit::getOnlinePlayers).thenReturn(List.of());
+            var lifecycle = new LoginViewAuthentication(() -> ordinary, backend);
+            lifecycle.start();
+            assertThrows(IllegalArgumentException.class, () -> lifecycle.setLoginViewEnabled(true));
+            assertFalse(lifecycle.isAdmissionSuspended());
+            assertFalse(lifecycle.requiresAdmission());
+            verify(ordinary, never()).close();
+            lifecycle.setLoginViewEnabled(true);
+            assertFalse(lifecycle.isAdmissionSuspended());
+            assertTrue(lifecycle.requiresAdmission());
+            verify(ordinary).close();
+            verify(recovered).start();
         }
     }
     @Test void intermediateOrdinaryAdmissionCannotLoseAnUnfinishedBackendDrain() {

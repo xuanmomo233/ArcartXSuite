@@ -48,21 +48,26 @@ public final class BattlePassPlaceholderExpansion extends PlaceholderExpansion {
         if (player == null) return "";
         BattlePassService service = serviceProvider.get();
         if (service == null) return "";
-        BattlePassPlayerProgress progress = service.getProgress(player);
         var config = service.configuration().season();
+        switch(identifier) {
+            case "season": return config.seasonId();
+            case "season_display": return config.displayName();
+            case "max_level": return String.valueOf(config.maxLevel());
+            case "level", "xp", "xp_per_level", "xp_needed", "premium", "deluxe", "tier", "active_tasks": break;
+            default: return "";
+        }
+        BattlePassPlayerProgress progress = service.progressSnapshot(player);
+        if(progress==null) return "";
 
         return switch (identifier) {
-            case "season" -> config.seasonId();
-            case "season_display" -> config.displayName();
             case "level" -> String.valueOf(progress.currentLevel());
-            case "max_level" -> String.valueOf(config.maxLevel());
             case "xp" -> String.valueOf(progress.currentXp());
             case "xp_per_level" -> {
-                int xpPerLevel = config.xpCurve().xpRequiredForLevelOr(progress.currentLevel() + 1, 0);
+                int xpPerLevel = service.xpRequiredForLevelOr(progress.currentLevel() + 1, 0);
                 yield String.valueOf(xpPerLevel);
             }
             case "xp_needed" -> {
-                int xpPerLevel = config.xpCurve().xpRequiredForLevelOr(progress.currentLevel() + 1, 0);
+                int xpPerLevel = service.xpRequiredForLevelOr(progress.currentLevel() + 1, 0);
                 yield String.valueOf(Math.max(0, xpPerLevel - progress.currentXp()));
             }
             case "premium" -> progress.unlockedPremium() ? "已激活" : "未激活";
@@ -73,8 +78,7 @@ public final class BattlePassPlaceholderExpansion extends PlaceholderExpansion {
                 case DELUXE -> "典藏";
             };
             case "active_tasks" -> {
-                var instances = service.getActiveTaskInstances(player);
-                yield String.valueOf(instances.size());
+                yield String.valueOf(service.activeTasksSnapshot(player.getUniqueId()));
             }
             default -> "";
         };

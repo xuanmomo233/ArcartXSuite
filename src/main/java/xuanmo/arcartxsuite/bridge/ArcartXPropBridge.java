@@ -4,9 +4,15 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.function.BooleanSupplier;
 import org.bukkit.NamespacedKey;
 import org.bukkit.entity.Player;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
+import org.bukkit.event.HandlerList;
+import org.bukkit.event.Listener;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataContainer;
@@ -17,6 +23,7 @@ import priv.seventeen.artist.arcartx.api.ArcartXAPI;
 import priv.seventeen.artist.arcartx.core.entity.ArcartXEntityManager;
 import priv.seventeen.artist.arcartx.core.entity.data.ArcartXPlayer;
 import priv.seventeen.artist.arcartx.core.keybind.ArcartXKeyBindRegistry;
+import priv.seventeen.artist.arcartx.event.player.PlayerExtraSlotUpdateEvent;
 import priv.seventeen.artist.arcartx.util.ItemStackUtils;
 import priv.seventeen.artist.arcartx.util.collections.KeyCallBack;
 
@@ -26,7 +33,8 @@ import priv.seventeen.artist.arcartx.util.collections.KeyCallBack;
  * <p>
  * 通过 PDC 在物品上记录 prop id，配合 KeyBindRegistry 注册按键回调。
  */
-public final class ArcartXPropBridge implements xuanmo.arcartxsuite.api.bridge.PropBridgeAPI {
+public final class ArcartXPropBridge implements xuanmo.arcartxsuite.api.bridge.PropBridgeAPI,
+        xuanmo.arcartxsuite.api.bridge.PropSlotUpdates {
 
     private static final String PDC_BACKEND_KEY = "pdc";
 
@@ -77,6 +85,71 @@ public final class ArcartXPropBridge implements xuanmo.arcartxsuite.api.bridge.P
 
     public boolean isAvailable() {
         return available;
+    }
+
+    @Override
+    public Optional<PotionDrink> preparePotionDrink(Player player, ItemStack item) {
+        try {
+            if (mmoItemsAvailable() && MmoItemsQuickUse.usesHandForRemainingDoses(item)) {
+                return Optional.empty();
+            }
+            return Optional.of(xuanmo.arcartxsuite.bridge.potion.NativePotionDrink.prepare(player, item));
+        } catch (ReflectiveOperationException | RuntimeException | LinkageError exception) {
+            xuanmo.arcartxsuite.module.AxsLog.logger().fine("当前服务端原版饮用入口不可用: " + exception);
+            return Optional.empty();
+        }
+    }
+
+    @Override
+    public MmoClickResult useMmoItem(Player player, ItemStack item, BooleanSupplier takeOne, Runnable refundOne) {
+        if (!mmoItemsAvailable()) {
+            return MmoClickResult.UNAVAILABLE;
+        }
+        try {
+            return MmoItemsQuickUse.use(player, item, takeOne, refundOne);
+        } catch (LinkageError exception) {
+            xuanmo.arcartxsuite.module.AxsLog.logger().warning("MMOItems 快捷使用接口不兼容: " + exception);
+            return MmoClickResult.UNAVAILABLE;
+        }
+    }
+
+    private boolean mmoItemsAvailable() {
+        var plugins = plugin.getServer().getPluginManager();
+        return plugins.isPluginEnabled("MMOItems") && plugins.isPluginEnabled("MythicLib");
+    }
+
+    @Override
+    public Runnable registerMmoItemsAccessories(java.util.Set<String> slotIds) {
+        if (!available || !mmoItemsAvailable() || slotIds.isEmpty()) return null;
+        try {
+            return MmoItemsAccessories.register(plugin, this, slotIds);
+        } catch (RuntimeException | LinkageError failure) {
+            xuanmo.arcartxsuite.module.AxsLog.logger().warning("MMOItems 饰品槽接入失败: " + failure);
+            return null;
+        }
+    }
+
+    @Override
+    public Runnable observeSlots(BiConsumer<Player, String> changed) {
+        if (!available) return null;
+        Listener listener = null;
+        try {
+            listener = new SlotListener(changed);
+            plugin.getServer().getPluginManager().registerEvents(listener, plugin);
+            Listener registered = listener;
+            return () -> HandlerList.unregisterAll(registered);
+        } catch (RuntimeException | LinkageError failure) {
+            if (listener != null) HandlerList.unregisterAll(listener);
+            xuanmo.arcartxsuite.module.AxsLog.logger().fine("ArcartX 额外槽位事件暂不可用: " + failure.getMessage());
+            return null;
+        }
+    }
+
+    private record SlotListener(BiConsumer<Player, String> changed) implements Listener {
+        @EventHandler(priority = EventPriority.MONITOR)
+        public void changed(PlayerExtraSlotUpdateEvent event) {
+            changed.accept(event.getPlayer(), event.getSlotID());
+        }
     }
 
     public String propIdWriterBackendKey() {
@@ -227,6 +300,37 @@ public final class ArcartXPropBridge implements xuanmo.arcartxsuite.api.bridge.P
                 handle.setSlotItemStack(safe(slotId), itemStack);
             } catch (RuntimeException exception) {
                 xuanmo.arcartxsuite.module.AxsLog.logger().warning("写入 ArcartX 额外槽位失败(" + slotId + "): " + exception.getMessage());
+            }
+        }
+
+        @Override
+        public boolean trySetSlotItemStack(String slotId, ItemStack itemStack) {
+            String key = safe(slotId);
+            setSlotItemStack(key, itemStack);
+            try {
+                ItemStack stored = handle.getSlotItemStack(key);
+                if (itemStack.getType().isAir() || itemStack.getAmount() <= 0) {
+                    return stored == null || stored.getType().isAir() || stored.getAmount() <= 0;
+                }
+                return itemStack.equals(stored);
+            } catch (RuntimeException exception) {
+                xuanmo.arcartxsuite.module.AxsLog.logger().warning("确认 ArcartX 额外槽位写入失败(" + slotId + "): " + exception.getMessage());
+                return false;
+            }
+        }
+
+        @Override
+        public void syncSlotToClient(String slotId) {
+            try {
+                String key = safe(slotId);
+                ItemStack stored = handle.getSlotItemStack(key);
+                if (stored == null) {
+                    handle.removeSlotItemStackOnlyClient(key, false);
+                } else {
+                    handle.setSlotItemStackOnlyClient(key, stored);
+                }
+            } catch (RuntimeException exception) {
+                xuanmo.arcartxsuite.module.AxsLog.logger().warning("同步 ArcartX 额外槽位失败(" + slotId + "): " + exception.getMessage());
             }
         }
 

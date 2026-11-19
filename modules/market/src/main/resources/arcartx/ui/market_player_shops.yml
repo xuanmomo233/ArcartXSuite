@@ -37,7 +37,7 @@ ui:
         var.followPending = false
         var.saving = false
         var.resultMsg = '会话已刷新，请重新确认后提交'
-      } else if(!var.followPending && !var.saving){
+      } elif(!var.followPending && !var.saving){
         var.actionBusy = false
       }
     store_result: |-
@@ -83,26 +83,16 @@ ui:
           }
         })
       }
-      scheduler.delay(50, -> {
-        if(val.店铺卡片区 != none){
-          if(var.count != var.renderedCount){
-            while(val.店铺卡片区.childrenCount() > 1){val.店铺卡片区.get(1).remove()}
-            if(var.count > 1){
-              for(i in range(1, var.count - 1)){
-                e = val.店铺卡片区['店铺卡片'].copy('店铺卡片' + i.round())
-                e.entryKey = i.round()
-              }
-            }
-            var.renderedCount = var.count
-          }
-          if(var.count > 0){
-            for(i in range(0, var.count - 1)){
-              e = val.店铺卡片区.get(i.round())
-              if(e != none && e['店铺图标'] != none){e['店铺图标'].seticon()}
-            }
+      if(var.店铺卡片区Rows == none || var.店铺卡片区Rows.size() != (var.count)){
+        网格数据 = []
+        if((var.count) > 0){
+          for(网格序号 in range(0, (var.count) - 1)){
+            网格数据.add(网格序号.round())
           }
         }
-      })
+        var.店铺卡片区Rows = 网格数据
+      }
+      var.店铺卡片区IconsDirty = true
   action:
     load: |-
       var.packetId = 'AXS_MARKET'
@@ -162,6 +152,24 @@ ui:
         var.refreshSeconds = 0
         var.loading = true
         Packet.send(var.packetId, 'pshop_directory_list', var.page, var.keyword, var.mode)
+      }
+
+tasks:
+  refresh-repeat-grid-icons:
+    type: loop
+    time: 100
+    cycle: 100
+    run: |-
+      if(var.店铺卡片区IconsDirty == true && var.店铺卡片区Rows != none && val.店铺卡片区 != none && val.店铺卡片区.childrenCount() == var.店铺卡片区Rows.size()){
+        var.店铺卡片区IconsDirty = false
+        if(var.店铺卡片区Rows.size() > 0){
+          for(i in range(0, var.店铺卡片区Rows.size() - 1)){
+            row = val.店铺卡片区.get(i.round())
+            if(row != none && row['店铺图标'] != none){
+              row['店铺图标'].seticon()
+            }
+          }
+        }
       }
 
 controls:
@@ -476,9 +484,12 @@ controls:
                 val.店铺滑块.setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
             children:
               店铺卡片区:
-                type: HGrid
+                type: RepeatGrid
                 val: 店铺卡片区
                 attribute:
+                  items: "var.店铺卡片区Rows"
+                  flow: ~row
+                  maxSize: "var.店铺卡片区Rows == none ? 0 : var.店铺卡片区Rows.size()"
                   width: "var.pageW - 48"
                   column: 3
                   spaceBetweenX: 16
@@ -487,7 +498,7 @@ controls:
                   店铺卡片:
                     type: Canvas
                     attribute:
-                      entryKey: 0.round()
+                      entryKey: self.item
                       entry: var.shops[self.entryKey]
                       visible: "self.entry != none && !var.loading"
                       width: "var.cardW"

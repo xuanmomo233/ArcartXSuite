@@ -20,6 +20,7 @@ public final class DefaultAttributeBridgeRegistry implements AttributeBridgeRegi
     private final DefaultMythicLibBridge mythicLibBridge;
     private final DefaultSymphonyBridge symphonyBridge;
     private final AttributeDamageDispatcher damageDispatcher;
+    private final TaczCombatBridge tacz;
 
     private boolean attributePlusEnabled = true;
     private boolean craneAttributeEnabled = true;
@@ -27,6 +28,11 @@ public final class DefaultAttributeBridgeRegistry implements AttributeBridgeRegi
     private boolean symphonyEnabled = true;
 
     public DefaultAttributeBridgeRegistry(JavaPlugin plugin) {
+        this(plugin, null);
+    }
+
+    public DefaultAttributeBridgeRegistry(JavaPlugin plugin, TaczCombatBridge tacz) {
+        this.tacz = tacz;
         this.attributePlusBridge = safeCreate(() -> new DefaultAttributePlusBridge(plugin), "AttributePlus");
         this.craneAttributeBridge = safeCreate(() -> new DefaultCraneAttributeBridge(plugin), "CraneAttribute");
         this.mythicLibBridge = safeCreate(() -> new DefaultMythicLibBridge(plugin), "MythicLib");
@@ -61,10 +67,12 @@ public final class DefaultAttributeBridgeRegistry implements AttributeBridgeRegi
         if (symphonyEnabled && symphonyBridge != null) symphonyBridge.initialize();
         if (damageDispatcher != null) {
             damageDispatcher.initialize(attributePlusEnabled, craneAttributeEnabled, mythicLibEnabled, symphonyEnabled);
+            if (tacz != null) tacz.setDamageRouter(damageDispatcher.combatRouter());
         }
     }
 
     public void shutdown() {
+        if (tacz != null) tacz.setDamageRouter(null);
         if (damageDispatcher != null) damageDispatcher.shutdown();
     }
 
@@ -72,6 +80,9 @@ public final class DefaultAttributeBridgeRegistry implements AttributeBridgeRegi
     @Override public CraneAttributeBridge craneAttribute() { return craneAttributeBridge; }
     @Override public MythicLibBridge mythicLib() { return mythicLibBridge; }
     @Override public SymphonyBridge symphony() { return symphonyBridge; }
+    @Override public boolean symphonyDamageAvailable() {
+        return damageDispatcher != null && damageDispatcher.symphonyDamageAvailable();
+    }
 
     @Override
     public boolean hasDamageSource() {

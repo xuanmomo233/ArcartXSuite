@@ -10,6 +10,13 @@ kick-offline-message: "&c本服务器仅支持正版/LittleSkin 账号登录"
 # 是否为离线玩家自动分配 UUID（通常保持 true）
 auto-assign-uuid: true
 
+# Velocity：将参与同步的其他子服玩家加入原版 Tab。重启代理后生效。
+# 子服 Tab 模块启用 settings.proxy-roster；未确认准入和隐身状态的条目不公开。
+# 隐身交接需要所有参与子服启用 Paper 的 Velocity modern forwarding 并运行 Suite Essentials 和 Tab。
+tab-list:
+  enabled: false
+  max-remote-entries: 80
+
 # Velocity 与 BungeeCord 共用本节。代理私钥只保存在代理数据目录，不下发给客户端或后端。
 # 后端使用 authentication.yml 的 signed-proxy、相同 realm/audience 与代理公钥。
 # 仍须限制后端直连；跨机游戏链路应通过私网或加密隧道保护。

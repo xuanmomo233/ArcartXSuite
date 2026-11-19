@@ -42,7 +42,6 @@ import xuanmo.arcartxsuite.api.script.XpCurve;
  * @param seasonRewardsFile 赛季结算奖励配置文件名
  * @param seasonRewards    赛季结算奖励列表（按等级阈值发放的额外奖励）
  * @param ui               UI 配置（注册开关与 UI ID）
- * @param crossServer      跨服配置（启用开关与同步字段列表）
  */
 public record BattlePassModuleConfiguration(
     BattlePassStorageConfiguration storage,
@@ -52,8 +51,7 @@ public record BattlePassModuleConfiguration(
     List<BattlePassReward> rewards,
     String seasonRewardsFile,
     List<SeasonSettlementReward> seasonRewards,
-    BattlePassUiConfiguration ui,
-    BattlePassCrossServerConfiguration crossServer
+    BattlePassUiConfiguration ui
 ) {
 
     /**
@@ -75,8 +73,7 @@ public record BattlePassModuleConfiguration(
             loadRewards(rewardsFile, dataFolder, logger),
             seasonRewardsFile,
             loadSeasonRewards(seasonRewardsFile, dataFolder, logger),
-            BattlePassUiConfiguration.load(yaml.getConfigurationSection("ui")),
-            BattlePassCrossServerConfiguration.load(yaml.getConfigurationSection("cross-server"))
+            BattlePassUiConfiguration.load(yaml.getConfigurationSection("ui"))
         );
     }
 
@@ -203,7 +200,8 @@ public record BattlePassModuleConfiguration(
             commands, currency, currencyAmount,
             mailPresets,
             mailSubject.isBlank() ? null : mailSubject,
-            mailBody.isBlank() ? null : mailBody);
+            mailBody.isBlank() ? null : mailBody,
+            section.getString("target-id"));
     }
 
     /**
@@ -412,10 +410,27 @@ public record BattlePassModuleConfiguration(
                 section, "weekly", BattlePassTask.TaskCategory.WEEKLY, tasksDirectory, dataFolder, logger, problems);
             List<BattlePassTask> season = loadTasksWithFallback(
                 section, "season", BattlePassTask.TaskCategory.SEASON, tasksDirectory, dataFolder, logger, problems);
+            if (dataFolder != null) {
+                File integrations = new File(dataFolder, tasksDirectory + "/integrations.yml");
+                if (integrations.isFile()) {
+                    var extra = YamlConfiguration.loadConfiguration(integrations);
+                    daily = appendTasks(daily, extra, "daily", BattlePassTask.TaskCategory.DAILY, logger, problems);
+                    weekly = appendTasks(weekly, extra, "weekly", BattlePassTask.TaskCategory.WEEKLY, logger, problems);
+                    season = appendTasks(season, extra, "season", BattlePassTask.TaskCategory.SEASON, logger, problems);
+                }
+            }
             BattlePassTasksConfiguration result = new BattlePassTasksConfiguration(
                 daily, weekly, season, section.getInt("daily-count", 3), section.getInt("weekly-count", 2));
             problems.report(daily.size() + weekly.size() + season.size());
             return result;
+        }
+
+        private static List<BattlePassTask> appendTasks(List<BattlePassTask> base, ConfigurationSection extra,
+            String key, BattlePassTask.TaskCategory category, Logger logger, TaskConfigProblemCollector problems) {
+            var merged = new ArrayList<>(base);
+            merged.addAll(loadTaskList(extra.getConfigurationSection(key), category,
+                "integrations.yml#" + key, logger, problems));
+            return List.copyOf(merged);
         }
 
         private static List<BattlePassTask> loadTasksWithFallback(
@@ -476,7 +491,7 @@ public record BattlePassModuleConfiguration(
             if (section == null) return result;
             for (String key : section.getKeys(false)) {
                 ConfigurationSection taskSection = section.getConfigurationSection(key);
-                if (taskSection == null) continue;
+                if (taskSection == null || !taskSection.getBoolean("enabled", true)) continue;
                 String taskId = taskSection.getString("task-id", key);
                 String previousSource = problems.registerTask(taskId, source);
                 if (previousSource != null) {
@@ -500,7 +515,11 @@ public record BattlePassModuleConfiguration(
             String taskId = section.getString("task-id", key);
             String displayName = section.getString("display-name", key);
             String description = section.getString("description", "");
-            String eventTopic = section.getString("event-topic", "");
+            String eventTopic = section.getString("event-topic", "").trim();
+            if ("season-market-50".equals(taskId) && "axs.market.listing_created".equals(eventTopic)) {
+                if ("交易大师".equals(displayName)) displayName = "上架达人";
+                if ("本赛季在市场累计交易50次".equals(description)) description = "本赛季在市场累计上架50次";
+            }
             int requiredCount = section.getInt("required-count", 1);
             if (requiredCount <= 0) {
                 problems.add(source, taskId, "required-count 必须大于 0，已回退为 1");
@@ -555,8 +574,21 @@ public record BattlePassModuleConfiguration(
             return new BattlePassTask(
                 taskId, displayName, description, category, difficulty,
                 eventTopic, bukkitEvent, requiredCount, baseXpReward, difficultyMultiplier,
-                conditions, incrementStrategy, weight, limits
+                conditions, incrementStrategy, weight, limits, parseNavigation(section, source, taskId, problems)
             );
+        }
+
+        private static BattlePassTask.Navigation parseNavigation(ConfigurationSection section, String source,
+            String taskId, TaskConfigProblemCollector problems) {
+            var navigation = section.getConfigurationSection("navigation");
+            if (navigation == null) return null;
+            String type = navigation.getString("type", "").trim();
+            String target = navigation.getString("target", "").trim();
+            if ((!type.equals("map") && !type.equals("quest")) || target.isBlank()) {
+                problems.add(source, taskId, "navigation 需要 map 或 quest 类型及有效的目标 ID");
+                return null;
+            }
+            return new BattlePassTask.Navigation(type, target);
         }
 
         private static BattlePassTask.TriggerLimits parseTriggerLimits(
@@ -692,26 +724,4 @@ public record BattlePassModuleConfiguration(
         }
     }
 
-    /**
-     * 跨服配置 record，控制跨服数据同步行为。
-     *
-     * @param enabled    是否启用跨服同步
-     * @param syncFields 需同步的字段列表（progress / task-progress / claimed-rewards）
-     */
-    public record BattlePassCrossServerConfiguration(
-        boolean enabled,
-        List<String> syncFields
-    ) {
-        public static BattlePassCrossServerConfiguration load(ConfigurationSection section) {
-            if (section == null) section = new org.bukkit.configuration.MemoryConfiguration();
-            List<String> fields = section.getStringList("sync-fields");
-            if (fields.isEmpty()) {
-                fields = List.of("progress", "task-progress", "claimed-rewards");
-            }
-            return new BattlePassCrossServerConfiguration(
-                section.getBoolean("enabled", false),
-                Collections.unmodifiableList(fields)
-            );
-        }
-    }
 }

@@ -50,12 +50,22 @@ public record RedPacket(
     String status,
     Instant createdAt,
     Instant expiresAt,
-    String originNode
+    String originNode,
+    String audienceKey,
+    boolean refundOnExpire
 ) {
 
-    public static final String STATUS_ACTIVE = "active";
+    public static final String STATUS_ACTIVE = "active_v2";
     public static final String STATUS_EXHAUSTED = "exhausted";
     public static final String STATUS_EXPIRED = "expired";
+    public static final String STATUS_DEBITING = "debiting";
+    public static final String STATUS_CANCELLED = "cancelled";
+
+    public RedPacket withStatus(String value) {
+        return new RedPacket(id, type, senderUuid, senderName, senderDisplay, channelId, currencyId,
+            totalAmount, remainingAmount, amounts, totalCount, claimedCount, wish, presetId, admin,
+            value, createdAt, expiresAt, originNode, audienceKey, refundOnExpire);
+    }
 
     /**
      * 红包当前是否可领取。

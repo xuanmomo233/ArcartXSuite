@@ -3,7 +3,6 @@ package xuanmo.arcartxsuite.regions.config;
 import java.util.logging.Logger;
 import org.bukkit.ChatColor;
 import org.bukkit.Material;
-import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 
 /**
@@ -17,7 +16,6 @@ import org.bukkit.configuration.file.YamlConfiguration;
  * @param selection     选区工具与体积/数量限制配置
  * @param defaults      区域默认值（优先级、全局区域 ID）
  * @param notifications 通知展示配置（Actionbar、显示模式）
- * @param storage       存储后端配置（SQLite / MySQL）
  * @param messages      玩家可见消息模板
  */
 public record RegionsConfiguration(
@@ -25,7 +23,6 @@ public record RegionsConfiguration(
     SelectionConfig selection,
     DefaultsConfig defaults,
     NotificationConfig notifications,
-    StorageConfig storage,
     MessagesConfig messages
 ) {
 
@@ -53,62 +50,6 @@ public record RegionsConfiguration(
      * @param displayMode   显示模式（如 {@code actionbar}）
      */
     public record NotificationConfig(boolean showActionbar, String displayMode) {}
-
-    /**
-     * 存储后端配置，支持共享存储与自建存储两种模式。
-     *
-     * @param shared         是否使用共享存储模式（true=共享本体数据源，false=自建连接池）
-     * @param mode           存储模式（sqlite / mysql，仅 shared=false 时生效）
-     * @param sqliteFileName SQLite 数据库文件名
-     * @param host           MySQL 主机地址
-     * @param port           MySQL 端口
-     * @param database       MySQL 数据库名
-     * @param username       MySQL 用户名
-     * @param password       MySQL 密码
-     * @param tablePrefix    表名前缀
-     * @param poolSize       连接池大小
-     */
-    public record StorageConfig(
-        boolean shared,
-        String mode, String sqliteFileName,
-        String host, int port, String database,
-        String username, String password,
-        String tablePrefix, int poolSize
-    ) {
-        /**
-         * 判断当前存储模式是否为 SQLite（非 mysql 均视为 SQLite）。
-         *
-         * @return {@code true} 表示使用 SQLite
-         */
-        public boolean isSqlite() {
-            return !"mysql".equalsIgnoreCase(mode);
-        }
-
-        /**
-         * 将本配置转换为平台统一的 {@link xuanmo.arcartxsuite.api.storage.StorageDescriptor}。
-         *
-         * @return 对应的存储描述符
-         */
-        public xuanmo.arcartxsuite.api.storage.StorageDescriptor toDescriptor() {
-            if (!isSqlite()) {
-                return xuanmo.arcartxsuite.api.storage.StorageDescriptor.mysql(
-                    host, port, database, username, password, poolSize, tablePrefix);
-            }
-            return xuanmo.arcartxsuite.api.storage.StorageDescriptor.sqlite(sqliteFileName);
-        }
-
-        /**
-         * 判断是否为覆盖模式（模块自建连接池）。
-         * <p>
-         * 当 shared=false 时返回 true（模块自建独立连接池）；
-         * shared=true 时返回 false（使用本体共享数据源）。
-         *
-         * @return {@code true} 表示模块应自建连接池
-         */
-        public boolean hasOverride() {
-            return !shared;
-        }
-    }
 
     /**
      * 玩家可见消息模板集合。
@@ -189,32 +130,6 @@ public record RegionsConfiguration(
             notif != null ? notif.getString("display-mode", "actionbar") : "actionbar"
         );
 
-        var stor = yaml.getConfigurationSection("storage");
-        boolean shared = stor != null && stor.getBoolean("shared", true);
-        // 向后兼容：如果 shared 字段不存在但 mode=mysql 存在，视为 shared=false
-        if (stor != null && !stor.isSet("shared") && "mysql".equalsIgnoreCase(stor.getString("mode", "sqlite"))) {
-            shared = false;
-        }
-        StorageConfig storage;
-        if (shared) {
-            storage = new StorageConfig(true, "sqlite", "regions.db",
-                "127.0.0.1", 3306, "arcartxsuite", "root", "",
-                "axs_rg_", 3);
-        } else {
-            ConfigurationSection mysql = stor != null ? stor.getConfigurationSection("mysql") : null;
-            storage = new StorageConfig(false,
-                stor != null ? stor.getString("mode", "sqlite") : "sqlite",
-                stor != null ? stor.getString("sqlite.file", "regions.db") : "regions.db",
-                mysql != null ? mysql.getString("host", "127.0.0.1") : "127.0.0.1",
-                mysql != null ? mysql.getInt("port", 3306) : 3306,
-                mysql != null ? mysql.getString("database", "arcartxsuite") : "arcartxsuite",
-                mysql != null ? mysql.getString("username", "root") : "root",
-                mysql != null ? mysql.getString("password", "") : "",
-                mysql != null ? mysql.getString("table-prefix", "axs_rg_") : "axs_rg_",
-                stor != null ? stor.getInt("pool-size", 3) : 3
-            );
-        }
-
         var msg = messagesYaml;
         MessagesConfig messages = new MessagesConfig(
             s(msg, "prefix", "&8[&6Regions&8] &r"),
@@ -240,7 +155,7 @@ public record RegionsConfiguration(
             s(msg, "region-leave", "&a[离开] &f{region}")
         );
 
-        return new RegionsConfiguration(yaml.getBoolean("debug", false), selection, defaults, notifications, storage, messages);
+        return new RegionsConfiguration(yaml.getBoolean("debug", false), selection, defaults, notifications, messages);
     }
 
     private static String s(org.bukkit.configuration.ConfigurationSection section, String key, String def) {

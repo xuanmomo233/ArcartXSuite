@@ -36,6 +36,13 @@ public interface ClientBridgeAPI {
     boolean sendDamageDisplay(@NotNull Player player, @NotNull String configId,
                               double amount, @NotNull Entity target);
 
+    /** 在主线程重新读取伤害飘字样式，并同步到已完成 ArcartX 握手的客户端。 */
+    boolean reloadDamageDisplayConfigurations();
+
+    /** 向跟踪目标的玩家各发送一条飘字。在线的指定接收者也会收到，即使其不在跟踪范围内。 */
+    void broadcastDamageDisplay(@Nullable Player recipient, @NotNull String configId,
+                                        double amount, @NotNull Entity target);
+
     /**
      * 向玩家下发服务端变量。
      *
@@ -44,6 +51,12 @@ public interface ClientBridgeAPI {
      * @param value        变量值（String / Number / Boolean）
      */
     boolean sendServerVariable(@NotNull Player player, @NotNull String variableName, @Nullable Object value);
+
+    /** 在指定观察者的客户端播放目标实体的动作。持续时间 0 仅保留到当前时刻。 */
+    default boolean sendEntityAnimation(@NotNull Player viewer, @NotNull Entity target,
+                                        @NotNull String animation, double speed, int blendMs, long durationMs) {
+        return false;
+    }
 
     /**
      * 遍历能看到指定实体的所有玩家。

@@ -5,6 +5,7 @@ import java.util.UUID;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.bridge.ApiStability;
+import xuanmo.arcartxsuite.api.icon.IconDefinition;
 
 /**
  * 统一待发放奖励服务。
@@ -43,6 +44,11 @@ public interface PendingRewardService {
      */
     default boolean savePendingBatchConfirmed(@NotNull String requestKey, @NotNull List<PendingReward> rewards) {
         return false;
+    }
+
+    /** Identifies the durable receipt store, or returns null until it is available. This method does no I/O. */
+    default @Nullable UUID rewardReceiptStoreId() {
+        return null;
     }
 
     /** Ask the host to claim and deliver persisted rewards for an online player. */
@@ -89,6 +95,7 @@ public interface PendingRewardService {
      * <ul>
      *   <li>{@link Type#ITEM} — {@code {"source":"minecraft","id":"DIAMOND","amount":1,"nbt":""}}</li>
      *   <li>{@link Type#ITEM_SERIALIZED} — {@code {"data":"<Base64 序列化的 ItemStack>"}}</li>
+     *   <li>{@link Type#ITEM_SPEC} — {@link ItemSpec} 的 JSON，包含完整物品配置和可选邮件内容</li>
      *   <li>{@link Type#CURRENCY} — {@code {"currencyId":"coin","amount":100}}</li>
      *   <li>{@link Type#COMMAND} — {@code {"commands":["give {player} diamond 1"]}}</li>
      *   <li>{@link Type#MAIL_PRESET} — {@code {"presetIds":["preset1","preset2"]}}</li>
@@ -122,13 +129,23 @@ public interface PendingRewardService {
             ITEM,
             /** 已序列化的物品奖励（Base64 ItemStack，反序列化后通过 ItemRewardDispatcher 发放） */
             ITEM_SERIALIZED,
+            /** Frozen serialized item awaiting a natural player save or a durable external destination. */
+            ITEM_NATURAL,
+            /** 完整物品定义，收件人上线时解析。可选邮件主题和正文用于带附件邮件。 */
+            ITEM_SPEC,
             /** 货币奖励（通过 CurrencyBridge 入账） */
             CURRENCY,
             /** 命令奖励（通过控制台执行） */
             COMMAND,
             /** 邮件预设奖励（通过 MailDispatchable 发送） */
-            MAIL_PRESET
+            MAIL_PRESET,
+            /** 永久称号，载荷中的 targetId 为称号 ID。 */
+            TITLE,
+            /** 免费解锁地图锚点，载荷中的 targetId 为锚点 ID。 */
+            MAP_ANCHOR
         }
+
+        public record ItemSpec(IconDefinition item, @Nullable String mailSubject, @Nullable String mailBody) {}
 
         /**
          * 创建待发放物品奖励的便捷构造。

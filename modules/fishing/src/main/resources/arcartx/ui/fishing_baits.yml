@@ -67,31 +67,14 @@ ui:
         }
       }
       // 重建饵料队列槽位（模板在索引0，复制 1~baitSlots-1）
-      while(val.饵料队列.childrenCount() > 1){
-        val.饵料队列.get(1).remove()
-      }
-      if(var.baitSlots != none && var.baitSlots > 1){
-        for(i in range(1, var.baitSlots - 1)){
-          key = i.round()
-          if(val.饵料队列['队列槽'] != none) {
-            e = val.饵料队列['队列槽'].copy('队列槽' + key)
-            e.entryKey = key
-          }
+      var.饵料队列网格数据 = []
+      if((var.baitSlots - 1) >= 0){
+        for(网格序号 in range(0, var.baitSlots - 1)){
+          var.饵料队列网格数据.add(网格序号.round())
         }
       }
       // 数据就绪后触发每个队列槽位图标的 seticon()
-      if(val.饵料队列['队列槽'] != none && val.饵料队列['队列槽']['队列槽图标'] != none){
-        val.饵料队列['队列槽']['队列槽图标'].seticon()
-      }
-      if(var.baitSlots != none && var.baitSlots > 1){
-        for(i in range(1, var.baitSlots - 1)){
-          key = i.round()
-          e = val.饵料队列['队列槽' + key]
-          if(e != none && e['队列槽图标'] != none){
-            e['队列槽图标'].seticon()
-          }
-        }
-      }
+      var.饵料队列图标待刷新 = true
       // 操作后清除选中状态
       var.selectedInvSlot = none
       var.selectedQueueSlot = none
@@ -125,6 +108,26 @@ ui:
       var.contentW = var.viewW - 420
 
 # ─── 控件树 ────────────────────────────────────────────────────────
+tasks:
+  refresh-repeat-grid-icons:
+    type: loop
+    time: 100
+    cycle: 100
+    run: |-
+      if(var.饵料队列图标待刷新 == true && var.饵料队列网格数据 != none && val.饵料队列 != none && val.饵料队列.childrenCount() == var.饵料队列网格数据.size()){
+        var.饵料队列图标待刷新 = false
+        if(var.饵料队列网格数据.size() > 0){
+          for(网格序号 in range(0, var.饵料队列网格数据.size() - 1)){
+            网格项 = val.饵料队列.get(网格序号.round())
+            if(网格项 != none){
+              if(网格项['队列槽图标'] != none){
+                网格项['队列槽图标'].seticon()
+              }
+            }
+          }
+        }
+      }
+
 controls:
   # 全屏毛玻璃底（真高斯模糊世界背景）；置于顶层以覆盖整块屏幕
   全屏玻璃底:
@@ -601,15 +604,19 @@ controls:
               # queueEntry 为该槽位的队列数据，none 表示空槽位
               # 交互：选中背包槽后点击队列槽 → put_bait；未选中且槽位有饵料 → take_bait
               饵料队列:
-                type: HStack
+                type: RepeatGrid
                 val: 饵料队列
                 attribute:
+                  items: "var.饵料队列网格数据"
+                  flow: ~column
+                  row: 1
+                  spaceBetweenX: 12
+                  maxSize: "var.饵料队列网格数据 == none ? 0 : var.饵料队列网格数据.size()"
                   point: ~top_left
                   x: 24
                   y: 68
                   width: "var.contentW - 112"
                   height: 96
-                  spaceBetween: 12
                 children:
                   # 队列槽模板（索引0）
                   # 交互逻辑：
@@ -618,7 +625,7 @@ controls:
                   队列槽:
                     type: Canvas
                     attribute:
-                      entryKey: 0.round()
+                      entryKey: self.item
                       queueEntry: var.queue[self.entryKey]
                       visible: var.baitSlots > 0
                       width: 72

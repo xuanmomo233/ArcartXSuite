@@ -1,12 +1,16 @@
 package xuanmo.arcartxsuite.bridge;
 
 import java.util.function.Consumer;
+import org.bukkit.Location;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
+import priv.seventeen.artist.arcartx.ArcartX;
 import priv.seventeen.artist.arcartx.api.ArcartXAPI;
+import priv.seventeen.artist.arcartx.core.entity.ArcartXEntityManager;
 import priv.seventeen.artist.arcartx.core.network.ArcartXNetworkSender;
+import priv.seventeen.artist.arcartx.network.NetworkMessageSender;
 import priv.seventeen.artist.arcartx.util.EntityUtils;
 import priv.seventeen.artist.arcartx.util.collections.PlayerCallBack;
 import xuanmo.arcartxsuite.api.bridge.ClientBridgeAPI;
@@ -71,6 +75,47 @@ public class ArcartXClientBridge implements ClientBridgeAPI {
         }
     }
 
+    @Override
+    public boolean reloadDamageDisplayConfigurations() {
+        if (!available) return false;
+        try {
+            ArcartX.INSTANCE.getConfigs().getDamageDisplayFolder().reload();
+            for (Player player : plugin.getServer().getOnlinePlayers()) {
+                var arcartXPlayer = ArcartXEntityManager.INSTANCE.getPlayer(player);
+                if (arcartXPlayer != null && arcartXPlayer.getEncryptor() != null) {
+                    NetworkMessageSender.INSTANCE.sendSettingReload(player);
+                }
+            }
+            return true;
+        } catch (RuntimeException | LinkageError exception) {
+            xuanmo.arcartxsuite.module.AxsLog.logger().warning("ArcartX 伤害飘字配置同步失败: " + exception);
+            return false;
+        }
+    }
+
+    @Override
+    public void broadcastDamageDisplay(Player recipient, String configId, double amount, Entity target) {
+        if (!available || configId == null || configId.isBlank() || networkSender == null) return;
+        Location position = target.getLocation();
+        position.setY(position.getY() + target.getHeight() / 2);
+        if (recipient != null && recipient.isOnline()) {
+            sendDamageDisplay(recipient, configId, amount, position);
+        }
+        forEachSeenPlayer(target, viewer -> {
+            if (!viewer.equals(recipient)) {
+                sendDamageDisplay(viewer, configId, amount, position);
+            }
+        });
+    }
+
+    private void sendDamageDisplay(Player player, String configId, double amount, Location position) {
+        try {
+            networkSender.sendDamageDisplay(player, configId, amount, position);
+        } catch (RuntimeException exception) {
+            xuanmo.arcartxsuite.module.AxsLog.logger().warning("ArcartX 伤害数字发送失败: " + exception.getMessage());
+        }
+    }
+
     public boolean sendServerVariable(Player player, String variableName, Object value) {
         if (!available || player == null || variableName == null || variableName.isBlank() || networkSender == null) {
             return false;
@@ -80,6 +125,22 @@ public class ArcartXClientBridge implements ClientBridgeAPI {
             return true;
         } catch (RuntimeException exception) {
             xuanmo.arcartxsuite.module.AxsLog.logger().warning("ArcartX 服务器变量发送失败: " + exception.getMessage());
+            return false;
+        }
+    }
+
+    @Override
+    public boolean sendEntityAnimation(Player viewer, Entity target, String animation,
+                                       double speed, int blendMs, long durationMs) {
+        if (!available || networkSender == null || !viewer.isOnline() || animation.isBlank()
+            || !Double.isFinite(speed) || speed <= 0 || blendMs < 0 || durationMs < 0) {
+            return false;
+        }
+        try {
+            networkSender.sendSetEntityAnimation(viewer, target.getUniqueId(), animation, speed, blendMs, durationMs);
+            return true;
+        } catch (RuntimeException | LinkageError exception) {
+            xuanmo.arcartxsuite.module.AxsLog.logger().warning("ArcartX 实体动作发送失败: " + exception);
             return false;
         }
     }

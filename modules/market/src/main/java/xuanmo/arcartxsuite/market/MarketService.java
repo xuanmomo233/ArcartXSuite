@@ -9,16 +9,29 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BiConsumer;
+import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
+import java.util.function.Predicate;
+import java.util.function.Supplier;
 import java.util.logging.Logger;
+import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
+import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.bridge.ItemBridgeAPI;
+import xuanmo.arcartxsuite.api.auth.AuthAccess;
+import xuanmo.arcartxsuite.api.auth.AuthSnapshot;
 import xuanmo.arcartxsuite.api.capability.EventBusCapability;
 import xuanmo.arcartxsuite.api.capability.MailDispatchable;
-import xuanmo.arcartxsuite.api.capability.SignalDispatchable;
 import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI;
 import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
 import xuanmo.arcartxsuite.api.item.ItemMatcherAPI;
@@ -29,7 +42,9 @@ import xuanmo.arcartxsuite.api.crossserver.CrossServerChannel;
 import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.api.scheduler.SchedulerAPI;
 import xuanmo.arcartxsuite.market.auction.AuctionItemSerializer;
+import xuanmo.arcartxsuite.market.auction.AuctionBidTerms;
 import xuanmo.arcartxsuite.market.auction.AuctionListing;
+import xuanmo.arcartxsuite.market.auction.AuctionRoomSnapshot;
 import xuanmo.arcartxsuite.market.auction.AuctionService;
 import xuanmo.arcartxsuite.market.config.MarketModuleConfiguration;
 import xuanmo.arcartxsuite.market.dynamic.DynamicShopService;
@@ -41,7 +56,9 @@ import xuanmo.arcartxsuite.market.shop.ShopService;
 import xuanmo.arcartxsuite.market.storage.AuctionHistory;
 import xuanmo.arcartxsuite.market.storage.JdbcMarketRepository;
 import xuanmo.arcartxsuite.market.storage.MarketRepository;
+import xuanmo.arcartxsuite.market.storage.MarketListingDraft;
 import xuanmo.arcartxsuite.market.storage.RedisMarketCache;
+import xuanmo.arcartxsuite.market.storage.ShopCheckout;
 
 /**
  * 市场模块顶层门面服务，协调拍卖行/系统商店/回收商店三个子服务。
@@ -69,11 +86,17 @@ public class MarketService {
     private final Set<UUID> actionTokensInFlight = ConcurrentHashMap.newKeySet();
     /** 打开商店/编辑 UI 时预选商店的暂存（在对应 list 包处理时消费）。 */
     private final Map<UUID, String> pendingShopSelections = new ConcurrentHashMap<>();
+    private final Map<UUID, ShopView> shopViews = new java.util.HashMap<>();
+    private final Map<UUID, Runnable> nextShopRead = new java.util.HashMap<>();
+    private final Set<UUID> activeShopReads = new java.util.HashSet<>();
+    private final Map<UUID, String> activeShopOrders = new java.util.HashMap<>();
     private final Set<UUID> pendingMyAuctions = ConcurrentHashMap.newKeySet();
     private final Set<UUID> pendingMyShops = ConcurrentHashMap.newKeySet();
     private final Map<UUID, String> sellModes = new ConcurrentHashMap<>();
 
     private static final int AUCTION_PAGE_SIZE = 20;
+    private static final int SHOP_PAGE_SIZE = 12;
+    private static final long SHOP_QUOTE_TTL_NANOS = 30_000_000_000L;
     private static final String AUCTION_SELL_UI_ID = "AXS:market_auction_sell";
     private static final String SHOP_ADMIN_PERMISSION = "arcartxsuite.market.admin";
     private static final int HISTORY_PAGE_SIZE = 20;
@@ -93,11 +116,18 @@ public class MarketService {
         return rawSlot;
     }
 
-    private volatile java.util.function.Supplier<SignalDispatchable> signalProvider;
     private volatile java.util.function.Supplier<EventBusCapability> eventBusProvider;
 
     private xuanmo.arcartxsuite.market.auction.AuctionRoomService auctionRooms;
     private final Map<UUID,List<String>> auctionBrowseContext=new ConcurrentHashMap<>();
+    private final Set<UUID> pendingAuctionListInvalidations = ConcurrentHashMap.newKeySet();
+    private final Set<UUID> pendingPlayerShopListInvalidations = ConcurrentHashMap.newKeySet();
+    private final Semaphore listCacheWrites = new Semaphore(8);
+    private final Set<String> pendingListCacheInvalidations = ConcurrentHashMap.newKeySet();
+    private final AtomicBoolean listCacheInvalidationRunning = new AtomicBoolean();
+    private org.bukkit.scheduler.BukkitTask auctionCatchUpTask;
+    private boolean readingAuctionRevision;
+    private long observedAuctionRevision = -1;
     private final Set<UUID> restoreAuctionBrowse=ConcurrentHashMap.newKeySet();
     private final Map<UUID,String> pendingAuctionCategories=new ConcurrentHashMap<>();
     private xuanmo.arcartxsuite.market.playershop.PlayerShopController playerStores;
@@ -108,13 +138,32 @@ public class MarketService {
     private PendingDeliveryService deliveries;
     private MarketRepository repository;
     private RedisMarketCache redisCache;
-    private CrossServerChannel crossServerChannel;
+    private CompletableFuture<Void> storagePreparation = CompletableFuture.completedFuture(null);
+    private volatile CrossServerChannel crossServerChannel;
     private AuctionService auctionService;
     private ShopService shopService;
     private RecycleService recycleService;
     private DynamicShopService dynamicShopService;
     private PlayerShopService playerShopService;
     private final SchedulerAPI scheduler;
+    private final MarketWork work;
+    private final MarketDebits debits;
+    private MarketListings listings;
+    private final MarketPageReads pageReads;
+    private final Map<UUID, CompletableFuture<String>> shareRequests = new ConcurrentHashMap<>();
+    private static final long AUCTION_QUOTE_TTL = TimeUnit.SECONDS.toNanos(15);
+    private final Semaphore auctionQuoteSlots = new Semaphore(32);
+    private final Semaphore auctionFavoriteSlots = new Semaphore(32);
+    private final Map<UUID, Object> asyncActionTickets = new java.util.HashMap<>();
+    private final Map<UUID, AuctionQuotes> auctionQuotes = new java.util.HashMap<>();
+    private final xuanmo.arcartxsuite.api.scheduler.ModuleExecutor cleanup =
+        new xuanmo.arcartxsuite.api.scheduler.ModuleExecutor(0, 1, 30, java.util.concurrent.TimeUnit.SECONDS,
+            new java.util.concurrent.ArrayBlockingQueue<>(1), task -> {
+                Thread thread = new Thread(task, "AXS-Market-Close");
+                thread.setDaemon(true);
+                return thread;
+            });
+    private final java.util.concurrent.CompletableFuture<Void> databaseStopped = new java.util.concurrent.CompletableFuture<>();
 
     public MarketService(JavaPlugin plugin, MarketModuleConfiguration config,
                          PacketBridgeAPI packetBridge, CurrencyBridgeAPI currencyManager,
@@ -131,6 +180,9 @@ public class MarketService {
                          xuanmo.arcartxsuite.api.bridge.ContentModerator contentModerator,
                          xuanmo.arcartxsuite.api.condition.ScriptConditionEvaluator scriptConditionEvaluator) {
         this.plugin = plugin;
+        this.work = new MarketWork(plugin);
+        this.debits = new MarketDebits(work, logger);
+        this.pageReads = new MarketPageReads(work, logger);
         this.config = config;
         this.packetBridge = packetBridge;
         this.currencyManager = currencyManager;
@@ -152,9 +204,6 @@ public class MarketService {
             : xuanmo.arcartxsuite.api.condition.ScriptConditionEvaluator.noop();
     }
 
-    public void setSignalProvider(java.util.function.Supplier<SignalDispatchable> provider) {
-        this.signalProvider = provider;
-    }
 
     public void setEventBusProvider(java.util.function.Supplier<EventBusCapability> provider) {
         this.eventBusProvider = provider;
@@ -162,6 +211,13 @@ public class MarketService {
 
     /** 玩家退出时清理其 actionToken 与在飞行标记，避免内存累积。 */
     public void clearPlayerState(UUID playerUuid) {
+        pageReads.clear(playerUuid);
+        pendingAuctionListInvalidations.remove(playerUuid);
+        pendingPlayerShopListInvalidations.remove(playerUuid);
+        auctionQuotes.remove(playerUuid);
+        asyncActionTickets.remove(playerUuid);
+        shopViews.remove(playerUuid);
+        nextShopRead.remove(playerUuid);
         actionTokens.values().forEach(map -> map.remove(playerUuid));
         actionTokensInFlight.remove(playerUuid);
         if(management!=null)management.clear(playerUuid);
@@ -175,18 +231,24 @@ public class MarketService {
         sellModes.remove(playerUuid);
     }
 
-    public void start(java.io.File dataFolder, JdbcMarketRepository repository) throws Exception {
-        // 初始化存储
-        this.repository = repository;
-        repository.initialize();
-        ledger = new MarketLedger(repository, logger);
-        CurrencyBridgeAPI tradingCurrencies = ledger.wrap(currencyManager);
+    java.util.concurrent.CompletionStage<Void> prepareStorage(xuanmo.arcartxsuite.api.storage.ModuleStorage scope,
+            xuanmo.arcartxsuite.api.storage.ModuleStorage.Initializer initializeTables) {
+        var cache = new RedisMarketCache(config.redis(), logger);
+        redisCache = cache;
+        storagePreparation = scope.initialize(() -> {
+            initializeTables.run();
+            cache.initialize();
+            cache.invalidateByPrefix("market:listings:");
+            cache.invalidateByPrefix("market:pshop:");
+        }).toCompletableFuture();
+        return storagePreparation;
+    }
 
-        // 初始化 Redis
-        redisCache = new RedisMarketCache(config.redis(), logger);
-        redisCache.initialize();
-        redisCache.invalidateByPrefix("market:listings:");
-        redisCache.invalidateByPrefix("market:pshop:");
+    public void start(java.io.File dataFolder, JdbcMarketRepository repository) throws Exception {
+        this.repository = repository;
+        ledger = new MarketLedger(repository, logger);
+        if (config.auction().enabled() || config.playerShop().enabled()) work.repeat(debits::drain, 1L, 1L);
+        CurrencyBridgeAPI tradingCurrencies = ledger.wrap(currencyManager);
 
         crossServerChannel = crossServer.openChannel(
             "market",
@@ -199,7 +261,7 @@ public class MarketService {
             }
         };
 
-        management=new MarketManagementController(plugin,repository,config,packetBridge,itemStackBridge,itemSerializer,vanillaItemNameBridge,
+        management=new MarketManagementController(work, plugin,repository,config,packetBridge,itemStackBridge,itemSerializer,vanillaItemNameBridge,
             new MarketManagementController.Host(){
                 public void open(Player player,String ui){packetBridge.openUi(player,ui);issueActionToken(player,ui);}
                 public void send(Player player,String ui,String handler,Map<String,Object> packet){sendUiPacket(player,ui,handler,packet);}
@@ -215,24 +277,31 @@ public class MarketService {
             },logger);
         // 启动子服务
         if (config.auction().enabled()) {
-            auctionService = new AuctionService(plugin, config.auction(), config.messages(),
+            auctionService = new AuctionService(work, plugin, config.auction(), config.messages(),
                 repository, redisCache, crossServerPublisher, tradingCurrencies, itemSerializer, logger, vanillaItemNameBridge, itemRewardDispatcher, itemMatcher);
-            auctionService.setEventPublisher(this::publishEvent);
+            auctionService.setEventPublisher(this::publishAuctionEvent);
+            auctionService.setEventObserver((buyer, payload) ->
+                publishEvent(EventBusCapability.MARKET_AUCTION_PURCHASED, buyer, payload));
+            if (config.crossServer().enabled()) auctionService.setSettlementRefresh(this::publishSettlementRefresh);
             auctionService.setLedger(ledger);
             auctionService.start(config.schedulerIntervalTicks());
-            auctionRooms=new xuanmo.arcartxsuite.market.auction.AuctionRoomService(plugin,repository,packetBridge,config.ui().auctionRoomId(),
+            auctionRooms=new xuanmo.arcartxsuite.market.auction.AuctionRoomService(work, repository,packetBridge,config.ui().auctionRoomId(), currencyManager,
                 this::sendAuctionRoom,(player,message)->{
+                    if (!canUseMarket(player, AuthAccess.snapshot(player.getUniqueId()))) return;
                     Map<String,Object> packet=new LinkedHashMap<>();packet.put("message",message);packet.put("packetId",config.ui().packetId());
                     sendUiPacket(player,config.ui().auctionRoomId(),"room_error",packet);
                 },logger);
             auctionRooms.start();
+            if (config.crossServer().enabled() && repository.getDescriptor().isMysql()) {
+                auctionCatchUpTask = work.repeat(this::catchUpAuctionViews, 20L, 20L);
+            }
         }
 
         if (config.shop().enabled()) {
-            shopService = new ShopService(plugin, config.shop(), config.messages(),
-                repository, tradingCurrencies, itemSourceRegistry, scriptConditionEvaluator, dataFolder, logger);
+            shopService = new ShopService(work, plugin, config.shop(), config.messages(),
+                repository, currencyManager, itemSourceRegistry, scriptConditionEvaluator, dataFolder, logger);
             // 注入跨服限购广播回调
-            shopService.setLimitBroadcaster((playerUuid, shopId, itemId, newCount, timestamp, resetTime) -> {
+            if (!repository.getDescriptor().isMysql()) shopService.setLimitBroadcaster((playerUuid, shopId, itemId, newCount, timestamp, resetTime) -> {
                 if (crossServerChannel != null && crossServerChannel.isActive()) {
                     crossServerChannel.publish("SHOP_LIMIT_UPDATE:" + playerUuid + ":" + shopId + ":"
                         + itemId + ":" + newCount + ":" + timestamp + ":" + resetTime);
@@ -244,7 +313,7 @@ public class MarketService {
             // 初始化动态商品策略服务
             if (config.dynamic().enabled() && !config.dynamic().strategies().isEmpty() && scheduler != null) {
                 dynamicShopService = new DynamicShopService(
-                    plugin, logger, scheduler, shopService, repository, config.dynamic().strategies()
+                    work, plugin, logger, scheduler, shopService, repository, config.dynamic().strategies()
                 );
                 dynamicShopService.setStateBroadcaster((action, strategyKey, shopId, data) -> {
                     if (crossServerChannel != null && crossServerChannel.isActive()) {
@@ -266,12 +335,12 @@ public class MarketService {
         }
 
         if (config.playerShop().enabled()) {
-            playerShopService = new PlayerShopService(plugin, config.playerShop(), config.messages(),
+            playerShopService = new PlayerShopService(work, plugin, config.playerShop(), config.messages(),
                 repository, redisCache, crossServerPublisher, tradingCurrencies, itemSerializer, logger,
-                vanillaItemNameBridge, itemRewardDispatcher, itemMatcher);
+                vanillaItemNameBridge, itemRewardDispatcher, itemMatcher, debits);
             playerShopService.setLedger(ledger);
             playerShopService.start(config.schedulerIntervalTicks());
-            playerStores=new xuanmo.arcartxsuite.market.playershop.PlayerShopController(plugin,repository,config,packetBridge,itemStackBridge,itemSerializer,currencyManager,contentModerator,
+            playerStores=new xuanmo.arcartxsuite.market.playershop.PlayerShopController(work, plugin,repository,config,packetBridge,itemStackBridge,itemSerializer,currencyManager,contentModerator,
                 new xuanmo.arcartxsuite.market.playershop.PlayerShopController.Host(){
                     public void open(Player player,String ui){packetBridge.openUi(player,ui);issueActionToken(player,ui);}
                     public void send(Player player,String ui,String handler,Map<String,Object> packet){sendUiPacket(player,ui,handler,packet);}
@@ -293,27 +362,128 @@ public class MarketService {
 
     public MarketLedger getLedger() { return ledger; }
 
-    public void attachDeliveries(PendingDeliveryService deliveries) { this.deliveries = deliveries; deliveries.start(); }
+    public void attachDeliveries(PendingDeliveryService deliveries) { this.deliveries = deliveries; deliveries.start(shopService); }
+
+    public void attachListingSaves(java.nio.file.Path playerData, String sourceNode) {
+        if (playerShopService == null && auctionService == null) return;
+        listings = new MarketListings(work, repository, ledger, currencyManager, itemSerializer, debits, logger,
+            playerData, sourceNode, this::listingCommitted);
+    }
+
+    private void listingCommitted(MarketListingDraft.Save save, boolean published) {
+        boolean auction = save.kind() == MarketListingDraft.Kind.AUCTION;
+        AuctionBidTerms details = null;
+        if (published) {
+            try {
+                if (redisCache != null) redisCache.invalidateByPrefix(auction ? "market:listings:" : "market:pshop:");
+                var channel = crossServerChannel;
+                if (channel != null && channel.isActive()) channel.publish(
+                    (auction ? "LISTING_CREATED:" : "PSHOP_LISTING_CREATED:") + save.listingId());
+                if (auction) details = repository.readAuctionBidTerms(save.listingId());
+            } catch (RuntimeException failure) {
+                logger.warning("Market 上架已提交，刷新失败 #" + save.listingId() + ": " + failure.getMessage());
+            }
+        }
+        var notification = details;
+        work.main(() -> {
+            Player seller = Bukkit.getPlayer(save.seller());
+            if (published && auction) refreshOpenAuctionBrowsers();
+            if (published && !auction && playerStores != null) playerStores.changed();
+            if (notification != null) {
+                publishEvent("axs.market.listing_created", seller, Map.of(
+                    "price", String.valueOf(notification.startingBid()), "currency", notification.currency(),
+                    "listing_id", String.valueOf(notification.id()), "seller_uuid", save.seller().toString()));
+            }
+            if (seller != null && AuthAccess.admitted(save.seller())) {
+                seller.sendMessage(published ? ChatColor.translateAlternateColorCodes('&', auction
+                    ? config.messages().auctionListed() : config.messages().playerShopListed())
+                    : ChatColor.YELLOW + "上次上架扣除未写入存档，已释放暂存。上架费可在交易流水核对。");
+            }
+        });
+    }
 
     public void shutdown() {
-        if(management!=null){management.close();management=null;}
-        if(playerStores!=null){playerStores.close();playerStores=null;}
+        if (work.isStopping()) return;
+        work.stopCallbacks();
+        if (listings != null) listings.close();
+        debits.close();
+        auctionQuotes.clear();
+        asyncActionTickets.clear();
+        List.copyOf(shareRequests.values()).forEach(request -> request.complete(null));
+        try {
+        if (auctionCatchUpTask != null) { auctionCatchUpTask.cancel(); auctionCatchUpTask = null; }
+        shopViews.clear();
+        nextShopRead.clear();
+        activeShopOrders.clear();
+        if(management!=null)management.close();
+        if(playerStores!=null)playerStores.close();
         playerShopBrowseContext.clear();restorePlayerShopBrowse.clear();
-        if(auctionRooms!=null){auctionRooms.close();auctionRooms=null;}
+        if(auctionRooms!=null)auctionRooms.close();
         auctionBrowseContext.clear();restoreAuctionBrowse.clear();pendingAuctionCategories.clear();
-        if (deliveries != null) { deliveries.close(); deliveries = null; }
-        if (auctionService != null) { auctionService.shutdown(); auctionService = null; }
-        if (dynamicShopService != null) { dynamicShopService.shutdown(); dynamicShopService = null; }
-        if (shopService != null) { shopService.shutdown(); shopService = null; }
-        if (recycleService != null) { recycleService.shutdown(); recycleService = null; }
-        if (playerShopService != null) { playerShopService.shutdown(); playerShopService = null; }
-        if (redisCache != null) { redisCache.shutdown(); redisCache = null; }
+        pageReads.close();
+        pendingAuctionListInvalidations.clear();
+        pendingPlayerShopListInvalidations.clear();
+        pendingListCacheInvalidations.clear();
+        if (deliveries != null) deliveries.close();
+        if (auctionService != null) auctionService.shutdown();
+        if (dynamicShopService != null) dynamicShopService.shutdown();
+        if (shopService != null) shopService.shutdown();
+        if (recycleService != null) recycleService.shutdown();
+        if (playerShopService != null) playerShopService.shutdown();
         if (crossServerChannel != null) { crossServerChannel.close(); crossServerChannel = null; }
-        if (repository != null) { repository.shutdown(); repository = null; }
+        } finally {
+            work.drain().thenCombine(storagePreparation.handle((ignored, preparationFailure) -> null),
+                (workStopped, prepared) -> null).whenComplete((ignored, failure) -> finishShutdown(failure));
+        }
+    }
+
+    public MarketWork work() { return work; }
+    public boolean isStopping() { return work.isStopping(); }
+    public java.util.concurrent.CompletionStage<Void> databaseStopped() { return databaseStopped.copy(); }
+
+    private void finishShutdown(Throwable priorFailure) {
+        var finalized = new java.util.concurrent.CompletableFuture<Void>();
+        cleanup.execute(() -> {
+            Throwable failure = priorFailure;
+            try { if (dynamicShopService != null) dynamicShopService.finishShutdown(); }
+            catch (Throwable error) { failure = error; }
+            try { if (redisCache != null) redisCache.shutdown(); }
+            catch (Throwable error) { if (failure == null) failure = error; else failure.addSuppressed(error); }
+            try { if (repository != null) repository.shutdown(); }
+            catch (Throwable error) { if (failure == null) failure = error; else failure.addSuppressed(error); }
+            if (failure == null) finalized.complete(null); else finalized.completeExceptionally(failure);
+            cleanup.shutdown();
+        });
+        java.util.concurrent.CompletableFuture.allOf(finalized, cleanup.stopped().toCompletableFuture())
+            .whenComplete((ignored, failure) -> {
+                if (failure == null) databaseStopped.complete(null); else databaseStopped.completeExceptionally(failure);
+            });
     }
 
     public MarketRepository getRepository() {
         return repository;
+    }
+
+    public void reviewShopOrder(String id, String action, String audit, boolean playerShop, java.util.function.Consumer<String> reply) {
+        if (!shopUuid(id)) {
+            reply.accept("订单 ID 格式无效");
+            return;
+        }
+        var store = repository;
+        work.async(() -> {
+            String result;
+            try { result = playerShop ? store.reviewPlayerShopPurchase(id, action, audit) : store.reviewShopOrder(id, action, audit); }
+            catch (RuntimeException exception) {
+                logger.log(java.util.logging.Level.WARNING, "商店订单人工核对失败 " + id, exception);
+                result = "核对事务未确认，请查询原订单状态";
+            }
+            if (playerShop && redisCache != null) redisCache.invalidateByPrefix("market:pshop:");
+            var message = result;
+            if (plugin.isEnabled()) work.main(() -> {
+                if (playerShop && playerStores != null) playerStores.changed();
+                reply.accept(message);
+            });
+        });
     }
 
     public void reload() {
@@ -323,64 +493,121 @@ public class MarketService {
 
     // ─── 拍卖行操作 ─────────────────────────────────────────
 
-    public boolean createListing(Player player, ItemStack item, double startingBid, String currency, long duration) {
-        if (auctionService == null) {
-            player.sendMessage(messages.get("player.auction-unavailable"));
-            return false;
-        }
-        // 价格范围校验（覆盖命令路径，UI 路径在 handleAuctionListCreatePacket 已校验）
-        if (!Double.isFinite(startingBid) || startingBid < config.auction().minPrice()) {
-            player.sendMessage(messages.get("player.sell.price-out-of-range",
-                formatPrice(config.auction().minPrice()),
-                formatPrice(config.auction().maxPrice())));
-            return false;
-        }
-        if (startingBid > 0 && (startingBid < config.auction().minPrice() || startingBid > config.auction().maxPrice())) {
-            player.sendMessage(messages.get("player.sell.price-out-of-range",
-                formatPrice(config.auction().minPrice()),
-                formatPrice(config.auction().maxPrice())));
-            return false;
-        }
-        // 货币校验
-        String effectiveCurrency = currency != null && !currency.isBlank() ? currency : config.auction().defaultCurrency();
-        var currencyOption = config.auction().currencies().stream()
-            .filter(option -> option.id().equalsIgnoreCase(effectiveCurrency))
-            .findFirst().orElse(null);
-        if (currencyOption == null || currencyManager.bridge(effectiveCurrency) == null
-            || !currencyManager.bridge(effectiveCurrency).available()) {
-            player.sendMessage(messages.get("player.sell.invalid-currency"));
-            return false;
-        }
-        if (duration <= 0) duration = config.auction().defaultDurationSeconds();
-        var result = auctionService.createListing(player, item, startingBid, currencyOption.id(), duration);
-        if (result.success()) {
-            rotateToken(player, config.ui().auctionId());
-            player.sendMessage(ChatColor.translateAlternateColorCodes('&', config.messages().auctionListed()));
-            dispatchSignal("market_listing_created", player, Map.of(
-                "price", String.valueOf(startingBid),
-                "currency", currencyOption.id()
-            ));
-            publishEvent("axs.market.listing_created", player, Map.of(
-                "price", String.valueOf(startingBid),
-                "currency", currencyOption.id()
-            ));
-            return true;
-        }
-        player.sendMessage(ChatColor.RED + result.error());
-        return false;
+    public void createListing(Player player, ItemStack item, double startingBid, String currency, long duration) {
+        submitAuctionFromHand(player, item, startingBid, currency, duration, false);
     }
 
-    public boolean cancelListing(Player player, long listingId) {
-        if (auctionService == null) return false;
-        boolean success = auctionService.cancelListing(player, listingId);
-        if (success) {
-            rotateToken(player, activeAuctionUi(player));
+    public CompletableFuture<Boolean> createAuctionListing(Player player, ItemStack item, double startingBid, String currency, long duration) {
+        return submitAuctionFromHand(player, item, startingBid, currency, duration, true).published();
+    }
+
+    private MarketListings.Submission submitAuctionFromHand(Player player, ItemStack item, double bid, String currency,
+                                                             long duration, boolean awaitPublication) {
+        AuthSnapshot session = AuthAccess.snapshot(player.getUniqueId());
+        if (auctionService == null || listings == null || !canUseMarket(player, session)) {
+            return refuseAuctionListing(player, awaitPublication, messages.get("player.auction-unavailable"));
+        }
+        if (!Double.isFinite(bid) || bid < config.auction().minPrice() || bid > config.auction().maxPrice()) {
+            return refuseAuctionListing(player, awaitPublication, messages.get("player.sell.price-out-of-range",
+                formatPrice(config.auction().minPrice()), formatPrice(config.auction().maxPrice())));
+        }
+        String effective = currency != null && !currency.isBlank() ? currency : config.auction().defaultCurrency();
+        var option = config.auction().currencies().stream().filter(row -> row.id().equalsIgnoreCase(effective)).findFirst().orElse(null);
+        var bridge = option == null ? null : currencyManager.bridge(option.id());
+        if (bridge == null || !bridge.available()) {
+            return refuseAuctionListing(player, awaitPublication, messages.get("player.sell.invalid-currency"));
+        }
+        if (item == null || item.getType().isAir() || auctionService.isBlacklisted(item)) {
+            return refuseAuctionListing(player, awaitPublication, "物品无法上架，请确认主手物品及黑名单");
+        }
+        int slot = player.getInventory().getHeldItemSlot();
+        long seconds = duration <= 0 ? config.auction().defaultDurationSeconds() : duration;
+        seconds = Math.max(config.auction().minDurationSeconds(), Math.min(config.auction().maxDurationSeconds(), seconds));
+        var submission = listings.submit(player, slot, item, auctionTerms(item, bid, option.id(), seconds, ""),
+            () -> canUseMarket(player, session) && player.getInventory().getHeldItemSlot() == slot, awaitPublication);
+        submission.staged().whenComplete((result, failure) -> work.main(() -> {
+            if (isCurrentMarketSession(player, session)) sendListingStage(player, result, failure);
+        }));
+        return submission;
+    }
+
+    private MarketListings.Submission refuseAuctionListing(Player player, boolean awaitPublication, String message) {
+        player.sendMessage(message);
+        return MarketListings.Submission.refused(awaitPublication, message);
+    }
+
+    private MarketListings.Terms auctionTerms(ItemStack item, double bid, String currency, long duration, String note) {
+        var c = config.auction();
+        return new MarketListings.Terms(MarketListingDraft.Kind.AUCTION, bid, currency, note, duration,
+            auctionService.getItemDisplayName(item), auctionService.classifyItem(item), c.listingFee(), c.listingFeeCurrency(),
+            c.maxListingsPerPlayer());
+    }
+
+    private boolean submitListingFromUi(Player player, String ui, String action, int slot, ItemStack item, MarketListings.Terms terms) {
+        UUID viewer = player.getUniqueId();
+        AuthSnapshot session = AuthAccess.snapshot(viewer);
+        String token = tokenMap(ui).get(viewer);
+        BooleanSupplier authorized = () -> currentListView(player, session, ui, token);
+        if (listings == null || !authorized.getAsBoolean()) return false;
+        Object ticket = new Object();
+        asyncActionTickets.put(viewer, ticket);
+        listings.submit(player, slot, item, terms, authorized, false).staged().whenComplete((result, failure) -> work.main(() -> {
+            if (!clearTrackedAction(viewer, ticket) || !isCurrentMarketSession(player, session)) return;
+            sendListingStage(player, result, failure);
+            if (!authorized.getAsBoolean()) return;
+            rotateToken(player, ui);
+            sendActionState(player, action);
+        }));
+        return true;
+    }
+
+    private void sendListingStage(Player player, MarketListings.Result result, Throwable failure) {
+        if (failure != null) player.sendMessage(ChatColor.RED + "上架结果未确认，请核对交易流水。");
+        else if (result.staged()) player.sendMessage(ChatColor.YELLOW + "商品已暂存，等待服务器自然保存背包后上架。");
+        else player.sendMessage(ChatColor.RED + result.error());
+    }
+
+    public CompletableFuture<Boolean> cancelListing(Player player, long listingId) {
+        var session = AuthAccess.snapshot(player.getUniqueId());
+        return cancelOwnedAuction(player, listingId, session, () -> true, success -> {
+            if (success && isAuctionUiOpen(player)) rotateToken(player, activeAuctionUi(player));
+        });
+    }
+
+    private CompletableFuture<Boolean> cancelOwnedAuction(Player player, long listingId, AuthSnapshot session,
+                                                           BooleanSupplier viewValid, Consumer<Boolean> completed) {
+        var result = auctionService == null || !canUseMarket(player, session) ? CompletableFuture.completedFuture(false)
+            : auctionService.cancelListing(session.playerId(), listingId, false,
+                () -> canUseMarket(player, session) && viewValid.getAsBoolean());
+        result.whenComplete((success, failure) -> work.main(() -> {
+            boolean committed = Boolean.TRUE.equals(success);
+            if (committed) refreshCancelledAuction(listingId);
+            if (!isCurrentMarketSession(player, session)) return;
+            try {
+                sendCancellationResult(player, committed, failure);
+            } finally {
+                completed.accept(committed);
+            }
+        }));
+        return result;
+    }
+
+    private void sendCancellationResult(Player player, boolean committed, Throwable failure) {
+        if (failure != null) {
+            player.sendMessage(ChatColor.RED + "撤单结果未确认，请刷新拍品状态或核对交易流水。");
+        } else if (committed) {
             player.sendMessage(ChatColor.translateAlternateColorCodes('&', config.messages().auctionCancelled()));
         } else {
             player.sendMessage(messages.get("player.cancel-failed"));
-            if(!config.auction().allowCancelWithBids()) player.sendMessage(ChatColor.GRAY+"已有有效出价或已到期的拍卖不能由卖家下架；管理员可强制处理。");
+            if (!config.auction().allowCancelWithBids()) {
+                player.sendMessage(ChatColor.GRAY + "已有有效出价或已到期的拍卖不能由卖家下架，管理员可强制处理。");
+            }
         }
-        return success;
+    }
+
+    private void refreshCancelledAuction(long listingId) {
+        if (auctionRooms != null) auctionRooms.changed(listingId);
+        refreshOpenAuctionBrowsers();
     }
 
     public void searchAuction(Player player, String keyword) {
@@ -478,6 +705,8 @@ public class MarketService {
 
     public void openShopUi(Player player, @Nullable String shopId) {
         if (shopService == null) { player.sendMessage(messages.get("player.shop-unavailable")); return; }
+        shopViews.remove(player.getUniqueId());
+        nextShopRead.remove(player.getUniqueId());
         if (shopId != null && !shopId.isBlank()) {
             pendingShopSelections.put(player.getUniqueId(), shopId);
         } else {
@@ -560,6 +789,114 @@ public class MarketService {
         return playerStores.openStore(player,owner);
     }
 
+    public CompletionStage<String> describeChatLink(Player viewer, String type, String key) {
+        return resolveChatLink(viewer, type, key, false);
+    }
+
+    public CompletionStage<String> openChatLink(Player viewer, String type, String key) {
+        return resolveChatLink(viewer, type, key, true);
+    }
+
+    private CompletionStage<String> resolveChatLink(Player viewer, String type, String key, boolean open) {
+        UUID id = viewer.getUniqueId();
+        AuthSnapshot session = AuthAccess.snapshot(id);
+        if (!canUseMarket(viewer, session)) return CompletableFuture.completedFuture(null);
+        if ("shop".equals(type)) {
+            var shop = shopService == null ? null : shopService.getShop(key);
+            String description = shop != null && shop.permission().isBlank() && (!open || openSystemShop(viewer, key))
+                ? "系统商店 " + shop.displayName() : null;
+            return CompletableFuture.completedFuture(description);
+        }
+        if (shareRequests.size() >= 32) return CompletableFuture.completedFuture(null);
+        var response = new CompletableFuture<String>();
+        if (shareRequests.putIfAbsent(id, response) != null) return CompletableFuture.completedFuture(null);
+        response.whenComplete((value, failure) -> shareRequests.remove(id, response));
+        try {
+            work.async(() -> {
+                try {
+                    if (isStopping()) {
+                        response.complete(null);
+                        return;
+                    }
+                    var target = readChatLink(type, key, id, open);
+                    if (!plugin.isEnabled() || isStopping()) {
+                        response.complete(null);
+                        return;
+                    }
+                    work.main(() -> {
+                        try {
+                            if (target == null || !canUseMarket(viewer, session) || !target.available().getAsBoolean()) {
+                                response.complete(null);
+                                return;
+                            }
+                            String description = target.description().get();
+                            response.complete(!open || target.open().test(viewer) ? description : null);
+                        } catch (RuntimeException | LinkageError failure) {
+                            response.completeExceptionally(failure);
+                        }
+                    });
+                } catch (IllegalArgumentException invalidKey) {
+                    response.complete(null);
+                } catch (RuntimeException | LinkageError failure) {
+                    response.completeExceptionally(failure);
+                }
+            });
+        } catch (java.util.concurrent.RejectedExecutionException stopped) {
+            response.complete(null);
+        }
+        return response.copy();
+    }
+
+    private boolean canUseMarket(Player viewer, AuthSnapshot session) {
+        return !isStopping() && repository != null && isCurrentMarketSession(viewer, session)
+            && viewer.hasPermission("arcartxsuite.market.use");
+    }
+
+    private boolean isCurrentMarketSession(Player viewer, AuthSnapshot session) {
+        if (!session.admitted() || !viewer.isOnline() || Bukkit.getPlayer(session.playerId()) != viewer) return false;
+        return sameMarketAdmission(session);
+    }
+
+    private boolean sameMarketAdmission(AuthSnapshot session) {
+        AuthSnapshot current = AuthAccess.snapshot(session.playerId());
+        return current.admitted() && current.generation() == session.generation()
+            && java.util.Objects.equals(current.connectionId(), session.connectionId());
+    }
+
+    private PreparedMarketLink readChatLink(String type, String key, UUID viewer, boolean open) {
+        return switch (type) {
+            case "auction" -> {
+                if (auctionService == null || auctionRooms == null) yield null;
+                long id = Long.parseLong(key);
+                long readAt = System.nanoTime();
+                AuctionRoomSnapshot room = open ? repository.readAuctionRoom(id, viewer) : null;
+                var lot = open ? (room == null ? null : room.listing()) : repository.getListing(id);
+                if (lot == null || !lot.isActive()) yield null;
+                double price = lot.getType() == AuctionListing.ListingType.BUY_NOW
+                    ? lot.getBuyNowPrice() : Math.max(lot.getCurrentBid(), lot.getStartingBid());
+                yield new PreparedMarketLink(() -> "拍品 #" + lot.getId() + " " + lot.getItemDisplayName() + " · "
+                    + currencyManager.format(lot.getCurrency(), BigDecimal.valueOf(price)), lot::isActive,
+                    player -> openAuctionRoom(player, id, room, readAt));
+            }
+            case "listing" -> {
+                var item = playerStores == null ? null : repository.getPublishedPlayerShopListing(Long.parseLong(key));
+                if (item == null || !item.isActive()) yield null;
+                yield new PreparedMarketLink(() -> "商品 #" + item.getId() + " " + item.getItemDisplayName() + " · "
+                    + currencyManager.format(item.getCurrency(), BigDecimal.valueOf(item.getPrice())), item::isActive,
+                    player -> playerStores.openSharedListing(player, item) && playerStores.isStoreOpen(player));
+            }
+            case "store" -> {
+                var store = playerStores == null ? null : repository.playerShopProfile(UUID.fromString(key));
+                if (store == null || !store.published()) yield null;
+                yield new PreparedMarketLink(() -> "玩家店铺 " + store.shopName(), store::published,
+                    player -> openPlayerStore(player, store.owner()) && playerStores.isStoreOpen(player));
+            }
+            default -> null;
+        };
+    }
+
+    private record PreparedMarketLink(Supplier<String> description, BooleanSupplier available, Predicate<Player> open) {}
+
     public void openPlayerStoreEditor(Player player) {
         if(playerStores==null){player.sendMessage(messages.get("player.pshop-unavailable"));return;}
         playerStores.openEditor(player);
@@ -582,12 +919,17 @@ public class MarketService {
 
     // ─── 客户端包处理 ────────────────────────────────────────
 
-    /** 判断该包是否归本模块处理（供模块层在切主线程前快速判定）。 */
+    List<String> packetIds() {
+        return List.of(config.ui().packetId(), "AXS_MARKET");
+    }
+
+    /** 主动配置 ID 和内置界面的引导 ID 使用现有的精确大小写校验。 */
     public boolean ownsPacket(String packetId) {
         return config.ui().packetId().equals(packetId) || "AXS_MARKET".equals(packetId);
     }
 
     public boolean handleClientPacket(Player player, String packetId, List<String> data) {
+        if (isStopping()) return true;
         if (!ownsPacket(packetId)) return false;
         if (data.isEmpty()) return false;
 
@@ -622,28 +964,33 @@ public class MarketService {
             sendActionState(player, action,true);
             return true;
         }
+        boolean delayedAction = false;
         try {
         switch (action) {
             case "auction_list" -> handleAuctionListPacket(player, data);
-            case "auction_bid" -> handleAuctionBidPacket(player, data);
+            case "auction_bid" -> delayedAction = handleAuctionBidPacket(player, data);
             case "auction_quote" -> handleAuctionQuote(player, data);
             case "auction_room_ui_open" -> {if(data.size()>1)openAuctionRoom(player,parseLongSafe(data.get(1),0));}
             case "auction_room_open", "auction_room_refresh" -> {
-                if(auctionRooms!=null && auctionRooms.selected(player)>0)auctionRooms.request(player);
-                else sendAuctionRoom(player,null);
+                if(auctionRooms!=null && auctionRooms.selected(player)>0) {
+                    if ("auction_room_open".equals(action)) auctionRooms.requestInitial(player);
+                    else auctionRooms.request(player);
+                }
+                else sendAuctionRoom(player,null,null);
             }
             case "auction_room_back" -> {
                 if(auctionRooms!=null)auctionRooms.leave(player.getUniqueId());
                 restoreAuctionBrowse.add(player.getUniqueId());openAuctionUi(player);
             }
-            case "auction_cancel" -> handleAuctionCancelPacket(player, data);
+            case "auction_cancel" -> delayedAction = handleAuctionCancelPacket(player, data);
             case "auction_sell_ui_open" -> openAuctionSellUi(player);
             case "auction_sell_open" -> handleAuctionSellOpenPacket(player);
-            case "auction_list_create" -> handleAuctionListCreatePacket(player, data);
-            case "auction_favorite" -> handleAuctionFavoritePacket(player, data);
+            case "auction_list_create" -> delayedAction = handleAuctionListCreatePacket(player, data);
+            case "auction_favorite" -> delayedAction = handleAuctionFavoritePacket(player, data);
             case "shop_list" -> handleShopListPacket(player, data);
             case "shop_quote" -> handleShopQuote(player, data);
             case "shop_buy" -> handleShopBuyPacket(player, data);
+            case "shop_close" -> closeShopView(player.getUniqueId(), data);
             case "recycle_all" -> handleRecycleAll(player, data);
             case "recycle_single" -> handleRecycleSinglePacket(player, data);
             case "recycle_preview" -> handleRecyclePreviewPacket(player);
@@ -679,9 +1026,9 @@ public class MarketService {
                 }
             case "pshop_list" -> handlePlayerShopListPacket(player, data);
             case "pshop_sellers" -> handlePlayerShopSellersPacket(player, data);
-            case "pshop_buy" -> handlePlayerShopBuyPacket(player, data);
-            case "pshop_cancel" -> handlePlayerShopCancelPacket(player, data);
-            case "pshop_create" -> handlePlayerShopCreatePacket(player, data);
+            case "pshop_buy" -> delayedAction = handlePlayerShopBuyPacket(player, data);
+            case "pshop_cancel" -> delayedAction = handlePlayerShopCancelPacket(player, data);
+            case "pshop_create" -> delayedAction = handlePlayerShopCreatePacket(player, data);
             default -> { return false; }
         }
         return true;
@@ -691,6 +1038,7 @@ public class MarketService {
             if ("shop_quote".equals(action) && data.size() > 2) {
                 Map<String,Object> failed = new LinkedHashMap<>(); failed.put("packetId",config.ui().packetId());
                 failed.put("shopId",data.get(1)); failed.put("itemId",data.get(2)); failed.put("available",false);
+                failed.put("sequence", data.size() > 4 ? data.get(4) : "");
                 sendUiPacket(player,config.ui().shopId(),"shop_quote",failed);
             }
             if ("auction_quote".equals(action) && data.size()>1) {
@@ -700,7 +1048,7 @@ public class MarketService {
             }
             return true;
         } finally {
-            if (requiresActionToken(action)) {
+            if (requiresActionToken(action) && !delayedAction) {
                 actionTokensInFlight.remove(player.getUniqueId());
                 sendActionState(player, action);
             }
@@ -733,56 +1081,14 @@ public class MarketService {
         sendUiPacket(player, AUCTION_SELL_UI_ID, "update", buildAuctionSellPacket(player));
     }
 
-    private void handleAuctionListCreatePacket(Player player, List<String> data) {
-        if (auctionService == null) return;
-        int rawSlot = data.size() > 1 ? parseIntSafe(data.get(1), -1) : -1;
-        double startingBid = data.size() > 2 ? parseDoubleSafe(data.get(2), 0) : 0;
-        String message = data.size() > 3 && data.get(3) != null ? data.get(3) : "";
+    private boolean handleAuctionListCreatePacket(Player player, List<String> data) {
+        int slot = data.size() > 1 ? parseIntSafe(data.get(1), -1) : -1;
+        double bid = data.size() > 2 ? parseDoubleSafe(data.get(2), 0) : 0;
+        String note = data.size() > 3 && data.get(3) != null ? data.get(3) : "";
         long duration = data.size() > 4 ? parseLongSafe(data.get(4), 0) : 0;
         String currency = data.size() > 5 && data.get(5) != null && !data.get(5).isBlank()
             ? data.get(5) : config.auction().defaultCurrency();
-        if (rawSlot < 9 || rawSlot > 44) {
-            player.sendMessage(messages.get("player.sell.invalid-slot"));
-            return;
-        }
-        int slot = toBukkitBackpackSlot(rawSlot);
-        if (startingBid < config.auction().minPrice()
-                || startingBid > config.auction().maxPrice()) {
-            player.sendMessage(messages.get("player.sell.price-out-of-range",
-                formatPrice(config.auction().minPrice()),
-                formatPrice(config.auction().maxPrice())));
-            return;
-        }
-        if (duration < config.auction().minDurationSeconds()
-                || duration > config.auction().maxDurationSeconds()) {
-            player.sendMessage(messages.get("player.sell.invalid-duration"));
-            return;
-        }
-        if (message.length() > config.auction().messageMaxLength()) {
-            player.sendMessage(messages.get("player.sell.message-too-long",
-                String.valueOf(config.auction().messageMaxLength())));
-            return;
-        }
-        message = filterMessage(player, message);
-        if (message == null) return;
-        var currencyOption = config.auction().currencies().stream()
-            .filter(option -> option.id().equalsIgnoreCase(currency))
-            .findFirst().orElse(null);
-        var currencyBridge = currencyOption == null ? null : currencyManager.bridge(currencyOption.id());
-        if (currencyOption == null || currencyBridge == null || !currencyBridge.available()) {
-            player.sendMessage(messages.get("player.sell.invalid-currency"));
-            return;
-        }
-        var result = auctionService.createListing(
-            player, slot, startingBid, currencyOption.id(), duration, message);
-        if (!result.success()) {
-            player.sendMessage(ChatColor.RED + result.error());
-            return;
-        }
-        rotateToken(player, AUCTION_SELL_UI_ID);
-        player.sendMessage(ChatColor.translateAlternateColorCodes((char) 38, config.messages().auctionListed()));
-        openAuctionUi(player);
-        handleAuctionListPacket(player, List.of("auction_list", "0", "all", ""));
+        return handleAuctionModeCreate(player, slot, bid, note, duration, currency, AUCTION_SELL_UI_ID, "auction_list_create");
     }
 
     // ─── 玩家商店包处理 ──────────────────────────────────────
@@ -840,8 +1146,8 @@ public class MarketService {
         return packet;
     }
 
-    private void handlePlayerShopCreatePacket(Player player, List<String> data) {
-        if (playerShopService == null && auctionService == null) return;
+    private boolean handlePlayerShopCreatePacket(Player player, List<String> data) {
+        if (playerShopService == null && auctionService == null) return false;
         // data: [action, slot, price, message, duration, currency, mode, actionToken]
         // mode: "auction" 或 "pshop"
         int rawSlot = data.size() > 1 ? parseIntSafe(data.get(1), -1) : -1;
@@ -854,51 +1160,55 @@ public class MarketService {
 
         if ("auction".equalsIgnoreCase(mode)) {
             // 拍卖行模式：price 作为起拍价，无一口价（纯竞价拍卖）
-            handleAuctionModeCreate(player, rawSlot, price, message, duration, currency);
-            return;
+            return handleAuctionModeCreate(player, rawSlot, price, message, duration, currency, config.ui().sellId(), "pshop_create");
         }
 
         // 玩家商店上架
-        if (playerShopService == null) return;
+        if (playerShopService == null) return false;
         if (rawSlot < 9 || rawSlot > 44) {
             player.sendMessage(messages.get("player.sell.invalid-slot"));
-            return;
+            return false;
         }
         int slot = toBukkitBackpackSlot(rawSlot);
         if (price < config.playerShop().minPrice() || price > config.playerShop().maxPrice()) {
             player.sendMessage(messages.get("player.sell.price-out-of-range",
                 formatPrice(config.playerShop().minPrice()),
                 formatPrice(config.playerShop().maxPrice())));
-            return;
+            return false;
         }
         if (duration < config.playerShop().minDurationSeconds()
                 || duration > config.playerShop().maxDurationSeconds()) {
             player.sendMessage(messages.get("player.sell.invalid-duration"));
-            return;
+            return false;
         }
         if (message.length() > config.playerShop().messageMaxLength()) {
             player.sendMessage(messages.get("player.sell.message-too-long",
                 String.valueOf(config.playerShop().messageMaxLength())));
-            return;
+            return false;
         }
         message = filterMessage(player, message);
-        if (message == null) return;
+        if (message == null) return false;
         var currencyOption = config.playerShop().currencies().stream()
             .filter(option -> option.id().equalsIgnoreCase(currency))
             .findFirst().orElse(null);
         var currencyBridge = currencyOption == null ? null : currencyManager.bridge(currencyOption.id());
         if (currencyOption == null || currencyBridge == null || !currencyBridge.available()) {
             player.sendMessage(messages.get("player.sell.invalid-currency"));
-            return;
+            return false;
         }
-        var result = playerShopService.createListing(player, slot, price, currencyOption.id(), duration, message);
-        if (!result.success()) {
-            player.sendMessage(ChatColor.RED + result.error());
-            return;
+        ItemStack item = player.getInventory().getItem(slot);
+        if (item == null || item.getType().isAir()) {
+            player.sendMessage(ChatColor.RED + "没有可上架的物品");
+            return false;
         }
-        rotateToken(player, config.ui().sellId());
-        player.sendMessage(ChatColor.translateAlternateColorCodes('&', config.messages().playerShopListed()));
-        openPlayerStore(player,player.getUniqueId());
+        if (playerShopService.isBlacklisted(item)) {
+            player.sendMessage(config.messages().itemBlacklisted());
+            return false;
+        }
+        var c = config.playerShop();
+        var terms = new MarketListings.Terms(MarketListingDraft.Kind.PLAYER_SHOP, price, currencyOption.id(), message,
+            duration, playerShopService.getItemDisplayName(item), "", c.listingFee(), c.listingFeeCurrency(), c.maxListingsPerPlayer());
+        return submitListingFromUi(player, config.ui().sellId(), "pshop_create", slot, item, terms);
     }
 
     /**
@@ -906,160 +1216,193 @@ public class MarketService {
      * <p>
      * 与 {@link #handleAuctionListCreatePacket} 不同，此方法使用 sell UI 的 token。
      * price 作为起拍价（startingBid），无一口价（纯竞价拍卖）。
-     * 上架成功后打开拍卖行 UI 供玩家查看。
+     * 提交后显示暂存提示，自然存档确认后发布。
      */
-    private void handleAuctionModeCreate(Player player, int rawSlot, double startingBid,
-                                          String message, long duration, String currency) {
-        if (auctionService == null) return;
+    private boolean handleAuctionModeCreate(Player player, int rawSlot, double startingBid,
+                                          String message, long duration, String currency, String ui, String action) {
+        if (auctionService == null) return false;
         if (rawSlot < 9 || rawSlot > 44) {
             player.sendMessage(messages.get("player.sell.invalid-slot"));
-            return;
+            return false;
         }
         int slot = toBukkitBackpackSlot(rawSlot);
-        if (startingBid < config.auction().minPrice() || startingBid > config.auction().maxPrice()) {
+        if (!Double.isFinite(startingBid) || startingBid < config.auction().minPrice() || startingBid > config.auction().maxPrice()) {
             player.sendMessage(messages.get("player.sell.price-out-of-range",
                 formatPrice(config.auction().minPrice()),
                 formatPrice(config.auction().maxPrice())));
-            return;
+            return false;
         }
         if (duration < config.auction().minDurationSeconds()
                 || duration > config.auction().maxDurationSeconds()) {
             player.sendMessage(messages.get("player.sell.invalid-duration"));
-            return;
+            return false;
         }
         if (message.length() > config.auction().messageMaxLength()) {
             player.sendMessage(messages.get("player.sell.message-too-long",
                 String.valueOf(config.auction().messageMaxLength())));
-            return;
+            return false;
         }
         message = filterMessage(player, message);
-        if (message == null) return;
+        if (message == null) return false;
         var currencyOption = config.auction().currencies().stream()
             .filter(option -> option.id().equalsIgnoreCase(currency))
             .findFirst().orElse(null);
         var currencyBridge = currencyOption == null ? null : currencyManager.bridge(currencyOption.id());
         if (currencyOption == null || currencyBridge == null || !currencyBridge.available()) {
             player.sendMessage(messages.get("player.sell.invalid-currency"));
-            return;
+            return false;
         }
-        // price 作为起拍价（纯竞价拍卖）
-        var result = auctionService.createListing(
-            player, slot, startingBid, currencyOption.id(), duration, message);
-        if (!result.success()) {
-            player.sendMessage(ChatColor.RED + result.error());
-            return;
+        ItemStack item = player.getInventory().getItem(slot);
+        if (item == null || item.getType().isAir()) {
+            player.sendMessage(ChatColor.RED + "没有可上架的物品");
+            return false;
         }
-        // 使用 sell UI 的 token（而非 AUCTION_SELL_UI_ID），与 beginActionToken 一致
-        rotateToken(player, config.ui().sellId());
-        player.sendMessage(ChatColor.translateAlternateColorCodes('&', config.messages().auctionListed()));
-        openAuctionUi(player);
-        handleAuctionListPacket(player, List.of("auction_list", "0", "all", ""));
+        if (auctionService.isBlacklisted(item)) {
+            player.sendMessage(config.messages().itemBlacklisted());
+            return false;
+        }
+        return submitListingFromUi(player, ui, action, slot, item, auctionTerms(item, startingBid, currencyOption.id(), duration, message));
     }
 
     private void handlePlayerShopListPacket(Player player, List<String> data) {
-        if (playerShopService == null) return;
-        if(restorePlayerShopBrowse.remove(player.getUniqueId()))data=playerShopBrowseContext.getOrDefault(player.getUniqueId(),data);
-        // 无论从何处打开本 UI（Screen.open 或 openPlayerShopUi），都在首次列表请求时签发 token，
-        // 保证购买/下架按钮的 enable 条件 var.actionToken != '' 成立
-        issueActionToken(player, config.ui().playerShopId());
-        int page = data.size() > 1 ? parseIntSafe(data.get(1), 0) : 0;
-        String keyword = data.size() > 2 ? data.get(2) : null;
-        String sellerUuid = data.size() > 3 ? data.get(3) : null;
-        if (pendingMyShops.remove(player.getUniqueId())) sellerUuid = player.getUniqueId().toString();
-        page = Math.max(0, page);
-        playerShopBrowseContext.put(player.getUniqueId(),List.of("pshop_list",String.valueOf(page),keyword==null?"":keyword,sellerUuid==null?"":sellerUuid,"refresh"));
-        String cacheKey = listCacheKey("pshop", player, page, keyword, sellerUuid);
-        if (data.size() > 4 && "refresh".equals(data.get(4))) {
-            redisCache.invalidateByPrefix("market:pshop:" + player.getUniqueId() + ":");
-        }
-        Map<String, Object> cached = readListCache(cacheKey);
-        if (cached != null) {
-            sendUiPacket(player, config.ui().playerShopId(), "pshop_list", cached);
-            return;
-        }
+        UUID viewer = player.getUniqueId();
+        AuthSnapshot session = AuthAccess.snapshot(viewer);
+        String ui = config.ui().playerShopId();
+        if (playerShopService == null || !canUseMarket(player, session) || !packetBridge.isUiOpen(player, ui)) return;
+        if (restorePlayerShopBrowse.remove(viewer)) data = playerShopBrowseContext.getOrDefault(viewer, data);
+        String token = tokenMap(ui).computeIfAbsent(viewer, ignored -> UUID.randomUUID().toString());
+        int page = data.size() > 1 ? Math.max(0, parseIntSafe(data.get(1), 0)) : 0;
+        String keyword = data.size() > 2 && data.get(2) != null ? data.get(2) : "";
+        UUID seller = pendingMyShops.remove(viewer) ? viewer : parseSellerFilter(data.size() > 3 ? data.get(3) : null);
+        String sellerId = seller == null ? "" : seller.toString();
+        var context = List.of("pshop_list", String.valueOf(page), keyword, sellerId, "refresh");
+        playerShopBrowseContext.put(viewer, context);
+        if (data.size() > 4 && "refresh".equals(data.get(4))) pendingPlayerShopListInvalidations.add(viewer);
+        pageReads.submit(viewer, MarketPageReads.View.PLAYER_SHOP_LISTINGS,
+            () -> playerShopBrowseContext.get(viewer) == context && currentListView(player, session, ui, token),
+            () -> readMarketList("pshop", viewer, page, keyword, sellerId, true,
+                pendingPlayerShopListInvalidations.remove(viewer), () -> queryPlayerShopPage(page, keyword, seller)),
+            loaded -> sendMarketList(player, ui, "pshop_list", loaded, fresh -> buildPlayerShopPacket(player,
+                fresh.listings(), fresh.page(), fresh.totalPages(), keyword, sellerId)),
+            () -> player.sendMessage(ChatColor.YELLOW + "玩家商品暂不可用，请稍后刷新"));
+    }
 
-        List<PlayerShopListing> listings;
-        int totalCount;
-        if (sellerUuid != null && !sellerUuid.isEmpty() && !"all".equals(sellerUuid)) {
-            try {
-                UUID seller = UUID.fromString(sellerUuid);
-                if (keyword != null && !keyword.isBlank()) {
-                    listings = playerShopService.searchListingsBySeller(seller, keyword, page, PSHOP_PAGE_SIZE);
-                    totalCount = playerShopService.countSearchBySeller(seller, keyword);
-                } else {
-                    listings = playerShopService.getListingsBySeller(seller, page, PSHOP_PAGE_SIZE);
-                    totalCount = playerShopService.countBySeller(seller);
-                }
-            } catch (IllegalArgumentException e) {
-                listings = playerShopService.getActiveListings(page, PSHOP_PAGE_SIZE);
-                totalCount = playerShopService.countActive();
-            }
-        } else if (keyword != null && !keyword.isEmpty()) {
-            listings = playerShopService.searchListings(keyword, page, PSHOP_PAGE_SIZE);
-            totalCount = playerShopService.countSearch(keyword);
+    private static @Nullable UUID parseSellerFilter(String seller) {
+        if (seller == null || seller.isBlank() || "all".equals(seller)) return null;
+        try { return UUID.fromString(seller); }
+        catch (IllegalArgumentException invalid) { return null; }
+    }
+
+    private PlayerShopPage queryPlayerShopPage(int requestedPage, String keyword, @Nullable UUID seller) {
+        boolean search = !keyword.isBlank();
+        int count;
+        if (seller == null) {
+            count = search ? playerShopService.countSearch(keyword) : playerShopService.countActive();
         } else {
-            listings = playerShopService.getActiveListings(page, PSHOP_PAGE_SIZE);
-            totalCount = playerShopService.countActive();
+            count = search ? playerShopService.countSearchBySeller(seller, keyword) : playerShopService.countBySeller(seller);
         }
-        int totalPages = Math.max(1, (totalCount + PSHOP_PAGE_SIZE - 1) / PSHOP_PAGE_SIZE);
-        if (page >= totalPages) {
-            handlePlayerShopListPacket(player, List.of("pshop_list", String.valueOf(totalPages - 1),
-                keyword == null ? "" : keyword, sellerUuid == null ? "" : sellerUuid));
-            return;
+        int totalPages = Math.max(1, (count + PSHOP_PAGE_SIZE - 1) / PSHOP_PAGE_SIZE);
+        int page = Math.min(requestedPage, totalPages - 1);
+        List<PlayerShopListing> listings;
+        if (seller == null) {
+            listings = search ? playerShopService.searchListings(keyword, page, PSHOP_PAGE_SIZE)
+                : playerShopService.getActiveListings(page, PSHOP_PAGE_SIZE);
+        } else {
+            listings = search ? playerShopService.searchListingsBySeller(seller, keyword, page, PSHOP_PAGE_SIZE)
+                : playerShopService.getListingsBySeller(seller, page, PSHOP_PAGE_SIZE);
         }
-        Map<String, Object> packet = buildPlayerShopPacket(player, listings, page, totalPages, keyword, sellerUuid);
-        writeListCache(cacheKey, packet);
-        sendUiPacket(player, config.ui().playerShopId(), "pshop_list", packet);
+        return new PlayerShopPage(listings, page, totalPages);
     }
 
     private void handlePlayerShopSellersPacket(Player player, List<String> data) {
-        if (playerShopService == null) return;
-        int totalCount = playerShopService.countSellers();
-        int totalPages = Math.max(1, (totalCount + PSHOP_SELLERS_PAGE_SIZE - 1) / PSHOP_SELLERS_PAGE_SIZE);
-        int page = data.size() > 1 ? parseIntSafe(data.get(1), 0) : 0;
-        page = Math.max(0, Math.min(page, totalPages - 1));
-        var sellers = playerShopService.getSellers(page, PSHOP_SELLERS_PAGE_SIZE);
-        sendUiPacket(player, config.ui().playerShopId(), "pshop_sellers",
-            buildPlayerShopSellersPacket(player, sellers, page, totalPages));
+        UUID viewer = player.getUniqueId();
+        AuthSnapshot session = AuthAccess.snapshot(viewer);
+        String ui = config.ui().playerShopId();
+        if (playerShopService == null || !canUseMarket(player, session) || !packetBridge.isUiOpen(player, ui)) return;
+        String token = tokenMap(ui).computeIfAbsent(viewer, ignored -> UUID.randomUUID().toString());
+        int requestedPage = data.size() > 1 ? Math.max(0, parseIntSafe(data.get(1), 0)) : 0;
+        pageReads.submit(viewer, MarketPageReads.View.PLAYER_SHOP_SELLERS,
+            () -> currentListView(player, session, ui, token),
+            () -> {
+                int count = playerShopService.countSellers();
+                int totalPages = Math.max(1, (count + PSHOP_SELLERS_PAGE_SIZE - 1) / PSHOP_SELLERS_PAGE_SIZE);
+                int page = Math.min(requestedPage, totalPages - 1);
+                return new PlayerShopSellersPage(playerShopService.getSellers(page, PSHOP_SELLERS_PAGE_SIZE), page, totalPages);
+            },
+            loaded -> sendUiPacket(player, ui, "pshop_sellers",
+                buildPlayerShopSellersPacket(player, loaded.sellers(), loaded.page(), loaded.totalPages())),
+            () -> player.sendMessage(ChatColor.YELLOW + "卖家列表暂不可用，请稍后刷新"));
     }
 
-    private void handlePlayerShopBuyPacket(Player player, List<String> data) {
-        if (playerShopService == null) return;
+    private record PlayerShopPage(List<PlayerShopListing> listings, int page, int totalPages) {}
+    private record PlayerShopSellersPage(List<MarketRepository.PlayerShopSellerInfo> sellers, int page, int totalPages) {}
+
+    private boolean handlePlayerShopBuyPacket(Player player, List<String> data) {
+        if (playerShopService == null) return false;
         long listingId = data.size() > 1 ? parseLongSafe(data.get(1), 0) : 0;
-        var result = playerStores!=null && playerStores.isStoreOpen(player)
-            ?playerShopService.purchaseFromStore(player,listingId,playerStores.selectedOwner(player))
-            :playerShopService.purchase(player, listingId);
-        if (!result.success()) {
-            player.sendMessage(ChatColor.RED + result.error());
-            refreshPlayerShopAfterAction(player, data);
-            return;
-        }
-        player.sendMessage(ChatColor.translateAlternateColorCodes('&',
-            config.messages().playerShopBought().replace("{amount}",
-                currencyManager.format(result.currency(), BigDecimal.valueOf(result.price())))));
-        // 刷新列表
-        refreshPlayerShopAfterAction(player, data);
+        UUID viewer = player.getUniqueId();
+        AuthSnapshot session = AuthAccess.snapshot(viewer);
+        boolean inStore = playerStores != null && playerStores.isStoreOpen(player);
+        UUID owner = inStore ? playerStores.selectedOwner(player) : null;
+        String ui = inStore ? config.ui().playerStoreId() : config.ui().playerShopId();
+        String token = tokenMap(ui).get(viewer);
+        BooleanSupplier authorized = () -> currentListView(player, session, ui, token)
+            && (!inStore || java.util.Objects.equals(owner, playerStores.selectedOwner(player)));
+        if (listingId <= 0 || (inStore && owner == null) || !authorized.getAsBoolean()) return false;
+        Object ticket = new Object();
+        asyncActionTickets.put(viewer, ticket);
+        playerShopService.purchase(player, listingId, owner, currencyManager, authorized).whenComplete((result, failure) -> work.main(() -> {
+            if (!clearTrackedAction(viewer, ticket) || !isCurrentMarketSession(player, session)) return;
+            if (failure != null) {
+                player.sendMessage(ChatColor.RED + "购买结果未确认，请核对交易流水。");
+            } else if (result.success()) {
+                player.sendMessage(ChatColor.translateAlternateColorCodes('&',
+                    config.messages().playerShopBought().replace("{amount}",
+                        currencyManager.format(result.currency(), BigDecimal.valueOf(result.price())))));
+            } else {
+                player.sendMessage(ChatColor.RED + result.error());
+            }
+            if (!authorized.getAsBoolean()) return;
+            try { refreshPlayerShopAfterAction(player, data); }
+            finally { sendActionState(player, "pshop_buy"); }
+        }));
+        return true;
     }
 
-    private void handlePlayerShopCancelPacket(Player player, List<String> data) {
-        if (playerShopService == null) return;
-        if(playerStores!=null && playerStores.isStoreOpen(player) && !player.getUniqueId().equals(playerStores.selectedOwner(player))) {
-            player.sendMessage(ChatColor.RED+"请在自己的店铺中下架商品");return;
+    private boolean handlePlayerShopCancelPacket(Player player, List<String> data) {
+        if (playerShopService == null) return false;
+        UUID viewer = player.getUniqueId();
+        boolean inStore = playerStores != null && playerStores.isStoreOpen(player);
+        if (inStore && !viewer.equals(playerStores.selectedOwner(player))) {
+            player.sendMessage(ChatColor.RED + "请在自己的店铺中下架商品");
+            return false;
         }
         long listingId = data.size() > 1 ? parseLongSafe(data.get(1), 0) : 0;
-        if (playerShopService.cancelListing(player, listingId)) {
-            player.sendMessage(ChatColor.translateAlternateColorCodes('&', config.messages().playerShopCancelled()));
-        } else {
-            player.sendMessage(ChatColor.RED + "下架失败");
-        }
-        refreshPlayerShopAfterAction(player, data);
+        AuthSnapshot session = AuthAccess.snapshot(viewer);
+        String ui = inStore ? config.ui().playerStoreId() : config.ui().playerShopId();
+        String token = tokenMap(ui).get(viewer);
+        BooleanSupplier authorized = () -> currentListView(player, session, ui, token)
+            && (!inStore || viewer.equals(playerStores.selectedOwner(player)));
+        if (listingId <= 0 || !authorized.getAsBoolean()) return false;
+        Object ticket = new Object();
+        asyncActionTickets.put(viewer, ticket);
+        playerShopService.cancelListing(viewer, listingId, false, authorized).whenComplete((removed, failure) -> work.main(() -> {
+            if (!clearTrackedAction(viewer, ticket) || !isCurrentMarketSession(player, session)) return;
+            sendPlayerShopCancellation(player, Boolean.TRUE.equals(removed), failure);
+            if (!authorized.getAsBoolean()) return;
+            try { refreshPlayerShopAfterAction(player, data); }
+            finally { sendActionState(player, "pshop_cancel"); }
+        }));
+        return true;
     }
 
     private void refreshPlayerShopAfterAction(Player player, List<String> data) {
         if(playerStores!=null && playerStores.isStoreOpen(player)){
             rotateToken(player,config.ui().playerStoreId());playerStores.refresh(player);return;
         }
-        handlePlayerShopListPacket(player, List.of("pshop_list", data.size() > 3 ? data.get(3) : "0",
+        rotateToken(player, config.ui().playerShopId());
+        var current = playerShopBrowseContext.get(player.getUniqueId());
+        handlePlayerShopListPacket(player, current != null ? current : List.of("pshop_list", data.size() > 3 ? data.get(3) : "0",
             data.size() > 4 ? data.get(4) : "", data.size() > 5 ? data.get(5) : ""));
         handlePlayerShopSellersPacket(player, List.of("pshop_sellers", "0"));
     }
@@ -1134,23 +1477,21 @@ public class MarketService {
 
     // ─── 玩家商店公共 API ────────────────────────────────────
 
-    public void createPlayerShopListing(Player player, ItemStack item, double price, String currency, long duration) {
-        if (playerShopService == null) {
-            player.sendMessage(messages.get("player.pshop-unavailable"));
-            return;
-        }
-        int slot = player.getInventory().getHeldItemSlot();
-        var result = playerShopService.createListing(player, slot, price, currency, duration, "");
-        if (!result.success()) {
-            player.sendMessage(ChatColor.RED + result.error());
-            return;
-        }
-        player.sendMessage(ChatColor.translateAlternateColorCodes('&', config.messages().playerShopListed()));
-    }
 
     public void cancelPlayerShopListing(Player player, long listingId) {
         if (playerShopService == null) return;
-        if (playerShopService.cancelListing(player, listingId)) {
+        AuthSnapshot session = AuthAccess.snapshot(player.getUniqueId());
+        if (!canUseMarket(player, session)) return;
+        playerShopService.cancelListing(session.playerId(), listingId, false, () -> canUseMarket(player, session))
+            .whenComplete((removed, failure) -> work.main(() -> {
+                if (isCurrentMarketSession(player, session)) sendPlayerShopCancellation(player, Boolean.TRUE.equals(removed), failure);
+            }));
+    }
+
+    private void sendPlayerShopCancellation(Player player, boolean removed, Throwable failure) {
+        if (failure != null) {
+            player.sendMessage(ChatColor.RED + "下架结果未确认，请刷新商品状态或核对交易流水。");
+        } else if (removed) {
             player.sendMessage(ChatColor.translateAlternateColorCodes('&', config.messages().playerShopCancelled()));
         } else {
             player.sendMessage(ChatColor.RED + "下架失败");
@@ -1168,8 +1509,10 @@ public class MarketService {
     }
 
     private void handleAuctionListPacket(Player player, List<String> data) {
-        if(restoreAuctionBrowse.remove(player.getUniqueId()))data=auctionBrowseContext.getOrDefault(player.getUniqueId(),data);
-        if (auctionService == null) return;
+        UUID viewer = player.getUniqueId();
+        if (auctionService == null || !canUseMarket(player, AuthAccess.snapshot(viewer))
+                || !packetBridge.isUiOpen(player, config.ui().auctionId())) return;
+        if(restoreAuctionBrowse.remove(viewer))data=auctionBrowseContext.getOrDefault(viewer,data);
         // 无论从何处打开本 UI（Screen.open 或 openAuctionUi），都在首次列表请求时签发 token，
         // 保证购买/出价/取消按钮的 enable 条件 var.actionToken != '' 成立
         issueActionToken(player, config.ui().auctionId());
@@ -1179,24 +1522,21 @@ public class MarketService {
         String keyword = data.size() > 3 ? data.get(3) : null;
         String pendingCategory=pendingAuctionCategories.remove(player.getUniqueId());
         if(pendingCategory!=null)category=pendingCategory;
-        auctionBrowseContext.put(player.getUniqueId(),List.of("auction_list",String.valueOf(page),category==null?"all":category,keyword==null?"":keyword,"refresh"));
-        String cacheKey = listCacheKey("listings", player, page, category, keyword);
-        if (data.size() > 4 && "refresh".equals(data.get(4))) {
-            redisCache.invalidateByPrefix("market:listings:" + player.getUniqueId() + ":");
-        }
-        Map<String, Object> cached = readListCache(cacheKey);
-        if (cached != null) {
-            sendUiPacket(player, config.ui().auctionId(), "update", cached);
-            return;
-        }
+        auctionBrowseContext.put(viewer, List.of("auction_list", String.valueOf(page), category == null ? "all" : category,
+            keyword == null ? "" : keyword, "refresh"));
+        enqueueAuctionPage(player, true, data.size() > 4 && "refresh".equals(data.get(4)));
+    }
 
+    private record AuctionPage(List<AuctionListing> listings, Set<Long> favorites, int page, int totalPages) {}
+
+    private AuctionPage queryAuctionPage(UUID player, int page, String category, String keyword) {
         int totalCount;
         if ("ending".equals(category) || "participating".equals(category)) {
-            totalCount=repository.countBrowseAuction(category,player.getUniqueId(),keyword);
+            totalCount=repository.countBrowseAuction(category,player,keyword);
         } else if ("favorites".equals(category)) {
-            totalCount=repository.countFavoriteListings(player.getUniqueId(),keyword);
+            totalCount=repository.countFavoriteListings(player,keyword);
         } else if ("my".equals(category)) {
-            totalCount = auctionService.countMy(player.getUniqueId());
+            totalCount = auctionService.countMy(player);
         } else if (keyword != null && !keyword.isEmpty()) {
             totalCount = auctionService.countSearch(keyword);
         } else if (category != null && !category.isEmpty() && !"all".equals(category)) {
@@ -1209,11 +1549,11 @@ public class MarketService {
 
         List<AuctionListing> listings;
         if ("ending".equals(category) || "participating".equals(category)) {
-            listings=repository.browseAuction(category,player.getUniqueId(),keyword,page*AUCTION_PAGE_SIZE,AUCTION_PAGE_SIZE);
+            listings=repository.browseAuction(category,player,keyword,page*AUCTION_PAGE_SIZE,AUCTION_PAGE_SIZE);
         } else if ("favorites".equals(category)) {
-            listings=repository.favoriteListings(player.getUniqueId(),keyword,page*AUCTION_PAGE_SIZE,AUCTION_PAGE_SIZE);
+            listings=repository.favoriteListings(player,keyword,page*AUCTION_PAGE_SIZE,AUCTION_PAGE_SIZE);
         } else if ("my".equals(category)) {
-            listings = auctionService.getMyListings(player.getUniqueId(), page, AUCTION_PAGE_SIZE);
+            listings = auctionService.getMyListings(player, page, AUCTION_PAGE_SIZE);
         } else if (keyword != null && !keyword.isEmpty()) {
             listings = auctionService.searchListings(keyword, page, AUCTION_PAGE_SIZE);
         } else if (category != null && !category.isEmpty() && !"all".equals(category)) {
@@ -1222,11 +1562,149 @@ public class MarketService {
             listings = auctionService.getActiveListings(page, AUCTION_PAGE_SIZE);
         }
 
-        Map<String, Object> packet = buildAuctionPacket(player, listings, page, totalPages,
-            category != null ? category : "all" );
+        return new AuctionPage(listings, new java.util.HashSet<>(repository.getFavorites(player)), page, totalPages);
+    }
+
+    private Map<String, Object> auctionPagePacket(Player player, AuctionPage result, String category, String keyword) {
+        Map<String, Object> packet = buildAuctionPacket(player, result.listings(), result.favorites(), result.page(),
+            result.totalPages(), category != null ? category : "all");
         packet.put("keyword", keyword == null ? "" : keyword);
-        writeListCache(cacheKey, packet);
-        sendUiPacket(player, config.ui().auctionId(), "update", packet);
+        return packet;
+    }
+
+    private void refreshOpenAuctionBrowsers() {
+        if (isStopping()) return;
+        Runnable refresh = () -> {
+            if (auctionService == null || packetBridge == null) return;
+            for (Player player : Bukkit.getOnlinePlayers()) {
+                if (packetBridge.isUiOpen(player, config.ui().auctionId())) refreshAuctionBrowser(player);
+            }
+        };
+        if (Bukkit.isPrimaryThread()) refresh.run();
+        else work.main(refresh);
+    }
+
+    private boolean needsAuctionCatchUp() {
+        var channel = crossServerChannel;
+        return channel != null && channel.requiresSharedStateCatchUp()
+            && repository instanceof JdbcMarketRepository jdbc && jdbc.getDescriptor().isMysql();
+    }
+
+    private boolean hasOpenAuctionView() {
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            if (isAuctionUiOpen(player)) return true;
+        }
+        return false;
+    }
+
+    private void catchUpAuctionViews() {
+        if (!needsAuctionCatchUp() || readingAuctionRevision || !hasOpenAuctionView()) return;
+        var currentRepository = repository;
+        readingAuctionRevision = true;
+        work.async(() -> {
+            long revision = -1;
+            try { revision = currentRepository.auctionSettlementRevision(); }
+            catch (RuntimeException failure) { logger.fine("[Market] 无法核对拍卖结算版本: " + failure.getMessage()); }
+            long latest = revision;
+            work.main(() -> {
+                readingAuctionRevision = false;
+                if (repository != currentRepository || latest < 0 || latest == observedAuctionRevision) return;
+                refreshOpenAuctionBrowsers();
+                boolean roomsQueued = true;
+                if (auctionRooms != null) {
+                    for (Player player : Bukkit.getOnlinePlayers()) {
+                        if (!auctionRooms.request(player)) roomsQueued = false;
+                    }
+                }
+                if (roomsQueued) observedAuctionRevision = latest;
+            });
+        });
+    }
+
+    private void refreshAuctionBrowser(Player player) {
+        enqueueAuctionPage(player, false, false);
+    }
+
+    private void enqueueAuctionPage(Player player, boolean interactive, boolean invalidate) {
+        UUID viewer = player.getUniqueId();
+        AuthSnapshot session = AuthAccess.snapshot(viewer);
+        String ui = config.ui().auctionId();
+        var context = auctionBrowseContext.get(viewer);
+        if (context == null || !canUseMarket(player, session) || !packetBridge.isUiOpen(player, ui)) return;
+        String token = tokenMap(ui).get(viewer);
+        if (invalidate) pendingAuctionListInvalidations.add(viewer);
+        int page = parseIntSafe(context.get(1), 0);
+        String category = context.get(2), keyword = context.get(3);
+        pageReads.submit(viewer, MarketPageReads.View.AUCTIONS,
+            () -> auctionBrowseContext.get(viewer) == context && currentListView(player, session, ui, token),
+            () -> readMarketList("listings", viewer, page, category, keyword, interactive && !needsAuctionCatchUp(),
+                pendingAuctionListInvalidations.remove(viewer), () -> queryAuctionPage(viewer, page, category, keyword)),
+            loaded -> sendMarketList(player, ui, "update", loaded, fresh -> auctionPagePacket(player, fresh, category, keyword)),
+            () -> { if (interactive) player.sendMessage(ChatColor.YELLOW + "拍卖列表暂不可用，请稍后刷新"); });
+    }
+
+    private boolean currentListView(Player player, AuthSnapshot session, String ui, String token) {
+        return canUseMarket(player, session) && packetBridge.isUiOpen(player, ui)
+            && java.util.Objects.equals(tokenMap(ui).get(session.playerId()), token);
+    }
+
+    private <T> CachedList<T> readMarketList(String kind, UUID viewer, int page, String first, String second, boolean cache,
+                                             boolean invalidate, Supplier<T> query) {
+        if (invalidate && redisCache != null) redisCache.invalidateByPrefix("market:" + kind + ":" + viewer + ":");
+        String key = cache && redisCache != null ? redisCache.versionedListPageKey(viewer,
+            listCacheKey(kind, viewer, page, first, second)) : null;
+        Map<String, Object> cached = key != null && !invalidate ? readListCache(key) : null;
+        return new CachedList<>(cached, cached == null ? query.get() : null, key);
+    }
+
+    private <T> void sendMarketList(Player player, String ui, String handler, CachedList<T> result,
+                                    java.util.function.Function<T, Map<String, Object>> render) {
+        var packet = result.cached();
+        if (packet == null) {
+            packet = render.apply(result.fresh());
+            cacheListPacketAsync(result.cacheKey(), packet);
+        }
+        sendUiPacket(player, ui, handler, packet);
+    }
+
+    private record CachedList<T>(Map<String, Object> cached, T fresh, String cacheKey) {}
+
+    private void cacheListPacketAsync(String key, Map<String, Object> packet) {
+        if (key == null || !listCacheWrites.tryAcquire()) return;
+        var copy = new LinkedHashMap<>(packet);
+        try {
+            work.async(() -> {
+                try { writeListCache(key, copy); }
+                finally { listCacheWrites.release(); }
+            });
+        } catch (java.util.concurrent.RejectedExecutionException closing) {
+            listCacheWrites.release();
+        }
+    }
+
+    private void invalidateListCacheAsync(String prefix) {
+        pendingListCacheInvalidations.add(prefix);
+        dispatchCacheInvalidations();
+    }
+
+    private void dispatchCacheInvalidations() {
+        if (isStopping() || !listCacheInvalidationRunning.compareAndSet(false, true)) return;
+        try {
+            work.async(() -> {
+                try {
+                    while (!isStopping() && !pendingListCacheInvalidations.isEmpty()) {
+                        for (var prefix : List.copyOf(pendingListCacheInvalidations)) {
+                            if (pendingListCacheInvalidations.remove(prefix)) redisCache.invalidateByPrefix(prefix);
+                        }
+                    }
+                } finally {
+                    listCacheInvalidationRunning.set(false);
+                    if (!pendingListCacheInvalidations.isEmpty() && !isStopping()) dispatchCacheInvalidations();
+                }
+            });
+        } catch (java.util.concurrent.RejectedExecutionException closing) {
+            listCacheInvalidationRunning.set(false);
+        }
     }
 
     private String activeAuctionUi(Player player) {
@@ -1242,10 +1720,17 @@ public class MarketService {
     }
 
     public boolean openAuctionRoom(Player player,long id) {
+        return openAuctionRoom(player, id, null, 0);
+    }
+
+    private boolean openAuctionRoom(Player player, long id, @Nullable AuctionRoomSnapshot initial, long readAt) {
         if(auctionService==null || auctionRooms==null) {player.sendMessage(messages.get("player.auction-unavailable"));return false;}
         if(id<=0){player.sendMessage(ChatColor.RED+"拍品 ID 必须为正整数");return false;}
-        auctionRooms.select(player,id);
-        packetBridge.openUi(player,config.ui().auctionRoomId());
+        auctionRooms.select(player,id,initial,readAt);
+        if (!packetBridge.openUi(player,config.ui().auctionRoomId())) {
+            auctionRooms.leave(player.getUniqueId());
+            return false;
+        }
         issueActionToken(player,config.ui().auctionRoomId());
         return true;
     }
@@ -1256,16 +1741,20 @@ public class MarketService {
 
     private void refreshAuctionSurface(Player player,List<String> listRequest) {
         if(auctionRooms!=null && packetBridge.isUiOpen(player,config.ui().auctionRoomId()))auctionRooms.request(player);
-        else handleAuctionListPacket(player,listRequest);
+        else if (packetBridge.isUiOpen(player, config.ui().auctionId())) {
+            auctionBrowseContext.putIfAbsent(player.getUniqueId(), listRequest);
+            refreshAuctionBrowser(player);
+        }
     }
 
     private String auctionBidRevision(AuctionListing listing) {
-        return listing.getId()+"|"+listing.getCurrentBid()+"|"+listing.getHighestBidder()+"|"+listing.getExpiresAt()+"|"+listing.getStatus();
+        return AuctionBidTerms.revision(listing);
     }
 
     private String auctionTime(long time) {return new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date(time));}
 
-    private void sendAuctionRoom(Player player,xuanmo.arcartxsuite.market.auction.AuctionRoomSnapshot snapshot) {
+    private void sendAuctionRoom(Player player, @Nullable AuctionRoomSnapshot snapshot, @Nullable BigDecimal balance) {
+        if (!canUseMarket(player, AuthAccess.snapshot(player.getUniqueId()))) return;
         Map<String,Object> packet=new LinkedHashMap<>();packet.put("packetId",config.ui().packetId());packet.put("found",snapshot!=null);
         if(snapshot==null){packet.put("message","拍品不存在或已被清理，请返回拍卖大厅");sendUiPacket(player,config.ui().auctionRoomId(),"room_snapshot",packet);return;}
         AuctionListing lot=snapshot.listing();boolean seller=lot.getSeller().equals(player.getUniqueId());
@@ -1289,8 +1778,7 @@ public class MarketService {
         packet.put("highest",leading?"你（领先）":lot.getHighestBidder()==null?"暂无领先者":nameFromUuid(lot.getHighestBidder()));
         double myHighest=Math.max(snapshot.myHighestBid(),leading?lot.getCurrentBid():0);
         packet.put("myHighest",myHighest>0?currencyManager.format(lot.getCurrency(),BigDecimal.valueOf(myHighest)):"尚无有效出价");
-        var bridge=currencyManager.bridge(lot.getCurrency());
-        packet.put("myBalance",bridge!=null && bridge.available()?currencyManager.format(lot.getCurrency(),bridge.balance(player)):"货币暂不可用");
+        packet.put("myBalance", balance == null ? "货币暂不可用" : currencyManager.format(lot.getCurrency(), balance));
         packet.put("myHeld",currencyManager.format(lot.getCurrency(),leading?BigDecimal.valueOf(lot.getCurrentBid()):BigDecimal.ZERO));
         packet.put("remainingSeconds",Math.max(0,(lot.getExpiresAt()-System.currentTimeMillis()+999)/1000));
         packet.put("createdAt",auctionTime(lot.getCreatedAt()));packet.put("deadline",auctionTime(lot.getExpiresAt()));
@@ -1339,146 +1827,550 @@ public class MarketService {
     private void handleAuctionQuote(Player player,List<String> data) {
         if(auctionService==null || data.size()<3 || !isAuctionUiOpen(player))return;
         long id=parseLongSafe(data.get(1),0);
-        if(!isSelectedAuctionIntent(player,id))return;
-        var listing=repository.getListing(id);
-        Map<String,Object> packet=new LinkedHashMap<>(); packet.put("packetId",config.ui().packetId());packet.put("id",String.valueOf(id));
-        boolean active=listing!=null && listing.isActive() && listing.getType()!=AuctionListing.ListingType.BUY_NOW
-            && !listing.getSeller().equals(player.getUniqueId());
-        packet.put("available",active);
-        packet.put("revision",listing==null?"":auctionBidRevision(listing));
-        if(active) {
-            BigDecimal minimum=auctionService.minimumBid(listing);
-            double requested=parseDoubleSafe(data.get(2),Double.NaN);
-            BigDecimal amount=Double.isFinite(requested) && requested==0?minimum
-                :Double.isFinite(requested)?BigDecimal.valueOf(requested):BigDecimal.ZERO;
-            if("step1".equals(data.get(2)) || "step2".equals(data.get(2))) {
-                amount=minimum;
-                int steps="step1".equals(data.get(2))?1:2;
-                for(int step=0;step<steps;step++)amount=amount.add(amount.multiply(BigDecimal.valueOf(config.auction().minBidIncrementRatio()))
-                    .max(BigDecimal.valueOf(config.auction().minBidIncrementAbsolute()))).setScale(auctionService.currencyScale(listing.getCurrency()),java.math.RoundingMode.CEILING);
-            }
-            boolean own=player.getUniqueId().equals(listing.getHighestBidder());
-            BigDecimal held=own?BigDecimal.valueOf(listing.getCurrentBid()):BigDecimal.ZERO;
-            BigDecimal debit=amount.subtract(held).max(BigDecimal.ZERO);
-            var bridge=currencyManager.bridge(listing.getCurrency());
-            boolean allowed=amount.compareTo(minimum)>=0 && amount.compareTo(BigDecimal.valueOf(config.auction().maxPrice()))<=0
-                && amount.stripTrailingZeros().scale()<=auctionService.currencyScale(listing.getCurrency())
-                && bridge!=null && bridge.available() && bridge.balance(player).compareTo(debit)>=0;
-            packet.put("canSubmit",allowed);packet.put("amount",amount.toPlainString());packet.put("minimum",minimum.toPlainString());
-            packet.put("current",listing.getHighestBidder()==null?"暂无出价":currencyManager.format(listing.getCurrency(),BigDecimal.valueOf(listing.getCurrentBid())));
-            packet.put("highest",own?"你正在领先":listing.getHighestBidder()==null?"暂无领先者":nameFromUuid(listing.getHighestBidder()));
-            packet.put("debit",currencyManager.format(listing.getCurrency(),debit));packet.put("held",currencyManager.format(listing.getCurrency(),held));
-            packet.put("deadline",new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date(listing.getExpiresAt())));
-            packet.put("protection",config.auction().endProtectionEnabled()?"临近结束有效出价可延时；累计最多 "+config.auction().endMaxExtensionSeconds()+" 秒":"未启用临近结束延时");
-            packet.put("reason",allowed?"确认后才扣款；报价不会自动提交出价":"金额低于最低出价、精度不符、超出上限或余额不足，请修改后重新报价");
-        } else packet.put("reason","该拍卖已结束、已下架或不能对自己的商品出价");
-        sendUiPacket(player,activeAuctionUi(player),"auction_quote",packet);
+        if(id<=0 || !isSelectedAuctionIntent(player,id))return;
+        UUID viewer = player.getUniqueId();
+        String ui = activeAuctionUi(player);
+        var session = AuthAccess.snapshot(viewer);
+        String token = tokenMap(ui).get(viewer);
+        if (token == null || !session.admitted()) return;
+        var state = auctionQuotes.computeIfAbsent(viewer, ignored -> new AuctionQuotes());
+        var request = new AuctionQuoteRequest(player, session, ui, token, id, data.get(2));
+        if (state.reading != null && request.equals(state.latest)) return;
+        state.latest = request;
+        state.issued = null;
+        if (state.reading == null) startAuctionQuote(state, request);
     }
 
-    private void handleAuctionBidPacket(Player player, List<String> data) {
-        if (auctionService == null) return;
-        long listingId = data.size() > 1 ? parseLongSafe(data.get(1), 0) : 0;
-        if(!isSelectedAuctionIntent(player,listingId))return;
-        double amount = data.size() > 2 ? parseDoubleSafe(data.get(2), 0) : 0;
-        if (listingId <= 0 || amount <= 0) return;
-        var result = auctionService.placeBid(player, listingId, amount);
-        if (result.success()) {
-            rotateToken(player, activeAuctionUi(player));
-            player.sendMessage(ChatColor.translateAlternateColorCodes('&',
-                config.messages().auctionBidPlaced().replace("{amount}", String.valueOf(result.amount()))));
-        } else {
-            player.sendMessage(ChatColor.RED + result.error());
+    private void startAuctionQuote(AuctionQuotes state, AuctionQuoteRequest request) {
+        if (!currentAuctionQuote(state, request)) return;
+        if (!auctionQuoteSlots.tryAcquire()) {
+            sendUnavailableAuctionQuote(request, "报价请求较多，请稍后重试");
+            return;
         }
-        if(auctionRooms!=null)auctionRooms.changed(listingId);
-        refreshAuctionSurface(player, List.of("auction_list", data.size() > 4 ? data.get(4) : "0",
-            data.size() > 5 ? data.get(5) : "all", data.size() > 6 ? data.get(6) : ""));
+        state.reading = request;
+        readAuctionQuote(state, request, () -> repository.readAuctionBidTerms(request.listing()), terms -> {
+            if (terms == null || !terms.canBid(request.viewer())) {
+                sendUnavailableAuctionQuote(request, "该拍卖已结束、已下架或不能对自己的商品出价");
+                finishAuctionQuote(state, request);
+                return;
+            }
+            int scale = auctionService.currencyScale(terms.currency());
+            BigDecimal minimum = auctionService.minimumBid(terms.startingBid(), terms.currentBid(), terms.highestBidder() != null, scale);
+            double requested = parseDoubleSafe(request.amount(), Double.NaN);
+            BigDecimal amount = Double.isFinite(requested) ? (requested == 0 ? minimum : BigDecimal.valueOf(requested)) : BigDecimal.ZERO;
+            int steps = "step1".equals(request.amount()) ? 1 : "step2".equals(request.amount()) ? 2 : 0;
+            if (steps > 0) {
+                amount = minimum;
+                for (int step = 0; step < steps; step++) {
+                    amount = amount.add(amount.multiply(BigDecimal.valueOf(config.auction().minBidIncrementRatio()))
+                        .max(BigDecimal.valueOf(config.auction().minBidIncrementAbsolute()))).setScale(scale, java.math.RoundingMode.CEILING);
+                }
+            }
+            boolean own = request.viewer().equals(terms.highestBidder());
+            BigDecimal held = own ? BigDecimal.valueOf(terms.currentBid()) : BigDecimal.ZERO;
+            var quote = new CalculatedAuctionQuote(terms, minimum, amount, held, amount.subtract(held).max(BigDecimal.ZERO));
+            boolean validAmount = amount.compareTo(minimum) >= 0
+                && amount.compareTo(BigDecimal.valueOf(config.auction().maxPrice())) <= 0
+                && amount.stripTrailingZeros().scale() <= scale;
+            var bridge = validAmount ? currencyManager.bridge(terms.currency()) : null;
+            if (bridge == null || !bridge.available()) {
+                sendAuctionQuote(state, request, quote, false);
+                return;
+            }
+            var backgroundBalance = bridge.prepareBackgroundBalance(request.player());
+            if (backgroundBalance == null) {
+                sendAuctionQuote(state, request, quote, bridge.balance(request.player()).compareTo(quote.debit()) >= 0);
+            } else {
+                readAuctionQuote(state, request, backgroundBalance,
+                    balance -> sendAuctionQuote(state, request, quote, balance.compareTo(quote.debit()) >= 0));
+            }
+        });
     }
 
-    private void handleAuctionCancelPacket(Player player, List<String> data) {
+    private <T> void readAuctionQuote(AuctionQuotes state, AuctionQuoteRequest request, Supplier<T> query, Consumer<T> done) {
+        try {
+            work.async(() -> {
+                try {
+                    T result = query.get();
+                    work.main(() -> {
+                        if (!currentAuctionQuote(state, request)) {
+                            finishAuctionQuote(state, request);
+                            return;
+                        }
+                        try {
+                            done.accept(result);
+                        } catch (RuntimeException failure) {
+                            failAuctionQuote(state, request, failure);
+                        }
+                    });
+                } catch (RuntimeException failure) {
+                    work.main(() -> failAuctionQuote(state, request, failure));
+                }
+            });
+        } catch (java.util.concurrent.RejectedExecutionException stopping) {
+            finishAuctionQuote(state, request);
+        }
+    }
+
+    private boolean currentAuctionQuote(AuctionQuotes state, AuctionQuoteRequest request) {
+        return auctionQuotes.get(request.viewer()) == state && state.latest == request && currentAuctionView(request);
+    }
+
+    private boolean currentAuctionView(AuctionQuoteRequest request) {
+        Player player = request.player();
+        return canUseMarket(player, request.session()) && request.ui().equals(activeAuctionUi(player))
+            && packetBridge.isUiOpen(player, request.ui()) && request.token().equals(tokenMap(request.ui()).get(request.viewer()))
+            && isSelectedAuctionIntent(player, request.listing());
+    }
+
+    private void failAuctionQuote(AuctionQuotes state, AuctionQuoteRequest request, RuntimeException failure) {
+        logger.warning("读取拍卖报价失败 " + request.listing() + ": " + failure.getMessage());
+        try {
+            if (currentAuctionQuote(state, request)) {
+                state.issued = null;
+                sendUnavailableAuctionQuote(request, "报价暂不可用，请稍后重试");
+            }
+        } finally {
+            finishAuctionQuote(state, request);
+        }
+    }
+
+    private void finishAuctionQuote(AuctionQuotes state, AuctionQuoteRequest request) {
+        if (state.reading != request) return;
+        state.reading = null;
+        auctionQuoteSlots.release();
+        if (auctionQuotes.get(request.viewer()) == state && state.latest != request) startAuctionQuote(state, state.latest);
+    }
+
+    private void sendUnavailableAuctionQuote(AuctionQuoteRequest request, String reason) {
+        sendUiPacket(request.player(), request.ui(), "auction_quote", new LinkedHashMap<>(Map.of(
+            "packetId", config.ui().packetId(), "id", String.valueOf(request.listing()), "available", false,
+            "revision", "", "reason", reason)));
+    }
+
+    private void sendAuctionQuote(AuctionQuotes state, AuctionQuoteRequest request, CalculatedAuctionQuote quote, boolean allowed) {
+        AuctionBidTerms terms = quote.terms();
+        if (!terms.canBid(request.viewer())) {
+            sendUnavailableAuctionQuote(request, "该拍卖已结束、已下架或不能对自己的商品出价");
+            finishAuctionQuote(state, request);
+            return;
+        }
+        String currency = terms.currency();
+        UUID highest = terms.highestBidder();
+        String highestName = highest == null ? "暂无领先者" : request.viewer().equals(highest) ? "你正在领先"
+            : terms.highestBidderName() == null || terms.highestBidderName().isBlank()
+                ? highest.toString().substring(0, 8) : terms.highestBidderName();
+        Map<String, Object> packet = new LinkedHashMap<>();
+        packet.put("packetId", config.ui().packetId());
+        packet.put("id", String.valueOf(terms.id()));
+        packet.put("available", true);
+        packet.put("revision", terms.revision());
+        packet.put("canSubmit", allowed);
+        packet.put("amount", quote.amount().toPlainString());
+        packet.put("minimum", quote.minimum().toPlainString());
+        packet.put("current", highest == null ? "暂无出价" : currencyManager.format(currency, BigDecimal.valueOf(terms.currentBid())));
+        packet.put("highest", highestName);
+        packet.put("debit", currencyManager.format(currency, quote.debit()));
+        packet.put("held", currencyManager.format(currency, quote.held()));
+        packet.put("deadline", auctionTime(terms.expiresAt()));
+        packet.put("protection", config.auction().endProtectionEnabled()
+            ? "临近结束有效出价可延时；累计最多 " + config.auction().endMaxExtensionSeconds() + " 秒" : "未启用临近结束延时");
+        packet.put("reason", allowed ? "确认后才扣款；报价不会自动提交出价" : "金额低于最低出价、精度不符、超出上限或余额不足，请修改后重新报价");
+        if (allowed) state.issued = new IssuedAuctionQuote(request, quote.amount().doubleValue(), terms.revision(), System.nanoTime());
+        sendUiPacket(request.player(), request.ui(), "auction_quote", packet);
+        finishAuctionQuote(state, request);
+    }
+
+    private static final class AuctionQuotes {
+        AuctionQuoteRequest latest;
+        IssuedAuctionQuote issued;
+        AuctionQuoteRequest reading;
+    }
+
+    private record AuctionQuoteRequest(Player player, AuthSnapshot session, String ui, String token, long listing, String amount) {
+        UUID viewer() { return session.playerId(); }
+    }
+
+    private record CalculatedAuctionQuote(AuctionBidTerms terms, BigDecimal minimum, BigDecimal amount, BigDecimal held, BigDecimal debit) {}
+    private record IssuedAuctionQuote(AuctionQuoteRequest request, double amount, String revision, long issuedAt) {}
+
+    private boolean handleAuctionBidPacket(Player player, List<String> data) {
+        if (auctionService == null) return false;
         long listingId = data.size() > 1 ? parseLongSafe(data.get(1), 0) : 0;
-        if(!isSelectedAuctionIntent(player,listingId))return;
-        if (listingId <= 0) return;
-        cancelListing(player, listingId);
+        if(!isSelectedAuctionIntent(player,listingId))return false;
+        double amount = data.size() > 2 ? parseDoubleSafe(data.get(2), 0) : 0;
+        if (listingId <= 0 || !Double.isFinite(amount) || amount <= 0) return false;
+        var quotes = auctionQuotes.get(player.getUniqueId());
+        var quote = quotes == null ? null : quotes.issued;
+        if (quote == null || quote.request().listing() != listingId || Double.compare(quote.amount(), amount) != 0
+                || System.nanoTime() - quote.issuedAt() >= AUCTION_QUOTE_TTL || !currentAuctionQuote(quotes, quote.request())) {
+            player.sendMessage(ChatColor.RED + "报价已过期或金额已变化，请重新报价后提交");
+            return false;
+        }
+        quotes.issued = null;
+        var request = quote.request();
+        var confirmation = new AuctionService.BidConfirmation(listingId, amount, quote.revision(), quote.issuedAt() + AUCTION_QUOTE_TTL);
+        List<String> refresh = List.of("auction_list", data.size() > 4 ? data.get(4) : "0",
+            data.size() > 5 ? data.get(5) : "all", data.size() > 6 ? data.get(6) : "");
+        auctionService.placeBid(player, confirmation, currencyManager, () -> currentAuctionView(request), result -> {
+            if (result.success() && auctionRooms != null) auctionRooms.changed(listingId);
+            if (!isCurrentMarketSession(player, request.session())) return;
+            actionTokensInFlight.remove(request.viewer());
+            boolean showing = currentAuctionView(request);
+            if (result.success()) {
+                if (showing) rotateToken(player, request.ui());
+                player.sendMessage(ChatColor.translateAlternateColorCodes('&',
+                    config.messages().auctionBidPlaced().replace("{amount}", String.valueOf(result.amount()))));
+                if (result.extended()) player.sendMessage(ChatColor.GOLD + "本次有效出价触发临近结束延时，请查看最新截止时间。");
+            } else {
+                player.sendMessage(ChatColor.RED + result.error());
+            }
+            if (showing) {
+                sendActionState(player, "auction_bid");
+                refreshAuctionSurface(player, refresh);
+            }
+        });
+        return true;
+    }
+
+    private boolean handleAuctionCancelPacket(Player player, List<String> data) {
+        long listingId = data.size() > 1 ? parseLongSafe(data.get(1), 0) : 0;
+        if (listingId <= 0 || !isSelectedAuctionIntent(player, listingId)) return false;
+        UUID viewer = player.getUniqueId();
+        AuthSnapshot session = AuthAccess.snapshot(viewer);
+        String ui = activeAuctionUi(player);
+        String token = tokenMap(ui).get(viewer);
+        BooleanSupplier viewValid = () -> token != null && token.equals(tokenMap(ui).get(viewer))
+            && ui.equals(activeAuctionUi(player)) && packetBridge.isUiOpen(player, ui) && isSelectedAuctionIntent(player, listingId);
         // 取消后刷新当前页列表
         String page = data.size() > 3 && data.get(3) != null ? data.get(3) : "0";
         String category = data.size() > 4 && data.get(4) != null ? data.get(4) : "all";
         String search = data.size() > 5 && data.get(5) != null ? data.get(5) : "";
-        if(auctionRooms!=null)auctionRooms.changed(listingId);
-        refreshAuctionSurface(player, List.of("auction_list", page, category, search));
+        cancelOwnedAuction(player, listingId, session, viewValid, success -> {
+            actionTokensInFlight.remove(viewer);
+            if (!viewValid.getAsBoolean()) return;
+            if (success) rotateToken(player, ui);
+            sendActionState(player, "auction_cancel");
+            refreshAuctionSurface(player, List.of("auction_list", page, category, search));
+        });
+        return true;
     }
 
-    private void handleAuctionFavoritePacket(Player player, List<String> data) {
-        if (auctionService == null) return;
+    private boolean handleAuctionFavoritePacket(Player player, List<String> data) {
+        if (auctionService == null) return false;
         long listingId = data.size() > 1 ? parseLongSafe(data.get(1), 0) : 0;
-        if(!isSelectedAuctionIntent(player,listingId))return;
-        if (listingId <= 0) return;
-        if(repository.getListing(listingId)==null) {player.sendMessage(ChatColor.YELLOW+"该拍卖已不存在");return;}
-        if(!repository.isFavorite(player.getUniqueId(),listingId) && repository.getFavorites(player.getUniqueId()).size()>=100) {
-            player.sendMessage(ChatColor.YELLOW+"最多关注100件商品，请先取消部分关注");return;
+        if (listingId <= 0 || !isSelectedAuctionIntent(player, listingId)) return false;
+        UUID viewer = player.getUniqueId();
+        AuthSnapshot session = AuthAccess.snapshot(viewer);
+        if (!canUseMarket(player, session)) return false;
+        if (!auctionFavoriteSlots.tryAcquire()) {
+            player.sendMessage(ChatColor.YELLOW + "关注请求较多，请稍后重试");
+            return false;
         }
-        boolean following=auctionService.toggleFavorite(player.getUniqueId(), listingId);
-        player.sendMessage(following?ChatColor.GREEN+"已关注，可在我的关注中查看；结束提醒随通知配置生效。":ChatColor.GRAY+"已取消关注");
-        rotateToken(player,activeAuctionUi(player));
-        if(auctionRooms!=null)auctionRooms.changed(listingId);
-        redisCache.invalidateByPrefix("market:listings:");
-        // 保留玩家当前分类与搜索条件（由客户端随包附带），避免收藏后列表跳回"全部"
+        String ui = activeAuctionUi(player);
+        String token = tokenMap(ui).get(viewer);
         String currentCategory = data.size() > 2 && data.get(2) != null ? data.get(2) : "all";
         String currentSearch = data.size() > 3 && data.get(3) != null ? data.get(3) : "";
-        refreshAuctionSurface(player, List.of("auction_list", data.size() > 4 ? data.get(4) : "0", currentCategory, currentSearch));
+        String page = data.size() > 4 && data.get(4) != null ? data.get(4) : "0";
+        List<String> refresh = List.of("auction_list", page, currentCategory, currentSearch);
+        Object action = new Object();
+        asyncActionTickets.put(viewer, action);
+        try {
+            work.async(() -> {
+                try {
+                    if (!sameMarketAdmission(session)) {
+                        work.main(() -> clearTrackedAction(viewer, action));
+                        return;
+                    }
+                    var change = repository.toggleAuctionFavorite(viewer, listingId);
+                    if (favoriteCommitted(change) && redisCache != null) {
+                        redisCache.invalidateByPrefix("market:listings:" + viewer + ":");
+                    }
+                    work.main(() -> finishAuctionFavorite(player, session, listingId, ui, token, refresh, change, action));
+                } catch (RuntimeException failure) {
+                    logger.warning("拍卖关注提交结果未确认 #" + listingId + ": " + failure.getMessage());
+                    work.main(() -> finishAuctionFavorite(player, session, listingId, ui, token, refresh, null, action));
+                } finally {
+                    auctionFavoriteSlots.release();
+                }
+            });
+        } catch (java.util.concurrent.RejectedExecutionException closing) {
+            auctionFavoriteSlots.release();
+            clearTrackedAction(viewer, action);
+            return false;
+        }
+        return true;
+    }
+
+    private static boolean favoriteCommitted(MarketRepository.FavoriteChange change) {
+        return change == MarketRepository.FavoriteChange.ADDED || change == MarketRepository.FavoriteChange.REMOVED;
+    }
+
+    private boolean clearTrackedAction(UUID player, Object action) {
+        if (!asyncActionTickets.remove(player, action)) return false;
+        actionTokensInFlight.remove(player);
+        return true;
+    }
+
+    private void finishAuctionFavorite(Player player, AuthSnapshot session, long listingId, String ui, String token,
+                                        List<String> refresh, MarketRepository.FavoriteChange change, Object action) {
+        if (favoriteCommitted(change) && auctionRooms != null) auctionRooms.changed(listingId);
+        UUID viewer = session.playerId();
+        if (!clearTrackedAction(viewer, action) || !canUseMarket(player, session)) return;
+        if (!ui.equals(activeAuctionUi(player)) || !packetBridge.isUiOpen(player, ui)) return;
+        boolean sameView = java.util.Objects.equals(token, tokenMap(ui).get(viewer)) && isSelectedAuctionIntent(player, listingId);
+        if (!sameView) {
+            sendActionState(player, "auction_favorite");
+            return;
+        }
+        if (change == null) {
+            player.sendMessage(ChatColor.YELLOW + "关注结果未确认，请刷新页面后核对");
+            rotateToken(player, ui);
+        } else {
+            player.sendMessage(switch (change) {
+                case ADDED -> ChatColor.GREEN + "已关注，可在我的关注中查看。结束提醒随通知配置生效。";
+                case REMOVED -> ChatColor.GRAY + "已取消关注";
+                case LIMIT_REACHED -> ChatColor.YELLOW + "最多关注 100 件商品，请先取消部分关注";
+                case MISSING -> ChatColor.YELLOW + "该拍卖已不存在";
+            });
+            if (favoriteCommitted(change)) rotateToken(player, ui);
+        }
+        sendActionState(player, "auction_favorite");
+        if (change == null || favoriteCommitted(change)) refreshAuctionSurface(player, refresh);
     }
 
     private void handleShopListPacket(Player player, List<String> data) {
-        if (shopService == null) return;
+        if (shopService == null || !packetBridge.isUiOpen(player, config.ui().shopId())) return;
+        UUID viewer = player.getUniqueId();
         String shopId = data.size() > 1 ? data.get(1) : "";
         if (shopId.isBlank()) {
-            String pending = pendingShopSelections.remove(player.getUniqueId());
+            String pending = pendingShopSelections.remove(viewer);
             if (pending != null) shopId = pending;
         }
-        Map<String, Object> packet = buildShopPacket(player, shopId);
-        sendUiPacket(player, config.ui().shopId(), "update", packet);
+        var groups = shopService.getShops().values().stream()
+            .filter(shop -> shop.permission().isBlank() || player.hasPermission(shop.permission())).toList();
+        String selected = shopId;
+        var group = groups.stream().filter(shop -> shop.id().equals(selected)).findFirst()
+            .orElse(groups.isEmpty() ? null : groups.get(0));
+        var effective = group == null ? null : shopService.getEffectiveShop(group.id());
+        List<ShopService.ShopItem> visible = effective == null ? List.of() : effective.items().values().stream()
+            .filter(item -> shopService.meetsConditions(player, item)).toList();
+        int pages = Math.max(1, (visible.size() + SHOP_PAGE_SIZE - 1) / SHOP_PAGE_SIZE);
+        int page = Math.max(0, Math.min(pages - 1, data.size() > 2 ? parseIntSafe(data.get(2), 0) : 0));
+        int from = page * SHOP_PAGE_SIZE;
+        var view = new ShopView(UUID.randomUUID().toString(), groups, group, page, pages,
+            List.copyOf(visible.subList(from, Math.min(visible.size(), from + SHOP_PAGE_SIZE))));
+        shopViews.put(viewer, view);
+        var products = view.products.stream().map(shopService::availabilityRequest).toList();
+        var store = repository;
+        readShop(viewer, view, () -> store.shopAvailability(viewer, view.shopId(), products),
+            (online, stock) -> sendUiPacket(online, config.ui().shopId(), "update", buildShopPacket(online, view, stock)),
+            online -> sendUiPacket(online, config.ui().shopId(), "shop_error", new LinkedHashMap<>(
+                Map.of("message", "商店库存暂不可用，请刷新后重试"))));
     }
 
     private void handleShopBuyPacket(Player player, List<String> data) {
-        String shopId = data.size() > 1 ? data.get(1) : "";
-        String itemId = data.size() > 2 ? data.get(2) : "";
-        int amount = data.size() > 3 ? parseIntSafe(data.get(3), 1) : 1;
-        if (shopId.isEmpty() || itemId.isEmpty()) return;
-        BigDecimal expectedPrice = null;
-        if (data.size() > 5) {
-            try { expectedPrice = new BigDecimal(data.get(5)); }
-            catch (NumberFormatException exception) {
-                player.sendMessage(ChatColor.RED + "确认金额无效，请刷新商店");
-                return;
-            }
+        if (shopService == null || data.size() != 3 || !packetBridge.isUiOpen(player, config.ui().shopId())
+            || !shopUuid(data.get(1)) || !shopUuid(data.get(2))) return;
+        String quoteId = data.get(1), request = data.get(2);
+        UUID viewer = player.getUniqueId();
+        if (activeShopOrders.putIfAbsent(viewer, request) != null) {
+            sendShopOrder(player, request, ShopService.BuyResult.pending("订单处理中，请稍后查询"));
+            return;
         }
-        buyFromShop(player, shopId, itemId, amount, expectedPrice);
-        // 购买后刷新商店 UI
-        if (shopService != null) {
-            Map<String, Object> packet = buildShopPacket(player, shopId);
-            sendUiPacket(player, config.ui().shopId(), "update", packet);
+        var view = shopViews.get(viewer);
+        var quote = view == null ? null : view.quote;
+        if (quote == null || !quote.id().equals(quoteId) || !quote.request().equals(request)
+            || System.nanoTime() - quote.issuedAt() >= SHOP_QUOTE_TTL_NANOS) {
+            lookupShopOrder(player, quoteId, request);
+            return;
+        }
+        view.quote = null;
+        try {
+            shopService.checkoutAsync(player, view.shopId(), quote.item().key(), quote.quantity(),
+                quote.unitPrice(), quote.item(), quoteId, request,
+                result -> finishShopRequest(player, view, request, result));
+        } catch (RuntimeException exception) {
+            logger.log(java.util.logging.Level.WARNING, "系统商店订单需核对 " + request, exception);
+            finishShopRequest(player, view, request, ShopService.BuyResult.pending("订单结果待确认，请使用原请求查询"));
+        }
+    }
+
+    private void lookupShopOrder(Player player, String quoteId, String request) {
+        var viewer = player.getUniqueId();
+        var store = repository;
+        work.async(() -> {
+            ShopService.BuyResult result;
+            try {
+                var existing = store.shopOrder(request);
+                result = existing == null ? ShopService.BuyResult.fail("报价已过期或已失效，请重新报价")
+                    : ShopService.matchesOrder(existing, viewer, quoteId) ? ShopService.orderResult(existing)
+                    : ShopService.BuyResult.fail("订单请求无效");
+            } catch (RuntimeException exception) {
+                logger.log(java.util.logging.Level.WARNING, "系统商店订单查询失败 " + request, exception);
+                result = ShopService.BuyResult.pending("订单暂不可查询，请使用原请求重试");
+            }
+            var reply = result;
+            if (plugin.isEnabled()) work.main(() -> finishShopRequest(player, null, request, reply));
+        });
+    }
+
+    private void finishShopRequest(Player player, @Nullable ShopView view, String request, ShopService.BuyResult result) {
+        var viewer = player.getUniqueId();
+        activeShopOrders.remove(viewer, request);
+        if (shopService == null || !player.isOnline() || org.bukkit.Bukkit.getPlayer(viewer) != player) return;
+        sendShopOrder(player, request, result);
+        if (result.success() && view != null && shopViews.get(viewer) == view) {
+            handleShopListPacket(player, List.of("shop_list", view.shopId(), Integer.toString(view.page)));
+        }
+    }
+
+    private void sendShopOrder(Player player, String request, ShopService.BuyResult result) {
+        String message = result.success() ? config.messages().shopBought().replace("{amount}",
+            currencyManager.format(result.currency(), BigDecimal.valueOf(result.totalPrice()))) : result.error();
+        player.sendMessage(ChatColor.translateAlternateColorCodes('&', message));
+        sendUiPacket(player, config.ui().shopId(), "shop_order", new LinkedHashMap<>(Map.of(
+            "requestId", request, "success", result.success(), "pending", result.pending(), "message", message)));
+    }
+
+    private static boolean shopUuid(String value) {
+        if (value.length() != 36) return false;
+        try { return UUID.fromString(value).toString().equals(value); }
+        catch (IllegalArgumentException ignored) { return false; }
+    }
+
+    private void closeShopView(UUID viewer, List<String> data) {
+        var view = shopViews.get(viewer);
+        if (view != null && data.size() == 2 && view.revision.equals(data.get(1))) {
+            shopViews.remove(viewer);
+            nextShopRead.remove(viewer);
         }
     }
 
     private void handleShopQuote(Player player, List<String> data) {
-        if (shopService == null || !packetBridge.isUiOpen(player, config.ui().shopId()) || data.size() < 4) return;
-        String shop = data.get(1), item = data.get(2);
-        var quote = shopService.quote(player, shop, item);
-        Map<String,Object> packet = new LinkedHashMap<>();
-        packet.put("packetId",config.ui().packetId()); packet.put("shopId",shop); packet.put("itemId",item);
-        packet.put("available",quote != null);
-        if (quote != null) {
-            int quantity = Math.max(0,Math.min(quote.maximum(),Math.max(1,parseIntSafe(data.get(3),1))));
-            packet.put("quantity",quantity); packet.put("maximum",quote.maximum());
-            packet.put("unitPrice",quote.unitPrice().toPlainString());
-            packet.put("basePrice",currencyManager.format(quote.currency(),quote.basePrice()));
-            packet.put("total",currencyManager.format(quote.currency(),quote.unitPrice().multiply(BigDecimal.valueOf(quantity))));
-            packet.put("stock",quote.stock()); packet.put("limit",quote.limit()); packet.put("capacity",quote.capacity());
-            var definition=shopService.getEffectiveShop(shop).items().get(item);
-            packet.put("stockDisplay",formatShopStock(player,shop,item,definition));
-            packet.put("limitDisplay",definition.limitPerPlayer()>0?String.valueOf(quote.limit()):"不限");
+        if (shopService == null || !packetBridge.isUiOpen(player, config.ui().shopId())) return;
+        if (data.size() != 6) {
+            if (data.size() == 4) {
+                player.sendMessage(ChatColor.RED + "系统商店界面版本过旧，请联系管理员更新后重新打开");
+                sendUiPacket(player, config.ui().shopId(), "shop_quote", new LinkedHashMap<>(Map.of(
+                    "shopId", data.get(1), "itemId", data.get(2), "available", false)));
+            }
+            return;
         }
-        sendUiPacket(player,config.ui().shopId(),"shop_quote",packet);
+        UUID viewer = player.getUniqueId();
+        var view = shopViews.get(viewer);
+        String shop = data.get(1), itemId = data.get(2), sequence = data.get(4);
+        if (view == null || !view.revision.equals(data.get(5)) || !view.shopId().equals(shop)
+            || !sequence.matches("[0-9]{1,10}")) return;
+        view.quote = null;
+        view.quoteSequence = sequence;
+        var definition = shopService.getEffectiveShop(shop);
+        var item = definition == null ? null : definition.items().get(itemId);
+        if (item == null || view.products.stream().noneMatch(row -> row.key().equals(itemId))
+            || (!definition.permission().isBlank() && !player.hasPermission(definition.permission()))
+            || !shopService.meetsConditions(player, item)) {
+            sendShopQuote(player, view, itemId, sequence, null, null, 0);
+            return;
+        }
+        int wanted = Math.max(1, parseIntSafe(data.get(3), 1));
+        var product = shopService.availabilityRequest(item);
+        var store = repository;
+        var balance = shopService.prepareQuoteBalance(player, item);
+        readShop(viewer, view, () -> {
+            var available = store.shopAvailability(viewer, shop, List.of(product)).get(itemId);
+            return new ShopQuoteInputs(available, available == null || balance == null ? null : balance.get());
+        }, (online, inputs) -> {
+            if (!sequence.equals(view.quoteSequence)) return;
+            var quote = inputs.availability() == null ? null : shopService.quote(online, item, inputs.availability(), inputs.balance());
+            sendShopQuote(online, view, itemId, sequence, item, quote, wanted);
+        }, online -> sendShopQuote(online, view, itemId, sequence, null, null, 0));
     }
+
+    private record ShopQuoteInputs(@Nullable ShopCheckout.Availability availability, @Nullable BigDecimal balance) { }
+
+    private void sendShopQuote(Player player, ShopView view, String itemId, String sequence,
+                               @Nullable ShopService.ShopItem item, @Nullable ShopService.PurchaseQuote quote, int wanted) {
+        if (!sequence.equals(view.quoteSequence)) return;
+        Map<String, Object> packet = new LinkedHashMap<>(Map.of("shopId", view.shopId(), "itemId", itemId,
+            "sequence", sequence, "available", quote != null));
+        if (quote != null && item != null) {
+            int quantity = Math.min(quote.maximum(), wanted);
+            var issued = new ShopQuote(UUID.randomUUID().toString(), UUID.randomUUID().toString(), item,
+                quote.unitPrice(), quantity, System.nanoTime());
+            if (quantity > 0) view.quote = issued;
+            packet.put("quoteId", quantity > 0 ? issued.id() : "");
+            packet.put("requestId", quantity > 0 ? issued.request() : "");
+            packet.put("quantity", quantity);
+            packet.put("maximum", quote.maximum());
+            packet.put("unitPrice", quote.unitPrice().toPlainString());
+            packet.put("basePrice", currencyManager.format(quote.currency(), quote.basePrice()));
+            packet.put("total", currencyManager.format(quote.currency(), quote.unitPrice().multiply(BigDecimal.valueOf(quantity))));
+            packet.put("stockDisplay", shopService.availabilityRequest(item).stockMode().equals("unlimited") ? "无限" : String.valueOf(quote.stock()));
+            packet.put("limitDisplay", item.limitPerPlayer() > 0 ? String.valueOf(quote.limit()) : "不限");
+            packet.put("capacity", quote.capacity());
+            var preview = quote.preview();
+            packet.put("detailIcon", preview == null ? shopItemJson(player, item) : itemToJson(preview));
+        }
+        sendUiPacket(player, config.ui().shopId(), "shop_quote", packet);
+    }
+
+    private <T> void readShop(UUID viewer, ShopView view, java.util.function.Supplier<T> query,
+                              java.util.function.BiConsumer<Player, T> reply, java.util.function.Consumer<Player> failed) {
+        if (!activeShopReads.add(viewer)) {
+            nextShopRead.put(viewer, () -> readShop(viewer, view, query, reply, failed));
+            return;
+        }
+        work.async(() -> {
+            T result = null;
+            try { result = query.get(); }
+            catch (RuntimeException exception) { logger.log(java.util.logging.Level.WARNING, "系统商店读取失败", exception); }
+            T value = result;
+            work.main(() -> {
+                try {
+                    Player player = org.bukkit.Bukkit.getPlayer(viewer);
+                    if (shopService != null && shopViews.get(viewer) == view && player != null
+                        && packetBridge.isUiOpen(player, config.ui().shopId())) {
+                        if (value != null) reply.accept(player, value);
+                        else failed.accept(player);
+                    }
+                } catch (RuntimeException exception) {
+                    logger.log(java.util.logging.Level.WARNING, "系统商店展示失败", exception);
+                    Player player = org.bukkit.Bukkit.getPlayer(viewer);
+                    if (player != null && shopViews.get(viewer) == view) failed.accept(player);
+                } finally {
+                    activeShopReads.remove(viewer);
+                    Runnable next = nextShopRead.remove(viewer);
+                    if (next != null) next.run();
+                }
+            });
+        });
+    }
+
+    private static final class ShopView {
+        final String revision;
+        final List<ShopService.ShopDefinition> groups;
+        final ShopService.ShopDefinition group;
+        final int page;
+        final int pages;
+        final List<ShopService.ShopItem> products;
+        String quoteSequence;
+        ShopQuote quote;
+
+        ShopView(String revision, List<ShopService.ShopDefinition> groups, @Nullable ShopService.ShopDefinition group,
+                 int page, int pages, List<ShopService.ShopItem> products) {
+            this.revision = revision;
+            this.groups = groups;
+            this.group = group;
+            this.page = page;
+            this.pages = pages;
+            this.products = products;
+        }
+
+        String shopId() { return group == null ? "" : group.id(); }
+    }
+
+    private record ShopQuote(String id, String request, ShopService.ShopItem item, BigDecimal unitPrice,
+                             int quantity, long issuedAt) { }
 
     private void handleRecycleAll(Player player, List<String> data) {
         if (!config.recycle().batchRecycleEnabled()) {
@@ -2126,9 +3018,9 @@ public class MarketService {
         packetBridge.sendPacket(player, uiId, handler, packet);
     }
 
-    private String listCacheKey(String kind, Player player, int page, String first, String second) {
+    private String listCacheKey(String kind, UUID viewer, int page, String first, String second) {
         String query = page + "\n" + (first == null ? "" : first) + "\n" + (second == null ? "" : second);
-        return "market:" + kind + ":" + player.getUniqueId() + ":"
+        return "market:" + kind + ":" + viewer + ":"
             + java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(query.getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }
 
@@ -2149,7 +3041,7 @@ public class MarketService {
     private boolean requiresActionToken(String action) {
         return switch (action) {
             case "auction_bid", "auction_cancel", "auction_list_create",
-                "shop_buy", "recycle_all", "recycle_single",
+                "recycle_all", "recycle_single",
                 "pshop_buy", "pshop_cancel", "pshop_create",
                 "shop_edit_shop_save", "shop_edit_shop_delete",
                 "shop_edit_item_save", "shop_edit_item_delete" -> true;
@@ -2186,7 +3078,6 @@ public class MarketService {
             case "auction_cancel" -> 2;
             case "auction_bid" -> 3;
             case "auction_list_create" -> 6;
-            case "shop_buy" -> 4;
             case "recycle_single" -> 2;
             case "pshop_buy", "pshop_cancel" -> 2;
             case "pshop_create" -> 7;
@@ -2226,7 +3117,6 @@ public class MarketService {
             case "pshop_profile_save", "pshop_profile_pick" -> config.ui().playerStoreEditId();
             case "guard_pick","guard_add","guard_remove","guard_auto" -> config.ui().recycleProtectionId();
             case "pshop_store_follow" -> playerStores==null?config.ui().playerShopsId():playerStores.followUi(player);
-            case "shop_buy" -> config.ui().shopId();
             case "recycle_all", "recycle_single" -> config.ui().recycleId();
             case "shop_edit_shop_save", "shop_edit_shop_delete",
                 "shop_edit_item_save", "shop_edit_item_delete" -> shopEditUiId();
@@ -2255,7 +3145,7 @@ public class MarketService {
         return packet;
     }
 
-    private Map<String, Object> buildAuctionPacket(Player player, List<AuctionListing> listings,
+    private Map<String, Object> buildAuctionPacket(Player player, List<AuctionListing> listings, Set<Long> favoriteIds,
                                                     int page, int totalPages, String currentCategory) {
         Map<String, Object> packet = new LinkedHashMap<>();
         packet.put("packetId", config.ui().packetId());
@@ -2293,7 +3183,6 @@ public class MarketService {
         // 物品列表数据
         Map<String, Object> listingsMap = new LinkedHashMap<>();
         Map<String, Object> listingTexts = new LinkedHashMap<>();
-        Set<Long> favoriteIds = new java.util.HashSet<>(repository.getFavorites(player.getUniqueId()));
         for (int i = 0; i < listings.size() && i < AUCTION_PAGE_SIZE; i++) {
             AuctionListing listing = listings.get(i);
             String key = Integer.toString(i);
@@ -2341,77 +3230,60 @@ public class MarketService {
         return packet;
     }
 
-    private Map<String, Object> buildShopPacket(Player player, String selectedShopId) {
+    private Map<String, Object> buildShopPacket(Player player, ShopView view, Map<String, ShopCheckout.Availability> availability) {
         Map<String, Object> packet = new LinkedHashMap<>();
         packet.put("packetId", config.ui().packetId());
         packet.put("isAdmin", isShopAdmin(player));
+        packet.put("revision", view.revision);
+        packet.put("page", view.page);
+        packet.put("pages", view.pages);
 
-        // 商店列表
         Map<String, Object> shops = new LinkedHashMap<>();
         Map<String, Object> shopTexts = new LinkedHashMap<>();
-        String firstShopId = null;
         int shopIndex = 0;
-        if (shopService != null) {
-            for (var entry : shopService.getShops().entrySet()) {
-                if (!entry.getValue().permission().isBlank() && !player.hasPermission(entry.getValue().permission())) continue;
-                String id = entry.getKey();
-                if (firstShopId == null) firstShopId = id;
-                String key = Integer.toString(shopIndex++);
-                Map<String, Object> row = new LinkedHashMap<>();
-                row.put("id", id);
-                shops.put(key, row);
-                packet.put("shopIconJson" + key, iconResolver.resolveItemJson(player, entry.getValue().icon()));
-                shopTexts.put(key, "&f" + entry.getValue().displayName());
-            }
+        for (var group : view.groups) {
+            String key = Integer.toString(shopIndex++);
+            shops.put(key, Map.of("id", group.id()));
+            packet.put("shopIconJson" + key, iconResolver.resolveItemJson(player, group.icon()));
+            shopTexts.put(key, "&f" + group.displayName());
         }
         packet.put("shops", shops);
         packet.put("shopTexts", shopTexts);
+        packet.put("shopId", view.shopId());
+        packet.put("shopName", view.group == null ? "" : view.group.displayName());
 
-        // 当前选中商店
-        String activeShopId = selectedShopId != null
-            && !selectedShopId.isEmpty()
-            && shopService != null
-            && shopService.getShop(selectedShopId) != null
-            && (shopService.getShop(selectedShopId).permission().isBlank()
-                || player.hasPermission(shopService.getShop(selectedShopId).permission()))
-            ? selectedShopId
-            : firstShopId;
-        packet.put("shopId", activeShopId != null ? activeShopId : "");
-        packet.put("shopName", "");
-
-        // 商品列表（使用合并动态商品和价格乘数后的有效商店定义）
         Map<String, Object> items = new LinkedHashMap<>();
-        if (activeShopId != null && shopService != null) {
-            var shopDef = shopService.getEffectiveShop(activeShopId);
-            if (shopDef != null) {
-                packet.put("shopName", shopDef.displayName());
-                int idx = 0;
-                for (var itemEntry : shopDef.items().entrySet()) {
-                    var shopItem = itemEntry.getValue();
-                    // 上架条件不满足的商品对该玩家不显示
-                    if (!shopService.meetsConditions(player, shopItem)) continue;
-                    String key = Integer.toString(idx);
-                    Map<String, Object> row = new LinkedHashMap<>();
-                    row.put("key", itemEntry.getKey());
-                    // 商品卡由 UI 控制正文颜色，物品原有颜色仍保留在图标及悬浮提示中。
-                    row.put("name", ChatColor.stripColor(MessageProvider.translateColors(shopItem.displayName())));
-                    row.put("price", shopService.displayBuyPriceDecimal(player, shopItem).stripTrailingZeros().toPlainString());
-                    row.put("priceRaw", shopService.displayBuyPriceDecimal(player, shopItem).toPlainString());
-                    row.put("currencyName", currencyDisplayName(shopItem.currency()));
-                    row.put("stock", formatShopStock(player, activeShopId, itemEntry.getKey(), shopItem));
-                    row.put("limitText", shopItem.limitPerPlayer() > 0 ? "限购 " + shopItem.limitPerPlayer() + " 个" : "");
-                    items.put(key, row);
-
-                    // 物品 JSON（flat 字段）
-                    packet.put("shopItemJson" + idx, shopItemJson(player, shopItem));
-                    idx++;
-                }
-            }
+        int idx = 0;
+        for (var item : view.products) {
+            String key = Integer.toString(idx++);
+            var stock = availability.get(item.key());
+            var product = shopService.availabilityRequest(item);
+            BigDecimal price = shopService.displayBuyPriceDecimal(player, item);
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("key", item.key());
+            row.put("name", ChatColor.stripColor(MessageProvider.translateColors(item.displayName())));
+            row.put("price", price.stripTrailingZeros().toPlainString());
+            row.put("priceRaw", price.toPlainString());
+            row.put("currencyName", currencyDisplayName(item.currency()));
+            row.put("stock", product.stockMode().equals("unlimited") ? "无限" : stock == null ? "—" : String.valueOf(stock.stock()));
+            row.put("limitText", item.limitPerPlayer() > 0 && stock != null ? "可购 " + stock.limit() + " 个" : "");
+            items.put(key, row);
+            packet.put("shopItemJson" + key, shopCardIcon(player, item));
         }
         packet.put("items", items);
         packet.put("maxShopCount", shops.size());
         packet.put("maxItemCount", items.size());
         return packet;
+    }
+
+    private String shopCardIcon(Player player, ShopService.ShopItem item) {
+        if (item.icon() != null) return iconResolver.resolveItemJson(player, item.icon());
+        if (item.type() == ShopService.ShopItemType.COMMAND) return itemToJson(new ItemStack(org.bukkit.Material.COMMAND_BLOCK));
+        if ("minecraft".equalsIgnoreCase(item.item().source())) {
+            var material = org.bukkit.Material.matchMaterial(item.item().id());
+            if (material != null && material.isItem() && !material.isAir()) return itemToJson(new ItemStack(material));
+        }
+        return shopItemJson(player, item);
     }
 
     private String formatRecycleEarnings(Map<String, Double> earningsByCurrency) {
@@ -2593,24 +3465,6 @@ public class MarketService {
             ? def.displayName() : currencyId;
     }
 
-    private String formatShopStock(Player player, String shopId, String itemKey, ShopService.ShopItem shopItem) {
-        if ("unlimited".equalsIgnoreCase(shopItem.stockMode())) {
-            return "无限";
-        }
-        if (repository == null || shopItem.stockAmount() <= 0) {
-            return "无限";
-        }
-        if ("global".equalsIgnoreCase(shopItem.stockMode())) {
-            return String.valueOf(repository.getGlobalShopStock(shopId, itemKey, shopItem.stockAmount()));
-        }
-        if ("per-player".equalsIgnoreCase(shopItem.stockMode())) {
-            return String.valueOf(repository.getPlayerShopStock(
-                player.getUniqueId(), shopId, itemKey, shopItem.stockAmount()
-            ));
-        }
-        return String.valueOf(shopItem.stockAmount());
-    }
-
     private String itemToJson(ItemStack item) {
         if (item == null || item.getType().isAir()) return "";
         if (itemStackBridge != null) {
@@ -2750,23 +3604,43 @@ public class MarketService {
         return redisCache != null && redisCache.isAvailable();
     }
 
-    public int clearExpired() {
+    public void clearExpired(java.util.function.IntConsumer reply) {
+        work.async(() -> {
+            try {
+                int cleared = scanExpiredListings();
+                if (plugin.isEnabled()) work.main(() -> reply.accept(cleared));
+            } catch (RuntimeException exception) {
+                logger.log(java.util.logging.Level.WARNING, "手动处理到期挂单失败", exception);
+                if (plugin.isEnabled()) work.main(() -> reply.accept(-1));
+            }
+        });
+    }
+
+    private int scanExpiredListings() {
         return (auctionService == null ? 0 : auctionService.triggerExpiredProcessing())
             + (playerShopService == null ? 0 : playerShopService.triggerExpiredProcessing());
     }
 
-    public boolean adminRemoveListing(UUID actor,long listingId){return auctionService!=null && auctionService.adminForceCancelListing(actor,listingId);}
-    public boolean adminRemovePlayerShopListing(UUID actor,long listingId){return playerShopService!=null && playerShopService.adminForceCancel(actor,listingId);}
-
-    public boolean adminRemoveListing(long listingId) {
-        if (auctionService == null) return false;
-        return auctionService.adminForceCancelListing(listingId);
+    public void adminRemoveListing(CommandSender sender, long listingId, boolean playerShop, BiConsumer<Boolean, Throwable> reply) {
+        Player player = sender instanceof Player actor ? actor : null;
+        AuthSnapshot session = player == null ? null : AuthAccess.snapshot(player.getUniqueId());
+        UUID actor = session == null ? new UUID(0, 0) : session.playerId();
+        BooleanSupplier authorized = () -> sender.hasPermission("arcartxsuite.market.admin")
+            && (player == null || isCurrentMarketSession(player, session));
+        if ((playerShop ? playerShopService == null : auctionService == null) || !authorized.getAsBoolean()) {
+            reply.accept(false, null);
+            return;
+        }
+        var result = playerShop ? playerShopService.cancelListing(actor, listingId, true, authorized)
+            : auctionService.cancelListing(actor, listingId, true, authorized);
+        result.whenComplete((success, failure) -> work.main(() -> {
+            if (Boolean.TRUE.equals(success)) {
+                if (!playerShop) refreshCancelledAuction(listingId);
+                else if (playerStores != null) playerStores.changed();
+            }
+            if (authorized.getAsBoolean()) reply.accept(Boolean.TRUE.equals(success), failure);
+        }));
     }
-
-    public boolean adminRemovePlayerShopListing(long listingId) {
-        return playerShopService != null && playerShopService.adminForceCancel(listingId);
-    }
-
     public int getPlayerShopCount() {
         return playerShopService == null ? 0 : playerShopService.countActive();
     }
@@ -2778,6 +3652,7 @@ public class MarketService {
     }
 
     private void handleCrossServerMessage(xuanmo.arcartxsuite.api.crossserver.CrossServerDelivery delivery) {
+        if (isStopping()) return;
         String message = delivery == null ? null : delivery.payload();
         if (message == null || message.isBlank()) {
             return;
@@ -2795,16 +3670,18 @@ public class MarketService {
             String[] parts=message.split(":",3);
             if(parts.length>1)auctionRooms.changed(parseLongSafe(parts[1],0));
         }
+        if (message.startsWith("LISTING_SETTLED:") || message.startsWith("LISTING_CANCELLED:")) refreshOpenAuctionBrowsers();
         if(message.startsWith("RECYCLE_PROTECTION_CHANGED:") && management!=null){
             try{java.util.UUID owner=java.util.UUID.fromString(message.substring("RECYCLE_PROTECTION_CHANGED:".length()));
                 Runnable refresh=()->{if(management!=null)management.protection().invalidate(owner);};
-                if(org.bukkit.Bukkit.isPrimaryThread())refresh.run();else org.bukkit.Bukkit.getScheduler().runTask(plugin,refresh);
+                if(org.bukkit.Bukkit.isPrimaryThread())refresh.run();else work.main(refresh);
             }catch(IllegalArgumentException ignored){}
         }
         // 拍卖消息不再重复写入竞价：写库、押金与延时由出价节点原子处理。
 
         // 跨服限购同步：其他服购买后广播，本地 upsert 限购记录
-        if (message.startsWith("SHOP_LIMIT_UPDATE:")) {
+        if (message.startsWith("SHOP_LIMIT_UPDATE:") && repository instanceof JdbcMarketRepository jdbc
+            && !jdbc.getDescriptor().isMysql()) {
             String[] parts = message.split(":", -1);
             if (parts.length == 7) {
                 try {
@@ -2833,7 +3710,7 @@ public class MarketService {
                 || message.startsWith("BID_"))
                 && redisCache != null
                 && redisCache.isAvailable()) {
-            redisCache.invalidateByPrefix("market:listings:");
+            invalidateListCacheAsync("market:listings:");
         }
 
         if(message.startsWith("PSHOP_") && playerStores!=null)playerStores.changed();
@@ -2841,7 +3718,7 @@ public class MarketService {
         if (message.startsWith("PSHOP_")
                 && redisCache != null
                 && redisCache.isAvailable()) {
-            redisCache.invalidateByPrefix("market:pshop:");
+            invalidateListCacheAsync("market:pshop:");
         }
 
         // 跨服动态商品状态同步
@@ -2883,19 +3760,24 @@ public class MarketService {
         return amount >= current + minIncrement;
     }
 
-    private void dispatchSignal(String signal, Player player, Map<String, String> variables) {
-        if (signalProvider == null) return;
-        SignalDispatchable sd = signalProvider.get();
-        if (sd != null && player != null) {
-            sd.dispatchSignal(signal, player, variables);
-        }
+    private java.util.concurrent.CompletionStage<Boolean> publishSettlementRefresh(String payload) {
+        var channel = crossServerChannel;
+        return channel == null ? java.util.concurrent.CompletableFuture.completedFuture(false) : channel.publishWithReceipt(payload);
     }
 
-    private void publishEvent(String topic, Player player, Map<String, String> payload) {
-        if (eventBusProvider == null) return;
+    private boolean publishEvent(String topic, Player player, Map<String, String> payload) {
+        if (eventBusProvider == null) return false;
         EventBusCapability bus = eventBusProvider.get();
         if (bus != null) {
             bus.publish(topic, player, payload);
+            return true;
         }
+        return false;
+    }
+
+    private java.util.concurrent.CompletionStage<Boolean> publishAuctionEvent(String topic, Player player, Map<String, String> payload) {
+        EventBusCapability bus = eventBusProvider == null ? null : eventBusProvider.get();
+        if (bus == null) return java.util.concurrent.CompletableFuture.completedFuture(false);
+        return bus.publishConfirmed(topic, player, payload);
     }
 }

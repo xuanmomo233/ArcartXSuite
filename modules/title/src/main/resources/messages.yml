@@ -11,6 +11,7 @@ prefix: "&3◆ &6ArcartXSuite &7| &r"
 # ── 通用 ──────────────────────────────────────────────
 common:
   service-down: "&c服务未启动。"
+  storage-busy: "&c称号保存队列繁忙，请稍后重试。"
   player-offline: "&c玩家不在线: {0}"
   unknown: "&e未知命令，使用 /{0} title help"
 
@@ -37,10 +38,13 @@ give:
   invalid-duration: "&c无效时长: {0} (支持 permanent/7d/12h/30m)"
   title-not-found: "称号不存在: {0}"
   group-no-permission: "目标玩家没有权限使用该称号分组。"
+  queued: "称号授予请求已受理。"
+  storage-failed: "称号授予未获得数据库确认，请查询玩家状态后重试。"
   success: "已授予称号: {0}"
 revoke:
   usage: "&e用法: /axs title revoke <玩家> <称号ID>"
   title-not-found: "称号不存在: {0}"
+  storage-failed: "称号回收未获得数据库确认，请查询玩家状态后重试。"
   success: "已扣除称号: {0}"
 open:
   usage: "&e用法: /axs title open <玩家>"
@@ -104,6 +108,7 @@ player:
     hide: "&7/title hide <称号ID>&f - 隐藏称号"
     unhide: "&7/title unhide <称号ID>&f - 取消隐藏称号"
   data-load-failed: "&c称号数据加载失败，请稍后重试。"
+  data-save-failed: "&c称号保存失败，操作未获数据库确认，请稍后重试。"
   title-not-found: "&c称号不存在: {0}"
   group-no-permission: "&c你没有权限使用该称号分组。"
   not-owned: "&c你尚未拥有称号: {0}"

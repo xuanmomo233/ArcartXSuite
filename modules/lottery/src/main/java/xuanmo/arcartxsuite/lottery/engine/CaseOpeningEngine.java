@@ -1,9 +1,12 @@
 package xuanmo.arcartxsuite.lottery.engine;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
-import java.util.concurrent.ThreadLocalRandom;
 import org.jetbrains.annotations.NotNull;
 import xuanmo.arcartxsuite.lottery.config.CasePoolConfig;
 import xuanmo.arcartxsuite.lottery.config.CasePoolConfig.RaritySetting;
@@ -16,6 +19,17 @@ import xuanmo.arcartxsuite.lottery.model.PoolItem;
  * 根据稀有度权重随机选择稀有度，再从该稀有度的奖品中随机选取一件。
  */
 public class CaseOpeningEngine {
+    private final Map<CasePoolConfig, PreparedCase> prepared;
+
+    public CaseOpeningEngine() {
+        this(List.of());
+    }
+
+    public CaseOpeningEngine(Iterable<CasePoolConfig> configurations) {
+        var indexed = new IdentityHashMap<CasePoolConfig, PreparedCase>();
+        for (var config : configurations) indexed.put(config, new PreparedCase(config));
+        this.prepared = Collections.unmodifiableMap(indexed);
+    }
 
     /**
      * 执行一次开箱抽奖。
@@ -25,15 +39,7 @@ public class CaseOpeningEngine {
      */
     @NotNull
     public CaseResult openCase(@NotNull CasePoolConfig caseConfig) {
-        String selectedRarity = weightedRarity(caseConfig.raritySettings());
-        List<PoolItem> items = caseConfig.items();
-        List<Integer> indices = indicesByRarity(items, selectedRarity);
-        if (indices.isEmpty()) {
-            return new CaseResult(null, selectedRarity, -1);
-        }
-        int selectedSlot = weightedRandomIndex(items, indices);
-        PoolItem item = items.get(selectedSlot);
-        return new CaseResult(item, selectedRarity, selectedSlot + 1);
+        return preparedCase(caseConfig).open();
     }
 
     /**
@@ -45,51 +51,52 @@ public class CaseOpeningEngine {
      */
     @NotNull
     public List<CaseResult> openCaseBatch(@NotNull CasePoolConfig caseConfig, int count) {
+        var table = preparedCase(caseConfig);
         List<CaseResult> results = new ArrayList<>();
         for (int i = 0; i < count; i++) {
-            results.add(openCase(caseConfig));
+            results.add(table.open());
         }
         return results;
     }
 
-    private String weightedRarity(Map<String, RaritySetting> raritySettings) {
-        if (raritySettings == null || raritySettings.isEmpty()) return "COMMON";
-        int totalWeight = raritySettings.values().stream().mapToInt(RaritySetting::baseWeight).sum();
-        if (totalWeight <= 0) return raritySettings.keySet().iterator().next();
-        int roll = ThreadLocalRandom.current().nextInt(totalWeight);
-        int current = 0;
-        for (Map.Entry<String, RaritySetting> entry : raritySettings.entrySet()) {
-            current += entry.getValue().baseWeight();
-            if (roll < current) return entry.getKey();
-        }
-        return raritySettings.keySet().iterator().next();
+    private PreparedCase preparedCase(CasePoolConfig config) {
+        var table = prepared.get(config);
+        return table != null ? table : new PreparedCase(config);
     }
 
-    private List<Integer> indicesByRarity(List<PoolItem> items, String rarity) {
-        List<Integer> result = new ArrayList<>();
-        if (items == null) return result;
-        for (int i = 0; i < items.size(); i++) {
-            if (rarity.equalsIgnoreCase(items.get(i).rarity())) {
-                result.add(i);
+    private record Slot(PoolItem item, int position) {}
+
+    private static final class PreparedCase {
+        private final WeightedPool<String> rarities;
+        private final Map<String, WeightedPool<Slot>> pools;
+
+        PreparedCase(CasePoolConfig config) {
+            Map<String, RaritySetting> rules = config.raritySettings();
+            rarities = rules == null ? new WeightedPool<>(List.of(), ignored -> 0)
+                : new WeightedPool<>(new ArrayList<>(rules.keySet()), name -> rules.get(name).baseWeight());
+            var slots = new HashMap<String, List<Slot>>();
+            List<PoolItem> items = config.items();
+            if (items != null) {
+                for (int i = 0; i < items.size(); i++) {
+                    PoolItem item = items.get(i);
+                    if (item.rarity() != null) {
+                        slots.computeIfAbsent(item.rarity().toUpperCase(Locale.ROOT), ignored -> new ArrayList<>())
+                            .add(new Slot(item, i + 1));
+                    }
+                }
             }
+            var groups = new HashMap<String, WeightedPool<Slot>>();
+            slots.forEach((name, list) -> groups.put(name, new WeightedPool<>(list, slot -> slot.item().weight())));
+            pools = Map.copyOf(groups);
         }
-        return result;
-    }
 
-    private int weightedRandomIndex(List<PoolItem> items, List<Integer> indices) {
-        if (indices.isEmpty()) return -1;
-        if (indices.size() == 1) return indices.get(0);
-        int totalWeight = 0;
-        for (int idx : indices) {
-            totalWeight += items.get(idx).weight();
+        CaseResult open() {
+            String rarity = rarities.roll(false);
+            if (rarity == null) rarity = "COMMON";
+            var pool = pools.get(rarity.toUpperCase(Locale.ROOT));
+            Slot selected = pool == null ? null : pool.roll(true);
+            return selected == null ? new CaseResult(null, rarity, -1)
+                : new CaseResult(selected.item(), rarity, selected.position());
         }
-        if (totalWeight <= 0) return indices.get(ThreadLocalRandom.current().nextInt(indices.size()));
-        int roll = ThreadLocalRandom.current().nextInt(totalWeight);
-        int current = 0;
-        for (int idx : indices) {
-            current += items.get(idx).weight();
-            if (roll < current) return idx;
-        }
-        return indices.get(indices.size() - 1);
     }
 }

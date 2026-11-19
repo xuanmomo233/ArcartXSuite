@@ -28,7 +28,8 @@ final class QQBotEconomyStore {
     private final String owner = UUID.randomUUID().toString();
     private static final long OWNER_LEASE_MILLIS = 60_000;
     private volatile boolean closed;
-    private java.util.concurrent.ScheduledExecutorService heartbeat;
+    private xuanmo.arcartxsuite.api.scheduler.ModuleScheduledExecutor heartbeat;
+    private java.util.concurrent.CompletableFuture<Void> retirement;
 
     QQBotEconomyStore(DataSource source, boolean mysql, String prefix) {
         this.source = source;
@@ -82,7 +83,7 @@ final class QQBotEconomyStore {
             conn.commit();
         } catch (SQLException e) { conn.rollback(); throw e; }
         finally { conn.setAutoCommit(auto); }
-        heartbeat = java.util.concurrent.Executors.newSingleThreadScheduledExecutor(task -> {
+        heartbeat = new xuanmo.arcartxsuite.api.scheduler.ModuleScheduledExecutor(1, task -> {
             Thread thread = new Thread(task, "QQBot-Economy-Heartbeat"); thread.setDaemon(true); return thread;
         });
         heartbeat.scheduleWithFixedDelay(() -> {
@@ -98,9 +99,24 @@ final class QQBotEconomyStore {
         }, 10, 10, java.util.concurrent.TimeUnit.SECONDS);
     }
 
-    synchronized void close() {
+    void close() {
+        try { retire().toCompletableFuture().join(); }
+        catch (java.util.concurrent.CompletionException failure) {
+            if (failure.getCause() instanceof StorageFailure storageFailure) throw storageFailure;
+            throw failure;
+        }
+    }
+
+    synchronized java.util.concurrent.CompletionStage<Void> retire() {
+        if (retirement != null) return retirement.copy();
         closed = true;
-        if (heartbeat != null) { heartbeat.shutdownNow(); heartbeat = null; }
+        if (heartbeat == null) return java.util.concurrent.CompletableFuture.completedFuture(null);
+        heartbeat.shutdown();
+        retirement = heartbeat.stopped().thenRunAsync(this::retireOwner).toCompletableFuture();
+        return retirement.copy();
+    }
+
+    private void retireOwner() {
         transaction(conn -> {
             execute(conn, "UPDATE " + workers + " SET active=0 WHERE owner_id=?", owner);
             recoverAbandoned(conn, databaseTime(conn));

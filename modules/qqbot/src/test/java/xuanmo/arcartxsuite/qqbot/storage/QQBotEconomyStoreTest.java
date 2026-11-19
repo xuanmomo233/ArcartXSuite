@@ -40,6 +40,37 @@ class QQBotEconomyStoreTest {
 
     @AfterEach void shutdown() { if (store != null) store.close(); }
 
+    @Test void retirementDoesNotWaitForBlockedLeaseSqlOnTheCaller() throws Exception {
+        var data = org.mockito.Mockito.mock(javax.sql.DataSource.class);
+        var entered = new java.util.concurrent.CountDownLatch(1);
+        var release = new java.util.concurrent.CountDownLatch(1);
+        var block = new java.util.concurrent.atomic.AtomicBoolean();
+        Thread caller = Thread.currentThread();
+        org.mockito.Mockito.when(data.getConnection()).thenAnswer(call -> {
+            if (block.get()) {
+                assertNotSame(caller, Thread.currentThread());
+                entered.countDown();
+                assertTrue(release.await(3, java.util.concurrent.TimeUnit.SECONDS));
+            }
+            return source.getConnection();
+        });
+        var retiring = new QQBotEconomyStore(data, false, "test_");
+        try (Connection conn = source.getConnection()) { retiring.initialize(conn); }
+        block.set(true);
+        try {
+            var stopped = retiring.retire().toCompletableFuture();
+            assertTrue(entered.await(2, java.util.concurrent.TimeUnit.SECONDS));
+            assertFalse(stopped.isDone());
+            assertEquals(2, value("SELECT COUNT(*) FROM test_economy_workers WHERE active=1"));
+            release.countDown();
+            stopped.get(3, java.util.concurrent.TimeUnit.SECONDS);
+            assertEquals(1, value("SELECT COUNT(*) FROM test_economy_workers WHERE active=1"));
+        } finally {
+            release.countDown();
+            retiring.close();
+        }
+    }
+
     @Test void simultaneousSignInsCreditExactlyOnce() throws Exception {
         var outcomes = concurrent(12, () -> store.signIn(1, "2026-11-07", 10, 2, 50));
         assertEquals(1, outcomes.stream().filter(r -> r.status() == MutationStatus.SUCCESS).count());

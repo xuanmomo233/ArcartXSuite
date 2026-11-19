@@ -181,74 +181,54 @@ ui:
       var.maxSetCount = packet['max_set_count']
       var.maxEquippedCount = packet['max_equipped_count']
       称号数 = var.maxTitleCount.round()
-      现有称号数 = val.title_list.childrenCount() - 1
-      if(现有称号数 != 称号数 - 1 && val.title_list['称号模板'] != none){
-        var.刷新轮次 = var.刷新轮次 + 1
-        while(val.title_list.childrenCount() > 1){
-          val.title_list.get(1).remove()
-        }
-        if(称号数 > 1){
-          for(序号 in range(1, 称号数 - 1)){
-            项 = val.title_list['称号模板'].copy('称号项_' + var.刷新轮次 + '_' + 序号.round())
-            项.entryKey = 序号.round()
+      if(var.title_listRows == none || var.title_listRows.size() != (var.maxTitleCount)){
+        网格数据 = []
+        if((var.maxTitleCount) > 0){
+          for(网格序号 in range(0, (var.maxTitleCount) - 1)){
+            网格数据.add(网格序号.round())
           }
         }
+        var.title_listRows = 网格数据
       }
       分组数 = var.maxGroupCount.round()
-      现有分组数 = val.group_list.childrenCount() - 1
-      if(现有分组数 != 分组数 - 1 && val.group_list['分组模板'] != none){
-        var.刷新轮次 = var.刷新轮次 + 1
-        while(val.group_list.childrenCount() > 1){
-          val.group_list.get(1).remove()
-        }
-        if(分组数 > 1){
-          for(序号 in range(1, 分组数 - 1)){
-            项 = val.group_list['分组模板'].copy('分组项_' + var.刷新轮次 + '_' + 序号.round())
-            项.entryKey = 序号.round()
+      if(var.group_listRows == none || var.group_listRows.size() != (var.maxGroupCount)){
+        网格数据 = []
+        if((var.maxGroupCount) > 0){
+          for(网格序号 in range(0, (var.maxGroupCount) - 1)){
+            网格数据.add(网格序号.round())
           }
         }
+        var.group_listRows = 网格数据
       }
       品质数 = var.maxQualityCount.round()
-      现有品质数 = val.quality_list.childrenCount() - 1
-      if(现有品质数 != 品质数 - 1 && val.quality_list['品质模板'] != none){
-        var.刷新轮次 = var.刷新轮次 + 1
-        while(val.quality_list.childrenCount() > 1){
-          val.quality_list.get(1).remove()
-        }
-        if(品质数 > 1){
-          for(序号 in range(1, 品质数 - 1)){
-            项 = val.quality_list['品质模板'].copy('品质项_' + var.刷新轮次 + '_' + 序号.round())
-            项.entryKey = 序号.round()
+      if(var.quality_listRows == none || var.quality_listRows.size() != (var.maxQualityCount)){
+        网格数据 = []
+        if((var.maxQualityCount) > 0){
+          for(网格序号 in range(0, (var.maxQualityCount) - 1)){
+            网格数据.add(网格序号.round())
           }
         }
+        var.quality_listRows = 网格数据
       }
       套装数 = var.maxSetCount.round()
-      现有套装数 = val.set_list.childrenCount() - 1
-      if(现有套装数 != 套装数 - 1 && val.set_list['套装模板'] != none){
-        var.刷新轮次 = var.刷新轮次 + 1
-        while(val.set_list.childrenCount() > 1){
-          val.set_list.get(1).remove()
-        }
-        if(套装数 > 1){
-          for(序号 in range(1, 套装数 - 1)){
-            项 = val.set_list['套装模板'].copy('套装项_' + var.刷新轮次 + '_' + 序号.round())
-            项.entryKey = 序号.round()
+      if(var.set_listRows == none || var.set_listRows.size() != (var.maxSetCount)){
+        网格数据 = []
+        if((var.maxSetCount) > 0){
+          for(网格序号 in range(0, (var.maxSetCount) - 1)){
+            网格数据.add(网格序号.round())
           }
         }
+        var.set_listRows = 网格数据
       }
       已装备数 = var.maxEquippedCount.round()
-      现有已装备数 = val.equipped_list.childrenCount() - 1
-      if(现有已装备数 != 已装备数 - 1 && val.equipped_list['已装备模板'] != none){
-        var.刷新轮次 = var.刷新轮次 + 1
-        while(val.equipped_list.childrenCount() > 1){
-          val.equipped_list.get(1).remove()
-        }
-        if(已装备数 > 1){
-          for(序号 in range(1, 已装备数 - 1)){
-            项 = val.equipped_list['已装备模板'].copy('已装备项_' + var.刷新轮次 + '_' + 序号.round())
-            项.entryKey = 序号.round()
+      if(var.equipped_listRows == none || var.equipped_listRows.size() != (var.maxEquippedCount)){
+        网格数据 = []
+        if((var.maxEquippedCount) > 0){
+          for(网格序号 in range(0, (var.maxEquippedCount) - 1)){
+            网格数据.add(网格序号.round())
           }
         }
+        var.equipped_listRows = 网格数据
       }
       // init 包到达，重置防抖标志，恢复按钮可点击
     # packetHandler: update
@@ -314,74 +294,54 @@ ui:
       var.maxSetCount = packet['max_set_count']
       var.maxEquippedCount = packet['max_equipped_count']
       // ── 称号列表：仅在数量变化时重建 ──
-      if(var.maxTitleCount != oldMaxTitleCount && val.title_list['称号模板'] != none){
-        称号数 = var.maxTitleCount.round()
-        var.刷新轮次 = var.刷新轮次 + 1
-        while(val.title_list.childrenCount() > 1){
-          val.title_list.get(1).remove()
-        }
-        if(称号数 > 1){
-          for(序号 in range(1, 称号数 - 1)){
-            项 = val.title_list['称号模板'].copy('称号项_' + var.刷新轮次 + '_' + 序号.round())
-            项.entryKey = 序号.round()
+      if(var.title_listRows == none || var.title_listRows.size() != (var.maxTitleCount)){
+        网格数据 = []
+        if((var.maxTitleCount) > 0){
+          for(网格序号 in range(0, (var.maxTitleCount) - 1)){
+            网格数据.add(网格序号.round())
           }
         }
+        var.title_listRows = 网格数据
       }
       // ── 分组列表：仅在数量变化时重建 ──
-      if(var.maxGroupCount != oldMaxGroupCount && val.group_list['分组模板'] != none){
-        分组数 = var.maxGroupCount.round()
-        var.刷新轮次 = var.刷新轮次 + 1
-        while(val.group_list.childrenCount() > 1){
-          val.group_list.get(1).remove()
-        }
-        if(分组数 > 1){
-          for(序号 in range(1, 分组数 - 1)){
-            项 = val.group_list['分组模板'].copy('分组项_' + var.刷新轮次 + '_' + 序号.round())
-            项.entryKey = 序号.round()
+      if(var.group_listRows == none || var.group_listRows.size() != (var.maxGroupCount)){
+        网格数据 = []
+        if((var.maxGroupCount) > 0){
+          for(网格序号 in range(0, (var.maxGroupCount) - 1)){
+            网格数据.add(网格序号.round())
           }
         }
+        var.group_listRows = 网格数据
       }
       // ── 品质列表：仅在数量变化时重建 ──
-      if(var.maxQualityCount != oldMaxQualityCount && val.quality_list['品质模板'] != none){
-        品质数 = var.maxQualityCount.round()
-        var.刷新轮次 = var.刷新轮次 + 1
-        while(val.quality_list.childrenCount() > 1){
-          val.quality_list.get(1).remove()
-        }
-        if(品质数 > 1){
-          for(序号 in range(1, 品质数 - 1)){
-            项 = val.quality_list['品质模板'].copy('品质项_' + var.刷新轮次 + '_' + 序号.round())
-            项.entryKey = 序号.round()
+      if(var.quality_listRows == none || var.quality_listRows.size() != (var.maxQualityCount)){
+        网格数据 = []
+        if((var.maxQualityCount) > 0){
+          for(网格序号 in range(0, (var.maxQualityCount) - 1)){
+            网格数据.add(网格序号.round())
           }
         }
+        var.quality_listRows = 网格数据
       }
       // ── 套装列表：仅在数量变化时重建 ──
-      if(var.maxSetCount != oldMaxSetCount && val.set_list['套装模板'] != none){
-        套装数 = var.maxSetCount.round()
-        var.刷新轮次 = var.刷新轮次 + 1
-        while(val.set_list.childrenCount() > 1){
-          val.set_list.get(1).remove()
-        }
-        if(套装数 > 1){
-          for(序号 in range(1, 套装数 - 1)){
-            项 = val.set_list['套装模板'].copy('套装项_' + var.刷新轮次 + '_' + 序号.round())
-            项.entryKey = 序号.round()
+      if(var.set_listRows == none || var.set_listRows.size() != (var.maxSetCount)){
+        网格数据 = []
+        if((var.maxSetCount) > 0){
+          for(网格序号 in range(0, (var.maxSetCount) - 1)){
+            网格数据.add(网格序号.round())
           }
         }
+        var.set_listRows = 网格数据
       }
       // ── 已装备列表：仅在数量变化时重建 ──
-      if(var.maxEquippedCount != oldMaxEquippedCount && val.equipped_list['已装备模板'] != none){
-        已装备数 = var.maxEquippedCount.round()
-        var.刷新轮次 = var.刷新轮次 + 1
-        while(val.equipped_list.childrenCount() > 1){
-          val.equipped_list.get(1).remove()
-        }
-        if(已装备数 > 1){
-          for(序号 in range(1, 已装备数 - 1)){
-            项 = val.equipped_list['已装备模板'].copy('已装备项_' + var.刷新轮次 + '_' + 序号.round())
-            项.entryKey = 序号.round()
+      if(var.equipped_listRows == none || var.equipped_listRows.size() != (var.maxEquippedCount)){
+        网格数据 = []
+        if((var.maxEquippedCount) > 0){
+          for(网格序号 in range(0, (var.maxEquippedCount) - 1)){
+            网格数据.add(网格序号.round())
           }
         }
+        var.equipped_listRows = 网格数据
       }
       // update 包到达，重置防抖标志，恢复按钮可点击
 
@@ -691,15 +651,19 @@ controls:
             children:
               分组列表:
                 val: group_list
-                type: VStack
+                type: RepeatGrid
                 attribute:
+                  items: "var.group_listRows"
+                  flow: ~row
+                  column: 1
+                  spaceBetweenY: 8
+                  maxSize: "var.group_listRows == none ? 0 : var.group_listRows.size()"
                   width: 244
-                  spaceBetween: 8
                 children:
                   分组模板:
                     type: Canvas
                     attribute:
-                      entryKey: 0.round()
+                      entryKey: self.item
                       entry: var.groups[self.entryKey]
                       width: 244
                       height: 48
@@ -799,15 +763,19 @@ controls:
             children:
               品质列表:
                 val: quality_list
-                type: VStack
+                type: RepeatGrid
                 attribute:
+                  items: "var.quality_listRows"
+                  flow: ~row
+                  column: 1
+                  spaceBetweenY: 8
+                  maxSize: "var.quality_listRows == none ? 0 : var.quality_listRows.size()"
                   width: 244
-                  spaceBetween: 8
                 children:
                   品质模板:
                     type: Canvas
                     attribute:
-                      entryKey: 0.round()
+                      entryKey: self.item
                       entry: var.qualities[self.entryKey]
                       width: 244
                       height: 48
@@ -951,15 +919,19 @@ controls:
             children:
               称号列表:
                 val: title_list
-                type: VStack
+                type: RepeatGrid
                 attribute:
+                  items: "var.title_listRows"
+                  flow: ~row
+                  column: 1
+                  spaceBetweenY: 8
+                  maxSize: "var.title_listRows == none ? 0 : var.title_listRows.size()"
                   width: 364
-                  spaceBetween: 8
                 children:
                   称号模板:
                     type: Canvas
                     attribute:
-                      entryKey: 0.round()
+                      entryKey: self.item
                       entry: var.titles[self.entryKey]
                       width: 364
                       height: 64
@@ -1227,16 +1199,20 @@ controls:
                       visible: var.sets != none && var.sets.size() > 0
                   套装列表:
                     val: set_list
-                    type: VStack
+                    type: RepeatGrid
                     attribute:
+                      items: "var.set_listRows"
+                      flow: ~row
+                      column: 1
+                      spaceBetweenY: 10
+                      maxSize: "var.set_listRows == none ? 0 : var.set_listRows.size()"
                       width: "var.detailW - 76"
-                      spaceBetween: 10
                       visible: var.sets != none && var.sets.size() > 0
                     children:
                       套装模板:
                         type: Canvas
                         attribute:
-                          entryKey: 0.round()
+                          entryKey: self.item
                           entry: var.sets[self.entryKey]
                           width: "var.detailW - 76"
                           height: 80
@@ -1631,15 +1607,19 @@ controls:
                 children:
                   已装备列表:
                     val: equipped_list
-                    type: VStack
+                    type: RepeatGrid
                     attribute:
+                      items: "var.equipped_listRows"
+                      flow: ~row
+                      column: 1
+                      spaceBetweenY: 8
+                      maxSize: "var.equipped_listRows == none ? 0 : var.equipped_listRows.size()"
                       width: 540
-                      spaceBetween: 8
                     children:
                       已装备模板:
                         type: Canvas
                         attribute:
-                          entryKey: 0.round()
+                          entryKey: self.item
                           entry: var.equippedByGroup[self.entryKey]
                           width: 540
                           height: 64

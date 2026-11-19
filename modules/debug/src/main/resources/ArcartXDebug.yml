@@ -6,18 +6,18 @@ config-version: 1
 # 注意: 本模块面向个人本地调试使用，不做安全加固，请勿在生产服务器启用。
 
 debug:
-  enabled: true  # 是否启用调试桥（关闭后 WebSocket 不会启动）
+  enabled: false  # 显式启用后才启动本地 WebSocket
 
 websocket:
   port: 18899  # WebSocket 监听端口
   # 认证 token，客户端连接时需在 URL 中携带 ?token=xxx
-  # 例: ws://127.0.0.1:18899/?token=axs-debug-local
-  token: "axs-debug-local"
-  # 绑定地址，0.0.0.0 表示监听所有网卡（本地调试可改为 127.0.0.1）
-  host: "0.0.0.0"
+  # 设置至少 32 字符的随机令牌，仅使用字母、数字、连字符和下划线。
+  token: ""
+  # 只允许绑定回环地址 127.0.0.1 或 ::1。
+  host: "127.0.0.1"
 
 packet-capture:
   # 包流拦截环形缓冲容量（记录最近 N 条客户端包）
   buffer-size: 256
   # 是否在捕获时记录包负载内容
-  log-payload: true
+  log-payload: false

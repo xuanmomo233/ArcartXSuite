@@ -25,11 +25,10 @@ item:
   id: cod
   amount: 1                     # 物品数量
 difficulty: 10                  # 钓鱼难度（0-100，难度10，新手进阶）
-behaviors:                      # 小游戏中鱼的行为模式及权重
-  - type: smooth                # 平滑型：鱼缓慢平稳移动
-    weight: 0.8                 # 权重0.8（主要行为）
-  - type: floater               # 上浮型：鱼向轨道顶部移动
-    weight: 0.2                 # 权重0.2（次要行为）
+behavior-mode: sequence
+behaviors:
+  - { type: sinker, duration-ticks: 12, tell-ticks: 12, recovery-ticks: 18 }
+  - { type: floater, duration-ticks: 12, tell-ticks: 12, recovery-ticks: 18 }
 
 # ─── 小游戏机制（可选，覆盖全局配置） ──────────────────
 # 鲫鱼较温顺，进度衰减慢，逃离概率低

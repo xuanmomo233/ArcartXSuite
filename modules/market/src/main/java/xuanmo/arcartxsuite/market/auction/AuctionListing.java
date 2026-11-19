@@ -93,6 +93,6 @@ public class AuctionListing {
     }
 
     public enum ListingStatus {
-        ACTIVE, SOLD, EXPIRED, CANCELLED
+        PREPARING, ACTIVE, SOLD, EXPIRED, CANCELLED
     }
 }

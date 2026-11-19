@@ -7,7 +7,7 @@
 #   │   [格][格]        (展示位)       [格][格]    │
 #   ├ 左下页脚按钮组          底部说明条          右下页脚按钮组 ┘
 #
-# 数据流: 服务端 sendPacket(init/update) -> packetHandler -> var.* -> 模板复制渲染
+# 数据流: 服务端 sendPacket(init/update) -> packetHandler -> var.* -> RepeatGrid 渲染
 # 客户端回包: Packet.send('AXS_MENU', 'click'/'footer', token, id) / page / esc_open / close
 #
 # 启用方式：菜单 yml 顶部配置 `ui-id: menu_esc_grid`（不带命名空间），
@@ -66,6 +66,7 @@ ui:
       self.actions['applyPacket']()
   action:
     load: |-
+      var.closeAt = none
       var.menuUi = self
       var.packetId = 'AXS_MENU'
       var.closing = false
@@ -74,18 +75,21 @@ ui:
       var.gridRows = 0
       var.pageCount = 1
       var.pageIndex = 0
+      var.hasPrev = false
+      var.hasNext = false
+      var.title = '菜单'
+      var.pageTitle = '菜单'
+      var.displayTitle = '菜单'
+      var.grid_leftRows = []
+      var.grid_rightRows = []
+      var.footer_leftRows = []
+      var.footer_rightRows = []
       var.左数 = 0
       var.右数 = 0
       var.左页脚数 = 0
       var.右页脚数 = 0
       var.labels = {}
       var.footerLabels = {}
-      var.左引用 = {}
-      var.右引用 = {}
-      var.左页脚引用 = {}
-      var.右页脚引用 = {}
-      var.按钮轮次 = 0
-      var.页脚轮次 = 0
       var.air = '{"id":"minecraft:air","Count":1b}'
       var.goldIcon = '{"id":"minecraft:gold_ingot","Count":1b}'
       var.pointIcon = '{"id":"minecraft:emerald","Count":1b}'
@@ -100,6 +104,7 @@ ui:
       var.viewH = Screen.getHeight() / s
       var.offX = (var.viewW - 1920) / 2
     open: |-
+      var.closeAt = none
       var.closing = false
       var.actionBusy = false
       var.preview = none
@@ -108,9 +113,15 @@ ui:
       Sound.self('minecraft:item.book.page_turn', 0.9, 14)
       Packet.send(var.packetId, 'esc_open')
     tick: |-
+      if(var.closeAt != none && Time.currentTime() >= var.closeAt){
+        var.closeAt = none
+        Camera.setThirdPerson(false)
+        Screen.close()
+      }
       if(!var.closing && server.player_yaw != var.yaw){
         self.actions['applyCamera']()
       }
+      self.actions['refreshIcons']()
     seconds: |-
       if(var.actionBusy){
         var.actionBusySeconds = var.actionBusySeconds + 1
@@ -131,17 +142,14 @@ ui:
         var.preview = none
         var.anim = Smooth(0, 1, 240)
         Camera.clearState()
-        async {
-          Thread.sleep(260)
-          Camera.setThirdPerson(false)
-          Screen.close()
-        }
+        var.closeAt = Time.currentTime() + 260
       }
     keyPress: |-
       if(self.currentKeyPress() == 'ESCAPE'){
         self.actions['closeMenu']()
       }
     close: |-
+      var.closeAt = none
       var.closing = true
       var.preview = none
       Camera.setThirdPerson(false)
@@ -185,119 +193,46 @@ ui:
       var.footerCount = var.incoming['footerCount']
       var.gridRows = math.ceil(var.buttonCount / 4)
       var.displayTitle = var.pageCount > 1 ? var.pageTitle : var.title
+      if(var.displayTitle == none){
+        var.displayTitle = '菜单'
+      }
       while(var.displayTitle.length() >= 2 && (var.displayTitle.charAt(0) == '&' || var.displayTitle.charAt(0) == '§')){
         var.displayTitle = var.displayTitle.substring(2)
       }
       if(changedPage){
         val.grid_slider.setDragYRatio(0)
       }
-      // ── 统计左右两侧数量（偶列进左块，奇列进右块）──
-      目标数 = var.buttonCount.round()
-      var.左数 = 0
-      var.右数 = 0
-      for(i in range(0, 目标数 - 1)){
-        if((i % 4) < 2){
-          var.左数 = var.左数 + 1
-        }else{
-          var.右数 = var.右数 + 1
-        }
-      }
-      var.左页脚数 = 0
-      var.右页脚数 = 0
-      for(i in range(0, var.footerCount.round() - 1)){
-        if((i % 2) == 0){
-          var.左页脚数 = var.左页脚数 + 1
-        }else{
-          var.右页脚数 = var.右页脚数 + 1
-        }
-      }
-      // ── 数量变化才重建：副本引用集中管理，跨轮次重名靠轮次号区分 ──
-      if(val.grid_left.childrenCount() != var.左数 || val.grid_right.childrenCount() != var.右数){
-        for(key in var.左引用.keys()){
-          var.左引用[key].remove()
-        }
-        for(key in var.右引用.keys()){
-          var.右引用[key].remove()
-        }
-        var.左引用 = {}
-        var.右引用 = {}
-        var.按钮轮次 = (var.按钮轮次 + 1).round()
-        左模板 = val.grid_left.get(0)
-        右模板 = val.grid_right.get(0)
-        左序号 = 0
-        右序号 = 0
-        for(i in range(0, 目标数 - 1)){
-          ii = i.round()
-          if((i % 4) < 2){
-            if(左序号 == 0){
-              cell = 左模板
-            }else{
-              cell = 左模板.copy('左钮_' + var.按钮轮次 + '_' + 左序号.round())
-              var.左引用[左序号.round()] = cell
-            }
-            cell.entryKey = ii
-            左序号 = 左序号 + 1
+      // 前两列在左侧，后两列在右侧。页脚按索引奇偶分列。
+      grid_leftRows = []
+      grid_rightRows = []
+      if(var.buttonCount > 0){
+        for(i in range(0, var.buttonCount - 1)){
+          if(i % 4 < 2){
+            grid_leftRows.add(i.round())
           }else{
-            if(右序号 == 0){
-              cell = 右模板
-            }else{
-              cell = 右模板.copy('右钮_' + var.按钮轮次 + '_' + 右序号.round())
-              var.右引用[右序号.round()] = cell
-            }
-            cell.entryKey = ii
-            右序号 = 右序号 + 1
+            grid_rightRows.add(i.round())
           }
         }
-        if(左序号 == 0){
-          左模板.entryKey = 'x'
-        }
-        if(右序号 == 0){
-          右模板.entryKey = 'x'
-        }
       }
-      if(val.footer_left.childrenCount() != var.左页脚数 || val.footer_right.childrenCount() != var.右页脚数){
-        for(key in var.左页脚引用.keys()){
-          var.左页脚引用[key].remove()
-        }
-        for(key in var.右页脚引用.keys()){
-          var.右页脚引用[key].remove()
-        }
-        var.左页脚引用 = {}
-        var.右页脚引用 = {}
-        var.页脚轮次 = (var.页脚轮次 + 1).round()
-        左模板 = val.footer_left.get(0)
-        右模板 = val.footer_right.get(0)
-        左序号 = 0
-        右序号 = 0
-        for(i in range(0, var.footerCount.round() - 1)){
-          ii = i.round()
-          if((i % 2) == 0){
-            if(左序号 == 0){
-              cell = 左模板
-            }else{
-              cell = 左模板.copy('左脚_' + var.页脚轮次 + '_' + 左序号.round())
-              var.左页脚引用[左序号.round()] = cell
-            }
-            cell.entryKey = ii
-            左序号 = 左序号 + 1
+      var.左数 = grid_leftRows.size()
+      var.右数 = grid_rightRows.size()
+      footer_leftRows = []
+      footer_rightRows = []
+      if(var.footerCount > 0){
+        for(i in range(0, var.footerCount - 1)){
+          if(i % 2 == 0){
+            footer_leftRows.add(i.round())
           }else{
-            if(右序号 == 0){
-              cell = 右模板
-            }else{
-              cell = 右模板.copy('右脚_' + var.页脚轮次 + '_' + 右序号.round())
-              var.右页脚引用[右序号.round()] = cell
-            }
-            cell.entryKey = ii
-            右序号 = 右序号 + 1
+            footer_rightRows.add(i.round())
           }
         }
-        if(左序号 == 0){
-          左模板.entryKey = 'x'
-        }
-        if(右序号 == 0){
-          右模板.entryKey = 'x'
-        }
       }
+      var.左页脚数 = footer_leftRows.size()
+      var.右页脚数 = footer_rightRows.size()
+      var.grid_leftRows = grid_leftRows
+      var.grid_rightRows = grid_rightRows
+      var.footer_leftRows = footer_leftRows
+      var.footer_rightRows = footer_rightRows
       // ── 标签与图标字典（剥离 &/§ 颜色码）──
       var.labels = {}
       var.footerLabels = {}
@@ -322,34 +257,64 @@ ui:
         var.footerLabels[key] = label
       }
       // ── seticon 统一走保存的引用，不回查容器 ──
-      if(var.左数 > 0){
-        cell = val.grid_left.get(0)
-        cell['图标'].seticon()
-        for(key in var.左引用.keys()){
-          var.左引用[key]['图标'].seticon()
+      var.grid_leftIconsDirty = true
+      var.grid_rightIconsDirty = true
+      var.footer_leftIconsDirty = true
+      var.footer_rightIconsDirty = true
+    refreshIcons: |-
+      if(var.grid_leftIconsDirty == true && val.grid_left != none && val.grid_left.childrenCount() == var.左数){
+        var.grid_leftIconsDirty = false
+        if(var.左数 > 0){
+          for(网格序号 in range(0, var.左数 - 1)){
+            网格项 = val.grid_left.get(网格序号.round())
+            if(网格项 != none){
+              if(网格项['图标'] != none){
+                网格项['图标'].seticon()
+              }
+            }
+          }
         }
       }
-      if(var.右数 > 0){
-        cell = val.grid_right.get(0)
-        cell['图标'].seticon()
-        for(key in var.右引用.keys()){
-          var.右引用[key]['图标'].seticon()
+      if(var.grid_rightIconsDirty == true && val.grid_right != none && val.grid_right.childrenCount() == var.右数){
+        var.grid_rightIconsDirty = false
+        if(var.右数 > 0){
+          for(网格序号 in range(0, var.右数 - 1)){
+            网格项 = val.grid_right.get(网格序号.round())
+            if(网格项 != none){
+              if(网格项['图标'] != none){
+                网格项['图标'].seticon()
+              }
+            }
+          }
         }
       }
-      if(var.左页脚数 > 0){
-        cell = val.footer_left.get(0)
-        cell['图标'].seticon()
-        for(key in var.左页脚引用.keys()){
-          var.左页脚引用[key]['图标'].seticon()
+      if(var.footer_leftIconsDirty == true && val.footer_left != none && val.footer_left.childrenCount() == var.左页脚数){
+        var.footer_leftIconsDirty = false
+        if(var.左页脚数 > 0){
+          for(网格序号 in range(0, var.左页脚数 - 1)){
+            网格项 = val.footer_left.get(网格序号.round())
+            if(网格项 != none){
+              if(网格项['图标'] != none){
+                网格项['图标'].seticon()
+              }
+            }
+          }
         }
       }
-      if(var.右页脚数 > 0){
-        cell = val.footer_right.get(0)
-        cell['图标'].seticon()
-        for(key in var.右页脚引用.keys()){
-          var.右页脚引用[key]['图标'].seticon()
+      if(var.footer_rightIconsDirty == true && val.footer_right != none && val.footer_right.childrenCount() == var.右页脚数){
+        var.footer_rightIconsDirty = false
+        if(var.右页脚数 > 0){
+          for(网格序号 in range(0, var.右页脚数 - 1)){
+            网格项 = val.footer_right.get(网格序号.round())
+            if(网格项 != none){
+              if(网格项['图标'] != none){
+                网格项['图标'].seticon()
+              }
+            }
+          }
         }
       }
+
 controls:
   自适应全局布局:
     type: Adaptive
@@ -745,9 +710,12 @@ controls:
                   height: "math.max(152, var.gridRows * 152)"
                 children:
                   左列网格:
-                    type: HGrid
+                    type: RepeatGrid
                     val: grid_left
                     attribute:
+                      items: "var.grid_leftRows"
+                      flow: ~row
+                      maxSize: 2147483647
                       x: 0
                       y: 0
                       column: 2
@@ -757,7 +725,7 @@ controls:
                       菜单按钮:
                         type: Canvas
                         attribute:
-                          entryKey: 0.round()
+                          entryKey: self.item
                           entry: var.buttonRows[self.entryKey]
                           visible: self.entry != none
                           width: 120
@@ -818,7 +786,7 @@ controls:
                               itemScale: 1.1
                               normal: ~0,0,0,0
                               through: true
-                              seticon: "self.setItemIcon(var.iconJsons[self.parent.entryKey])"
+                              seticon: "self.setItemIcon(var.iconJsons[self.parent.entryKey] != none ? var.iconJsons[self.parent.entryKey] : var.air)"
                           标签底:
                             type: Texture
                             attribute:
@@ -852,9 +820,12 @@ controls:
                               radius: 10
                               through: true
                   右列网格:
-                    type: HGrid
+                    type: RepeatGrid
                     val: grid_right
                     attribute:
+                      items: "var.grid_rightRows"
+                      flow: ~row
+                      maxSize: 2147483647
                       x: 618
                       y: 0
                       column: 2
@@ -864,7 +835,7 @@ controls:
                       菜单按钮:
                         type: Canvas
                         attribute:
-                          entryKey: 0.round()
+                          entryKey: self.item
                           entry: var.buttonRows[self.entryKey]
                           visible: self.entry != none
                           width: 120
@@ -925,7 +896,7 @@ controls:
                               itemScale: 1.1
                               normal: ~0,0,0,0
                               through: true
-                              seticon: "self.setItemIcon(var.iconJsons[self.parent.entryKey])"
+                              seticon: "self.setItemIcon(var.iconJsons[self.parent.entryKey] != none ? var.iconJsons[self.parent.entryKey] : var.air)"
                           标签底:
                             type: Texture
                             attribute:
@@ -986,19 +957,23 @@ controls:
               through: true
           # ── 左下页脚按钮组（偶数位页脚按钮）──
           左页脚列:
-            type: HStack
+            type: RepeatGrid
             val: footer_left
             attribute:
+              items: "var.footer_leftRows"
+              flow: ~column
+              row: 1
+              spaceBetweenX: 18
+              maxSize: 2147483647
               point: ~bottom_left
               x: "44 - var.anim.get() * 160"
               y: "-34 + var.anim.get() * 180"
               height: 140
-              spaceBetween: 18
             children:
               页脚按钮:
                 type: Canvas
                 attribute:
-                  entryKey: 0.round()
+                  entryKey: self.item
                   entry: var.footerRows[self.entryKey]
                   visible: self.entry != none
                   width: 120
@@ -1061,7 +1036,7 @@ controls:
                       itemScale: 1.1
                       normal: ~0,0,0,0
                       through: true
-                      seticon: "self.setItemIcon(var.footerIconJsons[self.parent.entryKey])"
+                      seticon: "self.setItemIcon(var.footerIconJsons[self.parent.entryKey] != none ? var.footerIconJsons[self.parent.entryKey] : var.air)"
                   标签底:
                     type: Texture
                     attribute:
@@ -1096,19 +1071,23 @@ controls:
                       through: true
           # ── 右下页脚按钮组（奇数位页脚按钮）──
           右页脚列:
-            type: HStack
+            type: RepeatGrid
             val: footer_right
             attribute:
+              items: "var.footer_rightRows"
+              flow: ~column
+              row: 1
+              spaceBetweenX: 18
+              maxSize: 2147483647
               point: ~bottom_right
               x: "-44 + var.anim.get() * 160"
               y: "-34 + var.anim.get() * 180"
               height: 140
-              spaceBetween: 18
             children:
               页脚按钮:
                 type: Canvas
                 attribute:
-                  entryKey: 0.round()
+                  entryKey: self.item
                   entry: var.footerRows[self.entryKey]
                   visible: self.entry != none
                   width: 120
@@ -1171,7 +1150,7 @@ controls:
                       itemScale: 1.1
                       normal: ~0,0,0,0
                       through: true
-                      seticon: "self.setItemIcon(var.footerIconJsons[self.parent.entryKey])"
+                      seticon: "self.setItemIcon(var.footerIconJsons[self.parent.entryKey] != none ? var.footerIconJsons[self.parent.entryKey] : var.air)"
                   标签底:
                     type: Texture
                     attribute:

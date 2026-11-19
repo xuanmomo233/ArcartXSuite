@@ -10,6 +10,8 @@ import java.util.Locale;
 public enum MailStatus {
     UNREAD,
     READ,
+    CLAIM_PENDING,
+    CLAIM_REVIEW,
     CLAIMED,
     DELETED,
     EXPIRED;

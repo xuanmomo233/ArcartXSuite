@@ -25,7 +25,7 @@ import org.gradle.work.DisableCachingByDefault
  * 输出格式：随机 magic (4 bytes) + IV (12 bytes) + ciphertext + auth tag (16 bytes)。
  *
  * 模块作者需在 Gradle 中配置 moduleKey 和 moduleIv（Base64），
- * 或在任务执行时自动生成随机密钥并输出到控制台。
+ * 或在任务执行时自动生成随机密钥并写入产物旁的元数据文件。
  */
 @DisableCachingByDefault(because = "输出包含随机 IV，不适合缓存。")
 abstract class EncryptModuleAxbTask : DefaultTask() {
@@ -89,9 +89,6 @@ abstract class EncryptModuleAxbTask : DefaultTask() {
             iv = ByteArray(12).also { SecureRandom().nextBytes(it) }
             keyB64 = Base64.getEncoder().encodeToString(key)
             ivB64 = Base64.getEncoder().encodeToString(iv)
-            logger.lifecycle("[EncryptModuleAxb] 自动生成密钥（请保存到平台）：")
-            logger.lifecycle("  moduleKey = $keyB64")
-            logger.lifecycle("  moduleIv  = $ivB64")
         }
 
         val plain = jarFile.readBytes()

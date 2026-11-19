@@ -50,7 +50,7 @@ public final class SnowLumaProcessManager {
     private volatile InputStream download;
     private volatile String owner, phase, webUiPassword;
     private volatile Thread shutdownHook;
-    private volatile CompletableFuture<Void> shutdownCompletion = CompletableFuture.completedFuture(null);
+    private final CompletableFuture<Void> shutdownCompletion = new CompletableFuture<>();
 
     record CommandResult(int code, String output) {}
     @FunctionalInterface interface CommandRunner {
@@ -132,7 +132,6 @@ public final class SnowLumaProcessManager {
             return "SnowLuma 已启动。WebUI: " + webUiUrl()
                 + "\n登录 QQ 后配置对应账号的 Universal 正向 WS，将 access token 填入 onebot.access-token，再重载 QQBot。";
         } catch (Exception e) {
-            if (closed.get()) cleanupOwned();
             return failure("启动", e);
         } finally { status = Status.STOPPED; mutation.unlock(); }
     }
@@ -148,29 +147,27 @@ public final class SnowLumaProcessManager {
 
     /** Non-blocking for the Bukkit thread. This instance can never be enabled again. */
     public void shutdown() {
-        synchronized (launchLock) {
-            if (!closed.compareAndSet(false, true)) return;
-            shutdownCompletion = new CompletableFuture<>();
-        }
-        unregisterShutdownHook();
-        InputStream stream = download;
-        if (stream != null) try { stream.close(); } catch (IOException ignored) {}
-        Process process = nativeProcess;
-        if (process != null) terminate(process);
+        if (!closed.compareAndSet(false, true)) return;
         status = Status.STOPPED;
         CompletableFuture.runAsync(() -> {
+            InputStream stream = download;
+            if (stream != null) try { stream.close(); } catch (IOException ignored) {}
             mutation.lock();
             try {
-                if (cleanupOwned()) shutdownCompletion.complete(null);
-                else shutdownCompletion.completeExceptionally(new IOException("旧托管进程/容器清理失败，不能启动新实例"));
+                if (!cleanupOwned()) throw new java.io.UncheckedIOException(
+                    new IOException("旧托管进程/容器清理失败，不能启动新实例"));
+                unregisterShutdownHook();
             } finally { mutation.unlock(); }
+        }).whenComplete((ignored, failure) -> {
+            if (failure == null) shutdownCompletion.complete(null);
+            else shutdownCompletion.completeExceptionally(failure);
         });
     }
 
-    /** Await on the module's startup worker before enabling a replacement manager. */
+    /** The host waits for confirmed cleanup before enabling a replacement manager. */
     public CompletableFuture<Void> shutdownAsync() {
         shutdown();
-        synchronized (launchLock) { return shutdownCompletion; }
+        return shutdownCompletion.copy();
     }
 
     public CompletableFuture<String> installAsync(@Nullable Consumer<String> progress) {
@@ -185,7 +182,6 @@ public final class SnowLumaProcessManager {
             } catch (Exception e) { return failure("安装/更新", e); }
             finally {
                 status = Status.STOPPED;
-                if (closed.get()) cleanupOwned();
                 mutation.unlock();
             }
         });
@@ -431,7 +427,7 @@ public final class SnowLumaProcessManager {
             webUiPassword = null;
             return "认证文件已备份，请 start 生成初始密码，再 password 查看。";
         } catch (Exception e) { return failure("重置密码", e); }
-        finally { if (closed.get()) cleanupOwned(); mutation.unlock(); }
+        finally { mutation.unlock(); }
     }
 
     public CompletableFuture<String> checkUpdateAsync() {

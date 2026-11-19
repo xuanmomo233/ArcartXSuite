@@ -22,6 +22,31 @@ import sys
 import zipfile
 from pathlib import Path
 
+
+def runtime_target_native(jar):
+    layouts = {
+        "universal": ("windows,linux", "any", {"native/axs-native.enc", "native/libaxs-native.enc"}),
+        "windows-x86_64": ("windows", "x86_64", {"native/axs-native.enc"}),
+        "linux-x86_64": ("linux", "x86_64", {"native/libaxs-native.enc"}),
+    }
+    if "META-INF/axs-runtime.properties" not in jar.namelist():
+        return "universal", layouts["universal"][2]
+    properties = {}
+    for raw in jar.read("META-INF/axs-runtime.properties").decode("utf-8").splitlines():
+        if not raw.strip() or raw.lstrip().startswith("#"):
+            continue
+        key, value = raw.split("=", 1)
+        if key in properties:
+            raise ValueError("duplicate runtime property")
+        properties[key] = value
+    target = properties.get("target")
+    if target not in layouts:
+        raise ValueError("unknown runtime target")
+    os_name, arch, native = layouts[target]
+    if properties.get("format") != "1" or properties.get("os") != os_name or properties.get("arch") != arch:
+        raise ValueError("invalid runtime target metadata")
+    return target, native
+
 ALG_AES_256_GCM = 0x01
 ALG_CHACHA20_POLY1305 = 0x02
 
@@ -145,11 +170,16 @@ def score_protection(results):
 
 
 def main():
+    from host_seal import HOST_MANIFEST, HOST_SIGNATURE, verify_host_seal
+
     parser = argparse.ArgumentParser(description="验证 JAR 加密保护完整性")
     parser.add_argument("--input", required=True, help="加密 JAR 文件路径")
     parser.add_argument("--keys-dir", default=None, help="密钥目录（包含公钥）")
     parser.add_argument("--verbose", action="store_true", help="详细输出")
+    parser.add_argument("--strict", action="store_true", help="按发行版必需的校验项决定退出状态")
     args = parser.parse_args()
+    if args.strict and not args.keys_dir:
+        parser.error("--strict 需要 --keys-dir")
 
     input_jar = Path(args.input)
     if not input_jar.exists():
@@ -173,7 +203,25 @@ def main():
         results["encrypted_count"] = len(encrypted)
         results["bootstrap_count"] = len(bootstrap)
         results["total_classes"] = len(encrypted) + len(bootstrap)
-        results["native_platform_count"] = len(set(n.split('/')[1] for n in native if '/' in n and len(n.split('/')) > 2))
+        try:
+            target, release_native = runtime_target_native(zin)
+            results["runtime_target_valid"] = True
+        except (ValueError, UnicodeError) as error:
+            print(f"    [!] 平台清单无效: {error}")
+            target, release_native = "invalid", set()
+            results["runtime_target_valid"] = False
+        results["required_native_platform_count"] = len(release_native)
+        native_platforms = {
+            platform for platform, paths in (
+                ("windows", {"native/axs-native.dll", "native/axs-native.enc"}),
+                ("linux", {"native/libaxs-native.so", "native/libaxs-native.enc"}),
+            )
+            if paths.intersection(all_names)
+        }
+        results["native_platform_count"] = len(native_platforms)
+        results["release_native"] = results["runtime_target_valid"] and all(
+            name in all_names and zin.getinfo(name).file_size > 16 for name in release_native
+        ) and not ({"native/axs-native.enc", "native/libaxs-native.enc"} - release_native).intersection(all_names)
         results["has_protection_mf"] = has_pmf
         results["encryption_ratio"] = len(encrypted) / max(len(encrypted) + len(bootstrap), 1)
 
@@ -181,6 +229,7 @@ def main():
         print(f"    加密类: {len(encrypted)}")
         print(f"    引导类: {len(bootstrap)}")
         print(f"    Native 平台: {results['native_platform_count']}")
+        print(f"    发行目标: {target}")
         print(f"    加密覆盖率: {results['encryption_ratio']*100:.1f}%")
 
         # 验证 .enc 格式
@@ -204,6 +253,7 @@ def main():
         print(f"\n[3/5] 完整性校验:")
         results["has_signature"] = False
         results["signature_valid"] = None
+        results["hash_match"] = False
         if has_pmf:
             pmf_content = zin.read("META-INF/PROTECTION.MF").decode('utf-8')
             pmf_lines = {}
@@ -219,6 +269,7 @@ def main():
             # 计算 Merkle 根并比对
             computed_root = build_hash_tree(encrypted)
             hash_match = computed_root.hex() == stored_hash
+            results["hash_match"] = hash_match
             print(f"    Merkle 根匹配: {'YES' if hash_match else 'NO'}")
 
             if stored_sig and args.keys_dir:
@@ -231,52 +282,22 @@ def main():
         else:
             print(f"    [!] 未找到 PROTECTION.MF")
 
-        # BOOTSTRAP.MF 明文类清单校验（与 native verify_bootstrap_classes 同构）
-        results["bootstrap_manifest_ok"] = None
-        if has_pmf:
-            has_bmf = "META-INF/BOOTSTRAP.MF" in all_names
-            has_bsig = "META-INF/BOOTSTRAP.SIG" in all_names
-            if not (has_bmf and has_bsig):
-                print(f"    [!] 缺少 BOOTSTRAP.MF/BOOTSTRAP.SIG（native 引导类完整性校验将拒绝启动）")
-                results["bootstrap_manifest_ok"] = False
+        results["host_seal_valid"] = None
+        if args.strict or HOST_MANIFEST in all_names or HOST_SIGNATURE in all_names:
+            if not args.keys_dir:
+                print("    [!] 未提供公钥，无法验证宿主签名清单")
             else:
-                mf_data = zin.read("META-INF/BOOTSTRAP.MF")
-                sig_data = zin.read("META-INF/BOOTSTRAP.SIG")
-                ok = len(sig_data) == 64
-                # 解析清单并逐一比对
-                entries = {}
-                in_entries = False
-                for line in mf_data.decode("utf-8").splitlines():
-                    if not in_entries:
-                        if line == "":
-                            in_entries = True
-                        continue
-                    if not line:
-                        continue
-                    name, _, hexv = line.rpartition(" ")
-                    entries[name] = hexv
-                plain = {n: zin.read(n) for n in all_names
-                         if n.endswith(".class") and not n.startswith("ENCRYPTED/")}
-                problems = []
-                if set(plain.keys()) != set(entries.keys()):
-                    missing = set(entries) - set(plain)
-                    extra = set(plain) - set(entries)
-                    problems.append(f"集合不符(缺 {len(missing)} 多 {len(extra)})")
+                try:
+                    from cryptography.hazmat.primitives.serialization import load_pem_public_key
+
+                    public_key = load_pem_public_key((Path(args.keys_dir) / "ed25519_public.pem").read_bytes())
+                    count = verify_host_seal(zin, public_key)
+                except Exception as exc:
+                    results["host_seal_valid"] = False
+                    print(f"    [!] 宿主签名清单验证失败: {type(exc).__name__}: {exc}")
                 else:
-                    bad = [n for n, d in plain.items() if hashlib.sha256(d).hexdigest() != entries[n]]
-                    if bad:
-                        problems.append(f"{len(bad)} 个类哈希不符")
-                if args.keys_dir and ok:
-                    pub_key = Path(args.keys_dir) / "ed25519_public.pem"
-                    sig_ok, msg = verify_signature(hashlib.sha256(mf_data).digest(), sig_data.hex(), pub_key)
-                    if not sig_ok:
-                        problems.append(f"清单签名无效: {msg}")
-                if problems:
-                    print(f"    [!] BOOTSTRAP.MF 校验失败: {'; '.join(problems)}")
-                    results["bootstrap_manifest_ok"] = False
-                else:
-                    print(f"    BOOTSTRAP.MF 明文类清单: {len(entries)} 类，哈希与签名一致")
-                    results["bootstrap_manifest_ok"] = True
+                    results["host_seal_valid"] = True
+                    print(f"    宿主签名清单及明文边界检查通过（{count} 个条目）")
 
         # 结构验证
         print(f"\n[4/5] JAR 结构:")
@@ -303,13 +324,13 @@ def main():
     score = score_protection(results)
     print(f"    总分: {score}/100")
     if score >= 80:
-        level = "极高 (AI 逆向需数月)"
+        level = "极高"
     elif score >= 60:
-        level = "高 (AI 逆向需数周)"
+        level = "高"
     elif score >= 30:
-        level = "中 (AI 逆向需数天)"
+        level = "中"
     else:
-        level = "低 (AI 逆向可在数小时内完成)"
+        level = "低"
     print(f"    等级: {level}")
 
     print(f"\n{'='*50}")
@@ -317,15 +338,30 @@ def main():
     if not structure_ok:
         print(f"  WARNINGS: JAR 结构不完整")
     gaps = []
-    if results["native_platform_count"] < 2:
-        gaps.append("缺少双平台 native 库")
+    if results["native_platform_count"] < results["required_native_platform_count"]:
+        gaps.append("缺少发行目标所需的 native 库")
+    if not results["runtime_target_valid"]:
+        gaps.append("平台清单无效")
     if results["signature_valid"] is not True:
         gaps.append("签名未验证")
-    if results.get("bootstrap_manifest_ok") is False:
-        gaps.append("BOOTSTRAP.MF 明文类清单校验失败")
+    if results["host_seal_valid"] is False:
+        gaps.append("宿主签名清单校验失败")
     if gaps:
         print(f"  GAPS: {'; '.join(gaps)}")
     print(f"{'='*50}")
+
+    if args.strict:
+        passed = (
+            len(all_names) == len(set(all_names))
+            and results["structure_valid"]
+            and results["format_valid_ratio"] == 1
+            and results["release_native"]
+            and results["hash_match"]
+            and results["signature_valid"] is True
+            and results["host_seal_valid"] is True
+        )
+        print("  发行版完整性校验通过" if passed else "  发行版完整性校验失败")
+        return 0 if passed else 1
 
     return 0 if score >= 60 else 1
 

@@ -1,11 +1,16 @@
 package xuanmo.arcartxsuite.lottery.storage;
 
+import java.sql.SQLException;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import xuanmo.arcartxsuite.lottery.model.CaseResult;
 import xuanmo.arcartxsuite.lottery.model.PlayerCaseState;
 import xuanmo.arcartxsuite.lottery.model.PlayerGachaState;
+import xuanmo.arcartxsuite.lottery.model.PoolItem;
 
 /**
  * Lottery 模块数据仓库接口。
@@ -23,14 +28,41 @@ public interface LotteryRepository {
      * @param poolId     奖池 ID
      * @return 抽卡状态，不存在时返回初始空状态
      */
-    PlayerGachaState loadGachaState(@NotNull UUID playerUuid, @NotNull String poolId);
+    PlayerGachaState loadGachaState(@NotNull UUID playerUuid, @NotNull String poolId) throws SQLException;
 
-    /**
-     * 保存玩家的 GACHA 抽卡状态（upsert）。
-     *
-     * @param state 抽卡状态
-     */
-    void saveGachaState(@NotNull PlayerGachaState state);
+    boolean beginGachaOperation(UUID playerId, UUID operation, String poolId, String details) throws SQLException;
+
+    void commitGachaPull(UUID operation, PlayerGachaState state, String poolId,
+                         int count, String items, boolean guaranteed, List<PoolItem> prizes,
+                         Map<String, Long> pointCosts, Map<String, Long> pointRewards) throws SQLException;
+
+    record PrizePlan(int nextIndex, List<PoolItem> items) {}
+
+    PrizePlan loadCommittedPrizes(UUID playerId, UUID operation) throws SQLException;
+
+    boolean beginPrize(UUID playerId, UUID operation, int index, String evidence) throws SQLException;
+
+    boolean completePrize(UUID playerId, UUID operation, int index, String evidence) throws SQLException;
+
+    GachaOperation findGachaOperation(UUID playerId) throws SQLException;
+
+    GachaOperation findGachaOperation(UUID playerId, UUID operation) throws SQLException;
+
+    List<RefundClaim> findRefundClaims(UUID playerId, UUID operation) throws SQLException;
+
+    static String refundClaimPool(UUID operation) { return "rollback:" + operation; }
+
+    record RefundClaim(long id, String itemMetadata, boolean transferred, String transferId) { }
+
+    boolean changeGachaOperation(UUID playerId, UUID operation, String expected, String next) throws SQLException;
+
+    boolean finishGachaOperation(UUID playerId, UUID operation, String expected) throws SQLException;
+
+    boolean appendGachaEvidence(UUID playerId, UUID operation, String phase, String details) throws SQLException;
+
+    boolean resolveGachaOperation(UUID playerId, UUID operation, String expected, String reason) throws SQLException;
+
+    record GachaOperation(UUID id, String poolId, String status, String details) {}
 
     /**
      * 删除玩家在指定奖池的 GACHA 抽卡状态。
@@ -38,7 +70,7 @@ public interface LotteryRepository {
      * @param playerUuid 玩家 UUID
      * @param poolId     奖池 ID
      */
-    void deleteGachaState(@NotNull UUID playerUuid, @NotNull String poolId);
+    void deleteGachaState(@NotNull UUID playerUuid, @NotNull String poolId) throws SQLException;
 
     // ─── Case State ─────────────────────────────────────────
 
@@ -50,6 +82,13 @@ public interface LotteryRepository {
      * @return 开箱状态，不存在时返回初始空状态
      */
     PlayerCaseState loadCaseState(@NotNull UUID playerUuid, @NotNull String poolId);
+
+    void commitCaseOpen(UUID playerId, UUID operation, String poolId, List<CaseResult> results,
+                        Map<String, Long> pointCosts, Map<String, Long> pointRewards) throws SQLException;
+
+    /** Use the same reservation and transaction for exchange quota, points and the delivery boundary. */
+    void commitExchange(UUID playerId, UUID operation, String itemId, int limit,
+                        String prize, PoolItem reward, Map<String, Long> pointCosts) throws SQLException;
 
     /**
      * 保存玩家的 CASE 开箱状态（upsert）。
@@ -76,6 +115,22 @@ public interface LotteryRepository {
 
     int getExchangeCount(@NotNull UUID playerUuid, @NotNull String itemId);
 
+    /** Read-only display values. An unavailable datastore is reported as a failed read. */
+    GachaView loadGachaView(UUID playerId, String effectivePoolId, Set<String> pointIds) throws SQLException;
+
+    ExchangeView loadExchangeView(UUID playerId, Set<String> pointIds, Set<String> exchangeIds) throws SQLException;
+
+    Map<String, Long> loadPointBalances(UUID playerId, Set<String> pointIds) throws SQLException;
+    Map<String, Long> loadAllPointBalances(UUID playerId) throws SQLException;
+
+    List<GachaLogEntry> loadGachaHistory(UUID playerId, String poolId, int limit) throws SQLException;
+
+    List<CaseLogEntry> loadCaseHistory(UUID playerId, String poolId, int limit) throws SQLException;
+
+    record GachaView(PlayerGachaState state, Map<String, Long> points) {}
+
+    record ExchangeView(Map<String, Long> points, Map<String, Integer> counts) {}
+
     boolean incrementExchangeCount(@NotNull UUID playerUuid, @NotNull String itemId);
 
     boolean decrementExchangeCount(@NotNull UUID playerUuid, @NotNull String itemId);
@@ -100,12 +155,14 @@ public interface LotteryRepository {
      */
     @NotNull List<PendingClaim> getPendingClaims(@NotNull UUID playerUuid);
 
-    /**
-     * 将指定待领取奖励标记为已领取。
-     *
-     * @param claimId 待领取记录 ID
-     */
-    void markPendingClaimClaimed(long claimId);
+    List<PendingClaim> loadTransferableClaims(UUID player, String target, int limit) throws SQLException;
+
+    /** Bind the legacy row to one durable host store and one permanent request key. */
+    UUID prepareClaimTransfer(UUID player, long claimId, String target) throws SQLException;
+
+    boolean confirmClaimTransfer(UUID player, long claimId, String target, UUID transfer) throws SQLException;
+
+    int countPendingClaims(UUID player) throws SQLException;
 
     /**
      * 待领取奖励记录。
@@ -122,19 +179,6 @@ public interface LotteryRepository {
                         String itemData, long createdTime, int attempts) {}
 
     // ─── Logs ───────────────────────────────────────────────
-
-    /**
-     * 记录一次 GACHA 抽卡日志。
-     *
-     * @param playerUuid   玩家 UUID
-     * @param poolId       奖池 ID
-     * @param pullCount    本次抽卡次数
-     * @param itemsJson    获得奖品的 JSON 字符串
-     * @param pityAtPull   抽卡时的 5 星保底计数
-     * @param guaranteed   本次是否触发大保底
-     */
-    void logGachaPull(@NotNull UUID playerUuid, @NotNull String poolId, int pullCount,
-                      @NotNull String itemsJson, int pityAtPull, boolean guaranteed);
 
     /**
      * 记录一次 CASE 开箱日志。

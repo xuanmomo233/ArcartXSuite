@@ -38,6 +38,9 @@ ui:
       var.page = packet['page']
       var.packetId = packet['packetId']
       var.actionToken = packet['action_token']
+      var.pageNumber = packet['pageNumber']
+      var.hasPrevious = packet['hasPrevious']
+      var.hasNext = packet['hasNext']
       var.players = packet['players']
       var.playerCount = packet['playerCount']
       var.warps = packet['warps']
@@ -51,6 +54,9 @@ ui:
       var.worldWeather = packet['worldWeather']
   action:
     load: |-
+      var.hasPrevious = 'false'
+      var.hasNext = 'false'
+      var.pageNumber = '1'
       var.banCount = '0'
       var.muteCount = '0'
       var.playerCount = '0'
@@ -147,6 +153,52 @@ controls:
               x: 288
               texts: "'&a在线 &f' + var.playerCount"
               fontSize: 36
+          分页状态:
+            type: Text
+            attribute:
+              point: ~middle_center
+              through: true
+              visible: "var.hasPrevious == 'true' || var.hasNext == 'true'"
+              texts: "'&f第 ' + var.pageNumber + ' 页'"
+              fontSize: 24
+          上一页:
+            type: Canvas
+            attribute:
+              point: ~middle_center
+              x: -88
+              width: 52
+              height: 32
+              visible: "var.hasPrevious == 'true'"
+            action:
+              clickLeft: |-
+                Packet.send(var.packetId, 'previous')
+            children:
+              文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  through: true
+                  texts: "~&f上一页"
+                  fontSize: 21
+          下一页:
+            type: Canvas
+            attribute:
+              point: ~middle_center
+              x: 88
+              width: 52
+              height: 32
+              visible: "var.hasNext == 'true'"
+            action:
+              clickLeft: |-
+                Packet.send(var.packetId, 'next')
+            children:
+              文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  through: true
+                  texts: "~&f下一页"
+                  fontSize: 21
           关闭按钮:
             type: Canvas
             attribute:
@@ -521,17 +573,22 @@ controls:
                 children:
                   players_list:
                     val: player_data
-                    type: VStack
+                    type: RepeatGrid
                     attribute:
+                      items: var.players
+                      flow: ~row
+                      column: 1
+                      maxSize: "var.players == none ? 0 : var.players.size()"
+                      key: ~uuid
                       x: 0
                       y: 0
                       width: "var.contentW - 82"
-                      spaceBetween: 8
+                      spaceBetweenY: 8
                     children:
                       玩家行:
                         type: Canvas
                         attribute:
-                          entry: var.players[self.key]
+                          entry: self.item
                           visible: self.entry != none
                           width: "var.contentW - 90"
                           height: 72
@@ -944,18 +1001,23 @@ controls:
                     }
                 children:
                   bans_list:
-                    val: ban_data
-                    type: VStack
+                    val: bans_list
+                    type: RepeatGrid
                     attribute:
+                      items: var.bans
+                      key: ~uuid
+                      flow: ~row
+                      column: 1
+                      spaceBetweenY: 8
+                      maxSize: "var.bans == none ? 0 : var.bans.size()"
                       x: 0
                       y: 0
                       width: "var.contentW - 82"
-                      spaceBetween: 8
                     children:
                       封禁行:
                         type: Canvas
                         attribute:
-                          entry: var.bans[self.key]
+                          entry: self.item
                           visible: self.entry != none
                           width: "var.contentW - 90"
                           height: 72
@@ -997,6 +1059,33 @@ controls:
                               texts: "self.parent.entry['permanent'] == 'true' ? '&c永久' : '&e临时'"
                               fontSize: 36
                               through: true
+                          查看处罚历史:
+                            type: Canvas
+                            attribute:
+                              point: ~middle_right
+                              x: -116
+                              width: 90
+                              height: 48
+                            action:
+                              clickLeft: |-
+                                Packet.send(var.packetId, 'ban_history', var.actionToken, self.parent.entry['uuid'])
+                            children:
+                              历史背景:
+                                type: Texture
+                                attribute:
+                                  point: ~stretch_all
+                                  through: true
+                                  normal: ~62,66,74,210
+                                  hover: ~80,90,110,230
+                                  shape: ~round_rect
+                                  radius: 8
+                              历史文字:
+                                type: Text
+                                attribute:
+                                  point: ~middle_center
+                                  texts: "~&f历史"
+                                  fontSize: 28
+                                  through: true
                           解封按钮:
                             type: Canvas
                             attribute:
@@ -1113,17 +1202,22 @@ controls:
                 children:
                   mutes_list:
                     val: mute_data
-                    type: VStack
+                    type: RepeatGrid
                     attribute:
+                      items: var.mutes
+                      flow: ~row
+                      column: 1
+                      maxSize: "var.mutes == none ? 0 : var.mutes.size()"
+                      key: ~uuid
                       x: 0
                       y: 0
                       width: "var.contentW - 82"
-                      spaceBetween: 8
+                      spaceBetweenY: 8
                     children:
                       禁言行:
                         type: Canvas
                         attribute:
-                          entry: var.mutes[self.key]
+                          entry: self.item
                           visible: self.entry != none
                           width: "var.contentW - 90"
                           height: 72
@@ -1218,6 +1312,19 @@ controls:
                   y: 0
                   texts: "~&f传送点管理"
                   fontSize: 48
+              传送点名称输入:
+                type: TextBox
+                val: adminWarpName
+                attribute:
+                  point: ~top_right
+                  x: -178
+                  y: 0
+                  width: 220
+                  height: 38
+                  length: 64
+                  emptyText: "~传送点名称"
+                  background: ~62,66,74,210
+                  fontSize: 26
               新建传送点按钮:
                 type: Canvas
                 attribute:
@@ -1228,7 +1335,7 @@ controls:
                   height: 44
                 action:
                   clickLeft: |-
-                    Packet.send(var.packetId, 'set_warp', var.actionToken, 'new_warp')
+                    Packet.send(var.packetId, 'set_warp', var.actionToken, val.adminWarpName.getContent())
                 children:
                   新建底:
                     type: Texture
@@ -1248,8 +1355,8 @@ controls:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      texts: "~&f+ 新建传送点"
-                      fontSize: 36
+                      texts: "~&f保存当前位置"
+                      fontSize: 26
                       through: true
               传送点滑轨:
                 type: Texture
@@ -1295,18 +1402,22 @@ controls:
                     }
                 children:
                   warps_list:
-                    val: warp_data
-                    type: VStack
+                    val: adminWarpList
+                    type: RepeatGrid
                     attribute:
+                      items: var.warps
+                      flow: ~row
+                      column: 1
+                      spaceBetweenY: 8
+                      maxSize: "var.warps == none ? 0 : var.warps.size()"
                       x: 0
                       y: 0
                       width: "var.contentW - 82"
-                      spaceBetween: 8
                     children:
                       传送点行:
                         type: Canvas
                         attribute:
-                          entry: var.warps[self.key]
+                          entry: self.item
                           visible: self.entry != none
                           width: "var.contentW - 90"
                           height: 56

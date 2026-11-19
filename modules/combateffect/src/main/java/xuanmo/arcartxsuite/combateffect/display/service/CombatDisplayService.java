@@ -3,7 +3,6 @@ package xuanmo.arcartxsuite.combateffect.display.service;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import org.bukkit.Bukkit;
@@ -12,7 +11,6 @@ import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
-import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityRegainHealthEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
@@ -20,6 +18,7 @@ import xuanmo.arcartxsuite.api.attribute.AttributeBridgeRegistry;
 import xuanmo.arcartxsuite.api.attribute.AttributeDamageEvent;
 import xuanmo.arcartxsuite.api.attribute.AttributeHealEvent;
 import xuanmo.arcartxsuite.api.bridge.ClientBridgeAPI;
+import xuanmo.arcartxsuite.api.event.CombatDamageEvent;
 import xuanmo.arcartxsuite.api.util.AttributeResolver;
 import xuanmo.arcartxsuite.combateffect.display.config.CombatDisplayConfiguration;
 import java.util.logging.Logger;
@@ -110,11 +109,10 @@ public final class CombatDisplayService {
     public void start() {
         registerListener(new CombatDisplayDamageListener(this));
         registerListener(new CombatDisplayHealListener(this));
-        registerListener(new CombatDisplayTaczListener(this));
         registerMythicHealListenerIfAvailable();
 
-        if (attributeBridge != null && attributeBridge.hasDamageSource()) {
-            activeDamageSource = resolveActiveSource();
+        activeDamageSource = resolveActiveSource();
+        if (attributeBridge != null) {
             if (activeDamageSource != CombatDisplayDamageSource.NONE
                 && activeDamageSource != CombatDisplayDamageSource.BUKKIT) {
                 attributeDamageListener = event -> {
@@ -189,29 +187,12 @@ public final class CombatDisplayService {
         return activeDamageSource;
     }
 
-    void handleDamage(EntityDamageByEntityEvent event) {
-        if (activeDamageSource != CombatDisplayDamageSource.NONE
-            && activeDamageSource != CombatDisplayDamageSource.BUKKIT) {
-            return;
+    void handleDamage(CombatDamageEvent event) {
+        if (activeDamageSource == CombatDisplayDamageSource.BUKKIT
+                || activeDamageSource == CombatDisplayDamageSource.SYMPHONY
+                    && configuration.damageSourceFallback() && event.getSource() != CombatDamageEvent.Source.SYMPHONY) {
+            handleStandardDamage(event.getAttacker(), event.getTarget(), event.getDamage());
         }
-        handleStandardDamage(resolveBukkitAttacker(event), event.getEntity(), event.getFinalDamage());
-    }
-
-    private Player resolveBukkitAttacker(EntityDamageByEntityEvent event) {
-        Entity damager = event.getDamager();
-        if (damager instanceof Player p) return p;
-        if (damager instanceof org.bukkit.entity.Projectile proj) {
-            if (proj.getShooter() instanceof Player p) return p;
-        }
-        return null;
-    }
-
-    void handleTaczDamage(xuanmo.arcartxsuite.api.event.TaczGunDamageEvent event) {
-        if (activeDamageSource != CombatDisplayDamageSource.NONE
-            && activeDamageSource != CombatDisplayDamageSource.BUKKIT) {
-            return;
-        }
-        handleStandardDamage(event.getAttacker(), event.getTarget(), event.getDamage());
     }
 
     void handleMythicLibDamage(Player attacker, Entity target, double damage) {
@@ -260,7 +241,7 @@ public final class CombatDisplayService {
         // 闪避优先处理（damage=0，使用独立飘字样式）
         if (dodged) {
             if (configuration.dodgedEnabled()) {
-                trySendDamageDisplay(attacker, target, configuration.dodgedConfigId(), 0.0D);
+                sendDamageToViewer(attacker, target, configuration.dodgedConfigId(), 0.0D);
             }
             return;
         }
@@ -316,13 +297,16 @@ public final class CombatDisplayService {
     }
 
     private CombatDisplayDamageSource resolveActiveSource() {
-        boolean apAvailable = attributeBridge.attributePlus().available()
+        boolean apAvailable = attributeBridge != null && attributeBridge.attributePlus() != null
+            && attributeBridge.attributePlus().available()
             && configuration.damageAttributePlusCompatible();
-        boolean caAvailable = attributeBridge.craneAttribute().available()
+        boolean caAvailable = attributeBridge != null && attributeBridge.craneAttribute() != null
+            && attributeBridge.craneAttribute().available()
             && configuration.craneAttributeDamageEnabled();
-        boolean mlAvailable = attributeBridge.mythicLib().available()
+        boolean mlAvailable = attributeBridge != null && attributeBridge.mythicLib() != null
+            && attributeBridge.mythicLib().available()
             && configuration.mythicLibDamageEnabled();
-        boolean symAvailable = attributeBridge.symphony().available()
+        boolean symAvailable = attributeBridge != null && attributeBridge.symphonyDamageAvailable()
             && configuration.symphonyDamageEnabled();
         boolean bukkitAvailable = configuration.damageEnabled() || configuration.playerDamageEnabled();
         return CombatDisplayDamageSourceResolver.resolve(
@@ -520,15 +504,10 @@ public final class CombatDisplayService {
         if (target == null || configId == null || configId.isBlank() || !clientBridge.isAvailable()) {
             return;
         }
-        if (attacker != null && attacker.isOnline()) {
-            clientBridge.sendDamageDisplay(attacker, configId, amount, target);
-        }
         if (configuration.showOthersDamage()) {
-            clientBridge.forEachSeenPlayer(target, viewer -> {
-                if (attacker == null || !viewer.equals(attacker)) {
-                    clientBridge.sendDamageDisplay(viewer, configId, amount, target);
-                }
-            });
+            clientBridge.broadcastDamageDisplay(attacker, configId, amount, target);
+        } else if (attacker != null && attacker.isOnline()) {
+            clientBridge.sendDamageDisplay(attacker, configId, amount, target);
         }
     }
 
@@ -536,7 +515,7 @@ public final class CombatDisplayService {
         if (target == null || configId == null || configId.isBlank() || !clientBridge.isAvailable()) {
             return;
         }
-        clientBridge.forEachSeenPlayer(target, viewer -> clientBridge.sendDamageDisplay(viewer, configId, amount, target));
+        clientBridge.broadcastDamageDisplay(null, configId, amount, target);
     }
 }
 

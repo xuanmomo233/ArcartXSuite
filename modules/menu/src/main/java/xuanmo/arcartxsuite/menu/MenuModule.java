@@ -86,7 +86,8 @@ public final class MenuModule extends AbstractAXSModule implements ModuleCommand
     protected @NotNull PacketHandlerSpec createPacketHandlerSpec() {
         return PacketHandlerSpec.of(
             (player, packetId, data) ->
-                    packetHandler != null && packetHandler.handleClientPacket(player, packetId, data), 0, null, null);
+                    packetHandler != null && packetHandler.handleClientPacket(player, packetId, data),
+            0, configuration.ui().packetId(), "menu");
     }
 
     @Override
@@ -158,6 +159,8 @@ public final class MenuModule extends AbstractAXSModule implements ModuleCommand
         service.setRuntimeUiIds(panelBinding.runtimeUiId(), escBinding.runtimeUiId());
         service.reload(dataFolder);
         registerCustomMenuUis(panelBinding.runtimeUiId(), escBinding.runtimeUiId());
+        service.trackUiClose(panelBinding.runtimeUiId());
+        service.trackUiClose(escBinding.runtimeUiId());
         packetHandler = new MenuUiPacketHandler(service, configuration.ui().packetId());
         adminCommand = new MenuAdminCommand(service, messages());
 
@@ -188,7 +191,7 @@ public final class MenuModule extends AbstractAXSModule implements ModuleCommand
         for (xuanmo.arcartxsuite.menu.config.MenuDefinition definition : service.menus()) {
             for (xuanmo.arcartxsuite.menu.config.MenuUiTarget target : definition.uiTargets()) {
                 String uiId = target.uiId();
-                if (uiId == null || uiId.isBlank() || builtin.contains(uiId) || !handled.add(uiId)) {
+                if (uiId == null || uiId.isBlank() || builtin.contains(service.resolveRuntimeUiId(uiId)) || !handled.add(uiId)) {
                     continue;
                 }
                 File uiFile = new File(uiDirectory, uiId + ".yml");
@@ -203,6 +206,7 @@ public final class MenuModule extends AbstractAXSModule implements ModuleCommand
                 }
                 // 纳入基类生命周期管理：onDisable / reload 时自动注销，避免卸载后残留 match 绑定
                 recordExternalUi(result.runtimeUiId(), result.registeredUiId());
+                service.trackUiClose(result.runtimeUiId());
                 if (!uiId.equals(result.runtimeUiId())) {
                     logger.warning("自定义菜单 UI runtime id 与配置不一致(请让 ui-id 使用不带命名空间前缀的 id): 配置="
                         + uiId + " runtime=" + result.runtimeUiId());
@@ -234,6 +238,12 @@ public final class MenuModule extends AbstractAXSModule implements ModuleCommand
     protected List<Listener> createListeners() {
         MenuBindingListener bindingListener = new MenuBindingListener(() -> this.service);
         return List.of(bindingListener, new Listener() {
+            @EventHandler
+            public void onRestriction(xuanmo.arcartxsuite.api.auth.AuthRestrictionEvent event) {
+                var player = org.bukkit.Bukkit.getPlayer(event.previous().playerId());
+                if (service != null && player != null) service.handlePlayerRestriction(player);
+            }
+
             @EventHandler
             public void onPlayerQuit(PlayerQuitEvent event) {
                 if (service != null) {

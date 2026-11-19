@@ -22,7 +22,7 @@ public interface SpawnBackend {
      * @param loc 出生点位置
      * @return 设置成功返回 {@code true}
      */
-    boolean setSpawn(@NotNull Location loc);
+    java.util.concurrent.CompletionStage<Boolean> setSpawn(@NotNull Location loc);
 
     /**
      * 查询出生点位置。
@@ -30,5 +30,5 @@ public interface SpawnBackend {
      * @param context 上下文世界（按世界取出生点的后端使用，单点后端可忽略）
      * @return 出生点位置，未设置或查询失败时返回 {@code null}
      */
-    @Nullable Location getSpawn(@NotNull World context);
+    java.util.concurrent.CompletionStage<Location> getSpawn(@NotNull World context);
 }

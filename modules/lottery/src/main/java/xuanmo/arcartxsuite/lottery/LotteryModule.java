@@ -4,6 +4,9 @@ import java.io.File;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
+import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabExecutor;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -11,7 +14,7 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.player.PlayerInteractEvent;
-import org.bukkit.event.player.PlayerJoinEvent;
+import xuanmo.arcartxsuite.api.auth.AuthAdmissionEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -46,6 +49,7 @@ import xuanmo.arcartxsuite.lottery.storage.JdbcLotteryRepository;
  * 数据库迁移与玩家数据清除能力的注册。
  */
 public final class LotteryModule extends AbstractAXSModule implements ModuleCommandHandler {
+    private JdbcLotteryRepository repository;
 
     private static final String GACHA_UI_RESOURCE = "arcartx/ui/lottery_gacha.yml";
     private static final String GACHA_UI_FILE = "ui/lottery_gacha.yml";
@@ -55,9 +59,10 @@ public final class LotteryModule extends AbstractAXSModule implements ModuleComm
     private static final String CASE_UI_FILE = "ui/lottery_case.yml";
 
     private LotteryModuleConfiguration configuration;
-    private LotteryService service;
+    private volatile LotteryService service;
     private LotteryAdminCommand adminCommand;
-    private JdbcLotteryRepository repository;
+    private xuanmo.arcartxsuite.api.storage.ModuleStorage storageScope;
+    private xuanmo.arcartxsuite.api.scheduler.ModuleCallback calls;
     private LotteryPacketHandler packetHandler;
 
     @Override
@@ -125,8 +130,12 @@ public final class LotteryModule extends AbstractAXSModule implements ModuleComm
             wishUiId = "AXS:lottery_wish";
         }
         String caseUiId = caseBinding != null ? caseBinding.runtimeUiId() : configuration.ui().caseUiId();
-        packetHandler = new LotteryPacketHandler(service, packetBridge, iconResolver, plugin, gachaUiId, wishUiId, caseUiId);
-        return PacketHandlerSpec.of(packetHandler, 0, null, null);
+        var handler = new LotteryPacketHandler(service, packetBridge, iconResolver, plugin, gachaUiId, wishUiId, caseUiId);
+        packetHandler = handler;
+        var runtime = calls;
+        return PacketHandlerSpec.of((player, id, data) -> runtime.call(() -> handler.handleClientPacket(player, id, data), true),
+            0, LotteryPacketHandler.GACHA, "lottery",
+            LotteryPacketHandler.WISH, LotteryPacketHandler.CASE);
     }
 
     @Override
@@ -159,33 +168,41 @@ public final class LotteryModule extends AbstractAXSModule implements ModuleComm
     }
 
     @Override
-    protected void startService() throws Exception {
+    protected java.util.concurrent.CompletionStage<Void> prepareService() throws Exception {
         // 共享模式：使用本体统一数据源，模块只需提供表前缀
         // 若模块配置了独立 storage 节（mode=mysql 等），则走自建模式（向后兼容）
         xuanmo.arcartxsuite.api.storage.StorageDescriptor lotteryDesc;
-        javax.sql.DataSource lotteryDs;
         if (configuration.storage().hasOverride()) {
             lotteryDesc = configuration.storage().toDescriptor()
                 .withTablePrefix(configuration.storage().tablePrefix());
-            lotteryDs = storageManager.resolveModuleDataSource("lottery", null, dataFolder, lotteryDesc);
+            storageScope = storageManager.openModuleStorage("lottery", null, dataFolder, lotteryDesc);
         } else {
             lotteryDesc = storageManager.getDescriptor()
                 .withTablePrefix(configuration.storage().tablePrefix());
-            lotteryDs = storageManager.resolveModuleDataSource("lottery",
+            storageScope = storageManager.openModuleStorage("lottery",
                 configuration.storage().sqliteFileName(), dataFolder, null);
         }
-        JdbcLotteryRepository repo = new JdbcLotteryRepository(lotteryDs, lotteryDesc, dataFolder, logger);
-        repo.initialize();
-        repository = repo;
+        repository = new JdbcLotteryRepository(storageScope.dataSource(), lotteryDesc, dataFolder, logger);
+        return storageScope.initialize(repository::initialize);
+    }
+
+    @Override
+    protected void startService() throws Exception {
+        var repo = repository;
+        var runtime = new xuanmo.arcartxsuite.api.scheduler.ModuleCallback(() -> {});
+        calls = runtime;
 
         java.util.function.Supplier<xuanmo.arcartxsuite.api.capability.MailDispatchable> mailSupplier
             = () -> getCapability(xuanmo.arcartxsuite.api.capability.MailDispatchable.class);
 
+        var claimTransfer = new LotteryClaimTransfer(repo, pendingRewardService,
+            LotteryClaimTransfer.target(storageManager.getDescriptor(), !configuration.storage().hasOverride(), dataFolder.toPath()));
         service = new LotteryService(
             plugin, configuration, repo,
-            currencyManager, itemSourceRegistry, itemMatcher, mailSupplier, itemRewardDispatcher, logger);
+            currencyManager, itemSourceRegistry, itemMatcher, mailSupplier, logger, claimTransfer);
         service.setMessageProvider(messages());
         service.start();
+        var active = service;
 
         // UI 注册
         registerModuleUi(GACHA_UI_FILE, configuration.ui().gachaUiId(), true);
@@ -196,7 +213,9 @@ public final class LotteryModule extends AbstractAXSModule implements ModuleComm
             @Override public @NotNull String moduleId() { return "lottery"; }
             @Override public @NotNull xuanmo.arcartxsuite.api.storage.MigrationResult migrateDatabase(
                     @NotNull xuanmo.arcartxsuite.api.storage.StorageDescriptor target, boolean overwrite) {
-                return repo.migrateData(target, overwrite);
+                var unavailable = new xuanmo.arcartxsuite.api.storage.MigrationResult(false, 0, 0);
+                unavailable.addError("Lottery 模块已停用");
+                return runtime.call(() -> repo.migrateData(target, overwrite), unavailable);
             }
             @Override public @NotNull xuanmo.arcartxsuite.api.storage.StorageDescriptor currentDescriptor() {
                 return repo.getDescriptor();
@@ -206,70 +225,72 @@ public final class LotteryModule extends AbstractAXSModule implements ModuleComm
         registerCapability(PlayerDataPurgeable.class, new PlayerDataPurgeable() {
             @Override public @NotNull String moduleId() { return "lottery"; }
             @Override public int purgePlayerData(@NotNull java.util.UUID playerUuid) {
-                try { return repo.deletePlayerData(playerUuid); }
-                catch (Exception e) { logger.warning("Lottery purge 失败: " + e.getMessage()); return -1; }
+                return runtime.call(() -> {
+                    try { return repo.deletePlayerData(playerUuid); }
+                    catch (Exception e) { logger.warning("Lottery purge 失败: " + e.getMessage()); return -1; }
+                }, -1);
             }
             @Override public int purgeAllPlayerData() {
-                try { return repo.deleteAllPlayerData(); }
-                catch (Exception e) { logger.warning("Lottery purgeAll 失败: " + e.getMessage()); return -1; }
+                return runtime.call(() -> {
+                    try { return repo.deleteAllPlayerData(); }
+                    catch (Exception e) { logger.warning("Lottery purgeAll 失败: " + e.getMessage()); return -1; }
+                }, -1);
             }
         });
 
         registerCapability(xuanmo.arcartxsuite.api.capability.LotteryAccess.class,
             new xuanmo.arcartxsuite.api.capability.LotteryAccess() {
-                @Override public long getPoint(@NotNull java.util.UUID playerUuid,
+                @Override public @NotNull CompletionStage<Long> getPoint(@NotNull java.util.UUID playerUuid,
                         @NotNull String pointId) {
-                    return service != null ? service.getPoint(playerUuid, pointId) : 0;
+                    return available(runtime.call(() -> active.getPoint(playerUuid, pointId), null));
                 }
-                @Override public @NotNull Map<String, Long> getPoints(
+                @Override public @NotNull CompletionStage<Map<String, Long>> getPoints(
                         @NotNull java.util.UUID playerUuid) {
-                    return service != null ? service.getPoints(playerUuid) : Map.of();
+                    return available(runtime.call(() -> active.getPoints(playerUuid), null));
                 }
-                @Override public boolean givePoints(@NotNull java.util.UUID playerUuid,
+                @Override public @NotNull CompletionStage<Boolean> givePoints(@NotNull java.util.UUID playerUuid,
                         @NotNull String pointId, long amount) {
-                    return service != null && service.givePoints(playerUuid, pointId, amount);
+                    return available(runtime.call(() -> active.givePoints(playerUuid, pointId, amount), null));
                 }
-                @Override public boolean exchange(@NotNull org.bukkit.entity.Player player,
+                @Override public @NotNull CompletionStage<Boolean> exchange(@NotNull org.bukkit.entity.Player player,
                         @NotNull String itemId) {
-                    return service != null && service.exchange(player, itemId);
+                    return available(runtime.call(() -> active.exchange(player, itemId), null));
                 }
-                @Override public @NotNull List<CaseDrawResult> openCase(
+                @Override public @NotNull CompletionStage<List<CaseDrawResult>> openCase(
                         @NotNull org.bukkit.entity.Player player, @NotNull String poolId, int count) {
-                    if (service == null) return List.of();
-                    return service.openCaseBatch(player, poolId, count).stream()
+                    return available(runtime.call(() -> active.openCaseBatch(player, poolId, count), null))
+                        .thenApply(results -> results.stream()
                         .map(r -> new CaseDrawResult(r.rarity(), r.poolIndex(),
                             r.item() != null ? r.item().key() : null,
                             r.item() != null ? r.item().name() : null,
                             r.item() != null ? r.item().amount() : 0))
-                        .toList();
+                        .toList());
                 }
             });
 
-        adminCommand = new LotteryAdminCommand(() -> service, messages(), () -> {
-            try {
-                onReload();
-            } catch (Exception exception) {
-                throw new IllegalStateException("Lottery reload failed", exception);
-            }
-        });
+        adminCommand = new LotteryAdminCommand(() -> active, messages());
         logger.fine("Lottery 模块已载入 | 奖池=" + configuration.pools().size());
+    }
+
+    private static <T> CompletionStage<T> available(CompletionStage<T> stage) {
+        return stage != null ? stage : CompletableFuture.failedFuture(new IllegalStateException("Lottery 模块已停用"));
     }
 
     @Override
     protected @NotNull List<Listener> createListeners() {
+        var runtime = calls;
+        var active = service;
         return List.of(new Listener() {
             @EventHandler
-            public void onJoin(PlayerJoinEvent event) {
-                if (service != null) {
-                    service.claimPending(event.getPlayer());
+            public void onAdmission(AuthAdmissionEvent event) {
+                if (runtime != null && active != null) {
+                    var player = Bukkit.getPlayer(event.snapshot().playerId());
+                    if (player != null) runtime.call(() -> active.claimPending(player), null);
                 }
             }
 
             @EventHandler
             public void onQuit(PlayerQuitEvent event) {
-                if (service != null) {
-                    service.removePlayerLock(event.getPlayer().getUniqueId());
-                }
                 if (packetHandler != null) {
                     packetHandler.onPlayerQuit(event.getPlayer().getUniqueId());
                 }
@@ -292,38 +313,68 @@ public final class LotteryModule extends AbstractAXSModule implements ModuleComm
                 if (pool == null) {
                     return;
                 }
-                // 取消原版交互（防止右键方块触发方块功能）
-                event.setCancelled(true);
-                // 打开对应 CASE 奖池 UI
-                packetHandler.openPoolUi(event.getPlayer(), pool.id());
+                if (packetHandler.openPoolUi(event.getPlayer(), pool.id())) {
+                    event.setCancelled(true);
+                }
             }
         });
     }
 
     @Override
     protected void stopService() {
-        if (service != null) {
-            service.shutdown();
-            service = null;
-        }
-        if (repository != null) {
-            storageManager.closeModuleDataSource("lottery");
-            repository = null;
-        }
+        var runtime = calls;
+        var scope = storageScope;
+        var handler = packetHandler;
+        var retiring = service;
+        calls = null;
+        packetHandler = null;
+        service = null;
+        repository = null;
+        adminCommand = null;
+        storageScope = null;
         configuration = null;
+        if (runtime != null) runtime.close();
+        try {
+            if (handler != null) handler.shutdown();
+        } finally {
+            if (retiring != null) retiring.shutdown();
+            var ready = java.util.concurrent.CompletableFuture.<Void>completedFuture(null);
+            var stopped = java.util.concurrent.CompletableFuture.allOf(
+                runtime == null ? ready : runtime.stopped().toCompletableFuture(),
+                handler == null ? ready : handler.stopped().toCompletableFuture(),
+                retiring == null ? ready : retiring.stopped().toCompletableFuture());
+            trackShutdown(stopped);
+            if (scope != null) {
+                scope.retireAfter(stopped);
+                trackShutdown(scope.retired());
+            }
+        }
     }
 
     @Override
     protected @NotNull Map<String, TabExecutor> commandBindings() {
-        return Map.of("lottery", new LotteryPlayerCommand(
-            () -> service, messages(),
-            () -> packetHandler,
-            () -> packetBridge));
+        var delegate = new LotteryPlayerCommand(() -> service, messages(), () -> packetHandler, () -> packetBridge);
+        return Map.of("lottery", new TabExecutor() {
+            @Override
+            public boolean onCommand(@NotNull CommandSender sender, @NotNull org.bukkit.command.Command command,
+                                     @NotNull String label, @NotNull String[] args) {
+                var runtime = calls;
+                return runtime == null || runtime.call(() -> delegate.onCommand(sender, command, label, args), true);
+            }
+
+            @Override
+            public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull org.bukkit.command.Command command,
+                    @NotNull String alias, @NotNull String[] args) {
+                var runtime = calls;
+                return runtime == null ? List.of() : runtime.call(() -> delegate.onTabComplete(sender, command, alias, args), List.of());
+            }
+        });
     }
 
     @Override
     protected @Nullable Object createPlaceholderExpansion() {
-        return new LotteryPlaceholderExpansion(plugin, () -> service);
+        var active = service;
+        return new LotteryPlaceholderExpansion(plugin, () -> active);
     }
 
     // ─── ModuleCommandHandler (/axs lottery) ──────────────────
@@ -336,7 +387,9 @@ public final class LotteryModule extends AbstractAXSModule implements ModuleComm
 
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull String label, @NotNull String[] args) {
-        return adminCommand != null && adminCommand.onCommand(sender, label, args);
+        var runtime = calls;
+        var handler = adminCommand;
+        return runtime != null && handler != null && runtime.call(() -> handler.onCommand(sender, label, args), true);
     }
 
     @Override

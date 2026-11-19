@@ -55,7 +55,6 @@ class RawChannelDiag(
         val byType = ConcurrentHashMap<Int, AtomicLong>()
         val evtTotal = AtomicLong()
         val byPacketId = ConcurrentHashMap<String, AtomicLong>()
-        @Volatile var lastRawSnippet: String = ""
         @Volatile var lastRawAt: Long = 0L
         @Volatile var lastEventAt: Long = 0L
 
@@ -74,7 +73,6 @@ class RawChannelDiag(
         val part: Int,
         val size: Int,
         val msgId: Int?,
-        val snippet: String,
     )
 
     private class Watch(
@@ -147,7 +145,6 @@ class RawChannelDiag(
         if (parsed.code == -1) s.unparseable.incrementAndGet()
         if (parsed.type >= 0) s.byType.computeIfAbsent(parsed.type) { AtomicLong() }.incrementAndGet()
         if (parsed.size > 1) s.fragments.incrementAndGet()
-        s.lastRawSnippet = parsed.snippet
         notifyWatchers(
             player.uniqueId, player.name,
             "RAW code=${codeName(parsed.code)}(${parsed.code}) type=${typeName(parsed.type)}(${parsed.type}) part=${parsed.part}/${parsed.size} msgId=${parsed.msgId} bytes=${message.size}"
@@ -156,13 +153,16 @@ class RawChannelDiag(
 
     // ── ClientCustomPacketEvent 计数（由 RawPacketEventListener 喂入）──────
 
-    fun recordEvent(player: Player, id: String, data: List<String>) {
+    fun recordEvent(player: Player, id: String, argumentCount: Int, payload: List<String>?) {
         val s = stats(player.uniqueId)
         s.evtTotal.incrementAndGet()
         s.byPacketId.computeIfAbsent(id) { AtomicLong() }.incrementAndGet()
         s.lastEventAt = System.currentTimeMillis()
-        val preview = if (data.size <= 6) data.toString() else data.take(6).toString() + "...(+${data.size - 6})"
-        notifyWatchers(player.uniqueId, player.name, "EVT id=$id data=$preview")
+        val preview = payload?.let {
+            if (it.size <= 6) it.toString() else it.take(6).toString() + "...(+${it.size - 6})"
+        }
+        val line = if (preview == null) "EVT id=$id args=$argumentCount" else "EVT id=$id data=$preview"
+        notifyWatchers(player.uniqueId, player.name, line)
     }
 
     // ── 客户端生命周期事件（由 RawPacketEventListener 喂入）──────────
@@ -237,14 +237,13 @@ class RawChannelDiag(
         }
         val code = intField(text, "code") ?: run {
             // 有合法 JSON 但没有 code 字段，记为不可解析而不是 malformed
-            val s = text.take(120)
-            return Parsed(-1, -1, -1, -1, null, s)
+            return Parsed(-1, -1, -1, -1, null)
         }
         val type = intField(text, "type") ?: -1
         val part = intField(text, "part") ?: -1
         val size = intField(text, "size") ?: -1
         val msgId = intField(text, "id")
-        return Parsed(code, type, part, size, msgId, text.take(140))
+        return Parsed(code, type, part, size, msgId)
     }
 
     // ── 命令支撑 ─────────────────────────────────────────

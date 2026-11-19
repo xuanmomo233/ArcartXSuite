@@ -9,6 +9,7 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.logging.Logger;
@@ -45,6 +46,27 @@ public final class JdbcMapRepository extends AbstractModuleRepository implements
     @Override
     protected void onInitialize(Connection conn) throws SQLException {
         createTables(conn);
+        ensureUnlockColumn(conn, "reservation_id", "VARCHAR(36)");
+        ensureUnlockColumn(conn, "reservation_source", "VARCHAR(64)");
+    }
+
+    private void ensureUnlockColumn(Connection conn, String column, String type) throws SQLException {
+        if (hasUnlockColumn(conn, column)) return;
+        try (Statement statement = conn.createStatement()) {
+            statement.executeUpdate("ALTER TABLE AXS_map_unlocks ADD COLUMN " + column + " " + type + " NULL");
+        } catch (SQLException failure) {
+            if (!hasUnlockColumn(conn, column)) throw failure;
+        }
+    }
+
+    private boolean hasUnlockColumn(Connection conn, String column) throws SQLException {
+        try (ResultSet columns = conn.getMetaData().getColumns(conn.getCatalog(), null, "AXS_map_unlocks", "%")) {
+            while (columns.next()) {
+                if ("AXS_map_unlocks".equalsIgnoreCase(columns.getString("TABLE_NAME"))
+                    && column.equalsIgnoreCase(columns.getString("COLUMN_NAME"))) return true;
+            }
+            return false;
+        }
     }
 
     @Override
@@ -74,7 +96,7 @@ public final class JdbcMapRepository extends AbstractModuleRepository implements
         LinkedHashSet<String> result = new LinkedHashSet<>();
         try (Connection connection = getConnection();
              PreparedStatement statement = prepare(connection,
-                 "SELECT anchor_id FROM AXS_map_unlocks WHERE uuid = ? ORDER BY unlock_time ASC, anchor_id ASC"
+                 "SELECT anchor_id FROM AXS_map_unlocks WHERE uuid = ? AND reservation_id IS NULL ORDER BY unlock_time ASC, anchor_id ASC"
              )) {
             statement.setString(1, playerUuid.toString());
             try (ResultSet resultSet = statement.executeQuery()) {
@@ -110,34 +132,87 @@ public final class JdbcMapRepository extends AbstractModuleRepository implements
      */
     @Override
     public boolean tryUnlockAnchor(UUID playerUuid, String anchorId, long unlockTime) throws SQLException {
-        String sql = !isMysql()
-            ? "INSERT OR IGNORE INTO AXS_map_unlocks (uuid, anchor_id, unlock_time) VALUES (?, ?, ?)"
-            : "INSERT IGNORE INTO AXS_map_unlocks (uuid, anchor_id, unlock_time) VALUES (?, ?, ?)";
+        return insertAnchorUnlock(playerUuid, anchorId, unlockTime, null, null);
+    }
+
+    @Override
+    public boolean reserveAnchorUnlock(UUID playerUuid, String anchorId, long time, UUID reservation, String source) throws SQLException {
+        return insertAnchorUnlock(playerUuid, anchorId, time, reservation.toString(), source);
+    }
+
+    private boolean insertAnchorUnlock(UUID playerUuid, String anchorId, long unlockTime, String reservation, String source) throws SQLException {
+        String sql = "INSERT INTO AXS_map_unlocks (uuid, anchor_id, unlock_time, reservation_id, reservation_source) VALUES (?, ?, ?, ?, ?)";
+        if (!isMysql()) sql += " ON CONFLICT(uuid, anchor_id) DO NOTHING";
         try (Connection connection = getConnection();
              PreparedStatement statement = prepare(connection, sql)) {
             statement.setString(1, playerUuid.toString());
             statement.setString(2, anchorId);
             statement.setLong(3, unlockTime);
+            statement.setString(4, reservation);
+            statement.setString(5, source);
             return statement.executeUpdate() > 0;
+        } catch (SQLException failure) {
+            if (isMysql() && failure.getErrorCode() == 1062) return false;
+            throw failure;
         }
     }
 
-    /**
-     * 移除玩家的指定锚点解锁记录。
-     *
-     * @param playerUuid 玩家 UUID
-     * @param anchorId   锚点 ID
-     * @throws SQLException 数据库删除失败时抛出
-     */
     @Override
-    public void removeUnlock(UUID playerUuid, String anchorId) throws SQLException {
+    public boolean isAnchorUnlockConfirmed(UUID playerUuid, String anchorId) throws SQLException {
+        try (Connection connection = getConnection(); PreparedStatement statement = prepare(connection,
+                "SELECT 1 FROM AXS_map_unlocks WHERE uuid=? AND anchor_id=? AND reservation_id IS NULL")) {
+            statement.setString(1, playerUuid.toString());
+            statement.setString(2, anchorId);
+            try (ResultSet rows = statement.executeQuery()) { return rows.next(); }
+        }
+    }
+
+    @Override
+    public Optional<AnchorReservation> findAnchorReservation(UUID reservation) throws SQLException {
+        try (Connection connection = getConnection(); PreparedStatement statement = prepare(connection,
+                "SELECT uuid, anchor_id, reservation_source, unlock_time FROM AXS_map_unlocks WHERE reservation_id=?")) {
+            statement.setString(1, reservation.toString());
+            try (ResultSet rows = statement.executeQuery()) {
+                return rows.next() ? Optional.of(new AnchorReservation(UUID.fromString(rows.getString(1)),
+                    rows.getString(2), reservation, rows.getString(3), rows.getLong(4))) : Optional.empty();
+            }
+        }
+    }
+
+    @Override
+    public Optional<UUID> pendingAnchorReservation(UUID playerUuid, String anchorId) throws SQLException {
+        try (Connection connection = getConnection(); PreparedStatement statement = prepare(connection,
+                "SELECT reservation_id FROM AXS_map_unlocks WHERE uuid=? AND anchor_id=? AND reservation_id IS NOT NULL")) {
+            statement.setString(1, playerUuid.toString());
+            statement.setString(2, anchorId);
+            try (ResultSet rows = statement.executeQuery()) {
+                return rows.next() ? Optional.of(UUID.fromString(rows.getString(1))) : Optional.empty();
+            }
+        }
+    }
+
+    @Override
+    public boolean confirmAnchorUnlock(UUID playerUuid, String anchorId, long time, UUID reservation) throws SQLException {
+        try (Connection connection = getConnection(); PreparedStatement statement = prepare(connection,
+                "UPDATE AXS_map_unlocks SET reservation_id=NULL, reservation_source=NULL, unlock_time=? WHERE uuid=? AND anchor_id=? AND reservation_id=?")) {
+            statement.setLong(1, time);
+            statement.setString(2, playerUuid.toString());
+            statement.setString(3, anchorId);
+            statement.setString(4, reservation.toString());
+            return statement.executeUpdate() == 1;
+        }
+    }
+
+    @Override
+    public boolean cancelAnchorUnlock(UUID playerUuid, String anchorId, UUID reservation) throws SQLException {
         try (Connection connection = getConnection();
              PreparedStatement statement = prepare(connection,
-                 "DELETE FROM AXS_map_unlocks WHERE uuid = ? AND anchor_id = ?"
+                 "DELETE FROM AXS_map_unlocks WHERE uuid=? AND anchor_id=? AND reservation_id=?"
              )) {
             statement.setString(1, playerUuid.toString());
             statement.setString(2, anchorId);
-            statement.executeUpdate();
+            statement.setString(3, reservation.toString());
+            return statement.executeUpdate() == 1;
         }
     }
 
@@ -324,6 +399,8 @@ public final class JdbcMapRepository extends AbstractModuleRepository implements
                         uuid TEXT NOT NULL,
                         anchor_id TEXT NOT NULL,
                         unlock_time INTEGER NOT NULL,
+                        reservation_id VARCHAR(36) NULL,
+                        reservation_source VARCHAR(64) NULL,
                         PRIMARY KEY (uuid, anchor_id)
                     );
                     """);
@@ -370,6 +447,8 @@ public final class JdbcMapRepository extends AbstractModuleRepository implements
                         uuid VARCHAR(36) NOT NULL,
                         anchor_id VARCHAR(128) NOT NULL,
                         unlock_time BIGINT NOT NULL,
+                        reservation_id VARCHAR(36) NULL,
+                        reservation_source VARCHAR(64) NULL,
                         PRIMARY KEY (uuid, anchor_id)
                     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
                     """);

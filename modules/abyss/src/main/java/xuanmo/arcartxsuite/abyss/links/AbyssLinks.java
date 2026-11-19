@@ -36,15 +36,18 @@ public final class AbyssLinks {
     private final CapabilityResolver capabilityResolver;
     private final AttributeBridgeRegistry attributeBridge;
     private final Logger logger;
+    private final org.bukkit.plugin.Plugin plugin;
+    private volatile boolean closed;
     private xuanmo.arcartxsuite.api.attribute.AttributeDamageListener damageListener;
     private xuanmo.arcartxsuite.api.attribute.AttributeHealListener healListener;
     private final Map<java.util.UUID, Map<String, java.util.Set<String>>> attributeSources = new java.util.concurrent.ConcurrentHashMap<>();
 
     public AbyssLinks(CapabilityResolver capabilityResolver,
-                      AttributeBridgeRegistry attributeBridge, Logger logger) {
+                      AttributeBridgeRegistry attributeBridge, Logger logger, org.bukkit.plugin.Plugin plugin) {
         this.capabilityResolver = capabilityResolver;
         this.attributeBridge = attributeBridge;
         this.logger = logger;
+        this.plugin = plugin;
     }
 
     // ═══ 内部：capability 懒解析 ═══
@@ -127,7 +130,9 @@ public final class AbyssLinks {
     public void battlePassTask(Player player, String taskId, int increment) {
         BattlePassAccess c = cap(BattlePassAccess.class);
         if (c != null && increment != 0) {
-            safe(() -> c.updateTaskProgress(player, taskId, increment));
+            safe(() -> c.updateTaskProgress(player, taskId, increment).whenComplete((ignored,failure)->{
+                if(failure!=null)logger.warning("[abyss] 战令任务进度未确认: "+taskId+" "+failure.getMessage());
+            }));
         }
     }
 
@@ -221,6 +226,7 @@ public final class AbyssLinks {
     }
 
     public void close() {
+        closed = true;
         unregisterAttributeStats();
         for (var entry : Map.copyOf(attributeSources).entrySet()) {
             Player player = org.bukkit.Bukkit.getPlayer(entry.getKey());
@@ -233,14 +239,21 @@ public final class AbyssLinks {
     // ═══ Essentials ═══
 
     /** Essentials 出生点（含 Multiverse 世界 spawn），缺席返回 null。 */
-    public @Nullable Location essentialsSpawn(Player player) {
+    public java.util.concurrent.CompletionStage<Location> essentialsSpawn(Player player) {
         EssentialsQueryable c = cap(EssentialsQueryable.class);
-        if (c == null) return null;
+        if (c == null || closed) return java.util.concurrent.CompletableFuture.completedFuture(null);
         try {
             return c.getSpawn(player.getWorld());
         } catch (Throwable t) {
-            return null;
+            return java.util.concurrent.CompletableFuture.failedFuture(t);
         }
+    }
+
+    /** Suppress continuations belonging to an instance that has been retired. */
+    public void onMain(Runnable action) {
+        if (closed) return;
+        if (org.bukkit.Bukkit.isPrimaryThread()) action.run();
+        else org.bukkit.Bukkit.getScheduler().runTask(plugin, () -> { if (!closed) action.run(); });
     }
 
     /** Essentials AFK 状态。 */

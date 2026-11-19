@@ -21,7 +21,8 @@ ui:
     # packetHandler: display
     # 包字段:
     #   - isShow: 是否显示公告
-    #   - id: 当前公告条目 ID
+    #   - id: 可点击公告的回包令牌
+    #   - entryId: 当前公告条目 ID
     #   - text: 公告文本内容
     #   - clickable: 是否可点击
     #   - revision: 数据修订版本号
@@ -29,7 +30,7 @@ ui:
     display: |-
       var.currentText = none
       var.displayVisible = packet['isShow']
-      var.currentEntryId = packet['id']
+      var.currentClickHandle = packet['id']
       var.currentText = packet['text']
       var.currentClickable = packet['clickable']
       var.lastRevision = packet['revision']
@@ -81,7 +82,7 @@ controls:
           visible: var.displayVisible && var.currentClickable && var.currentText != none
         action:
           clickLeft: |-
-            Packet.send("AXS_announcer_click", var.currentEntryId)
+            Packet.send("AXS_announcer_click", var.currentClickHandle)
       公告文字:
         type: Text
         attribute:

@@ -210,6 +210,6 @@ public final class AfkRewardListener implements Listener {
     public void onPlayerQuit(PlayerQuitEvent event) {
         AfkRewardService service = serviceSupplier.get();
         if (service == null) return;
-        service.onPlayerQuit(event.getPlayer().getUniqueId());
+        service.onPlayerQuit(event.getPlayer());
     }
 }

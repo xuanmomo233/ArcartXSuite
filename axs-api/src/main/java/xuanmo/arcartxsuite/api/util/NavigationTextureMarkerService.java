@@ -48,6 +48,7 @@ public final class NavigationTextureMarkerService implements NavigationRouteRend
     /** 玩家 → (markerKey → 路径状态)，支持同一玩家多条并行贴图链。 */
     private final ConcurrentMap<UUID, ConcurrentMap<String, PlayerPathState>> playerPaths = new ConcurrentHashMap<>();
 
+    private NavigationRouteCache routeCache = new NavigationRouteCache();
     private NavigationPathfinder pathfinder;
     private BukkitTask updateTask;
     private boolean available;
@@ -101,6 +102,7 @@ public final class NavigationTextureMarkerService implements NavigationRouteRend
     }
 
     public void shutdown() {
+        available = false;
         if (updateTask != null) {
             updateTask.cancel();
             updateTask = null;
@@ -108,8 +110,14 @@ public final class NavigationTextureMarkerService implements NavigationRouteRend
         for (Player player : Bukkit.getOnlinePlayers()) {
             hideMarker(player);
         }
+        playerPaths.forEach((playerId, paths) -> paths.values().forEach(state -> cancel(playerId, state)));
         playerPaths.clear();
-        available = false;
+    }
+
+    void setRouteCache(NavigationRouteCache routeCache) {
+        if (playerPaths.isEmpty()) {
+            this.routeCache = routeCache;
+        }
     }
 
     /**
@@ -149,12 +157,13 @@ public final class NavigationTextureMarkerService implements NavigationRouteRend
             w = player.getWorld();
         }
 
-        Location goal = new Location(w, x, y, z);
+        UUID playerId = player.getUniqueId();
         ConcurrentMap<String, PlayerPathState> paths =
-            playerPaths.computeIfAbsent(player.getUniqueId(), ignored -> new ConcurrentHashMap<>());
+            playerPaths.computeIfAbsent(playerId, ignored -> new ConcurrentHashMap<>());
         PlayerPathState existing = paths.get(key);
         if (existing != null && !existing.cancelled) {
-            existing.goal = goal;
+            if (NavigationRouteCache.samePosition(existing.goal, w, x, y, z)) return;
+            existing.goal = new Location(w, x, y, z);
             existing.suppressedByDistance = false;
             if (debug) {
                 logger.info("路径贴图: 重定向 player=" + player.getName()
@@ -163,7 +172,7 @@ public final class NavigationTextureMarkerService implements NavigationRouteRend
             return;
         }
 
-        PlayerPathState state = new PlayerPathState(goal, key);
+        PlayerPathState state = new PlayerPathState(new Location(w, x, y, z), key);
         paths.put(key, state);
 
         if (debug) {
@@ -172,7 +181,8 @@ public final class NavigationTextureMarkerService implements NavigationRouteRend
         }
 
         Bukkit.getScheduler().runTask(plugin, () -> {
-            if (!player.isOnline()) return;
+            if (!available || state.cancelled || !player.isOnline() || Bukkit.getPlayer(playerId) != player
+                || paths.get(key) != state) return;
             computeAndApplyPath(player, state);
         });
     }
@@ -188,7 +198,7 @@ public final class NavigationTextureMarkerService implements NavigationRouteRend
         }
         if (state == null) return;
 
-        state.cancelled = true;
+        cancel(player.getUniqueId(), state);
         removeAllTextures(player, state);
     }
 
@@ -199,9 +209,14 @@ public final class NavigationTextureMarkerService implements NavigationRouteRend
         if (paths == null) return;
 
         for (PlayerPathState state : paths.values()) {
-            state.cancelled = true;
+            cancel(player.getUniqueId(), state);
             removeAllTextures(player, state);
         }
+    }
+
+    private void cancel(UUID playerId, PlayerPathState state) {
+        state.cancelled = true;
+        routeCache.remove(playerId, state.markerKeySegment, pathfinder);
     }
 
     @Override
@@ -227,7 +242,7 @@ public final class NavigationTextureMarkerService implements NavigationRouteRend
                 ConcurrentMap<String, PlayerPathState> offlinePaths = playerPaths.remove(playerEntry.getKey());
                 if (offlinePaths != null) {
                     for (PlayerPathState state : offlinePaths.values()) {
-                        state.cancelled = true;
+                        cancel(playerEntry.getKey(), state);
                     }
                 }
                 continue;
@@ -258,6 +273,7 @@ public final class NavigationTextureMarkerService implements NavigationRouteRend
 
         if (playerLoc.getWorld() == null || goal.getWorld() == null
             || !playerLoc.getWorld().equals(goal.getWorld())) {
+            state.renderedRoute = null;
             removeExcessTextures(player, state, 0);
             return;
         }
@@ -266,6 +282,7 @@ public final class NavigationTextureMarkerService implements NavigationRouteRend
         if (distance > config.pathMaxDistance()) {
             if (!state.suppressedByDistance) {
                 state.suppressedByDistance = true;
+                state.renderedRoute = null;
                 removeExcessTextures(player, state, 0);
             }
             return;
@@ -277,39 +294,34 @@ public final class NavigationTextureMarkerService implements NavigationRouteRend
         }
         state.suppressedByDistance = false;
 
-        List<Location> rawPath = pathfinder.findPath(playerLoc, goal);
-        if (rawPath.isEmpty()) {
-            rawPath = NavigationPathfinder.shortDirectionalPath(playerLoc, goal);
-        }
-
-        List<Location> simplified = NavigationPathfinder.simplifyPath(rawPath);
-        List<Location> sampled = NavigationPathfinder.samplePath(simplified, config.pathInterval(), config.pathMaxMarkers());
+        List<Location> simplified = routeCache.route(player.getUniqueId(), state.markerKeySegment,
+            pathfinder, playerLoc, goal);
+        if (state.renderedRoute == simplified) return;
+        List<Location> sampled = NavigationPathfinder.sampleOrientedPath(
+            simplified, config.pathInterval(), config.pathMaxMarkers());
 
         double yOffset = config.yOffset();
         List<TexturePoint> finalPoints = new ArrayList<>(sampled.size());
-        for (int i = 0; i < sampled.size(); i++) {
-            Location loc = sampled.get(i).clone().add(0, yOffset, 0);
-            Location next = (i + 1 < sampled.size()) ? sampled.get(i + 1) : goal;
-            double dx = next.getX() - sampled.get(i).getX();
-            double dz = next.getZ() - sampled.get(i).getZ();
-            float yaw = (float) Math.toDegrees(Math.atan2(-dx, dz));
-            finalPoints.add(new TexturePoint(loc.getX(), loc.getY(), loc.getZ(), yaw));
+        for (Location point : sampled) {
+            finalPoints.add(new TexturePoint(point.getX(), point.getY() + yOffset, point.getZ(), point.getYaw()));
         }
 
         if (!player.isOnline() || state.cancelled) return;
-        applyPathTextures(player, state, finalPoints);
+        state.renderedRoute = null;
+        if (applyPathTextures(player, state, goal.getWorld(), finalPoints)) state.renderedRoute = simplified;
     }
 
     /**
      * 按序号 diff 应用贴图：同序号位置/yaw 变化超过阈值时以同 id 重发（客户端覆盖语义），
      * 数量收缩时移除尾部多余贴图。
      */
-    private void applyPathTextures(Player player, PlayerPathState state, List<TexturePoint> points) {
+    private boolean applyPathTextures(Player player, PlayerPathState state, World world, List<TexturePoint> points) {
         int needed = points.size();
+        boolean applied = true;
         for (int i = 0; i < needed; i++) {
             TexturePoint next = points.get(i);
             SpawnedTexture current = i < state.spawned.size() ? state.spawned.get(i) : null;
-            if (current != null && !current.shouldRespawn(next)) {
+            if (current != null && !current.shouldRespawn(world, next)) {
                 continue;
             }
             String textureId = textureId(player, state.markerKeySegment, i);
@@ -320,7 +332,7 @@ public final class NavigationTextureMarkerService implements NavigationRouteRend
             boolean sent = textureBridge.spawnForPlayer(
                 player,
                 textureId,
-                new Location(state.goal.getWorld(), next.x(), next.y(), next.z()),
+                new Location(world, next.x(), next.y(), next.z()),
                 config.texture(),
                 config.width(),
                 config.height(),
@@ -332,9 +344,11 @@ public final class NavigationTextureMarkerService implements NavigationRouteRend
                 pulse
             );
             if (!sent) {
+                applied = false;
+                if (current == null) break;
                 continue;
             }
-            SpawnedTexture spawned = new SpawnedTexture(textureId, next);
+            SpawnedTexture spawned = new SpawnedTexture(textureId, world, next);
             if (current == null) {
                 state.spawned.add(spawned);
             } else {
@@ -343,6 +357,7 @@ public final class NavigationTextureMarkerService implements NavigationRouteRend
         }
 
         removeExcessTextures(player, state, needed);
+        return applied;
     }
 
     private void removeExcessTextures(Player player, PlayerPathState state, int keepCount) {
@@ -380,9 +395,10 @@ public final class NavigationTextureMarkerService implements NavigationRouteRend
     }
 
     /** 已下发的贴图记录：用于 diff 判定是否需要重发。 */
-    private record SpawnedTexture(String textureId, TexturePoint point) {
+    private record SpawnedTexture(String textureId, World world, TexturePoint point) {
 
-        boolean shouldRespawn(TexturePoint next) {
+        boolean shouldRespawn(World nextWorld, TexturePoint next) {
+            if (!world.equals(nextWorld)) return true;
             double dx = point.x() - next.x();
             double dy = point.y() - next.y();
             double dz = point.z() - next.z();
@@ -395,16 +411,16 @@ public final class NavigationTextureMarkerService implements NavigationRouteRend
 
     private static final class PlayerPathState {
         volatile Location goal;
-        final List<SpawnedTexture> spawned;
+        final List<SpawnedTexture> spawned = new ArrayList<>();
         final String markerKeySegment;
+        List<Location> renderedRoute;
         volatile boolean cancelled;
         /** 距离滞回：true 表示已因超出最大距离被抑制，须进入重显示距离内才恢复。 */
         volatile boolean suppressedByDistance;
 
-        PlayerPathState(Location goal, String markerKey) {
+        PlayerPathState(Location goal, String markerKeySegment) {
             this.goal = goal;
-            this.spawned = new ArrayList<>();
-            this.markerKeySegment = sanitizeKey(markerKey);
+            this.markerKeySegment = markerKeySegment;
         }
     }
 }

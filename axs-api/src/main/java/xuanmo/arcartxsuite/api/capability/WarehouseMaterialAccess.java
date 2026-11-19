@@ -30,6 +30,14 @@ public interface WarehouseMaterialAccess {
     void recordUncertain(Player player, String operationId, String reason);
     /** Safe cancellation is allowed only while HELD, before authorization. */
     void cancelPrepared(Player player, String operationId);
+    /** Reports on the main thread whether the reserved materials have been restored. */
+    void cancelPrepared(Player player, String operationId, Consumer<Boolean> restored);
+    /**
+     * Cancels a transfer whose delivery was authorized but never attempted by the caller.
+     * If application started or its result is unknown, use recordUncertain instead.
+     * The callback reports whether the reserved materials have been restored.
+     */
+    void cancelUndelivered(Player player, String operationId, Consumer<Boolean> restored);
 
     record Target(String adapter, String identity, String persistence, String evidence) { }
     record Prepared(boolean success, String operationId, String message) { }

@@ -8,16 +8,21 @@ import org.bukkit.Location;
 public final class Selection {
 
     private String world;
+    private long version;
     private int x1, y1, z1;
     private int x2, y2, z2;
     private boolean pos1Set, pos2Set;
 
     public void setPos1(Location loc) {
+        if (world != null && !world.equals(loc.getWorld().getName())) {
+            pos2Set = false;
+        }
         this.world = loc.getWorld().getName();
         this.x1 = loc.getBlockX();
         this.y1 = loc.getBlockY();
         this.z1 = loc.getBlockZ();
         this.pos1Set = true;
+        version++;
     }
 
     /**
@@ -35,6 +40,7 @@ public final class Selection {
         this.y2 = loc.getBlockY();
         this.z2 = loc.getBlockZ();
         this.pos2Set = true;
+        version++;
         return true;
     }
 
@@ -52,8 +58,10 @@ public final class Selection {
     public int y2() { return y2; }
     public int z2() { return z2; }
 
+    public long version() { return version; }
+
     public long volume() {
         if (!isComplete()) return 0;
-        return (long)(Math.abs(x2 - x1) + 1) * (Math.abs(y2 - y1) + 1) * (Math.abs(z2 - z1) + 1);
+        return Region.volume(x1, y1, z1, x2, y2, z2);
     }
 }

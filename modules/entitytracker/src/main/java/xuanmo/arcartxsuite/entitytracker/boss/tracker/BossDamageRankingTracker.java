@@ -38,6 +38,17 @@ final class BossDamageRankingTracker {
         this.cachedSnapshot = BossDamageRankingSnapshot.empty(this.settings.enabled(), this.settings.maxEntries());
     }
 
+    BossDamageRankingTracker(BossDamageRankingSettings settings, BossDamageRankingTracker previous) {
+        this(settings);
+        for (Contribution contribution : previous.contributions.values()) {
+            var copy = new Contribution(contribution.playerUuid(), contribution.playerName(), contribution.firstContributionOrder());
+            copy.addDamage(contribution.damage());
+            copy.addTakenDamage(contribution.takenDamage());
+            contributions.put(copy.playerUuid(), copy);
+        }
+        nextContributionOrder = previous.nextContributionOrder;
+    }
+
     /**
      * 返回当前排名设置。
      *

@@ -106,4 +106,23 @@ class AbyssUiLifecycleTest {
         lifecycle.send(player,"ui","update",Map.of("count",1));deferred.get(1).run();deferred.get(2).run();
         assertFalse(lifecycle.isOpen(player,"ui"));verify(bridge).closeUiUnsafe(player,"ui");
     }
+
+    @Test void unchangedHudStateDoesNotReplaceQueuedStateOrDuplicateTheInitialPacket() {
+        lifecycle.open(player, "hud", "update", Map.of("count", 1), true);
+        lifecycle.sendChanged(player, "hud", "update", Map.of("count", 1));
+        assertTrue(lifecycle.clientReady(player, "hud"));
+        deferred.get(1).run();
+        verify(bridge, times(1)).sendPacket(eq(player), eq("hud"), eq("update"), any());
+
+        when(bridge.sendPacket(player, "hud", "update", Map.of("count", 2))).thenReturn(false, true);
+        assertFalse(lifecycle.sendChanged(player, "hud", "update", Map.of("count", 2)));
+        assertTrue(lifecycle.sendChanged(player, "hud", "update", Map.of("count", 2)));
+        deferred.get(2).run();
+        lifecycle.sendChanged(player, "hud", "update", Map.of("count", 2));
+        verify(bridge, times(2)).sendPacket(player, "hud", "update", Map.of("count", 2));
+
+        lifecycle.open(player, "hud", "update", Map.of("count", 2), true);
+        deferred.get(3).run();
+        verify(bridge, times(4)).sendPacket(eq(player), eq("hud"), eq("update"), any());
+    }
 }

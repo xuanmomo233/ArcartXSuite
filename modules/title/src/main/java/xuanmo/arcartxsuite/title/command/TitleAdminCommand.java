@@ -10,6 +10,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
+import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.ModuleCommandHandler;
@@ -32,12 +33,14 @@ public final class TitleAdminCommand implements ModuleCommandHandler {
 
     private final Supplier<TitleService> serviceProvider;
     private final MessageProvider messages;
+    private final JavaPlugin plugin;
 
     /**
      * @param serviceProvider 称号服务提供者，运行时可能尚未就绪
      * @param messages         消息提供者，用于获取本地化提示文本
      */
-    public TitleAdminCommand(Supplier<TitleService> serviceProvider, MessageProvider messages) {
+    public TitleAdminCommand(JavaPlugin plugin, Supplier<TitleService> serviceProvider, MessageProvider messages) {
+        this.plugin = plugin;
         this.serviceProvider = serviceProvider;
         this.messages = messages;
     }
@@ -133,8 +136,15 @@ public final class TitleAdminCommand implements ModuleCommandHandler {
             sender.sendMessage(msg("give.invalid-duration", args[4]));
             return;
         }
-        TitleOperationResult result = svc.giveTitle(uuid, args[3], spec.get(), sender.getName());
-        sender.sendMessage(prefix() + (result.success() ? ChatColor.GREEN : ChatColor.RED) + result.message());
+        sendWriteResult(sender, svc.giveTitleAsync(uuid, args[3], spec.get(), sender.getName()));
+    }
+
+    private void sendWriteResult(CommandSender sender, java.util.concurrent.CompletableFuture<TitleOperationResult> result) {
+        result.thenAccept(outcome -> {
+            Runnable notify = () -> sender.sendMessage(prefix() + (outcome.success() ? ChatColor.GREEN : ChatColor.RED) + outcome.message());
+            if (Bukkit.isPrimaryThread()) notify.run();
+            else if (plugin.isEnabled()) Bukkit.getScheduler().runTask(plugin, notify);
+        });
     }
 
     private void handleRevoke(CommandSender sender, String[] args) {
@@ -146,8 +156,7 @@ public final class TitleAdminCommand implements ModuleCommandHandler {
         }
         Player target = Bukkit.getPlayer(args[2]);
         UUID uuid = target != null ? target.getUniqueId() : Bukkit.getOfflinePlayer(args[2]).getUniqueId();
-        TitleOperationResult result = svc.revokeTitle(uuid, args[3]);
-        sender.sendMessage(prefix() + (result.success() ? ChatColor.GREEN : ChatColor.RED) + result.message());
+        sendWriteResult(sender, svc.revokeTitle(uuid, args[3]));
     }
 
     private void handleOpen(CommandSender sender, String[] args) {
@@ -159,7 +168,7 @@ public final class TitleAdminCommand implements ModuleCommandHandler {
         }
         Player target = Bukkit.getPlayer(args[2]);
         if (target == null) { sender.sendMessage(msg("common.player-offline", args[2])); return; }
-        svc.openMenu(target);
+        svc.openMenuForAdmin(target);
         sender.sendMessage(msg("open.success", target.getName()));
     }
 

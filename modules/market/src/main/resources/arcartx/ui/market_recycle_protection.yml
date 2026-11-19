@@ -30,7 +30,7 @@ ui:
         var.pending = false
         var.busy = false
         var.resultMsg = '会话已刷新，请重新确认设置'
-      } else if(!var.pending){
+      } elif(!var.pending){
         var.busy = false
       }
     guard_unavailable: |-
@@ -53,7 +53,7 @@ ui:
           var.showPicker = false
           var.pickToken = ''
         }
-      } else if(!var.pending){
+      } elif(!var.pending){
         var.loading = false
       }
     guard_pick: |-
@@ -155,15 +155,17 @@ ui:
             }
             var.ruleCopies = {}
             var.ruleGeneration = var.ruleGeneration + 1
-            if(var.count > 1){
-              for(i in range(1, var.count - 1)){
-                e = val.保护行区.get(0).copy('保护行_' + var.ruleGeneration.round() + '_' + i.round())
-                e.entryKey = i.round()
-                var.ruleCopies[i.round()] = e
+            if(var.保护行区Rows == none || var.保护行区Rows.size() != (var.count)){
+              网格数据 = []
+              if((var.count) > 0){
+                for(网格序号 in range(0, (var.count) - 1)){
+                  网格数据.add(网格序号.round())
+                }
               }
+              var.保护行区Rows = 网格数据
+              var.renderedCount = var.count
+              val.保护滑块.setDragYRatio(0)
             }
-            var.renderedCount = var.count
-            val.保护滑块.setDragYRatio(0)
           }
           var.rulesRenderPending = false
           var.iconsPending = true
@@ -173,27 +175,18 @@ ui:
         }
       }
       var.applyRuleIcons = -> {
-        if(val.保护行区 != none){
-          var.allIconsReady = true
-          if(var.count > 0){
-            row = val.保护行区.get(0)
-            if(row['保护图标'] != none){
-              row['保护图标'].seticon()
-            }
-            else{
-              var.allIconsReady = false
-            }
-            for(key in var.ruleCopies.keys()){
-              row = var.ruleCopies[key]
-              if(row['保护图标'] != none){
+        if(var.保护行区Rows != none && val.保护行区 != none && val.保护行区.childrenCount() == var.保护行区Rows.size()){
+          var.iconsPending = false
+          if(var.保护行区Rows.size() > 0){
+            for(i in range(0, var.保护行区Rows.size() - 1)){
+              row = val.保护行区.get(i.round())
+              if(row != none && row['保护图标'] != none){
                 row['保护图标'].seticon()
-              }
-              else{
-                var.allIconsReady = false
+              }else{
+                var.iconsPending = true
               }
             }
           }
-          var.iconsPending = !var.allIconsReady
         }
       }
       sx = Screen.getWidth() / 1920
@@ -231,7 +224,7 @@ ui:
         var.retrySeconds = 0
         var.resultMsg = '正在确认保存结果，可关闭后重新打开查看'
         Packet.send(var.packetId, 'guard_refresh', var.page, var.kind)
-      } else if(!var.busy && !var.showConfirm && !var.showPicker && var.retrySeconds >= 8){
+      } elif(!var.busy && !var.showConfirm && !var.showPicker && var.retrySeconds >= 8){
         var.retrySeconds = 0
         Packet.send(var.packetId, 'guard_refresh', var.page, var.kind)
       }
@@ -560,16 +553,20 @@ controls:
                 val.保护滑块.setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
             children:
               保护行区:
-                type: VStack
+                type: RepeatGrid
                 val: 保护行区
                 attribute:
+                  items: "var.保护行区Rows"
+                  flow: ~row
+                  column: 1
+                  spaceBetweenY: 12
+                  maxSize: "var.保护行区Rows == none ? 0 : var.保护行区Rows.size()"
                   width: "var.pageW - 48"
-                  spaceBetween: 12
                 children:
                   保护行:
                     type: Canvas
                     attribute:
-                      entryKey: 0.round()
+                      entryKey: self.item
                       entry: var.rules[self.entryKey]
                       visible: "self.entry != none"
                       width: "var.pageW - 48"
@@ -594,51 +591,27 @@ controls:
                           itemScale: 0.72
                           seticon: "self.setItemIcon(var.icons[self.parent.entryKey])"
                       保护物品名:
-                        type: Scroll
+                        type: Text
                         attribute:
                           x: "112"
                           y: "18"
                           width: "var.pageW - 430"
                           height: 40
-                          scrollAnim: none
-                          moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
-                        action:
-                          enter: |-
-                            self.scrollAnim = Lerp(0,1,2500)
-                          leave: |-
-                            self.scrollAnim = none
-                        children:
-                          文本:
-                            type: Text
-                            attribute:
-                              x: 0
-                              y: 0
-                              texts: "self.parent.parent.entry != none ? '&f' + self.parent.parent.entry['name'] : ''"
-                              fontSize: 28
-                              through: true
+                          texts: "self.parent.entry != none ? '&f' + self.parent.entry['name'] : ''"
+                          fontSize: 28
+                          limit: 36
+                          through: true
                       保护范围:
-                        type: Scroll
+                        type: Text
                         attribute:
                           x: "112"
                           y: "64"
                           width: "var.pageW - 430"
                           height: 32
-                          scrollAnim: none
-                          moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
-                        action:
-                          enter: |-
-                            self.scrollAnim = Lerp(0,1,2500)
-                          leave: |-
-                            self.scrollAnim = none
-                        children:
-                          文本:
-                            type: Text
-                            attribute:
-                              x: 0
-                              y: 0
-                              texts: "self.parent.parent.entry != none ? '&7' + self.parent.parent.entry['description'] : ''"
-                              fontSize: 24
-                              through: true
+                          texts: "self.parent.entry != none ? '&7' + self.parent.entry['description'] : ''"
+                          fontSize: 24
+                          limit: 48
+                          through: true
                       移除规则:
                         type: Canvas
                         attribute:
@@ -783,7 +756,7 @@ controls:
         type: Texture
         attribute:
           point: ~stretch_all
-          normal: ~0,0,0,190
+          normal: ~12,19,33,178
       面板:
         type: Adaptive
         attribute:
@@ -796,7 +769,13 @@ controls:
             attribute:
               point: ~stretch_all
               through: true
-              normal: ~28,39,53,245
+              normal: ~32,43,62,250
+              shape: ~round_rect
+              radius: 12
+            effect:
+              stroke:
+                width: 2
+                color: ~86,145,225,200
           选物标题:
             type: Text
             attribute:
@@ -903,7 +882,7 @@ controls:
         type: Texture
         attribute:
           point: ~stretch_all
-          normal: ~0,0,0,190
+          normal: ~12,19,33,178
       面板:
         type: Adaptive
         attribute:
@@ -916,7 +895,13 @@ controls:
             attribute:
               point: ~stretch_all
               through: true
-              normal: ~28,39,53,245
+              normal: ~32,43,62,250
+              shape: ~round_rect
+              radius: 12
+            effect:
+              stroke:
+                width: 2
+                color: ~86,145,225,200
           确认物品:
             type: Slot
             val: 确认物品
@@ -937,74 +922,38 @@ controls:
               fontSize: 34
               through: true
           确认对象:
-            type: Scroll
+            type: Text
             attribute:
               x: "150"
               y: "96"
               width: "720"
               height: 44
-              scrollAnim: none
-              moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
-            action:
-              enter: |-
-                self.scrollAnim = Lerp(0,1,2500)
-              leave: |-
-                self.scrollAnim = none
-            children:
-              文本:
-                type: Text
-                attribute:
-                  x: 0
-                  y: 0
-                  texts: "'&f' + var.confirmName"
-                  fontSize: 28
-                  through: true
+              texts: "'&f' + var.confirmName"
+              fontSize: 28
+              limit: 36
+              through: true
           确认说明:
-            type: Scroll
+            type: Text
             attribute:
               x: "32"
               y: "202"
               width: "856"
               height: 34
-              scrollAnim: none
-              moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
-            action:
-              enter: |-
-                self.scrollAnim = Lerp(0,1,2500)
-              leave: |-
-                self.scrollAnim = none
-            children:
-              文本:
-                type: Text
-                attribute:
-                  x: 0
-                  y: 0
-                  texts: "'&7' + var.confirmText"
-                  fontSize: 26
-                  through: true
+              texts: "'&7' + var.confirmText"
+              fontSize: 26
+              limit: 50
+              through: true
           确认结果:
-            type: Scroll
+            type: Text
             attribute:
               x: "32"
               y: "250"
               width: "856"
               height: 30
-              scrollAnim: none
-              moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
-            action:
-              enter: |-
-                self.scrollAnim = Lerp(0,1,2500)
-              leave: |-
-                self.scrollAnim = none
-            children:
-              文本:
-                type: Text
-                attribute:
-                  x: 0
-                  y: 0
-                  texts: "'&7' + var.resultMsg"
-                  fontSize: 22
-                  through: true
+              texts: "'&7' + var.resultMsg"
+              fontSize: 22
+              limit: 54
+              through: true
           确认:
             type: Canvas
             attribute:
@@ -1019,7 +968,7 @@ controls:
                 var.busy = true
                 if(var.confirmMode == 'auto'){
                   Packet.send(var.packetId, 'guard_auto', '1', var.confirmVersion, var.actionToken)
-                } else if(var.confirmMode == 'remove'){
+                } elif(var.confirmMode == 'remove'){
                   Packet.send(var.packetId, 'guard_remove', var.confirmRule, var.confirmVersion, var.actionToken)
                 } else {
                   Packet.send(var.packetId, 'guard_add', var.pickToken, var.confirmVersion, var.actionToken)

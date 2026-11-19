@@ -14,6 +14,8 @@ import xuanmo.arcartxsuite.map.config.MapModuleConfiguration.WorldDefinition;
 import xuanmo.arcartxsuite.map.crossserver.MapCrossServerService;
 import xuanmo.arcartxsuite.map.model.MapOperationResult;
 import xuanmo.arcartxsuite.map.model.MapPlayerViewState;
+import xuanmo.arcartxsuite.map.model.MapTeleportSession;
+import xuanmo.arcartxsuite.map.service.MapTerrainPushService.ChunkRequest;
 
 /**
  * 跨服地图回调实现（{@link MapCrossServerService.Handler}），自 {@link MapService} 内部类提取。
@@ -103,7 +105,7 @@ import xuanmo.arcartxsuite.map.model.MapPlayerViewState;
          * 只接受 crossShare=true 且有预加载的世界；请求块 ⊆ 预加载覆盖。
          */
         @Override
-        public MapCrossServerService.TerrainRelayTicket prepareTerrainRelay(String worldId, List<long[]> chunks) {
+        public MapCrossServerService.TerrainRelayTicket prepareTerrainRelay(String worldId, List<ChunkRequest> chunks) {
             WorldDefinition world = service.configuration.worlds().get(worldId);
             if (world == null || !world.crossShare() || !world.hasPreload()) {
                 return null;
@@ -113,14 +115,10 @@ import xuanmo.arcartxsuite.map.model.MapPlayerViewState;
                 return null;
             }
             Set<Long> allowed = service.preloadPackedChunkCoords(world);
-            List<Long> accepted = new ArrayList<>(chunks.size());
-            for (long[] c : chunks) {
-                if (c == null || c.length < 2) {
-                    continue;
-                }
-                long packed = ((long) c[0] << 32) | (c[1] & 0xffffffffL);
-                if (allowed.contains(packed)) {
-                    accepted.add(packed);
+            List<ChunkRequest> accepted = new ArrayList<>(chunks.size());
+            for (var chunk : chunks) {
+                if (allowed.contains(chunk.coordinate())) {
+                    accepted.add(chunk);
                 }
             }
             return accepted.isEmpty()
@@ -158,7 +156,8 @@ import xuanmo.arcartxsuite.map.model.MapPlayerViewState;
          * 世界出生点落地永远免费（与本机 teleportToWorld 一致）。
          */
         @Override
-        public void executeArrival(Player player, String worldId, String anchorId) {
+        public void executeArrival(MapTeleportSession session, String worldId, String anchorId) {
+            Player player = session.player();
             service.crossServerFeedback(player, MapOperationResult.success(service.message("player.cross-server-arriving")));
             WorldDefinition world = service.configuration.worlds().get(worldId);
             if (world == null || !world.crossArrive()) {
@@ -171,16 +170,20 @@ import xuanmo.arcartxsuite.map.model.MapPlayerViewState;
                 return;
             }
             if (anchorId.isEmpty()) {
-                Location spawn = service.resolveWorldSpawn(bukkitWorld);
-                if (spawn == null) {
-                    service.crossServerFeedback(player, MapOperationResult.failure(service.message("player.anchor-world-unloaded", worldId)));
-                    return;
-                }
-                boolean arrived = player.teleport(spawn);
-                service.crossServerFeedback(player, arrived ? MapOperationResult.success(
-                    service.message("player.cross-server-arrived", service.resolveDisplayName(world)))
-                    : MapOperationResult.failure(service.message("player.cross-server-arrive-cancelled")));
-                service.sync(player, false);
+                World origin = player.getWorld();
+                Object token = service.beginWorldSpawnRequest(player);
+                service.resolveWorldSpawn(bukkitWorld, spawn -> {
+                    if (!service.claimWorldSpawnRequest(session, token, origin, false)) return;
+                    if (spawn == null) {
+                        service.crossServerFeedback(player, MapOperationResult.failure(service.message("player.anchor-world-unloaded", worldId)));
+                        return;
+                    }
+                    boolean arrived = player.teleport(spawn);
+                    service.crossServerFeedback(player, arrived ? MapOperationResult.success(
+                        service.message("player.cross-server-arrived", service.resolveDisplayName(world)))
+                        : MapOperationResult.failure(service.message("player.cross-server-arrive-cancelled")));
+                    service.sync(player, false);
+                });
                 return;
             }
             AnchorDefinition anchor = service.configuration.anchor(anchorId);

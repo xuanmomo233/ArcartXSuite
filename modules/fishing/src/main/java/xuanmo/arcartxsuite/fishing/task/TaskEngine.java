@@ -1,17 +1,23 @@
 package xuanmo.arcartxsuite.fishing.task;
 
-import java.io.File;
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.UUID;
-import java.util.concurrent.ThreadLocalRandom;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CompletionStage;
+import java.util.concurrent.FutureTask;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.TimeUnit;
+import xuanmo.arcartxsuite.api.scheduler.ModuleCallback;
+import xuanmo.arcartxsuite.api.scheduler.ModuleExecutor;
 import java.util.function.Supplier;
 import java.util.logging.Logger;
 import org.bukkit.Bukkit;
@@ -36,6 +42,14 @@ import xuanmo.arcartxsuite.fishing.storage.FishingRepository;
  */
 public final class TaskEngine {
 
+    private volatile boolean stopping;
+    private final ModuleCallback callbacks = new ModuleCallback(() -> {});
+    private final Set<FutureTask<Void>> pendingWrites = ConcurrentHashMap.newKeySet();
+    private final ModuleExecutor closer = new ModuleExecutor(0,1,30,TimeUnit.SECONDS,new ArrayBlockingQueue<>(1),work -> {
+        var thread=new Thread(work,"AXS-Fishing-TaskClose");thread.setDaemon(true);return thread;
+    });
+    private EventBusCapability subscribedBus;
+
     private final List<FishingTask> dailyPool;
     private final List<FishingTask> weeklyPool;
     private final List<FishingTask> seasonPool;
@@ -46,11 +60,12 @@ public final class TaskEngine {
     private final Logger logger;
     private final Plugin plugin;
     private final FishingRepository repository;
-    private final File dataFolder;
     private final String currentSeasonId;
 
     // 玩家任务实例缓存：uuid → 分类 → 实例列表
     private final Map<UUID, Map<FishingTask.TaskCategory, List<PlayerTaskInstance>>> playerTasks = new java.util.concurrent.ConcurrentHashMap<>();
+    private final Map<UUID, Object> loadingTasks = new HashMap<>();
+    private final Map<UUID, Runnable> onTasksLoaded = new HashMap<>();
     // EventBus 订阅 ID：shutdown 时退订，防止模块 reload 后订阅叠加、进度双倍增长
     private final List<String> eventBusSubscriptionIds = new ArrayList<>();
     // 周期边界检测任务（daily/weekly reset 调度）
@@ -68,7 +83,6 @@ public final class TaskEngine {
                       @NotNull Logger logger,
                       @NotNull Plugin plugin,
                       @NotNull FishingRepository repository,
-                      @NotNull File dataFolder,
                       @NotNull String currentSeasonId) {
         this.dailyPool = dailyPool;
         this.weeklyPool = weeklyPool;
@@ -80,23 +94,25 @@ public final class TaskEngine {
         this.logger = logger;
         this.plugin = plugin;
         this.repository = repository;
-        this.dataFolder = dataFolder;
         this.currentSeasonId = currentSeasonId;
     }
 
     /**
-     * 启动任务引擎：检测赛季切换、清理过期行、注册 EventBus 订阅并启动周期重置调度。
+     * 启动任务引擎，恢复在线玩家的任务并注册事件与周期调度。
      */
     public void start() {
-        checkSeasonRollover();
         startResetBoundaryScheduler();
         purgeStaleTaskProgress();
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            assignTasks(player.getUniqueId());
+        }
 
         EventBusCapability eventBus = eventBusProvider != null ? eventBusProvider.get() : null;
         if (eventBus == null) {
             logger.warning("EventBus 不可用，钓鱼任务引擎无法监听事件");
             return;
         }
+        subscribedBus = eventBus;
         // 收集所有需要订阅的事件主题（去重）
         java.util.Set<String> topics = new java.util.HashSet<>();
         for (FishingTask task : dailyPool) {
@@ -115,7 +131,7 @@ public final class TaskEngine {
                 if (player == null) return;
                 // EventBus 同步派发在 publish 线程；强制回主线程，保证 updateTasks 内
                 // Bukkit API（sendMessage/giveXp）与 playerTasks 访问都在主线程安全区
-                Bukkit.getScheduler().runTask(plugin, () -> {
+                onMain(() -> {
                     try {
                         updateTasks(player, event.topic(), event.payload());
                     } catch (Exception e) {
@@ -133,11 +149,17 @@ public final class TaskEngine {
      * 关闭任务引擎：取消周期调度、退订全部 EventBus 订阅并清空任务缓存。
      */
     public void shutdown() {
+        synchronized(pendingWrites) {
+            if(stopping) return;
+            stopping=true;
+        }
+        callbacks.close();
+        try {
         if (resetBoundaryTask != null) {
             resetBoundaryTask.cancel();
             resetBoundaryTask = null;
         }
-        EventBusCapability eventBus = eventBusProvider != null ? eventBusProvider.get() : null;
+        EventBusCapability eventBus = subscribedBus;
         if (eventBus != null) {
             for (String subId : eventBusSubscriptionIds) {
                 eventBus.unsubscribe(subId);
@@ -145,6 +167,43 @@ public final class TaskEngine {
         }
         eventBusSubscriptionIds.clear();
         playerTasks.clear();
+        loadingTasks.clear();
+        onTasksLoaded.clear();
+        } finally {
+            subscribedBus=null;
+            callbacks.stopped().whenComplete((ignored,failure)->{
+                try { closer.execute(()->{
+                    for(var write:List.copyOf(pendingWrites)) {
+                        write.run();
+                        try { write.get(); }
+                        catch(ExecutionException error) { /* done() records the original failure. */ }
+                        catch(InterruptedException error) { Thread.currentThread().interrupt();throw new IllegalStateException(error); }
+                    }
+                }); } finally { closer.shutdown(); }
+            });
+        }
+    }
+
+    public CompletionStage<Void> databaseStopped() { return closer.stopped(); }
+    private Runnable guard(Runnable action) { return ()->callbacks.call(()->{if(!stopping)action.run();return null;},null); }
+    private void readAsync(Runnable action) { if(!stopping)Bukkit.getScheduler().runTaskAsynchronously(plugin,guard(action)); }
+    private void onMain(Runnable action) { if(!stopping)Bukkit.getScheduler().runTask(plugin,guard(action)); }
+
+    /** Normal writes keep Bukkit scheduling; shutdown rescues accepted jobs cancelled before they start. */
+    private void writeAsync(Runnable action) {
+        var write=new FutureTask<Void>(action,null) {
+            @Override protected void done() {
+                try { get(); }
+                catch(ExecutionException failure) { logger.warning("钓鱼任务写入失败: "+failure.getCause()); }
+                catch(InterruptedException failure) { Thread.currentThread().interrupt(); }
+                finally { pendingWrites.remove(this); }
+            }
+        };
+        synchronized(pendingWrites) { if(stopping)return;pendingWrites.add(write); }
+        try { Bukkit.getScheduler().runTaskAsynchronously(plugin,guard(write)); }
+        catch(RuntimeException | LinkageError failure) {
+            logger.fine("钓鱼任务尚未调度，保留至停用收尾: "+failure.getMessage());
+        }
     }
 
     /**
@@ -159,6 +218,7 @@ public final class TaskEngine {
         UUID uuid = player.getUniqueId();
         Map<FishingTask.TaskCategory, List<PlayerTaskInstance>> categoryMap = playerTasks.get(uuid);
         if (categoryMap == null) return;
+        ensurePeriodTasks(uuid, categoryMap, LocalDate.now());
 
         for (Map.Entry<FishingTask.TaskCategory, List<PlayerTaskInstance>> entry : categoryMap.entrySet()) {
             List<PlayerTaskInstance> updated = new ArrayList<>();
@@ -177,19 +237,23 @@ public final class TaskEngine {
                     continue;
                 }
                 int increment = template.calculateIncrement(player, payload);
-                PlayerTaskInstance newInstance = instance.withProgress(instance.currentProgress() + increment);
-                updated.add(newInstance);
-                persistAsync(newInstance);
-
-                // 任务完成时发放经验
-                if (newInstance.completed() && !instance.completed()) {
+                int progress = (int) Math.min(instance.targetCount(), (long) instance.currentProgress() + Math.max(0, increment));
+                PlayerTaskInstance newInstance = instance.withProgress(progress);
+                if (newInstance.completed()) {
                     FishingService service = serviceSupplier.get();
-                    if (service != null) {
-                        service.giveXp(uuid, template.totalXpReward());
+                    var result = service == null ? null : service.completeTask(newInstance, template.totalXpReward());
+                    if (result == null) {
+                        updated.add(instance);
+                        continue;
+                    }
+                    if (result.awarded()) {
                         String msg = "§a任务完成: " + template.displayName() + " §7(+" + template.totalXpReward() + " XP)";
                         player.sendMessage(msg);
                     }
+                } else {
+                    persistAsync(newInstance);
                 }
+                updated.add(newInstance);
             }
             categoryMap.put(entry.getKey(), updated);
         }
@@ -201,29 +265,39 @@ public final class TaskEngine {
      * @param uuid 玩家 UUID
      */
     public void assignTasks(@NotNull UUID uuid) {
+        prepareTasks(uuid, null);
+    }
+
+    /** 已准备好返回 true，否则在恢复完成后刷新最后一次请求。 */
+    public boolean prepareTasks(@NotNull UUID uuid, @Nullable Runnable afterLoad) {
+        if(stopping)return false;
         LocalDate today = LocalDate.now();
         Map<FishingTask.TaskCategory, List<PlayerTaskInstance>> existing = playerTasks.get(uuid);
-        if (existing != null && !existing.isEmpty()) {
+        if (existing != null) {
             // 已分配过：纯内存补齐当前周期任务，不查库（主线程安全路径）
             ensurePeriodTasks(uuid, existing, today);
-            return;
+            return true;
         }
+        if (afterLoad != null) onTasksLoaded.put(uuid, afterLoad);
+        Object request = new Object();
+        if (loadingTasks.putIfAbsent(uuid, request) != null) return false;
         // 首次分配：DB 恢复挪异步，回主线程装填+分配，避免 loadTaskProgress 卡主线程
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+        readAsync(() -> {
             List<PlayerTaskInstance> persisted;
             try {
-                persisted = repository.loadTaskProgress(uuid);
+                persisted = repository.loadTaskProgress(uuid, currentSeasonId);
             } catch (Exception e) {
                 logger.warning("恢复任务进度失败 [" + uuid + "]: " + e.getMessage());
-                persisted = List.of();
+                persisted = null;
             }
             List<PlayerTaskInstance> recovered = persisted;
-            Bukkit.getScheduler().runTask(plugin, () -> {
+            onMain(() -> {
+                if (!loadingTasks.remove(uuid, request)) return;
+                Runnable callback = onTasksLoaded.remove(uuid);
                 // 异步读库期间玩家可能已退出，跳过装填避免残留离线玩家的内存 entry
                 Player online = Bukkit.getPlayer(uuid);
-                if (online == null || !online.isOnline()) return;
-                Map<FishingTask.TaskCategory, List<PlayerTaskInstance>> categoryMap =
-                    playerTasks.computeIfAbsent(uuid, k -> new HashMap<>());
+                if (online == null || !online.isOnline() || recovered == null) return;
+                Map<FishingTask.TaskCategory, List<PlayerTaskInstance>> categoryMap = new HashMap<>();
                 LocalDate fillDay = LocalDate.now(); // 用装填时刻日期，异步延迟跨天边界自动取新值
                 for (PlayerTaskInstance p : recovered) {
                     if (isInstanceCurrent(p, fillDay)) {
@@ -231,8 +305,11 @@ public final class TaskEngine {
                     }
                 }
                 ensurePeriodTasks(uuid, categoryMap, fillDay);
+                playerTasks.put(uuid, categoryMap);
+                if (callback != null) callback.run();
             });
         });
+        return false;
     }
 
     /** 主线程内存分配：补齐 daily/weekly/season 当前周期缺失的任务实例。 */
@@ -250,7 +327,7 @@ public final class TaskEngine {
         // 每周任务（周一重置）
         List<PlayerTaskInstance> weekly = categoryMap.get(FishingTask.TaskCategory.WEEKLY);
         if (weekly == null || weekly.isEmpty() || !isSameWeek(weekly.get(0).assignedDate(), today)) {
-            weekly = assignFromPool(uuid, weeklyPool, FishingTask.TaskCategory.WEEKLY, weeklyCount, today);
+            weekly = assignFromPool(uuid, weeklyPool, FishingTask.TaskCategory.WEEKLY, weeklyCount, today.with(DayOfWeek.MONDAY));
             categoryMap.put(FishingTask.TaskCategory.WEEKLY, weekly);
             persistAllAsync(weekly);
         }
@@ -283,9 +360,9 @@ public final class TaskEngine {
 
     /** 异步保存单条任务实例进度。 */
     private void persistAsync(@NotNull PlayerTaskInstance instance) {
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+        writeAsync(() -> {
             try {
-                repository.saveTaskProgress(instance);
+                repository.saveTaskProgress(instance, currentSeasonId);
             } catch (Exception e) {
                 logger.warning("持久化任务进度失败 [" + instance.templateId() + "]: " + e.getMessage());
             }
@@ -304,10 +381,13 @@ public final class TaskEngine {
         List<PlayerTaskInstance> result = new ArrayList<>();
         if (pool.isEmpty()) return result;
         List<FishingTask> candidates = new ArrayList<>(pool);
-        // 按权重随机抽取
-        for (int i = 0; i < Math.min(count, candidates.size()); i++) {
+        candidates.sort(Comparator.comparing(FishingTask::taskId));
+        // 同一玩家和周期在恢复或切服时保持相同的加权抽选结果。
+        long seed = uuid.getMostSignificantBits() ^ uuid.getLeastSignificantBits() ^ date.toEpochDay();
+        Random random = new Random(seed ^ category.name().hashCode());
+        for (int i = 0; i < count && !candidates.isEmpty(); i++) {
             int totalWeight = candidates.stream().mapToInt(FishingTask::weight).sum();
-            int roll = ThreadLocalRandom.current().nextInt(totalWeight);
+            int roll = random.nextInt(totalWeight);
             int cumulative = 0;
             int selectedIdx = 0;
             for (int j = 0; j < candidates.size(); j++) {
@@ -383,6 +463,8 @@ public final class TaskEngine {
      */
     public void onPlayerQuit(@NotNull UUID uuid) {
         playerTasks.remove(uuid);
+        loadingTasks.remove(uuid);
+        onTasksLoaded.remove(uuid);
     }
 
     /**
@@ -395,7 +477,7 @@ public final class TaskEngine {
         }
         // 全库清理过期每日任务行（含离线玩家）
         String today = LocalDate.now().toString();
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> repository.purgeTaskProgressBefore("DAILY", today));
+        writeAsync(() -> repository.purgeTaskProgressBefore("DAILY", today));
         // 在线玩家重新分配
         for (Player player : Bukkit.getOnlinePlayers()) {
             assignTasks(player.getUniqueId());
@@ -411,22 +493,7 @@ public final class TaskEngine {
             categoryMap.remove(FishingTask.TaskCategory.WEEKLY);
         }
         String weekStart = LocalDate.now().with(DayOfWeek.MONDAY).toString();
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> repository.purgeTaskProgressBefore("WEEKLY", weekStart));
-        for (Player player : Bukkit.getOnlinePlayers()) {
-            assignTasks(player.getUniqueId());
-        }
-    }
-
-    /**
-     * 赛季重置（赛季切换时调用）：仅清 SEASON 分类的任务进度，
-     * 不动 daily/weekly——避免赛季切换被利用重刷当日/当周任务奖励。
-     * 在线玩家随后重新分配新赛季任务。
-     */
-    public void seasonReset() {
-        for (Map<FishingTask.TaskCategory, List<PlayerTaskInstance>> categoryMap : playerTasks.values()) {
-            categoryMap.remove(FishingTask.TaskCategory.SEASON);
-        }
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> repository.purgeTaskProgressByCategory("SEASON"));
+        writeAsync(() -> repository.purgeTaskProgressBefore("WEEKLY", weekStart));
         for (Player player : Bukkit.getOnlinePlayers()) {
             assignTasks(player.getUniqueId());
         }
@@ -443,7 +510,7 @@ public final class TaskEngine {
         LocalDate today = LocalDate.now();
         lastDailyDate = today;
         lastWeekMonday = today.with(DayOfWeek.MONDAY);
-        resetBoundaryTask = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
+        resetBoundaryTask = Bukkit.getScheduler().runTaskTimer(plugin, guard(() -> {
             LocalDate now = LocalDate.now();
             if (!now.equals(lastDailyDate)) {
                 lastDailyDate = now;
@@ -454,7 +521,7 @@ public final class TaskEngine {
                 lastWeekMonday = monday;
                 weeklyReset();
             }
-        }, 1200L, 1200L);
+        }), 1200L, 1200L);
     }
 
     /**
@@ -464,7 +531,7 @@ public final class TaskEngine {
     private void purgeStaleTaskProgress() {
         String today = LocalDate.now().toString();
         String weekStart = LocalDate.now().with(DayOfWeek.MONDAY).toString();
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+        writeAsync(() -> {
             try {
                 repository.purgeTaskProgressBefore("DAILY", today);
                 repository.purgeTaskProgressBefore("WEEKLY", weekStart);
@@ -474,31 +541,4 @@ public final class TaskEngine {
         });
     }
 
-    /**
-     * 检测赛季 ID 是否变化（跨启动/跨 reload）：marker 文件记录上次生效的 seasonId，
-     * 与当前配置不同则触发 {@link #seasonReset()} 清空旧赛季任务并更新 marker。
-     */
-    private void checkSeasonRollover() {
-        File marker = new File(dataFolder, ".last-season-id");
-        String lastSeasonId = null;
-        if (marker.exists()) {
-            try {
-                lastSeasonId = Files.readString(marker.toPath(), StandardCharsets.UTF_8).trim();
-            } catch (IOException e) {
-                logger.warning("读取赛季标记失败: " + e.getMessage());
-            }
-        }
-        if (currentSeasonId.equals(lastSeasonId)) {
-            return;
-        }
-        if (lastSeasonId != null) {
-            logger.info("检测到赛季切换: " + lastSeasonId + " -> " + currentSeasonId + "，清空赛季任务进度");
-            seasonReset();
-        }
-        try {
-            Files.writeString(marker.toPath(), currentSeasonId, StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            logger.warning("写入赛季标记失败: " + e.getMessage());
-        }
-    }
 }

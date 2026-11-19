@@ -14,7 +14,7 @@ import xuanmo.arcartxsuite.entitytracker.entity.PlayerBossBestDamage;
 public final class EntityTrackerCrossServerPayloadCodec {
 
     public static final String TYPE_BEST_DAMAGE = "BEST_DAMAGE";
-    public static final String TYPE_KILL_RECORD = "KILL_RECORD";
+    public static final String TYPE_KILL_RECORD = "KILL_RECORD_V2";
 
     private EntityTrackerCrossServerPayloadCodec() {
     }
@@ -37,6 +37,7 @@ public final class EntityTrackerCrossServerPayloadCodec {
     }
 
     public static String encodeKillRecord(BossKillRecord record) {
+        String key = java.util.UUID.fromString(record.getSettlementKey()).toString();
         return String.join("\t",
             TYPE_KILL_RECORD,
             nullToEmpty(record.getBossId()),
@@ -50,7 +51,8 @@ public final class EntityTrackerCrossServerPayloadCodec {
             sanitize(nullToEmpty(record.getWorldName())),
             record.getLocationX() == null ? "" : String.valueOf(record.getLocationX()),
             record.getLocationY() == null ? "" : String.valueOf(record.getLocationY()),
-            record.getLocationZ() == null ? "" : String.valueOf(record.getLocationZ())
+            record.getLocationZ() == null ? "" : String.valueOf(record.getLocationZ()),
+            key
         );
     }
 
@@ -98,10 +100,11 @@ public final class EntityTrackerCrossServerPayloadCodec {
 
     public static BossKillRecord decodeKillRecord(String payload) {
         String[] parts = payload.split("\t", -1);
-        if (parts.length < 9 || !TYPE_KILL_RECORD.equals(parts[0])) {
+        if (parts.length != 14 || !TYPE_KILL_RECORD.equals(parts[0])) {
             throw new IllegalArgumentException("unsupported kill_record payload");
         }
         BossKillRecord record = new BossKillRecord();
+        record.setSettlementKey(java.util.UUID.fromString(parts[13]).toString());
         record.setBossId(parts[1]);
         record.setBossDisplayName(parts[2]);
         record.setKillTime(fromEpochMilli(parseLong(parts[3], 0L)));

@@ -9,6 +9,7 @@ public final class WarehouseCrossServerPayloadCodec {
 
     public static final String TYPE_LOCK = "LOCK";
     public static final String TYPE_UNLOCK = "UNLOCK";
+    public static final String TYPE_SHOWCASE_REVOKED = "SHOWCASE_REVOKED";
 
     private WarehouseCrossServerPayloadCodec() {
     }
@@ -32,6 +33,11 @@ public final class WarehouseCrossServerPayloadCodec {
         );
     }
 
+    public static String encodeShowcaseRevoked(ShowcaseRevocation revoke) {
+        return String.join("\t", TYPE_SHOWCASE_REVOKED, revoke.ownerUuid().toString(),
+            sanitize(revoke.ownerType()), sanitize(revoke.warehouseId()));
+    }
+
     public static DecodedPayload decode(String payload) {
         if (payload == null || payload.isBlank()) {
             throw new IllegalArgumentException("empty payload");
@@ -42,10 +48,15 @@ public final class WarehouseCrossServerPayloadCodec {
         }
         String type = parts[0];
         if (TYPE_LOCK.equals(type)) {
-            return new DecodedPayload(type, parts[1], decodeLock(parts), null);
+            return new DecodedPayload(type, parts[1], decodeLock(parts), null, null);
         }
         if (TYPE_UNLOCK.equals(type)) {
-            return new DecodedPayload(type, parts[1], null, decodeUnlock(parts));
+            return new DecodedPayload(type, parts[1], null, decodeUnlock(parts), null);
+        }
+        if (TYPE_SHOWCASE_REVOKED.equals(type) && parts.length == 4
+            && ("personal".equals(parts[2]) || "shared".equals(parts[2])) && !parts[3].isBlank()) {
+            return new DecodedPayload(type, null, null, null,
+                new ShowcaseRevocation(UUID.fromString(parts[1]), parts[2], parts[3]));
         }
         throw new IllegalArgumentException("unsupported payload: " + type);
     }
@@ -68,10 +79,14 @@ public final class WarehouseCrossServerPayloadCodec {
         return new UnlockPayload(parts[1], UUID.fromString(parts[2]), parts[3]);
     }
 
-    public record DecodedPayload(String type, String sharedId, SharedEditLock lock, UnlockPayload unlock) {
+    public record DecodedPayload(String type, String sharedId, SharedEditLock lock, UnlockPayload unlock,
+                                 ShowcaseRevocation showcaseRevocation) {
     }
 
     public record UnlockPayload(String sharedId, UUID playerUuid, String nodeId) {
+    }
+
+    public record ShowcaseRevocation(UUID ownerUuid, String ownerType, String warehouseId) {
     }
 
     private static String sanitize(String value) {

@@ -30,6 +30,8 @@ import xuanmo.arcartxsuite.api.bridge.ApiStability;
 @ApiStability.Stable
 public interface SymphonyBridge {
 
+    enum ModifierOperation { ADD, MULTIPLY_BASE, MULTIPLY_TOTAL }
+
     boolean available();
 
     // ─── 属性写操作 ──────────────────────────────────────────
@@ -41,6 +43,9 @@ public interface SymphonyBridge {
      */
     void setAttribute(Player player, String attributeId, boolean percent, double value, String sourceKey);
 
+    /** 设置显式运算方式的属性修饰符。倍率值使用比例，如 0.2 表示 20%。 */
+    void setAttribute(Player player, String attributeId, ModifierOperation operation, double value, String sourceKey);
+
     /** 移除指定 sourceKey 的属性 */
     void removeAttribute(Player player, String sourceKey);
 
@@ -51,6 +56,9 @@ public interface SymphonyBridge {
 
     /** 查询实体指定属性的当前值，Symphony 不可用或属性不存在时返回 0 */
     double attributeValue(LivingEntity entity, String attributeId);
+
+    /** 读取实体当前属性的只读快照，键为完整属性 ID。不可用时返回空映射。 */
+    Map<String, Double> attributeValues(LivingEntity entity);
 
     // ─── 战力查询 ────────────────────────────────────────────
 

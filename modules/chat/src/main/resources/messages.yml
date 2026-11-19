@@ -66,9 +66,19 @@ player:
     socialspy: "&7/chat socialspy [on|off]&f - 切换社交监听"
     redpacket: "&7/chat redpacket <normal|lucky> <金额> <个数> [祝福]&f - 发送红包"
     grab: "&7/chat grab <id>&f - 领取红包"
+    links: "&7/chat party、/chat meeting、/chat ready、/chat share&f - 小队和分享"
+    preferences: "&7/chat subscribe、/chat unsubscribe、/chat quiet、/chat mentions&f - 频道偏好和提及"
+    reports: "&7/chat history、/chat report&f - 最近消息和举报"
 
 # ── service results ─────────────────────────────────────
 result:
+  reloading: "&e聊天正在重载，刚才的消息未发送，请稍后重试。"
+  login-required: "请先完成登录验证。"
+  party-required: "你需要先加入 Abyss 小队。"
+  storage-unavailable: "聊天数据暂时不可用，请稍后重试。"
+  channel-changed-while-sending: "频道已切换，请重新发送这条消息。"
+  relay-unavailable: "这条消息未被跨服通道接收，请稍后重试。"
+  private-relay-accepted: "跨服私聊已提交。"
   player-offline: "玩家当前不在线。"                    # 目标玩家不在线
   no-channel: "未找到可用聊天频道。"                    # 没有可用频道
   private-no-target: "当前私聊频道没有最近会话对象，请先使用 /msg。"  # 无私聊目标
@@ -105,6 +115,7 @@ result:
   target-offline: "对方当前不在线。"                    # 私聊目标不在线
   private-sent: "私聊已发送。"                          # 私聊发送成功
   channel-speak-no-permission: "你没有权限在该频道发言。"  # 频道发言权限不足
+  region-speak-denied: "当前区域禁止发送公共聊天。"
   private-no-permission: "你没有权限使用私聊。"         # 私聊权限不足
   mute-remaining: "你当前处于禁言状态，剩余 {0}。"      # 禁言剩余时间提示
   too-fast: "发言过快，请稍后再试。"                    # 触发发言冷却
@@ -112,7 +123,44 @@ result:
   message-too-long: "消息长度不能超过 {0} 个字符。"      # 消息超长提示
 
 # ── 红包 ─────────────────────────────────────────────
+links:
+  preferences-usage: "/chat subscribe <频道>、/chat unsubscribe <频道> 或 /chat quiet <频道> <on|off>"
+  quiet-changed: "{0} 的频道静音已{1}。"
+  subscription-changed: "{0} 的订阅已{1}。"
+  mentions-read: "你有 {0} 条未读提及，已标为已读。"
+  external-mention: "你在 QQ 同步频道收到了一条提及。"
+  usage: "/chat share location 或 /chat share <quest|auction|listing|shop|store> <ID>"
+  unavailable: "内容已失效，或当前无法打开。"
+  expired: "此链接已过期，或你已离开其可见范围。"
+  leader-required: "只有队长可以发起准备确认。"
+  no-audience: "当前频道没有可接收该内容的玩家。"
+  sent: "聊天卡片已发送。"
+
+moderation:
+  history-line: "&7[{0}] [{1}] {2}&f {3}"
+  empty: "没有可显示的记录。"
+  report-usage: "先用 /chat history 查看消息编号，再用 /chat report <编号> <原因>。"
+  report-missing: "找不到可举报的消息，或编号不唯一。"
+  report-sent: "举报已登记，回执 {0}。"
+  report-duplicate: "你已举报过这条消息。"
+  report-summary: "举报 {0} [{1}] {2} · {3}"
+  report-detail: "举报人 {0} · 消息 {1} · 原因 {2}"
+  report-closed: "已标为处理完成。"
+  receipt-id: "处置回执 {0}。"
+  receipt-line: "{0} · {1} {2} · 操作者 {3} · 节点 {4} · 时间 {5} · 到期 {6} · {7}"
+  review-usage: "用法 /axs chat <mutehistory 玩家|receipt 回执|reports [举报ID]|closereport 举报ID>。"
+
 redpacket:
+  invalid-wish: "红包祝福语过长或未通过内容审核。"
+  invalid-precision: "金额精度或每份金额不符合该货币的要求。"
+  debit-review: "红包 {0} 的扣款结果待核对，请保留编号。"
+  not-eligible: "红包不存在或你当前无法在该频道领取。"
+  claim-queued: "已登记领取，奖励入账后会通知你。"
+  ledger-count: "待核对扣款 {0} 条，待核对发放 {1} 条（各最多显示 100 条）。"
+  ledger-entry: "{0}  玩家 {1}  {2}"
+  ledger-usage: "/axs chat redpacket ledger 或 /axs chat redpacket resolve <流水ID> <paid|unpaid|retry|done>"
+  ledger-resolved: "已处理红包流水 {0}。"
+  ledger-missing: "红包流水 {0} 暂不可核对，或已处理。"
   disabled: "红包功能当前未启用。"                        # 功能开关关闭
   no-send-permission: "你没有权限发送红包。"              # 发送权限不足
   no-claim-permission: "你没有权限领取红包。"             # 领取权限不足
@@ -135,6 +183,7 @@ redpacket:
   already-claimed: "你已经领取过这个红包了。"              # 重复领取
   sender-denied: "不能领取自己发的红包。"                  # 发送者不可领取
   claimed: "领取成功：{0}。"                              # 领取成功反馈
+  item-queued: "红包物品已进入待发队列：{0}。"
   refunded: "红包过期退款：{0} 已退回你的账户。"           # 过期退款通知
   broadcast-line: "&c🧧 &f{0} &7发了一个&e{1}&7：&f{2} "    # 红包广播文字行（发送者/类型/祝福）
   claim-button: "&e&l[点击领取]"                          # 文字行领取按钮

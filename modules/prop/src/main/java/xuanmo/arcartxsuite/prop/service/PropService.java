@@ -1,45 +1,54 @@
 package xuanmo.arcartxsuite.prop.service;
 
-import java.util.ArrayList;
+import java.util.BitSet;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.GameMode;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
+import org.bukkit.event.Event;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
 import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
+import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
-import xuanmo.arcartxsuite.api.util.AttributeResolver;
+import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.Plugin;
-import org.bukkit.potion.PotionEffect;
-import org.bukkit.potion.PotionEffectType;
-import xuanmo.arcartxsuite.api.potion.PotionEffectTypeResolver;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
+import xuanmo.arcartxsuite.api.attribute.AttributeBridgeRegistry;
+import xuanmo.arcartxsuite.api.auth.AuthAccess;
 import xuanmo.arcartxsuite.api.capability.EventBusCapability;
 import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.api.bridge.PropBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.PropPlayerHandle;
+import xuanmo.arcartxsuite.api.bridge.PropSlotUpdates;
 import xuanmo.arcartxsuite.api.condition.ScriptCondition;
 import xuanmo.arcartxsuite.api.condition.ScriptConditionServices;
+import xuanmo.arcartxsuite.api.modattr.ModAttributeService;
+import xuanmo.arcartxsuite.api.placeholder.PlaceholderResolverAPI;
+import xuanmo.arcartxsuite.api.script.AriaBridge;
+import xuanmo.arcartxsuite.prop.config.PropAmount;
 import xuanmo.arcartxsuite.prop.config.PropAutoTriggerConfiguration;
 import xuanmo.arcartxsuite.prop.config.PropAutoTriggerDefinition;
 import xuanmo.arcartxsuite.prop.config.PropDefinition;
+import xuanmo.arcartxsuite.prop.config.PropEffects;
 import xuanmo.arcartxsuite.prop.config.PropKeyBindingDefinition;
 import xuanmo.arcartxsuite.prop.config.PropKeyMappingConfiguration;
 import xuanmo.arcartxsuite.prop.config.PropLanguageConfiguration;
@@ -50,9 +59,8 @@ import java.util.logging.Logger;
  * Prop 模块核心服务。
  * <p>
  * 实现 Bukkit {@link Listener}，负责道具的按键绑定注册、手持右键与按键使用处理、
- * 效果执行（命令、消息、饱食度、生命、经验、药水、AttributePlus、MythicLib、Symphony）、
- * 冷却管理、槽位同步与道具绑定。聚合三个属性子系统服务：
- * {@link PropAttributePlusService}、{@link PropMythicLibService}、{@link PropSymphonyService}。
+ * 冷却管理、槽位同步与道具绑定。效果定义与临时属性分别由
+ * {@link PropEffects} 和 {@link PropTimedAttributes} 管理。
  */
 public final class PropService implements Listener {
 
@@ -62,17 +70,56 @@ public final class PropService implements Listener {
     private final PropBridgeAPI bridge;
     private final PropKeyMappingConfiguration keyMappingConfiguration;
     private final PropLanguageConfiguration languageConfiguration;
-    private final Map<String, PropDefinition> definitionsByNormalizedId;
-    private final PropAttributePlusService attributePlusService;
-    private final PropMythicLibService mythicLibService;
-    private final PropSymphonyService symphonyService;
+    private final Map<String, PropDefinition> props;
+    private final PropTimedAttributes timedAttributes;
+    private final PropQuickSlotUse quickSlotUse;
+    private final PropKeyPressQueue keyPresses;
     private Supplier<EventBusCapability> eventBusProvider;
     private final MessageProvider messages;
     private final xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge;
     private final Set<String> registeredBindingIds = new LinkedHashSet<>();
     private final Map<UUID, Map<String, Long>> autoCheckTimestamps = new HashMap<>();
-    private List<String> autoSlotIds = List.of();
+    private final ConcurrentHashMap<UUID, AutoSlots> observedSlots = new ConcurrentHashMap<>();
+    private final List<String> configuredSlotIds;
+    private final Map<String, Integer> slotIndices;
     private BukkitTask autoTriggerTask;
+    private Runnable unobserveSlots;
+    private long autoTick;
+    private volatile boolean active;
+
+    private static final class AutoSlots {
+        private final Player owner;
+        private final PropDefinition[] candidates;
+        private final BitSet activeCandidates = new BitSet();
+        private volatile BitSet dirty;
+        private long fullCheckAt;
+        private long nextCandidateAt = Long.MAX_VALUE;
+
+        private AutoSlots(Player owner, int slots) {
+            this.owner = owner;
+            this.candidates = new PropDefinition[slots];
+        }
+
+        private boolean checkDue(long now) {
+            return now >= fullCheckAt || now >= nextCandidateAt || dirty != null;
+        }
+
+        private void setCandidate(int index, PropDefinition definition) {
+            candidates[index] = definition;
+            activeCandidates.set(index, definition != null);
+        }
+
+        private synchronized void mark(int index) {
+            if (dirty == null) dirty = new BitSet();
+            dirty.set(index);
+        }
+
+        private synchronized BitSet take() {
+            BitSet changed = dirty;
+            dirty = null;
+            return changed;
+        }
+    }
 
     /**
      * 构造 Prop 核心服务。
@@ -85,6 +132,9 @@ public final class PropService implements Listener {
      * @param languageConfiguration     语言配置
      * @param definitionsByNormalizedId 以小写归一化 ID 为键的道具定义 Map
      * @param attributeBridge           属性桥接注册表
+     * @param modAttributes             本体的模组属性服务
+     * @param aria                      Aria 求值桥接
+     * @param placeholders              PlaceholderAPI 解析桥接
      * @param messages                  消息提供者
      * @param vanillaItemNameBridge     原版物品名称桥接
      */
@@ -96,7 +146,10 @@ public final class PropService implements Listener {
         PropKeyMappingConfiguration keyMappingConfiguration,
         PropLanguageConfiguration languageConfiguration,
         Map<String, PropDefinition> definitionsByNormalizedId,
-        xuanmo.arcartxsuite.api.attribute.AttributeBridgeRegistry attributeBridge,
+        AttributeBridgeRegistry attributeBridge,
+        ModAttributeService modAttributes,
+        AriaBridge aria,
+        PlaceholderResolverAPI placeholders,
         MessageProvider messages,
         xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge
     ) {
@@ -106,12 +159,19 @@ public final class PropService implements Listener {
         this.bridge = bridge;
         this.keyMappingConfiguration = keyMappingConfiguration;
         this.languageConfiguration = languageConfiguration;
-        this.definitionsByNormalizedId = definitionsByNormalizedId;
         this.messages = messages;
         this.vanillaItemNameBridge = vanillaItemNameBridge;
-        this.attributePlusService = new PropAttributePlusService(plugin, attributeBridge.attributePlus());
-        this.mythicLibService = new PropMythicLibService(plugin, this.logger, configuration.mythicLib(), attributeBridge.mythicLib());
-        this.symphonyService = new PropSymphonyService(plugin, attributeBridge.symphony());
+        this.props = definitionsByNormalizedId;
+        this.timedAttributes = new PropTimedAttributes(attributeBridge, modAttributes, aria, placeholders, configuration.mythicLib(),
+            (task, ticks) -> Bukkit.getScheduler().runTaskLater(plugin, task, ticks), logger);
+        this.quickSlotUse = new PropQuickSlotUse(plugin, bridge, messages, this::canUse, logger);
+        this.keyPresses = new PropKeyPressQueue(task -> Bukkit.getScheduler().runTask(plugin, task), this::handleQueuedPress);
+        this.configuredSlotIds = keyMappingConfiguration.bindings().values().stream()
+            .filter(binding -> binding.mode() == PropKeyBindingDefinition.Mode.PROP)
+            .map(PropKeyBindingDefinition::slotId).distinct().toList();
+        var indices = new HashMap<String, Integer>();
+        for (int i = 0; i < configuredSlotIds.size(); i++) indices.put(configuredSlotIds.get(i), i);
+        this.slotIndices = Map.copyOf(indices);
     }
 
     /**
@@ -124,10 +184,10 @@ public final class PropService implements Listener {
     }
 
     /**
-     * 启动服务：初始化 MythicLib 子服务、注册事件监听、注册按键绑定、同步在线玩家槽位。
+     * 启动服务：注册事件与按键，启动槽位同步及自动触发。
      */
     public void start() {
-        mythicLibService.start();
+        active = true;
         Bukkit.getPluginManager().registerEvents(this, plugin);
         registerBindings();
         syncOnlinePlayers();
@@ -138,15 +198,22 @@ public final class PropService implements Listener {
      * 关闭服务：注销事件监听、取消按键绑定、停止自动触发任务、关闭各属性子服务。
      */
     public void shutdown() {
+        active = false;
+        keyPresses.close();
         HandlerList.unregisterAll(this);
         unregisterBindings();
         if (autoTriggerTask != null) {
             autoTriggerTask.cancel();
             autoTriggerTask = null;
         }
+        if (unobserveSlots != null) {
+            unobserveSlots.run();
+            unobserveSlots = null;
+        }
+        observedSlots.clear();
         autoCheckTimestamps.clear();
-        mythicLibService.shutdown();
-        symphonyService.shutdown();
+        quickSlotUse.shutdown();
+        timedAttributes.shutdown();
     }
 
     /**
@@ -155,7 +222,7 @@ public final class PropService implements Listener {
      * @return 道具数量
      */
     public int propCount() {
-        return definitionsByNormalizedId.size();
+        return props.size();
     }
 
     /**
@@ -176,31 +243,8 @@ public final class PropService implements Listener {
         return keyMappingConfiguration.category();
     }
 
-    /**
-     * 检查 AttributePlus 是否已挂钩。
-     *
-     * @return {@code true} 表示已挂钩
-     */
-    public boolean attributePlusHooked() {
-        return attributePlusService.hooked();
-    }
-
-    /**
-     * 检查 MythicLib 是否已挂钩。
-     *
-     * @return {@code true} 表示已挂钩
-     */
-    public boolean mythicLibHooked() {
-        return mythicLibService.hooked();
-    }
-
-    /**
-     * 检查 Symphony 是否已挂钩。
-     *
-     * @return {@code true} 表示已挂钩
-     */
-    public boolean symphonyHooked() {
-        return symphonyService.hooked();
+    public Map<String, Boolean> attributeProviders() {
+        return timedAttributes.providers();
     }
 
     /**
@@ -209,11 +253,7 @@ public final class PropService implements Listener {
      * @return 不可变的道具 ID 列表
      */
     public List<String> propIds() {
-        List<String> propIds = new ArrayList<>();
-        for (PropDefinition definition : definitionsByNormalizedId.values()) {
-            propIds.add(definition.id());
-        }
-        return List.copyOf(propIds);
+        return props.values().stream().map(PropDefinition::id).toList();
     }
 
     /**
@@ -239,6 +279,9 @@ public final class PropService implements Listener {
         }
 
         ItemStack boundItem = bindItem(mainHand, definition.id(), definition.coolDownGroup());
+        if (boundItem == null) {
+            return PropOperationResult.failure(messages.get("set.bind-failed"));
+        }
         player.getInventory().setItemInMainHand(boundItem);
         return PropOperationResult.success(messages.get("set.success", definition.id()));
     }
@@ -259,6 +302,9 @@ public final class PropService implements Listener {
      */
     @EventHandler(ignoreCancelled = true)
     public void onPlayerJoin(PlayerJoinEvent event) {
+        UUID uuid = event.getPlayer().getUniqueId();
+        autoCheckTimestamps.remove(uuid);
+        observedSlots.remove(uuid);
         scheduleSlotSync(event.getPlayer(), 1L);
     }
 
@@ -270,10 +316,25 @@ public final class PropService implements Listener {
     @EventHandler(ignoreCancelled = true)
     public void onPlayerQuit(PlayerQuitEvent event) {
         Player player = event.getPlayer();
-        autoCheckTimestamps.remove(player.getUniqueId());
-        mythicLibService.clear(player);
-        symphonyService.clear(player);
-        attributePlusService.clear(player);
+        UUID uuid = player.getUniqueId();
+        autoCheckTimestamps.remove(uuid);
+        observedSlots.remove(uuid);
+        keyPresses.cancel(player);
+        quickSlotUse.cancel(player);
+        timedAttributes.clear(player);
+    }
+
+    @EventHandler
+    public void onPlayerDeath(PlayerDeathEvent event) {
+        keyPresses.cancel(event.getEntity());
+        quickSlotUse.cancel(event.getEntity());
+        timedAttributes.clear(event.getEntity());
+    }
+
+    @EventHandler
+    public void onPlayerChangedWorld(PlayerChangedWorldEvent event) {
+        keyPresses.cancel(event.getPlayer());
+        quickSlotUse.cancel(event.getPlayer());
     }
 
     /**
@@ -281,31 +342,34 @@ public final class PropService implements Listener {
      *
      * @param event 玩家交互事件
      */
-    @EventHandler(ignoreCancelled = true)
+    @EventHandler(priority = EventPriority.HIGHEST)
     public void onPlayerInteract(PlayerInteractEvent event) {
-        if (event.getAction() != Action.RIGHT_CLICK_AIR && event.getAction() != Action.RIGHT_CLICK_BLOCK) {
+        if (event.getHand() != EquipmentSlot.HAND) return;
+        Action action = event.getAction();
+        if (action != Action.RIGHT_CLICK_AIR && action != Action.RIGHT_CLICK_BLOCK) {
+            return;
+        }
+        if (event.useItemInHand() == Event.Result.DENY
+            || (action == Action.RIGHT_CLICK_BLOCK && event.useInteractedBlock() == Event.Result.DENY)) {
             return;
         }
 
         Player player = event.getPlayer();
+        if (!canUse(player)) return;
         ItemStack mainHand = player.getInventory().getItemInMainHand();
-        ResolvedBoundProp resolved = resolveBoundProp(mainHand);
-        if (resolved == null) {
+        PropDefinition prop = resolveBoundProp(mainHand);
+        if (prop == null) {
             return;
         }
 
         event.setCancelled(true);
-
-        if (resolved.changed()) {
-            player.getInventory().setItemInMainHand(resolved.itemStack());
-        }
 
         PropPlayerHandle handle = bridge.resolvePlayerHandle(player).orElse(null);
         if (handle == null) {
             return;
         }
 
-        handleUse(player, resolved, PropUseMode.HAND, null, handle);
+        handleUse(player, prop, mainHand, PropUseMode.HAND, null, handle);
     }
 
     private void registerBindings() {
@@ -315,7 +379,7 @@ public final class PropService implements Listener {
                 definition.bindingId(),
                 keyMappingConfiguration.category(),
                 definition.defaultKey(),
-                player -> Bukkit.getScheduler().runTask(plugin, () -> handleKeyPress(player, definition))
+                player -> queueKeyPress(player, definition)
             );
             if (success) {
                 registeredBindingIds.add(definition.bindingId());
@@ -340,8 +404,27 @@ public final class PropService implements Listener {
         registeredBindingIds.clear();
     }
 
+    private void queueKeyPress(Player player, PropKeyBindingDefinition binding) {
+        if (!active || player == null) return;
+        var admission = AuthAccess.snapshot(player.getUniqueId());
+        if (admission.admitted()) keyPresses.offer(player, binding, admission);
+    }
+
+    private void handleQueuedPress(PropKeyPressQueue.Press press) {
+        var accepted = press.admission();
+        if (!active || Bukkit.getPlayer(accepted.playerId()) != press.player()) return;
+        var current = AuthAccess.snapshot(accepted.playerId());
+        if (!current.admitted() || current.generation() != accepted.generation()
+            || !java.util.Objects.equals(current.connectionId(), accepted.connectionId())) return;
+        try {
+            handleKeyPress(press.player(), press.binding());
+        } catch (RuntimeException failure) {
+            logger.log(java.util.logging.Level.WARNING, "Prop 快捷键处理失败: " + press.binding().bindingId(), failure);
+        }
+    }
+
     private void handleKeyPress(Player player, PropKeyBindingDefinition binding) {
-        if (player == null || !player.isOnline()) {
+        if (!canUse(player)) {
             return;
         }
 
@@ -351,23 +434,23 @@ public final class PropService implements Listener {
         }
 
         ItemStack slotItem = handle.getSlotItemStack(binding.slotId());
-        ResolvedBoundProp resolved = resolveBoundProp(slotItem);
-        if (resolved == null) {
-            return;
+        switch (binding.mode()) {
+            case VANILLA_POTION -> quickSlotUse.potion(player, handle, binding.slotId(), slotItem);
+            case MMOITEMS -> quickSlotUse.mmoItem(player, handle, binding.slotId(), slotItem);
+            case PROP -> {
+                PropDefinition prop = resolveBoundProp(slotItem);
+                if (prop != null) {
+                    handleUse(player, prop, slotItem, PropUseMode.KEY, binding.slotId(), handle);
+                }
+            }
         }
-
-        if (resolved.changed()) {
-            handle.setSlotItemStack(binding.slotId(), resolved.itemStack());
-        }
-
-        handleUse(player, resolved, PropUseMode.KEY, binding.slotId(), handle);
     }
 
     /**
      * 启动自动触发轮询任务。
      * <p>
      * 仅当全局 {@code auto-trigger.enabled} 开启且至少一个道具启用了 {@code auto.enabled} 时才调度；
-     * 任务间隔为全局 {@code auto-trigger.interval}，道具 {@code auto.interval} 通过时间戳节流实现。
+     * 任务间隔为全局 {@code auto-trigger.interval}，道具 {@code auto.interval} 按服务端 tick 计时。
      */
     private void startAutoTrigger() {
         PropAutoTriggerConfiguration autoConfig = configuration.autoTrigger();
@@ -375,23 +458,12 @@ public final class PropService implements Listener {
             return;
         }
 
-        LinkedHashSet<String> slotIds = new LinkedHashSet<>();
-        boolean anyAutoProp = false;
-        for (PropKeyBindingDefinition binding : keyMappingConfiguration.bindings().values()) {
-            slotIds.add(binding.slotId());
-        }
-        for (PropDefinition definition : definitionsByNormalizedId.values()) {
-            if (definition.auto().enabled()) {
-                anyAutoProp = true;
-                break;
-            }
-        }
-        autoSlotIds = List.copyOf(slotIds);
-        if (!anyAutoProp || autoSlotIds.isEmpty()) {
+        if (configuredSlotIds.isEmpty() || props.values().stream().noneMatch(prop -> prop.auto().enabled())) {
             return;
         }
 
         long interval = Math.max(1L, autoConfig.intervalTicks());
+        if (bridge instanceof PropSlotUpdates updates) unobserveSlots = updates.observeSlots(this::slotChanged);
         autoTriggerTask = Bukkit.getScheduler().runTaskTimer(plugin, this::tickAutoTrigger, interval, interval);
         if (configuration.debug()) {
             this.logger.info(
@@ -400,7 +472,7 @@ public final class PropService implements Listener {
                     + " | mode="
                     + autoConfig.mode().name().toLowerCase(Locale.ROOT)
                     + " | slots="
-                    + autoSlotIds.size()
+                    + configuredSlotIds.size()
             );
         }
     }
@@ -414,75 +486,127 @@ public final class PropService implements Listener {
     private void tickAutoTrigger() {
         PropAutoTriggerConfiguration autoConfig = configuration.autoTrigger();
         boolean firstOnly = autoConfig.mode() == PropAutoTriggerConfiguration.Mode.FIRST;
-        long now = System.currentTimeMillis();
+        autoTick += autoConfig.intervalTicks();
 
         for (Player player : Bukkit.getOnlinePlayers()) {
-            // 死亡玩家无法通过手动方式使用道具，自动触发同样需要跳过；
-            // 否则血量类条件（如 health < 30）会对尸体成立，白消耗物品。
-            if (player == null || !player.isOnline() || player.isDead()
-                || player.getGameMode() == GameMode.SPECTATOR) {
-                continue;
-            }
-            PropPlayerHandle handle = bridge.resolvePlayerHandle(player).orElse(null);
-            if (handle == null) {
-                continue;
-            }
-            Map<String, Long> checks = autoCheckTimestamps.computeIfAbsent(
-                player.getUniqueId(), key -> new HashMap<>());
+            if (unobserveSlots != null) tickObservedSlots(player, autoConfig.intervalTicks(), firstOnly);
+            else if (canUse(player)) tickConfiguredSlots(player, autoConfig.intervalTicks(), firstOnly);
+        }
+    }
 
-            for (String slotId : autoSlotIds) {
-                ResolvedBoundProp resolved = resolveBoundProp(handle.getSlotItemStack(slotId));
-                if (resolved == null) {
-                    continue;
-                }
-                PropDefinition definition = resolved.definition();
-                PropAutoTriggerDefinition auto = definition.auto();
-                if (!auto.enabled()) {
-                    continue;
-                }
+    private void slotChanged(Player player, String slot) {
+        if (!active || slot == null) return;
+        Integer index = slotIndices.get(slot);
+        if (index == null) return;
+        var signal = observedSlots.get(player.getUniqueId());
+        if (signal != null && signal.owner == player) signal.mark(index);
+    }
 
-                Long nextCheck = checks.get(definition.id());
-                if (nextCheck != null && now < nextCheck) {
-                    continue;
-                }
-                int intervalTicks = auto.intervalTicks() > 0
-                    ? auto.intervalTicks()
-                    : autoConfig.intervalTicks();
-                checks.put(definition.id(), now + Math.max(1, intervalTicks) * 50L);
+    private void tickConfiguredSlots(Player player, int interval, boolean firstOnly) {
+        var handle = bridge.resolvePlayerHandle(player).orElse(null);
+        if (handle == null) return;
+        UUID uuid = player.getUniqueId();
+        for (String slot : configuredSlotIds) {
+            ItemStack item = handle.getSlotItemStack(slot);
+            if (tryAutoUse(player, uuid, resolveBoundProp(item), item, slot, handle, interval, firstOnly)) break;
+        }
+    }
 
-                if (resolved.changed()) {
-                    handle.setSlotItemStack(slotId, resolved.itemStack());
-                }
-                if (!auto.conditions().isEmpty()
-                    && ScriptConditionServices.evaluator().firstFailed(player, auto.conditions()) != null) {
-                    continue;
-                }
-
-                if (handleUse(player, resolved, PropUseMode.AUTO, slotId, handle) && firstOnly) {
-                    break;
-                }
+    private void tickObservedSlots(Player player, int interval, boolean firstOnly) {
+        UUID uuid = player.getUniqueId();
+        var cached = observedSlots.get(uuid);
+        boolean currentOwner = cached != null && cached.owner == player;
+        if (currentOwner && !cached.checkDue(autoTick)) return;
+        if (!canUse(player)) return;
+        if (!currentOwner) {
+            if (cached != null) autoCheckTimestamps.remove(uuid);
+            cached = new AutoSlots(player, configuredSlotIds.size());
+            observedSlots.put(uuid, cached);
+        }
+        BitSet changed = cached.take();
+        boolean fullCheck = autoTick >= cached.fullCheckAt;
+        BitSet selection = changed;
+        if (!fullCheck && autoTick >= cached.nextCandidateAt) {
+            if (changed == null) {
+                selection = cached.activeCandidates;
+            } else {
+                selection = (BitSet) cached.activeCandidates.clone();
+                selection.or(changed);
             }
         }
+        if (!fullCheck && (selection == null || selection.isEmpty())) return;
+
+        PropPlayerHandle handle = bridge.resolvePlayerHandle(player).orElse(null);
+        if (handle == null) {
+            // A full check on the next eligible poll covers any event lost while the handle was unavailable.
+            cached.fullCheckAt = 0;
+            return;
+        }
+        boolean finished = false;
+        for (int i = fullCheck ? 0 : selection.nextSetBit(0);
+             i >= 0 && i < cached.candidates.length;
+             i = fullCheck ? i + 1 : selection.nextSetBit(i + 1)) {
+            if (!active) return;
+            boolean mustRead = fullCheck || changed != null && changed.get(i);
+            if (!mustRead && (finished || !autoCheckDue(uuid, cached.candidates[i]))) continue;
+            String slot = configuredSlotIds.get(i);
+            ItemStack item = handle.getSlotItemStack(slot);
+            PropDefinition current = resolveBoundProp(item);
+            cached.setCandidate(i, current != null && current.auto().enabled() ? current : null);
+            if (!finished) {
+                finished = tryAutoUse(player, uuid, cached.candidates[i], item, slot, handle, interval, firstOnly);
+            }
+        }
+        if (fullCheck) {
+            // Covers slot writers that bypass ArcartX's event and spreads the checks across players.
+            cached.fullCheckAt = autoTick + 100 + Math.floorMod(uuid.hashCode(), 100);
+        }
+        var checks = autoCheckTimestamps.get(uuid);
+        cached.nextCandidateAt = Long.MAX_VALUE;
+        for (int i = cached.activeCandidates.nextSetBit(0); i >= 0; i = cached.activeCandidates.nextSetBit(i + 1)) {
+            long due = checks == null ? autoTick : checks.getOrDefault(cached.candidates[i].id(), autoTick);
+            cached.nextCandidateAt = Math.min(cached.nextCandidateAt, due);
+        }
+    }
+
+    private boolean autoCheckDue(UUID uuid, PropDefinition definition) {
+        if (definition == null || !definition.auto().enabled()) return false;
+        var checks = autoCheckTimestamps.get(uuid);
+        Long next = checks == null ? null : checks.get(definition.id());
+        return next == null || autoTick >= next;
+    }
+
+    private boolean tryAutoUse(Player player, UUID uuid, PropDefinition definition, ItemStack item, String slot,
+                               PropPlayerHandle handle, int interval, boolean firstOnly) {
+        if (!autoCheckDue(uuid, definition)) return false;
+        int configured = definition.auto().intervalTicks();
+        autoCheckTimestamps.computeIfAbsent(uuid, ignored -> new HashMap<>())
+            .put(definition.id(), autoTick + (configured > 0 ? configured : interval));
+        return handleUse(player, definition, item, PropUseMode.AUTO, slot, handle) && (firstOnly || !canUse(player));
+    }
+
+    private boolean canUse(Player player) {
+        return active && player != null && player.isOnline() && !player.isDead()
+            && player.getGameMode() != GameMode.SPECTATOR && AuthAccess.admitted(player.getUniqueId());
     }
 
     private boolean handleUse(
         Player player,
-        ResolvedBoundProp resolved,
+        PropDefinition definition,
+        ItemStack itemStack,
         PropUseMode useMode,
         String slotId,
         PropPlayerHandle handle
     ) {
-        PropDefinition definition = resolved.definition();
-        ItemStack itemStack = resolved.itemStack();
-        String itemName = resolveDisplayName(itemStack);
         boolean auto = useMode == PropUseMode.AUTO;
+        String itemName = auto ? null : resolveDisplayName(definition, itemStack);
         long cooldown = handle.getTagCooldown(definition.coolDownGroup());
 
         if (cooldown > 0L) {
             if (!auto) {
                 player.sendMessage(render(languageConfiguration.coolDown(), itemName, cooldown));
                 if (useMode == PropUseMode.KEY) {
-                    resyncSlotCacheEntry(handle, slotId);
+                    handle.syncSlotToClient(slotId);
                 }
             }
             return false;
@@ -493,16 +617,21 @@ public final class PropService implements Listener {
         }
         if (useMode == PropUseMode.KEY && !definition.key()) {
             player.sendMessage(render(languageConfiguration.noKey(), itemName, 0L));
-            resyncSlotCacheEntry(handle, slotId);
+            handle.syncSlotToClient(slotId);
             return false;
         }
         if (!definition.permission().isBlank() && !player.hasPermission(definition.permission())) {
             if (!auto) {
                 player.sendMessage(render(languageConfiguration.noPermission(), itemName, 0L));
                 if (useMode == PropUseMode.KEY) {
-                    resyncSlotCacheEntry(handle, slotId);
+                    handle.syncSlotToClient(slotId);
                 }
             }
+            return false;
+        }
+        ItemStack expected = itemStack.clone();
+        if (auto && !definition.auto().conditions().isEmpty()
+            && ScriptConditionServices.evaluator().firstFailed(player, definition.auto().conditions()) != null) {
             return false;
         }
         if (!definition.conditions().isEmpty()) {
@@ -511,34 +640,67 @@ public final class PropService implements Listener {
                 if (!auto) {
                     player.sendMessage(renderCondition(languageConfiguration.conditionNotMet(), itemName, failedCondition.raw()));
                     if (useMode == PropUseMode.KEY) {
-                        resyncSlotCacheEntry(handle, slotId);
+                        handle.syncSlotToClient(slotId);
                     }
                 }
                 return false;
             }
         }
 
-        handle.setTagCooldown(definition.coolDownGroup(), definition.coolDownTimeSeconds() * 1000L);
-
-        if (useMode == PropUseMode.HAND) {
-            if (definition.remove()) {
-                player.getInventory().setItemInMainHand(consumeOne(itemStack));
-            } else if (resolved.changed()) {
-                player.getInventory().setItemInMainHand(itemStack);
-            }
-        } else {
-            if (definition.remove()) {
-                handle.setSlotItemStack(slotId, consumeOne(itemStack));
-            } else if (resolved.changed()) {
-                handle.setSlotItemStack(slotId, itemStack);
-            }
+        PropEffects effects = definition.effects();
+        String blocked = effectUseError(player, effects);
+        if (blocked != null) {
+            if (!auto) player.sendMessage(blocked);
+            if (useMode == PropUseMode.KEY) handle.syncSlotToClient(slotId);
+            return false;
         }
 
-        executeEffects(player, definition);
-        publishPropUsedEvent(player, definition.id());
+        List<PropTimedAttributes.PreparedGroup> attributes;
+        try {
+            attributes = timedAttributes.prepare(player, effects);
+        } catch (PropAmount.EvaluationException exception) {
+            if (!auto) player.sendMessage(messages.get("use.amount-unavailable"));
+            if (useMode == PropUseMode.KEY) handle.syncSlotToClient(slotId);
+            if (configuration.debug()) logger.info("Prop " + definition.id() + " 的 " + exception.getMessage());
+            return false;
+        }
+
+        ItemStack current = useMode == PropUseMode.HAND
+            ? player.getInventory().getItemInMainHand() : handle.getSlotItemStack(slotId);
+        if (!canUse(player) || !expected.equals(current)) {
+            if (!auto) player.sendMessage(messages.get("use.slot-update-failed"));
+            if (useMode == PropUseMode.KEY) handle.syncSlotToClient(slotId);
+            return false;
+        }
+        ItemStack replacement = definition.remove() ? consumeOne(expected) : retagCooldown(expected, definition);
+        if (replacement != null) {
+            if (isRealItem(replacement) && definition.remove()) {
+                synchronizeCooldownTag(replacement, definition);
+            }
+            if (useMode == PropUseMode.HAND) {
+                player.getInventory().setItemInMainHand(replacement);
+            } else if (definition.remove()) {
+                if (!handle.trySetSlotItemStack(slotId, replacement)) {
+                    if (!auto) {
+                        player.sendMessage(messages.get("use.slot-update-failed"));
+                        handle.syncSlotToClient(slotId);
+                    }
+                    return false;
+                }
+            } else {
+                handle.setSlotItemStack(slotId, replacement);
+            }
+        }
+        handle.setTagCooldown(definition.coolDownGroup(), definition.coolDownTimeSeconds() * 1000L);
+
+        effects.instant().forEach(effect -> effect.accept(player));
+        if (canUse(player)) {
+            timedAttributes.apply(player, definition.id(), attributes);
+        }
+        publishPropUsedEvent(player, definition, useMode);
 
         if (auto && definition.auto().notifyPlayer()) {
-            player.sendMessage(render(languageConfiguration.autoUsed(), itemName, 0L));
+            player.sendMessage(render(languageConfiguration.autoUsed(), resolveDisplayName(definition, itemStack), 0L));
         }
 
         if (configuration.debug()) {
@@ -558,147 +720,82 @@ public final class PropService implements Listener {
         return true;
     }
 
-    private ResolvedBoundProp resolveBoundProp(ItemStack itemStack) {
-        if (!isRealItem(itemStack)) {
+    private PropDefinition resolveBoundProp(ItemStack itemStack) {
+        return isRealItem(itemStack) ? resolveDefinition(bridge.getPersistentPropId(itemStack)) : null;
+    }
+
+    private ItemStack updatedCooldownTag(ItemStack item, PropDefinition definition) {
+        if (definition.coolDownGroup().equals(bridge.getCooldownTag(item))) {
             return null;
         }
+        ItemStack updated = item.clone();
+        bridge.setCooldownTag(updated, definition.coolDownGroup());
+        return updated;
+    }
 
-        String propId = bridge.getPersistentPropId(itemStack);
-        if (propId.isBlank()) {
-            return null;
+    private ItemStack retagCooldown(ItemStack copy, PropDefinition definition) {
+        if (definition.coolDownGroup().equals(bridge.getCooldownTag(copy))) return null;
+        bridge.setCooldownTag(copy, definition.coolDownGroup());
+        return copy;
+    }
+
+    private void synchronizeCooldownTag(ItemStack item, PropDefinition definition) {
+        if (!definition.coolDownGroup().equals(bridge.getCooldownTag(item))) {
+            bridge.setCooldownTag(item, definition.coolDownGroup());
         }
-
-        PropDefinition definition = resolveDefinition(propId);
-        if (definition == null) {
-            return null;
-        }
-
-        ItemStack working = itemStack;
-        boolean changed = false;
-        String currentCooldownTag = bridge.getCooldownTag(working);
-        if (!Objects.equals(currentCooldownTag, definition.coolDownGroup())) {
-            bridge.setCooldownTag(working, definition.coolDownGroup());
-            changed = true;
-        }
-
-        return new ResolvedBoundProp(definition, working, changed);
     }
 
     private ItemStack bindItem(ItemStack itemStack, String propId, String coolDownGroup) {
-        ItemStack working = bridge.writePropId(itemStack, propId);
-        if (working == null) {
-            working = itemStack;
-        }
+        ItemStack working = bridge.writePropId(itemStack.clone(), propId);
+        if (working == null || !propId.equals(bridge.getPersistentPropId(working))) return null;
         bridge.setCooldownTag(working, coolDownGroup);
         return working;
     }
 
-    private void publishPropUsedEvent(Player player, String propId) {
+    private void publishPropUsedEvent(Player player, PropDefinition definition, PropUseMode mode) {
         if (eventBusProvider == null) return;
         EventBusCapability eventBus = eventBusProvider.get();
         if (eventBus == null) return;
-        Map<String, String> payload = new java.util.HashMap<>();
-        payload.put("prop_id", propId);
-        eventBus.publish("axs.prop.prop_used", player, payload);
+        eventBus.publish("axs.prop.prop_used", player, Map.of(
+            "prop_id", definition.id(),
+            "trigger", mode.name().toLowerCase(Locale.ROOT),
+            "consumed", Boolean.toString(definition.remove()),
+            "cooldown_group", definition.coolDownGroup(),
+            "max_duration_seconds", Integer.toString(definition.effects().maxDurationSeconds())
+        ));
     }
 
-    private void executeEffects(Player player, PropDefinition definition) {
-        List<String> attributeLines = new ArrayList<>();
-        List<PropMythicLibEffect> mythicLibEffects = new ArrayList<>();
-        List<PropSymphonyEffect> symphonyEffects = new ArrayList<>();
-        for (String effectLine : definition.effects()) {
-            String[] split = effectLine.split("\\|", 2);
-            if (split.length != 2) {
-                continue;
-            }
-
-            String type = split[0].trim().toLowerCase(Locale.ROOT);
-            String payload = split[1].trim();
-            switch (type) {
-                case "cmd" -> Bukkit.dispatchCommand(Bukkit.getConsoleSender(), replacePlayerToken(payload, player));
-                case "msg" -> player.sendMessage(ChatColor.translateAlternateColorCodes('&', replacePlayerToken(payload, player)));
-                case "food" -> player.setFoodLevel(Math.min(20, player.getFoodLevel() + parseInt(payload, 0)));
-                case "health" -> applyHealthDelta(player, parseDouble(payload, 0.0D));
-                case "exp" -> player.giveExp(parseInt(payload, 0));
-                case "healthpercent" -> applyHealthPercent(player, parseDouble(payload, 0.0D));
-                case "potion" -> applyPotion(player, definition.durationSeconds(), payload);
-                case "ap" -> attributeLines.add(payload);
-                case "ml", "mythiclib" -> PropMythicLibEffectParser.parse(type + "|" + payload)
-                    .ifPresentOrElse(
-                        mythicLibEffects::add,
-                        () -> this.logger.warning("Prop MythicLib 效果格式无效，已跳过: " + effectLine)
-                    );
-                case "sy", "symphony" -> parseSymphonyEffect(payload)
-                    .ifPresentOrElse(
-                        symphonyEffects::add,
-                        () -> this.logger.warning("Prop Symphony 效果格式无效，已跳过: " + effectLine)
-                    );
-                default -> {
-                    if (configuration.debug()) {
-                        this.logger.warning("ArcartXProp 检测到未知效果类型: " + effectLine);
-                    }
-                }
-            }
-        }
-
-        if (!attributeLines.isEmpty() && !attributePlusService.apply(player, definition.displayName(), attributeLines, definition.durationSeconds()) && configuration.debug()) {
-            this.logger.info("ArcartXProp AP 效果已跳过 -> hooked=" + attributePlusService.hooked());
-        }
-        if (!mythicLibEffects.isEmpty()
-            && !mythicLibService.apply(player, definition.id(), mythicLibEffects, definition.durationSeconds())
-            && configuration.debug()
-        ) {
-            this.logger.info("ArcartXProp MythicLib 效果已跳过 -> hooked=" + mythicLibService.hooked());
-        }
-        if (!symphonyEffects.isEmpty()
-            && !symphonyService.apply(player, definition.id(), symphonyEffects, definition.durationSeconds())
-            && configuration.debug()
-        ) {
-            this.logger.info("ArcartXProp Symphony 效果已跳过 -> hooked=" + symphonyService.hooked());
-        }
-    }
-
-    private static java.util.Optional<PropSymphonyEffect> parseSymphonyEffect(String payload) {
-        if (payload == null || payload.isBlank()) {
-            return java.util.Optional.empty();
-        }
-        boolean percent = false;
-        String working = payload.trim();
-        if (working.endsWith("%")) {
-            percent = true;
-            working = working.substring(0, working.length() - 1).trim();
-        }
-        int separatorIndex = working.indexOf(':');
-        if (separatorIndex <= 0 || separatorIndex >= working.length() - 1) {
-            return java.util.Optional.empty();
-        }
-        String attributeId = working.substring(0, separatorIndex).trim();
-        if (attributeId.isBlank()) {
-            return java.util.Optional.empty();
-        }
-        try {
-            double value = Double.parseDouble(working.substring(separatorIndex + 1).trim());
-            return java.util.Optional.of(new PropSymphonyEffect(attributeId, value, percent));
-        } catch (NumberFormatException exception) {
-            return java.util.Optional.empty();
-        }
+    private String effectUseError(Player player, PropEffects effects) {
+        String unavailable = timedAttributes.unavailableProvider(effects);
+        if (unavailable != null) return messages.get("use.effect-provider-unavailable", unavailable);
+        String unsupported = timedAttributes.unsupportedAttribute(player, effects);
+        return unsupported == null ? null : messages.get("use.attribute-unavailable", unsupported);
     }
 
     private void syncOnlinePlayers() {
-        for (Player online : Bukkit.getOnlinePlayers()) {
-            scheduleSlotSync(online, 1L);
-        }
+        if (configuredSlotIds.isEmpty()) return;
+        var players = List.copyOf(Bukkit.getOnlinePlayers());
+        if (players.isEmpty()) return;
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            for (Player player : players) {
+                try {
+                    synchronizeConfiguredSlots(player);
+                } catch (RuntimeException failure) {
+                    logger.log(java.util.logging.Level.WARNING, "Prop 快捷槽初始同步失败: " + player.getName(), failure);
+                }
+            }
+        }, 1L);
     }
 
     private void scheduleSlotSync(Player player, long delayTicks) {
-        if (player == null) {
+        if (player == null || configuredSlotIds.isEmpty()) {
             return;
         }
         Bukkit.getScheduler().runTaskLater(plugin, () -> synchronizeConfiguredSlots(player), Math.max(0L, delayTicks));
     }
 
     private void synchronizeConfiguredSlots(Player player) {
-        if (player == null || !player.isOnline()) {
+        if (!active || player == null || !player.isOnline() || Bukkit.getPlayer(player.getUniqueId()) != player) {
             return;
         }
 
@@ -707,35 +804,21 @@ public final class PropService implements Listener {
             return;
         }
 
-        Set<String> slotIds = new LinkedHashSet<>();
-        for (PropKeyBindingDefinition definition : keyMappingConfiguration.bindings().values()) {
-            slotIds.add(definition.slotId());
-        }
-        for (String slotId : slotIds) {
+        for (String slotId : configuredSlotIds) {
             ItemStack slotItem = handle.getSlotItemStack(slotId);
-            ResolvedBoundProp resolved = resolveBoundProp(slotItem);
-            if (resolved != null && resolved.changed()) {
-                handle.setSlotItemStack(slotId, resolved.itemStack());
+            PropDefinition prop = resolveBoundProp(slotItem);
+            if (prop != null) {
+                ItemStack updated = updatedCooldownTag(slotItem, prop);
+                if (updated != null) handle.setSlotItemStack(slotId, updated);
             }
         }
     }
 
-    /** 仅回推该槽位的服务端缓存值；全量槽位同步的包量与槽位总数成正比（ExtraBackpack 可注入上千槽位）。 */
-    private void resyncSlotCacheEntry(PropPlayerHandle handle, String slotId) {
-        if (slotId == null) {
-            return;
-        }
-        ItemStack current = handle.getSlotItemStack(slotId);
-        if (current != null) {
-            handle.setSlotItemStack(slotId, current);
-        }
-    }
-
     private PropDefinition resolveDefinition(String propId) {
-        if (propId == null) {
+        if (propId == null || propId.isBlank()) {
             return null;
         }
-        return definitionsByNormalizedId.get(propId.trim().toLowerCase(Locale.ROOT));
+        return props.get(propId.trim().toLowerCase(Locale.ROOT));
     }
 
     private String render(String template, String itemName, long cooldownMillis) {
@@ -746,76 +829,15 @@ public final class PropService implements Listener {
     }
 
     private static boolean isRealItem(ItemStack itemStack) {
-        return itemStack != null && itemStack.getType() != Material.AIR;
+        return itemStack != null && !itemStack.getType().isAir() && itemStack.getAmount() > 0;
     }
 
-    private static ItemStack consumeOne(ItemStack itemStack) {
-        if (!isRealItem(itemStack)) {
+    private static ItemStack consumeOne(ItemStack copy) {
+        if (copy.getAmount() <= 1) {
             return new ItemStack(Material.AIR);
         }
-        if (itemStack.getAmount() <= 1) {
-            return new ItemStack(Material.AIR);
-        }
-        ItemStack next = itemStack.clone();
-        next.setAmount(next.getAmount() - 1);
-        return next;
-    }
-
-    private static String replacePlayerToken(String text, Player player) {
-        String safeName = xuanmo.arcartxsuite.api.command.CommandSanitizer.validatePlayerName(player.getName());
-        return (text == null ? "" : text).replace("{player}", safeName);
-    }
-
-    private static void applyHealthDelta(Player player, double delta) {
-        if (player == null) {
-            return;
-        }
-        double maxHealth = AttributeResolver.getMaxHealth(player);
-        player.setHealth(Math.min(maxHealth, Math.max(0.0D, player.getHealth() + delta)));
-    }
-
-    private static void applyHealthPercent(Player player, double percent) {
-        if (player == null) {
-            return;
-        }
-        var maxHealthAttribute = AttributeResolver.getMaxHealthAttribute(player);
-        if (maxHealthAttribute == null) {
-            return;
-        }
-        double maxHealth = maxHealthAttribute.getValue();
-        double delta = maxHealth * percent / 100.0D;
-        player.setHealth(Math.min(maxHealth, Math.max(0.0D, player.getHealth() + delta)));
-    }
-
-    private static void applyPotion(Player player, int durationSeconds, String payload) {
-        String[] split = payload.split(":", 2);
-        if (split.length != 2) {
-            return;
-        }
-        PotionEffectType type = PotionEffectTypeResolver.resolve(split[0]);
-        if (type == null) {
-            return;
-        }
-        // 配置写等级（1 起，与称号 display-effects 一致），转换为 Bukkit amplifier
-        int level = parseInt(split[1], 1);
-        int amplifier = Math.max(0, level - 1);
-        player.addPotionEffect(new PotionEffect(type, Math.max(0, durationSeconds) * 20, amplifier));
-    }
-
-    private static int parseInt(String rawValue, int defaultValue) {
-        try {
-            return Integer.parseInt(rawValue.trim());
-        } catch (NumberFormatException exception) {
-            return defaultValue;
-        }
-    }
-
-    private static double parseDouble(String rawValue, double defaultValue) {
-        try {
-            return Double.parseDouble(rawValue.trim());
-        } catch (NumberFormatException exception) {
-            return defaultValue;
-        }
+        copy.setAmount(copy.getAmount() - 1);
+        return copy;
     }
 
     private String renderCondition(String template, String itemName, String conditionRaw) {
@@ -825,7 +847,10 @@ public final class PropService implements Listener {
         return ChatColor.translateAlternateColorCodes('&', rendered);
     }
 
-    private String resolveDisplayName(ItemStack itemStack) {
+    private String resolveDisplayName(PropDefinition definition, ItemStack itemStack) {
+        if (!definition.displayName().isBlank()) {
+            return definition.displayName();
+        }
         if (itemStack == null) {
             return "§c未知道具";
         }
@@ -884,9 +909,6 @@ public final class PropService implements Listener {
         public static PropOperationResult failure(String message) {
             return new PropOperationResult(false, message);
         }
-    }
-
-    private record ResolvedBoundProp(PropDefinition definition, ItemStack itemStack, boolean changed) {
     }
 
     private enum PropUseMode {

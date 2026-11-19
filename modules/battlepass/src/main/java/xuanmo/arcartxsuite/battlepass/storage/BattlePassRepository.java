@@ -2,7 +2,6 @@ package xuanmo.arcartxsuite.battlepass.storage;
 
 import java.sql.SQLException;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import xuanmo.arcartxsuite.battlepass.model.BattlePassPlayerProgress;
@@ -10,7 +9,7 @@ import xuanmo.arcartxsuite.battlepass.model.BattlePassTask;
 import xuanmo.arcartxsuite.battlepass.model.PlayerTaskInstance;
 
 /**
- * 战令数据仓储接口，定义玩家进度、任务进度、奖励领取记录及玩家任务的持久化操作。
+ * 战令数据仓储接口，定义玩家进度、奖励领取记录及玩家任务的持久化操作。
  * <p>
  * 由 {@link JdbcBattlePassRepository} 提供 JDBC 实现，支持 SQLite 和 MySQL 两种存储模式。
  */
@@ -18,8 +17,14 @@ public interface BattlePassRepository {
     @FunctionalInterface interface Write<T> { T run() throws SQLException; }
     /** Worker-only serialization of cache snapshots and authentication receipts for a player. */
     <T> T withPlayerWrite(UUID player,Write<T> work) throws SQLException;
+    /** Whether other server instances can concurrently write this progress store. */
+    default boolean sharedProgress() { return false; }
+    /** Serialize progress mutations for this player and season on a single database connection. */
+    default <T> T withProgressWrite(UUID player, String season, Write<T> work) throws SQLException { return work.run(); }
     boolean receivedAuthFact(UUID player,String season,String fact) throws SQLException;
     void saveAuthFact(String fact,BattlePassPlayerProgress progress,List<PlayerTaskInstance> tasks,boolean changed) throws SQLException;
+    long loadAbyssCursor(String season) throws SQLException;
+    void advanceAbyssCursor(String season, long sequence) throws SQLException;
 
     /**
      * 加载玩家在指定赛季的进度数据。
@@ -32,33 +37,16 @@ public interface BattlePassRepository {
     BattlePassPlayerProgress loadProgress(UUID playerUuid, String seasonId) throws SQLException;
 
     /**
-     * 保存玩家进度数据（含任务进度与领取记录）。
+     * 保存玩家进度。领取记录由独立的奖励确认操作写入。
      *
      * @param progress 玩家进度实例
      * @throws SQLException 数据库操作失败时抛出
      */
     void saveProgress(BattlePassPlayerProgress progress) throws SQLException;
 
-    /**
-     * 加载玩家在指定赛季的所有任务进度。
-     *
-     * @param playerUuid 玩家 UUID
-     * @param seasonId   赛季 ID
-     * @return 任务 ID → 完成次数的映射
-     * @throws SQLException 数据库操作失败时抛出
-     */
-    Map<String, Integer> loadTaskProgresses(UUID playerUuid, String seasonId) throws SQLException;
-
-    /**
-     * 保存单条任务进度。
-     *
-     * @param playerUuid 玩家 UUID
-     * @param seasonId   赛季 ID
-     * @param taskId     任务 ID
-     * @param count      完成次数
-     * @throws SQLException 数据库操作失败时抛出
-     */
-    void saveTaskProgress(UUID playerUuid, String seasonId, String taskId, int count) throws SQLException;
+    /** Commit progress, task changes and any period replacements together. */
+    void saveProgressAndTasks(BattlePassPlayerProgress progress, List<PlayerTaskInstance> tasks,
+                              Set<BattlePassTask.TaskCategory> replacedCategories) throws SQLException;
 
     /**
      * 加载玩家在指定赛季已领取的奖励 ID 集合。
@@ -79,6 +67,14 @@ public interface BattlePassRepository {
      * @throws SQLException 数据库操作失败时抛出
      */
     void saveClaimedReward(UUID playerUuid, String seasonId, String rewardId) throws SQLException;
+
+    record RewardRequest(String id, String payload) {}
+
+    /** Select the original reward payload and delivery key when a request is retried. */
+    RewardRequest stageReward(UUID player, String season, String rewardId, String payload) throws SQLException;
+
+    /** Record durable host acceptance only for the current request. */
+    boolean completeReward(UUID player, String season, String rewardId, String requestId) throws SQLException;
 
     /**
      * 重置玩家在指定赛季的全部数据（进度、任务、奖励、玩家任务）。

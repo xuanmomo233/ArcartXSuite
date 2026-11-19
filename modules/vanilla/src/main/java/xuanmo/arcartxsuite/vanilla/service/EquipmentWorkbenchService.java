@@ -17,12 +17,24 @@ import xuanmo.arcartxsuite.vanilla.recipe.*;
 
 /** Native equipment menus expose their state; only resource filling uses escrow. */
 public final class EquipmentWorkbenchService implements Listener,AutoCloseable {
+    private record Viewer(String itemToken, int level, boolean creative, boolean hasItem) { }
+    private record AnvilDisplay(Viewer viewer, String name, int cost, int maximum, int materialCost, boolean hasOutput) { }
+    private record EnchantingDisplay(Viewer viewer, String offerToken, int lapis) { }
+
     private static final class State {
         final InventoryView view;final WorkshopType type;
         ItemStack gear;boolean initialized,explicitName;
-        String itemToken=UUID.randomUUID().toString(),offerToken="",name="",rawName="",sent="";
-        EquipmentNativeAccess.Offers offers;long lastPush=-100;
+        String itemToken="",offerToken="",name="",rawName="",pendingRenameAck="";
+        EquipmentNativeAccess.Offers offers;
+        AnvilDisplay sentAnvil;
+        EnchantingDisplay sentEnchanting;
+        long nextPush;
         State(InventoryView view,WorkshopType type){this.view=view;this.type=type;}
+
+        void resetDisplay() {
+            sentAnvil = null;
+            sentEnchanting = null;
+        }
     }
     private final Plugin plugin;
     private final PacketBridgeAPI bridge;
@@ -44,8 +56,8 @@ public final class EquipmentWorkbenchService implements Listener,AutoCloseable {
     private void poll(){
         for(UUID uuid:List.copyOf(states.keySet())){
             Player player=Bukkit.getPlayer(uuid);State state=states.get(uuid);
-            if(player==null||!player.isOnline()||player.getOpenInventory()!=state.view||!state.type.matches(state.view)){states.remove(uuid);continue;}
-            if(ticks-state.lastPush>=config.interval(state.type)||state.sent.isEmpty()){state.lastPush=ticks;push(player,state,"");}
+            if(state==null||player==null||!player.isOnline()||player.getOpenInventory()!=state.view||!state.type.matches(state.view)){states.remove(uuid);continue;}
+            if (ticks >= state.nextPush) push(player, state, "");
         }
     }
     private State attach(Player player,WorkshopType type){
@@ -60,43 +72,96 @@ public final class EquipmentWorkbenchService implements Listener,AutoCloseable {
         return names==null?item.getType().name():names.translate(item.getType());
     }
     private void refresh(Player player,State state){
-        ItemStack current=InventoryItems.copy(state.view.getTopInventory().getItem(0));
+        ItemStack current = state.view.getTopInventory().getItem(0);
+        if (InventoryItems.empty(current)) current = null;
         if(!state.initialized||!Objects.equals(current,state.gear)){
-            state.gear=current;state.initialized=true;state.itemToken=UUID.randomUUID().toString();state.offerToken="";state.explicitName=false;state.name=display(current);
-            if(state.type==WorkshopType.ANVIL&&!InventoryItems.empty(current)){
-                String raw=current.hasItemMeta()&&current.getItemMeta().hasDisplayName()?state.name:"";
+            state.gear=InventoryItems.copy(current);state.initialized=true;state.itemToken=UUID.randomUUID().toString();state.offerToken="";state.explicitName=false;state.name=display(state.gear);
+            state.pendingRenameAck = "";
+            if(state.type==WorkshopType.ANVIL&&state.gear!=null){
+                String raw=state.gear.hasItemMeta()&&state.gear.getItemMeta().hasDisplayName()?state.name:"";
                 nativeAccess.rename(state.view,raw);state.rawName=Objects.toString(((AnvilInventory)state.view.getTopInventory()).getRenameText(),"");
             }
         }
         if(state.type==WorkshopType.ENCHANTING){
-            var offers=nativeAccess.offers(player);
+            var offers=nativeAccess.offers(player, state.offers);
             if(!same(offers,state.offers)||state.offerToken.isEmpty()){state.offers=offers;state.offerToken=UUID.randomUUID().toString();}
         }
     }
     private void push(Player player,State state,String ack){
-        if(!bridge.isUiOpen(player,ui.apply(state.type)))return;
-        refresh(player,state);Map<String,Object> packet=new LinkedHashMap<>();
-        boolean creative=player.getGameMode()==GameMode.CREATIVE;
-        packet.put("level",player.getLevel());packet.put("creative",creative);packet.put("hasItem",!InventoryItems.empty(state.gear));packet.put("itemToken",state.itemToken);
-        if(state.type==WorkshopType.ANVIL){
-            AnvilInventory inv=(AnvilInventory)state.view.getTopInventory();String raw=Objects.toString(inv.getRenameText(),"");
-            if(!raw.equals(state.rawName)){state.rawName=raw;state.name=raw.isEmpty()&&!state.explicitName?display(state.gear):raw;}
-            int cost=inv.getRepairCost(),maximum=inv.getMaximumRepairCost();
-            packet.put("name",state.name);packet.put("ack",ack);packet.put("cost",cost);packet.put("maximum",maximum);packet.put("materialCost",inv.getRepairCostAmount());
-            boolean hasOutput=!InventoryItems.empty(inv.getItem(2));
-            packet.put("tooExpensive",!creative&&!InventoryItems.empty(state.gear)&&!hasOutput&&cost>=maximum);packet.put("enough",creative||player.getLevel()>=cost);packet.put("hasOutput",hasOutput);
-        }else{
-            int lapis=0;ItemStack secondary=state.view.getTopInventory().getItem(1);if(!InventoryItems.empty(secondary)&&secondary.getType()==Material.LAPIS_LAZULI)lapis=secondary.getAmount();
-            packet.put("lapis",lapis);packet.put("offerToken",state.offerToken);packet.put("supported",state.offers!=null);
-            Map<String,Object> rows=new LinkedHashMap<>();
-            for(int i=0;i<3;i++){
-                int cost=state.offers==null?0:state.offers.costs()[i],clue=state.offers==null?-1:state.offers.clues()[i],hintLevel=state.offers==null?0:state.offers.levels()[i];
-                rows.put(Integer.toString(i),Map.of("required",cost,"lapis",i+1,"spentLevels",i+1,"hint",cost<=0?"放入可附魔的装备或书":enchantmentName(nativeAccess.hint(clue))+(hintLevel>0?" "+hintLevel:""),"enabled",cost>0&&!InventoryItems.empty(state.gear)&&(creative||player.getLevel()>=cost&&lapis>=i+1)));
-            }
-            packet.put("offers",rows);
+        state.nextPush = ticks + config.interval(state.type);
+        String uiId = ui.apply(state.type);
+        if (!bridge.isUiOpen(player, uiId)) {
+            state.resetDisplay();
+            state.pendingRenameAck = "";
+            return;
         }
-        String signature=packet.toString();if(ack.isEmpty()&&signature.equals(state.sent))return;state.sent=signature;
-        bridge.sendPacket(player,ui.apply(state.type),state.type==WorkshopType.ANVIL?"anvil_state":"enchanting_state",packet);
+        refresh(player, state);
+        var viewer = new Viewer(state.itemToken, player.getLevel(), player.getGameMode() == GameMode.CREATIVE, state.gear != null);
+        if (state.type == WorkshopType.ANVIL) {
+            if (!ack.isEmpty()) state.pendingRenameAck = ack;
+            pushAnvil(player, state, uiId, viewer);
+        } else {
+            pushEnchanting(player, state, uiId, viewer);
+        }
+    }
+
+    private void pushAnvil(Player player, State state, String uiId, Viewer viewer) {
+        AnvilInventory inventory = (AnvilInventory) state.view.getTopInventory();
+        String raw = Objects.toString(inventory.getRenameText(), "");
+        if (!raw.equals(state.rawName)) {
+            state.rawName = raw;
+            state.name = raw.isEmpty() && !state.explicitName ? display(state.gear) : raw;
+        }
+        var display = new AnvilDisplay(viewer, state.name, inventory.getRepairCost(), inventory.getMaximumRepairCost(),
+            inventory.getRepairCostAmount(), !InventoryItems.empty(inventory.getItem(2)));
+        String ack = state.pendingRenameAck;
+        if (ack.isEmpty() && display.equals(state.sentAnvil)) return;
+
+        var packet = viewerFields(viewer);
+        packet.put("name", display.name());
+        packet.put("ack", ack);
+        packet.put("cost", display.cost());
+        packet.put("maximum", display.maximum());
+        packet.put("materialCost", display.materialCost());
+        packet.put("tooExpensive", !viewer.creative() && viewer.hasItem() && !display.hasOutput() && display.cost() >= display.maximum());
+        packet.put("enough", viewer.creative() || viewer.level() >= display.cost());
+        packet.put("hasOutput", display.hasOutput());
+        if (bridge.sendPacket(player, uiId, "anvil_state", packet)) {
+            state.sentAnvil = display;
+            state.pendingRenameAck = "";
+        }
+    }
+
+    private void pushEnchanting(Player player, State state, String uiId, Viewer viewer) {
+        ItemStack secondary = state.view.getTopInventory().getItem(1);
+        int lapis = !InventoryItems.empty(secondary) && secondary.getType() == Material.LAPIS_LAZULI ? secondary.getAmount() : 0;
+        var display = new EnchantingDisplay(viewer, state.offerToken, lapis);
+        if (display.equals(state.sentEnchanting)) return;
+
+        var packet = viewerFields(viewer);
+        packet.put("lapis", lapis);
+        packet.put("offerToken", display.offerToken());
+        packet.put("supported", state.offers != null);
+        Map<String, Object> rows = new LinkedHashMap<>();
+        for (int i = 0; i < 3; i++) {
+            int cost = state.offers == null ? 0 : state.offers.costs()[i];
+            int clue = state.offers == null ? -1 : state.offers.clues()[i];
+            int hintLevel = state.offers == null ? 0 : state.offers.levels()[i];
+            String hint = cost <= 0 ? "放入可附魔的装备或书" : enchantmentName(nativeAccess.hint(clue)) + (hintLevel > 0 ? " " + hintLevel : "");
+            rows.put(Integer.toString(i), Map.of("required", cost, "lapis", i + 1, "spentLevels", i + 1, "hint", hint,
+                "enabled", cost > 0 && viewer.hasItem() && (viewer.creative() || viewer.level() >= cost && lapis >= i + 1)));
+        }
+        packet.put("offers", rows);
+        if (bridge.sendPacket(player, uiId, "enchanting_state", packet)) state.sentEnchanting = display;
+    }
+
+    private static Map<String, Object> viewerFields(Viewer viewer) {
+        var packet = new LinkedHashMap<String, Object>();
+        packet.put("level", viewer.level());
+        packet.put("creative", viewer.creative());
+        packet.put("hasItem", viewer.hasItem());
+        packet.put("itemToken", viewer.itemToken());
+        return packet;
     }
     private void notice(Player player,WorkshopType type,String text){bridge.sendPacket(player,ui.apply(type),"ui_notice",Map.of("message",text));}
     private boolean writable(Player player,WorkshopType type){
@@ -107,15 +172,16 @@ public final class EquipmentWorkbenchService implements Listener,AutoCloseable {
     }
     public boolean handle(Player player,WorkshopType type,String action,List<String> data){
         if(!type.equipment()||!type.matches(player.getOpenInventory())||!config.enabled(type))return false;
-        State state=attach(player,type);refresh(player,state);
+        State state=attach(player,type);
         switch(action){
-            case "equipment_open","refresh_equipment" -> {state.sent="";push(player,state,"");}
+            case "equipment_open","refresh_equipment" -> {state.resetDisplay();push(player,state,"");}
             case "rename" -> {
                 if(type!=WorkshopType.ANVIL||data.size()<4)return true;
                 String value=data.get(1),token=data.get(2),ack=data.get(3);
                 if(ack.length()>32)return true;
                 if(!writable(player,type)){push(player,state,ack);return true;}
                 if(value.length()>50){notice(player,type,"物品名称最多 50 个字符");push(player,state,ack);return true;}
+                refresh(player,state);
                 if(!state.itemToken.equals(token)||InventoryItems.empty(state.gear)){push(player,state,"");return true;}
                 String raw=!state.gear.getItemMeta().hasDisplayName()&&value.equals(display(state.gear))?"":value;
                 if(!nativeAccess.rename(state.view,raw)){notice(player,type,"当前服务端不支持铁砧改名");push(player,state,ack);return true;}
@@ -123,6 +189,7 @@ public final class EquipmentWorkbenchService implements Listener,AutoCloseable {
             }
             case "enchant" -> {
                 if(type!=WorkshopType.ENCHANTING||data.size()<3||!writable(player,type))return true;
+                refresh(player,state);
                 int index;try{index=Integer.parseInt(data.get(1));}catch(NumberFormatException e){return true;}
                 if(index<0||index>2||!state.offerToken.equals(data.get(2))||state.offers==null){notice(player,type,"附魔选项已变化，请重新选择");push(player,state,"");return true;}
                 ItemStack before=InventoryItems.copy(state.view.getTopInventory().getItem(0));
@@ -132,6 +199,7 @@ public final class EquipmentWorkbenchService implements Listener,AutoCloseable {
             }
             case "lapis_fill" -> {
                 if(type!=WorkshopType.ENCHANTING||data.size()<3||!writable(player,type))return true;
+                refresh(player,state);
                 int amount;try{amount=Integer.parseInt(data.get(1));}catch(NumberFormatException e){return true;}
                 if(amount<1||amount>3||!state.itemToken.equals(data.get(2))||InventoryItems.empty(state.gear)){notice(player,type,"请先放入目标装备或书");return true;}
                 String itemToken=state.itemToken;ItemStack gear=state.gear.clone();gear.setAmount(1);

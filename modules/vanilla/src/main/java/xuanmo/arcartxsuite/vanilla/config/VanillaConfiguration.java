@@ -4,6 +4,7 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import java.util.EnumMap;
 import java.util.Map;
 import xuanmo.arcartxsuite.vanilla.recipe.WorkshopType;
+import xuanmo.arcartxsuite.vanilla.service.InventorySorter;
 
 /**
  * Vanilla 模块配置。
@@ -13,6 +14,7 @@ public final class VanillaConfiguration {
     private final Ui ui;
     private final Crafting crafting;
     private final Furnace furnace;
+    private final InventorySorter.Mode sortMode;
     private final Map<WorkshopType, Boolean> enabled = new EnumMap<>(WorkshopType.class);
     private final Map<WorkshopType, String> uiIds = new EnumMap<>(WorkshopType.class);
     private final Map<WorkshopType, Integer> intervals = new EnumMap<>(WorkshopType.class);
@@ -21,10 +23,11 @@ public final class VanillaConfiguration {
     public String uiId(WorkshopType type) { return uiIds.getOrDefault(type, type.uiId()); }
     public int interval(WorkshopType type) { return intervals.getOrDefault(type, 2); }
 
-    private VanillaConfiguration(Ui ui, Crafting crafting, Furnace furnace) {
+    private VanillaConfiguration(Ui ui, Crafting crafting, Furnace furnace, InventorySorter.Mode sortMode) {
         this.ui = ui;
         this.crafting = crafting;
         this.furnace = furnace;
+        this.sortMode = sortMode;
     }
 
     public Ui ui() {
@@ -37,6 +40,10 @@ public final class VanillaConfiguration {
 
     public Furnace furnace() {
         return furnace;
+    }
+
+    public InventorySorter.Mode sortMode() {
+        return sortMode;
     }
 
     public static VanillaConfiguration load(YamlConfiguration yaml) {
@@ -52,7 +59,8 @@ public final class VanillaConfiguration {
             yaml.getBoolean("furnace.enabled", true),
             yaml.getInt("furnace.push-interval-ticks", 2)
         );
-        VanillaConfiguration configuration = new VanillaConfiguration(ui, crafting, furnace);
+        VanillaConfiguration configuration = new VanillaConfiguration(ui, crafting, furnace,
+            InventorySorter.Mode.parse(yaml.getString("inventory-sort.mode", "type")));
         for (WorkshopType type : WorkshopType.values()) {
             configuration.enabled.put(type, yaml.getBoolean(type.configKey() + ".enabled", true));
             configuration.uiIds.put(type, yaml.getString("ui." + type.configKey() + "-ui-id", type.uiId()));

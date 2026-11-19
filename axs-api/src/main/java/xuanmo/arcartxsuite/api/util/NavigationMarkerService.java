@@ -44,6 +44,7 @@ public final class NavigationMarkerService implements NavigationRouteRenderer {
     /** 玩家 → (markerKey → 路径状态)，支持同一玩家多条并行路径标记。 */
     private final ConcurrentMap<UUID, ConcurrentMap<String, PlayerPathState>> playerPaths = new ConcurrentHashMap<>();
 
+    private NavigationRouteCache routeCache = new NavigationRouteCache();
     private NavigationPathfinder pathfinder;
     private BukkitTask updateTask;
     private boolean available;
@@ -102,6 +103,7 @@ public final class NavigationMarkerService implements NavigationRouteRenderer {
     }
 
     public void shutdown() {
+        available = false;
         if (updateTask != null) {
             updateTask.cancel();
             updateTask = null;
@@ -109,8 +111,14 @@ public final class NavigationMarkerService implements NavigationRouteRenderer {
         for (Player player : Bukkit.getOnlinePlayers()) {
             hideMarker(player);
         }
+        playerPaths.forEach((playerId, paths) -> paths.values().forEach(state -> cancel(playerId, state)));
         playerPaths.clear();
-        available = false;
+    }
+
+    void setRouteCache(NavigationRouteCache routeCache) {
+        if (playerPaths.isEmpty()) {
+            this.routeCache = routeCache;
+        }
     }
 
     /**
@@ -152,13 +160,14 @@ public final class NavigationMarkerService implements NavigationRouteRenderer {
             w = player.getWorld();
         }
 
-        Location goal = new Location(w, x, y, z);
+        UUID playerId = player.getUniqueId();
         ConcurrentMap<String, PlayerPathState> paths =
-            playerPaths.computeIfAbsent(player.getUniqueId(), ignored -> new ConcurrentHashMap<>());
+            playerPaths.computeIfAbsent(playerId, ignored -> new ConcurrentHashMap<>());
         PlayerPathState existing = paths.get(key);
         if (existing != null && !existing.cancelled) {
+            if (NavigationRouteCache.samePosition(existing.goal, w, x, y, z)) return;
             // 原地重定向：仅更新目标点，实体复用，下个 tick 自动重算
-            existing.goal = goal;
+            existing.goal = new Location(w, x, y, z);
             existing.suppressedByDistance = false;
             if (debug) {
                 logger.info("路径标记: 重定向 player=" + player.getName()
@@ -167,7 +176,7 @@ public final class NavigationMarkerService implements NavigationRouteRenderer {
             return;
         }
 
-        PlayerPathState state = new PlayerPathState(goal, new ArrayList<>(), new ArrayList<>(), key);
+        PlayerPathState state = new PlayerPathState(new Location(w, x, y, z), key);
         paths.put(key, state);
 
         if (debug) {
@@ -176,7 +185,8 @@ public final class NavigationMarkerService implements NavigationRouteRenderer {
         }
 
         Bukkit.getScheduler().runTask(plugin, () -> {
-            if (!player.isOnline()) return;
+            if (!available || state.cancelled || !player.isOnline() || Bukkit.getPlayer(playerId) != player
+                || paths.get(key) != state) return;
             computeAndApplyPath(player, state);
         });
     }
@@ -199,12 +209,8 @@ public final class NavigationMarkerService implements NavigationRouteRenderer {
         }
         if (state == null) return;
 
-        state.cancelled = true;
-        for (String markerId : state.markerIds) {
-            npcBridge.removePrivateMarker(player, markerId);
-        }
-        state.markerIds.clear();
-        state.markerEntities.clear();
+        cancel(player.getUniqueId(), state);
+        removeExcessMarkers(player, state, 0);
     }
 
     /**
@@ -217,13 +223,14 @@ public final class NavigationMarkerService implements NavigationRouteRenderer {
         if (paths == null) return;
 
         for (PlayerPathState state : paths.values()) {
-            state.cancelled = true;
-            for (String markerId : state.markerIds) {
-                npcBridge.removePrivateMarker(player, markerId);
-            }
-            state.markerIds.clear();
-            state.markerEntities.clear();
+            cancel(player.getUniqueId(), state);
+            removeExcessMarkers(player, state, 0);
         }
+    }
+
+    private void cancel(UUID playerId, PlayerPathState state) {
+        state.cancelled = true;
+        routeCache.remove(playerId, state.markerKeySegment, pathfinder);
     }
 
     /**
@@ -257,7 +264,7 @@ public final class NavigationMarkerService implements NavigationRouteRenderer {
                 ConcurrentMap<String, PlayerPathState> offlinePaths = playerPaths.remove(playerEntry.getKey());
                 if (offlinePaths != null) {
                     for (PlayerPathState state : offlinePaths.values()) {
-                        state.cancelled = true;
+                        cancel(playerEntry.getKey(), state);
                     }
                 }
                 continue;
@@ -289,6 +296,7 @@ public final class NavigationMarkerService implements NavigationRouteRenderer {
 
         if (playerLoc.getWorld() == null || goal.getWorld() == null
             || !playerLoc.getWorld().equals(goal.getWorld())) {
+            state.renderedRoute = null;
             removeExcessMarkers(player, state, 0);
             return;
         }
@@ -297,6 +305,7 @@ public final class NavigationMarkerService implements NavigationRouteRenderer {
         if (distance > config.pathMaxDistance()) {
             if (!state.suppressedByDistance) {
                 state.suppressedByDistance = true;
+                state.renderedRoute = null;
                 removeExcessMarkers(player, state, 0);
             }
             return;
@@ -309,72 +318,70 @@ public final class NavigationMarkerService implements NavigationRouteRenderer {
         }
         state.suppressedByDistance = false;
 
-        List<Location> rawPath = pathfinder.findPath(playerLoc, goal);
-        if (rawPath.isEmpty()) {
-            rawPath = NavigationPathfinder.shortDirectionalPath(playerLoc, goal);
-        }
-
-        List<Location> simplified = NavigationPathfinder.simplifyPath(rawPath);
-        List<Location> sampled = NavigationPathfinder.samplePath(simplified, config.pathInterval(), config.pathMaxMarkers());
+        List<Location> simplified = routeCache.route(player.getUniqueId(), state.markerKeySegment,
+            pathfinder, playerLoc, goal);
+        if (state.renderedRoute == simplified) return;
+        List<Location> points = NavigationPathfinder.sampleOrientedPath(
+            simplified, config.pathInterval(), config.pathMaxMarkers());
 
         double yOffset = config.yOffset();
-        List<Location> finalPoints = new ArrayList<>(sampled.size());
-        for (int i = 0; i < sampled.size(); i++) {
-            Location loc = sampled.get(i).clone().add(0, yOffset, 0);
-            Location next = (i + 1 < sampled.size()) ? sampled.get(i + 1) : goal;
-            double dx = next.getX() - sampled.get(i).getX();
-            double dz = next.getZ() - sampled.get(i).getZ();
-            float yaw = (float) Math.toDegrees(Math.atan2(-dx, dz));
-            loc.setYaw(yaw);
-            finalPoints.add(loc);
+        for (Location point : points) {
+            point.add(0, yOffset, 0);
         }
 
         // 已在主线程中，无需嵌套调度
         if (!player.isOnline() || state.cancelled) return;
-        applyPathMarkers(player, state, finalPoints);
+        state.renderedRoute = null;
+        if (applyPathMarkers(player, state, points)) state.renderedRoute = simplified;
     }
 
-    private void applyPathMarkers(Player player, PlayerPathState state, List<Location> points) {
+    private boolean applyPathMarkers(Player player, PlayerPathState state, List<Location> points) {
         int needed = points.size();
-        int existing = state.markerIds.size();
-
-        int toTeleport = Math.min(needed, existing);
-        for (int i = 0; i < toTeleport; i++) {
-            npcBridge.teleportMarker(player, state.markerIds.get(i), points.get(i));
-        }
-
-        if (needed > existing) {
-            String markerKeySegment = state.markerKeySegment;
-            for (int i = existing; i < needed; i++) {
-                String markerId = markerIdPrefix + player.getUniqueId().toString().substring(0, 8)
-                    + "_" + markerKeySegment + "_" + i;
-                Object entity = npcBridge.spawnPrivateMarker(player, markerId, points.get(i));
-                if (entity == null) continue;
-                state.markerIds.add(markerId);
-                state.markerEntities.add(entity);
-
-                final Object ent = entity;
-                Bukkit.getScheduler().runTaskLater(plugin, () -> {
-                    if (!player.isOnline()) return;
-                    npcBridge.applyModelForPlayer(player, ent, config.modelId(), config.scale());
-                    if (config.animation() != null && !config.animation().isBlank()) {
-                        npcBridge.applyAnimationForPlayer(player, ent, config.animation(), 1.0, 200, -1);
-                    }
-                }, 2L);
+        boolean applied = true;
+        for (int i = 0; i < needed; i++) {
+            Location point = points.get(i);
+            if (i < state.markers.size()) {
+                SpawnedMarker current = state.markers.get(i);
+                if (current.sent().equals(point)) continue;
+                Location sent = point.clone();
+                if (npcBridge.teleportMarker(player, current.id(), point)) {
+                    state.markers.set(i, new SpawnedMarker(current.id(), current.entity(), sent));
+                } else {
+                    applied = false;
+                }
+                continue;
             }
+
+            UUID playerId = player.getUniqueId();
+            String markerId = markerIdPrefix + playerId.toString().substring(0, 8) + "_" + state.markerKeySegment + "_" + i;
+            Location sent = point.clone();
+            Object entity = npcBridge.spawnPrivateMarker(player, markerId, point);
+            if (entity == null) {
+                applied = false;
+                break;
+            }
+            state.markers.add(new SpawnedMarker(markerId, entity, sent));
+
+            int index = i;
+            Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                if (!available || state.cancelled || !player.isOnline() || Bukkit.getPlayer(playerId) != player
+                    || index >= state.markers.size() || state.markers.get(index).entity() != entity) return;
+                npcBridge.applyModelForPlayer(player, entity, config.modelId(), config.scale());
+                if (config.animation() != null && !config.animation().isBlank()) {
+                    npcBridge.applyAnimationForPlayer(player, entity, config.animation(), 1.0, 200, -1);
+                }
+            }, 2L);
         }
 
         removeExcessMarkers(player, state, needed);
+        return applied;
     }
 
     private void removeExcessMarkers(Player player, PlayerPathState state, int keepCount) {
-        while (state.markerIds.size() > keepCount) {
-            int last = state.markerIds.size() - 1;
-            npcBridge.removePrivateMarker(player, state.markerIds.get(last));
-            state.markerIds.remove(last);
-            if (last < state.markerEntities.size()) {
-                state.markerEntities.remove(last);
-            }
+        while (state.markers.size() > keepCount) {
+            int last = state.markers.size() - 1;
+            npcBridge.removePrivateMarker(player, state.markers.get(last).id());
+            state.markers.remove(last);
         }
     }
 
@@ -388,20 +395,20 @@ public final class NavigationMarkerService implements NavigationRouteRenderer {
 
     // ==================== 玩家状态 ====================
 
+    private record SpawnedMarker(String id, Object entity, Location sent) {}
+
     private static final class PlayerPathState {
         volatile Location goal;
-        final List<String> markerIds;
-        final List<Object> markerEntities;
+        final List<SpawnedMarker> markers = new ArrayList<>();
         final String markerKeySegment;
+        List<Location> renderedRoute;
         volatile boolean cancelled;
         /** 距离滞回：true 表示已因超出最大距离被抑制，须进入重显示距离内才恢复。 */
         volatile boolean suppressedByDistance;
 
-        PlayerPathState(Location goal, List<String> markerIds, List<Object> markerEntities, String markerKey) {
+        PlayerPathState(Location goal, String markerKeySegment) {
             this.goal = goal;
-            this.markerIds = markerIds;
-            this.markerEntities = markerEntities;
-            this.markerKeySegment = sanitizeKey(markerKey);
+            this.markerKeySegment = markerKeySegment;
         }
     }
 }

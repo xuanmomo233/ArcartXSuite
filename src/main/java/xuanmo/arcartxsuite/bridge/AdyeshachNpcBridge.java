@@ -4,16 +4,21 @@ import ink.ptms.adyeshach.api.AdyeshachAPI;
 import ink.ptms.adyeshach.common.entity.EntityInstance;
 import ink.ptms.adyeshach.common.entity.EntityTypes;
 import ink.ptms.adyeshach.common.entity.manager.Manager;
+import ink.ptms.adyeshach.core.Adyeshach;
+import ink.ptms.adyeshach.core.AdyeshachEntityFinder;
+import ink.ptms.adyeshach.core.util.Components;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.function.BiConsumer;
+import java.util.function.Predicate;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
@@ -24,6 +29,8 @@ import org.bukkit.plugin.EventExecutor;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
 import priv.seventeen.artist.arcartx.core.network.ArcartXNetworkSender;
+import xuanmo.arcartxsuite.api.bridge.AdyeshachNearbyNpc;
+import xuanmo.arcartxsuite.api.bridge.AdyeshachNpcScanBridge;
 
 /**
  * {@link xuanmo.arcartxsuite.api.bridge.AdyeshachNpcBridgeAPI} 的默认实现，
@@ -31,7 +38,12 @@ import priv.seventeen.artist.arcartx.core.network.ArcartXNetworkSender;
  * <p>
  * Adyeshach 为可选依赖，运行时通过 {@link #initialize()} 懒检测可用性。
  */
-public final class AdyeshachNpcBridge implements xuanmo.arcartxsuite.api.bridge.AdyeshachNpcBridgeAPI {
+public final class AdyeshachNpcBridge implements xuanmo.arcartxsuite.api.bridge.AdyeshachNpcBridgeAPI, AdyeshachNpcScanBridge {
+
+    private static final Comparator<AdyeshachNearbyNpc> NEARBY_ORDER =
+        Comparator.comparingDouble(AdyeshachNearbyNpc::distanceSquared)
+            .thenComparing(npc -> npc.label().toLowerCase(Locale.ROOT))
+            .thenComparing(npc -> npc.npcId().toLowerCase(Locale.ROOT));
 
     private final JavaPlugin plugin;
     private final ConcurrentMap<String, EntityInstance> privateMarkerEntities = new ConcurrentHashMap<>();
@@ -40,6 +52,7 @@ public final class AdyeshachNpcBridge implements xuanmo.arcartxsuite.api.bridge.
     private boolean debug;
     private Manager publicManager;
     private Manager publicTemporaryManager;
+    private AdyeshachEntityFinder entityFinder;
 
     private Listener adyeshachVisibleListener;
     private BiConsumer<Player, Object> adyeshachVisibleHandler;
@@ -66,6 +79,7 @@ public final class AdyeshachNpcBridge implements xuanmo.arcartxsuite.api.bridge.
         available = false;
         publicManager = null;
         publicTemporaryManager = null;
+        entityFinder = null;
         privateMarkerEntities.clear();
 
         Plugin adyeshach = plugin.getServer().getPluginManager().getPlugin("Adyeshach");
@@ -83,6 +97,7 @@ public final class AdyeshachNpcBridge implements xuanmo.arcartxsuite.api.bridge.
             } catch (RuntimeException exception) {
                 xuanmo.arcartxsuite.module.AxsLog.logger().warning("Adyeshach 公共临时管理器不可用，临时 NPC 能力停用: " + exception.getMessage());
             }
+            entityFinder = Adyeshach.INSTANCE.api().getEntityFinder();
             available = true;
             return true;
         } catch (RuntimeException exception) {
@@ -99,6 +114,7 @@ public final class AdyeshachNpcBridge implements xuanmo.arcartxsuite.api.bridge.
         available = false;
         publicManager = null;
         publicTemporaryManager = null;
+        entityFinder = null;
         privateMarkerEntities.clear();
     }
 
@@ -133,12 +149,69 @@ public final class AdyeshachNpcBridge implements xuanmo.arcartxsuite.api.bridge.
             }
         }
 
-        result.sort(
-            Comparator.comparingDouble(xuanmo.arcartxsuite.api.bridge.AdyeshachNearbyNpc::distanceSquared)
-                .thenComparing(nearbyNpc -> nearbyNpc.label().toLowerCase(Locale.ROOT))
-                .thenComparing(nearbyNpc -> nearbyNpc.npcId().toLowerCase(Locale.ROOT))
-        );
+        result.sort(NEARBY_ORDER);
         return List.copyOf(result);
+    }
+
+    @Override
+    public List<AdyeshachNearbyNpc> findVisibleNearby(Player player, double range, Predicate<String> eligibleId) {
+        if (!canScan(player, range)) return List.of();
+        Location origin = player.getLocation();
+        double limit = range * range;
+        List<AdyeshachNearbyNpc> matches = new ArrayList<>();
+        for (var entity : entityFinder.getVisibleEntities(player, ignored -> true)) {
+            try {
+                var manager = entity.getManager();
+                if (!isPublicManager(manager) || entity.isRemoved() || entity.isInvalid()) continue;
+                String npcId = entity.getId();
+                if (npcId == null || npcId.isBlank() || !eligibleId.test(npcId)) continue;
+                Location point = entity.getLocation();
+                double distance = distanceSquared(origin, point);
+                if (!Double.isFinite(distance) || distance > limit || !entity.isVisibleViewer(player)
+                    || manager.getEntityByUniqueId(entity.getUniqueId()) != entity) continue;
+
+                String label = firstNonBlank(entity.getDisplayName());
+                if (label.isEmpty()) {
+                    label = firstNonBlank(Components.INSTANCE.toLegacyText(entity.<String>getMetadata("customName")), npcId);
+                }
+                matches.add(new AdyeshachNearbyNpc(npcId, label, point.clone(), entity, entity, distance));
+            } catch (RuntimeException exception) {
+                logWarning("scan-visible-entity", entity, exception);
+            }
+        }
+        // Prefer the persistent manager when two entries have the same displayed sorting keys.
+        var persistent = publicManager.v2();
+        matches.sort(NEARBY_ORDER
+            .thenComparing(npc -> ((ink.ptms.adyeshach.core.entity.EntityInstance) npc.rawEntity()).getManager() != persistent)
+            .thenComparing(npc -> ((ink.ptms.adyeshach.core.entity.EntityInstance) npc.rawEntity()).getUniqueId()));
+        return List.copyOf(matches);
+    }
+
+    @Override
+    public boolean canInteract(Player player, double range, String npcId, Object conversationEntity) {
+        if (!canScan(player, range)
+            || !(conversationEntity instanceof ink.ptms.adyeshach.core.entity.EntityInstance entity)) return false;
+        var manager = entity.getManager();
+        if (!isPublicManager(manager) || entity.isRemoved() || entity.isInvalid() || !npcId.equalsIgnoreCase(entity.getId())
+            || manager.getEntityByUniqueId(entity.getUniqueId()) != entity) return false;
+        double distance = distanceSquared(player.getLocation(), entity.getLocation());
+        return Double.isFinite(distance) && distance <= range * range && entity.isVisibleViewer(player);
+    }
+
+    private boolean canScan(Player player, double range) {
+        return available && player != null && player.isOnline() && Double.isFinite(range) && range > 0;
+    }
+
+    private boolean isPublicManager(ink.ptms.adyeshach.core.entity.manager.Manager manager) {
+        return manager != null && (manager == publicManager.v2()
+            || publicTemporaryManager != null && manager == publicTemporaryManager.v2());
+    }
+
+    private static double distanceSquared(Location origin, Location target) {
+        if (target == null || target.getWorld() == null || !target.getWorld().equals(origin.getWorld())) {
+            return Double.POSITIVE_INFINITY;
+        }
+        return origin.distanceSquared(target);
     }
 
     @Override
@@ -713,17 +786,18 @@ public final class AdyeshachNpcBridge implements xuanmo.arcartxsuite.api.bridge.
         if (entity == null || entity.isDeleted() || entity.getInvalid()) {
             return null;
         }
-        if (!entity.isVisibleViewer(player)) {
-            return null;
-        }
         Location location = entity.getLocation();
         if (location == null || location.getWorld() == null || !playerWorld.equals(location.getWorld())) {
             return null;
         }
         double distanceSquared = playerLocation.distanceSquared(location);
-        if (distanceSquared > rangeSquared) {
+        if (distanceSquared > rangeSquared || !entity.isVisibleViewer(player)) {
             return null;
         }
+        return toNearbyNpc(entity, location.clone(), distanceSquared);
+    }
+
+    private AdyeshachNearbyNpc toNearbyNpc(EntityInstance entity, Location point, double distanceSquared) {
         String npcId = entity.getId();
         if (npcId == null || npcId.isBlank()) {
             return null;
@@ -735,7 +809,7 @@ public final class AdyeshachNpcBridge implements xuanmo.arcartxsuite.api.bridge.
         if (conversationEntity == null) {
             conversationEntity = entity;
         }
-        return new xuanmo.arcartxsuite.api.bridge.AdyeshachNearbyNpc(npcId, label, location.clone(), entity, conversationEntity, distanceSquared);
+        return new AdyeshachNearbyNpc(npcId, label, point, entity, conversationEntity, distanceSquared);
     }
 
     private UUID getAdyEntityUUID(Object adyeshachEntity) {

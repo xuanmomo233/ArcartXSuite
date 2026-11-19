@@ -2,11 +2,10 @@ id: tab
 name: Tab
 version: 2.0.0
 main: xuanmo.arcartxsuite.tab.TabModule
-api-version: 3.0
+api-version: 3.9
 
 depends: []
 softdepends: []
-external-depends:
-  - PlaceholderAPI
+external-depends: []
 external-softdepends: []
 

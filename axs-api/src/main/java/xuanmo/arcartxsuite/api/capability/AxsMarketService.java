@@ -1,6 +1,7 @@
 package xuanmo.arcartxsuite.api.capability;
 
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.NotNull;
@@ -55,6 +56,12 @@ public interface AxsMarketService {
     /** 按店主 UUID 打开独立玩家店铺；主线程调用。 */
     default boolean openPlayerStore(@NotNull Player player,@NotNull java.util.UUID owner) { return false; }
 
+    /** Submit on the server thread. Resolves the visible description, or null when unavailable. */
+    @NotNull CompletionStage<String> describeChatLink(@NotNull Player viewer, @NotNull String type, @NotNull String key);
+
+    /** Submit on the server thread. Opens the view and resolves its current description, or null on rejection. */
+    @NotNull CompletionStage<String> openChatLink(@NotNull Player viewer, @NotNull String type, @NotNull String key);
+
     /** 打开调用玩家自己的店铺资料编辑页；主线程调用。 */
     default boolean openOwnStoreEditor(@NotNull Player player) { return false; }
 
@@ -68,12 +75,12 @@ public interface AxsMarketService {
     /**
      * 替玩家创建一条拍卖挂单（从玩家手中取走物品）。
      * <p>
-     * 在调用线程同步执行（涉及背包与落库，须在 Bukkit 主线程调用），
-     * 返回的 Future 已完成：{@code true} 上架成功，{@code false} 校验失败
-     * （价格/货币/黑名单/数量上限等，失败原因已通过消息发送给玩家）。
+     * 在 Bukkit 主线程提交。原子服确认背包扣除已随自然存档保存并提交发布后，
+     * Future 返回 {@code true}。请求被拒绝、取消或未发布时返回 {@code false}。
+     * 停用时未确认最终结果的请求可能异常完成，已暂存的挂单仍由原子服恢复。
+     * 不得在主线程等待，回调涉及 Bukkit 对象时先切回主线程。
      * <p>
-     * 防复制约束：{@code item} 必须与玩家主手物品匹配（type 相同且数量不超过
-     * 主手持量），上架从主手扣除——不支持给玩家上架其未持有的物品。
+     * {@code item} 的类型和元数据必须与玩家主手物品匹配，数量不得超过主手持量。
      *
      * @param player          卖家
      * @param item            上架物品
@@ -87,8 +94,9 @@ public interface AxsMarketService {
     /**
      * 取消玩家的一条拍卖挂单。
      * <p>
-     * 在调用线程同步执行（须主线程），返回的 Future 已完成：
-     * {@code true} 取消成功，{@code false} 挂单不存在/不属于该玩家/已成交等。
+     * 在主线程提交。后台事务确认后完成，{@code true} 表示撤单及待交付记录已提交，
+     * {@code false} 表示请求被拒绝，提交结果无法确认时异常完成。
+     * 结果可能在后台线程完成，操作 Bukkit 对象前必须切回主线程。
      */
     @NotNull CompletableFuture<Boolean> cancelListing(@NotNull Player player, long listingId);
 

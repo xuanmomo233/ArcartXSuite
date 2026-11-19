@@ -96,26 +96,16 @@ ui:
       val.UP物品槽.seticon()
       // 卡池导航按钮: 根据实际奖池数量动态创建
       poolCount = var.poolCount != none ? var.poolCount : 0
-      for(i in range(0, poolCount)){
-        key = i.round()
-        if(i > 0){
-          existing = val.卡池导航列表['卡池按钮' + key]
-          if(existing == none){
-            if(val.卡池导航列表['卡池按钮0'] != none) {
-              btn = val.卡池导航列表['卡池按钮0'].copy('卡池按钮' + key)
-              btn['卡底'].entryKey = key
-              btn['立绘框'].entryKey = key
-              btn['UP物品槽'].entryKey = key
-              btn['名称'].entryKey = key
-            }
+      if(var.卡池导航列表网格数据 == none || var.卡池导航列表网格数据.size() != (var.poolCount)){
+        网格数据 = []
+        if((var.poolCount) > 0){
+          for(网格序号 in range(0, (var.poolCount) - 1)){
+            网格数据.add(网格序号.round())
           }
         }
-        e = val.卡池导航列表['卡池按钮' + key]
-        if(e != none){
-          e.entryKey = key
-          e['UP物品槽'].seticon()
-        }
+        var.卡池导航列表网格数据 = 网格数据
       }
+      var.卡池导航列表IconsDirty = true
       // 消耗区与资源栏图标
       for(i in range(0, 3)){
         key = i.round()
@@ -139,6 +129,15 @@ ui:
         val.主面板.visible = true
       }
       var.actionBusy = false
+    read_failed: |-
+      var.actionToken = ''
+      var.actionBusy = false
+      var.actionBusySeconds = 0
+      if(var.pulling != none && var.pulling == true && var.resultPending != none && var.resultPending != true){
+        var.pulling = false
+        val.等待层.visible = false
+        val.主面板.visible = true
+      }
     # packetHandler: result（单抽结果）
     # 包字段:
     #   - resultCount: 结果数量
@@ -239,25 +238,16 @@ ui:
       }
       // 根据实际历史条目数动态创建行
       historyCount = var.historyCount != none ? var.historyCount : 0
-      for(i in range(0, historyCount)){
-        key = i.round()
-        if(i > 0){
-          existing = val.历史列表['历史行' + key]
-          if(existing == none){
-            if(val.历史列表['历史行0'] != none) {
-              e = val.历史列表['历史行0'].copy('历史行' + key)
-              e['物品图标'].entryKey = key
-              e['时间'].entryKey = key
-              e['摘要'].entryKey = key
-            }
+      if(var.历史列表网格数据 == none || var.历史列表网格数据.size() != (var.historyCount)){
+        网格数据 = []
+        if((var.historyCount) > 0){
+          for(网格序号 in range(0, (var.historyCount) - 1)){
+            网格数据.add(网格序号.round())
           }
         }
-        row = val.历史列表['历史行' + key]
-        if(row != none){
-          row.entryKey = key
-          row['物品图标'].seticon()
-        }
+        var.历史列表网格数据 = 网格数据
       }
+      var.历史列表IconsDirty = true
       val.历史面板.visible = true
     # packetHandler: details（卡池详情）
     # 包字段:
@@ -283,26 +273,16 @@ ui:
       }
       // 根据实际详情条目数动态创建行
       detailCount = var.detailCount != none ? var.detailCount : 0
-      for(i in range(0, detailCount)){
-        key = i.round()
-        if(i > 0){
-          existing = val.详情列表['详情行' + key]
-          if(existing == none){
-            if(val.详情列表['详情行0'] != none) {
-              e = val.详情列表['详情行0'].copy('详情行' + key)
-              e['物品图标'].entryKey = key
-              e['名称'].entryKey = key
-              e['稀有度'].entryKey = key
-              e['概率'].entryKey = key
-            }
+      if(var.详情列表网格数据 == none || var.详情列表网格数据.size() != (var.detailCount)){
+        网格数据 = []
+        if((var.detailCount) > 0){
+          for(网格序号 in range(0, (var.detailCount) - 1)){
+            网格数据.add(网格序号.round())
           }
         }
-        row = val.详情列表['详情行' + key]
-        if(row != none){
-          row.entryKey = key
-          row['物品图标'].seticon()
-        }
+        var.详情列表网格数据 = 网格数据
       }
+      var.详情列表IconsDirty = true
       val.详情面板.visible = true
     # packetHandler: exchange（积分兑换商店）
     # 包字段:
@@ -341,29 +321,22 @@ ui:
       }
       // 根据实际兑换商品数动态创建行并设图标
       exchangeCount = var.exchangeCount != none ? var.exchangeCount : 0
-      for(i in range(0, exchangeCount)){
-        key = i.round()
-        if(i > 0){
-          existing = val.兑换列表['兑换行' + key]
-          if(existing == none){
-            if(val.兑换列表['兑换行0'] != none) {
-              e = val.兑换列表['兑换行0'].copy('兑换行' + key)
-              e['商品图标'].entryKey = key
-              e['商品名称'].entryKey = key
-              e['消耗文本'].entryKey = key
-              e['限购文本'].entryKey = key
-              e['兑换按钮'].entryKey = key
-            }
+      if(var.兑换列表网格数据 == none || var.兑换列表网格数据.size() != (var.exchangeCount)){
+        网格数据 = []
+        if((var.exchangeCount) > 0){
+          for(网格序号 in range(0, (var.exchangeCount) - 1)){
+            网格数据.add(网格序号.round())
           }
         }
-        row = val.兑换列表['兑换行' + key]
-        if(row != none){
-          row.entryKey = key
-          row['商品图标'].seticon()
-        }
+        var.兑换列表网格数据 = 网格数据
       }
+      var.兑换列表IconsDirty = true
       val.兑换面板.visible = true
   action:
+    close: |-
+      if(var.packetId != none && var.packetId != '' && (val.历史面板.visible || val.详情面板.visible || val.兑换面板.visible)){
+        Packet.send(var.packetId, 'close_overlay')
+      }
     seconds: |-
       if(var.actionBusy){
         var.actionBusySeconds = var.actionBusySeconds + 1
@@ -402,6 +375,65 @@ ui:
       val.资源不足提示.visible = false
 
 # ─── 控件树（书写顺序即叠层顺序，弹层写在最后）────────────────────
+tasks:
+  refresh-repeat-grid-icons:
+    type: loop
+    time: 100
+    cycle: 100
+    run: |-
+      if(var.历史列表IconsDirty == true && var.历史列表网格数据 != none && val.历史列表 != none && val.历史列表.childrenCount() == var.历史列表网格数据.size()){
+        var.历史列表IconsDirty = false
+        if(var.历史列表网格数据.size() > 0){
+          for(网格序号 in range(0, var.历史列表网格数据.size() - 1)){
+            网格项 = val.历史列表.get(网格序号.round())
+            if(网格项 != none){
+              if(网格项['物品图标'] != none){
+                网格项['物品图标'].seticon()
+              }
+            }
+          }
+        }
+      }
+      if(var.详情列表IconsDirty == true && var.详情列表网格数据 != none && val.详情列表 != none && val.详情列表.childrenCount() == var.详情列表网格数据.size()){
+        var.详情列表IconsDirty = false
+        if(var.详情列表网格数据.size() > 0){
+          for(网格序号 in range(0, var.详情列表网格数据.size() - 1)){
+            网格项 = val.详情列表.get(网格序号.round())
+            if(网格项 != none){
+              if(网格项['物品图标'] != none){
+                网格项['物品图标'].seticon()
+              }
+            }
+          }
+        }
+      }
+      if(var.兑换列表IconsDirty == true && var.兑换列表网格数据 != none && val.兑换列表 != none && val.兑换列表.childrenCount() == var.兑换列表网格数据.size()){
+        var.兑换列表IconsDirty = false
+        if(var.兑换列表网格数据.size() > 0){
+          for(网格序号 in range(0, var.兑换列表网格数据.size() - 1)){
+            网格项 = val.兑换列表.get(网格序号.round())
+            if(网格项 != none){
+              if(网格项['商品图标'] != none){
+                网格项['商品图标'].seticon()
+              }
+            }
+          }
+        }
+      }
+      if(var.卡池导航列表IconsDirty == true && var.卡池导航列表网格数据 != none && val.卡池导航列表 != none && val.卡池导航列表.childrenCount() == var.卡池导航列表网格数据.size()){
+        var.卡池导航列表IconsDirty = false
+        if(var.卡池导航列表网格数据.size() > 0){
+          for(网格序号 in range(0, var.卡池导航列表网格数据.size() - 1)){
+            网格项 = val.卡池导航列表.get(网格序号.round())
+            if(网格项 != none){
+              if(网格项['UP物品槽'] != none){
+                网格项['UP物品槽'].seticon()
+              }
+            }
+          }
+        }
+      }
+
 controls:
   自适应根:
     type: Adaptive
@@ -737,19 +769,23 @@ controls:
                   radius: 2
                   through: true
               卡池导航列表:
-                type: VStack
+                type: RepeatGrid
                 val: 卡池导航列表
                 attribute:
+                  items: "var.卡池导航列表网格数据"
+                  flow: ~row
+                  column: 1
+                  spaceBetweenY: 12
+                  maxSize: "var.卡池导航列表网格数据 == none ? 0 : var.卡池导航列表网格数据.size()"
                   point: ~top_left
                   x: 14
                   y: 24
                   width: 208
-                  spaceBetween: 12
                 children:
                   卡池按钮0:
                     type: Canvas
                     attribute:
-                      entryKey: 0.round()
+                      entryKey: self.item
                       width: 208
                       height: 124
                       visible: "var.poolList == none || var.poolList.size() == 0 ? self.entryKey < 3 : self.entryKey < var.poolList.size()"
@@ -757,7 +793,7 @@ controls:
                       卡底:
                         type: Texture
                         attribute:
-                          entryKey: 0.round()
+                          entryKey: self.parent().entryKey
                           point: ~stretch_all
                           normal: "var.currentPoolIndex != none && self.entryKey == var.currentPoolIndex ? '38,48,74,235' : '26,32,50,238'"
                           hover: ~48,58,88,245
@@ -802,7 +838,7 @@ controls:
                       立绘框:
                         type: Texture
                         attribute:
-                          entryKey: 0.round()
+                          entryKey: self.parent().entryKey
                           point: ~top_center
                           y: 10
                           width: 176
@@ -823,7 +859,7 @@ controls:
                       UP物品槽:
                         type: Slot
                         attribute:
-                          entryKey: 0.round()
+                          entryKey: self.parent().entryKey
                           point: ~top_center
                           y: 20
                           slotType: ~Icon
@@ -835,7 +871,7 @@ controls:
                       名称:
                         type: Text
                         attribute:
-                          entryKey: 0.round()
+                          entryKey: self.parent().entryKey
                           point: ~bottom_center
                           y: -12
                           texts: "var.poolList[self.entryKey] != none ? (self.entryKey == var.currentPoolIndex ? '&e' : '&7') + var.poolList[self.entryKey] : '&8———'"
@@ -2601,16 +2637,19 @@ controls:
                     }
                 children:
                   历史列表:
-                    type: VGrid
+                    type: RepeatGrid
                     val: 历史列表
                     attribute:
+                      items: "var.历史列表网格数据"
+                      flow: ~column
+                      maxSize: "var.历史列表网格数据 == none ? 0 : var.历史列表网格数据.size()"
                       row: 100
                       spaceBetweenY: 12
                     children:
                       历史行0:
                         type: Canvas
                         attribute:
-                          entryKey: 0.round()
+                          entryKey: self.item
                           width: 860
                           height: 66
                           visible: "var.historyRows[self.entryKey] != none"
@@ -2629,7 +2668,7 @@ controls:
                           物品图标:
                             type: Slot
                             attribute:
-                              entryKey: 0.round()
+                              entryKey: self.parent().entryKey
                               point: ~middle_left
                               x: 12
                               slotType: ~Icon
@@ -2640,7 +2679,7 @@ controls:
                           时间:
                             type: Text
                             attribute:
-                              entryKey: 0.round()
+                              entryKey: self.parent().entryKey
                               point: ~middle_left
                               x: 68
                               texts: "var.historyRows[self.entryKey] != none ? '&7' + var.historyRows[self.entryKey]['timeText'] : ''"
@@ -2648,7 +2687,7 @@ controls:
                           摘要:
                             type: Text
                             attribute:
-                              entryKey: 0.round()
+                              entryKey: self.parent().entryKey
                               point: ~middle_left
                               x: 280
                               texts: "var.historyRows[self.entryKey] != none ? var.historyRows[self.entryKey]['summary'] : ''"
@@ -2669,7 +2708,9 @@ controls:
                   width: 200
                   height: 56
                 action:
-                  click: "val.历史面板.visible = false"
+                  click: |-
+                    val.历史面板.visible = false
+                    Packet.send(var.packetId, 'close_overlay')
                 children:
                   历史关闭背景:
                     type: Texture
@@ -2864,16 +2905,19 @@ controls:
                     }
                 children:
                   详情列表:
-                    type: VGrid
+                    type: RepeatGrid
                     val: 详情列表
                     attribute:
+                      items: "var.详情列表网格数据"
+                      flow: ~column
+                      maxSize: "var.详情列表网格数据 == none ? 0 : var.详情列表网格数据.size()"
                       row: 60
                       spaceBetweenY: 12
                     children:
                       详情行0:
                         type: Canvas
                         attribute:
-                          entryKey: 0.round()
+                          entryKey: self.item
                           width: 860
                           height: 58
                           visible: "var.detailRows[self.entryKey] != none"
@@ -2892,7 +2936,7 @@ controls:
                           物品图标:
                             type: Slot
                             attribute:
-                              entryKey: 0.round()
+                              entryKey: self.parent().entryKey
                               point: ~middle_left
                               x: 12
                               slotType: ~Icon
@@ -2903,7 +2947,7 @@ controls:
                           名称:
                             type: Text
                             attribute:
-                              entryKey: 0.round()
+                              entryKey: self.parent().entryKey
                               point: ~middle_left
                               x: 68
                               texts: "var.detailRows[self.entryKey] != none ? '&f' + var.detailRows[self.entryKey]['name'] : ''"
@@ -2911,7 +2955,7 @@ controls:
                           稀有度:
                             type: Text
                             attribute:
-                              entryKey: 0.round()
+                              entryKey: self.parent().entryKey
                               point: ~middle_left
                               x: 540
                               texts: "var.detailRows[self.entryKey] != none ? '&7' + var.detailRows[self.entryKey]['rarity'] : ''"
@@ -2919,7 +2963,7 @@ controls:
                           概率:
                             type: Text
                             attribute:
-                              entryKey: 0.round()
+                              entryKey: self.parent().entryKey
                               point: ~middle_left
                               x: 740
                               texts: "var.detailRows[self.entryKey] != none ? '&7' + var.detailRows[self.entryKey]['probability'] : ''"
@@ -2940,7 +2984,9 @@ controls:
                   width: 200
                   height: 56
                 action:
-                  click: "val.详情面板.visible = false"
+                  click: |-
+                    val.详情面板.visible = false
+                    Packet.send(var.packetId, 'close_overlay')
                 children:
                   详情关闭背景:
                     type: Texture
@@ -3165,16 +3211,19 @@ controls:
                     }
                 children:
                   兑换列表:
-                    type: VGrid
+                    type: RepeatGrid
                     val: 兑换列表
                     attribute:
+                      items: "var.兑换列表网格数据"
+                      flow: ~column
+                      maxSize: "var.兑换列表网格数据 == none ? 0 : var.兑换列表网格数据.size()"
                       row: 20
                       spaceBetweenY: 12
                     children:
                       兑换行0:
                         type: Canvas
                         attribute:
-                          entryKey: 0.round()
+                          entryKey: self.item
                           width: 860
                           height: 64
                           visible: "var.exchangeRows[self.entryKey] != none"
@@ -3193,7 +3242,7 @@ controls:
                           商品图标:
                             type: Slot
                             attribute:
-                              entryKey: 0.round()
+                              entryKey: self.parent().entryKey
                               point: ~middle_left
                               x: 12
                               slotType: ~Icon
@@ -3204,7 +3253,7 @@ controls:
                           商品名称:
                             type: Text
                             attribute:
-                              entryKey: 0.round()
+                              entryKey: self.parent().entryKey
                               point: ~middle_left
                               x: 68
                               y: -12
@@ -3215,7 +3264,7 @@ controls:
                           消耗文本:
                             type: Text
                             attribute:
-                              entryKey: 0.round()
+                              entryKey: self.parent().entryKey
                               point: ~middle_left
                               x: 68
                               y: 12
@@ -3225,7 +3274,7 @@ controls:
                           限购文本:
                             type: Text
                             attribute:
-                              entryKey: 0.round()
+                              entryKey: self.parent().entryKey
                               point: ~middle_right
                               x: -140
                               texts: "var.exchangeRows[self.entryKey] != none ? (var.exchangeRows[self.entryKey]['limit'] == 0 ? '&7不限购' : '&7剩余 ' + var.exchangeRows[self.entryKey]['remaining'].round() + '/' + var.exchangeRows[self.entryKey]['limit'].round()) : ''"
@@ -3234,7 +3283,7 @@ controls:
                           兑换按钮:
                             type: Texture
                             attribute:
-                              entryKey: 0.round()
+                              entryKey: self.parent().entryKey
                               point: ~middle_right
                               x: -12
                               width: 110
@@ -3273,7 +3322,9 @@ controls:
                   width: 200
                   height: 56
                 action:
-                  click: "val.兑换面板.visible = false"
+                  click: |-
+                    val.兑换面板.visible = false
+                    Packet.send(var.packetId, 'close_overlay')
                 children:
                   兑换关闭背景:
                     type: Texture

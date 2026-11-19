@@ -14,8 +14,7 @@ import org.bukkit.configuration.ConfigurationSection;
  * @param source               连击伤害来源类型（AUTO / CHRONOS / BUKKIT）
  * @param timeoutMs            连击超时时间（毫秒），超过则重置连击计数
  * @param chronosGroups        Chronos 事件分组名称集合
- * @param syncVariable         是否将连击数同步到客户端变量
- * @param variableName         同步连击数所用的变量名
+ * @param syncVariable         是否实时同步连击数
  * @param perTarget            是否按目标分别计数连击
  * @param debug                是否开启调试日志
  */
@@ -25,7 +24,6 @@ public record ComboTrackerConfiguration(
     long timeoutMs,
     Set<String> chronosGroups,
     boolean syncVariable,
-    String variableName,
     boolean perTarget,
     boolean debug
 ) {
@@ -33,7 +31,8 @@ public record ComboTrackerConfiguration(
     /**
      * 连击伤害来源类型枚举。
      * <p>
-     * AUTO 表示自动检测；CHRONOS 表示通过 Chronos 事件触发；BUKKIT 表示使用 Bukkit 原生事件。
+     * AUTO 在 Symphony 确认桥可用时选择有效伤害，否则优先 Chronos。
+     * CHRONOS 统计状态段，BUKKIT 统计宿主结算的有效伤害。
      */
     public enum ComboSource {
         AUTO, CHRONOS, BUKKIT;
@@ -64,7 +63,7 @@ public record ComboTrackerConfiguration(
      */
     public static ComboTrackerConfiguration load(ConfigurationSection section) {
         if (section == null) {
-            return new ComboTrackerConfiguration(false, ComboSource.AUTO, 2000L, Set.of(), false, "combo_count", false, false);
+            return new ComboTrackerConfiguration(false, ComboSource.AUTO, 2000L, Set.of(), false, false, false);
         }
         boolean enabled = section.getBoolean("enabled", false);
         ComboSource source = ComboSource.from(section.getString("source", "auto"));
@@ -74,9 +73,8 @@ public record ComboTrackerConfiguration(
             chronosGroups.add("攻击");
         }
         boolean syncVariable = section.getBoolean("sync-variable", false);
-        String variableName = section.getString("variable-name", "combo_count");
         boolean perTarget = section.getBoolean("per-target", false);
         boolean debug = section.getBoolean("debug", false);
-        return new ComboTrackerConfiguration(enabled, source, timeoutMs, chronosGroups, syncVariable, variableName, perTarget, debug);
+        return new ComboTrackerConfiguration(enabled, source, timeoutMs, chronosGroups, syncVariable, perTarget, debug);
     }
 }

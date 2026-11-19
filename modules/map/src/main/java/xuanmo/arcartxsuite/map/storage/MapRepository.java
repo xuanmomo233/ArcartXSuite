@@ -2,6 +2,7 @@ package xuanmo.arcartxsuite.map.storage;
 
 import java.sql.SQLException;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import xuanmo.arcartxsuite.map.model.MapPin;
@@ -20,7 +21,19 @@ public interface MapRepository {
      */
     boolean tryUnlockAnchor(UUID playerUuid, String anchorId, long unlockTime) throws SQLException;
 
-    void removeUnlock(UUID playerUuid, String anchorId) throws SQLException;
+    boolean isAnchorUnlockConfirmed(UUID playerUuid, String anchorId) throws SQLException;
+
+    record AnchorReservation(UUID player, String anchor, UUID id, String source, long createdAt) { }
+
+    boolean reserveAnchorUnlock(UUID playerUuid, String anchorId, long time, UUID reservation, String source) throws SQLException;
+
+    Optional<AnchorReservation> findAnchorReservation(UUID reservation) throws SQLException;
+
+    Optional<UUID> pendingAnchorReservation(UUID playerUuid, String anchorId) throws SQLException;
+
+    boolean confirmAnchorUnlock(UUID playerUuid, String anchorId, long time, UUID reservation) throws SQLException;
+
+    boolean cancelAnchorUnlock(UUID playerUuid, String anchorId, UUID reservation) throws SQLException;
 
     /**
      * 在世界路径点未达上限时创建路径点，返回 false 表示已达上限。

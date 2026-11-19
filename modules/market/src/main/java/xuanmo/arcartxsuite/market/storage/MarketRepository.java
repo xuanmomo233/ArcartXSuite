@@ -1,9 +1,11 @@
 package xuanmo.arcartxsuite.market.storage;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.market.auction.AuctionBid;
+import xuanmo.arcartxsuite.market.auction.AuctionBidTerms;
 import xuanmo.arcartxsuite.market.auction.AuctionListing;
 import xuanmo.arcartxsuite.market.dynamic.DynamicShopState;
 import xuanmo.arcartxsuite.market.playershop.PlayerShopListing;
@@ -34,13 +36,29 @@ public interface MarketRepository {
     int countPlayerShopDirectory(UUID viewer,String keyword,boolean favorites);
     xuanmo.arcartxsuite.market.playershop.PlayerShopView playerShopView(UUID owner,UUID viewer,String keyword,int page,int pageSize);
     int setPlayerShopFollow(UUID viewer,UUID owner,boolean follow,int maximum);
-    boolean claimPlayerShopPurchase(long listingId);
+    boolean reservePlayerShopPurchase(PlayerShopOrder order);
+    void finishPlayerShopPurchase(PlayerShopOrder order, xuanmo.arcartxsuite.api.currency.CurrencyTransactionResult payment);
+    String reviewPlayerShopPurchase(String id, String action, String audit);
+    MarketListingDraft.Reservation reserveListingDraft(MarketListingDraft draft, int maximum);
+    void recordListingFee(MarketListingDraft draft, xuanmo.arcartxsuite.api.currency.CurrencyTransactionResult payment);
+    boolean abortListingDraft(MarketListingDraft.Save save, String sourceNode, String note);
+    List<MarketListingDraft.Save> listingSaves(String sourceNode, String after, int limit);
+    boolean publishListingDraft(MarketListingDraft.Save save, String sourceNode);
+    boolean isListingDraftPublished(MarketListingDraft.Save save, String sourceNode);
 
     void insertOperation(MarketOperation operation);
     boolean transitionOperation(String id, String expected, String state, String note, String owner);
+    boolean transitionItemBatch(List<String> ids, String owner, boolean claim);
     List<MarketOperation> operations(String state, UUID player, int offset, int limit);
+    List<MarketOperation> pendingDeliveries(UUID player, String inventoryNode, int limit);
     void heartbeatMarketOwner(String owner);
     void recoverAbandonedOperations();
+    @Nullable MarketOperation shopOrder(String requestId);
+    Map<String, ShopCheckout.Availability> shopAvailability(UUID player, String shop, List<ShopCheckout.Product> products);
+    ShopCheckout.Reservation reserveShopOrder(MarketOperation order, ShopCheckout checkout, List<MarketOperation> rewards);
+    void finishShopOrder(MarketOperation order, boolean paid, String note);
+    String reviewShopOrder(String id, String action, String audit);
+    void finishConfirmedShopRefunds();
     boolean resolveOperation(String id, String action, String note);
 
     boolean adjustShopStock(String shop, String item, String mode, int maximum, String action, int amount, UUID player);
@@ -70,19 +88,26 @@ public interface MarketRepository {
 
     /** Update an active listing bid only when the new amount is strictly higher. */
     boolean updateListingBidIfHigher(long listingId, double amount, UUID bidder);
-    boolean placeAuctionBid(AuctionListing expected, double amount, UUID bidder, String bidderName, long newExpiresAt);
+    boolean reserveAuctionBid(AuctionBidOrder order);
+    AuctionBidOrder.Outcome finishAuctionBid(AuctionBidOrder order,
+        xuanmo.arcartxsuite.api.currency.CurrencyTransactionResult payment, long newExpiresAt);
     xuanmo.arcartxsuite.market.auction.AuctionRoomSnapshot readAuctionRoom(long listingId,UUID viewer);
     List<AuctionListing> browseAuction(String mode,UUID viewer,String keyword,int offset,int limit);
     int countBrowseAuction(String mode,UUID viewer,String keyword);
-    AuctionListing claimAuctionSettlement(long listingId);
-    AuctionListing claimAuctionCancellation(long listingId, UUID seller, boolean allowBids);
+    boolean settleExpiredAuction(AuctionSettlement settlement);
+    long auctionSettlementRevision();
+    List<AuctionPublication> claimAuctionPublications(String token, long now, int limit);
+    boolean finishAuctionPublication(String id, String token, boolean event, boolean refresh, long retryAt);
+    boolean cancelAuction(AuctionSettlement settlement, @Nullable UUID seller, boolean allowBids);
     List<AuctionListing> favoriteListings(UUID player, String keyword, int offset, int limit);
     int countFavoriteListings(UUID player, String keyword);
     List<UUID> auctionWatchers(long listingId);
+    String latestAuctionBidderName(long listingId, UUID bidder);
 
     void deleteListing(long listingId);
 
     @Nullable AuctionListing getListing(long listingId);
+    @Nullable AuctionBidTerms readAuctionBidTerms(long listingId);
 
     List<AuctionListing> getActiveListings(int offset, int limit);
 
@@ -102,7 +127,7 @@ public interface MarketRepository {
 
     int countListingsBySeller(UUID seller);
 
-    List<AuctionListing> getExpiredListings();
+    List<AuctionListing> getExpiredListings(int limit);
 
     // ─── 竞价 ───────────────────────────────────────────────
 
@@ -122,13 +147,11 @@ public interface MarketRepository {
 
     // ─── 收藏 ───────────────────────────────────────────────
 
-    void addFavorite(UUID player, long listingId);
+    enum FavoriteChange { ADDED, REMOVED, LIMIT_REACHED, MISSING }
 
-    void removeFavorite(UUID player, long listingId);
+    FavoriteChange toggleAuctionFavorite(UUID player, long listingId);
 
     List<Long> getFavorites(UUID player);
-
-    boolean isFavorite(UUID player, long listingId);
 
     // ─── 系统商店限购 ────────────────────────────────────────
 
@@ -201,14 +224,10 @@ public interface MarketRepository {
     /** 插入玩家商店上架记录，成功后 id 回填。 */
     boolean insertPlayerShopListing(PlayerShopListing listing);
 
-    void updatePlayerShopListing(PlayerShopListing listing);
-
-    /** 状态 CAS：仅当当前状态等于 expect 时才更新为 update。 */
-    boolean compareAndSetPlayerShopListingStatus(long listingId,
-                                                  PlayerShopListing.ListingStatus expect,
-                                                  PlayerShopListing.ListingStatus update);
-
+    boolean terminatePlayerShopListing(PlayerShopTermination termination);
     @Nullable PlayerShopListing getPlayerShopListing(long listingId);
+
+    @Nullable PlayerShopListing getPublishedPlayerShopListing(long listingId);
 
     /** 获取所有活跃的玩家商店商品（分页）。 */
     List<PlayerShopListing> getActivePlayerShopListings(int offset, int limit);
@@ -234,13 +253,9 @@ public interface MarketRepository {
 
     int countSearchPlayerShopListingsBySeller(UUID seller, String keyword);
 
-    int countListingsByPlayerShopSeller(UUID seller);
-
-    List<PlayerShopListing> getExpiredPlayerShopListings();
+    List<PlayerShopListing> getExpiredPlayerShopListings(int limit);
 
     // ─── 玩家商店交易历史 ──────────────────────────────────────
-
-    void insertPlayerShopHistory(PlayerShopHistory history);
 
     List<PlayerShopHistory> getPlayerShopHistoryByPlayer(UUID player, int offset, int limit);
 

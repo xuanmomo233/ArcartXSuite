@@ -1,0 +1,66 @@
+# 同一鱼种与天气下，三档对抗都使用 [seed, seed + trials) 的种子。
+fish: legendary_carp
+water: dragon_lake
+season: spring
+weather: rain
+time: "06:00"
+biome: river
+permissions: [axs.fishing.legendary]
+
+seed: 42137
+trials: 512
+# 步数以小游戏更新为单位。默认设置下每步 50ms。
+reaction-steps: 3
+minimum-hold-steps: 2
+
+profiles:
+  unlock:
+    name: 刚解锁
+    level: 30
+    rod: default
+    bait: bread
+    fatigue: 0
+  recommended:
+    name: 推荐配装
+    level: 90
+    rod: wooden_rod
+    bait: corn
+    fatigue: 0
+    talents: [root, t2-control, focus, focus-t4-a, focus-t5-a]
+  specialized:
+    name: 专精配装
+    level: 100
+    rod: wooden_rod
+    bait: corn
+    fatigue: 0
+    # 按可点亮顺序列出节点。
+    talents:
+      - root
+      - t2-power
+      - steady
+      - steady-t4-a
+      - steady-t5-a
+      - swift
+      - swift-t4-a
+      - swift-t5-a
+      - t2-control
+      - pressure
+      - focus
+      - focus-t4-a
+      - focus-t4-b
+      - focus-t5-a
+      - focus-t5-b
+      - focus-t6-a
+      - focus-t6-b
+      - t2-fortune
+      - endure
+      - endure-t4-a
+      - endure-t5-a
+      - endure-t6-b
+
+# 每组对照只替换一项，其他条件沿用此档。
+compare:
+  profile: specialized
+  rods: [default]
+  baits: [bread, worm]
+  fatigue: [60, 90, 100]

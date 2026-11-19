@@ -19,11 +19,13 @@ public record RodDefinition(
     double expMultiplier,
     int minPlayerLevel,
     int maxPlayerLevel,
-    @Nullable ItemMatcher matcher
+    @Nullable ItemMatcher matcher,
+    double lineStrength,
+    double turnResponse
 ) {
 
     public static final RodDefinition DEFAULT = new RodDefinition(
         "default",
-        0.0, 0, 0, 1.0, 0, 0, null
+        0.0, 0, 0, 1.0, 0, 0, null, 1.0, 1.0
     );
 }

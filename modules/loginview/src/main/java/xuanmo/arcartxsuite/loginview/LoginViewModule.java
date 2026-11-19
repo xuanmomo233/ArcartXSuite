@@ -45,7 +45,7 @@ public final class LoginViewModule extends AbstractAXSModule implements ModuleCo
     }
     @Override protected void stopService() { if(controller!=null) controller.close(); controller=null; }
     @Override protected @NotNull PacketHandlerSpec createPacketHandlerSpec() {
-        return PacketHandlerSpec.of((p,id,data)->controller!=null && controller.handle(p,id,data),0,"AXS_auth_v1","auth");
+        return PacketHandlerSpec.of((p,id,data)->controller!=null && controller.handle(p,id,data),0,"AXS_auth_v1","loginview");
     }
     @Override protected @Nullable ClientInitializedHandler createInitializedHandler() {
         return player->{if(controller!=null) controller.clientReady(player);};

@@ -9,10 +9,8 @@ import java.util.UUID;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
@@ -20,6 +18,10 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.java_websocket.client.WebSocketClient;
 import org.java_websocket.handshake.ServerHandshake;
+import org.java_websocket.drafts.Draft_6455;
+import xuanmo.arcartxsuite.api.scheduler.ModuleCallback;
+import xuanmo.arcartxsuite.api.scheduler.ModuleExecutor;
+import xuanmo.arcartxsuite.api.scheduler.ModuleScheduledExecutor;
 
 /**
  * Universal WS transport. Socket responses never wait on business SQL: events use a bounded worker.
@@ -43,13 +45,15 @@ public final class OneBotClient implements AutoCloseable {
     private final Consumer<String> onDisconnected;
     private final AtomicBoolean closed = new AtomicBoolean();
     private final Map<String, CompletableFuture<OneBotResult>> pending = new ConcurrentHashMap<>();
-    private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
+    private final ModuleScheduledExecutor scheduler = new ModuleScheduledExecutor(1, r -> {
         Thread thread = new Thread(r, "QQBot-Transport"); thread.setDaemon(true); return thread;
     });
-    private final ThreadPoolExecutor events = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,
+    private final ModuleExecutor events = new ModuleExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,
         new ArrayBlockingQueue<>(256), r -> {
             Thread thread = new Thread(r, "QQBot-Events"); thread.setDaemon(true); return thread;
-        }, new ThreadPoolExecutor.AbortPolicy());
+        });
+    private final ModuleCallback socketCallbacks = new ModuleCallback(() -> {});
+    private final CompletableFuture<Void> socketStopped = new CompletableFuture<>();
     private volatile WebSocketClient wsClient;
     private volatile boolean running;
     private volatile boolean connected;
@@ -88,17 +92,40 @@ public final class OneBotClient implements AutoCloseable {
     }
     @Override public void close() { shutdown(); }
 
-    public synchronized void shutdown() {
-        if (!closed.compareAndSet(false, true)) return;
-        running = false;
-        connected = false;
-        if (reconnectTask != null) reconnectTask.cancel(false);
-        WebSocketClient old = wsClient;
-        wsClient = null;
-        if (old != null) old.close();
-        failPending(-2, "连接已关闭，在途消息结果未知，请勿自动重发");
-        events.shutdownNow();
-        scheduler.shutdownNow();
+    public void shutdown() {
+        WebSocketClient old;
+        synchronized (this) {
+            if (!closed.compareAndSet(false, true)) return;
+            running = false;
+            connected = false;
+            if (reconnectTask != null) reconnectTask.cancel(false);
+            old = wsClient;
+            wsClient = null;
+            socketCallbacks.close();
+            events.shutdown();
+            scheduler.shutdown();
+        }
+        CompletableFuture.runAsync(() -> {
+            try {
+                if (old != null) {
+                    old.closeConnection(1001, "QQBot stopped");
+                    var socket = old.getSocket();
+                    if (socket != null) socket.close();
+                }
+            } catch (java.io.IOException failure) {
+                throw new java.io.UncheckedIOException(failure);
+            } finally {
+                failPending(-2, "连接已关闭，在途消息结果未知，请勿自动重发");
+            }
+        }).whenComplete((ignored, failure) -> {
+            if (failure == null) socketStopped.complete(null);
+            else socketStopped.completeExceptionally(failure);
+        });
+    }
+
+    public CompletionStage<Void> stopped() {
+        return CompletableFuture.allOf(events.stopped().toCompletableFuture(), scheduler.stopped().toCompletableFuture(),
+            socketCallbacks.stopped().toCompletableFuture(), socketStopped);
     }
 
     /** Untrusted strings are text, never executable CQ segments. */
@@ -167,24 +194,34 @@ public final class OneBotClient implements AutoCloseable {
         WebSocketClient old = wsClient;
         wsClient = null;
         if (old != null) old.close();
-        WebSocketClient socket = new WebSocketClient(uri) {
+        WebSocketClient socket = new WebSocketClient(uri, new Draft_6455(), Map.of(), 5000) {
             @Override public void onOpen(ServerHandshake handshake) {
                 if (closed.get() || !running || wsClient != this) { close(); return; }
-                connected = true;
-                logger.info("[OneBot] WebSocket 已连接");
-                if (onConnected != null) onConnected.run();
+                socketCallbacks.call(() -> {
+                    if (closed.get() || wsClient != this) return null;
+                    connected = true;
+                    logger.info("[OneBot] WebSocket 已连接");
+                    if (onConnected != null) onConnected.run();
+                    return null;
+                }, null);
             }
             @Override public void onMessage(String message) {
-                if (!closed.get() && wsClient == this) receive(message);
+                socketCallbacks.call(() -> {
+                    if (!closed.get() && wsClient == this) receive(message);
+                    return null;
+                }, null);
             }
             @Override public void onClose(int code, String reason, boolean remote) {
-                if (closed.get() || wsClient != this) return;
-                connected = false;
-                failPending(-2, "连接断开，在途消息结果未知，请先核对后再操作");
-                String detail = code == 1008 || code == 403 || code == 401
-                    ? "鉴权失败，请核对 OneBot access-token" : (remote ? REASON_REMOTE_CLOSED : REASON_UNKNOWN);
-                if (onDisconnected != null) onDisconnected.accept(detail);
-                scheduleReconnect();
+                socketCallbacks.call(() -> {
+                    if (closed.get() || wsClient != this) return null;
+                    connected = false;
+                    failPending(-2, "连接断开，在途消息结果未知，请先核对后再操作");
+                    String detail = code == 1008 || code == 403 || code == 401
+                        ? "鉴权失败，请核对 OneBot access-token" : (remote ? REASON_REMOTE_CLOSED : REASON_UNKNOWN);
+                    if (onDisconnected != null) onDisconnected.accept(detail);
+                    scheduleReconnect();
+                    return null;
+                }, null);
             }
             @Override public void onError(Exception error) { logger.log(Level.FINE, "[OneBot] 连接异常", error); }
         };
@@ -243,7 +280,8 @@ public final class OneBotClient implements AutoCloseable {
         }, reconnectSeconds, TimeUnit.SECONDS);
     }
     private void failPending(int code, String reason) {
-        pending.forEach((echo, future) -> future.complete(OneBotResult.failure(code, reason)));
-        pending.clear();
+        pending.forEach((echo, future) -> {
+            if (pending.remove(echo, future)) future.complete(OneBotResult.failure(code, reason));
+        });
     }
 }

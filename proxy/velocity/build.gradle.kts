@@ -6,6 +6,7 @@ plugins {
 dependencies {
     implementation(project(":proxy:common"))
     implementation(project(":auth-minecraft"))
+    compileOnly(project(":axs-api"))
     compileOnly("com.velocitypowered:velocity-api:3.4.0-SNAPSHOT")
     annotationProcessor("com.velocitypowered:velocity-api:3.4.0-SNAPSHOT")
     compileOnly("org.jetbrains:annotations:24.1.0")

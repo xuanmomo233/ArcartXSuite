@@ -3,7 +3,7 @@
 # 重载: /axs reload vanilla
 
 # 配置版本号（请勿手动修改）
-config-version: 2
+config-version: 3
 
 # UI 配置（统一管理所有界面的 id 与覆盖策略）
 ui:
@@ -27,22 +27,19 @@ ui:
   dispenser-ui-id: "AXS:vanilla_dispenser"
   container-ui-id: "AXS:vanilla_container"
   shulker-box-ui-id: "AXS:vanilla_shulker_box"
-  # 是否覆盖用户已修改的 UI 文件
+  # 是否覆盖已修改的 UI 文件
   overwrite-ui-files: false
 
 # 工作台界面替换
 crafting:
   # 是否启用工作台 UI 替换
   enabled: true
-
 # 熔炉界面替换
 furnace:
   # 是否启用熔炉 UI 替换
   enabled: true
   # 熔炉状态推送间隔（tick），每秒 20 tick，默认 2 tick（每秒 10 次）
   push-interval-ticks: 2
-
-# 高炉、烟熏炉使用各自原版配方，不与普通熔炉混用。
 blast-furnace:
   enabled: true
   push-interval-ticks: 2
@@ -91,14 +88,37 @@ shulker-box:
   enabled: true
   push-interval-ticks: 2
 
-# 随身背包独立启用，仓库容量和物品由 Warehouse 管理。
-# 从独立背包升级时，可将旧配置的 extra-backpack.categories 和 ui 复制到下方对应位置。
+# 随身背包独立启用，仓库物品、容量与分类由 Warehouse 管理。
 backpack:
   enabled: false
   ui:
     register-ui-on-enable: true
     overwrite-ui-files: false
-  categories: {}
+  # ArcartX 的额外槽位不支持 MMOItems 的属性识别，需要外部辅助。
+  # 设置参与 MMOItems 装备属性结算的 AX 饰品槽 ID，留空关闭。需要 MMOItems 和 MythicLib。
+  # 示例：[accessory_1, accessory_2, accessory_3]。填写额外槽位的实际 ID，区分大小写。
+  mmoitems-attribute-slots: []
+  presentation:
+    # 开启背包转场及已配置的角色动作。
+    enabled: false
+    transition-ms: 220 # 面板与镜头转场时长（毫秒），0 关闭转场。
+    blend-ms: 100 # 角色动作之间的混合时长（毫秒），0 直接切换。
+    # 动作名来自玩家当前的 ArcartX 动作包，保留原有大小写。
+    open: # 开包时播放一次。
+      animation: '' # 留空跳过入场动作。
+      duration-ms: 450 # 入场动作播放时长（毫秒），到时进入待机阶段。
+    idle: # 两次动作之间的循环待机。
+      animation: '' # 留空沿用普通待机，填写时资源需设置为循环。
+    random:
+      min-interval-ms: 6000 # 进入待机后，到下一次随机动作的最短等待（毫秒）。
+      max-interval-ms: 12000 # 最长等待（毫秒），小于最短等待时按最短等待处理。
+      # 动作池留空时跳过随机播放。每个子项的键名由服主自定。
+      # animation 是动作名，留空忽略该项。duration-ms 是播放时长（毫秒）。
+      # weight 是相对抽取权重，默认 1，设为 0 忽略该项。
+      actions: {}
+# 随身背包与箱柜的整理方式：type（按类型）、name（按材质名称）、amount（按堆叠数量）。
+inventory-sort:
+  mode: type
 
 # 自定义原版配方，定义保存于 data/vanilla/recipes.yml。
 recipes:

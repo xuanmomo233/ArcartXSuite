@@ -1,486 +1,492 @@
 package xuanmo.arcartxsuite.regions.packet;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.TreeSet;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.logging.Level;
 import org.bukkit.Bukkit;
+import org.bukkit.Material;
+import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.NotNull;
 import xuanmo.arcartxsuite.api.ClientPacketHandler;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.security.ActionTokenGuard;
-import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
-import xuanmo.arcartxsuite.regions.config.RegionsConfiguration;
 import xuanmo.arcartxsuite.regions.model.Region;
 import xuanmo.arcartxsuite.regions.model.RegionFlag;
-import xuanmo.arcartxsuite.regions.model.Selection;
 import xuanmo.arcartxsuite.regions.service.RegionManager;
-import xuanmo.arcartxsuite.regions.service.WorldRulesService;
+import xuanmo.arcartxsuite.regions.service.RegionProfiles;
 
-/**
- * Regions 管理员区域面板的 Packet Handler。
- * <p>
- * 处理客户端 UI 回包：navigate / select_region / create_region / redefine_region /
- * rename_region / set_flag / remove_flag / add_member / remove_member /
- * set_priority / set_parent / delete_region /
- * select_world_rule / toggle_no_fly / toggle_no_piston / toggle_interaction
- */
 public final class RegionsAdminPacketHandler implements ClientPacketHandler {
-
     public static final String PACKET_ID = "AXS_REGIONS_ADMIN";
     public static final String UI_RESOURCE_PATH = "arcartx/ui/regions_admin.yml";
-    public static final String UI_FILE_PATH = "ui/regions_admin.yml";
+    public static final String UI_FILE_PATH = "ui/regions_control.yml";
 
+    private static final int PAGE_SIZE = 8;
     private final JavaPlugin plugin;
-    private final PacketBridgeAPI packetBridge;
-    private final PacketGuardAPI packetGuard;
-    private final RegionManager regionManager;
-    private final RegionsConfiguration config;
-    private final WorldRulesService worldRulesService;
+    private final PacketBridgeAPI packets;
+    private final RegionManager manager;
     private final String uiId;
-    private final ActionTokenGuard tokenGuard = new ActionTokenGuard();
+    private final ActionTokenGuard tokens = new ActionTokenGuard();
+    private final Map<UUID, View> views = new HashMap<>();
 
-    public RegionsAdminPacketHandler(JavaPlugin plugin, PacketBridgeAPI packetBridge,
-                                     PacketGuardAPI packetGuard, RegionManager regionManager,
-                                     RegionsConfiguration config, WorldRulesService worldRulesService,
-                                     String uiId) {
+    public RegionsAdminPacketHandler(JavaPlugin plugin, PacketBridgeAPI packets, RegionManager manager, String uiId) {
         this.plugin = plugin;
-        this.packetBridge = packetBridge;
-        this.packetGuard = packetGuard;
-        this.regionManager = regionManager;
-        this.config = config;
-        this.worldRulesService = worldRulesService;
+        this.packets = packets;
+        this.manager = manager;
         this.uiId = uiId;
+    }
+
+    public void openMenu(Player player) {
+        if (!player.hasPermission("axs.regions.admin") || !packets.openUi(player, uiId)) return;
+        var view = new View();
+        views.put(player.getUniqueId(), view);
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            if (active(player, view)) initialize(player, view);
+        }, 2L);
+    }
+
+    public void clearPlayer(UUID id) {
+        views.remove(id);
+        tokens.clear(id);
+    }
+
+    public void close() {
+        views.clear();
+        tokens.clearAll();
     }
 
     @Override
     public boolean handleClientPacket(@NotNull Player player, @NotNull String packetId, @NotNull List<String> data) {
         if (!PACKET_ID.equalsIgnoreCase(packetId)) return false;
-        if (!player.hasPermission("axs.regions.admin")) return true;
-        String action = data.isEmpty() ? "refresh" : safe(data.get(0)).toLowerCase(Locale.ROOT);
-        // PacketGuard 已由 ClientPacketRouter 在路由层统一调用，此处不再重复检查。
-        // 写操作要求动作令牌：data[1] 为客户端回传的 action_token，业务参数自 data[2] 起。
-        boolean writeAction = requiresActionToken(action);
-        if (writeAction && !beginActionToken(player, data)) return true;
+        View view = views.get(player.getUniqueId());
+        if (data.isEmpty() || !active(player, view)) return true;
         try {
-            switch (action) {
-                case "navigate" -> pushData(player, hasValue(data, 1) ? data.get(1) : "regions", null);
-                case "refresh" -> pushData(player, hasValue(data, 1) ? data.get(1) : "regions", null);
-                case "select_region" -> {
-                    if (hasValue(data, 1)) {
-                        pushData(player, "edit", data.get(1));
+            switch (data.get(0)) {
+                case "ready" -> initialize(player, view);
+                case "list" -> {
+                    boolean worlds = switch (arg(data, 1)) {
+                        case "worlds" -> true;
+                        case "regions" -> false;
+                        default -> throw new IllegalArgumentException("未知目录。");
+                    };
+                    if (view.worlds != worlds) {
+                        view.worlds = worlds;
+                        view.selected = "";
+                        showDetail(player, view);
                     }
+                    showList(player, view, page(data, 2));
                 }
-                case "create_region" -> {
-                    // data: [action, token, regionName] — 用玩家当前选区创建区域
-                    if (hasValue(data, 2)) {
-                        handleCreateRegion(player, data.get(2));
+                case "select" -> {
+                    String selected = arg(data, 1);
+                    if (view.worlds ? !worldNames().contains(selected) : findRegion(selected) == null) {
+                        throw new IllegalArgumentException("记录已变更，请刷新列表。");
                     }
+                    view.selected = selected;
+                    view.pane = "rules";
+                    view.category = RegionFlag.Category.BLOCK;
+                    view.contentPage = 0;
+                    showDetail(player, view);
+                    showContent(player, view);
                 }
-                case "redefine_region" -> {
-                    // data: [action, token, regionId] — 用玩家当前选区重定义区域范围
-                    if (hasValue(data, 2)) {
-                        handleRedefineRegion(player, data.get(2));
+                case "rules" -> {
+                    view.category = RegionFlag.Category.valueOf(arg(data, 1).toUpperCase(Locale.ROOT));
+                    openPane(player, view, "rules", page(data, 2));
+                }
+                case "members" -> openPane(player, view, "members", page(data, 1));
+                case "settings" -> openPane(player, view, "settings", 0);
+                case "materials" -> openPane(player, view, "materials", page(data, 1));
+                case "preview" -> {
+                    Region previous = "new".equals(optional(data, 1)) ? null : selectedRegion(view);
+                    Region area = manager.selectionRegion(player, "preview");
+                    if (previous != null && !previous.world().equals(area.world())) {
+                        throw new IllegalArgumentException("请在同一世界设置选区。");
                     }
+                    notice(player, "选区包含 " + area.volume() + " 个方块，与 " + manager.overlaps(area, previous).size() + " 个区域重叠。");
                 }
-                case "rename_region" -> {
-                    // data: [action, token, oldId, newId]
-                    if (hasValue(data, 3)) {
-                        handleRenameRegion(player, data.get(2), data.get(3));
-                    }
-                }
-                case "set_flag" -> {
-                    // data: [action, token, regionId, flagKey, state]
-                    if (hasValue(data, 4)) {
-                        Region region = regionManager.getRegion(data.get(2));
-                        if (region != null) {
-                            RegionFlag flag = RegionFlag.fromKey(data.get(3));
-                            if (flag != null) {
-                                RegionFlag.State state = RegionFlag.State.fromString(data.get(4));
-                                region.setFlag(flag, state);
-                                trySave(region);
-                                pushData(player, "edit", region.id());
-                            }
-                        }
-                    }
-                }
-                case "remove_flag" -> {
-                    // data: [action, token, regionId, flagKey]
-                    if (hasValue(data, 3)) {
-                        Region region = regionManager.getRegion(data.get(2));
-                        if (region != null) {
-                            RegionFlag flag = RegionFlag.fromKey(data.get(3));
-                            if (flag != null) {
-                                region.setFlag(flag, RegionFlag.State.NONE);
-                                trySave(region);
-                                pushData(player, "edit", region.id());
-                            }
-                        }
-                    }
-                }
-                case "add_member" -> {
-                    // data: [action, token, regionId, playerName, role(owner/member)]
-                    if (hasValue(data, 4)) {
-                        Region region = regionManager.getRegion(data.get(2));
-                        if (region != null) {
-                            // 支持离线玩家：优先在线匹配，否则走 OfflinePlayer（同步查 Mojang 仅在必要时）
-                            Player online = Bukkit.getPlayerExact(data.get(3));
-                            java.util.UUID targetUuid;
-                            if (online != null) {
-                                targetUuid = online.getUniqueId();
-                            } else {
-                                targetUuid = Bukkit.getOfflinePlayer(data.get(3)).getUniqueId();
-                            }
-                            if ("owner".equalsIgnoreCase(data.get(4))) {
-                                region.addOwner(targetUuid);
-                            } else {
-                                region.addMember(targetUuid);
-                            }
-                            trySave(region);
-                            pushData(player, "edit", region.id());
-                        }
-                    }
-                }
-                case "remove_member" -> {
-                    // data: [action, token, regionId, uuid]
-                    if (hasValue(data, 3)) {
-                        Region region = regionManager.getRegion(data.get(2));
-                        if (region != null) {
-                            try {
-                                UUID uuid = UUID.fromString(data.get(3));
-                                region.removeOwner(uuid);
-                                region.removeMember(uuid);
-                                trySave(region);
-                            } catch (IllegalArgumentException ignored) {}
-                            pushData(player, "edit", region.id());
-                        }
-                    }
-                }
-                case "set_priority" -> {
-                    // data: [action, token, regionId, priority]
-                    if (hasValue(data, 3)) {
-                        Region region = regionManager.getRegion(data.get(2));
-                        if (region != null) {
-                            try {
-                                int priority = Integer.parseInt(data.get(3));
-                                region.setPriority(priority);
-                                trySave(region);
-                            } catch (NumberFormatException ignored) {}
-                            pushData(player, "edit", region.id());
-                        }
-                    }
-                }
-                case "set_parent" -> {
-                    // data: [action, token, regionId, parentId]
-                    if (hasValue(data, 3)) {
-                        Region region = regionManager.getRegion(data.get(2));
-                        if (region != null) {
-                            String parentId = data.get(3);
-                            region.setParentId(parentId.isBlank() || "none".equalsIgnoreCase(parentId) ? null : parentId);
-                            trySave(region);
-                            pushData(player, "edit", region.id());
-                        }
-                    }
-                }
-                case "delete_region" -> {
-                    if (hasValue(data, 2)) {
-                        Region region = regionManager.getRegion(data.get(2));
-                        if (region != null) {
-                            try {
-                                regionManager.deleteRegion(region);
-                            } catch (Exception ignored) {}
-                            pushData(player, "regions", null);
-                        }
-                    }
-                }
-                case "select_world_rule" -> pushWorldRulesData(player);
-                case "toggle_no_fly" -> {
-                    // data: [action, token, worldName]
-                    if (hasValue(data, 2) && worldRulesService != null) {
-                        worldRulesService.toggleNoFlyWorld(data.get(2));
-                        pushWorldRulesData(player);
-                    }
-                }
-                case "toggle_no_piston" -> {
-                    if (hasValue(data, 2) && worldRulesService != null) {
-                        worldRulesService.toggleNoPistonWorld(data.get(2));
-                        pushWorldRulesData(player);
-                    }
-                }
-                case "toggle_interaction" -> {
-                    // data: [action, token, worldName, materialName]
-                    if (hasValue(data, 3) && worldRulesService != null) {
-                        org.bukkit.Material mat = org.bukkit.Material.matchMaterial(data.get(3));
-                        if (mat != null) {
-                            worldRulesService.toggleDisabledInteraction(data.get(2), mat);
-                        }
-                        pushWorldRulesData(player);
-                    }
-                }
-                default -> pushData(player, "regions", null);
+                case "create", "flag", "message", "add_member", "remove_member", "blocked_material",
+                     "rename", "priority", "parent", "redefine", "delete" -> mutate(player, view, data);
+                default -> { }
             }
-        } finally {
-            if (writeAction) {
-                tokenGuard.finish(player.getUniqueId());
-            }
+        } catch (IllegalArgumentException error) {
+            notice(player, error.getMessage());
         }
         return true;
     }
 
-    public void openMenu(Player player) {
-        if (packetBridge == null) return;
-        tokenGuard.issue(player.getUniqueId(), uiId);
-        packetBridge.openUi(player, uiId);
-        Bukkit.getScheduler().runTaskLater(plugin, () -> {
-            if (player.isOnline()) {
-                pushData(player, "regions", null);
+    private void initialize(Player player, View view) {
+        if (view.initialized) return;
+        view.initialized = true;
+        credentials(player);
+        showList(player, view, 0);
+        showDetail(player, view);
+    }
+
+    private void showList(Player player, View view, int requested) {
+        if (view.worlds) {
+            var slice = slice(worldNames(), requested);
+            view.listPage = slice.page();
+            send(player, "list", Map.of("scope", "worlds", "page", view.listPage, "pages", slice.pages(),
+                "rows", slice.items().stream().map(world -> Map.of("id", world, "title", world, "subtitle", "世界默认规则")).toList()));
+        } else {
+            List<Region> regions = manager.getBoundedRegions();
+            var slice = slice(regions, requested);
+            view.listPage = slice.page();
+            send(player, "list", Map.of("scope", "regions", "page", view.listPage, "pages", slice.pages(),
+                "rows", slice.items().stream().map(region -> Map.of(
+                    "id", region.uid().toString(), "title", region.id(), "subtitle", region.world()
+                        + (region.kind() == Region.Kind.CLAIM ? " · 玩家领地" : " · 管理区域"))).toList()));
+        }
+    }
+
+    private List<String> worldNames() {
+        var names = new TreeSet<String>();
+        Bukkit.getWorlds().stream().map(World::getName).forEach(names::add);
+        manager.getAllRegions().forEach(region -> names.add(region.world()));
+        return List.copyOf(names);
+    }
+
+    private void showDetail(Player player, View view) {
+        Region region = selectedRegion(view);
+        Map<String, Object> detail = new LinkedHashMap<>();
+        detail.put("id", view.selected);
+        detail.put("world", view.worlds);
+        detail.put("title", view.worlds ? view.selected : region == null ? "" : region.id());
+        detail.put("subtitle", view.worlds ? "对该世界内未另设旗标的位置生效"
+            : region == null ? "" : region.world() + "     " + region.minX() + ", " + region.minY() + ", " + region.minZ()
+                + "  至  " + region.maxX() + ", " + region.maxY() + ", " + region.maxZ());
+        detail.put("priority", region == null ? "" : Integer.toString(region.priority()));
+        detail.put("parent", region == null || region.parentId() == null ? "" : region.parentId());
+        send(player, "detail", detail);
+    }
+
+    private void openPane(Player player, View view, String pane, int requested) {
+        if (view.selected.isEmpty()) return;
+        if (view.worlds && ("members".equals(pane) || "settings".equals(pane))
+                || !view.worlds && "materials".equals(pane)) return;
+        view.pane = pane;
+        view.contentPage = requested;
+        showContent(player, view);
+    }
+
+    private void showContent(Player player, View view) {
+        if (!view.worlds && selectedRegion(view) == null) {
+            view.selected = "";
+            showDetail(player, view);
+            showList(player, view, view.listPage);
+            return;
+        }
+        view.contentRequest++;
+        switch (view.pane) {
+            case "rules" -> showRules(player, view);
+            case "members" -> showMembers(player, view);
+            case "settings" -> {
+                showDetail(player, view);
+                send(player, "settings", Map.of("pane", "settings"));
             }
-        }, 2L);
+            case "materials" -> showMaterials(player, view);
+            default -> throw new IllegalStateException("未知管理面板。");
+        }
     }
 
-    /** 玩家退出时清理其 token 与在途标记（由模块 quit 监听调用）。 */
-    public void clearPlayer(UUID playerId) {
-        tokenGuard.clear(playerId);
+    private void showRules(Player player, View view) {
+        Region region = selectedRegion(view);
+        var flags = java.util.Arrays.stream(RegionFlag.values()).filter(flag -> flag.category() == view.category).toList();
+        var slice = slice(flags, view.contentPage);
+        view.contentPage = slice.page();
+        var rules = slice.items().stream().map(flag -> ruleRow(region, flag)).toList();
+        send(player, "rules", Map.of("category", view.category.name().toLowerCase(Locale.ROOT),
+            "page", view.contentPage, "pages", slice.pages(), "rows", rules));
     }
 
-    /** 写操作动作集合：需要有效动作令牌且在途槽位空闲。 */
-    private static boolean requiresActionToken(String action) {
-        return switch (action) {
-            case "create_region", "redefine_region", "rename_region",
-                "set_flag", "remove_flag", "add_member", "remove_member",
-                "set_priority", "set_parent", "delete_region",
-                "toggle_no_fly", "toggle_no_piston", "toggle_interaction" -> true;
-            default -> false;
+    private Map<String, Object> ruleRow(Region region, RegionFlag flag) {
+        var state = region == null ? RegionFlag.State.NONE : region.getFlag(flag);
+        var inherited = RegionFlag.State.NONE;
+        if (state == RegionFlag.State.NONE && region != null && region.kind() != Region.Kind.GLOBAL) {
+            inherited = manager.inheritedRule(region, flag);
+        }
+        String message = region == null ? null : region.getFlagData(flag);
+        return Map.of("id", flag.configKey(), "title", flag.description(), "state", state.name().toLowerCase(Locale.ROOT),
+            "hint", switch (state) {
+                case ALLOW -> "已允许";
+                case DENY -> "已禁止";
+                case NONE -> switch (inherited) {
+                    case ALLOW -> "继承 · 允许";
+                    case DENY -> "继承 · 禁止";
+                    case NONE -> "跟随默认";
+                };
+            }, "message", message == null ? "" : message,
+            "custom", flag == RegionFlag.GREETING || flag == RegionFlag.FAREWELL);
+    }
+
+    private void showMembers(Player player, View view) {
+        Region region = selectedRegion(view);
+        var members = new ArrayList<Membership>();
+        appendMembers(members, region.owners(), true);
+        appendMembers(members, region.members(), false);
+        appendGroups(members, region.ownerGroups(), true);
+        appendGroups(members, region.memberGroups(), false);
+        var slice = slice(members, view.contentPage);
+        view.contentPage = slice.page();
+        var unresolved = new ArrayList<UUID>();
+        var known = new HashMap<UUID, String>();
+        for (Membership member : slice.items()) {
+            if (member.uuid() == null) continue;
+            Player online = Bukkit.getPlayer(member.uuid());
+            if (online == null) unresolved.add(member.uuid());
+            else known.put(member.uuid(), online.getName());
+        }
+        send(player, "members", memberPage(slice, known, "正在读取名称…"));
+        if (unresolved.isEmpty() || view.resolvingMembers) return;
+        view.resolvingMembers = true;
+        long request = view.contentRequest;
+        RegionProfiles.background(plugin, () -> {
+            var resolved = new HashMap<>(known);
+            for (UUID id : unresolved) {
+                String name = RegionProfiles.offlineName(id);
+                if (name != null && !name.isBlank()) resolved.put(id, name);
+            }
+            return resolved;
+        }).whenComplete((names, error) -> {
+            view.resolvingMembers = false;
+            if (!active(player, view) || !"members".equals(view.pane)) return;
+            if (request != view.contentRequest) {
+                if (selectedRegion(view) != null) showMembers(player, view);
+            } else {
+                send(player, "members", memberPage(slice, error == null ? names : known, "未知玩家"));
+            }
+        });
+    }
+
+    private static Map<String, Object> memberPage(Page<Membership> slice, Map<UUID, String> names, String fallback) {
+        var entries = slice.items().stream().map(member -> Map.of(
+            "id", member.id(), "title", member.uuid() == null ? member.id().substring(2)
+                : names.getOrDefault(member.uuid(), fallback),
+            "subtitle", (member.owner() ? "所有者" : "成员") + (member.uuid() == null ? "权限组" : ""),
+            "role", member.owner() ? "owner" : "member")).toList();
+        return Map.of("page", slice.page(), "pages", slice.pages(), "rows", entries);
+    }
+
+    private static void appendMembers(List<Membership> rows, Collection<UUID> members, boolean owner) {
+        members.stream().sorted().forEach(id -> rows.add(new Membership(id.toString(), id, owner)));
+    }
+
+    private static void appendGroups(List<Membership> rows, Collection<String> groups, boolean owner) {
+        groups.stream().sorted().forEach(group -> rows.add(new Membership("g:" + group, null, owner)));
+    }
+
+    private void showMaterials(Player player, View view) {
+        Region global = manager.getGlobal(view.selected);
+        var materials = global == null ? List.<String>of() : global.blockedInteractions().stream().map(Material::name).sorted().toList();
+        var slice = slice(materials, view.contentPage);
+        view.contentPage = slice.page();
+        send(player, "materials", Map.of("page", slice.page(), "pages", slice.pages(),
+            "rows", slice.items().stream().map(name -> Map.of("id", name, "title", name)).toList()));
+    }
+
+    private void mutate(Player player, View view, List<String> data) {
+        UUID id = player.getUniqueId();
+        if (!tokens.begin(id, uiId, arg(data, 1))) {
+            if (view.writing) notice(player, "正在保存，请稍候。");
+            return;
+        }
+        view.writing = true;
+        String action = data.get(0);
+        String selected = view.selected;
+        boolean worlds = view.worlds;
+        Region region = selectedRegion(view);
+        CompletableFuture<? extends Region> future;
+        try {
+            if (!action.equals("create") && (!selected.equals(arg(data, 2)) || selected.isEmpty())) {
+                throw new IllegalArgumentException("当前选中的记录已变更。");
+            }
+            future = switch (action) {
+                case "create" -> manager.createRegion(player, arg(data, 2), copy -> {});
+                case "flag", "message" -> {
+                    RegionFlag flag = RegionFlag.fromKey(arg(data, 3));
+                    if (flag == null) throw new IllegalArgumentException("未知规则。");
+                    RegionFlag.State state = action.equals("message") ? RegionFlag.State.ALLOW : RegionFlag.State.parse(arg(data, 4));
+                    String message = action.equals("message") ? arg(data, 4) : null;
+                    yield worlds ? manager.editWorld(player, selected, copy -> flag.apply(copy, state, message))
+                        : manager.setFlag(player, requireRegion(region), flag, state, message);
+                }
+                case "add_member", "remove_member" -> membership(player, view, requireRegion(region), data);
+                case "blocked_material" -> {
+                    if (!worlds) throw new IllegalArgumentException("请选择一个世界。");
+                    Material material = Material.matchMaterial(arg(data, 3));
+                    if (material == null || !material.isBlock()) throw new IllegalArgumentException("请输入有效的方块材质名称。");
+                    boolean blocked = switch (arg(data, 4)) {
+                        case "deny" -> true;
+                        case "allow" -> false;
+                        default -> throw new IllegalArgumentException("交互状态无效。");
+                    };
+                    yield manager.editWorld(player, selected, copy -> copy.setBlockedInteraction(material, blocked));
+                }
+                case "rename" -> manager.renameRegion(player, requireBounded(view, region), arg(data, 3));
+                case "priority" -> manager.update(player, requireBounded(view, region), "priority",
+                    copy -> copy.setPriority(Integer.parseInt(arg(data, 3))));
+                case "parent" -> manager.setParent(player, requireBounded(view, region), optional(data, 3));
+                case "redefine" -> manager.redefine(player, requireBounded(view, region));
+                case "delete" -> manager.deleteRegion(player, requireBounded(view, region)).thenApply(ignored -> null);
+                default -> throw new IllegalArgumentException("未知保存操作。");
+            };
+        } catch (RuntimeException error) {
+            future = CompletableFuture.failedFuture(error);
+        }
+        future.whenComplete((updated, error) -> {
+            view.writing = false;
+            if (views.get(id) != view) {
+                // 重新打开面板时，旧请求仍占用槽位，退出重连后则已由 quit 清理。
+                if (Bukkit.getPlayer(id) == player) tokens.finish(id);
+                return;
+            }
+            tokens.finish(id);
+            if (!active(player, view)) return;
+            credentials(player);
+            if (error != null) {
+                Throwable cause = error instanceof CompletionException ? error.getCause() : error;
+                if (cause instanceof IllegalArgumentException || cause instanceof IllegalStateException) {
+                    notice(player, cause.getMessage());
+                } else {
+                    plugin.getLogger().log(Level.WARNING, "区域设置保存失败。", cause);
+                    notice(player, "保存失败，请查看服务端日志。");
+                }
+                return;
+            }
+            notice(player, "已保存");
+            if (view.worlds != worlds || !view.selected.equals(selected)) return;
+            switch (action) {
+                case "create", "rename", "delete" -> {
+                    view.worlds = false;
+                    view.selected = updated == null ? "" : updated.uid().toString();
+                    showList(player, view, view.listPage);
+                    showDetail(player, view);
+                    if (updated != null) showContent(player, view);
+                }
+                case "priority", "parent", "redefine" -> showDetail(player, view);
+                case "flag", "message" -> {
+                    if ("rules".equals(view.pane)) showRules(player, view);
+                }
+                case "add_member", "remove_member" -> {
+                    if ("members".equals(view.pane)) showContent(player, view);
+                }
+                case "blocked_material" -> {
+                    if ("materials".equals(view.pane)) showMaterials(player, view);
+                }
+                default -> { }
+            }
+        });
+    }
+
+    private CompletableFuture<Region> membership(Player player, View view, Region region, List<String> data) {
+        requireBounded(view, region);
+        boolean add = "add_member".equals(data.get(0));
+        String target = arg(data, 3);
+        boolean owner = switch (arg(data, 4)) {
+            case "owner" -> true;
+            case "member" -> false;
+            default -> throw new IllegalArgumentException("成员身份无效。");
         };
-    }
-
-    /**
-     * 校验写操作令牌：要求 UI 已打开、data[1] 与当前签发 token 一致、且玩家无在途写操作。
-     */
-    private boolean beginActionToken(Player player, List<String> data) {
-        String supplied = hasValue(data, 1) ? data.get(1) : "";
-        return packetBridge != null && packetBridge.isUiOpen(player, uiId)
-            && tokenGuard.begin(player.getUniqueId(), uiId, supplied);
-    }
-
-    public void pushData(Player player, String page, String selectedRegionId) {
-        if (packetBridge == null) return;
-        Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("page", page);
-        payload.put("packetId", PACKET_ID);
-        // 每次推送轮换动作令牌：写操作回包必须携带最新 token（防重放/防外部注入）。
-        payload.put("action_token", tokenGuard.rotate(player.getUniqueId(), uiId));
-
-        // 所有区域列表
-        List<Map<String, String>> regionList = new ArrayList<>();
-        for (Region region : regionManager.getAllRegions()) {
-            Map<String, String> info = new HashMap<>();
-            info.put("id", region.id());
-            info.put("world", region.world());
-            info.put("priority", String.valueOf(region.priority()));
-            info.put("volume", String.valueOf(region.volume()));
-            regionList.add(info);
-        }
-        payload.put("regions", regionList);
-        payload.put("regionCount", String.valueOf(regionList.size()));
-
-        // 选中区域的详情
-        if (selectedRegionId != null) {
-            Region region = regionManager.getRegion(selectedRegionId);
-            if (region != null) {
-                payload.put("selId", region.id());
-                payload.put("selWorld", region.world());
-                payload.put("selPriority", String.valueOf(region.priority()));
-                payload.put("selParent", region.parentId() != null ? region.parentId() : "");
-                payload.put("selMin", region.minX() + ", " + region.minY() + ", " + region.minZ());
-                payload.put("selMax", region.maxX() + ", " + region.maxY() + ", " + region.maxZ());
-                payload.put("selVolume", String.valueOf(region.volume()));
-
-                // 标志
-                List<Map<String, String>> flags = new ArrayList<>();
-                for (RegionFlag flag : RegionFlag.values()) {
-                    Map<String, String> f = new HashMap<>();
-                    f.put("key", flag.configKey());
-                    f.put("desc", flag.description());
-                    f.put("category", flag.category().name().toLowerCase(Locale.ROOT));
-                    f.put("state", region.getFlag(flag).name().toLowerCase(Locale.ROOT));
-                    flags.add(f);
+        String group = target.startsWith("g:") ? target.substring(2).toLowerCase(Locale.ROOT) : null;
+        if (group != null && !group.matches("[a-z0-9_-]{1,64}")) throw new IllegalArgumentException("权限组名称无效。");
+        var resolved = group != null ? CompletableFuture.<UUID>completedFuture(null)
+            : add ? RegionProfiles.resolve(plugin, target) : CompletableFuture.completedFuture(UUID.fromString(target));
+        return resolved.thenCompose(uuid -> {
+            if (!active(player, view)) throw new IllegalArgumentException("管理面板已关闭。");
+            return manager.update(player, region, data.get(0), copy -> {
+                if (group != null) {
+                    var groups = owner ? copy.ownerGroups() : copy.memberGroups();
+                    if (add) groups.add(group);
+                    else groups.remove(group);
+                } else {
+                    var members = owner ? copy.owners() : copy.members();
+                    if (add) members.add(uuid);
+                    else members.remove(uuid);
                 }
-                payload.put("selFlags", flags);
-
-                // 成员
-                List<Map<String, String>> memberList = new ArrayList<>();
-                for (UUID uuid : region.owners()) {
-                    var op = Bukkit.getOfflinePlayer(uuid);
-                    Map<String, String> m = new HashMap<>();
-                    m.put("uuid", uuid.toString());
-                    m.put("name", op.getName() != null ? op.getName() : uuid.toString().substring(0, 8));
-                    m.put("role", "owner");
-                    memberList.add(m);
-                }
-                for (UUID uuid : region.members()) {
-                    var op = Bukkit.getOfflinePlayer(uuid);
-                    Map<String, String> m = new HashMap<>();
-                    m.put("uuid", uuid.toString());
-                    m.put("name", op.getName() != null ? op.getName() : uuid.toString().substring(0, 8));
-                    m.put("role", "member");
-                    memberList.add(m);
-                }
-                payload.put("selMembers", memberList);
-            }
-        }
-
-        packetBridge.sendPacket(player, uiId, "init", payload);
+            });
+        });
     }
 
-    private void trySave(Region region) {
-        try { regionManager.saveRegion(region); } catch (Exception ignored) {}
+    private Region selectedRegion(View view) {
+        return view.worlds ? manager.getGlobal(view.selected) : findRegion(view.selected);
     }
 
-    /**
-     * 用玩家当前选区创建区域。校验：选区完成、体积不超限、名称不重复、数量不超限。
-     */
-    private void handleCreateRegion(Player player, String name) {
-        Selection sel = regionManager.getSelection(player.getUniqueId());
-        if (!sel.isComplete()) {
-            pushToast(player, "选区未完成，请先用木斧选定两个点");
-            pushData(player, "regions", null);
-            return;
-        }
-        if (sel.volume() > config.selection().maxVolume()) {
-            pushToast(player, "选区体积超过限制 (" + config.selection().maxVolume() + ")");
-            pushData(player, "regions", null);
-            return;
-        }
-        if (regionManager.getRegion(name, sel.world()) != null) {
-            pushToast(player, "区域 " + name + " 已存在");
-            pushData(player, "regions", null);
-            return;
-        }
-        int maxPer = config.selection().maxRegionsPerPlayer();
-        if (maxPer > 0 && !player.hasPermission("axs.regions.bypass.limit")
-            && regionManager.countRegionsByOwner(player.getUniqueId()) >= maxPer) {
-            pushToast(player, "你已达到最大区域数量限制 (" + maxPer + ")");
-            pushData(player, "regions", null);
-            return;
-        }
-        try {
-            Region region = regionManager.createRegion(name, sel);
-            region.addOwner(player.getUniqueId());
-            regionManager.saveRegion(region);
-            regionManager.clearSelection(player.getUniqueId());
-            pushToast(player, "区域 " + name + " 已创建");
-            pushData(player, "edit", name);
-        } catch (Exception e) {
-            pushToast(player, "创建失败: " + e.getMessage());
-            pushData(player, "regions", null);
-        }
+    private Region findRegion(String key) {
+        if (key.isEmpty()) return null;
+        Region region = manager.getRegion(UUID.fromString(key));
+        return region != null && region.kind() != Region.Kind.GLOBAL ? region : null;
     }
 
-    /**
-     * 用玩家当前选区重定义区域范围。
-     */
-    private void handleRedefineRegion(Player player, String regionId) {
-        Region region = regionManager.getRegion(regionId);
-        if (region == null) {
-            pushToast(player, "未找到区域: " + regionId);
-            pushData(player, "regions", null);
-            return;
-        }
-        Selection sel = regionManager.getSelection(player.getUniqueId());
-        if (!sel.isComplete()) {
-            pushToast(player, "选区未完成，请先用木斧选定两个点");
-            pushData(player, "edit", regionId);
-            return;
-        }
-        if (sel.volume() > config.selection().maxVolume()) {
-            pushToast(player, "选区体积超过限制 (" + config.selection().maxVolume() + ")");
-            pushData(player, "edit", regionId);
-            return;
-        }
-        region.redefine(sel.x1(), sel.y1(), sel.z1(), sel.x2(), sel.y2(), sel.z2());
-        trySave(region);
-        pushToast(player, "区域 " + regionId + " 范围已更新");
-        pushData(player, "edit", regionId);
+    private static Region requireBounded(View view, Region region) {
+        if (view.worlds) throw new IllegalArgumentException("请选择一个有界区域。");
+        return requireRegion(region);
     }
 
-    /**
-     * 重命名区域。校验新名称不重复、不与现有区域冲突。
-     */
-    private void handleRenameRegion(Player player, String oldId, String newId) {
-        Region region = regionManager.getRegion(oldId);
-        if (region == null) {
-            pushToast(player, "未找到区域: " + oldId);
-            pushData(player, "regions", null);
-            return;
-        }
-        if (regionManager.getRegion(newId, region.world()) != null) {
-            pushToast(player, "名称 " + newId + " 已存在");
-            pushData(player, "edit", oldId);
-            return;
-        }
-        try {
-            regionManager.renameRegion(region, newId);
-            pushToast(player, "区域 " + oldId + " 已重命名为 " + newId);
-            pushData(player, "edit", newId);
-        } catch (Exception e) {
-            pushToast(player, "重命名失败: " + e.getMessage());
-            pushData(player, "edit", oldId);
-        }
+    private static Region requireRegion(Region region) {
+        if (region == null) throw new IllegalArgumentException("区域不存在，请刷新列表。");
+        return region;
     }
 
-    /**
-     * 推送世界规则数据：所有已加载世界 + 每个世界的禁飞/禁活塞/禁交互状态。
-     */
-    public void pushWorldRulesData(Player player) {
-        if (packetBridge == null) return;
-        Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("page", "world_rules");
-        payload.put("packetId", PACKET_ID);
-        payload.put("action_token", tokenGuard.rotate(player.getUniqueId(), uiId));
-
-        List<Map<String, String>> worldList = new ArrayList<>();
-        for (org.bukkit.World w : Bukkit.getWorlds()) {
-            Map<String, String> info = new HashMap<>();
-            info.put("name", w.getName());
-            info.put("noFly", String.valueOf(worldRulesService != null && worldRulesService.isNoFlyWorld(w.getName())));
-            info.put("noPiston", String.valueOf(worldRulesService != null && worldRulesService.noPistonWorlds().contains(w.getName())));
-            // 禁交互物品列表（逗号分隔）
-            String interactions = "";
-            if (worldRulesService != null) {
-                var set = worldRulesService.disabledInteractions().get(w.getName());
-                if (set != null && !set.isEmpty()) {
-                    interactions = set.stream().map(org.bukkit.Material::name)
-                        .reduce((a, b) -> a + "," + b).orElse("");
-                }
-            }
-            info.put("interactions", interactions);
-            worldList.add(info);
-        }
-        payload.put("worlds", worldList);
-        payload.put("worldCount", String.valueOf(worldList.size()));
-        packetBridge.sendPacket(player, uiId, "init", payload);
+    private boolean active(Player player, View view) {
+        return view != null && views.get(player.getUniqueId()) == view && player.isOnline()
+            && player.hasPermission("axs.regions.admin") && packets.isUiOpen(player, uiId);
     }
 
-    /**
-     * 向玩家推送一条 toast 消息（复用 init 通道的 toast 字段，UI 端 var.toast 显示）。
-     */
-    private void pushToast(Player player, String message) {
-        // 简单实现：通过 chat 发送，UI 端无需特殊处理
-        player.sendMessage(org.bukkit.ChatColor.translateAlternateColorCodes('&',
-            "&8[&6Regions&8] &r" + message));
+    private void credentials(Player player) {
+        send(player, "credentials", Map.of("token", tokens.rotate(player.getUniqueId(), uiId)));
     }
 
-    private static boolean hasValue(List<String> data, int index) {
-        return data != null && data.size() > index && !safe(data.get(index)).isBlank();
+    private void notice(Player player, String message) {
+        send(player, "notice", Map.of("text", message));
     }
 
-    private static String safe(String value) {
-        return value == null ? "" : value.trim();
+    private void send(Player player, String channel, Map<String, Object> payload) {
+        packets.sendPacket(player, uiId, channel, payload);
+    }
+
+    private static String arg(List<String> data, int index) {
+        String value = optional(data, index);
+        if (value.isBlank()) throw new IllegalArgumentException("请填写必填项。");
+        return value;
+    }
+
+    private static String optional(List<String> data, int index) {
+        return data.size() > index && data.get(index) != null ? data.get(index).strip() : "";
+    }
+
+    private static int page(List<String> data, int index) {
+        String value = optional(data, index);
+        return value.isEmpty() ? 0 : Integer.parseInt(value);
+    }
+
+    static <T> Page<T> slice(List<T> items, int requested) {
+        int pages = Math.max(1, (items.size() + PAGE_SIZE - 1) / PAGE_SIZE);
+        int page = Math.max(0, Math.min(requested, pages - 1));
+        int start = page * PAGE_SIZE;
+        return new Page<>(items.subList(start, Math.min(start + PAGE_SIZE, items.size())), page, pages);
+    }
+
+    record Page<T>(List<T> items, int page, int pages) {}
+    private record Membership(String id, UUID uuid, boolean owner) {}
+    private static final class View {
+        boolean initialized;
+        boolean worlds;
+        boolean writing;
+        boolean resolvingMembers;
+        String selected = "";
+        String pane = "rules";
+        int listPage;
+        int contentPage;
+        long contentRequest;
+        RegionFlag.Category category = RegionFlag.Category.BLOCK;
     }
 }

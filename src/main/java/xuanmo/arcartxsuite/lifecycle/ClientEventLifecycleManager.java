@@ -1,6 +1,5 @@
 package xuanmo.arcartxsuite.lifecycle;
 
-import java.util.List;
 import java.util.function.Supplier;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
@@ -46,15 +45,7 @@ public final class ClientEventLifecycleManager implements Listener {
     public void onClientCustomPacket(ClientCustomPacketEvent event) {
         ModuleRegistry registry = registrySupplier.get();
         if (registry == null) return;
-        Player player = event.getPlayer();
-        String packetId = event.getId();
-        List<String> data = event.getData();
-        Runnable route = () -> registry.routeClientPacket(player, packetId, data);
-        if (Bukkit.isPrimaryThread()) {
-            route.run();
-        } else {
-            Bukkit.getScheduler().runTask(plugin, route);
-        }
+        registry.routeClientPacket(event.getPlayer(), event.getId(), event.getData());
     }
 
     @EventHandler(priority = EventPriority.MONITOR)

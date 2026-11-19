@@ -4,7 +4,7 @@
 #   ├ 右侧资料头部（圆形头像 / 昵称 / 等级+经验条 / 生命 / UID）
 #   ├ 分区标题行（菜单标题，多页时显示页码翻页器）
 #   └ 4 列深色方格 = 菜单按钮（统一渲染菜单配置的 icon，标签收进方格，底部显示操作说明）
-# 数据流: 服务端 sendPacket(init/update) -> packetHandler -> var.* -> 模板复制渲染
+# 数据流: 服务端 sendPacket(init/update) -> packetHandler -> var.* -> RepeatGrid 渲染
 # 客户端回包: Packet.send('AXS_MENU', 'click'/'footer', token, id) / page / esc_open
 ui:
   isHud: false
@@ -67,6 +67,7 @@ ui:
       self.actions['applyPacket']()
   action:
     load: |-
+      var.closeAt = none
       var.menuUi = self
       var.packetId = 'AXS_MENU'
       var.closing = false
@@ -75,12 +76,15 @@ ui:
       var.gridRows = 0
       var.pageCount = 1
       var.pageIndex = 0
+      var.hasPrev = false
+      var.hasNext = false
+      var.title = '菜单'
+      var.pageTitle = '菜单'
+      var.displayTitle = '菜单'
+      var.button_rowsRows = []
+      var.footer_rowsRows = []
       var.labels = {}
       var.footerLabels = {}
-      var.按钮引用 = {}
-      var.页脚引用 = {}
-      var.按钮轮次 = 0
-      var.页脚轮次 = 0
       var.air = '{"id":"minecraft:air","Count":1b}'
       var.actionBusySeconds = 0
       var.anim = Smooth(1, 0, 280)
@@ -93,6 +97,7 @@ ui:
       var.viewH = Screen.getHeight() / s
       var.offX = (var.viewW - 1920) / 2
     open: |-
+      var.closeAt = none
       var.closing = false
       var.actionBusy = false
       var.preview = none
@@ -101,9 +106,15 @@ ui:
       Sound.self('minecraft:item.book.page_turn', 0.9, 14)
       Packet.send(var.packetId, 'esc_open')
     tick: |-
+      if(var.closeAt != none && Time.currentTime() >= var.closeAt){
+        var.closeAt = none
+        Camera.setThirdPerson(false)
+        Screen.close()
+      }
       if(!var.closing && server.player_yaw != var.yaw){
         self.actions['applyCamera']()
       }
+      self.actions['refreshIcons']()
     seconds: |-
       if(var.actionBusy){
         var.actionBusySeconds = var.actionBusySeconds + 1
@@ -124,17 +135,14 @@ ui:
         var.preview = none
         var.anim = Smooth(0, 1, 220)
         Camera.clearState()
-        async {
-          Thread.sleep(240)
-          Camera.setThirdPerson(false)
-          Screen.close()
-        }
+        var.closeAt = Time.currentTime() + 240
       }
     keyPress: |-
       if(self.currentKeyPress() == 'ESCAPE'){
         self.actions['closeMenu']()
       }
     close: |-
+      var.closeAt = none
       var.closing = true
       var.preview = none
       Camera.setThirdPerson(false)
@@ -180,6 +188,9 @@ ui:
       var.maxFooterCount = var.incoming['maxFooterCount']
       var.gridRows = math.ceil(var.buttonCount / 4)
       var.displayTitle = var.pageCount > 1 ? var.pageTitle : var.title
+      if(var.displayTitle == none){
+        var.displayTitle = '菜单'
+      }
       while(var.displayTitle.length() >= 2 && (var.displayTitle.charAt(0) == '&' || var.displayTitle.charAt(0) == '§')){
         var.displayTitle = var.displayTitle.substring(2)
       }
@@ -187,36 +198,24 @@ ui:
         val.grid_slider.setDragYRatio(0)
         val.footer_slider.setDragYRatio(0)
       }
-      // 动态行模板用 get(0)，copy/remove/seticon 全部走引用字典
-      目标按钮数 = var.buttonCount.round()
-      if(val.button_rows.childrenCount() - 1 != 目标按钮数 - 1){
-        for(key in var.按钮引用.keys()){
-          var.按钮引用[key].remove()
+      // RepeatGrid 条目保存整数行索引，用于读取当前页面的数据字典。
+      if(var.button_rowsRows.size() != var.buttonCount){
+        网格数据 = []
+        if(var.buttonCount > 0){
+          for(网格序号 in range(0, var.buttonCount - 1)){
+            网格数据.add(网格序号.round())
+          }
         }
-        var.按钮引用 = {}
-        var.按钮轮次 = (var.按钮轮次 + 1).round()
-        模板 = val.button_rows.get(0)
-        模板.entryKey = 0.round()
-        for(i in range(1, 目标按钮数 - 1)){
-          mb = 模板.copy('菜单按钮_' + var.按钮轮次 + '_' + i.round())
-          mb.entryKey = i.round()
-          var.按钮引用[i.round()] = mb
-        }
+        var.button_rowsRows = 网格数据
       }
-      目标页脚数 = var.footerCount.round()
-      if(val.footer_rows.childrenCount() - 1 != 目标页脚数 - 1){
-        for(key in var.页脚引用.keys()){
-          var.页脚引用[key].remove()
+      if(var.footer_rowsRows.size() != var.footerCount){
+        网格数据 = []
+        if(var.footerCount > 0){
+          for(网格序号 in range(0, var.footerCount - 1)){
+            网格数据.add(网格序号.round())
+          }
         }
-        var.页脚引用 = {}
-        var.页脚轮次 = (var.页脚轮次 + 1).round()
-        模板 = val.footer_rows.get(0)
-        模板.entryKey = 0.round()
-        for(i in range(1, 目标页脚数 - 1)){
-          fb = 模板.copy('页脚按钮_' + var.页脚轮次 + '_' + i.round())
-          fb.entryKey = i.round()
-          var.页脚引用[i.round()] = fb
-        }
+        var.footer_rowsRows = 网格数据
       }
       // 标签与图标分离字典，一次遍历完成
       var.labels = {}
@@ -241,22 +240,36 @@ ui:
         }
         var.footerLabels[key] = label
       }
-      if(目标按钮数 > 0){
-        mb = val.button_rows.get(0)
-        mb['图标'].seticon()
-        for(i in range(1, 目标按钮数 - 1)){
-          mb = var.按钮引用[i.round()]
-          mb['图标'].seticon()
+      var.button_rowsIconsDirty = true
+      var.footer_rowsIconsDirty = true
+    refreshIcons: |-
+      if(var.button_rowsIconsDirty == true && val.button_rows != none && val.button_rows.childrenCount() == var.buttonCount){
+        var.button_rowsIconsDirty = false
+        if(var.buttonCount > 0){
+          for(网格序号 in range(0, var.buttonCount - 1)){
+            网格项 = val.button_rows.get(网格序号.round())
+            if(网格项 != none){
+              if(网格项['图标'] != none){
+                网格项['图标'].seticon()
+              }
+            }
+          }
         }
       }
-      if(目标页脚数 > 0){
-        fb = val.footer_rows.get(0)
-        fb['图标'].seticon()
-        for(i in range(1, 目标页脚数 - 1)){
-          fb = var.页脚引用[i.round()]
-          fb['图标'].seticon()
+      if(var.footer_rowsIconsDirty == true && val.footer_rows != none && val.footer_rows.childrenCount() == var.footerCount){
+        var.footer_rowsIconsDirty = false
+        if(var.footerCount > 0){
+          for(网格序号 in range(0, var.footerCount - 1)){
+            网格项 = val.footer_rows.get(网格序号.round())
+            if(网格项 != none){
+              if(网格项['图标'] != none){
+                网格项['图标'].seticon()
+              }
+            }
+          }
         }
       }
+
 controls:
   自适应全局布局:
     type: Adaptive
@@ -557,7 +570,7 @@ controls:
                   width: 254
                   height: 1
                   normal: ~190,180,159,255
-                  visible: "var.displayTitle.length() <= 6"
+                  visible: "var.displayTitle != none && var.displayTitle.length() <= 6"
                   through: true
               分区饰点:
                 type: Texture
@@ -568,7 +581,7 @@ controls:
                   height: 9
                   rotate: 45
                   normal: ~171,154,119,255
-                  visible: "var.displayTitle.length() <= 6"
+                  visible: "var.displayTitle != none && var.displayTitle.length() <= 6"
                   through: true
               分页器:
                 type: Canvas
@@ -750,17 +763,20 @@ controls:
                         val.footer_slider.setDragYRatio(ratio)
                     children:
                       页脚列表:
-                        type: VStack
+                        type: RepeatGrid
                         val: footer_rows
                         attribute:
+                          items: "var.footer_rowsRows"
+                          flow: ~row
+                          column: 1
+                          spaceBetweenY: 16
                           width: 72
-                          spaceBetween: 16
-                          maxSize: "var.footerCount + 1"
+                          maxSize: 2147483647
                         children:
                           页脚按钮:
                             type: Canvas
                             attribute:
-                              entryKey: 0.round()
+                              entryKey: self.item
                               entry: var.footerRows[self.entryKey]
                               visible: self.entry != none
                               width: 72
@@ -820,7 +836,7 @@ controls:
                                   itemScale: 0.68
                                   normal: ~0,0,0,0
                                   through: true
-                                  seticon: "self.setItemIcon(var.footerIconJsons[self.parent.entryKey])"
+                                  seticon: "self.setItemIcon(var.footerIconJsons[self.parent.entryKey] != none ? var.footerIconJsons[self.parent.entryKey] : var.air)"
                               禁用遮色:
                                 type: Texture
                                 attribute:
@@ -889,9 +905,12 @@ controls:
                     var.preview = none
                 children:
                   按钮网格:
-                    type: HGrid
+                    type: RepeatGrid
                     val: button_rows
                     attribute:
+                      items: "var.button_rowsRows"
+                      flow: ~row
+                      maxSize: 2147483647
                       x: 4
                       y: 8
                       column: 4
@@ -901,7 +920,7 @@ controls:
                       菜单按钮:
                         type: Canvas
                         attribute:
-                          entryKey: 0.round()
+                          entryKey: self.item
                           entry: var.buttonRows[self.entryKey]
                           visible: self.entry != none
                           width: 160
@@ -970,7 +989,7 @@ controls:
                               itemScale: 1.18
                               normal: ~0,0,0,0
                               through: true
-                              seticon: "self.setItemIcon(var.iconJsons[self.parent.entryKey])"
+                              seticon: "self.setItemIcon(var.iconJsons[self.parent.entryKey] != none ? var.iconJsons[self.parent.entryKey] : var.air)"
                           标签:
                             type: Text
                             attribute:

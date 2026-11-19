@@ -19,12 +19,16 @@ ui:
       var.whLayoutEnabled = false
       var.rows = {}
       var.keys = []
+      var.pageRows = []
+      var.assetRows = []
+      for(i in range(0, 7)){ var.assetRows.add(i.round()) }
       var.selection = ''
       var.search = ''
       var.page = 0
       var.pageText = '1 / 1'
       var.hasNext = false
       var.dirtyRows = false
+      var.offerIconsDirty = false
       var.detailDirty = false
       var.busy = false
       var.token = ''
@@ -51,7 +55,7 @@ ui:
       Packet.send('AXS:market_exchange', 'refresh')
     close: Packet.send('AXS:market_exchange', 'close')
     tick: |-
-      if(var.dirtyRows && var.offerIcons != none){
+      if(var.dirtyRows){
         var.dirtyRows = false
         keys = []
         for(key in var.rows.keys()){
@@ -65,22 +69,44 @@ ui:
         if(var.page < 0){ var.page = 0 }
         var.pageText = (var.page + 1).toInt().round() + ' / ' + pages.round()
         var.hasNext = var.page + 1 < pages
+        pageRows = []
         for(i in range(0, 11)){
           index = (var.page * 12 + i).round()
-          row = index.toInt() < keys.size() ? var.rows[keys.get(index)] : none
-          var.offerIcons[i.round()].setItemIcon(row == none ? '' : row['icon'])
+          if(index < keys.size()){ pageRows.add(keys.get(index)) }
         }
+        var.pageRows = pageRows
+        var.offerIconsDirty = true
       }
-      if(var.detailDirty && var.costIcons != none && var.rewardIcons != none){
-        var.detailDirty = false
+      if(var.offerIconsDirty && val.offerGrid != none && val.offerGrid.childrenCount() == var.pageRows.size()){
+        ready = true
+        if(var.pageRows.size() > 0){
+          for(i in range(0, var.pageRows.size() - 1)){
+            row = var.rows[var.pageRows.get(i.round())]
+            slot = val.offerGrid.get(i.round())['图标']
+            if(slot == none){ ready = false }
+            elif(row != none){ slot.setItemIcon(row['icon']) }
+          }
+        }
+        var.offerIconsDirty = !ready
+      }
+      if(var.detailDirty && val.costGrid != none && val.rewardGrid != none
+          && val.costGrid.childrenCount() == 8 && val.rewardGrid.childrenCount() == 8){
+        ready = true
         row = var.rows[var.selection]
         for(i in range(0, 7)){
           idx = i.round()
           cost = row == none ? none : row['costRows'][idx]
           reward = row == none ? none : row['rewardRows'][idx]
-          var.costIcons[idx].setItemIcon(cost == none ? '' : cost['icon'])
-          var.rewardIcons[idx].setItemIcon(reward == none ? '' : reward['icon'])
+          costSlot = val.costGrid.get(idx)['图标']
+          rewardSlot = val.rewardGrid.get(idx)['图标']
+          if(costSlot == none || rewardSlot == none){
+            ready = false
+          }else{
+            if(cost != none){ costSlot.setItemIcon(cost['icon']) }
+            if(reward != none){ rewardSlot.setItemIcon(reward['icon']) }
+          }
         }
+        var.detailDirty = !ready
       }
       if(var.noticeActive){
         var.noticeOpacity = var.noticeFade.get()
@@ -460,8 +486,12 @@ controls:
                         var.dirtyRows = true
                     val: npcSearch
               目录:
-                type: HGrid
+                type: RepeatGrid
+                val: offerGrid
                 attribute:
+                  items: var.pageRows
+                  maxSize: 12
+                  flow: ~row
                   x: 24
                   y: 158
                   width: 802
@@ -469,15 +499,6 @@ controls:
                   column: 3
                   spaceBetweenX: 14
                   spaceBetweenY: 14
-                action:
-                  create: |-
-                    var.offerIcons = {}
-                    for(i in range(0, 11)){
-                      cell = self['条目']
-                      if(i > 0){ cell = cell.copy('兑换' + i.round()) }
-                      cell.index = i.round()
-                      var.offerIcons[i.round()] = cell['图标']
-                    }
                 children:
                   条目:
                     type: Canvas
@@ -486,9 +507,7 @@ controls:
                       y: 0
                       width: 258
                       height: 116
-                      index: 0.round()
-                      entryKey: '(var.page * 12 + self.index.toInt()).toInt() < var.keys.size() ? var.keys.get((var.page * 12 + self.index.toInt()).round())
-                        : '''''
+                      entryKey: self.item
                       entry: var.rows[self.entryKey]
                       visible: self.entry != none
                     children:
@@ -777,8 +796,12 @@ controls:
                   normal: ~83,99,111,255
                   through: true
               cost列表:
-                type: HGrid
+                type: RepeatGrid
+                val: costGrid
                 attribute:
+                  items: var.assetRows
+                  maxSize: 8
+                  flow: ~row
                   x: 24
                   y: 130
                   width: 542
@@ -786,15 +809,6 @@ controls:
                   column: 2
                   spaceBetweenX: 14
                   spaceBetweenY: 10
-                action:
-                  create: |-
-                    var.costIcons = {}
-                    for(i in range(0, 7)){
-                      cell = self['资产']
-                      if(i > 0){ cell = cell.copy('资产' + i.round()) }
-                      cell.index = i.round()
-                      var.costIcons[i.round()] = cell['图标']
-                    }
                 children:
                   资产:
                     type: Canvas
@@ -803,8 +817,8 @@ controls:
                       y: 0
                       width: 264
                       height: 46
-                      index: 0.round()
-                      entry: 'var.rows[var.selection] == none ? none : var.rows[var.selection][''costRows''][self.index]'
+                      entryKey: self.item
+                      entry: 'var.rows[var.selection] == none ? none : var.rows[var.selection][''costRows''][self.entryKey]'
                     children:
                       底:
                         type: Texture
@@ -825,6 +839,8 @@ controls:
                           width: 36
                           height: 36
                           slotType: ~Icon
+                          id: "(12 + self.parent.entryKey).round()"
+                          visible: self.parent.entry != none
                           normal: ~0,0,0,0
                           through: true
                           itemScale: 0.8
@@ -847,8 +863,12 @@ controls:
                           through: true
                           point: ~top_right
               reward列表:
-                type: HGrid
+                type: RepeatGrid
+                val: rewardGrid
                 attribute:
+                  items: var.assetRows
+                  maxSize: 8
+                  flow: ~row
                   x: 24
                   y: 418
                   width: 542
@@ -856,15 +876,6 @@ controls:
                   column: 2
                   spaceBetweenX: 14
                   spaceBetweenY: 10
-                action:
-                  create: |-
-                    var.rewardIcons = {}
-                    for(i in range(0, 7)){
-                      cell = self['资产']
-                      if(i > 0){ cell = cell.copy('资产' + i.round()) }
-                      cell.index = i.round()
-                      var.rewardIcons[i.round()] = cell['图标']
-                    }
                 children:
                   资产:
                     type: Canvas
@@ -873,8 +884,8 @@ controls:
                       y: 0
                       width: 264
                       height: 46
-                      index: 0.round()
-                      entry: 'var.rows[var.selection] == none ? none : var.rows[var.selection][''rewardRows''][self.index]'
+                      entryKey: self.item
+                      entry: 'var.rows[var.selection] == none ? none : var.rows[var.selection][''rewardRows''][self.entryKey]'
                     children:
                       底:
                         type: Texture
@@ -895,6 +906,8 @@ controls:
                           width: 36
                           height: 36
                           slotType: ~Icon
+                          id: "(20 + self.parent.entryKey).round()"
+                          visible: self.parent.entry != none
                           normal: ~0,0,0,0
                           through: true
                           itemScale: 0.8

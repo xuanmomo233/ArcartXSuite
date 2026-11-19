@@ -65,6 +65,8 @@ groups: []
 #   - group-id: 123456789
     # 消息同步模式: both / game-to-qq / qq-to-game / none
 #     sync-mode: "both"
+    # Chat 启用时使用的公开频道 ID
+#     chat-channel: "normal"
     # 游戏消息转发到 QQ 群的格式
 #     game-to-qq: "[MC] {player}: {message}"
     # QQ 群消息转发到游戏内的格式

@@ -59,6 +59,12 @@ public final class QQBotService implements Listener {
     private final Map<Long, Long> groupLastAutoReply = new ConcurrentHashMap<>();
     private volatile QQBotMessageGateway messageGateway;
     private volatile boolean closed = true;
+    private final xuanmo.arcartxsuite.api.scheduler.ModuleExecutor io = new xuanmo.arcartxsuite.api.scheduler.ModuleExecutor(
+        0, 1, 5, java.util.concurrent.TimeUnit.SECONDS, new java.util.concurrent.ArrayBlockingQueue<>(64), task -> {
+            var thread = new Thread(task, "QQBot-Data");
+            thread.setDaemon(true);
+            return thread;
+        });
 
     public QQBotService(
         JavaPlugin plugin,
@@ -111,6 +117,7 @@ public final class QQBotService implements Listener {
     public void shutdown() {
         closed = true;
         connected = false;
+        io.shutdown();
         if (commandRouter != null) commandRouter.close();
         if (messageGateway != null) messageGateway.close();
         eventListeners.clear();
@@ -121,6 +128,31 @@ public final class QQBotService implements Listener {
             cleanupTask = null;
         }
         processedMessageIds.clear();
+    }
+
+    public <T> java.util.concurrent.CompletableFuture<T> submitIo(java.util.function.Supplier<T> task) {
+        var result = new java.util.concurrent.CompletableFuture<T>();
+        if (closed) {
+            result.completeExceptionally(new java.util.concurrent.RejectedExecutionException("QQBot stopped"));
+            return result;
+        }
+        try {
+            io.execute(() -> {
+                try {
+                    if (closed) throw new java.util.concurrent.RejectedExecutionException("QQBot stopped");
+                    result.complete(task.get());
+                } catch (Throwable failure) { result.completeExceptionally(failure); }
+            });
+        } catch (java.util.concurrent.RejectedExecutionException failure) { result.completeExceptionally(failure); }
+        return result;
+    }
+
+    public java.util.concurrent.CompletionStage<Void> stopped() {
+        return java.util.concurrent.CompletableFuture.allOf(io.stopped().toCompletableFuture(),
+            commandRouter == null ? java.util.concurrent.CompletableFuture.completedFuture(null)
+                : commandRouter.stopped().toCompletableFuture(),
+            messageGateway == null ? java.util.concurrent.CompletableFuture.completedFuture(null)
+                : messageGateway.stopped().toCompletableFuture());
     }
 
     public void onBotConnected() {
@@ -216,6 +248,7 @@ public final class QQBotService implements Listener {
         }
 
         if (!event.isGroupMessage()) return;
+        if (event.isOwnMessage()) return;
 
         // 消息去重：OneBot 重连重放/多端上报可能重复投递同一 message_id，
         // 重复处理会导致签到/积分/红包等指令被执行两次（set 每 5 分钟清空，覆盖重放窗口）
@@ -250,7 +283,9 @@ public final class QQBotService implements Listener {
         maybeAutoReply(groupId, rawMessage);
 
         // @游戏名 → 游戏内提示
-        if (config.atToGameEnabled()) {
+        boolean chatLoaded = xuanmo.arcartxsuite.api.AxsCapabilities.get(
+            xuanmo.arcartxsuite.api.capability.ChatMutable.class) != null;
+        if (config.atToGameEnabled() && !chatLoaded) {
             handleAtToGame(event);
         }
 
@@ -272,23 +307,38 @@ public final class QQBotService implements Listener {
             catch (Exception error) { logger.warning("群消息监听器异常: " + error.getClass().getSimpleName()); }
         }
         if (groupConfig.syncQqToGame()) {
-            String formatted = ChatColor.translateAlternateColorCodes('&', groupConfig.qqToGameFormat())
+            String format = ChatColor.translateAlternateColorCodes('&', groupConfig.qqToGameFormat())
                 .replace("{nick}", nick)
                 .replace("{qq}", String.valueOf(event.userId()))
-                .replace("{message}", cleanMessage)
                 .replace("{group}", String.valueOf(groupId));
+            QQBotBinding binding = bindService.findByQq(event.userId());
+            java.util.UUID linked = binding == null ? null : binding.playerUuid();
+            java.util.Set<java.util.UUID> mentions = new java.util.HashSet<>();
+            if (chatLoaded && config.atToGameEnabled()) {
+                for (long target : event.atQQs()) {
+                    QQBotBinding mentioned = bindService.findByQq(target);
+                    if (mentioned != null) mentions.add(mentioned.playerUuid());
+                }
+            }
 
             Bukkit.getScheduler().runTask(plugin, () -> {
                 if (closed) return;
-                for (Player online : Bukkit.getOnlinePlayers())
+                var chat = xuanmo.arcartxsuite.api.AxsCapabilities.get(
+                    xuanmo.arcartxsuite.api.capability.ChatExternalRelay.class);
+                if (chat != null) {
+                    chat.receive(groupConfig.chatChannel(), linked, format, cleanMessage, mentions).whenComplete((accepted, failure) -> {
+                        if (!closed && failure != null) logger.warning("转发群消息至 Chat 失败: " + failure.getMessage());
+                    });
+                    return;
+                }
+                if (xuanmo.arcartxsuite.api.AxsCapabilities.get(
+                    xuanmo.arcartxsuite.api.capability.ChatMutable.class) != null) return;
+                String formatted = format.replace("{message}", cleanMessage);
+                for (Player online : Bukkit.getOnlinePlayers()) {
                     if (xuanmo.arcartxsuite.api.auth.AuthAccess.admitted(online.getUniqueId())) online.sendMessage(formatted);
+                }
+                if (groupMessageListener != null) groupMessageListener.onMessage(displayNick, cleanMessage, groupId);
             });
-
-            // 通知 UI 服务
-            if (groupMessageListener != null) {
-                String finalNick = nick;
-                groupMessageListener.onMessage(finalNick, cleanMessage, groupId);
-            }
 
         }
     }
@@ -304,7 +354,7 @@ public final class QQBotService implements Listener {
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void onPublicChat(xuanmo.arcartxsuite.api.event.chat.PublicChatMessageEvent event) {
-        if (!closed && connected) sendPlayerMessage(event.player(), event.message());
+        if (!closed && connected) messageGateway.sendPlayer(event.player(), event.message(), null, event.channelId());
     }
 
     @EventHandler

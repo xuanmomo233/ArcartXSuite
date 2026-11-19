@@ -27,6 +27,7 @@ for folder in (
     "auth-minecraft/src/test/java",
     "proxy/common/src/test/java/xuanmo/arcartxsuite/proxy/common/auth",
     "proxy/bungee/src/test/java/xuanmo/arcartxsuite/proxy/bungee",
+    "modules/eventpacket/src/main/java",
 ):
     paths.extend((ROOT / folder).rglob("*.java"))
 for relative in (
@@ -38,13 +39,6 @@ for relative in (
 for relative in (
     "modules/chat/src/main/java/xuanmo/arcartxsuite/chat/service/ChatService.java",
     "modules/chat/src/main/java/xuanmo/arcartxsuite/chat/service/RedPacketService.java",
-    "modules/eventpacket/src/main/java/xuanmo/arcartxsuite/eventpacket/listener/PlayerEventPacketListener.java",
-    "modules/eventpacket/src/main/java/xuanmo/arcartxsuite/eventpacket/service/EventPacketDispatchService.java",
-    "modules/eventpacket/src/main/java/xuanmo/arcartxsuite/eventpacket/service/FirstAdmissionInbox.java",
-    "modules/eventpacket/src/main/java/xuanmo/arcartxsuite/eventpacket/storage/JdbcEventPacketRepository.java",
-    "modules/eventpacket/src/main/java/xuanmo/arcartxsuite/eventpacket/storage/EventPacketRepository.java",
-    "modules/eventpacket/src/main/java/xuanmo/arcartxsuite/eventpacket/EventPacketModule.java",
-    "modules/eventpacket/src/main/java/xuanmo/arcartxsuite/eventpacket/command/EventPacketAdminCommand.java",
     "modules/battlepass/src/main/java/xuanmo/arcartxsuite/battlepass/service/BattlePassTaskEngine.java",
     "modules/battlepass/src/main/java/xuanmo/arcartxsuite/battlepass/service/BattlePassService.java",
     "modules/battlepass/src/main/java/xuanmo/arcartxsuite/battlepass/storage/BattlePassRepository.java",
@@ -57,7 +51,7 @@ for relative in (
     "modules/qqbot/src/main/java/xuanmo/arcartxsuite/qqbot/storage/JdbcQQBotRepository.java",
     "modules/title/src/main/java/xuanmo/arcartxsuite/title/listener/PlayerTitleListener.java",
     "modules/title/src/main/java/xuanmo/arcartxsuite/title/service/TitleService.java",
-    "modules/tab/src/main/java/xuanmo/arcartxsuite/tab/sync/TabSyncService.java",
+    "modules/tab/src/main/java/xuanmo/arcartxsuite/tab/TabModule.java",
     "src/main/java/xuanmo/arcartxsuite/chat/ChatSignBypassService.java",
     "src/main/java/xuanmo/arcartxsuite/bridge/DefaultPendingRewardService.java",
     "src/main/java/xuanmo/arcartxsuite/module/GlobalBridgeFactory.java",
@@ -117,7 +111,7 @@ yaml_paths = (
     "proxy/common/src/main/resources/proxy-config.yml",
     "modules/battlepass/src/main/resources/tasks/daily.yml",
     "modules/battlepass/src/main/resources/tasks/season.yml",
-    "modules/eventpacket/src/main/resources/rules/examples.yml",
+    "modules/eventpacket/src/main/resources/ArcartXEventPacket.yml",
 )
 for relative in yaml_paths:
     try:
@@ -166,14 +160,18 @@ for module in ("auth-engine", "auth-protocol", "auth-center"):
         if re.search(r"^import\s+(?:org\.bukkit\.|xuanmo\.arcartxsuite\.api\.)", content, re.M):
             errors.append(f"{path.relative_to(ROOT)}: host-specific auth dependency")
 
+legacy_topic = "axs.loginview.login_success"
 for root in (ROOT / "modules", ROOT / "axs-api/src/main/java", ROOT / "src/main/java"):
     for path in root.rglob("*"):
         if path.suffix not in (".java", ".yml") or "build" in path.parts:
             continue
         content = path.read_text(encoding="utf-8-sig")
-        for removed in ("LoginViewQueryable", "LoginViewService", "LoginViewModuleConfiguration", "QQBindCapable", "axsloginview", "axs.loginview.login_success"):
+        relative = path.relative_to(ROOT)
+        if path.suffix == ".yml":
+            content = "\n".join(line for line in content.splitlines() if not line.lstrip().startswith("#"))
+        for removed in ("LoginViewQueryable", "LoginViewService", "LoginViewModuleConfiguration", "QQBindCapable", "axsloginview", legacy_topic):
             if removed in content:
-                errors.append(f"{path.relative_to(ROOT)}: removed contract reference {removed}")
+                errors.append(f"{relative}: removed contract reference {removed}")
 
 own_types = set()
 for folder in ("axs-api/src", "src", "modules", "proxy", "auth-minecraft/src", "auth-engine/src", "auth-protocol/src", "auth-center/src"):

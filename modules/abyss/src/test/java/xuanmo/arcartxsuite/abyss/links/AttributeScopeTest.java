@@ -12,7 +12,7 @@ import static org.mockito.Mockito.*;
 
 class AttributeScopeTest {
     AbyssLinks links(AttributeBridgeRegistry registry) {
-        return new AbyssLinks(new AbyssLinks.CapabilityResolver(){public <T>T get(Class<T> type){return null;}},registry,Logger.getAnonymousLogger());
+        return new AbyssLinks(new AbyssLinks.CapabilityResolver(){public <T>T get(Class<T> type){return null;}},registry,Logger.getAnonymousLogger(),null);
     }
     @Test void distinctEffectsCoexistAndAreAllRemovedThroughHostApi() {
         var registry=mock(AttributeBridgeRegistry.class);var symphony=mock(SymphonyBridge.class);

@@ -8,6 +8,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -29,6 +30,9 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
     private String tOperations;
     private String tOwners;
     private String tStockPolicies;
+    private String tShopReservations;
+    private String tAuctionPublications;
+    private String tAuctionRevision;
     private String tShopProfiles;
     private String tShopFollows;
     private String tRecyclePrefs;
@@ -122,6 +126,9 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
         tOperations = prefix + "operations";
         tOwners = prefix + "operation_owners";
         tStockPolicies = prefix + "stock_policies";
+        tShopReservations = prefix + "shop_order_reservations";
+        tAuctionPublications = prefix + "auction_publications";
+        tAuctionRevision = prefix + "auction_revision";
         tShopProfiles=prefix+"player_shop_profiles";
         tShopFollows=prefix+"player_shop_follows";
         createTables(conn);
@@ -183,6 +190,8 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
                 total += execUpdate(conn, "DELETE FROM " + tFavorites + " WHERE player=?", uuid);
                 // 商店限购记录
                 total += execUpdate(conn, "DELETE FROM " + tShopLimits + " WHERE player=?", uuid);
+                total += execUpdate(conn, "DELETE FROM " + tShopReservations + " WHERE player=?", uuid);
+                total += execUpdate(conn, "DELETE FROM " + tAuctionPublications + " WHERE seller=? OR buyer=?", uuid, uuid);
                 // 回收统计
                 total += execUpdate(conn, "DELETE FROM " + tRecycleStats + " WHERE player=?", uuid);
                 // 待发放物品/货币
@@ -227,6 +236,9 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
             prefix + "operations",
             prefix + "operation_owners",
             prefix + "stock_policies",
+            prefix + "shop_order_reservations",
+            prefix + "auction_publications",
+            prefix + "auction_revision",
             prefix + "listings",
             prefix + "bids",
             prefix + "history",
@@ -738,11 +750,20 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
 
     @Override
     public boolean insertListing(AuctionListing listing) {
+        try (Connection conn = getConnection()) {
+            insertListing(conn, listing);
+            return true;
+        } catch (SQLException e) {
+            logger.log(Level.SEVERE, "插入拍卖物品失败", e);
+            return false;
+        }
+    }
+
+    private void insertListing(Connection conn, AuctionListing listing) throws SQLException {
         String sql = "INSERT INTO " + tListings
             + " (seller, seller_name, item_data, item_display_name, pinyin, initials, message, category, buy_now_price, starting_bid, current_bid, highest_bidder, currency, type, status, created_at, expires_at)"
             + " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
-        try (Connection conn = getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+        try (PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             ps.setString(1, listing.getSeller().toString());
             ps.setString(2, listing.getSellerName());
             ps.setString(3, listing.getItemData());
@@ -762,12 +783,9 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
             ps.setLong(17, listing.getExpiresAt());
             ps.executeUpdate();
             try (ResultSet rs = ps.getGeneratedKeys()) {
-                if (rs.next()) listing.setId(rs.getLong(1));
+                if (!rs.next()) throw new SQLException("拍卖挂单编号未返回");
+                listing.setId(rs.getLong(1));
             }
-            return listing.getId() > 0;
-        } catch (SQLException e) {
-            logger.log(Level.SEVERE, "插入拍卖物品失败", e);
-            return false;
         }
     }
 
@@ -1033,9 +1051,10 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
     }
 
     @Override
-    public List<AuctionListing> getExpiredListings() {
-        String sql = "SELECT * FROM " + tListings + " WHERE status='ACTIVE' AND expires_at <= ?";
-        return queryListings(sql, System.currentTimeMillis());
+    public List<AuctionListing> getExpiredListings(int limit) {
+        String sql = "SELECT * FROM " + tListings
+            + " WHERE status='ACTIVE' AND expires_at <= ? ORDER BY expires_at,id LIMIT ?";
+        return queryListings(sql, System.currentTimeMillis(), limit);
     }
 
     // ─── 竞价 ───────────────────────────────────────────────
@@ -1091,27 +1110,20 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
 
     @Override
     public void insertHistory(AuctionHistory history) {
-        String sql = "INSERT INTO " + tHistory
-            + " (listing_id, seller, buyer, item_data, item_display_name, price, currency, tax_amount, transaction_type, timestamp, trade_id, material)"
-            + " VALUES (?,?,?,?,?,?,?,?,?,?,?,?)";
-        try (Connection conn = getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setLong(1, history.listingId());
-            ps.setString(2, history.seller().toString());
-            ps.setString(3, history.buyer() == null ? null : history.buyer().toString());
-            ps.setString(4, history.itemData());
-            ps.setString(5, history.itemDisplayName());
-            ps.setDouble(6, history.price());
-            ps.setString(7, history.currency());
-            ps.setDouble(8, history.taxAmount());
-            ps.setString(9, history.transactionType());
-            ps.setLong(10, history.timestamp());
-            ps.setString(11,java.util.Objects.toString(xuanmo.arcartxsuite.market.MarketLedger.currentTradeId(),""));
-            ps.setString(12,xuanmo.arcartxsuite.market.MarketLedger.currentItemMaterial());
-            ps.executeUpdate();
+        try (Connection conn = getConnection()) {
+            insertHistory(conn, history, java.util.Objects.toString(xuanmo.arcartxsuite.market.MarketLedger.currentTradeId(), ""),
+                xuanmo.arcartxsuite.market.MarketLedger.currentItemMaterial());
         } catch (SQLException e) {
             logger.log(Level.SEVERE, "插入交易历史失败", e);
         }
+    }
+
+    private void insertHistory(Connection conn, AuctionHistory history, String trade, String material) throws SQLException {
+        execUpdate(conn, "INSERT INTO " + tHistory
+            + " (listing_id, seller, buyer, item_data, item_display_name, price, currency, tax_amount, transaction_type, timestamp, trade_id, material)"
+            + " VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", history.listingId(), history.seller().toString(),
+            history.buyer() == null ? null : history.buyer().toString(), history.itemData(), history.itemDisplayName(),
+            history.price(), history.currency(), history.taxAmount(), history.transactionType(), history.timestamp(), trade, material);
     }
 
     @Override
@@ -1162,18 +1174,66 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
             return 0;
         }
     }
-    @Override
-    public void addFavorite(UUID player, long listingId) {
-        String sql = (!isMysql())
-            ? "INSERT OR IGNORE INTO " + tFavorites + " (player, listing_id) VALUES (?,?)"
-            : "INSERT IGNORE INTO " + tFavorites + " (player, listing_id) VALUES (?,?)";
-        durableUpdate(sql, player.toString(), listingId);
-    }
+    private static final int AUCTION_FAVORITE_LIMIT = 100;
 
     @Override
-    public void removeFavorite(UUID player, long listingId) {
-        durableUpdate("DELETE FROM " + tFavorites + " WHERE player=? AND listing_id=?",
-            player.toString(), listingId);
+    public FavoriteChange toggleAuctionFavorite(UUID player, long listingId) {
+        for (int attempt = 0; ; attempt++) {
+            try {
+                return writeAuctionFavorite(player, listingId);
+            } catch (SQLException failure) {
+                int code = failure.getErrorCode();
+                boolean contention = isMysql() ? code == 1213 : (code & 0xff) == 5;
+                if (attempt >= 2 || !contention) throw new IllegalStateException("无法保存拍卖关注状态", failure);
+                try {
+                    Thread.sleep(10L * (attempt + 1));
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException("拍卖关注操作已中断", interrupted);
+                }
+            }
+        }
+    }
+
+    private FavoriteChange writeAuctionFavorite(UUID player, long listingId) throws SQLException {
+        try (Connection conn = getConnection()) {
+            int previousIsolation = conn.getTransactionIsolation();
+            boolean lockRows = isMysql();
+            if (lockRows) conn.setTransactionIsolation(Connection.TRANSACTION_REPEATABLE_READ);
+            conn.setAutoCommit(false);
+            try {
+                String id = player.toString();
+                // SQLite takes its write lock here. On MySQL, the range read below also locks gaps for this player's keys.
+                if (execUpdate(conn, "DELETE FROM " + tFavorites + " WHERE player=? AND listing_id=?", id, listingId) != 0) {
+                    conn.commit();
+                    return FavoriteChange.REMOVED;
+                }
+                try (PreparedStatement lookup = conn.prepareStatement("SELECT 1 FROM " + tListings + " WHERE id=?")) {
+                    lookup.setLong(1, listingId);
+                    try (ResultSet rows = lookup.executeQuery()) {
+                        if (!rows.next()) { conn.rollback(); return FavoriteChange.MISSING; }
+                    }
+                }
+                try (PreparedStatement favorites = conn.prepareStatement("SELECT listing_id FROM " + tFavorites
+                        + " WHERE player=? ORDER BY listing_id LIMIT " + AUCTION_FAVORITE_LIMIT + (lockRows ? " FOR UPDATE" : ""))) {
+                    favorites.setString(1, id);
+                    try (ResultSet rows = favorites.executeQuery()) {
+                        int count = 0;
+                        while (rows.next()) count++;
+                        if (count == AUCTION_FAVORITE_LIMIT) { conn.rollback(); return FavoriteChange.LIMIT_REACHED; }
+                    }
+                }
+                execUpdate(conn, "INSERT INTO " + tFavorites + " (player,listing_id) VALUES (?,?)", id, listingId);
+                conn.commit();
+                return FavoriteChange.ADDED;
+            } catch (SQLException | RuntimeException failure) {
+                conn.rollback();
+                throw failure;
+            } finally {
+                conn.setAutoCommit(true);
+                if (lockRows) conn.setTransactionIsolation(previousIsolation);
+            }
+        }
     }
 
     @Override
@@ -1190,22 +1250,6 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
             logger.log(Level.SEVERE, "查询收藏失败", e);
         }
         return ids;
-    }
-
-    @Override
-    public boolean isFavorite(UUID player, long listingId) {
-        String sql = "SELECT 1 FROM " + tFavorites + " WHERE player=? AND listing_id=?";
-        try (Connection conn = getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, player.toString());
-            ps.setLong(2, listingId);
-            try (ResultSet rs = ps.executeQuery()) {
-                return rs.next();
-            }
-        } catch (SQLException e) {
-            logger.log(Level.SEVERE, "查询收藏状态失败", e);
-        }
-        return false;
     }
 
     // ─── 系统商店限购 ────────────────────────────────────────
@@ -1593,6 +1637,28 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
         }
     }
 
+    @Override
+    public @Nullable xuanmo.arcartxsuite.market.auction.AuctionBidTerms readAuctionBidTerms(long listingId) {
+        String sql = "SELECT l.id,l.seller,l.starting_bid,l.current_bid,l.highest_bidder,l.currency,l.type,l.status,l.expires_at,"
+            + " (SELECT b.bidder_name FROM " + tBids + " b WHERE b.listing_id=l.id AND b.bidder=l.highest_bidder"
+            + " ORDER BY b.timestamp DESC,b.id DESC LIMIT 1) AS highest_bidder_name"
+            + " FROM " + tListings + " l WHERE l.id=?";
+        try (Connection conn = getConnection(); PreparedStatement statement = conn.prepareStatement(sql)) {
+            statement.setLong(1, listingId);
+            try (ResultSet rows = statement.executeQuery()) {
+                if (!rows.next()) return null;
+                return new xuanmo.arcartxsuite.market.auction.AuctionBidTerms(rows.getLong("id"),
+                    parseUuidSafe(rows.getString("seller"), "listing.seller"), rows.getDouble("starting_bid"),
+                    rows.getDouble("current_bid"), parseUuidSafe(rows.getString("highest_bidder"), "listing.highest_bidder"),
+                    rows.getString("highest_bidder_name"), rows.getString("currency"),
+                    AuctionListing.ListingType.valueOf(rows.getString("type")),
+                    AuctionListing.ListingStatus.valueOf(rows.getString("status")), rows.getLong("expires_at"));
+            }
+        } catch (SQLException failure) {
+            throw new IllegalStateException("无法读取拍卖报价 " + listingId, failure);
+        }
+    }
+
     private AuctionListing mapListing(ResultSet rs) throws SQLException {
         String bidderStr = rs.getString("highest_bidder");
         UUID bidder = parseUuidSafe(bidderStr, "listing.highest_bidder");
@@ -1699,11 +1765,20 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
 
     @Override
     public boolean insertPlayerShopListing(PlayerShopListing listing) {
+        try (Connection conn = getConnection()) {
+            insertPlayerShopListing(conn, listing);
+            return true;
+        } catch (SQLException e) {
+            logger.log(Level.SEVERE, "插入玩家商店物品失败", e);
+            return false;
+        }
+    }
+
+    private void insertPlayerShopListing(Connection conn, PlayerShopListing listing) throws SQLException {
         String sql = "INSERT INTO " + tPlayerShopListings
             + " (seller, seller_name, item_data, item_display_name, pinyin, initials, message, price, currency, status, created_at, expires_at)"
             + " VALUES (?,?,?,?,?,?,?,?,?,?,?,?)";
-        try (Connection conn = getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+        try (PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             ps.setString(1, listing.getSeller().toString());
             ps.setString(2, listing.getSellerName());
             ps.setString(3, listing.getItemData());
@@ -1718,48 +1793,212 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
             ps.setLong(12, listing.getExpiresAt());
             ps.executeUpdate();
             try (ResultSet rs = ps.getGeneratedKeys()) {
-                if (rs.next()) listing.setId(rs.getLong(1));
+                if (!rs.next()) throw new SQLException("玩家商品编号未返回");
+                listing.setId(rs.getLong(1));
             }
-            return listing.getId() > 0;
-        } catch (SQLException e) {
-            logger.log(Level.SEVERE, "插入玩家商店物品失败", e);
-            return false;
         }
     }
 
-    @Override
-    public void updatePlayerShopListing(PlayerShopListing listing) {
-        String sql = "UPDATE " + tPlayerShopListings + " SET status=? WHERE id=?";
-        try (Connection conn = getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, listing.getStatus().name());
-            ps.setLong(2, listing.getId());
-            ps.executeUpdate();
-        } catch (SQLException e) {
-            logger.log(Level.SEVERE, "更新玩家商店物品失败", e);
-        }
-    }
-
-    @Override
-    public boolean compareAndSetPlayerShopListingStatus(long listingId,
-                                                          PlayerShopListing.ListingStatus expect,
-                                                          PlayerShopListing.ListingStatus update) {
-        String sql = "UPDATE " + tPlayerShopListings + " SET status=? WHERE id=? AND status=?";
-        try (Connection conn = getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, update.name());
-            ps.setLong(2, listingId);
-            ps.setString(3, expect.name());
-            return ps.executeUpdate() > 0;
-        } catch (SQLException e) {
-            logger.log(Level.SEVERE, "玩家商店状态 CAS 失败", e);
-            return false;
-        }
-    }
 
     @Override
     public @Nullable PlayerShopListing getPlayerShopListing(long listingId) {
-        String sql = "SELECT * FROM " + tPlayerShopListings + " WHERE id=?";
+        return readPlayerShopListing(listingId, "SELECT * FROM " + tPlayerShopListings + " WHERE id=?");
+    }
+
+    @Override
+    public MarketListingDraft.Reservation reserveListingDraft(MarketListingDraft draft, int maximum) {
+        return commitListingDraft(conn -> {
+            UUID seller = draft.seller();
+            // The upsert takes the seller's row lock before counting either type of draft.
+            noteMarketPlayer(conn, seller, draft.sellerName());
+            try (PreparedStatement count = conn.prepareStatement("SELECT COUNT(*),"
+                    + "COALESCE(SUM(CASE WHEN status='PREPARING' THEN 1 ELSE 0 END),0) FROM " + listingTable(draft.kind())
+                    + " WHERE seller=? AND (status IN ('PREPARING','RESERVED') OR (status='ACTIVE' AND expires_at>?))")) {
+                count.setString(1, seller.toString());
+                count.setLong(2, System.currentTimeMillis());
+                try (ResultSet row = count.executeQuery()) {
+                    if (!row.next()) throw new SQLException("无法计算已占用上架名额");
+                    if (row.getInt(2) != 0) return MarketListingDraft.Reservation.ALREADY_PENDING;
+                    if (row.getLong(1) >= maximum) return MarketListingDraft.Reservation.LIMIT_REACHED;
+                }
+            }
+            if (draft instanceof AuctionListingDraft auction) {
+                insertListing(conn, auction.listing());
+            } else if (draft instanceof PlayerShopListingDraft playerShop) {
+                ensurePlayerShopProfile(conn, seller, draft.sellerName(), false);
+                insertPlayerShopListing(conn, playerShop.listing());
+            }
+            insertOperation(conn, listingDraftOperation(draft, false), false);
+            insertOperation(conn, listingDraftOperation(draft, true), false);
+            return MarketListingDraft.Reservation.RESERVED;
+        });
+    }
+
+    private String listingTable(MarketListingDraft.Kind kind) {
+        return kind == MarketListingDraft.Kind.AUCTION ? tListings : tPlayerShopListings;
+    }
+
+    @Override
+    public void recordListingFee(MarketListingDraft draft, xuanmo.arcartxsuite.api.currency.CurrencyTransactionResult payment) {
+        commitListingDraft(conn -> {
+            var fee = listingDraftOperation(draft, true);
+            var order = listingDraftOperation(draft, false);
+            if (payment.uncertain()) {
+                finishRunningOperation(conn, fee, "REVIEW", "上架费结果不明");
+                finishRunningOperation(conn, order, "REVIEW", "物品未扣除，请核对上架费");
+            } else if (!payment.success()) {
+                finishRunningOperation(conn, fee, "FAILED", "未扣上架费");
+                finishRunningOperation(conn, order, "FAILED", "上架未提交，物品未扣除");
+                cancelListingDraftRow(conn, draft.kind(), draft.listingId(), draft.seller());
+            } else {
+                finishRunningOperation(conn, fee, "DONE", "上架费已确认");
+                if (execUpdate(conn, "UPDATE " + tOperations
+                        + " SET state='LISTING_SAVING',owner=?,note=?,updated_at=?"
+                        + " WHERE id=? AND kind=? AND state='RUNNING' AND owner=?",
+                        draft.sourceNode(), "等待玩家自然存档确认物品扣除", System.currentTimeMillis(), order.id(),
+                        draft.kind().operation(), order.owner()) != 1) {
+                    throw new SQLException("上架扣除意图状态冲突 " + draft.id());
+                }
+            }
+            return null;
+        });
+    }
+
+    @Override
+    public boolean abortListingDraft(MarketListingDraft.Save save, String sourceNode, String note) {
+        return commitListingDraft(conn -> {
+            long now = System.currentTimeMillis();
+            if (execUpdate(conn, "UPDATE " + tOperations + " SET state='CANCELLED',note=?,updated_at=?"
+                    + " WHERE id=? AND player=? AND kind=? AND state='LISTING_SAVING' AND owner=? AND reference=?",
+                    note, now, save.id(), save.seller().toString(), save.kind().operation(), sourceNode, save.reference()) != 1) {
+                return false;
+            }
+            cancelListingDraftRow(conn, save.kind(), save.listingId(), save.seller());
+            var fee = reviewChild(conn, save.id(), "DEBIT");
+            if (fee == null || !"DONE".equals(fee.state())) throw new SQLException("上架费尚未确认 " + save.id());
+            if (new java.math.BigDecimal(fee.amount()).signum() > 0) {
+                insertOperation(conn, new MarketOperation(save.id() + ":refund", save.id(), save.seller(), "CURRENCY",
+                    save.kind().prefix() + "-fee-refund", "READY", fee.currency(), fee.amount(), "",
+                    "等待退还上架费", "", now, now, fee.itemName(), fee.material()), false);
+            }
+            return true;
+        });
+    }
+
+    @Override
+    public List<MarketListingDraft.Save> listingSaves(String sourceNode, String after, int limit) {
+        try (Connection conn = getConnection(); PreparedStatement query = conn.prepareStatement("SELECT id,player,kind,reference FROM " + tOperations
+                + " WHERE state='LISTING_SAVING' AND kind IN ('AUCTION_LIST','PSHOP_LIST') AND owner=? AND id>? ORDER BY id LIMIT ?")) {
+            query.setString(1, sourceNode);
+            query.setString(2, after);
+            query.setInt(3, limit);
+            List<MarketListingDraft.Save> result = new ArrayList<>();
+            try (ResultSet rows = query.executeQuery()) {
+                while (rows.next()) {
+                    String[] ref = rows.getString("reference").split(":");
+                    var kind = "AUCTION_LIST".equals(rows.getString("kind")) ? MarketListingDraft.Kind.AUCTION : MarketListingDraft.Kind.PLAYER_SHOP;
+                    if (ref.length != 4 || !kind.prefix().equals(ref[0])) {
+                        throw new SQLException("上架暂存快照无效 " + rows.getString("id"));
+                    }
+                    result.add(new MarketListingDraft.Save(kind, rows.getString("id"), UUID.fromString(rows.getString("player")),
+                        Long.parseLong(ref[1]), Long.parseLong(ref[2]), Long.parseLong(ref[3])));
+                }
+            }
+            return result;
+        } catch (SQLException failure) {
+            throw new IllegalStateException("无法读取等待存档的上架记录", failure);
+        }
+    }
+
+    @Override
+    public boolean publishListingDraft(MarketListingDraft.Save save, String sourceNode) {
+        return commitListingDraft(conn -> {
+            long now = System.currentTimeMillis();
+            int updated = execUpdate(conn, "UPDATE " + tOperations
+                    + " SET state='DONE',note=?,updated_at=? WHERE id=? AND player=?"
+                    + " AND kind=? AND state='LISTING_SAVING' AND owner=? AND reference=?",
+                "玩家存档已确认扣除，商品已发布", now, save.id(), save.seller().toString(),
+                save.kind().operation(), sourceNode, save.reference());
+            if (updated != 1) return false;
+            long expires = Math.addExact(now, save.durationMillis());
+            if (execUpdate(conn, "UPDATE " + listingTable(save.kind())
+                    + " SET status='ACTIVE',created_at=?,expires_at=? WHERE id=? AND seller=? AND status='PREPARING'",
+                    now, expires, save.listingId(), save.seller().toString()) != 1) {
+                throw new SQLException("商品上架预留状态冲突 " + save.id());
+            }
+            if (save.kind() == MarketListingDraft.Kind.AUCTION) {
+                execUpdate(conn, "UPDATE " + tListings + " SET original_expires_at=? WHERE id=?", expires, save.listingId());
+            } else {
+                execUpdate(conn, "UPDATE " + tShopProfiles
+                    + " SET published=1,version=version+1,created_at=?,updated_at=? WHERE owner=? AND published=0",
+                    now, now, save.seller().toString());
+            }
+            return true;
+        });
+    }
+
+    @Override
+    public boolean isListingDraftPublished(MarketListingDraft.Save save, String sourceNode) {
+        String sql = "SELECT 1 FROM " + tOperations
+            + " WHERE id=? AND player=? AND kind=? AND state='DONE' AND owner=? AND reference=?";
+        try (Connection conn = getConnection(); PreparedStatement query = conn.prepareStatement(sql)) {
+            query.setString(1, save.id());
+            query.setString(2, save.seller().toString());
+            query.setString(3, save.kind().operation());
+            query.setString(4, sourceNode);
+            query.setString(5, save.reference());
+            try (ResultSet row = query.executeQuery()) {
+                return row.next();
+            }
+        } catch (SQLException failure) {
+            throw new IllegalStateException("无法核对上架提交结果 " + save.id(), failure);
+        }
+    }
+
+    private MarketOperation listingDraftOperation(MarketListingDraft draft, boolean debit) {
+        long now = System.currentTimeMillis();
+        return new MarketOperation(debit ? draft.id() + ":fee" : draft.id(), draft.id(), draft.seller(),
+            debit ? "DEBIT" : draft.kind().operation(), debit ? draft.kind().prefix() + "-fee" : draft.reference(), "RUNNING",
+            draft.feeCurrency(), draft.fee().toPlainString(), debit ? "" : draft.itemData(),
+            debit ? "等待上架费" : "暂存商品，物品尚未扣除", draft.worker(), now, now, draft.itemName(), draft.material());
+    }
+
+    private void cancelListingDraftRow(Connection conn, MarketListingDraft.Kind kind, long listingId, UUID seller) throws SQLException {
+        if (execUpdate(conn, "UPDATE " + listingTable(kind)
+                + " SET status='CANCELLED' WHERE id=? AND seller=? AND status='PREPARING'", listingId, seller.toString()) != 1) {
+            throw new SQLException("暂存商品状态冲突 #" + listingId);
+        }
+    }
+
+    @FunctionalInterface
+    private interface ListingWrite<T> {
+        T write(Connection conn) throws SQLException;
+    }
+
+    private <T> T commitListingDraft(ListingWrite<T> action) {
+        try (Connection conn = getConnection()) {
+            conn.setAutoCommit(false);
+            try {
+                T result = action.write(conn);
+                conn.commit();
+                return result;
+            } catch (SQLException | RuntimeException failure) {
+                conn.rollback();
+                throw failure;
+            } finally { conn.setAutoCommit(true); }
+        } catch (SQLException failure) {
+            throw new IllegalStateException("玩家商店上架事务失败", failure);
+        }
+    }
+
+    @Override
+    public @Nullable PlayerShopListing getPublishedPlayerShopListing(long listingId) {
+        String sql = "SELECT l.* FROM " + tPlayerShopListings + " l JOIN " + tShopProfiles
+            + " p ON p.owner=l.seller WHERE l.id=? AND p.published=1";
+        return readPlayerShopListing(listingId, sql);
+    }
+
+    private @Nullable PlayerShopListing readPlayerShopListing(long listingId, String sql) {
         try (Connection conn = getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setLong(1, listingId);
@@ -1775,47 +2014,35 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
     @Override
     public List<PlayerShopListing> getActivePlayerShopListings(int offset, int limit) {
         return queryPlayerShopListings("SELECT * FROM " + tPlayerShopListings
-            + " WHERE status='ACTIVE' AND expires_at > ? ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            + " WHERE status='ACTIVE' AND expires_at > ? ORDER BY created_at DESC,id DESC LIMIT ? OFFSET ?",
             System.currentTimeMillis(), limit, offset);
     }
 
     @Override
     public List<PlayerShopListing> getActivePlayerShopListingsBySeller(UUID seller, int offset, int limit) {
         return queryPlayerShopListings("SELECT * FROM " + tPlayerShopListings
-            + " WHERE status='ACTIVE' AND expires_at > ? AND seller=? ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            + " WHERE status='ACTIVE' AND expires_at > ? AND seller=? ORDER BY created_at DESC,id DESC LIMIT ? OFFSET ?",
             System.currentTimeMillis(), seller.toString(), limit, offset);
     }
 
+    private static final String PLAYER_SHOP_SEARCH = " AND (item_display_name LIKE ? ESCAPE '!'"
+        + " OR pinyin LIKE ? ESCAPE '!' OR initials LIKE ? ESCAPE '!')";
+
     @Override
     public List<PlayerShopListing> searchPlayerShopListings(String keyword, int offset, int limit) {
-        String sql = "SELECT * FROM " + tPlayerShopListings
-            + " WHERE status='ACTIVE' AND expires_at > ?"
-            + " AND (item_display_name LIKE ? ESCAPE '\\' OR pinyin LIKE ? ESCAPE '\\' OR initials LIKE ? ESCAPE '\\')"
-            + " ORDER BY created_at DESC LIMIT ? OFFSET ?";
-        List<PlayerShopListing> results = new ArrayList<>();
-        try (Connection conn = getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setLong(1, System.currentTimeMillis());
-            String like = "%" + escapeLike(truncateKeyword(keyword)) + "%";
-            ps.setString(2, like);
-            ps.setString(3, like);
-            ps.setString(4, like);
-            ps.setInt(5, limit);
-            ps.setInt(6, offset);
-            try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) results.add(mapPlayerShopListing(rs));
-            }
-        } catch (SQLException e) {
-            logger.log(Level.SEVERE, "搜索玩家商店物品失败", e);
-        }
-        return results;
+        String like = shopLike(keyword);
+        return queryPlayerShopListings("SELECT * FROM " + tPlayerShopListings
+            + " WHERE status='ACTIVE' AND expires_at > ?" + PLAYER_SHOP_SEARCH
+            + " ORDER BY created_at DESC,id DESC LIMIT ? OFFSET ?",
+            System.currentTimeMillis(), like, like, like, limit, offset);
     }
 
     @Override
     public List<MarketRepository.PlayerShopSellerInfo> getPlayerShopSellers(int offset, int limit) {
-        String sql = "SELECT seller, seller_name, COUNT(*) AS active_count FROM " + tPlayerShopListings
-            + " WHERE status='ACTIVE' AND expires_at > ?"
-            + " GROUP BY seller, seller_name ORDER BY active_count DESC LIMIT ? OFFSET ?";
+        String sql = "SELECT l.seller, COALESCE(NULLIF(p.owner_name,''),MAX(l.seller_name)) AS seller_name, COUNT(*) AS active_count"
+            + " FROM " + tPlayerShopListings + " l LEFT JOIN " + tShopProfiles + " p ON p.owner=l.seller"
+            + " WHERE l.status='ACTIVE' AND l.expires_at > ?"
+            + " GROUP BY l.seller,p.owner_name ORDER BY active_count DESC,l.seller LIMIT ? OFFSET ?";
         List<MarketRepository.PlayerShopSellerInfo> results = new ArrayList<>();
         try (Connection conn = getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -1852,23 +2079,10 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
 
     @Override
     public int countSearchPlayerShopListings(String keyword) {
-        String sql = "SELECT COUNT(*) FROM " + tPlayerShopListings
-            + " WHERE status='ACTIVE' AND expires_at > ?"
-            + " AND (item_display_name LIKE ? ESCAPE '\\' OR pinyin LIKE ? ESCAPE '\\' OR initials LIKE ? ESCAPE '\\')";
-        try (Connection conn = getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setLong(1, System.currentTimeMillis());
-            String like = "%" + escapeLike(truncateKeyword(keyword)) + "%";
-            ps.setString(2, like);
-            ps.setString(3, like);
-            ps.setString(4, like);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) return rs.getInt(1);
-            }
-        } catch (SQLException e) {
-            logger.log(Level.SEVERE, "统计搜索玩家商店物品失败", e);
-        }
-        return 0;
+        String like = shopLike(keyword);
+        return countQuery("SELECT COUNT(*) FROM " + tPlayerShopListings
+            + " WHERE status='ACTIVE' AND expires_at > ?" + PLAYER_SHOP_SEARCH,
+            System.currentTimeMillis(), like, like, like);
     }
 
     @Override
@@ -1889,42 +2103,69 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
 
     @Override
     public List<PlayerShopListing> searchPlayerShopListingsBySeller(UUID seller, String keyword, int offset, int limit) {
-        String like = "%" + escapeLike(truncateKeyword(keyword)) + "%";
+        String like = shopLike(keyword);
         return queryPlayerShopListings("SELECT * FROM " + tPlayerShopListings
-            + " WHERE status='ACTIVE' AND expires_at > ? AND seller=?"
-            + " AND (item_display_name LIKE ? ESCAPE '\\' OR pinyin LIKE ? ESCAPE '\\' OR initials LIKE ? ESCAPE '\\')"
-            + " ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            + " WHERE status='ACTIVE' AND expires_at > ? AND seller=?" + PLAYER_SHOP_SEARCH
+            + " ORDER BY created_at DESC,id DESC LIMIT ? OFFSET ?",
             System.currentTimeMillis(), seller.toString(), like, like, like, limit, offset);
     }
 
     @Override
     public int countSearchPlayerShopListingsBySeller(UUID seller, String keyword) {
-        String like = "%" + escapeLike(truncateKeyword(keyword)) + "%";
+        String like = shopLike(keyword);
         return countQuery("SELECT COUNT(*) FROM " + tPlayerShopListings
-            + " WHERE status='ACTIVE' AND expires_at > ? AND seller=?"
-            + " AND (item_display_name LIKE ? ESCAPE '\\' OR pinyin LIKE ? ESCAPE '\\' OR initials LIKE ? ESCAPE '\\')",
+            + " WHERE status='ACTIVE' AND expires_at > ? AND seller=?" + PLAYER_SHOP_SEARCH,
             System.currentTimeMillis(), seller.toString(), like, like, like);
     }
 
     @Override
-    public int countListingsByPlayerShopSeller(UUID seller) {
-        return countQuery("SELECT COUNT(*) FROM " + tPlayerShopListings + " WHERE seller=?", seller.toString());
-    }
-
-    @Override
-    public List<PlayerShopListing> getExpiredPlayerShopListings() {
+    public List<PlayerShopListing> getExpiredPlayerShopListings(int limit) {
         return queryPlayerShopListings("SELECT * FROM " + tPlayerShopListings
-            + " WHERE status='ACTIVE' AND expires_at <= ? ORDER BY expires_at ASC",
-            System.currentTimeMillis());
+            + " WHERE status='ACTIVE' AND expires_at <= ? ORDER BY expires_at ASC,id ASC LIMIT ?",
+            System.currentTimeMillis(), limit);
     }
 
     @Override
-    public void insertPlayerShopHistory(MarketRepository.PlayerShopHistory history) {
+    public boolean terminatePlayerShopListing(PlayerShopTermination termination) {
+        return retryTerminalSettlement(() -> commitPlayerShopTermination(termination),
+            "玩家商店终止结算 #" + termination.expected().getId());
+    }
+
+    private boolean commitPlayerShopTermination(PlayerShopTermination termination) throws SQLException {
+        var expected = termination.expected();
+        try (Connection conn = getConnection()) {
+            conn.setAutoCommit(false);
+            try {
+                int changed = execUpdate(conn, "UPDATE " + tPlayerShopListings
+                    + " SET status=? WHERE id=? AND seller=? AND status='ACTIVE' AND expires_at=? AND (?=0 OR expires_at<=?)",
+                    termination.expired() ? "EXPIRED" : "CANCELLED", expected.getId(), expected.getSeller().toString(),
+                    expected.getExpiresAt(), termination.expired() ? 1 : 0, System.currentTimeMillis());
+                if (changed != 1) {
+                    conn.rollback();
+                    return false;
+                }
+                var receipt = termination.receipt();
+                insertOperation(conn, receipt, false);
+                insertPlayerShopHistory(conn, termination.history(), receipt.id(), receipt.material());
+                for (var delivery : termination.deliveries()) insertOperation(conn, delivery, false);
+                conn.commit();
+                return true;
+            } catch (SQLException | RuntimeException failure) {
+                conn.rollback();
+                throw failure;
+            } finally {
+                conn.setAutoCommit(true);
+            }
+        }
+    }
+
+
+    private void insertPlayerShopHistory(Connection conn, MarketRepository.PlayerShopHistory history,
+                                         String tradeId, String material) throws SQLException {
         String sql = "INSERT INTO " + tPlayerShopHistory
             + " (listing_id, seller, buyer, item_data, item_display_name, price, currency, tax_amount, transaction_type, timestamp, trade_id, material)"
             + " VALUES (?,?,?,?,?,?,?,?,?,?,?,?)";
-        try (Connection conn = getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setLong(1, history.listingId());
             ps.setString(2, history.seller().toString());
             ps.setString(3, history.buyer() == null ? null : history.buyer().toString());
@@ -1935,11 +2176,9 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
             ps.setDouble(8, history.taxAmount());
             ps.setString(9, history.transactionType());
             ps.setLong(10, history.timestamp());
-            ps.setString(11,java.util.Objects.toString(xuanmo.arcartxsuite.market.MarketLedger.currentTradeId(),""));
-            ps.setString(12,xuanmo.arcartxsuite.market.MarketLedger.currentItemMaterial());
+            ps.setString(11, tradeId);
+            ps.setString(12, material);
             ps.executeUpdate();
-        } catch (SQLException e) {
-            logger.log(Level.SEVERE, "插入玩家商店历史失败", e);
         }
     }
 
@@ -2033,10 +2272,29 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
             statement.executeUpdate("CREATE TABLE IF NOT EXISTS " + tOwners + " (owner VARCHAR(64) PRIMARY KEY, last_seen BIGINT NOT NULL)");
             statement.executeUpdate("CREATE TABLE IF NOT EXISTS " + tStockPolicies + " (shop_id VARCHAR(64) NOT NULL, item_id VARCHAR(64) NOT NULL, "
                 + "next_at BIGINT NOT NULL, default_stock INTEGER, PRIMARY KEY(shop_id,item_id))");
+            statement.executeUpdate("CREATE TABLE IF NOT EXISTS " + tShopReservations
+                + " (order_id VARCHAR(64) PRIMARY KEY, player VARCHAR(36) NOT NULL, shop_id VARCHAR(64) NOT NULL,"
+                + " item_id VARCHAR(64) NOT NULL, quantity INTEGER NOT NULL, stock_mode VARCHAR(16) NOT NULL,"
+                + " stock_maximum INTEGER NOT NULL, stock_revision BIGINT NOT NULL, quota_reset BIGINT NOT NULL,"
+                + " quota_epoch VARCHAR(36) NOT NULL)");
+            statement.executeUpdate("CREATE TABLE IF NOT EXISTS " + tAuctionPublications
+                + " (id VARCHAR(64) PRIMARY KEY, listing_id BIGINT NOT NULL, seller VARCHAR(36) NOT NULL, buyer VARCHAR(36),"
+                + " item VARCHAR(255) NOT NULL, price DOUBLE NOT NULL, currency VARCHAR(64) NOT NULL, tax DOUBLE NOT NULL,"
+                + " buyer_name VARCHAR(64) NOT NULL, event_pending INTEGER NOT NULL, refresh_pending INTEGER NOT NULL,"
+                + " lease_until BIGINT NOT NULL, lease_token VARCHAR(36) NOT NULL)");
+            statement.executeUpdate("CREATE TABLE IF NOT EXISTS " + tAuctionRevision
+                + " (id INTEGER PRIMARY KEY, revision BIGINT NOT NULL)");
+            statement.executeUpdate("INSERT INTO " + tAuctionRevision + " (id,revision) VALUES (1,0)"
+                + (isMysql() ? " ON DUPLICATE KEY UPDATE id=id" : " ON CONFLICT(id) DO NOTHING"));
         }
+        ensureManagementColumn(conn, tStockPolicies, "revision", "BIGINT NOT NULL DEFAULT 0");
+        ensureManagementColumn(conn, tShopLimits, "quota_epoch", "VARCHAR(36) NOT NULL DEFAULT ''");
+        ensureTableIndex(conn, tShopReservations, "shop_reservations_player", "player");
+        ensureTableIndex(conn, tAuctionPublications, "auction_publish_lease", "lease_until,id");
         // Metadata avoids swallowing DDL errors while remaining restart-safe on both dialects.
         ensureOperationIndex(conn, "op_state_player", "state,player,created_at");
         ensureOperationIndex(conn, "op_trade", "trade_id");
+        ensureOperationIndex(conn, "op_owner_state", "owner,state");
         ensureOperationIndex(conn,"op_player_kind","player,kind,trade_id,state");
         ensureOperationIndex(conn,"op_reference",isMysql()?"reference(96),kind":"reference,kind");
         boolean auto = conn.getAutoCommit();
@@ -2088,20 +2346,286 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
 
     @Override
     public void insertOperation(MarketOperation operation) {
-        durableUpdate("INSERT INTO " + tOperations
-            + " (id,trade_id,player,kind,reference,state,currency,amount,item_data,note,owner,created_at,updated_at,item_name,material) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        try (Connection conn = getConnection()) {
+            insertOperation(conn, operation, false);
+        } catch (SQLException exception) { throw new IllegalStateException("Market 持久化失败", exception); }
+    }
+
+    private int insertOperation(Connection conn, MarketOperation operation, boolean ignoreDuplicate) throws SQLException {
+        String duplicate = ignoreDuplicate && !isMysql() ? " ON CONFLICT(id) DO NOTHING" : "";
+        String insert = ignoreDuplicate && isMysql() ? "INSERT IGNORE INTO " : "INSERT INTO ";
+        return execUpdate(conn, insert + tOperations
+            + " (id,trade_id,player,kind,reference,state,currency,amount,item_data,note,owner,created_at,updated_at,item_name,material) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)" + duplicate,
             operation.id(), operation.tradeId(), operation.player().toString(), operation.kind(), operation.reference(), operation.state(),
             operation.currency(), operation.amount(), operation.itemData(), operation.note(), operation.owner(), operation.createdAt(), operation.updatedAt(),operation.itemName(),operation.material());
     }
 
     @Override
-    public boolean transitionOperation(String id, String expected, String state, String note, String owner) {
-        String sql = "UPDATE " + tOperations + " SET state=?,note=?,owner=?,updated_at=? WHERE id=? AND state=?";
-        long now = System.currentTimeMillis();
-        if ("RUNNING".equals(expected) || "PREPARED".equals(expected)) {
-            return durableUpdate(sql + " AND owner=?", state, note, owner, now, id, expected, owner) == 1;
+    public @Nullable MarketOperation shopOrder(String requestId) {
+        var orders = readOperations("SELECT * FROM " + tOperations + " WHERE id=? AND kind='SHOP_BUY'"
+            + " AND reference LIKE 'shop-order:%'", List.of(requestId));
+        return orders.isEmpty() ? null : orders.get(0);
+    }
+
+    @Override
+    public Map<String, ShopCheckout.Availability> shopAvailability(UUID player, String shop, List<ShopCheckout.Product> products) {
+        if (products.isEmpty()) return Map.of();
+        String requested = String.join(" UNION ALL ", java.util.Collections.nCopies(products.size(),
+            "SELECT ? AS product_id, ? AS stock_mode, ? AS max_stock, ? AS quota"));
+        String sql = "WITH requested AS (" + requested + ") SELECT r.product_id,"
+            + " CASE WHEN r.stock_mode='global' THEN COALESCE(g.remaining,r.max_stock)"
+            + " WHEN r.stock_mode='per-player' THEN COALESCE(p.remaining,CASE WHEN b.default_stock<r.max_stock"
+            + " THEN b.default_stock ELSE r.max_stock END) ELSE r.max_stock END AS remaining,"
+            + " CASE WHEN r.quota<=0 THEN 2147483647 ELSE r.quota-CASE"
+            + " WHEN l.reset_time=0 OR l.reset_time>? THEN COALESCE(l.purchased_count,0) ELSE 0 END END AS quota_left"
+            + " FROM requested r LEFT JOIN " + tGlobalStock + " g ON g.shop_id=? AND g.item_id=r.product_id"
+            + " LEFT JOIN " + tPlayerStock + " p ON p.shop_id=? AND p.player=? AND p.item_id=r.product_id"
+            + " LEFT JOIN " + tStockPolicies + " b ON b.shop_id=? AND b.item_id=r.product_id"
+            + " LEFT JOIN " + tShopLimits + " l ON l.shop_id=? AND l.player=? AND l.item_id=r.product_id";
+        Map<String, ShopCheckout.Availability> result = new java.util.HashMap<>();
+        try (Connection conn = getConnection(); PreparedStatement query = conn.prepareStatement(sql)) {
+            int index = 1;
+            for (var product : products) {
+                query.setString(index++, product.item());
+                query.setString(index++, product.stockMode());
+                query.setInt(index++, product.stockMaximum());
+                query.setInt(index++, product.limit());
+            }
+            query.setLong(index++, System.currentTimeMillis());
+            query.setString(index++, shop);
+            query.setString(index++, shop);
+            query.setString(index++, player.toString());
+            query.setString(index++, shop);
+            query.setString(index++, shop);
+            query.setString(index, player.toString());
+            try (ResultSet rows = query.executeQuery()) {
+                while (rows.next()) result.put(rows.getString(1), new ShopCheckout.Availability(
+                    Math.max(0, rows.getInt(2)), Math.max(0, rows.getInt(3))));
+            }
+        } catch (SQLException exception) { throw new IllegalStateException("批量读取系统商店库存失败", exception); }
+        return result;
+    }
+
+    @Override
+    public ShopCheckout.Reservation reserveShopOrder(MarketOperation order, ShopCheckout checkout, List<MarketOperation> rewards) {
+        for (int attempt = 0; ; attempt++) {
+            try {
+                return reserveShopOrderTransaction(order, checkout, rewards);
+            } catch (SQLException exception) {
+                // MySQL 1213 has already rolled the entire transaction back. No debit has started.
+                if (attempt >= 2 || !isMysql() || exception.getErrorCode() != 1213) {
+                    throw new IllegalStateException("系统商店订单预留失败", exception);
+                }
+            }
         }
-        return durableUpdate(sql, state, note, owner, now, id, expected) == 1;
+    }
+
+    private ShopCheckout.Reservation reserveShopOrderTransaction(MarketOperation order, ShopCheckout checkout,
+                                                                List<MarketOperation> rewards) throws SQLException {
+        try (Connection conn = getConnection()) {
+            conn.setAutoCommit(false);
+            try {
+                if (insertOperation(conn, order, true) != 1) {
+                    conn.rollback();
+                    return new ShopCheckout.Reservation(false);
+                }
+                var reservation = conn.setSavepoint();
+                var quota = reserveShopQuota(conn, order, checkout);
+                long stockRevision = quota.reset() < 0 || !tracksStock(checkout) ? -1
+                    : lockStockRevision(conn, checkout.shop(), checkout.item());
+                String reason = quota.reset() < 0 ? "购买数量超过限购"
+                    : !reserveShopStock(conn, order.player(), checkout) ? "商品库存不足" : null;
+                if (reason != null) {
+                    conn.rollback(reservation);
+                    setShopOrderState(conn, order, "FAILED", reason);
+                    conn.commit();
+                    return new ShopCheckout.Reservation(false);
+                }
+                execUpdate(conn, "INSERT INTO " + tShopReservations + " (order_id,player,shop_id,item_id,quantity,"
+                    + "stock_mode,stock_maximum,stock_revision,quota_reset,quota_epoch) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                    order.id(), order.player().toString(), checkout.shop(), checkout.item(), checkout.quantity(),
+                    checkout.stockMode(), checkout.stockMaximum(), stockRevision, quota.reset(), quota.epoch());
+                for (var reward : rewards) insertOperation(conn, reward, false);
+                conn.commit();
+                return new ShopCheckout.Reservation(true);
+            } catch (SQLException | RuntimeException exception) {
+                conn.rollback();
+                throw exception;
+            } finally { conn.setAutoCommit(true); }
+        }
+    }
+
+    private record QuotaClaim(long reset, String epoch) { }
+
+    private QuotaClaim reserveShopQuota(Connection conn, MarketOperation order, ShopCheckout checkout) throws SQLException {
+        if (checkout.limit() <= 0) return new QuotaClaim(0, "");
+        String player = order.player().toString();
+        String key = " WHERE player=? AND shop_id=? AND item_id=?";
+        execUpdate(conn, stockRowInsert() + tShopLimits
+            + " (player,shop_id,item_id,purchased_count,last_purchase_time,reset_time) VALUES (?,?,?,0,0,0)"
+            + stockRowLock("purchased_count"),
+            player, checkout.shop(), checkout.item());
+        var calendar = java.time.ZonedDateTime.now();
+        long now = calendar.toInstant().toEpochMilli();
+        String expired = "reset_time>0 AND reset_time<=?";
+        int updated = execUpdate(conn, "UPDATE " + tShopLimits
+            + " SET purchased_count=CASE WHEN " + expired + " THEN ? ELSE purchased_count+? END,"
+            + " quota_epoch=CASE WHEN (" + expired + ") OR quota_epoch='' THEN ? ELSE quota_epoch END,"
+            + " last_purchase_time=?,reset_time=?" + key
+            + " AND (? >= 0 AND ((" + expired + ") OR purchased_count<=?))",
+            now, checkout.quantity(), checkout.quantity(), now, UUID.randomUUID().toString(), now, checkout.nextLimitReset(calendar),
+            player, checkout.shop(), checkout.item(), checkout.limit()-checkout.quantity(), now, checkout.limit()-checkout.quantity());
+        if (updated != 1) return new QuotaClaim(-1, "");
+        try (PreparedStatement query = conn.prepareStatement("SELECT reset_time,quota_epoch FROM " + tShopLimits + key)) {
+            query.setString(1, player);
+            query.setString(2, checkout.shop());
+            query.setString(3, checkout.item());
+            try (ResultSet rows = query.executeQuery()) {
+                if (rows.next()) return new QuotaClaim(rows.getLong(1), rows.getString(2));
+                throw new SQLException("限购预留记录缺失");
+            }
+        }
+    }
+
+    private boolean reserveShopStock(Connection conn, UUID player, ShopCheckout checkout) throws SQLException {
+        if (!tracksStock(checkout)) return true;
+        String insert = stockRowInsert();
+        String shop = checkout.shop(), item = checkout.item();
+        int amount = checkout.quantity();
+        if ("global".equals(checkout.stockMode())) {
+            execUpdate(conn, insert + tGlobalStock + " (shop_id,item_id,remaining) VALUES (?,?,?)" + stockRowLock("remaining"),
+                shop, item, checkout.stockMaximum());
+            return execUpdate(conn, "UPDATE " + tGlobalStock
+                + " SET remaining=remaining-? WHERE shop_id=? AND item_id=? AND remaining>=?", amount, shop, item, amount) == 1;
+        }
+        int initial = lockedPlayerStockDefault(conn, shop, item, checkout.stockMaximum());
+        execUpdate(conn, insert + tPlayerStock + " (player,shop_id,item_id,remaining) VALUES (?,?,?,?)" + stockRowLock("remaining"),
+            player.toString(), shop, item, initial);
+        return execUpdate(conn, "UPDATE " + tPlayerStock
+            + " SET remaining=remaining-? WHERE player=? AND shop_id=? AND item_id=? AND remaining>=?",
+            amount, player.toString(), shop, item, amount) == 1;
+    }
+
+    private static boolean tracksStock(ShopCheckout checkout) {
+        return checkout.stockMaximum() > 0 && !"unlimited".equals(checkout.stockMode());
+    }
+
+    private long lockStockRevision(Connection conn, String shop, String item) throws SQLException {
+        execUpdate(conn, stockRowInsert() + tStockPolicies
+            + " (shop_id,item_id,next_at,default_stock) VALUES (?,?,0,NULL)" + stockRowLock("revision"), shop, item);
+        try (PreparedStatement query = conn.prepareStatement("SELECT revision FROM " + tStockPolicies
+            + " WHERE shop_id=? AND item_id=?" + (isMysql() ? " FOR UPDATE" : ""))) {
+            query.setString(1, shop);
+            query.setString(2, item);
+            try (ResultSet rows = query.executeQuery()) {
+                if (rows.next()) return rows.getLong(1);
+                throw new SQLException("库存版本缺失");
+            }
+        }
+    }
+
+    private String stockRowInsert() { return isMysql() ? "INSERT INTO " : "INSERT OR IGNORE INTO "; }
+
+    private String stockRowLock(String column) {
+        // Acquire the existing row exclusively rather than upgrading INSERT IGNORE's shared lock.
+        return isMysql() ? " ON DUPLICATE KEY UPDATE " + column + "=" + column : "";
+    }
+
+    @Override
+    public void finishShopOrder(MarketOperation order, boolean paid, String note) {
+        for (int attempt = 0; ; attempt++) {
+            try {
+                finishShopOrderTransaction(order, paid, note);
+                return;
+            } catch (SQLException exception) {
+                // The debit receipt already exists. Only replay this rolled-back storage transaction.
+                if (attempt >= 2 || !isMysql() || exception.getErrorCode() != 1213) {
+                    throw new IllegalStateException("系统商店订单结算失败", exception);
+                }
+            }
+        }
+    }
+
+    private void finishShopOrderTransaction(MarketOperation order, boolean paid, String note) throws SQLException {
+        try (Connection conn = getConnection()) {
+            conn.setAutoCommit(false);
+            try {
+                setShopOrderState(conn, order, paid ? "DONE" : "FAILED", note);
+                if (!paid) {
+                    var reservation = loadShopReservation(conn, order.id());
+                    if (reservation == null) throw new SQLException("扣款失败的订单缺少预留快照");
+                    releaseShopReservation(conn, order.player(), reservation);
+                }
+                execUpdate(conn, "UPDATE " + tOperations + " SET state=?,note=?,updated_at=?"
+                    + " WHERE trade_id=? AND owner=? AND state='PREPARED' AND kind IN ('ITEM','COMMAND')",
+                    paid ? "READY" : "CANCELLED", paid ? "扣款成功，等待交付" : "未扣款，取消奖励快照",
+                    System.currentTimeMillis(), order.id(), order.owner());
+                conn.commit();
+            } catch (SQLException | RuntimeException exception) {
+                conn.rollback();
+                throw exception;
+            } finally { conn.setAutoCommit(true); }
+        }
+    }
+
+    private void restoreReservedStock(Connection conn, UUID player, String mode, int maximum, String shop, String item, int amount)
+        throws SQLException {
+        String cap = isMysql() ? "LEAST" : "MIN";
+        if ("global".equals(mode)) {
+            execUpdate(conn, "UPDATE " + tGlobalStock + " SET remaining=" + cap
+                + "(remaining+?,?) WHERE shop_id=? AND item_id=?", amount, maximum, shop, item);
+        } else {
+            execUpdate(conn, "UPDATE " + tPlayerStock + " SET remaining=" + cap
+                + "(remaining+?,?) WHERE player=? AND shop_id=? AND item_id=?",
+                amount, maximum, player.toString(), shop, item);
+        }
+    }
+
+    private void setShopOrderState(Connection conn, MarketOperation order, String state, String note) throws SQLException {
+        if (execUpdate(conn, "UPDATE " + tOperations
+            + " SET state=?,note=?,updated_at=? WHERE id=? AND owner=? AND state='RUNNING'",
+            state, note, System.currentTimeMillis(), order.id(), order.owner()) != 1) {
+            throw new SQLException("系统商店订单状态冲突 " + order.id());
+        }
+    }
+
+    @Override
+    public boolean transitionOperation(String id, String expected, String state, String note, String owner) {
+        String sql = "UPDATE " + tOperations + " SET state=?,note=?,owner=?,"
+            + "updated_at=CASE WHEN updated_at>=? THEN updated_at+1 ELSE ? END WHERE id=? AND state=?";
+        long now = System.currentTimeMillis();
+        if ("RUNNING".equals(expected) || "PREPARED".equals(expected) || "ITEM_SAVING".equals(expected)) {
+            return durableUpdate(sql + " AND owner=?", state, note, owner, now, now, id, expected, owner) == 1;
+        }
+        return durableUpdate(sql, state, note, owner, now, now, id, expected) == 1;
+    }
+
+    @Override
+    public boolean transitionItemBatch(List<String> ids, String owner, boolean claim) {
+        if (ids.isEmpty()) return true;
+        String markers = String.join(",", java.util.Collections.nCopies(ids.size(), "?"));
+        var values = new ArrayList<Object>();
+        values.add(claim ? "ITEM_SAVING" : "DONE");
+        values.add(claim ? "等待原子服保存玩家物品和交付凭证" : "物品和交付凭证已写入玩家存档");
+        values.add(owner);
+        values.add(System.currentTimeMillis());
+        values.add(claim ? "READY" : "ITEM_SAVING");
+        if (!claim) values.add(owner);
+        values.addAll(ids);
+        try (Connection conn = getConnection()) {
+            conn.setAutoCommit(false);
+            try {
+                int changed = execUpdate(conn, "UPDATE " + tOperations
+                    + " SET state=?,note=?,owner=?,updated_at=? WHERE kind='ITEM' AND state=?"
+                    + (claim ? "" : " AND owner=?") + " AND id IN (" + markers + ")", values.toArray());
+                if (changed != ids.size()) { conn.rollback(); return false; }
+                conn.commit();
+                return true;
+            } catch (SQLException | RuntimeException exception) {
+                conn.rollback();
+                throw exception;
+            } finally { conn.setAutoCommit(true); }
+        } catch (SQLException exception) { throw new IllegalStateException("批量写入物品交付状态失败", exception); }
     }
 
     @Override
@@ -2112,16 +2636,33 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
         if (player != null) { sql += " AND player=?"; args.add(player.toString()); }
         sql += "READY".equals(state) ? " ORDER BY created_at ASC,id ASC LIMIT ? OFFSET ?" : " ORDER BY created_at DESC,id DESC LIMIT ? OFFSET ?";
         args.add(Math.max(1, Math.min(200, limit))); args.add(Math.max(0, offset));
+        return readOperations(sql, args);
+    }
+
+    @Override
+    public List<MarketOperation> pendingDeliveries(UUID player, String inventoryNode, int limit) {
+        String sql = "SELECT * FROM " + tOperations + " WHERE player=? AND "
+            + "(state='READY' OR (state='ITEM_SAVING' AND kind='ITEM' AND owner=?))"
+            + " ORDER BY CASE WHEN state='ITEM_SAVING' THEN 0 WHEN kind='ITEM' THEN 2 ELSE 1 END,created_at,id LIMIT ?";
+        return readOperations(sql, List.of(player.toString(), inventoryNode, Math.max(1, Math.min(200, limit))));
+    }
+
+    private List<MarketOperation> readOperations(String sql, List<Object> args) {
         List<MarketOperation> result = new ArrayList<>();
         try (Connection conn = getConnection(); PreparedStatement query = conn.prepareStatement(sql)) {
             for (int i = 0; i < args.size(); i++) query.setObject(i + 1, args.get(i));
             try (ResultSet rows = query.executeQuery()) {
-                while (rows.next()) result.add(new MarketOperation(rows.getString("id"), rows.getString("trade_id"), UUID.fromString(rows.getString("player")),
-                    rows.getString("kind"), rows.getString("reference"), rows.getString("state"), rows.getString("currency"), rows.getString("amount"),
-                    rows.getString("item_data"), rows.getString("note"), rows.getString("owner"), rows.getLong("created_at"), rows.getLong("updated_at"),rows.getString("item_name"),rows.getString("material")));
+                while (rows.next()) result.add(marketOperation(rows));
             }
         } catch (SQLException exception) { throw new IllegalStateException("无法读取交易流水", exception); }
         return result;
+    }
+
+    private static MarketOperation marketOperation(ResultSet rows) throws SQLException {
+        return new MarketOperation(rows.getString("id"), rows.getString("trade_id"), UUID.fromString(rows.getString("player")),
+            rows.getString("kind"), rows.getString("reference"), rows.getString("state"), rows.getString("currency"), rows.getString("amount"),
+            rows.getString("item_data"), rows.getString("note"), rows.getString("owner"), rows.getLong("created_at"),
+            rows.getLong("updated_at"), rows.getString("item_name"), rows.getString("material"));
     }
 
     @Override
@@ -2133,23 +2674,244 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
 
     @Override
     public void recoverAbandonedOperations() {
+        long now = System.currentTimeMillis();
+        long cutoff = now - 120000L;
+        List<String> owners = abandonedOperationOwners(cutoff);
+        if (owners.isEmpty()) return;
+        String stale = " AND owner IN (" + String.join(",", java.util.Collections.nCopies(owners.size(), "?")) + ")"
+            + " AND owner NOT IN (SELECT owner FROM " + tOwners + " WHERE last_seen>=?)";
         durableUpdate("UPDATE " + tOperations + " SET state='READY',note=?,updated_at=? WHERE state='PREPARED' AND kind IN ('ITEM','COMMAND')"
-            + " AND owner NOT IN (SELECT owner FROM " + tOwners + " WHERE last_seen>=?)"
+            + stale
             + " AND trade_id IN (SELECT paid.trade_id FROM (SELECT DISTINCT trade_id FROM " + tOperations + " WHERE kind='DEBIT' AND state='DONE') paid)",
-            "已确认扣款成功，恢复持久奖励快照",System.currentTimeMillis(),System.currentTimeMillis()-120000L);
-        durableUpdate("UPDATE " + tOperations + " SET state='REVIEW',note=?,updated_at=? WHERE state='PREPARED'"
-            + " AND owner NOT IN (SELECT owner FROM " + tOwners + " WHERE last_seen>=?)",
-            "进程已离线，扣款或收取物品等前置结果未确认，请核对父交易",System.currentTimeMillis(),System.currentTimeMillis()-120000L);
-        durableUpdate("UPDATE " + tOperations + " SET state='REVIEW',note=?,updated_at=? WHERE state='RUNNING' AND owner NOT IN "
-            + "(SELECT owner FROM " + tOwners + " WHERE last_seen>=?)", "所属进程已离线，外部结果需核对", System.currentTimeMillis(), System.currentTimeMillis() - 120000L);
+            recoveryArguments("已确认扣款成功，恢复持久奖励快照", now, owners, cutoff));
+        durableUpdate("UPDATE " + tOperations + " SET state='DONE',note=?,updated_at=? WHERE state='RUNNING'"
+            + " AND kind='SHOP_BUY' AND reference LIKE 'shop-order:%'"
+            + stale
+            + " AND id IN (SELECT paid.trade_id FROM (SELECT DISTINCT trade_id FROM " + tOperations
+            + " WHERE kind='DEBIT' AND state='DONE') paid)",
+            recoveryArguments("扣款已确认，奖励已进入交付队列", now, owners, cutoff));
+        durableUpdate("UPDATE " + tOperations + " SET state='REVIEW',note=?,updated_at=? WHERE state='PREPARED'" + stale,
+            recoveryArguments("进程已离线，扣款或收取物品等前置结果未确认，请核对父交易", now, owners, cutoff));
+        String nextVersion = isMysql() ? "GREATEST(updated_at+1,?)" : "MAX(updated_at+1,?)";
+        durableUpdate("UPDATE " + tOperations + " SET state='REVIEW',note=?,updated_at=" + nextVersion
+            + " WHERE state='RUNNING'" + stale,
+            recoveryArguments("所属进程已离线，外部结果需核对", now, owners, cutoff));
+    }
+
+    private List<String> abandonedOperationOwners(long cutoff) {
+        String sql = "SELECT DISTINCT o.owner FROM " + tOperations + " o LEFT JOIN " + tOwners + " live"
+            + " ON live.owner=o.owner AND live.last_seen>=? WHERE o.state IN ('RUNNING','PREPARED')"
+            + " AND live.owner IS NULL LIMIT 128";
+        List<String> owners = new ArrayList<>();
+        try (Connection conn = getConnection(); PreparedStatement query = conn.prepareStatement(sql)) {
+            query.setLong(1, cutoff);
+            try (ResultSet rows = query.executeQuery()) {
+                while (rows.next()) owners.add(rows.getString(1));
+            }
+            return owners;
+        } catch (SQLException exception) { throw new IllegalStateException("无法查询已离线交易", exception); }
+    }
+
+    private static Object[] recoveryArguments(String note, long now, List<String> owners, long cutoff) {
+        List<Object> values = new ArrayList<>(owners.size() + 3);
+        values.add(note);
+        values.add(now);
+        values.addAll(owners);
+        values.add(cutoff);
+        return values.toArray();
     }
 
     @Override
     public boolean resolveOperation(String id, String action, String note) {
         String state = switch (action) { case "delivered" -> "DONE"; case "cancel" -> "CANCELLED"; case "retry-confirmed" -> "READY"; default -> null; };
         if (state == null) return false;
-        return durableUpdate("UPDATE " + tOperations + " SET state=?,note=?,updated_at=? WHERE id=? AND state='REVIEW'"
-            + ("READY".equals(state) ? " AND kind IN ('ITEM','CURRENCY','COMMAND','NOTICE')" : ""), state, note, System.currentTimeMillis(), id) == 1;
+        int separator = id.indexOf('@');
+        Long expectedVersion = null;
+        if (separator >= 0) {
+            try { expectedVersion = Long.parseLong(id.substring(separator + 1)); }
+            catch (NumberFormatException failure) { return false; }
+            id = id.substring(0, separator);
+        }
+        var target = readOperations("SELECT * FROM " + tOperations + " WHERE id=?", List.of(id));
+        if (target.isEmpty()) return false;
+        MarketOperation task = target.get(0);
+        if ("CURRENCY".equals(task.kind()) && expectedVersion == null) return false;
+        if (expectedVersion != null && expectedVersion != task.updatedAt()) return false;
+        var parent = task.tradeId() == null ? null : shopOrder(task.tradeId());
+        if (parent != null && !("DONE".equals(parent.state()) && List.of("ITEM", "COMMAND").contains(task.kind()))) return false;
+        var playerShop = task.tradeId() == null ? null : playerShopOrder(task.tradeId());
+        if (playerShop != null && !("DONE".equals(playerShop.state()) && List.of("ITEM", "CURRENCY", "NOTICE").contains(task.kind()))
+                && !("CANCELLED".equals(playerShop.state()) && "CURRENCY".equals(task.kind()) && "pshop-refund".equals(task.reference()))) {
+            return false;
+        }
+        if (task.tradeId() != null && List.of("PSHOP_LIST", "AUCTION_LIST", "DEBIT").contains(task.kind())
+                && !readOperations("SELECT * FROM " + tOperations
+                    + " WHERE id=? AND ((kind='PSHOP_LIST' AND reference LIKE 'pshop-listing:%')"
+                    + " OR (kind='AUCTION_LIST' AND reference LIKE 'auction-listing:%'))", List.of(task.tradeId())).isEmpty()) {
+            return false;
+        }
+        long now = System.currentTimeMillis();
+        return durableUpdate("UPDATE " + tOperations + " SET state=?,note=?,"
+            + "updated_at=CASE WHEN updated_at>=? THEN updated_at+1 ELSE ? END WHERE id=? AND state='REVIEW' AND updated_at=?"
+            + ("READY".equals(state) ? " AND kind IN ('ITEM','CURRENCY','COMMAND','NOTICE')" : ""),
+            state, note, now, now, id, task.updatedAt()) == 1;
+    }
+
+    private record ShopReservation(String shop, String item, int quantity, String stockMode, int stockMaximum,
+                                     long stockRevision, long quotaReset, String quotaEpoch) { }
+
+    @Override
+    public String reviewShopOrder(String id, String action, String audit) {
+        try (Connection conn = getConnection()) {
+            conn.setAutoCommit(false);
+            try {
+                MarketOperation order = lockShopOrder(conn, id);
+                String result = order == null ? "系统商店订单不存在"
+                    : "REFUND_PENDING".equals(order.state()) ? reviewPendingRefund(conn, order, action, audit)
+                    : "REVIEW".equals(order.state()) ? reviewUncertainDebit(conn, order, action, audit)
+                    : "当前状态 " + order.state() + "，无需重复处理";
+                conn.commit();
+                return result;
+            } catch (SQLException | RuntimeException exception) {
+                conn.rollback();
+                throw exception;
+            } finally { conn.setAutoCommit(true); }
+        } catch (SQLException exception) { throw new IllegalStateException("人工核对订单失败", exception); }
+    }
+
+    private String reviewUncertainDebit(Connection conn, MarketOperation order, String action, String audit) throws SQLException {
+        if (!List.of("fulfill-paid", "refund-paid", "cancel-unpaid").contains(action)) return "该操作要求退款已进入待处理状态";
+        var debit = reviewChild(conn, order.id(), "DEBIT");
+        if (debit == null && !"cancel-unpaid".equals(action) || debit != null && !"REVIEW".equals(debit.state())) {
+            return "扣款回执还未进入待核对状态";
+        }
+        int rewards = 0;
+        try (PreparedStatement query = conn.prepareStatement("SELECT state FROM " + tOperations
+            + " WHERE trade_id=? AND kind IN ('ITEM','COMMAND')")) {
+            query.setString(1, order.id());
+            try (ResultSet rows = query.executeQuery()) {
+                while (rows.next()) {
+                    if (!List.of("PREPARED", "REVIEW").contains(rows.getString(1))) return "奖励已发生状态变化，请先核对交付";
+                    rewards++;
+                }
+            }
+        }
+        if (rewards == 0) return "订单缺少可核对的奖励快照";
+        var reservation = loadShopReservation(conn, order.id());
+        if (!"fulfill-paid".equals(action) && reservation == null) return "旧订单缺少预留快照，库存与限购需单独核对";
+        if ("refund-paid".equals(action) && new java.math.BigDecimal(order.amount()).signum() <= 0) return "退款金额无效";
+
+        boolean fulfilled = "fulfill-paid".equals(action);
+        boolean unpaid = "cancel-unpaid".equals(action);
+        setReviewState(conn, order.id(), "REVIEW", fulfilled ? "DONE" : unpaid ? "CANCELLED" : "REFUND_PENDING", audit);
+        if (debit != null) setReviewState(conn, debit.id(), "REVIEW", unpaid ? "FAILED" : "DONE", audit);
+        execUpdate(conn, "UPDATE " + tOperations + " SET state=?,note=?,updated_at=? WHERE trade_id=?"
+            + " AND kind IN ('ITEM','COMMAND') AND state IN ('PREPARED','REVIEW')",
+            fulfilled ? "READY" : "CANCELLED", audit, System.currentTimeMillis(), order.id());
+        if (fulfilled) return "已确认扣款，按原快照补发";
+        if (unpaid) {
+            releaseShopReservation(conn, order.player(), reservation);
+            return "已确认未扣款，已取消订单";
+        }
+        long now = System.currentTimeMillis();
+        String refundId = UUID.nameUUIDFromBytes(("market-shop-refund:" + order.id()).getBytes(java.nio.charset.StandardCharsets.UTF_8)).toString();
+        insertOperation(conn, new MarketOperation(refundId, order.id(), order.player(), "CURRENCY", "shop-refund",
+            "READY", order.currency(), order.amount(), "", audit, "", now, now, order.itemName(), order.material()), false);
+        return "已登记退款，退款回执确认后释放本周期库存和限购预留";
+    }
+
+    private String reviewPendingRefund(Connection conn, MarketOperation order, String action, String audit) throws SQLException {
+        var refund = reviewChild(conn, order.id(), "CURRENCY");
+        if (refund == null || !"shop-refund".equals(refund.reference())) return "订单缺少退款回执";
+        if (!"REVIEW".equals(refund.state())) return "当前退款状态 " + refund.state() + "，无需重复处理";
+        if ("retry-refund-uncredited".equals(action)) {
+            setReviewState(conn, refund.id(), "REVIEW", "READY", audit);
+            return "已确认未入账，原退款请求重新入队";
+        }
+        if (!"confirm-refunded".equals(action)) return "请核对退款流水后确认已入账，或确认未入账后重试";
+        setReviewState(conn, refund.id(), "REVIEW", "DONE", audit);
+        finishReviewedRefund(conn, order);
+        return "已登记人工确认的退款回执";
+    }
+
+    @Override
+    public void finishConfirmedShopRefunds() {
+        var orders = readOperations("SELECT o.* FROM " + tOperations + " o JOIN " + tOperations
+            + " r ON r.trade_id=o.id AND r.kind='CURRENCY' AND r.reference='shop-refund' AND r.state='DONE'"
+            + " WHERE o.kind='SHOP_BUY' AND o.state='REFUND_PENDING' ORDER BY o.updated_at LIMIT 64", List.of());
+        for (var candidate : orders) {
+            try (Connection conn = getConnection()) {
+                conn.setAutoCommit(false);
+                try {
+                    var locked = lockShopOrder(conn, candidate.id());
+                    if (locked != null && "REFUND_PENDING".equals(locked.state())) finishReviewedRefund(conn, locked);
+                    conn.commit();
+                } catch (SQLException | RuntimeException exception) {
+                    conn.rollback();
+                    throw exception;
+                } finally { conn.setAutoCommit(true); }
+            } catch (SQLException exception) { throw new IllegalStateException("退款预留结算失败", exception); }
+        }
+    }
+
+    private void finishReviewedRefund(Connection conn, MarketOperation order) throws SQLException {
+        var reservation = loadShopReservation(conn, order.id());
+        if (reservation == null) throw new SQLException("退款缺少预留快照");
+        setReviewState(conn, order.id(), "REFUND_PENDING", "REFUNDED", "退款已确认，已核对库存和限购预留");
+        releaseShopReservation(conn, order.player(), reservation);
+    }
+
+    private void releaseShopReservation(Connection conn, UUID player, ShopReservation reservation) throws SQLException {
+        if (!reservation.quotaEpoch().isEmpty()) {
+            execUpdate(conn, "UPDATE " + tShopLimits
+                + " SET purchased_count=purchased_count-? WHERE player=? AND shop_id=? AND item_id=? AND quota_epoch=?"
+                + " AND reset_time=? AND (reset_time=0 OR reset_time>?) AND purchased_count>=?",
+                reservation.quantity(), player.toString(), reservation.shop(), reservation.item(), reservation.quotaEpoch(),
+                reservation.quotaReset(), System.currentTimeMillis(), reservation.quantity());
+        }
+        if (reservation.stockRevision() >= 0
+            && lockStockRevision(conn, reservation.shop(), reservation.item()) == reservation.stockRevision()) {
+            restoreReservedStock(conn, player, reservation.stockMode(), reservation.stockMaximum(),
+                reservation.shop(), reservation.item(), reservation.quantity());
+        }
+    }
+
+    private @Nullable ShopReservation loadShopReservation(Connection conn, String id) throws SQLException {
+        try (PreparedStatement query = conn.prepareStatement("SELECT * FROM " + tShopReservations + " WHERE order_id=?")) {
+            query.setString(1, id);
+            try (ResultSet rows = query.executeQuery()) {
+                if (!rows.next()) return null;
+                return new ShopReservation(rows.getString("shop_id"), rows.getString("item_id"), rows.getInt("quantity"),
+                    rows.getString("stock_mode"), rows.getInt("stock_maximum"), rows.getLong("stock_revision"),
+                    rows.getLong("quota_reset"), rows.getString("quota_epoch"));
+            }
+        }
+    }
+
+    private @Nullable MarketOperation lockShopOrder(Connection conn, String id) throws SQLException {
+        try (PreparedStatement query = conn.prepareStatement("SELECT * FROM " + tOperations
+            + " WHERE id=? AND kind='SHOP_BUY' AND reference LIKE 'shop-order:%'" + (isMysql() ? " FOR UPDATE" : ""))) {
+            query.setString(1, id);
+            try (ResultSet rows = query.executeQuery()) { return rows.next() ? marketOperation(rows) : null; }
+        }
+    }
+
+    private @Nullable MarketOperation reviewChild(Connection conn, String trade, String kind) throws SQLException {
+        try (PreparedStatement query = conn.prepareStatement("SELECT * FROM " + tOperations + " WHERE trade_id=? AND kind=?")) {
+            query.setString(1, trade);
+            query.setString(2, kind);
+            try (ResultSet rows = query.executeQuery()) {
+                if (!rows.next()) return null;
+                var child = marketOperation(rows);
+                if (rows.next()) throw new SQLException("人工核对发现重复子回执 " + trade);
+                return child;
+            }
+        }
+    }
+
+    private void setReviewState(Connection conn, String id, String previous, String state, String note) throws SQLException {
+        if (execUpdate(conn, "UPDATE " + tOperations + " SET state=?,note=?,updated_at=? WHERE id=? AND state=?",
+            state, note, System.currentTimeMillis(), id, previous) != 1) throw new SQLException("人工核对状态冲突 " + id);
     }
 
     private int playerStockDefault(String shop, String item, int maximum) {
@@ -2163,8 +2925,8 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
     }
 
     private int lockedPlayerStockDefault(Connection conn,String shop,String item,int maximum) throws SQLException {
-        execUpdate(conn,(isMysql()?"INSERT IGNORE INTO ":"INSERT OR IGNORE INTO ")+tStockPolicies
-            +" (shop_id,item_id,next_at,default_stock) VALUES (?,?,0,NULL)",shop,item);
+        execUpdate(conn,stockRowInsert()+tStockPolicies
+            +" (shop_id,item_id,next_at,default_stock) VALUES (?,?,0,NULL)"+stockRowLock("next_at"),shop,item);
         try(PreparedStatement query=conn.prepareStatement("SELECT default_stock FROM "+tStockPolicies
             +" WHERE shop_id=? AND item_id=?"+(isMysql()?" FOR UPDATE":""))) {
             query.setString(1,shop);query.setString(2,item);
@@ -2186,6 +2948,7 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
         try (Connection conn = getConnection()) {
             conn.setAutoCommit(false);
             try {
+                lockStockRevision(conn, shop, item);
                 if("per-player".equals(mode)) initialStock=lockedPlayerStockDefault(conn,shop,item,maximum);
                 int value = "reset".equals(action) ? maximum : amount;
                 String table = "global".equals(mode) ? tGlobalStock : tPlayerStock;
@@ -2209,6 +2972,7 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
                     if ("add".equals(action)) execUpdate(conn, "UPDATE " + tStockPolicies + " SET default_stock=" + expression + " WHERE shop_id=? AND item_id=?", value, value, shop, item);
                     else execUpdate(conn, "UPDATE " + tStockPolicies + " SET default_stock=? WHERE shop_id=? AND item_id=?", value, shop, item);
                 }
+                execUpdate(conn, "UPDATE " + tStockPolicies + " SET revision=revision+1 WHERE shop_id=? AND item_id=?", shop, item);
                 conn.commit(); return true;
             } catch (SQLException exception) { conn.rollback(); throw exception; }
             finally { conn.setAutoCommit(true); }
@@ -2243,7 +3007,7 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
         try(Connection conn=getConnection()) {
             conn.setAutoCommit(false);
             try {
-                int claimed=execUpdate(conn,"UPDATE "+tStockPolicies+" SET next_at=?,default_stock=? WHERE shop_id=? AND item_id=? AND next_at<=?",now+intervalMillis,maximum,shop,item,now);
+                int claimed=execUpdate(conn,"UPDATE "+tStockPolicies+" SET next_at=?,default_stock=?,revision=revision+1 WHERE shop_id=? AND item_id=? AND next_at<=?",now+intervalMillis,maximum,shop,item,now);
                 if(claimed==1) {
                     if("global".equals(mode)) execUpdate(conn,"UPDATE "+tGlobalStock+" SET remaining=? WHERE shop_id=? AND item_id=?",maximum,shop,item);
                     else execUpdate(conn,"DELETE FROM "+tPlayerStock+" WHERE shop_id=? AND item_id=?",shop,item);
@@ -2256,55 +3020,257 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
 
 
     @Override
-    public boolean placeAuctionBid(AuctionListing expected,double amount,UUID bidder,String bidderName,long newExpiresAt) {
-        try(Connection conn=getConnection()) {
+    public boolean reserveAuctionBid(AuctionBidOrder bid) {
+        AuctionListing expected = bid.expected();
+        try (Connection conn = getConnection()) {
             conn.setAutoCommit(false);
-            try {
-                int changed=execUpdate(conn,"UPDATE "+tListings+" SET current_bid=?,highest_bidder=?,"
-                    +"original_expires_at=CASE WHEN original_expires_at=0 THEN expires_at ELSE original_expires_at END,expires_at=?"
-                    +" WHERE id=? AND status='ACTIVE' AND expires_at>? AND expires_at=? AND current_bid=?"
-                    +" AND ((highest_bidder IS NULL AND ? IS NULL) OR highest_bidder=?)",
-                    amount,bidder.toString(),newExpiresAt,expected.getId(),System.currentTimeMillis(),expected.getExpiresAt(),expected.getCurrentBid(),
-                    expected.getHighestBidder()==null?null:expected.getHighestBidder().toString(),expected.getHighestBidder()==null?null:expected.getHighestBidder().toString());
-                if(changed!=1) {conn.rollback();return false;}
-                execUpdate(conn,"INSERT INTO "+tBids+" (listing_id,bidder,bidder_name,amount,timestamp,previous_expires_at,bid_expires_at) VALUES (?,?,?,?,?,?,?)",
-                    expected.getId(),bidder.toString(),bidderName,amount,System.currentTimeMillis(),expected.getExpiresAt(),newExpiresAt);
-                conn.commit();return true;
-            } catch(SQLException exception) {conn.rollback();throw exception;}
-            finally {conn.setAutoCommit(true);}
-        } catch(SQLException exception) {throw new IllegalStateException("竞价和竞价记录提交失败",exception);}
+            try (PreparedStatement query = conn.prepareStatement("SELECT 1 FROM " + tListings + auctionBidCondition())) {
+                Object[] parameters = auctionBidKey(expected);
+                for (int i = 0; i < parameters.length; i++) setParam(query, i + 1, parameters[i]);
+                try (ResultSet rows = query.executeQuery()) {
+                    if (!rows.next()) { conn.rollback(); return false; }
+                }
+                insertOperation(conn, bid.order(), false);
+                insertOperation(conn, bid.debit(), false);
+                conn.commit();
+                return true;
+            } catch (SQLException | RuntimeException failure) {
+                conn.rollback();
+                throw failure;
+            } finally { conn.setAutoCommit(true); }
+        } catch (SQLException failure) {
+            throw new IllegalStateException("保存竞价扣款意图失败", failure);
+        }
     }
 
     @Override
-    public AuctionListing claimAuctionSettlement(long listingId) {return claimAuction(listingId,false,null,true);}
-
-    @Override
-    public AuctionListing claimAuctionCancellation(long listingId,UUID seller,boolean allowBids) {return claimAuction(listingId,true,seller,allowBids);}
-
-    private AuctionListing claimAuction(long id,boolean cancellation,UUID seller,boolean allowBids) {
-        try(Connection conn=getConnection()) {
+    public AuctionBidOrder.Outcome finishAuctionBid(AuctionBidOrder bid,
+            xuanmo.arcartxsuite.api.currency.CurrencyTransactionResult payment, long newExpiresAt) {
+        try (Connection conn = getConnection()) {
             conn.setAutoCommit(false);
             try {
-                AuctionListing listing=null;
-                try(PreparedStatement query=conn.prepareStatement("SELECT * FROM "+tListings+" WHERE id=?"+(isMysql()?" FOR UPDATE":""))) {
-                    query.setLong(1,id);
-                    try(ResultSet rows=query.executeQuery()) {if(rows.next())listing=mapListing(rows);}
+                AuctionBidOrder.Outcome outcome;
+                if (payment.uncertain()) {
+                    finishRunningOperation(conn, bid.debit(), "REVIEW", "扣款结果不明");
+                    finishRunningOperation(conn, bid.order(), "REVIEW", "扣款结果不明，需核对流水");
+                    outcome = AuctionBidOrder.Outcome.REVIEW;
+                } else if (!payment.success()) {
+                    finishRunningOperation(conn, bid.debit(), "FAILED", "未扣款");
+                    finishRunningOperation(conn, bid.order(), "FAILED", "竞价未扣款");
+                    outcome = AuctionBidOrder.Outcome.DECLINED;
+                } else {
+                    finishRunningOperation(conn, bid.debit(), "DONE", "扣款已确认");
+                    outcome = commitPaidBid(conn, bid, newExpiresAt);
                 }
-                long now=System.currentTimeMillis();
-                if(listing==null || listing.getStatus()!=AuctionListing.ListingStatus.ACTIVE
-                    || (!cancellation && listing.getExpiresAt()>now)
-                    || (cancellation && seller!=null && (!seller.equals(listing.getSeller()) || listing.getExpiresAt()<=now))
-                    || (cancellation && !allowBids && listing.getHighestBidder()!=null)) {conn.rollback();return null;}
-                AuctionListing.ListingStatus state=cancellation?AuctionListing.ListingStatus.CANCELLED
-                    :listing.getHighestBidder()!=null && listing.getCurrentBid()>0?AuctionListing.ListingStatus.SOLD:AuctionListing.ListingStatus.EXPIRED;
-                String condition=cancellation?(seller==null?"":" AND expires_at>?"):" AND expires_at<=?";
-                int changed=condition.isEmpty()?execUpdate(conn,"UPDATE "+tListings+" SET status=? WHERE id=? AND status='ACTIVE'",state.name(),id)
-                    :execUpdate(conn,"UPDATE "+tListings+" SET status=? WHERE id=? AND status='ACTIVE'"+condition,state.name(),id,now);
-                if(changed!=1) {conn.rollback();return null;}
-                conn.commit();listing.setStatus(state);return listing;
-            } catch(SQLException exception) {conn.rollback();throw exception;}
-            finally {conn.setAutoCommit(true);}
-        } catch(SQLException exception) {throw new IllegalStateException("拍卖状态抢占失败",exception);}
+                conn.commit();
+                return outcome;
+            } catch (SQLException | RuntimeException failure) {
+                conn.rollback();
+                throw failure;
+            } finally { conn.setAutoCommit(true); }
+        } catch (SQLException failure) {
+            throw new IllegalStateException("提交竞价和押金退款失败", failure);
+        }
+    }
+
+    private AuctionBidOrder.Outcome commitPaidBid(Connection conn, AuctionBidOrder bid, long newExpiresAt) throws SQLException {
+        AuctionListing expected = bid.expected();
+        MarketOperation order = bid.order();
+        var parameters = new ArrayList<Object>();
+        parameters.add(bid.amount());
+        parameters.add(order.player().toString());
+        parameters.add(newExpiresAt);
+        java.util.Collections.addAll(parameters, auctionBidKey(expected));
+        int changed = execUpdate(conn, "UPDATE " + tListings + " SET current_bid=?,highest_bidder=?,"
+            + "original_expires_at=CASE WHEN original_expires_at=0 THEN expires_at ELSE original_expires_at END,expires_at=?"
+            + auctionBidCondition(), parameters.toArray());
+        if (changed != 1) {
+            insertBidRefund(conn, order, order.player(), bid.debit().amount(), "auction_bid_race_refund");
+            finishRunningOperation(conn, order, "FAILED", "拍卖状态变化，扣款已进入退款队列");
+            return AuctionBidOrder.Outcome.REFUND_QUEUED;
+        }
+        execUpdate(conn, "INSERT INTO " + tBids
+            + " (listing_id,bidder,bidder_name,amount,timestamp,previous_expires_at,bid_expires_at) VALUES (?,?,?,?,?,?,?)",
+            expected.getId(), order.player().toString(), bid.bidderName(), bid.amount(), System.currentTimeMillis(),
+            expected.getExpiresAt(), newExpiresAt);
+        UUID previous = expected.getHighestBidder();
+        if (previous != null && !previous.equals(order.player()) && expected.getCurrentBid() > 0) {
+            insertBidRefund(conn, order, previous, java.math.BigDecimal.valueOf(expected.getCurrentBid()).toPlainString(),
+                "auction_outbid_refund");
+        }
+        finishRunningOperation(conn, order, "DONE", "竞价与押金退款已提交");
+        return AuctionBidOrder.Outcome.PLACED;
+    }
+
+    private String auctionBidCondition() {
+        return " WHERE id=? AND status='ACTIVE' AND type<>'BUY_NOW' AND expires_at>? AND expires_at=? AND current_bid=?"
+            + " AND ((highest_bidder IS NULL AND ? IS NULL) OR highest_bidder=?)";
+    }
+
+    private Object[] auctionBidKey(AuctionListing expected) {
+        String bidder = expected.getHighestBidder() == null ? null : expected.getHighestBidder().toString();
+        return new Object[]{expected.getId(), System.currentTimeMillis(), expected.getExpiresAt(),
+            expected.getCurrentBid(), bidder, bidder};
+    }
+
+    private void finishRunningOperation(Connection conn, MarketOperation operation, String state, String note) throws SQLException {
+        long now = System.currentTimeMillis();
+        int changed = execUpdate(conn, "UPDATE " + tOperations
+            + " SET state=?,note=?,updated_at=CASE WHEN updated_at>=? THEN updated_at+1 ELSE ? END"
+            + " WHERE id=? AND trade_id=? AND kind=? AND state='RUNNING' AND owner=?",
+            state, note, now, now, operation.id(), operation.tradeId(), operation.kind(), operation.owner());
+        if (changed != 1) throw new IllegalStateException("交易流水状态不一致: " + operation.id());
+    }
+
+    private void insertBidRefund(Connection conn, MarketOperation order, UUID recipient, String amount, String reason) throws SQLException {
+        long now = System.currentTimeMillis();
+        insertOperation(conn, new MarketOperation(order.id() + ":refund", order.id(), recipient, "CURRENCY",
+            reason, "READY", order.currency(), amount, order.itemData(), "等待退还押金", "", now, now,
+            order.itemName(), order.material()), false);
+    }
+
+    @Override
+    public boolean settleExpiredAuction(AuctionSettlement settlement) {
+        var status = settlement.history().buyer() == null ? AuctionListing.ListingStatus.EXPIRED : AuctionListing.ListingStatus.SOLD;
+        return finishAuction(settlement, status, false);
+    }
+
+    @Override
+    public boolean cancelAuction(AuctionSettlement settlement, @Nullable UUID seller, boolean allowBids) {
+        var expected = settlement.expected();
+        if ((seller != null && !seller.equals(expected.getSeller())) || (!allowBids && expected.getHighestBidder() != null)) {
+            return false;
+        }
+        return finishAuction(settlement, AuctionListing.ListingStatus.CANCELLED, seller == null);
+    }
+
+    private boolean finishAuction(AuctionSettlement settlement, AuctionListing.ListingStatus status, boolean forced) {
+        return retryTerminalSettlement(() -> commitAuctionSettlement(settlement, status, forced),
+            "拍卖终止结算 #" + settlement.expected().getId());
+    }
+
+    @FunctionalInterface
+    private interface TerminalSettlement {
+        boolean commit() throws SQLException;
+    }
+
+    private boolean retryTerminalSettlement(TerminalSettlement settlement, String operation) {
+        for (int attempt = 0; ; attempt++) {
+            try {
+                return settlement.commit();
+            } catch (SQLException exception) {
+                int code = exception.getErrorCode();
+                boolean contention = isMysql() ? code == 1213 : (code & 0xff) == 5;
+                if (attempt >= 2 || !contention) {
+                    throw new IllegalStateException(operation + "失败", exception);
+                }
+                try {
+                    Thread.sleep(10L * (attempt + 1));
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(operation + "已中断", interrupted);
+                }
+            }
+        }
+    }
+
+    private boolean commitAuctionSettlement(AuctionSettlement settlement, AuctionListing.ListingStatus status,
+                                            boolean forced) throws SQLException {
+        var expected = settlement.expected();
+        var receipt = settlement.receipt();
+        String bidder = expected.getHighestBidder() == null ? null : expected.getHighestBidder().toString();
+        try (Connection conn = getConnection()) {
+            conn.setAutoCommit(false);
+            try {
+                long now = System.currentTimeMillis();
+                boolean cancel = status == AuctionListing.ListingStatus.CANCELLED;
+                long earliest = cancel && !forced ? now + 1 : Long.MIN_VALUE;
+                long latest = cancel ? Long.MAX_VALUE : now;
+                int changed = execUpdate(conn, "UPDATE " + tListings
+                    + " SET status=? WHERE id=? AND status='ACTIVE' AND expires_at BETWEEN ? AND ? AND expires_at=?"
+                    + " AND seller=? AND current_bid=? AND ((highest_bidder IS NULL AND ? IS NULL) OR highest_bidder=?)",
+                    status.name(), expected.getId(), earliest, latest, expected.getExpiresAt(),
+                    expected.getSeller().toString(), expected.getCurrentBid(), bidder, bidder);
+                if (changed != 1) {
+                    conn.rollback();
+                    return false;
+                }
+                insertOperation(conn, receipt, false);
+                insertHistory(conn, settlement.history(), receipt.id(), receipt.material());
+                for (var delivery : settlement.deliveries()) insertOperation(conn, delivery, false);
+                var publication = settlement.publication();
+                if (publication != null) {
+                    execUpdate(conn, "INSERT INTO " + tAuctionPublications + " (id,listing_id,seller,buyer,item,price,"
+                        + "currency,tax,buyer_name,event_pending,refresh_pending,lease_until,lease_token) VALUES (?,?,?,?,?,?,?,?,?,?,?,0,'')",
+                        publication.id(), publication.listingId(), publication.seller().toString(),
+                        publication.buyer() == null ? null : publication.buyer().toString(), publication.item(),
+                        publication.price(), publication.currency(), publication.tax(), publication.buyerName(),
+                        publication.eventPending() ? 1 : 0, publication.refreshPending() ? 1 : 0);
+                }
+                if (publication != null && publication.refreshPending()) {
+                    execUpdate(conn, "UPDATE " + tAuctionRevision + " SET revision=revision+1 WHERE id=1");
+                }
+                conn.commit();
+                return true;
+            } catch (SQLException | RuntimeException exception) {
+                conn.rollback();
+                throw exception;
+            } finally { conn.setAutoCommit(true); }
+        }
+    }
+
+    @Override
+    public long auctionSettlementRevision() {
+        try (Connection conn = getConnection(); Statement query = conn.createStatement();
+             ResultSet rows = query.executeQuery("SELECT revision FROM " + tAuctionRevision + " WHERE id=1")) {
+            if (rows.next()) return rows.getLong(1);
+            throw new IllegalStateException("拍卖结算版本记录缺失");
+        } catch (SQLException exception) {
+            throw new IllegalStateException("无法读取拍卖结算版本", exception);
+        }
+    }
+
+    @Override
+    public List<AuctionPublication> claimAuctionPublications(String token, long now, int limit) {
+        var selected = new ArrayList<AuctionPublication>();
+        try (Connection conn = getConnection(); PreparedStatement query = conn.prepareStatement(
+            "SELECT p.*,o.created_at AS settled_at FROM " + tAuctionPublications + " p LEFT JOIN "
+                + tOperations + " o ON o.id=p.id WHERE p.lease_until<=? ORDER BY p.lease_until,p.id LIMIT ?")) {
+            query.setLong(1, now);
+            query.setInt(2, limit);
+            try (ResultSet rows = query.executeQuery()) {
+                while (rows.next()) selected.add(new AuctionPublication(rows.getString("id"), rows.getLong("listing_id"),
+                    UUID.fromString(rows.getString("seller")), parseUuidSafe(rows.getString("buyer"), "publication.buyer"),
+                    rows.getString("item"), rows.getDouble("price"), rows.getString("currency"), rows.getDouble("tax"),
+                    rows.getString("buyer_name"), rows.getInt("event_pending") != 0, rows.getInt("refresh_pending") != 0,
+                    rows.getLong("settled_at")));
+            }
+            var claimed = new ArrayList<AuctionPublication>();
+            for (var entry : selected) {
+                if (execUpdate(conn, "UPDATE " + tAuctionPublications + " SET lease_token=?,lease_until=?"
+                    + " WHERE id=? AND lease_until<=?", token, now + 30_000, entry.id(), now) == 1) claimed.add(entry);
+            }
+            return claimed;
+        } catch (SQLException exception) { throw new IllegalStateException("认领拍卖通知失败", exception); }
+    }
+
+    @Override
+    public boolean finishAuctionPublication(String id, String token, boolean event, boolean refresh, long retryAt) {
+        try (Connection conn = getConnection()) {
+            conn.setAutoCommit(false);
+            try {
+                int changed = execUpdate(conn, "UPDATE " + tAuctionPublications + " SET event_pending=CASE WHEN ?=1 THEN 0 ELSE event_pending END,"
+                    + "refresh_pending=CASE WHEN ?=1 THEN 0 ELSE refresh_pending END,lease_until=? WHERE id=? AND lease_token=?",
+                    event ? 1 : 0, refresh ? 1 : 0, retryAt, id, token);
+                execUpdate(conn, "DELETE FROM " + tAuctionPublications
+                    + " WHERE id=? AND lease_token=? AND event_pending=0 AND refresh_pending=0", id, token);
+                conn.commit();
+                return changed == 1;
+            } catch (SQLException | RuntimeException exception) {
+                conn.rollback();
+                throw exception;
+            } finally { conn.setAutoCommit(true); }
+        } catch (SQLException exception) { throw new IllegalStateException("写入拍卖通知回执失败", exception); }
     }
 
     @Override
@@ -2330,6 +3296,19 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
             try(ResultSet rows=query.executeQuery()) {while(rows.next()) result.add(UUID.fromString(rows.getString(1)));}
         } catch(SQLException exception) {throw new IllegalStateException("关注者读取失败",exception);}
         return result;
+    }
+
+    @Override
+    public String latestAuctionBidderName(long listingId, UUID bidder) {
+        String sql = "SELECT bidder_name FROM " + tBids + " WHERE listing_id=? AND bidder=? ORDER BY id DESC LIMIT 1";
+        try (Connection conn = getConnection(); PreparedStatement query = conn.prepareStatement(sql)) {
+            query.setLong(1, listingId);
+            query.setString(2, bidder.toString());
+            try (ResultSet rows = query.executeQuery()) {
+                if (rows.next()) return rows.getString(1);
+            }
+        } catch (SQLException exception) { throw new IllegalStateException("成交买家读取失败", exception); }
+        return "未知";
     }
 
 
@@ -2427,12 +3406,20 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
     }
 
     @Override public void ensurePlayerShopProfile(UUID owner,String ownerName,boolean publish) {
+        try (Connection conn = getConnection()) {
+            ensurePlayerShopProfile(conn, owner, ownerName, publish);
+        } catch (SQLException failure) {
+            throw new IllegalStateException("无法准备玩家店铺档案", failure);
+        }
+    }
+
+    private void ensurePlayerShopProfile(Connection conn, UUID owner, String ownerName, boolean publish) throws SQLException {
         long now=System.currentTimeMillis();
-        durableUpdate((isMysql()?"INSERT IGNORE INTO ":"INSERT OR IGNORE INTO ")+tShopProfiles
+        execUpdate(conn, (isMysql()?"INSERT IGNORE INTO ":"INSERT OR IGNORE INTO ")+tShopProfiles
             +" (owner,owner_name,shop_name,description,announcement,icon_data,version,published,created_at,updated_at) VALUES (?,?,?,?,?,?,1,?,?,?)",
             owner.toString(),ownerName,ownerName+"的小店","","","",publish?1:0,now,now);
-        durableUpdate("UPDATE "+tShopProfiles+" SET owner_name=? WHERE owner=? AND owner_name<>?",ownerName,owner.toString(),ownerName);
-        if(publish)durableUpdate("UPDATE "+tShopProfiles+" SET published=1,version=version+1,created_at=?,updated_at=? WHERE owner=? AND published=0",now,now,owner.toString());
+        execUpdate(conn, "UPDATE "+tShopProfiles+" SET owner_name=? WHERE owner=? AND owner_name<>?",ownerName,owner.toString(),ownerName);
+        if(publish)execUpdate(conn, "UPDATE "+tShopProfiles+" SET published=1,version=version+1,created_at=?,updated_at=? WHERE owner=? AND published=0",now,now,owner.toString());
     }
 
     private xuanmo.arcartxsuite.market.playershop.PlayerShopProfile mapShopProfile(ResultSet rows) throws SQLException {
@@ -2552,9 +3539,183 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
         }catch(SQLException exception){throw new IllegalStateException("店铺收藏更新失败",exception);}
     }
 
-    @Override public boolean claimPlayerShopPurchase(long listingId) {
-        return durableUpdate("UPDATE "+tPlayerShopListings+" SET status='SOLD' WHERE id=? AND status='ACTIVE' AND expires_at>?",
-            listingId,System.currentTimeMillis())==1;
+    @Override
+    public boolean reservePlayerShopPurchase(PlayerShopOrder plan) {
+        return retryTerminalSettlement(() -> reservePlayerShopPurchaseTransaction(plan), "预留玩家商品");
+    }
+
+    private boolean reservePlayerShopPurchaseTransaction(PlayerShopOrder plan) throws SQLException {
+        var listing = plan.listing();
+        try (Connection conn = getConnection()) {
+            conn.setAutoCommit(false);
+            try {
+                int changed = execUpdate(conn, "UPDATE " + tPlayerShopListings + " SET status='RESERVED'"
+                    + " WHERE id=? AND seller=? AND status='ACTIVE' AND expires_at>? AND expires_at=? AND price=? AND currency=?"
+                    + (plan.storefront() ? " AND EXISTS (SELECT 1 FROM " + tShopProfiles + " WHERE owner=? AND published=1)" : ""),
+                    playerShopReservationArgs(listing, plan.storefront()));
+                if (changed != 1) { conn.rollback(); return false; }
+                insertOperation(conn, plan.order(), false);
+                insertOperation(conn, plan.debit(), false);
+                for (var delivery : plan.deliveries()) insertOperation(conn, delivery, false);
+                conn.commit();
+                return true;
+            } catch (SQLException | RuntimeException failure) {
+                conn.rollback();
+                throw failure;
+            } finally { conn.setAutoCommit(true); }
+        }
+    }
+
+    private Object[] playerShopReservationArgs(PlayerShopListing listing, boolean storefront) {
+        Object[] values = {listing.getId(), listing.getSeller().toString(), System.currentTimeMillis(),
+            listing.getExpiresAt(), listing.getPrice(), listing.getCurrency()};
+        if (!storefront) return values;
+        values = java.util.Arrays.copyOf(values, values.length + 1);
+        values[values.length - 1] = listing.getSeller().toString();
+        return values;
+    }
+
+    @Override
+    public void finishPlayerShopPurchase(PlayerShopOrder plan, xuanmo.arcartxsuite.api.currency.CurrencyTransactionResult payment) {
+        retryTerminalSettlement(() -> {
+            try (Connection conn = getConnection()) {
+                conn.setAutoCommit(false);
+                try {
+                    if (payment.uncertain()) {
+                        finishRunningOperation(conn, plan.debit(), "REVIEW", "扣款结果不明");
+                        finishRunningOperation(conn, plan.order(), "REVIEW", "商品已预留，等待人工核对扣款");
+                    } else {
+                        boolean paid = payment.success();
+                        finishRunningOperation(conn, plan.debit(), paid ? "DONE" : "FAILED", paid ? "扣款已确认" : "未扣款");
+                        finishRunningOperation(conn, plan.order(), paid ? "DONE" : "FAILED",
+                            paid ? "成交及交付任务已提交" : "未扣款，已释放商品");
+                        settlePlayerShopSale(conn, plan.order(), plan.listing(), plan.tax(), plan.deliveries().size(), paid);
+                    }
+                    conn.commit();
+                    return true;
+                } catch (SQLException | RuntimeException failure) {
+                    conn.rollback();
+                    throw failure;
+                } finally { conn.setAutoCommit(true); }
+            }
+        }, "提交玩家商店成交 " + plan.order().id());
+    }
+
+    private void settlePlayerShopSale(Connection conn, MarketOperation order, PlayerShopListing listing,
+                                      java.math.BigDecimal tax, int deliveryCount, boolean sold) throws SQLException {
+        if (execUpdate(conn, "UPDATE " + tPlayerShopListings
+                + " SET status=? WHERE id=? AND seller=? AND status='RESERVED' AND expires_at=? AND price=? AND currency=?",
+                sold ? "SOLD" : "ACTIVE", listing.getId(), listing.getSeller().toString(), listing.getExpiresAt(),
+                listing.getPrice(), listing.getCurrency()) != 1) {
+            throw new SQLException("玩家商品预留状态冲突 #" + listing.getId());
+        }
+        int changed = execUpdate(conn, "UPDATE " + tOperations + " SET state=?,note=?,updated_at=?"
+                + " WHERE trade_id=? AND kind IN ('ITEM','CURRENCY','NOTICE') AND state IN ('PREPARED','REVIEW')",
+            sold ? "READY" : "CANCELLED", sold ? "等待交付" : "成交未提交，取消交付", System.currentTimeMillis(), order.id());
+        if (changed != deliveryCount || deliveryCount < 1) throw new SQLException("玩家商店交付快照状态冲突 " + order.id());
+        if (sold) {
+            insertPlayerShopHistory(conn, new MarketRepository.PlayerShopHistory(0, listing.getId(), listing.getSeller(), order.player(),
+                listing.getItemData(), listing.getItemDisplayName(), listing.getPrice(), listing.getCurrency(),
+                tax.doubleValue(), "PURCHASE", System.currentTimeMillis()), order.id(), order.material());
+        }
+    }
+
+    private @Nullable MarketOperation playerShopOrder(String id) {
+        var rows = readOperations("SELECT * FROM " + tOperations
+            + " WHERE id=? AND kind='PSHOP_BUY' AND reference LIKE 'pshop-order:%'", List.of(id));
+        return rows.isEmpty() ? null : rows.get(0);
+    }
+
+    @Override
+    public String reviewPlayerShopPurchase(String id, String action, String audit) {
+        if (!List.of("fulfill-paid", "refund-paid", "cancel-unpaid").contains(action)) return "不支持的核对操作";
+        try (Connection conn = getConnection()) {
+            conn.setAutoCommit(false);
+            try {
+                String message = reviewPlayerShopPurchase(conn, id, action, audit);
+                conn.commit();
+                return message;
+            } catch (SQLException | RuntimeException failure) {
+                conn.rollback();
+                throw failure;
+            } finally { conn.setAutoCommit(true); }
+        } catch (SQLException failure) {
+            throw new IllegalStateException("人工核对玩家商店订单失败", failure);
+        }
+    }
+
+    private String reviewPlayerShopPurchase(Connection conn, String id, String action, String audit) throws SQLException {
+        MarketOperation order;
+        try (PreparedStatement query = conn.prepareStatement("SELECT * FROM " + tOperations
+                + " WHERE id=? AND kind='PSHOP_BUY' AND reference LIKE 'pshop-order:%'" + (isMysql() ? " FOR UPDATE" : ""))) {
+            query.setString(1, id);
+            try (ResultSet rows = query.executeQuery()) {
+                if (!rows.next()) return reviewListingFee(conn, id, action, audit);
+                order = marketOperation(rows);
+            }
+        }
+        if (!"REVIEW".equals(order.state())) return "当前状态 " + order.state() + "，无需重复核对";
+        var debit = reviewChild(conn, order.id(), "DEBIT");
+        if (debit == null || !"REVIEW".equals(debit.state())) return "扣款回执还未进入待核对状态";
+        String[] reference = order.reference().split(":");
+        if (reference.length != 4) throw new SQLException("玩家商店订单预留快照无效 " + id);
+        long listingId = Long.parseLong(reference[1]);
+        var tax = new java.math.BigDecimal(reference[2]);
+        int deliveries = Integer.parseInt(reference[3]);
+        PlayerShopListing listing;
+        try (PreparedStatement query = conn.prepareStatement("SELECT * FROM " + tPlayerShopListings + " WHERE id=? AND status='RESERVED'")) {
+            query.setLong(1, listingId);
+            try (ResultSet rows = query.executeQuery()) {
+                if (!rows.next()) return "商品预留不存在，请核对交易流水";
+                listing = mapPlayerShopListing(rows);
+            }
+        }
+        boolean sold = "fulfill-paid".equals(action);
+        boolean refund = "refund-paid".equals(action);
+        var amount = new java.math.BigDecimal(debit.amount());
+        if (refund && amount.signum() <= 0) return "退款金额无效";
+        setReviewState(conn, order.id(), "REVIEW", sold ? "DONE" : "CANCELLED", audit);
+        setReviewState(conn, debit.id(), "REVIEW", sold || refund ? "DONE" : "FAILED", audit);
+        settlePlayerShopSale(conn, order, listing, tax, deliveries, sold);
+        if (refund) {
+            long now = System.currentTimeMillis();
+            insertOperation(conn, new MarketOperation(order.id() + ":refund", order.id(), order.player(), "CURRENCY",
+                "pshop-refund", "READY", order.currency(), amount.toPlainString(), "", "等待退款", "", now, now,
+                order.itemName(), order.material()), false);
+        }
+        return sold ? "已确认扣款，成交及交付已入队" : refund ? "已取消订单，退款已入队" : "已确认未扣款，商品已释放";
+    }
+
+    private String reviewListingFee(Connection conn, String id, String action, String audit) throws SQLException {
+        MarketOperation order;
+        try (PreparedStatement query = conn.prepareStatement("SELECT * FROM " + tOperations
+                + " WHERE id=? AND ((kind='PSHOP_LIST' AND reference LIKE 'pshop-listing:%')"
+                + " OR (kind='AUCTION_LIST' AND reference LIKE 'auction-listing:%'))" + (isMysql() ? " FOR UPDATE" : ""))) {
+            query.setString(1, id);
+            try (ResultSet rows = query.executeQuery()) {
+                if (!rows.next()) return "玩家商店订单不存在";
+                order = marketOperation(rows);
+            }
+        }
+        if (!"REVIEW".equals(order.state())) return "当前状态 " + order.state() + "，无法核对上架费";
+        var debit = reviewChild(conn, id, "DEBIT");
+        if (debit == null || !"REVIEW".equals(debit.state())) return "上架费回执还未进入待核对状态";
+        boolean refund = "refund-paid".equals(action);
+        if (!refund && !"cancel-unpaid".equals(action)) return "物品尚未扣除，请选择退款或确认未扣上架费";
+        if (refund && new java.math.BigDecimal(debit.amount()).signum() <= 0) return "退款金额无效";
+        String[] reference = order.reference().split(":");
+        if (reference.length != 4) throw new SQLException("上架暂存快照无效 " + id);
+        setReviewState(conn, order.id(), "REVIEW", "CANCELLED", audit);
+        setReviewState(conn, debit.id(), "REVIEW", refund ? "DONE" : "FAILED", audit);
+        var kind = "AUCTION_LIST".equals(order.kind()) ? MarketListingDraft.Kind.AUCTION : MarketListingDraft.Kind.PLAYER_SHOP;
+        cancelListingDraftRow(conn, kind, Long.parseLong(reference[1]), order.player());
+        if (refund) {
+            long now = System.currentTimeMillis();
+            insertOperation(conn, new MarketOperation(id + ":refund", id, order.player(), "CURRENCY",
+                kind.prefix() + "-fee-refund", "READY", debit.currency(), debit.amount(), "",
+                "等待退还上架费", "", now, now, order.itemName(), order.material()), false);
+        }
+        return refund ? "暂存已释放，上架费退款已入队" : "已确认未扣上架费，暂存已释放";
     }
 
 
@@ -2632,7 +3793,18 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
     }
 
     @Override public void noteMarketPlayer(UUID player,String name){
-        durableUpdate("INSERT INTO "+tMarketPlayers+" (player,name,updated_at) VALUES (?,?,?)"+(isMysql()?" ON DUPLICATE KEY UPDATE name=VALUES(name),updated_at=VALUES(updated_at)":" ON CONFLICT(player) DO UPDATE SET name=excluded.name,updated_at=excluded.updated_at"),player.toString(),name,System.currentTimeMillis());
+        try (Connection conn = getConnection()) {
+            noteMarketPlayer(conn, player, name);
+        } catch (SQLException failure) {
+            throw new IllegalStateException("市场玩家档案写入失败", failure);
+        }
+    }
+
+    private void noteMarketPlayer(Connection conn, UUID player, String name) throws SQLException {
+        execUpdate(conn, "INSERT INTO " + tMarketPlayers + " (player,name,updated_at) VALUES (?,?,?)"
+            + (isMysql() ? " ON DUPLICATE KEY UPDATE name=VALUES(name),updated_at=VALUES(updated_at)"
+                : " ON CONFLICT(player) DO UPDATE SET name=excluded.name,updated_at=excluded.updated_at"),
+            player.toString(), name, System.currentTimeMillis());
     }
     @Override public UUID resolveMarketPlayer(String name){
         try{return UUID.fromString(name);}catch(IllegalArgumentException ignored){}
@@ -2748,7 +3920,7 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
         String category="CASE WHEN business_type LIKE 'AUCTION%' OR business_type IN ('BID_WIN','BUY_NOW') THEN 'AUCTION' WHEN business_type LIKE 'PSHOP%' THEN 'PSHOP' "
             +"WHEN business_type LIKE 'SHOP%' THEN 'SHOP' WHEN business_type LIKE 'RECYCLE%' THEN 'RECYCLE' WHEN business_type='NPC_EXCHANGE' THEN 'EXCHANGE' ELSE 'OTHER' END";
         if(!"ALL".equals(filter.type())){where.append(" AND (").append(category).append(")=?");args.add(filter.type());}
-        if("PENDING".equals(filter.state()))where.append(" AND state IN ('READY','PREPARED','RUNNING') AND kind IN ('ITEM','CURRENCY','COMMAND')");
+        if("PENDING".equals(filter.state()))where.append(" AND state IN ('READY','PREPARED','RUNNING','ITEM_SAVING') AND kind IN ('ITEM','CURRENCY','COMMAND')");
         else if("ISSUES".equals(filter.state()))where.append(" AND state IN ('FAILED','REVIEW')");
         else if(!"ALL".equals(filter.state())){where.append(" AND state=?");args.add(filter.state());}
         return where.toString();

@@ -8,6 +8,10 @@ dependencies {
     testImplementation(project(":axs-api"))
     testImplementation("org.spigotmc:spigot-api:1.20.1-R0.1-SNAPSHOT")
     testImplementation("org.xerial:sqlite-jdbc:3.46.0.0")
+    testImplementation("org.mockito:mockito-core:5.12.0")
+    testRuntimeOnly("com.mysql:mysql-connector-j:8.4.0")
+    testRuntimeOnly("com.belerweb:pinyin4j:2.5.1")
+    testImplementation("redis.clients:jedis:5.1.0")
     compileOnly(project(":axs-api"))
     compileOnly("org.spigotmc:spigot-api:1.20.1-R0.1-SNAPSHOT")
     compileOnly("org.jetbrains:annotations:24.1.0")
@@ -19,7 +23,11 @@ dependencies {
     compileOnly("net.luckperms:api:5.4")
 }
 
-tasks.test { useJUnitPlatform() }
+tasks.test {
+    useJUnitPlatform()
+    systemProperty("java.io.tmpdir", temporaryDir.absolutePath)
+    inputs.property("auctionMysqlUrl", providers.environmentVariable("AXS_EVENTPACKET_MYSQL_URL").orElse(""))
+}
 
 tasks.compileJava {
     options.encoding = "UTF-8"

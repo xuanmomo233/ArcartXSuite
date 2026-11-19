@@ -42,18 +42,12 @@ ui:
       节点目标数 = var.nodeCount.round()
       if(var.已建_节点容器 != 节点目标数){
         var.已建_节点容器 = 节点目标数
-        for(key in var.节点引用.keys()){
-          var.节点引用[key].remove()
-        }
         var.节点引用 = {}
         var.轮次 = (var.轮次 + 1).round()
-        模板 = val.节点容器.get(0)
-        模板.entryKey = 0.round()
-        if(节点目标数 > 1){
-          for(i in range(1, 节点目标数 - 1)){
-            e = 模板.copy('节点项_' + var.轮次 + '_' + i.round())
-            e.entryKey = i.round()
-            var.节点引用[i.round()] = e
+        var.节点容器网格数据 = []
+        if((节点目标数 - 1) >= 0){
+          for(网格序号 in range(0, 节点目标数 - 1)){
+            var.节点容器网格数据.add(网格序号.round())
           }
         }
       }
@@ -61,18 +55,12 @@ ui:
       对象目标数 = var.objCount.round()
       if(var.已建_对象容器 != 对象目标数){
         var.已建_对象容器 = 对象目标数
-        for(key in var.对象引用.keys()){
-          var.对象引用[key].remove()
-        }
         var.对象引用 = {}
         var.轮次 = (var.轮次 + 1).round()
-        模板 = val.对象容器.get(0)
-        模板.entryKey = 0.round()
-        if(对象目标数 > 1){
-          for(i in range(1, 对象目标数 - 1)){
-            e = 模板.copy('对象行_' + var.轮次 + '_' + i.round())
-            e.entryKey = i.round()
-            var.对象引用[i.round()] = e
+        var.对象容器网格数据 = []
+        if((对象目标数 - 1) >= 0){
+          for(网格序号 in range(0, 对象目标数 - 1)){
+            var.对象容器网格数据.add(网格序号.round())
           }
         }
       }
@@ -91,18 +79,12 @@ ui:
       节点目标数 = var.nodeCount.round()
       if(var.已建_节点容器 != 节点目标数){
         var.已建_节点容器 = 节点目标数
-        for(key in var.节点引用.keys()){
-          var.节点引用[key].remove()
-        }
         var.节点引用 = {}
         var.轮次 = (var.轮次 + 1).round()
-        模板 = val.节点容器.get(0)
-        模板.entryKey = 0.round()
-        if(节点目标数 > 1){
-          for(i in range(1, 节点目标数 - 1)){
-            e = 模板.copy('节点项_' + var.轮次 + '_' + i.round())
-            e.entryKey = i.round()
-            var.节点引用[i.round()] = e
+        var.节点容器网格数据 = []
+        if((节点目标数 - 1) >= 0){
+          for(网格序号 in range(0, 节点目标数 - 1)){
+            var.节点容器网格数据.add(网格序号.round())
           }
         }
       }
@@ -110,18 +92,12 @@ ui:
       对象目标数 = var.objCount.round()
       if(var.已建_对象容器 != 对象目标数){
         var.已建_对象容器 = 对象目标数
-        for(key in var.对象引用.keys()){
-          var.对象引用[key].remove()
-        }
         var.对象引用 = {}
         var.轮次 = (var.轮次 + 1).round()
-        模板 = val.对象容器.get(0)
-        模板.entryKey = 0.round()
-        if(对象目标数 > 1){
-          for(i in range(1, 对象目标数 - 1)){
-            e = 模板.copy('对象行_' + var.轮次 + '_' + i.round())
-            e.entryKey = i.round()
-            var.对象引用[i.round()] = e
+        var.对象容器网格数据 = []
+        if((对象目标数 - 1) >= 0){
+          for(网格序号 in range(0, 对象目标数 - 1)){
+            var.对象容器网格数据.add(网格序号.round())
           }
         }
       }
@@ -349,19 +325,22 @@ controls:
             }
         children:
           节点容器:
-            type: VStack
+            type: RepeatGrid
             val: 节点容器
             attribute:
+              items: "var.节点容器网格数据"
+              flow: ~row
+              column: 1
+              spaceBetweenY: 10
               maxSize: 2147483647
               width: 258
-              spaceBetween: 10
             children:
               节点项:
                 type: Canvas
                 attribute:
                   width: 258
                   height: 68
-                  entryKey: 0.round()
+                  entryKey: self.item
                   entry: "var.nodeRows[self.entryKey]"
                   visible: "self.entry != none"
                 action:
@@ -587,19 +566,22 @@ controls:
             }
         children:
           对象容器:
-            type: VStack
+            type: RepeatGrid
             val: 对象容器
             attribute:
+              items: "var.对象容器网格数据"
+              flow: ~row
+              column: 1
+              spaceBetweenY: 12
               maxSize: 2147483647
               width: "var.contentW - 70"
-              spaceBetween: 12
             children:
               行:
                 type: Canvas
                 attribute:
                   width: "var.contentW - 70"
                   height: 96
-                  entryKey: 0.round()
+                  entryKey: self.item
                   entry: "var.objRows[self.entryKey]"
                   visible: "self.entry != none"
                 children:

@@ -2,7 +2,7 @@ id: abyss
 name: Abyss
 version: 2.0.0
 main: xuanmo.arcartxsuite.abyss.AbyssModule
-api-version: 3.0
+api-version: 3.9
 
 depends: []
 softdepends:

@@ -9,8 +9,13 @@ plugins {
 }
 
 // 宿主、公开 API、认证组件、模块与代理端使用同一套发布版本。
+val runtimeTarget = RuntimeTarget.parse(providers.gradleProperty("axs.runtimeTarget").orElse("universal").get())
 allprojects {
     version = rootProject.version
+    // Profiles can coexist without overwriting another target's generated resources or JARs.
+    if (runtimeTarget != RuntimeTarget.UNIVERSAL) {
+        layout.buildDirectory.set(layout.projectDirectory.dir("build/runtime/${runtimeTarget.id}"))
+    }
 }
 
 val distDir = rootProject.layout.buildDirectory.dir("ArcartX-Suite")
@@ -206,7 +211,7 @@ tasks.named<Delete>("clean") {
 tasks.register("buildDev") {
     group = "build"
     description = "Build all JARs WITHOUT obfuscation (dev only)"
-    dependsOn(":axs-core:shadowJar")
+    dependsOn(":axs-core:thinCoreJar")
     dependsOn(subprojects.filter { isProductionModule(it) }.map { "${it.path}:jar" })
     // 仅对应用了 shadow 插件的代理子项目（velocity/bungee）依赖 shadowJar；
     // proxy:common 是纯 java 库、无 shadowJar 任务，其 jar 会随 velocity/bungee 的 shadowJar 传递构建。

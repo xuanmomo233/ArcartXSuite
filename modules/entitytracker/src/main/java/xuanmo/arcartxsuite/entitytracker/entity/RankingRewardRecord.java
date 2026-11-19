@@ -26,6 +26,21 @@ public class RankingRewardRecord {
     private String failureReason;
     private String serverName;
     private Integer retryCount;
+    private int nextAction;
+    private String rewardPlan;
+    private String claimAttempt;
+
+    public String getClaimAttempt() { return claimAttempt; }
+
+    public void setClaimAttempt(String claimAttempt) { this.claimAttempt = claimAttempt; }
+
+    public String getRewardPlan() { return rewardPlan; }
+
+    public void setRewardPlan(String rewardPlan) { this.rewardPlan = rewardPlan; }
+
+    public int getNextAction() { return nextAction; }
+
+    public void setNextAction(int nextAction) { this.nextAction = nextAction; }
 
     // 构造函数
     public RankingRewardRecord() {}

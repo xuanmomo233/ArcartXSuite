@@ -3,21 +3,32 @@ package xuanmo.arcartxsuite.menu.service;
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.UUID;
 import java.util.function.Supplier;
 import java.util.logging.Logger;
 import org.bukkit.Bukkit;
 import org.bukkit.Sound;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.scheduler.BukkitTask;
+import xuanmo.arcartxsuite.api.auth.AuthAccess;
+import xuanmo.arcartxsuite.api.auth.AuthSnapshot;
 import xuanmo.arcartxsuite.api.capability.SignalDispatchable;
+import xuanmo.arcartxsuite.api.command.ThrottledCommandExecutor;
 import xuanmo.arcartxsuite.api.condition.ScriptActionKind;
 import xuanmo.arcartxsuite.api.condition.ScriptConditionServices;
 import xuanmo.arcartxsuite.menu.config.MenuActionDefinition;
 import xuanmo.arcartxsuite.menu.config.MenuActionType;
+import xuanmo.arcartxsuite.menu.config.MenuButtonDefinition;
+import xuanmo.arcartxsuite.menu.config.MenuDefinition;
 import xuanmo.arcartxsuite.api.util.TemporaryOpExecutor;
 
 /**
@@ -30,15 +41,18 @@ import xuanmo.arcartxsuite.api.util.TemporaryOpExecutor;
 public final class MenuActionExecutor {
 
     private static final String BUNGEE_CHANNEL = "BungeeCord";
+    private static final int MAX_PENDING_PER_PLAYER = 64;
+    private static final int MAX_PENDING = 4096;
 
     private final JavaPlugin plugin;
     private final MenuService menuService;
     private final Logger logger;
     private final Supplier<SignalDispatchable> signalProvider;
-    /** 在途 DELAY 任务句柄——模块卸载/服务停止时统一取消，防止卸载后继续执行动作链 */
-    private final java.util.Set<org.bukkit.scheduler.BukkitTask> pendingDelayTasks =
-        java.util.concurrent.ConcurrentHashMap.newKeySet();
-    private volatile boolean stopped;
+    // All scheduling and cancellation are on the server thread.
+    private final Map<UUID, Set<DeferredAction>> pending = new HashMap<>();
+    private int pendingCount;
+    private long generation;
+    private boolean stopped;
 
     public MenuActionExecutor(
         JavaPlugin plugin,
@@ -65,10 +79,8 @@ public final class MenuActionExecutor {
      * @param action 动作定义
      * @return {@code true} 表示执行后应关闭菜单
      */
-    public boolean execute(Player player, MenuActionDefinition action) {
-        if (player == null || action == null) {
-            return false;
-        }
+    private boolean execute(ActionContext context, MenuActionDefinition action) {
+        Player player = context.player();
         return switch (action.type()) {
             case COMMAND -> {
                 String command = normalizeCommand(MenuConditionEvaluator.applyPlaceholders(player, action.value()));
@@ -82,8 +94,8 @@ public final class MenuActionExecutor {
                     logger.warning("Menu COMMAND 动作命令含分隔符，已拒绝: " + command);
                     yield false;
                 }
-                Bukkit.getScheduler().runTask(plugin, () -> player.performCommand(command));
-                yield menuService.configuration().settings().closeOnAction();
+                yield defer(context, 0L, () -> player.performCommand(command))
+                    && menuService.configuration().settings().closeOnAction();
             }
             case CHAT -> {
                 String raw = MenuConditionEvaluator.applyPlaceholders(player, action.value());
@@ -91,8 +103,8 @@ public final class MenuActionExecutor {
                     yield false;
                 }
                 final String chatMessage = raw.trim();
-                Bukkit.getScheduler().runTask(plugin, () -> player.chat(chatMessage));
-                yield menuService.configuration().settings().closeOnAction();
+                yield defer(context, 0L, () -> player.chat(chatMessage))
+                    && menuService.configuration().settings().closeOnAction();
             }
             case CONNECT -> {
                 String targetServer = MenuConditionEvaluator.applyPlaceholders(player, action.value());
@@ -101,8 +113,8 @@ public final class MenuActionExecutor {
                 }
                 targetServer = targetServer.trim();
                 final String serverName = targetServer;
-                Bukkit.getScheduler().runTask(plugin, () -> connectToServer(player, serverName));
-                yield menuService.configuration().settings().closeOnAction();
+                yield defer(context, 0L, () -> connectToServer(player, serverName))
+                    && menuService.configuration().settings().closeOnAction();
             }
             case PLAYER_OP -> {
                 String command = normalizeCommand(MenuConditionEvaluator.applyPlaceholders(player, action.value()));
@@ -115,11 +127,8 @@ public final class MenuActionExecutor {
                     logger.warning("Menu PLAYER_OP 动作命令含分隔符，已拒绝: " + command);
                     yield false;
                 }
-                Bukkit.getScheduler().runTask(
-                plugin,
-                () -> TemporaryOpExecutor.execute(player, command)
-            );
-            yield menuService.configuration().settings().closeOnAction();
+                yield defer(context, 0L, () -> TemporaryOpExecutor.execute(player, command))
+                    && menuService.configuration().settings().closeOnAction();
             }
             case CONSOLE -> {
                 String command = MenuConditionEvaluator.applyPlaceholders(player, action.value());
@@ -133,9 +142,8 @@ public final class MenuActionExecutor {
                     logger.warning("Menu CONSOLE 动作命令含分隔符，已拒绝: " + command);
                     yield false;
                 }
-                final String safeCommand = command;
-                xuanmo.arcartxsuite.api.command.ThrottledCommandExecutor.dispatch(safeCommand);
-                yield menuService.configuration().settings().closeOnAction();
+                yield ThrottledCommandExecutor.dispatchIf(command, () -> allowed(context))
+                    && menuService.configuration().settings().closeOnAction();
             }
             case MESSAGE -> {
                 player.sendMessage(menuService.messages().colorize(
@@ -148,15 +156,15 @@ public final class MenuActionExecutor {
                 if (menuId.isBlank()) {
                     yield false;
                 }
-                Bukkit.getScheduler().runTask(plugin, () -> menuService.openMenu(player, menuId, 0));
+                defer(context, 0L, () -> menuService.openMenu(player, menuId, 0));
                 yield false;
             }
             case CLOSE -> {
-                menuService.closeMenu(player);
+                closeOrigin(context);
                 yield false;
             }
             case PAGE -> {
-                menuService.changePage(player, action.value());
+                if (menuService.isCurrentSession(player, context.origin())) menuService.changePage(player, action.value());
                 yield false;
             }
             case SOUND -> {
@@ -227,30 +235,66 @@ public final class MenuActionExecutor {
      * @param player  目标玩家
      * @param actions 动作定义集合
      */
-    public void executeAll(Player player, List<MenuActionDefinition> actions) {
-        executeAllFrom(player, actions, 0);
+    void executeAll(Player player, MenuSession session, MenuDefinition menu, MenuButtonDefinition button,
+                    List<MenuActionDefinition> actions) {
+        if (stopped || actions.isEmpty()) return;
+        var auth = AuthAccess.snapshot(player.getUniqueId());
+        var context = new ActionContext(player, auth, session, menu.permission(),
+            button == null ? "" : button.permission(), generation);
+        if (authorized(context, auth)) executeAllFrom(context, actions, 0);
     }
 
     /** 模块卸载/服务停止：取消全部在途延迟动作链，后续调度点不再执行。 */
     public void shutdown() {
         stopped = true;
-        for (org.bukkit.scheduler.BukkitTask task : pendingDelayTasks) {
-            task.cancel();
-        }
-        pendingDelayTasks.clear();
+        invalidatePending();
     }
 
-    private void executeAllFrom(Player player, List<MenuActionDefinition> actions, int startIndex) {
-        if (stopped) {
-            return;
-        }
+    void invalidatePending() {
+        generation++;
+        for (var tasks : pending.values()) for (var task : tasks) task.handle.cancel();
+        pending.clear();
+        pendingCount = 0;
+    }
+
+    void cancelPlayer(UUID playerId) {
+        var tasks = pending.remove(playerId);
+        if (tasks == null) return;
+        pendingCount -= tasks.size();
+        for (var task : tasks) task.handle.cancel();
+    }
+
+    private boolean allowed(ActionContext context) {
+        if (!isActive(context)) return false;
+        Player player = context.player();
+        UUID id = context.auth().playerId();
+        return player.isOnline() && Bukkit.getPlayer(id) == player && authorized(context, AuthAccess.snapshot(id));
+    }
+
+    private boolean authorized(ActionContext context, AuthSnapshot current) {
+        return current.admitted() && current.generation() == context.auth().generation()
+            && Objects.equals(current.connectionId(), context.auth().connectionId())
+            && MenuConditionEvaluator.hasPermission(context.player(), context.menuPermission())
+            && MenuConditionEvaluator.hasPermission(context.player(), context.buttonPermission());
+    }
+
+    private boolean isActive(ActionContext context) {
+        return !stopped && generation == context.generation();
+    }
+
+    private void closeOrigin(ActionContext context) {
+        if (menuService.isCurrentSession(context.player(), context.origin())) menuService.closeMenu(context.player());
+    }
+
+    private void executeAllFrom(ActionContext context, List<MenuActionDefinition> actions, int startIndex) {
         boolean shouldClose = false;
         for (int i = startIndex; i < actions.size(); i++) {
+            if (!isActive(context)) return;
             MenuActionDefinition action = actions.get(i);
             if (action.type() == MenuActionType.DELAY) {
                 // 先把累积的关闭请求处理掉（立即关闭 menu UI），再延迟执行后续动作
                 if (shouldClose) {
-                    menuService.closeMenu(player);
+                    closeOrigin(context);
                     shouldClose = false;
                 }
                 long delayTicks = parseDelayTicks(action.value());
@@ -258,27 +302,51 @@ public final class MenuActionExecutor {
                     continue;
                 }
                 int nextIndex = i + 1;
-                // holder 用于 lambda 内自移除：任务体执行时句柄已回填（调度到下一 tick 才运行）
-                org.bukkit.scheduler.BukkitTask[] holder = new org.bukkit.scheduler.BukkitTask[1];
-                holder[0] = Bukkit.getScheduler().runTaskLater(plugin, () -> {
-                    if (holder[0] != null) {
-                        pendingDelayTasks.remove(holder[0]);
-                    }
-                    if (!stopped && player.isOnline() && nextIndex < actions.size()) {
-                        executeAllFrom(player, actions, nextIndex);
-                    }
-                }, delayTicks);
-                if (holder[0] != null) {
-                    pendingDelayTasks.add(holder[0]);
-                }
+                if (nextIndex < actions.size()) defer(context, delayTicks, () -> executeAllFrom(context, actions, nextIndex));
                 return;
             }
-            shouldClose |= execute(player, action);
+            shouldClose |= execute(context, action);
         }
         if (shouldClose) {
-            menuService.closeMenu(player);
+            closeOrigin(context);
         }
     }
+
+    private boolean defer(ActionContext context, long delayTicks, Runnable action) {
+        if (!isActive(context) || pendingCount >= MAX_PENDING) return false;
+        UUID playerId = context.auth().playerId();
+        var tasks = pending.get(playerId);
+        if (tasks != null && tasks.size() >= MAX_PENDING_PER_PLAYER) return false;
+        var task = new DeferredAction(context, action);
+        var scheduler = Bukkit.getScheduler();
+        task.handle = delayTicks == 0L ? scheduler.runTask(plugin, task) : scheduler.runTaskLater(plugin, task, delayTicks);
+        pending.computeIfAbsent(playerId, ignored -> new HashSet<>()).add(task);
+        pendingCount++;
+        return true;
+    }
+
+    private final class DeferredAction implements Runnable {
+        private final ActionContext context;
+        private final Runnable action;
+        private BukkitTask handle;
+
+        private DeferredAction(ActionContext context, Runnable action) {
+            this.context = context;
+            this.action = action;
+        }
+
+        @Override public void run() {
+            UUID id = context.auth().playerId();
+            var tasks = pending.get(id);
+            if (tasks == null || !tasks.remove(this)) return;
+            pendingCount--;
+            if (tasks.isEmpty()) pending.remove(id);
+            if (allowed(context)) action.run();
+        }
+    }
+
+    private record ActionContext(Player player, AuthSnapshot auth, MenuSession origin, String menuPermission,
+                                 String buttonPermission, long generation) {}
 
     private static long parseDelayTicks(String raw) {
         if (raw == null || raw.isBlank()) {

@@ -2,6 +2,9 @@ package xuanmo.arcartxsuite.bridge;
 
 import java.util.Optional;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.Material;
+import org.bukkit.entity.Player;
+import priv.seventeen.artist.arcartx.api.ArcartXAPI;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
 import priv.seventeen.artist.arcartx.nms.ItemBridge;
@@ -75,6 +78,20 @@ public final class ArcartXItemStackBridge implements ItemBridgeAPI {
                 failureWarned = true;
             }
             return Optional.empty();
+        }
+    }
+
+    @Override
+    public boolean showExtraSlot(Player player, String id, ItemStack item) {
+        if (!available || player == null || id == null || !org.bukkit.Bukkit.isPrimaryThread()) return false;
+        try {
+            var handler = ArcartXAPI.getEntityManager().getPlayer(player);
+            if (handler == null) return false;
+            handler.setSlotItemStackOnlyClient(id, item == null ? new ItemStack(Material.AIR) : item.clone());
+            return true;
+        } catch (RuntimeException failure) {
+            plugin.getLogger().warning("更新额外槽位显示失败: " + failure.getMessage());
+            return false;
         }
     }
 

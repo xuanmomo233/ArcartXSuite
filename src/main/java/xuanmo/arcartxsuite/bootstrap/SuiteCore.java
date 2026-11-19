@@ -16,7 +16,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 public interface SuiteCore {
 
     /** 宿主当前支持的契约版本。Core 与宿主版本不一致时宿主拒绝加载。 */
-    int HOST_API_VERSION = 1;
+    int HOST_API_VERSION = 2;
 
     /** Core 自身实现的契约版本，必须等于其构建时的 {@link #HOST_API_VERSION}。 */
     int apiVersion();
@@ -29,5 +29,5 @@ public interface SuiteCore {
     void onEnable(JavaPlugin host);
 
     /** 由宿主在插件停用时调用，释放全部业务资源。 */
-    void onDisable();
+    java.util.concurrent.CompletionStage<Void> onDisable();
 }

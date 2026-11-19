@@ -63,15 +63,13 @@ ui:
       Packet.send('abyss', 'view_ready', 'shop')
       Sound.self('minecraft:entity.villager.trade', 0.9, 10)
     tick: |-
-      if(var.iconsPending && !var.dirty){
+      if(var.iconsPending && var.goods_rowsGridRows != none && val.goods_rows != none && val.goods_rows.childrenCount() == var.goods_rowsGridRows.size()){
         var.iconsPending = false
-        目标数 = var.goodsCount.round()
-        // seticon 不随 var/entry 自动重算，需逐行手动触发
-        if(目标数 > 0){
-          val.goods_rows.get(0)['商品图标'].seticon()
-          if(目标数 > 1){
-            for(i in range(1, 目标数 - 1)){
-              var.商品引用[i.round()]['商品图标'].seticon()
+        if(var.goods_rowsGridRows.size() > 0){
+          for(i in range(0, var.goods_rowsGridRows.size() - 1)){
+            row = val.goods_rows.get(i.round())
+            if(row != none && row['商品图标'] != none){
+              row['商品图标'].seticon()
             }
           }
         }
@@ -80,22 +78,14 @@ ui:
         var.dirty = false
         // 重建商品行：模板在索引0，按轮次命名防冲突
         目标数 = var.goodsCount.round()
-        if(var.已建_goods_rows != 目标数){
-        var.已建_goods_rows = 目标数
-          for(key in var.商品引用.keys()){
-            var.商品引用[key].remove()
-          }
-          var.商品引用 = {}
-          var.商品轮次 = (var.商品轮次 + 1).round()
-          模板 = val.goods_rows.get(0)
-          模板.entryKey = 0.round()
-          if(目标数 > 1){
-            for(i in range(1, 目标数 - 1)){
-              c = 模板.copy('商品行_' + var.商品轮次 + '_' + i.round())
-              c.entryKey = i.round()
-              var.商品引用[i.round()] = c
+        if(var.goods_rowsGridRows == none || var.goods_rowsGridRows.size() != (var.goodsCount)){
+          网格数据 = []
+          if((var.goodsCount) > 0){
+            for(网格序号 in range(0, (var.goodsCount) - 1)){
+              网格数据.add(网格序号.round())
             }
           }
+          var.goods_rowsGridRows = 网格数据
         }
         var.iconsPending = true
       }
@@ -237,17 +227,20 @@ controls:
                 val.goods_slider.setDragYRatio(ratio)
             children:
               商品列表:
-                type: VStack
+                type: RepeatGrid
                 val: goods_rows
                 attribute:
+                  items: "var.goods_rowsGridRows"
+                  flow: ~row
+                  column: 1
+                  spaceBetweenY: 10
                   maxSize: 2147483647
                   width: 938
-                  spaceBetween: 10
                 children:
                   商品行:
                     type: Canvas
                     attribute:
-                      entryKey: 0.round()
+                      entryKey: self.item
                       entry: var.goodsRows[self.entryKey]
                       afford: "self.entry != none && self.entry['price'] >= 0 && self.entry['price'] <= var.coins"
                       visible: self.entry != none

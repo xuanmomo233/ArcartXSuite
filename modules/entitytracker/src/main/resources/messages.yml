@@ -59,6 +59,7 @@ admin:                         # 管理命令相关消息
   reissue:                     # 补发奖励消息
     record-not-found: "&c找不到结算记录: {0}"  # {0}=结算ID
     rank-not-found: "&c该结算记录中不存在第 {0} 名。"  # {0}=名次
+    pending: "&e该奖励正在等待发放结果，请稍候。"
     success: "&a已补发 {0} 第 {1} 名奖励 -> {2}"  # {0}=Boss名 {1}=名次 {2}=玩家名
     failure: "&c补发失败: {0}"  # {0}=失败原因
     usage: "&e用法: /axs entitytracker reissue <结算ID> <名次> [玩家]"

@@ -7,10 +7,13 @@ import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CompletableFuture;
+import java.util.function.Supplier;
 import javax.sql.DataSource;
 import org.bukkit.configuration.file.FileConfiguration;
 import xuanmo.arcartxsuite.api.storage.StorageDescriptor;
 import xuanmo.arcartxsuite.api.storage.StorageManager;
+import xuanmo.arcartxsuite.api.storage.ModuleStorage;
 
 /**
  * 宿主统一数据源管理器实现。
@@ -37,6 +40,9 @@ public final class StorageManagerImpl implements StorageManager {
     /** 自建模式（override）连接池，按 moduleId 缓存。 */
     private final Map<String, HikariDataSource> selfManagedSources = new ConcurrentHashMap<>();
     private volatile HikariDataSource hostSqliteSource;
+    private final ModuleStorageScopes scopedSources = new ModuleStorageScopes();
+    private volatile boolean closing;
+    private CompletableFuture<Void> hostPreparation = CompletableFuture.completedFuture(null);
     /** JDBC 连接参数（从 config.yml 读取，用于构建 MySQL JDBC URL）。 */
     private final JdbcParams jdbcParams;
 
@@ -48,6 +54,7 @@ public final class StorageManagerImpl implements StorageManager {
      * @throws SQLException 连接池初始化失败
      */
     public StorageManagerImpl(FileConfiguration config, File dataFolder) throws SQLException {
+        JdbcRuntimeTypes.prepare();
         this.dataFolder = dataFolder;
         this.descriptor = readDescriptor(config);
         this.jdbcParams = JdbcParams.fromConfig(config);
@@ -77,6 +84,7 @@ public final class StorageManagerImpl implements StorageManager {
         hc.setMinimumIdle(2);
         hc.setMaximumPoolSize(desc.poolSize());
         hc.setAutoCommit(true);
+        hc.setInitializationFailTimeout(-1L);
         String jdbcUrl = jdbcParams.buildUrl(desc.host(), desc.port(), desc.database());
         hc.setJdbcUrl(jdbcUrl);
         hc.setDriverClassName("com.mysql.cj.jdbc.Driver");
@@ -111,8 +119,9 @@ public final class StorageManagerImpl implements StorageManager {
         hc.setJdbcUrl("jdbc:sqlite:" + sqliteFile.getAbsolutePath());
         hc.setDriverClassName("org.sqlite.JDBC");
         hc.setConnectionTestQuery("SELECT 1");
+        HikariDataSource ds = null;
         try {
-            HikariDataSource ds = new HikariDataSource(hc);
+            ds = new HikariDataSource(hc);
             // SQLite PRAGMA 优化
             try (Connection conn = ds.getConnection();
                  java.sql.Statement stmt = conn.createStatement()) {
@@ -122,6 +131,9 @@ public final class StorageManagerImpl implements StorageManager {
             }
             return ds;
         } catch (Exception e) {
+            if (ds != null) {
+                try { ds.close(); } catch (RuntimeException closeFailure) { e.addSuppressed(closeFailure); }
+            }
             throw new SQLException("AXS SQLite 连接池初始化失败 (" + fileName + "): " + e.getMessage(), e);
         }
     }
@@ -138,6 +150,7 @@ public final class StorageManagerImpl implements StorageManager {
 
     @Override
     public boolean isAvailable() {
+        if (closing) return false;
         if (descriptor.isMysql()) {
             return globalDataSource != null && !globalDataSource.isClosed();
         }
@@ -151,6 +164,7 @@ public final class StorageManagerImpl implements StorageManager {
 
     @Override
     public Connection getConnection() throws SQLException {
+        requireOpen();
         if (descriptor.isMysql()) {
             if (globalDataSource == null || globalDataSource.isClosed()) {
                 throw new SQLException("AXS 全局 MySQL 数据源不可用");
@@ -162,6 +176,18 @@ public final class StorageManagerImpl implements StorageManager {
 
     @Override
     public DataSource getModuleDataSource(String moduleId, String sqliteFileName) throws SQLException {
+        rejectScopedAccess(moduleId);
+        return moduleDataSource(moduleId, sqliteFileName);
+    }
+
+    private void rejectScopedAccess(String moduleId) throws SQLException {
+        requireOpen();
+        String key = moduleId != null ? moduleId : "default";
+        if (scopedSources.manages(key)) throw new SQLException("模块数据源由运行实例管理，请使用 ModuleStorage: " + key);
+    }
+
+    private DataSource moduleDataSource(String moduleId, String sqliteFileName) throws SQLException {
+        requireOpen();
         if (descriptor.isMysql()) {
             return globalDataSource;
         }
@@ -172,6 +198,7 @@ public final class StorageManagerImpl implements StorageManager {
             return existing;
         }
         synchronized (sqliteModuleSources) {
+            requireOpen();
             existing = sqliteModuleSources.get(key);
             if (existing != null && !existing.isClosed()) {
                 return existing;
@@ -185,6 +212,7 @@ public final class StorageManagerImpl implements StorageManager {
     @Override
     public void closeModuleDataSource(String moduleId) {
         String key = moduleId != null ? moduleId : "default";
+        if (scopedSources.manages(key)) throw new IllegalStateException("请通过 ModuleStorage 退役运行实例: " + key);
         // 先关闭自建模式连接池（如果存在）
         HikariDataSource selfManaged = selfManagedSources.remove(key);
         if (selfManaged != null && !selfManaged.isClosed()) {
@@ -202,7 +230,25 @@ public final class StorageManagerImpl implements StorageManager {
     }
 
     @Override
+    public ModuleStorage openModuleStorage(String moduleId, String sqliteFileName, File moduleDataFolder,
+                                            StorageDescriptor overrideDescriptor) throws SQLException {
+        requireOpen();
+        String key = moduleId != null ? moduleId : "default";
+        return scopedSources.open(key, () -> {
+            DataSource source = resolveModuleDataSourceInternal(key, sqliteFileName, moduleDataFolder, overrideDescriptor);
+            if (source == globalDataSource) return new ModuleStorageScopes.OpenedSource(source, null);
+            HikariDataSource owned = (HikariDataSource) source;
+            return new ModuleStorageScopes.OpenedSource(source, () -> {
+                selfManagedSources.remove(key, owned);
+                sqliteModuleSources.remove(key, owned);
+                if (!owned.isClosed()) owned.close();
+            });
+        });
+    }
+
+    @Override
     public DataSource getHostDataSource() throws SQLException {
+        requireOpen();
         if (descriptor.isMysql()) {
             if (globalDataSource == null || globalDataSource.isClosed()) {
                 throw new SQLException("AXS 全局 MySQL 数据源不可用");
@@ -215,6 +261,7 @@ public final class StorageManagerImpl implements StorageManager {
             return existing;
         }
         synchronized (this) {
+            requireOpen();
             existing = hostSqliteSource;
             if (existing != null && !existing.isClosed()) {
                 return existing;
@@ -235,6 +282,13 @@ public final class StorageManagerImpl implements StorageManager {
     public DataSource resolveModuleDataSource(String moduleId, String sqliteFileName,
                                                File moduleDataFolder,
                                                StorageDescriptor overrideDescriptor) throws SQLException {
+        rejectScopedAccess(moduleId);
+        return resolveModuleDataSourceInternal(moduleId, sqliteFileName, moduleDataFolder, overrideDescriptor);
+    }
+
+    private DataSource resolveModuleDataSourceInternal(String moduleId, String sqliteFileName,
+                                                        File moduleDataFolder, StorageDescriptor overrideDescriptor) throws SQLException {
+        requireOpen();
         String key = moduleId != null ? moduleId : "default";
 
         // ── 自建模式：根据 overrideDescriptor 创建独立连接池 ──
@@ -244,6 +298,7 @@ public final class StorageManagerImpl implements StorageManager {
                 return existing;
             }
             synchronized (selfManagedSources) {
+                requireOpen();
                 existing = selfManagedSources.get(key);
                 if (existing != null && !existing.isClosed()) {
                     return existing;
@@ -262,7 +317,7 @@ public final class StorageManagerImpl implements StorageManager {
             return globalDataSource;
         }
         // SQLite 共享：按模块名分配独立连接池
-        return getModuleDataSource(key, sqliteFileName);
+        return moduleDataSource(key, sqliteFileName);
     }
 
     /**
@@ -308,8 +363,9 @@ public final class StorageManagerImpl implements StorageManager {
             hc.setConnectionTestQuery("SELECT 1");
         }
 
+        HikariDataSource ds = null;
         try {
-            HikariDataSource ds = new HikariDataSource(hc);
+            ds = new HikariDataSource(hc);
             if (!desc.isMysql()) {
                 // SQLite PRAGMA 优化
                 try (Connection conn = ds.getConnection();
@@ -321,6 +377,9 @@ public final class StorageManagerImpl implements StorageManager {
             }
             return ds;
         } catch (Exception e) {
+            if (ds != null) {
+                try { ds.close(); } catch (RuntimeException closeFailure) { e.addSuppressed(closeFailure); }
+            }
             String hint = desc.isMysql()
                 ? "MySQL 连接失败 [AXS-" + moduleId + "]: 请检查模块配置中的 storage.mysql 连接参数"
                   + "（host=" + desc.host() + ", port=" + desc.port()
@@ -331,29 +390,36 @@ public final class StorageManagerImpl implements StorageManager {
         }
     }
 
-    /**
-     * 关闭所有数据源（本体 onDisable 时调用）。
-     */
-    public void shutdown() {
-        if (globalDataSource != null && !globalDataSource.isClosed()) {
-            globalDataSource.close();
+    /** 串行准备宿主存储。和模块共用存储生命周期线程，关闭时等待已提交的准备工作。 */
+    public synchronized <T> CompletableFuture<T> prepareHost(Supplier<T> work) {
+        if (closing) return CompletableFuture.failedFuture(new IllegalStateException("存储管理器正在停止"));
+        var prepared = hostPreparation.thenCompose(ignored -> scopedSources.prepare(work));
+        hostPreparation = prepared.handle((value, failure) -> null);
+        return prepared.copy();
+    }
+
+    /** 等待宿主准备结束后关闭所有数据源。 */
+    public synchronized java.util.concurrent.CompletionStage<Void> shutdown() {
+        closing = true;
+        return hostPreparation.thenCompose(ignored -> scopedSources.shutdown(this::closePools));
+    }
+
+    private void requireOpen() throws SQLException {
+        if (closing) throw new SQLException("存储管理器正在停止");
+    }
+
+    private void closePools() {
+        var pools = new java.util.LinkedHashSet<HikariDataSource>();
+        if (globalDataSource != null) pools.add(globalDataSource);
+        synchronized (sqliteModuleSources) { pools.addAll(sqliteModuleSources.values()); sqliteModuleSources.clear(); }
+        synchronized (selfManagedSources) { pools.addAll(selfManagedSources.values()); selfManagedSources.clear(); }
+        synchronized (this) { if (hostSqliteSource != null) pools.add(hostSqliteSource); hostSqliteSource = null; }
+        Throwable problem = null;
+        for (HikariDataSource pool : pools) {
+            try { if (!pool.isClosed()) pool.close(); }
+            catch (Throwable error) { if (problem == null) problem = error; else problem.addSuppressed(error); }
         }
-        for (HikariDataSource ds : sqliteModuleSources.values()) {
-            if (!ds.isClosed()) {
-                ds.close();
-            }
-        }
-        sqliteModuleSources.clear();
-        for (HikariDataSource ds : selfManagedSources.values()) {
-            if (!ds.isClosed()) {
-                ds.close();
-            }
-        }
-        selfManagedSources.clear();
-        if (hostSqliteSource != null && !hostSqliteSource.isClosed()) {
-            hostSqliteSource.close();
-            hostSqliteSource = null;
-        }
+        if (problem != null) throw new java.util.concurrent.CompletionException(problem);
     }
 
     /**

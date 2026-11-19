@@ -8,10 +8,16 @@ config-version: 3
 debug: false
 
 # ─── 命令简写别名 ───
+# false：同名时优先使用 Essentials 简写；原命令仍可用其原有的命名空间前缀。
+# true：保留已有的无前缀命令，冲突的 Essentials 简写使用 /arcartx-suite:<别名>。
+command-conflict-protection: false
+
+# 停用指定 /ess 子命令，关联的顶层简写也会停用。示例：[sudo, inv, weather]
+disabled-actions: []
+
 # 注册独立的顶层命令，转发到 /essentials <action>。
 # 格式: 别名: action
-# 别名不能包含空格，action 必须是 /essentials 的合法子命令。
-# 注意: 别名可能与其它插件冲突，冲突时以先注册者为准。
+# 别名不能包含空格或命名空间前缀，action 必须是 /essentials 的合法子命令。
 command-aliases:
   fly: fly
   god: god
@@ -30,6 +36,8 @@ command-aliases:
   spawn: spawn
   setspawn: setspawn
   tpa: tpa
+  tptoggle: tptoggle
+  tpcancel: tpcancel
   tpahere: tpahere
   tpaccept: tpaccept
   tpdeny: tpdeny
@@ -47,7 +55,6 @@ command-aliases:
   inv: inv
   sit: sit
   lay: lay
-  sort: sort
   speed: speed
   time: time
   weather: weather
@@ -60,12 +67,48 @@ command-aliases:
   kick: kick
   warn: warn
   sudo: sudo
+  unstuck: unstuck
+
+# ─── Warp 传送点 ───
+# 传送点统一保存在此处。/setwarp 和 /delwarp 会直接更新本节。
+# /setwarp 更新现有点时会保留分组、权限和启用状态。enabled: false 会停用该点。
+warps: {}
+# warps:
+#   hub:
+#     world: world
+#     x: 100.5
+#     y: 70
+#     z: -20.5
+#     yaw: 90
+#     pitch: 0
+#     group: 主城
+#     permission: ''
+#     enabled: true
+
+# ─── TPA 请求 ───
+tpa:
+  enabled: true
+  cooldown-seconds: 5
+  max-incoming: 5
+  max-outgoing: 5
+
+# ─── 脱困 ───
+unstuck:
+  enabled: true
+  cooldown-seconds: 120
+  warmup-seconds: 3
+  combat-seconds: 15
+  search-radius: 4
+  vertical-range: 4
+  only-when-stuck: true
+  allowed-worlds: []
+  blocked-worlds: []
 
 # ─── 玩家管理 ───
 player:
-  # 默认飞行速度倍率 (1-10)
+  # /speed fly reset 使用的速度 (1-10)
   default-fly-speed: 1
-  # 默认行走速度倍率 (1-10)
+  # /speed walk reset 使用的速度 (1-10)
   default-walk-speed: 1
   # AFK 自动检测（秒），0 = 禁用
   afk-timeout: 300
@@ -111,6 +154,9 @@ world:
 
 # ─── 安全管理 ───
 moderation:
+  # 已知玩家可在离线时被封禁
+  allow-offline-bans: true
+  history-page-size: 10
   # 封禁消息
   ban-message: '&c你已被服务器封禁。\n&7原因: {reason}\n&7到期: {expiry}'
   # 踢出消息
@@ -126,7 +172,7 @@ moderation:
 
 # ─── Sit/Lay ───
 interaction:
-  # 右键点击楼梯自动坐下
+  # 有 sit 权限时，空手右键点击楼梯坐下
   sit-on-stairs: true
   # 右键点击台阶自动坐下
   sit-on-slabs: false
@@ -213,7 +259,6 @@ messages:
   warn-broadcast: '&e{player} 收到来自 {operator} 的警告。原因: {reason}'
   unban-success: '&a已解封 &f{player}&a。'
   unmute-success: '&a已解除 &f{player} &a的禁言。'
-  sort-done: '&a背包已整理。'
   tree-felled: '&a一键砍树! 共砍落 {count} 个原木方块。'
   replant-enabled: '&a自动补种已开启。'
   replant-disabled: '&c自动补种已关闭。'
@@ -226,19 +271,19 @@ tree-capitator:
   enabled: true
   # 需要的权限节点 (留空 = 无需权限)
   permission: "axs.essentials.treecap"
-  # 最大连锁方块数
+  # 连锁原木上限（含首块，1-1024），树叶另有同等的处理上限
   max-blocks: 128
   # 需要手持斧头
   require-axe: true
   # 需要潜行触发
   require-sneak: false
-  # 是否消耗工具耐久
+  # 连锁原木是否消耗工具耐久，首块按原版规则处理
   consume-durability: true
   # 支持的原木类型 (留空 = 所有原木)
   log-types: []
   # 是否同时破坏树叶
   break-leaves: true
-  # 树叶搜索范围 (在原木周围多少格内)
+  # 树叶搜索范围 (在原木周围多少格内，0-8)
   leaf-radius: 4
 
 # ─── 背包操作 (InvActions: 补种/整理/工具切换) ───
@@ -254,12 +299,6 @@ inv-actions:
       - POTATOES
       - BEETROOTS
       - NETHER_WART
-  # 背包整理
-  inventory-sort:
-    enabled: true
-    permission: "axs.essentials.sort"
-    # 排序方式: type(按类型) / name(按名称) / amount(按数量)
-    sort-mode: type
   # 自动工具切换
   auto-tool:
     enabled: true

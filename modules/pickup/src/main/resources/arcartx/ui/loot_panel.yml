@@ -230,7 +230,7 @@ ui:
       var.item15ItemJson = var.air
     tick: |-
       var.now = Time.currentTime()
-      if(var.dirty){
+      if(var.dirty && val.loot_slot_0 != none && val.loot_slot_15 != none){
         val.loot_slot_0.setItemIcon(var.item0ItemJson)
         val.loot_slot_1.setItemIcon(var.item1ItemJson)
         val.loot_slot_2.setItemIcon(var.item2ItemJson)

@@ -148,7 +148,7 @@ public record EntityTargetSnapshot(
             case "health_percent_raw" -> Double.toString(healthPercent);
             case "progress" -> Double.toString(progress);
             case "distance_raw" -> Integer.toString(distance);
-            default -> placeholderValues().get(key);
+            default -> placeholderValue(key);
         };
     }
 
@@ -162,29 +162,41 @@ public record EntityTargetSnapshot(
 
     private Map<String, String> placeholderValues() {
         Map<String, String> values = new LinkedHashMap<>();
-        values.put("display_name", displayName);
-        values.put("health", healthText);
-        values.put("health_text", healthText);
-        values.put("max_health", maxHealthText);
-        values.put("max_health_text", maxHealthText);
-        values.put("health_percent", healthPercentText);
-        values.put("health_percent_text", healthPercentText);
-        values.put("progress", Double.toString(progress));
-        values.put("progress_text", Double.toString(progress));
-        values.put("distance", Integer.toString(distance));
-        values.put("distance_text", distanceText);
-        values.put("entity_uuid", entityUuid);
-        values.put("entity_type", entityType);
-        values.put("entity_type_name", entityTypeName);
-        values.put("mythic_mob_id", mythicMobId);
-        values.put("is_player_target", Boolean.toString(playerTarget));
-        values.put("world", world);
-        values.put("x", Integer.toString(x));
-        values.put("y", Integer.toString(y));
-        values.put("z", Integer.toString(z));
-        values.put("last_hit_ago_ms", Long.toString(lastHitAgoMs));
-        values.put("timeout_ms", Long.toString(timeoutMs));
+        for (String field : TEMPLATE_FIELDS) {
+            values.put(field, placeholderValue(field));
+        }
         return values;
+    }
+
+    private static final String[] TEMPLATE_FIELDS = {
+        "display_name", "health", "health_text", "max_health", "max_health_text",
+        "health_percent", "health_percent_text", "progress", "progress_text", "distance",
+        "distance_text", "entity_uuid", "entity_type", "entity_type_name", "mythic_mob_id",
+        "is_player_target", "world", "x", "y", "z", "last_hit_ago_ms", "timeout_ms"
+    };
+
+    private String placeholderValue(String key) {
+        return switch (key) {
+            case "display_name" -> displayName;
+            case "health", "health_text" -> healthText;
+            case "max_health", "max_health_text" -> maxHealthText;
+            case "health_percent", "health_percent_text" -> healthPercentText;
+            case "progress", "progress_text" -> Double.toString(progress);
+            case "distance" -> Integer.toString(distance);
+            case "distance_text" -> distanceText;
+            case "entity_uuid" -> entityUuid;
+            case "entity_type" -> entityType;
+            case "entity_type_name" -> entityTypeName;
+            case "mythic_mob_id" -> mythicMobId;
+            case "is_player_target" -> Boolean.toString(playerTarget);
+            case "world" -> world;
+            case "x" -> Integer.toString(x);
+            case "y" -> Integer.toString(y);
+            case "z" -> Integer.toString(z);
+            case "last_hit_ago_ms" -> Long.toString(lastHitAgoMs);
+            case "timeout_ms" -> Long.toString(timeoutMs);
+            default -> null;
+        };
     }
 }
 

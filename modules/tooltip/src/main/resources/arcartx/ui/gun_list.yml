@@ -28,33 +28,23 @@ ui:
     # 翻页/重建统一走 dirty 标记：tick 中先按引用删旧格子再按当前页 copy
     tick: |-
       if(var.dirty){
-        for(key in var.格子引用.keys()){
-          var.格子引用[key].remove()
-        }
-        var.格子引用 = {}
-        var.轮次 = (var.轮次 + 1).round()
         start = var.page * 60
         count = math.min(var.guns.size() - start, 60)
-        模板 = val.grid.get(0)
         var.iconJsons = {}
         var.ownedFlags = {}
+        keys = []
         if(count > 0){
           for(i in range(0, count - 1)){
-            gi = i.round()
-            idx = (start + gi).round()
-            mb = 模板.copy('gun_' + var.轮次 + '_' + gi)
-            mb.x = (gi % 10) * 84
-            mb.y = math.floor(gi / 10) * 84
-            mb.entryKey = idx
-            var.iconJsons[idx] = var.guns.get(start + gi)
-            var.ownedFlags[idx] = (start + gi) < var.ownedCount
-            var.格子引用[gi] = mb
-            mb['图标'].seticon()
-            mb.visible = true
+            idx = (start + i).round()
+            keys.add(idx)
+            var.iconJsons[idx] = var.guns.get(idx)
+            var.ownedFlags[idx] = idx < var.ownedCount
           }
         }
+        var.gunKeys = keys
         var.hoverName = none
         var.dirty = false
+        var.gunIconsDirty = true
       }
     wheel: |-
       pages = math.ceil(var.guns.size() / 60)
@@ -78,6 +68,24 @@ ui:
         var.page = var.page + 1
         var.dirty = true
       }
+tasks:
+  refresh-repeat-grid-icons:
+    type: loop
+    time: 100
+    cycle: 100
+    run: |-
+      if(var.gunIconsDirty == true && var.gunKeys != none && val.grid != none && val.grid.childrenCount() == var.gunKeys.size()){
+        var.gunIconsDirty = false
+        if(var.gunKeys.size() > 0){
+          for(i in range(0, var.gunKeys.size() - 1)){
+            row = val.grid.get(i.round())
+            if(row != none && row['图标'] != none){
+              row['图标'].seticon()
+            }
+          }
+        }
+      }
+
 controls:
   遮罩:
     type: Adaptive
@@ -138,9 +146,15 @@ controls:
               through: true
               texts: "var.hoverName == none ? '§7悬停图标查看名称' : var.hoverName"
           网格:
-            type: Canvas
+            type: RepeatGrid
             val: grid
             attribute:
+              items: var.gunKeys
+              flow: ~row
+              column: 10
+              spaceBetweenX: 12
+              spaceBetweenY: 12
+              maxSize: 60
               point: ~top_left
               x: 66
               y: 144
@@ -152,7 +166,7 @@ controls:
                 attribute:
                   width: 72
                   height: 72
-                  visible: false
+                  entryKey: self.item
                 children:
                   底纹:
                     type: Texture

@@ -1,6 +1,6 @@
 ﻿# AXS 资源说明
 # 用途: Abyss 副本内 HUD —— 副本名/波次/存活/剩余时间条/引导提示
-# 由服务端在进本时打开、出本关闭；每秒 update 包刷新。
+# 由服务端在进本时打开、出本关闭，约每秒检查一次，有变化时发送 update。
 # 任务展示不在此渲染——委托给 QuestGPS guide HUD（含实时进度）与 Chemdah scoreboard。
 ui:
   isHud: true

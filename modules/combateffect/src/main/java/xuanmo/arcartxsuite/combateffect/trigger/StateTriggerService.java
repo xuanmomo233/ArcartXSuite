@@ -5,19 +5,18 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
 import org.bukkit.entity.Player;
+import org.bukkit.event.HandlerList;
+import org.bukkit.event.Listener;
 import org.bukkit.plugin.java.JavaPlugin;
+import xuanmo.arcartxsuite.api.bridge.ChronosAccess;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.combateffect.chronos.ChronosHook;
-import xuanmo.arcartxsuite.combateffect.chronos.ChronosHookFactory;
-import xuanmo.arcartxsuite.combateffect.chronos.ChronosHook.StateChange;
 import xuanmo.arcartxsuite.combateffect.packet.config.CombatEffectPacketConfiguration;
 import xuanmo.arcartxsuite.combateffect.packet.config.PacketDefinition;
 import xuanmo.arcartxsuite.combateffect.packet.config.PacketTrigger;
 
 /**
  * 监听 Chronos 状态/控制器事件，匹配 trigger:state 和 trigger:controller 的包定义并发送 UI 包。
- * <p>
- * Chronos 通过 {@link ChronosHook} 隔离，未安装时本类可正常加载（chronosHook 为 null）。
  */
 public final class StateTriggerService {
 
@@ -25,10 +24,7 @@ public final class StateTriggerService {
     private final CombatEffectPacketConfiguration configuration;
     private final PacketBridgeAPI packetBridge;
     private final Logger logger;
-    private boolean registered;
-
-    // Chronos（通过 ChronosHook 隔离，未装时为 null）
-    private ChronosHook chronosHook;
+    private final Listener listener = new Listener() {};
 
     // cooldown
     private final ConcurrentHashMap<String, Long> cooldownMap = new ConcurrentHashMap<>();
@@ -45,34 +41,27 @@ public final class StateTriggerService {
         this.logger = logger;
     }
 
-    public boolean start() {
-        // 通过工厂延迟加载 ChronosHook，Chronos 未装时返回 null（不触发 ChronosAPI 类加载）
-        chronosHook = ChronosHookFactory.tryCreate(plugin, logger, configuration.debug());
-        if (chronosHook == null) {
-            logger.info("StateTriggerService: Chronos 未安装，状态/控制器触发器未启用");
-            return false;
-        }
+    public boolean start(ChronosAccess chronos) {
+        if (chronos == null) return false;
         try {
-            chronosHook.registerStateListeners((player, change) ->
-                handleState(player, change.stateId(), change.enter(), change.controllerId())
-            );
-            chronosHook.registerControllerListener((player, controllerId) ->
-                handleController(player, controllerId)
-            );
-            registered = true;
+            ChronosHook.listen(plugin, chronos, listener, "PlayerEnterStateEvent", "getStateId",
+                (player, stateId) -> handleState(player, stateId, true, chronos.controllerId(player)));
+            ChronosHook.listen(plugin, chronos, listener, "PlayerLeaveStateEvent", "getStateId",
+                (player, stateId) -> handleState(player, stateId, false, chronos.controllerId(player)));
+            ChronosHook.listen(plugin, chronos, listener, "PlayerControllerChangeEvent", "getControllerId",
+                this::handleController);
             logger.info("StateTriggerService: 已注册 Chronos 状态/控制器事件监听");
             return true;
-        } catch (Exception | LinkageError e) {
-            logger.warning("StateTriggerService: 注册失败 — " + e.getMessage());
+        } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
+            shutdown();
+            logger.warning("StateTriggerService: 注册失败 — " + e);
             return false;
         }
     }
 
     public void shutdown() {
-        if (registered && chronosHook != null) {
-            chronosHook.shutdown();
-            registered = false;
-        }
+        HandlerList.unregisterAll(listener);
+        cooldownMap.clear();
     }
 
     private void handleState(Player player, String stateId, boolean isEnter, String currentController) {

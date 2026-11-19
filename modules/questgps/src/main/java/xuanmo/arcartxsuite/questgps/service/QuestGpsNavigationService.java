@@ -1,13 +1,17 @@
 package xuanmo.arcartxsuite.questgps.service;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.TreeMap;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.function.BiPredicate;
 import java.util.logging.Logger;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
@@ -24,6 +28,8 @@ import xuanmo.arcartxsuite.api.util.NavigationTextureMarkerService;
 import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.questgps.chemdah.ChemdahTrackerBridge;
 import xuanmo.arcartxsuite.questgps.config.QuestGpsModuleConfiguration;
+import xuanmo.arcartxsuite.questgps.config.QuestGpsModuleConfiguration.NavigationPointDefinition;
+import xuanmo.arcartxsuite.questgps.config.QuestGpsModuleConfiguration.QuestDefinition;
 
 /**
  * QuestGPS 导航服务。
@@ -46,9 +52,21 @@ public final class QuestGpsNavigationService {
     private final AdyeshachNpcBridgeAPI npcBridge;
     private final ChemdahTrackerBridge trackerBridge;
     /** 玩家 → (trackKey → 追踪状态)，同一玩家可并行追踪多个目标。 */
-    private final ConcurrentMap<java.util.UUID, LinkedHashMap<String, TrackingState>> trackingStates = new ConcurrentHashMap<>();
+    private final ConcurrentMap<UUID, TrackingSnapshot> trackingStates = new ConcurrentHashMap<>();
     /** 玩家 → (trackKey → 最近解析的导航点)。 */
     private final ConcurrentMap<java.util.UUID, Map<String, NavigationPoint>> trackingPoints = new ConcurrentHashMap<>();
+
+    private record TrackingSnapshot(Map<String, TrackingState> entries, Map<String, TrackingState> primaryByQuest) {
+        private TrackingSnapshot(LinkedHashMap<String, TrackingState> entries) {
+            this(Collections.unmodifiableMap(entries), latestByQuest(entries));
+        }
+
+        private static Map<String, TrackingState> latestByQuest(Map<String, TrackingState> entries) {
+            Map<String, TrackingState> result = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+            for (TrackingState state : entries.values()) result.put(state.questId(), state);
+            return Collections.unmodifiableMap(result);
+        }
+    }
 
     private boolean runtimeReady;
     private NavigationMarkerService markerService;
@@ -58,7 +76,7 @@ public final class QuestGpsNavigationService {
     private volatile PositionListener positionListener;
 
     /**
-     * 导航坐标变更监听器：激活/刷新路径点时回调，携带追踪状态便于按任务区分。
+     * 导航坐标变更监听器。坐标失效时 {@code point} 为 null。
      */
     public interface PositionListener {
         void onPositionUpdate(Player player, TrackingState state, NavigationPoint point);
@@ -75,11 +93,10 @@ public final class QuestGpsNavigationService {
 
     private void notifyPositionListener(Player player, String trackKey, NavigationPoint point) {
         PositionListener listener = positionListener;
-        if (listener == null || player == null || point == null) {
+        if (listener == null || player == null) {
             return;
         }
-        Map<String, TrackingState> states = trackingStates.get(player.getUniqueId());
-        TrackingState state = states == null ? null : states.get(trackKey);
+        TrackingState state = trackingStates(player).get(trackKey);
         if (state == null) {
             return;
         }
@@ -231,10 +248,8 @@ public final class QuestGpsNavigationService {
                 if (!(attachment instanceof TrackContext context)) {
                     return;
                 }
-                NavigationPoint point = trackingPoint(player, context.trackKey()).orElse(null);
-                if (point != null) {
-                    notifyPositionListener(player, context.trackKey(), point);
-                }
+                NavigationPoint point = resolved == null ? null : trackingPoint(player, context.trackKey()).orElse(null);
+                notifyPositionListener(player, context.trackKey(), point);
             });
             targetService.start();
         }
@@ -253,11 +268,6 @@ public final class QuestGpsNavigationService {
         if (textureMarkerService != null) {
             textureMarkerService.shutdown();
             textureMarkerService = null;
-        }
-        for (Player player : Bukkit.getOnlinePlayers()) {
-            if (chemdahNavigationEnabled()) {
-                trackerBridge.stopAll(player);
-            }
         }
         trackingStates.clear();
         trackingPoints.clear();
@@ -279,17 +289,14 @@ public final class QuestGpsNavigationService {
      * 玩家全部追踪状态（trackKey → 状态，激活顺序）。
      *
      * @param player 玩家
-     * @return 追踪状态映射的副本
+     * @return 当前只读追踪快照
      */
     public Map<String, TrackingState> trackingStates(Player player) {
         if (player == null) {
             return Map.of();
         }
-        Map<String, TrackingState> states = trackingStates.get(player.getUniqueId());
-        // LinkedHashMap 保序：values() 顺序 = 激活顺序，"主追踪"取最后
-        return states == null
-            ? Map.of()
-            : Collections.unmodifiableMap(new LinkedHashMap<>(states));
+        var snapshot = trackingStates.get(player.getUniqueId());
+        return snapshot == null ? Map.of() : snapshot.entries();
     }
 
     /** @return 玩家是否有任意追踪中的目标 */
@@ -302,13 +309,8 @@ public final class QuestGpsNavigationService {
         if (player == null || questId == null) {
             return false;
         }
-        String needle = questId.trim().toLowerCase(Locale.ROOT);
-        for (TrackingState state : trackingStates(player).values()) {
-            if (state.questId().equalsIgnoreCase(needle)) {
-                return true;
-            }
-        }
-        return false;
+        var snapshot = trackingStates.get(player.getUniqueId());
+        return snapshot != null && snapshot.primaryByQuest().containsKey(questId.trim());
     }
 
     /** @return 指定子任务是否追踪中 */
@@ -349,18 +351,9 @@ public final class QuestGpsNavigationService {
      * @return 存在可用坐标点时返回 {@code true}
      */
     public boolean hasQuestPoint(Player player, String questId, List<String> prioritizedTaskIds) {
-        if (!navigationAllowed(questId)) return false;
-        if (!runtimeReady()) {
-            return false;
-        }
-        boolean view = hasViewQuestPoint(questId, prioritizedTaskIds);
-        if (!chemdahNavigationEnabled()) {
-            return view;
-        }
-        if (player == null || !player.isOnline()) {
-            return view;
-        }
-        return view || trackerBridge.resolveTrackingLocation(player, questId).isPresent();
+        QuestDefinition quest = navigableQuest(questId);
+        return quest != null && (hasViewQuestPoint(quest, prioritizedTaskIds) || canResolveNative(player)
+            && trackerBridge.resolveQuestLocation(player, quest.id(), prioritizedTaskIds).isPresent());
     }
 
     /**
@@ -372,25 +365,20 @@ public final class QuestGpsNavigationService {
      * @return 存在可用坐标点时返回 {@code true}
      */
     public boolean hasTaskPoint(Player player, String questId, String taskId) {
-        if (!navigationAllowed(questId)) return false;
-        if (!runtimeReady()) {
-            return false;
-        }
-        boolean view = hasViewTaskPoint(questId, taskId);
-        if (!chemdahNavigationEnabled()) {
-            return view;
-        }
-        if (player == null || !player.isOnline()) {
-            return view;
-        }
-        return view || trackerBridge.resolveTrackingLocation(player, questId).isPresent();
+        QuestDefinition quest = navigableQuest(questId);
+        return quest != null && (viewTaskPoint(quest, taskId) != null || canResolveNative(player)
+            && trackerBridge.resolveTaskLocation(player, quest.id(), taskId).isPresent());
+    }
+
+    private boolean canResolveNative(Player player) {
+        return chemdahNavigationEnabled() && player != null && player.isOnline();
     }
 
     /**
      * 判断任务追踪能否建立追踪态（与 {@link #trackQuest} 的实际成功条件一致）。
      * <p>
      * 与 {@link #hasQuestPoint} 的区别：本方法判断"能否追踪"，而非"有无坐标点"。
-     * Chemdah 追踪可用时允许先建立无坐标的追踪态，稍后解析动态目标；
+     * Chemdah 配置了原生坐标来源时允许先建立追踪态，稍后解析动态目标；
      * 只有展示组件提供坐标时也可以独立建立导航。
      *
      * @param player             玩家
@@ -399,14 +387,10 @@ public final class QuestGpsNavigationService {
      * @return 调用 {@code trackQuest} 可建立追踪态时返回 {@code true}
      */
     public boolean questTrackable(Player player, String questId, List<String> prioritizedTaskIds) {
-        if (!navigationAllowed(questId)) return false;
-        if (!runtimeReady() || player == null || !player.isOnline()) {
-            return false;
-        }
-        if (chemdahNavigationEnabled()) {
-            return true;
-        }
-        return hasViewQuestPoint(questId, prioritizedTaskIds);
+        QuestDefinition quest = navigableQuest(questId);
+        return quest != null && player != null && player.isOnline()
+            && (hasViewQuestPoint(quest, prioritizedTaskIds)
+                || chemdahNavigationEnabled() && trackerBridge.hasQuestCenter(quest.id(), prioritizedTaskIds));
     }
 
     /**
@@ -414,14 +398,10 @@ public final class QuestGpsNavigationService {
      * 语义同 {@link #questTrackable}。
      */
     public boolean taskTrackable(Player player, String questId, String taskId) {
-        if (!navigationAllowed(questId)) return false;
-        if (!runtimeReady() || player == null || !player.isOnline()) {
-            return false;
-        }
-        if (chemdahNavigationEnabled()) {
-            return true;
-        }
-        return hasViewTaskPoint(questId, taskId);
+        QuestDefinition quest = navigableQuest(questId);
+        return quest != null && player != null && player.isOnline()
+            && (viewTaskPoint(quest, taskId) != null
+                || chemdahNavigationEnabled() && trackerBridge.hasTaskCenter(quest.id(), taskId));
     }
 
     /**
@@ -453,19 +433,11 @@ public final class QuestGpsNavigationService {
      * @param questId            任务 ID
      * @param questName          任务名称（用于路径点标题）
      * @param prioritizedTaskIds 优先解析的子任务 ID 列表
-     * @return 成功激活或进入 Chemdah 追踪时返回 {@code true}
+     * @return 成功建立 Suite 追踪时返回 {@code true}
      */
     public boolean trackQuest(Player player, String questId, String questName, List<String> prioritizedTaskIds) {
-        if (player == null || !player.isOnline() || !runtimeReady()) {
-            return false;
-        }
-        if (chemdahNavigationEnabled()) {
-            trackerBridge.startQuestTracking(player);
-        }
+        if (!runtimeReady() || !questTrackable(player, questId, prioritizedTaskIds)) return false;
         Optional<NavigationPoint> point = resolveQuestPoint(player, questId, prioritizedTaskIds, questName);
-        if (point.isEmpty() && !chemdahNavigationEnabled()) {
-            return false;
-        }
         return activate(player, TrackingMode.QUEST, questId, "", questName, "", prioritizedTaskIds, point.orElse(null));
     }
 
@@ -477,19 +449,11 @@ public final class QuestGpsNavigationService {
      * @param taskId    子任务 ID
      * @param questName 任务名称（%quest% 占位符）
      * @param taskName  子任务名称（用于路径点标题）
-     * @return 成功激活或进入 Chemdah 追踪时返回 {@code true}
+     * @return 成功建立 Suite 追踪时返回 {@code true}
      */
     public boolean trackTask(Player player, String questId, String taskId, String questName, String taskName) {
-        if (player == null || !player.isOnline() || !runtimeReady()) {
-            return false;
-        }
-        if (chemdahNavigationEnabled()) {
-            trackerBridge.startQuestTracking(player);
-        }
+        if (!runtimeReady() || !taskTrackable(player, questId, taskId)) return false;
         Optional<NavigationPoint> point = resolveTaskPoint(player, questId, taskId, taskName);
-        if (point.isEmpty() && !chemdahNavigationEnabled()) {
-            return false;
-        }
         return activate(player, TrackingMode.TASK, questId, taskId, questName, taskName, List.of(), point.orElse(null));
     }
 
@@ -504,14 +468,13 @@ public final class QuestGpsNavigationService {
         NavigationPoint point
     ) {
         String trackKey = trackKey(questId, taskId);
-        String waypointId = point == null ? buildWaypointId(questId, taskId) : point.waypointId();
+        String waypointId = buildWaypointId(questId, taskId);
         String label = mode == TrackingMode.TASK ? taskName : questName;
         String title = effectiveTitle(point == null ? "" : point.title(), label);
 
         TrackContext context = new TrackContext(
             trackKey, mode, questId, taskId, title,
-            prioritizedTaskIds == null ? List.of() : List.copyOf(prioritizedTaskIds),
-            point
+            prioritizedTaskIds == null ? List.of() : List.copyOf(prioritizedTaskIds)
         );
 
         NavigationTarget.Builder builder = NavigationTarget.builder(waypointId)
@@ -540,19 +503,21 @@ public final class QuestGpsNavigationService {
             : configuration.navigation().finishCommands();
         builder.finishCommands(finishCommands);
 
-        trackingStates.computeIfAbsent(player.getUniqueId(), ignored -> new LinkedHashMap<>())
-            .put(trackKey, new TrackingState(true, mode, safe(questId),
-                mode == TrackingMode.TASK ? safe(taskId) : "", waypointId, title,
-                questName == null || questName.isBlank() ? title : questName));
-        if (point != null) {
-            trackingPoints.computeIfAbsent(player.getUniqueId(), ignored -> new LinkedHashMap<>())
-                .put(trackKey, point);
-        }
+        var newState = new TrackingState(true, mode, safe(questId), mode == TrackingMode.TASK ? safe(taskId) : "",
+            waypointId, title, questName == null || questName.isBlank() ? title : questName);
+        trackingStates.compute(player.getUniqueId(), (ignored, previous) -> {
+            var entries = previous == null ? new LinkedHashMap<String, TrackingState>() : new LinkedHashMap<>(previous.entries());
+            entries.remove(trackKey);
+            entries.put(trackKey, newState);
+            return new TrackingSnapshot(entries);
+        });
         if (targetService != null) {
             targetService.setTarget(player, builder.build());
-        } else if (point != null && configuration.navigation().waypoint().enabled()) {
+        } else if (point != null) {
+            trackingPoints.computeIfAbsent(player.getUniqueId(), ignored -> new LinkedHashMap<>()).put(trackKey, point);
             // 目标编排服务不可用时（如测试替身）：直接下发路标，无 diff/滞回/钩子
-            if (!waypointRuntime.addWaypoint(player, waypointId, title, point.styleId(), point.x(), point.y(), point.z())) {
+            if (configuration.navigation().waypoint().enabled()
+                && !waypointRuntime.addWaypoint(player, waypointId, title, point.styleId(), point.x(), point.y(), point.z())) {
                 removeState(player.getUniqueId(), trackKey);
                 return false;
             }
@@ -560,14 +525,8 @@ public final class QuestGpsNavigationService {
         return true;
     }
 
-    private void removeState(java.util.UUID uuid, String trackKey) {
-        Map<String, TrackingState> states = trackingStates.get(uuid);
-        if (states != null) {
-            states.remove(trackKey);
-            if (states.isEmpty()) {
-                trackingStates.remove(uuid);
-            }
-        }
+    private void removeState(UUID uuid, String trackKey) {
+        detach(uuid, (key, state) -> key.equals(trackKey));
         Map<String, NavigationPoint> points = trackingPoints.get(uuid);
         if (points != null) {
             points.remove(trackKey);
@@ -585,7 +544,7 @@ public final class QuestGpsNavigationService {
         Optional<NavigationPoint> resolved = context.mode() == TrackingMode.TASK
             ? resolveTaskPoint(player, context.questId(), context.taskId(), context.label())
             : resolveQuestPoint(player, context.questId(), context.prioritizedTaskIds(), context.label());
-        NavigationPoint point = resolved.orElse(context.initialPoint());
+        NavigationPoint point = resolved.orElse(null);
         Map<String, NavigationPoint> points = trackingPoints.get(player.getUniqueId());
         if (point == null) {
             if (points != null) {
@@ -631,32 +590,8 @@ public final class QuestGpsNavigationService {
         if (player == null) {
             return false;
         }
-        java.util.UUID uuid = player.getUniqueId();
-        LinkedHashMap<String, TrackingState> states = trackingStates.get(uuid);
         String key = trackKey(questId, taskId);
-        TrackingState removed = states == null ? null : states.remove(key);
-        if (removed == null) {
-            return false;
-        }
-        Map<String, NavigationPoint> points = trackingPoints.get(uuid);
-        if (points != null) {
-            points.remove(key);
-            if (points.isEmpty()) {
-                trackingPoints.remove(uuid);
-            }
-        }
-        if (targetService != null) {
-            targetService.removeTarget(player, removed.waypointId());
-        } else if (!removed.waypointId().isBlank()) {
-            waypointRuntime.removeWaypoint(player, removed.waypointId(), false);
-        }
-        if (states != null && states.isEmpty()) {
-            trackingStates.remove(uuid);
-            if (chemdahNavigationEnabled()) {
-                trackerBridge.stopAll(player);
-            }
-        }
-        return true;
+        return stopTargets(player, detach(player.getUniqueId(), (id, state) -> id.equals(key)));
     }
 
     /**
@@ -668,19 +603,50 @@ public final class QuestGpsNavigationService {
         if (player == null || questId == null) {
             return false;
         }
-        String needle = questId.trim().toLowerCase(Locale.ROOT);
-        List<String> keys = trackingStates(player).entrySet().stream()
-            .filter(entry -> entry.getValue().questId().equalsIgnoreCase(needle))
-            .map(Map.Entry::getKey)
-            .toList();
-        boolean removed = false;
-        for (String key : keys) {
-            TrackingState state = trackingStates(player).get(key);
-            if (state != null) {
-                removed |= untrack(player, state.questId(), state.taskId());
+        String needle = questId.trim();
+        return stopTargets(player, detach(player.getUniqueId(), (key, state) -> state.questId().equalsIgnoreCase(needle)));
+    }
+
+    /** 供地图预览未追踪的目标。NPC 优先使用实时位置，静态坐标可作为兜底。 */
+    Optional<NavigationPoint> resolveMapPoint(NavigationPoint point) {
+        if (!point.npcId().isBlank() && npcBridge != null && npcBridge.isAvailable()) {
+            var location = npcBridge.locateByName(point.npcId()).orElse(null);
+            if (location != null && location.getWorld() != null) return Optional.of(point.withPosition(location));
+        }
+        return point.world().isBlank() ? Optional.empty() : Optional.of(point);
+    }
+
+    private List<TrackingState> detach(UUID playerId, BiPredicate<String, TrackingState> matches) {
+        var removed = new ArrayList<TrackingState>();
+        trackingStates.computeIfPresent(playerId, (ignored, snapshot) -> {
+            LinkedHashMap<String, TrackingState> remaining = null;
+            for (var entry : snapshot.entries().entrySet()) {
+                if (!matches.test(entry.getKey(), entry.getValue())) continue;
+                if (remaining == null) remaining = new LinkedHashMap<>(snapshot.entries());
+                removed.add(remaining.remove(entry.getKey()));
+            }
+            if (remaining == null) return snapshot;
+            return remaining.isEmpty() ? null : new TrackingSnapshot(remaining);
+        });
+        return removed;
+    }
+
+    private boolean stopTargets(Player player, List<TrackingState> removed) {
+        if (removed.isEmpty()) return false;
+        UUID playerId = player.getUniqueId();
+        Map<String, NavigationPoint> points = trackingPoints.get(playerId);
+        if (points != null) {
+            for (TrackingState state : removed) points.remove(state.trackKey());
+            if (points.isEmpty()) trackingPoints.remove(playerId, points);
+        }
+        for (TrackingState state : removed) {
+            if (targetService != null) {
+                targetService.removeTarget(player, state.waypointId());
+            } else if (!state.waypointId().isBlank()) {
+                waypointRuntime.removeWaypoint(player, state.waypointId(), false);
             }
         }
-        return removed;
+        return true;
     }
 
     /**
@@ -693,15 +659,12 @@ public final class QuestGpsNavigationService {
         if (player == null) {
             return;
         }
-        if (chemdahNavigationEnabled()) {
-            trackerBridge.stopAll(player);
-        }
-        Map<String, TrackingState> states = trackingStates.remove(player.getUniqueId());
+        var snapshot = trackingStates.remove(player.getUniqueId());
         trackingPoints.remove(player.getUniqueId());
         if (targetService != null) {
             targetService.clearTargets(player);
-        } else if (states != null) {
-            for (TrackingState state : states.values()) {
+        } else if (snapshot != null) {
+            for (TrackingState state : snapshot.entries().values()) {
                 if (!state.waypointId().isBlank()) {
                     waypointRuntime.removeWaypoint(player, state.waypointId(), false);
                 }
@@ -726,13 +689,8 @@ public final class QuestGpsNavigationService {
         if (player == null || questId == null) {
             return Optional.empty();
         }
-        TrackingState latest = null;
-        for (TrackingState state : trackingStates(player).values()) {
-            if (state.questId().equalsIgnoreCase(questId.trim())) {
-                latest = state;
-            }
-        }
-        return Optional.ofNullable(latest);
+        var snapshot = trackingStates.get(player.getUniqueId());
+        return snapshot == null ? Optional.empty() : Optional.ofNullable(snapshot.primaryByQuest().get(questId.trim()));
     }
 
     /** 玩家退出时清理追踪与目标状态（不派发包）。 */
@@ -770,105 +728,73 @@ public final class QuestGpsNavigationService {
 
     private Optional<NavigationPoint> resolveQuestPoint(Player player, String questId,
             List<String> prioritizedTaskIds, String fallbackTitle) {
-        if (!runtimeReady() || !navigationAllowed(questId)) return Optional.empty();
-        Optional<NavigationPoint> view = resolveViewQuestPoint(questId, prioritizedTaskIds, fallbackTitle);
-        return (view.isPresent() ? view : resolveChemdahPoint(player, questId, "", fallbackTitle))
-            .map(point -> withQuestTeleport(questId, point));
+        QuestDefinition quest = navigableQuest(questId);
+        if (quest == null) return Optional.empty();
+        if (prioritizedTaskIds != null) {
+            for (String taskId : prioritizedTaskIds) {
+                NavigationPointDefinition point = viewTaskPoint(quest, taskId);
+                if (point != null) return Optional.of(withQuestTeleport(quest, toNavigationPoint(questId, taskId, point, fallbackTitle)));
+            }
+        }
+        NavigationPointDefinition point = quest.navigation().point();
+        if (point != null) return Optional.of(toNavigationPoint(questId, "", point, fallbackTitle));
+        if (!canResolveNative(player)) return Optional.empty();
+        return trackerBridge.resolveQuestLocation(player, quest.id(), prioritizedTaskIds)
+            .map(location -> fromNativeLocation(questId, "", fallbackTitle, location));
     }
 
     private Optional<NavigationPoint> resolveTaskPoint(Player player, String questId, String taskId, String fallbackTitle) {
-        if (!runtimeReady() || !navigationAllowed(questId)) return Optional.empty();
-        Optional<NavigationPoint> view = resolveViewTaskPoint(questId, taskId, fallbackTitle);
-        return (view.isPresent() ? view : resolveChemdahPoint(player, questId, taskId, fallbackTitle))
-            .map(point -> withQuestTeleport(questId, point));
+        QuestDefinition quest = navigableQuest(questId);
+        if (quest == null) return Optional.empty();
+        NavigationPointDefinition point = viewTaskPoint(quest, taskId);
+        if (point != null) return Optional.of(withQuestTeleport(quest, toNavigationPoint(questId, taskId, point, fallbackTitle)));
+        if (!canResolveNative(player)) return Optional.empty();
+        return trackerBridge.resolveTaskLocation(player, quest.id(), taskId)
+            .map(location -> withQuestTeleport(quest, fromNativeLocation(questId, taskId, fallbackTitle, location)));
     }
 
-    private boolean hasViewQuestPoint(String questId, List<String> prioritizedTaskIds) {
-        return resolveViewQuestPoint(questId, prioritizedTaskIds, "").isPresent();
-    }
-
-    private boolean hasViewTaskPoint(String questId, String taskId) {
-        return resolveViewTaskPoint(questId, taskId, "").isPresent();
-    }
-
-    private Optional<NavigationPoint> resolveViewQuestPoint(
-        String questId,
-        List<String> prioritizedTaskIds,
-        String fallbackTitle
-    ) {
-        QuestGpsModuleConfiguration.QuestDefinition quest = configuration.quest(questId);
-        if (quest == null || !quest.navigation().enabled()) {
-            return Optional.empty();
-        }
+    private static boolean hasViewQuestPoint(QuestDefinition quest, List<String> prioritizedTaskIds) {
+        if (quest.navigation().point() != null) return true;
         if (prioritizedTaskIds != null) {
             for (String taskId : prioritizedTaskIds) {
-                Optional<NavigationPoint> taskPoint = resolveViewTaskPoint(questId, taskId, fallbackTitle);
-                if (taskPoint.isPresent()) {
-                    return taskPoint;
-                }
+                if (viewTaskPoint(quest, taskId) != null) return true;
             }
         }
-        QuestGpsModuleConfiguration.NavigationPointDefinition point = quest.navigation().point();
-        return point == null ? Optional.empty() : Optional.of(toNavigationPoint(questId, "", point, fallbackTitle));
+        return false;
     }
 
-    private Optional<NavigationPoint> resolveViewTaskPoint(String questId, String taskId, String fallbackTitle) {
-        QuestGpsModuleConfiguration.TaskDefinition task = configuration.task(questId, taskId);
-        if (task == null || task.navigation() == null) {
-            return Optional.empty();
-        }
-        return Optional.of(toNavigationPoint(questId, taskId, task.navigation(), fallbackTitle));
+    private static NavigationPointDefinition viewTaskPoint(QuestDefinition quest, String taskId) {
+        var task = quest.task(taskId);
+        return task == null ? null : task.navigation();
     }
 
-    private Optional<NavigationPoint> resolveChemdahPoint(
-        Player player,
-        String questId,
-        String taskId,
-        String fallbackTitle
-    ) {
-        if (!chemdahNavigationEnabled() || player == null || !player.isOnline()) {
-            return Optional.empty();
-        }
-        return trackerBridge.resolveTrackingLocation(player, questId)
-            .map(location -> new NavigationPoint(
-                buildWaypointId(questId, taskId),
-                effectiveTitle("", fallbackTitle),
-                effectiveStyle(""),
-                location.getWorld() == null ? "" : location.getWorld().getName(),
-                location.getX(),
-                location.getY(),
-                location.getZ(),
-                effectiveTitle("", fallbackTitle),
-                "",
-                -1,
-                List.of(),
-                null
-            ));
+    private NavigationPoint fromNativeLocation(String questId, String taskId, String fallbackTitle, Location location) {
+        String title = effectiveTitle("", fallbackTitle);
+        return new NavigationPoint(
+            buildWaypointId(questId, taskId),
+            title,
+            effectiveStyle(""),
+            location.getWorld() == null ? "" : location.getWorld().getName(),
+            location.getX(),
+            location.getY(),
+            location.getZ(),
+            title,
+            "",
+            -1,
+            List.of(),
+            null
+        );
     }
 
     /** 目标点未声明 teleport 时回退到任务级 navigation.point.teleport。 */
-    private NavigationPoint withQuestTeleport(String questId, NavigationPoint point) {
+    private static NavigationPoint withQuestTeleport(QuestDefinition quest, NavigationPoint point) {
         if (point.teleport() != null) {
             return point;
         }
-        QuestGpsModuleConfiguration.QuestDefinition quest = configuration.quest(questId);
-        QuestGpsModuleConfiguration.NavigationPointDefinition questPoint =
-            quest == null ? null : quest.navigation().point();
+        NavigationPointDefinition questPoint = quest.navigation().point();
         QuestGpsModuleConfiguration.TeleportPointDefinition teleport =
             questPoint == null ? null : questPoint.teleport();
         return teleport == null ? point : point.withTeleport(teleport);
-    }
-
-    private Optional<NavigationPoint> resolveQuestPoint(
-        String questId,
-        List<String> prioritizedTaskIds,
-        String fallbackTitle
-    ) {
-        return resolveQuestPoint(null, questId, prioritizedTaskIds, fallbackTitle);
-    }
-
-    private Optional<NavigationPoint> resolveTaskPoint(String questId, String taskId, String fallbackTitle) {
-        return resolveTaskPoint(null, questId, taskId, fallbackTitle);
     }
 
     private NavigationPoint toNavigationPoint(
@@ -921,9 +847,10 @@ public final class QuestGpsNavigationService {
         return trackerBridge != null && trackerBridge.available();
     }
 
-    private boolean navigationAllowed(String questId) {
+    private QuestDefinition navigableQuest(String questId) {
+        if (!runtimeReady()) return null;
         var quest = configuration.quest(questId);
-        return quest != null && quest.enabled() && quest.navigation().enabled();
+        return quest != null && quest.enabled() && quest.navigation().enabled() ? quest : null;
     }
 
     /** 世界查找：精确匹配优先，其次大小写不敏感（配置的世界名可能大小写不一致）。 */
@@ -964,8 +891,7 @@ public final class QuestGpsNavigationService {
         String questId,
         String taskId,
         String label,
-        List<String> prioritizedTaskIds,
-        NavigationPoint initialPoint
+        List<String> prioritizedTaskIds
     ) {
     }
 

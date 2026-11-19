@@ -104,54 +104,36 @@ ui:
       目标数 = var.partyCount.round()
       if(var.已建_party_rows != 目标数){
         var.已建_party_rows = 目标数
-        for(key in var.队伍引用.keys()){
-          var.队伍引用[key].remove()
-        }
         var.队伍引用 = {}
         var.队伍轮次 = (var.队伍轮次 + 1).round()
-        模板 = val.party_rows.get(0)
-        模板.entryKey = 0.round()
-        if(目标数 > 1){
-          for(i in range(1, 目标数 - 1)){
-            r = 模板.copy('队伍卡_' + var.队伍轮次 + '_' + i.round())
-            r.entryKey = i.round()
-            var.队伍引用[i.round()] = r
+        var.party_rows网格数据 = []
+        if((目标数 - 1) >= 0){
+          for(网格序号 in range(0, 目标数 - 1)){
+            var.party_rows网格数据.add(网格序号.round())
           }
         }
       }
       邀请数 = var.inviteCount.round()
       if(var.已建_invite_rows != 邀请数){
         var.已建_invite_rows = 邀请数
-        for(key in var.邀请引用.keys()){
-          var.邀请引用[key].remove()
-        }
         var.邀请引用 = {}
         var.邀请轮次 = (var.邀请轮次 + 1).round()
-        模板2 = val.invite_rows.get(0)
-        模板2.entryKey = 0.round()
-        if(邀请数 > 1){
-          for(i in range(1, 邀请数 - 1)){
-            r = 模板2.copy('邀请行_' + var.邀请轮次 + '_' + i.round())
-            r.entryKey = i.round()
-            var.邀请引用[i.round()] = r
+        var.invite_rows网格数据 = []
+        if((邀请数 - 1) >= 0){
+          for(网格序号 in range(0, 邀请数 - 1)){
+            var.invite_rows网格数据.add(网格序号.round())
           }
         }
       }
       筛选数 = var.dungeonCount.round()
       if(var.已建_filter_rows != 筛选数){
         var.已建_filter_rows = 筛选数
-        for(key in var.筛选引用.keys()){
-          var.筛选引用[key].remove()
-        }
         var.筛选引用 = {}
         var.筛选轮次 = (var.筛选轮次 + 1).round()
-        模板3 = val.filter_rows.get(0)
-        模板3.entryKey = 0.round()
-        if(筛选数 > 1){
-          for(i in range(1, 筛选数 - 1)){
-            r = 模板3.copy('筛选行_' + var.筛选轮次 + '_' + i.round())
-            r.entryKey = i.round()
-            var.筛选引用[i.round()] = r
+        var.filter_rows网格数据 = []
+        if((筛选数 - 1) >= 0){
+          for(网格序号 in range(0, 筛选数 - 1)){
+            var.filter_rows网格数据.add(网格序号.round())
           }
         }
       }
@@ -327,17 +309,20 @@ controls:
                 val.party_slider.setDragYRatio(ratio)
             children:
               队伍列表:
-                type: VStack
+                type: RepeatGrid
                 val: party_rows
                 attribute:
+                  items: "var.party_rows网格数据"
+                  flow: ~row
+                  column: 1
+                  spaceBetweenY: 12
                   maxSize: 2147483647
                   width: "var.leftW - 168"
-                  spaceBetween: 12
                 children:
                   队伍卡片:
                     type: Canvas
                     attribute:
-                      entryKey: 0.round()
+                      entryKey: self.item
                       entry: var.partyRows[self.entryKey]
                       visible: self.entry != none
                       width: "var.leftW - 168"
@@ -594,17 +579,20 @@ controls:
                 val.filter_slider.setDragXRatio(ratio)
             children:
               筛选列表:
-                type: HStack
+                type: RepeatGrid
                 val: filter_rows
                 attribute:
+                  items: "var.filter_rows网格数据"
+                  flow: ~column
+                  row: 1
+                  spaceBetweenX: 10
                   maxSize: 2147483647
                   height: 40
-                  spaceBetween: 10
                 children:
                   筛选项:
                     type: Canvas
                     attribute:
-                      entryKey: 0.round()
+                      entryKey: self.item
                       entry: var.dungeonRows[self.entryKey]
                       visible: self.entry != none
                       width: 140
@@ -684,17 +672,20 @@ controls:
                 val.invite_slider.setDragYRatio(ratio)
             children:
               邀请列表:
-                type: VStack
+                type: RepeatGrid
                 val: invite_rows
                 attribute:
+                  items: "var.invite_rows网格数据"
+                  flow: ~row
+                  column: 1
+                  spaceBetweenY: 10
                   maxSize: 2147483647
                   width: "var.rightW - 72"
-                  spaceBetween: 10
                 children:
                   邀请行:
                     type: Canvas
                     attribute:
-                      entryKey: 0.round()
+                      entryKey: self.item
                       entry: var.inviteRows[self.entryKey]
                       visible: self.entry != none
                       width: "var.rightW - 72"

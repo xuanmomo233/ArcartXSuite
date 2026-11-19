@@ -23,17 +23,23 @@ public class RankingRewardCommand {
     private final RankingRewardScheduler scheduler;
     private final File moduleConfigFile;
     private final MessageProvider messages;
+    private final org.bukkit.plugin.java.JavaPlugin plugin;
+    private final java.util.function.BiPredicate<Player, Boolean> openRewardUi;
 
     public RankingRewardCommand(RankingRewardService rewardService,
                                RankingRewardScheduler scheduler,
                                File moduleConfigFile,
                                Logger logger,
-                                MessageProvider messages) {
+                               MessageProvider messages,
+                               org.bukkit.plugin.java.JavaPlugin plugin,
+                               java.util.function.BiPredicate<Player, Boolean> openRewardUi) {
         this.rewardService = rewardService;
         this.scheduler = scheduler;
         this.moduleConfigFile = moduleConfigFile;
         this.logger = logger;
         this.messages = messages;
+        this.plugin = plugin;
+        this.openRewardUi = openRewardUi;
     }
 
     private String fullMsg(String key, Object... args) {
@@ -65,6 +71,7 @@ public class RankingRewardCommand {
             case "distribute" -> handleDistribute(sender, args);
             case "status" -> showSchedulerStatus(sender);
             case "reload" -> reloadScheduler(sender);
+            case "retry", "inspect", "resolve" -> handleActionReview(sender, args, subCommand);
             default -> showHelp(sender, label);
         }
 
@@ -77,7 +84,7 @@ public class RankingRewardCommand {
         }
 
         if (args.length == 1) {
-            return Arrays.asList("help", "manage", "history", "distribute", "status", "reload")
+            return Arrays.asList("help", "manage", "history", "distribute", "status", "reload", "retry", "inspect", "resolve")
                 .stream()
                 .filter(s -> s.toLowerCase().startsWith(args[0].toLowerCase()))
                 .collect(Collectors.toList());
@@ -93,6 +100,37 @@ public class RankingRewardCommand {
         return List.of();
     }
 
+    private void handleActionReview(CommandSender sender, String[] args, String action) {
+        boolean resolve = "resolve".equals(action);
+        if (resolve && !(sender instanceof org.bukkit.command.ConsoleCommandSender)) {
+            sender.sendMessage("§c请通过服务器控制台登记核对结果。");
+            return;
+        }
+        try {
+            if (args.length != (resolve ? 5 : 2)) throw new IllegalArgumentException();
+            int id = Integer.parseInt(args[1]);
+            CompletableFuture<String> response;
+            if (resolve) {
+                int step = Integer.parseInt(args[2]);
+                java.util.UUID attempt = java.util.UUID.fromString(args[3]);
+                boolean delivered = "delivered".equalsIgnoreCase(args[4]);
+                if (!delivered && !"not-delivered".equalsIgnoreCase(args[4])) throw new IllegalArgumentException();
+                response = rewardService.resolveReviewedAction(id, step, attempt, delivered);
+            } else if ("inspect".equals(action)) {
+                response = rewardService.inspectReward(id);
+            } else {
+                response = rewardService.retryDistribution(id);
+            }
+            response.thenAccept(message -> {
+                if (plugin.isEnabled()) rewardService.onMainIfActive(() -> sender.sendMessage(message));
+            });
+        } catch (IllegalArgumentException failure) {
+            sender.sendMessage(resolve
+                ? "§e用法: axs entitytracker rewards resolve <记录ID> <步骤编号> <尝试UUID> <delivered|not-delivered>"
+                : "§e用法: /axs entitytracker rewards " + action + " <记录ID>");
+        }
+    }
+
     /**
      * 显示帮助信息
      */
@@ -104,6 +142,12 @@ public class RankingRewardCommand {
         sender.sendMessage(fullMsg("ranking.help.distribute", cmd));
         sender.sendMessage(fullMsg("ranking.help.status", cmd));
         sender.sendMessage(fullMsg("ranking.help.reload", cmd));
+        sender.sendMessage("§e/axs entitytracker rewards retry <记录ID> §7继续发放待发步骤");
+        sender.sendMessage("§e/axs entitytracker rewards inspect <记录ID> §7查看待核对步骤与尝试编号");
+        if (sender instanceof org.bukkit.command.ConsoleCommandSender) {
+            sender.sendMessage("§eaxs entitytracker rewards resolve <记录ID> <步骤编号> <尝试UUID> <delivered|not-delivered>");
+            sender.sendMessage("§7确认该次尝试已经停止，并核对到账结果后再登记。");
+        }
     }
 
     /**
@@ -116,9 +160,9 @@ public class RankingRewardCommand {
         }
 
         try {
-            // 这里需要调用ArcartX UI系统
-            player.sendMessage(fullMsg("rewards.manage.opening"));
-            // TODO: 集成ArcartX UI系统
+            if (!openRewardUi.test(player, false)) {
+                player.sendMessage(fullMsg("rewards.manage.failed", "界面不可用"));
+            }
             
         } catch (Exception e) {
             sender.sendMessage(fullMsg("rewards.manage.failed", e.getMessage()));
@@ -136,8 +180,9 @@ public class RankingRewardCommand {
         }
 
         try {
-            player.sendMessage(fullMsg("rewards.history.opening"));
-            // TODO: 集成ArcartX UI系统
+            if (!openRewardUi.test(player, true)) {
+                player.sendMessage(fullMsg("rewards.history.failed", "界面不可用"));
+            }
             
         } catch (Exception e) {
             sender.sendMessage(fullMsg("rewards.history.failed", e.getMessage()));

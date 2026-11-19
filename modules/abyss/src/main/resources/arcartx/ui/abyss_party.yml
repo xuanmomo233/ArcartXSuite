@@ -137,36 +137,24 @@ ui:
       目标数 = var.hasParty ? var.memberCount.round() : 0
       if(var.已建_member_row != 目标数){
         var.已建_member_row = 目标数
-        for(key in var.成员引用.keys()){
-          var.成员引用[key].remove()
-        }
         var.成员引用 = {}
         var.成员轮次 = (var.成员轮次 + 1).round()
-        模板 = val.member_row.get(0)
-        模板.entryKey = 0.round()
-        if(目标数 > 1){
-          for(i in range(1, 目标数 - 1)){
-            r = 模板.copy('成员卡_' + var.成员轮次 + '_' + i.round())
-            r.entryKey = i.round()
-            var.成员引用[i.round()] = r
+        var.member_row网格数据 = []
+        if((目标数 - 1) >= 0){
+          for(网格序号 in range(0, 目标数 - 1)){
+            var.member_row网格数据.add(网格序号.round())
           }
         }
       }
       消息数 = var.hasParty ? var.feedCount.round() : 0
       if(var.已建_feed_rows != 消息数){
         var.已建_feed_rows = 消息数
-        for(key in var.消息引用.keys()){
-          var.消息引用[key].remove()
-        }
         var.消息引用 = {}
         var.消息轮次 = (var.消息轮次 + 1).round()
-        模板2 = val.feed_rows.get(0)
-        模板2.entryKey = 0.round()
-        if(消息数 > 1){
-          for(i in range(1, 消息数 - 1)){
-            r = 模板2.copy('消息行_' + var.消息轮次 + '_' + i.round())
-            r.entryKey = i.round()
-            var.消息引用[i.round()] = r
+        var.feed_rows网格数据 = []
+        if((消息数 - 1) >= 0){
+          for(网格序号 in range(0, 消息数 - 1)){
+            var.feed_rows网格数据.add(网格序号.round())
           }
         }
       }
@@ -174,36 +162,24 @@ ui:
       申请数 = var.hasParty && var.isLeader ? var.applicantCount.round() : 0
       if(var.已建_apply_rows != 申请数){
         var.已建_apply_rows = 申请数
-        for(key in var.申请引用.keys()){
-          var.申请引用[key].remove()
-        }
         var.申请引用 = {}
         var.申请轮次 = (var.申请轮次 + 1).round()
-        模板3 = val.apply_rows.get(0)
-        模板3.entryKey = 0.round()
-        if(申请数 > 1){
-          for(i in range(1, 申请数 - 1)){
-            r = 模板3.copy('申请行_' + var.申请轮次 + '_' + i.round())
-            r.entryKey = i.round()
-            var.申请引用[i.round()] = r
+        var.apply_rows网格数据 = []
+        if((申请数 - 1) >= 0){
+          for(网格序号 in range(0, 申请数 - 1)){
+            var.apply_rows网格数据.add(网格序号.round())
           }
         }
       }
       副本数 = var.allDungeonCount.round()
       if(var.已建_dungeon_rows != 副本数){
         var.已建_dungeon_rows = 副本数
-        for(key in var.副本引用.keys()){
-          var.副本引用[key].remove()
-        }
         var.副本引用 = {}
         var.副本轮次 = (var.副本轮次 + 1).round()
-        模板4 = val.dungeon_rows.get(0)
-        模板4.entryKey = 0.round()
-        if(副本数 > 1){
-          for(i in range(1, 副本数 - 1)){
-            r = 模板4.copy('副本行_' + var.副本轮次 + '_' + i.round())
-            r.entryKey = i.round()
-            var.副本引用[i.round()] = r
+        var.dungeon_rows网格数据 = []
+        if((副本数 - 1) >= 0){
+          for(网格序号 in range(0, 副本数 - 1)){
+            var.dungeon_rows网格数据.add(网格序号.round())
           }
         }
       }
@@ -214,18 +190,12 @@ ui:
       在线数 = var.onlineCount.round()
       if(var.已建_online_rows != 在线数){
         var.已建_online_rows = 在线数
-        for(key in var.在线引用.keys()){
-          var.在线引用[key].remove()
-        }
         var.在线引用 = {}
         var.在线轮次 = (var.在线轮次 + 1).round()
-        模板 = val.online_rows.get(0)
-        模板.entryKey = 0.round()
-        if(在线数 > 1){
-          for(i in range(1, 在线数 - 1)){
-            r = 模板.copy('在线行_' + var.在线轮次 + '_' + i.round())
-            r.entryKey = i.round()
-            var.在线引用[i.round()] = r
+        var.online_rows网格数据 = []
+        if((在线数 - 1) >= 0){
+          for(网格序号 in range(0, 在线数 - 1)){
+            var.online_rows网格数据.add(网格序号.round())
           }
         }
       }
@@ -420,17 +390,20 @@ controls:
                 val.member_slider.setDragXRatio(ratio)
             children:
               成员模型行:
-                type: HStack
+                type: RepeatGrid
                 val: member_row
                 attribute:
+                  items: "var.member_row网格数据"
+                  flow: ~column
+                  row: 1
+                  spaceBetweenX: 22
                   maxSize: 2147483647
                   height: 404
-                  spaceBetween: 22
                 children:
                   成员卡:
                     type: Canvas
                     attribute:
-                      entryKey: 0.round()
+                      entryKey: self.item
                       entry: var.memberRows[self.entryKey]
                       visible: self.entry != none
                       width: 230
@@ -856,17 +829,20 @@ controls:
                 val.feed_slider.setDragYRatio(ratio)
             children:
               消息列表:
-                type: VStack
+                type: RepeatGrid
                 val: feed_rows
                 attribute:
+                  items: "var.feed_rows网格数据"
+                  flow: ~row
+                  column: 1
+                  spaceBetweenY: 6
                   maxSize: 2147483647
                   width: "var.rightW - 72"
-                  spaceBetween: 6
                 children:
                   消息行:
                     type: Text
                     attribute:
-                      entryKey: 0.round()
+                      entryKey: self.item
                       entry: var.feedRows[self.entryKey]
                       visible: self.entry != none
                       texts: "self.entry['display']"
@@ -981,17 +957,20 @@ controls:
                 val.apply_slider.setDragYRatio(ratio)
             children:
               申请列表:
-                type: VStack
+                type: RepeatGrid
                 val: apply_rows
                 attribute:
+                  items: "var.apply_rows网格数据"
+                  flow: ~row
+                  column: 1
+                  spaceBetweenY: 8
                   maxSize: 2147483647
                   width: "var.rightW - 72"
-                  spaceBetween: 8
                 children:
                   申请行:
                     type: Canvas
                     attribute:
-                      entryKey: 0.round()
+                      entryKey: self.item
                       entry: var.applicantRows[self.entryKey]
                       visible: self.entry != none
                       width: "var.rightW - 72"
@@ -1396,17 +1375,20 @@ controls:
                     val.online_slider.setDragYRatio(ratio)
                 children:
                   在线列表:
-                    type: VStack
+                    type: RepeatGrid
                     val: online_rows
                     attribute:
+                      items: "var.online_rows网格数据"
+                      flow: ~row
+                      column: 1
+                      spaceBetweenY: 8
                       maxSize: 2147483647
                       width: 536
-                      spaceBetween: 8
                     children:
                       在线行:
                         type: Canvas
                         attribute:
-                          entryKey: 0.round()
+                          entryKey: self.item
                           entry: var.onlineRows[self.entryKey]
                           visible: self.entry != none
                           width: 536
@@ -1658,17 +1640,20 @@ controls:
                     val.dungeon_slider.setDragYRatio(ratio)
                 children:
                   副本列表:
-                    type: VStack
+                    type: RepeatGrid
                     val: dungeon_rows
                     attribute:
+                      items: "var.dungeon_rows网格数据"
+                      flow: ~row
+                      column: 1
+                      spaceBetweenY: 8
                       maxSize: 2147483647
                       width: 536
-                      spaceBetween: 8
                     children:
                       副本行:
                         type: Canvas
                         attribute:
-                          entryKey: 0.round()
+                          entryKey: self.item
                           entry: var.allDungeonRows[self.entryKey]
                           visible: self.entry != none
                           width: 536

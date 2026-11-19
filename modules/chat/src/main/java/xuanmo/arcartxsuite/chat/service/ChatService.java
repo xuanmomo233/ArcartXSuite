@@ -2,6 +2,7 @@ package xuanmo.arcartxsuite.chat.service;
 
 import java.io.File;
 import java.sql.SQLException;
+import java.sql.SQLTransientException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -15,10 +16,19 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
+import xuanmo.arcartxsuite.api.scheduler.ModuleExecutor;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BiFunction;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
 import java.util.regex.Matcher;
+import net.md_5.bungee.api.chat.BaseComponent;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Material;
@@ -36,6 +46,8 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.plugin.java.JavaPlugin;
 import xuanmo.arcartxsuite.api.bridge.ItemBridgeAPI;
+import xuanmo.arcartxsuite.api.auth.AuthAccess;
+import xuanmo.arcartxsuite.api.auth.AuthSnapshot;
 import xuanmo.arcartxsuite.api.bridge.ContentModerator;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge;
@@ -47,15 +59,21 @@ import xuanmo.arcartxsuite.chat.config.ChatModuleConfiguration;
 import xuanmo.arcartxsuite.chat.model.ChatEnvelope;
 import xuanmo.arcartxsuite.chat.model.ChatItemPreview;
 import xuanmo.arcartxsuite.chat.model.ChatMuteRecord;
+import xuanmo.arcartxsuite.chat.model.ChatModerationReceipt;
 import xuanmo.arcartxsuite.chat.model.ChatOperationResult;
 import xuanmo.arcartxsuite.chat.model.ChatPlayerProfile;
 import xuanmo.arcartxsuite.chat.model.ChatPlayerState;
 import xuanmo.arcartxsuite.chat.storage.ChatRepository;
+import xuanmo.arcartxsuite.chat.storage.ChatRepository.StateField;
+import xuanmo.arcartxsuite.chat.storage.ChatRepository.RouteState;
+import xuanmo.arcartxsuite.api.capability.AbyssPartyAccess;
+import xuanmo.arcartxsuite.api.capability.ChatMutable.MuteInfo;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerAPI;
 import xuanmo.arcartxsuite.api.placeholder.PlaceholderResolverAPI;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerChannel;
 import xuanmo.arcartxsuite.chat.service.ChatEnvelopeCodec;
 import xuanmo.arcartxsuite.api.capability.EventBusCapability;
+import xuanmo.arcartxsuite.api.capability.RegionChatAccess;
 import xuanmo.arcartxsuite.api.capability.TabRefreshable;
 import xuanmo.arcartxsuite.api.message.MessageProvider;
 import java.util.logging.Logger;
@@ -67,24 +85,46 @@ public final class ChatService implements Listener {
     private static final String SOCIAL_SPY_PERMISSION = "arcartxsuite.chat.socialspy";
     private static final long CLEANUP_PERIOD_TICKS = 1200L;
     private static final long ENVELOPE_TTL_MILLIS = 15000L;
+    private static final CompletionStage<Boolean> RELAY_HANDLED = CompletableFuture.completedFuture(true);
 
     private final JavaPlugin plugin;
     private final Logger logger;
     private final ChatModuleConfiguration configuration;
     private final ChatRepository repository;
+    private final ChatModeration moderation;
     private final PacketBridgeAPI packetBridge;
     private final ItemBridgeAPI itemStackBridge;
     private final ContentModerator contentModerator;
-    private final ExecutorService ioExecutor;
+    private final ModuleExecutor ioExecutor;
+    private volatile ChatReloadGate reloadGate;
+    private CompletionStage<Void> databaseStopped = CompletableFuture.completedFuture(null);
+    private final Semaphore pendingIgnoreCommands = new Semaphore(32);
+    private volatile boolean stopping;
+    private final Semaphore moderationSlots = new Semaphore(64);
+    private final Semaphore moderationReadSlots = new Semaphore(16);
+    private final Set<CompletableFuture<?>> moderationResults = ConcurrentHashMap.newKeySet();
+    private final Set<CompletableFuture<?>> moderationMainResults = ConcurrentHashMap.newKeySet();
+    private final Map<UUID, Integer> pendingMuteWrites = new ConcurrentHashMap<>();
+    private final xuanmo.arcartxsuite.api.scheduler.ModuleCallback moderationCallbacks =
+        new xuanmo.arcartxsuite.api.scheduler.ModuleCallback(() -> {});
+    private final Set<UUID> ignoreWritesPending = ConcurrentHashMap.newKeySet();
+    private final ChatDeliveryQueue publicDelivery;
+    private final boolean guardRemoteIgnores;
+    private final java.util.concurrent.atomic.AtomicLong deliveryPolicyVersion = new java.util.concurrent.atomic.AtomicLong();
+    private final Map<UUID, Long> channelChanges = new ConcurrentHashMap<>();
+    private final Map<UUID, ChatConnection> admittedAudience = new LinkedHashMap<>();
+    private volatile ChatAudience publishedAudience = ChatAudience.EMPTY;
     private final Map<UUID, ChatPlayerState> states = new ConcurrentHashMap<>();
     private final Map<UUID, ChatPlayerProfile> profiles = new ConcurrentHashMap<>();
     private final Map<UUID, ChatMuteRecord> mutes = new ConcurrentHashMap<>();
-    private final Map<UUID, UUID> replyTargets = new ConcurrentHashMap<>();
+    private final Map<UUID, ReplyTarget> replyTargets = new ConcurrentHashMap<>();
     private final Map<UUID, Long> lastMessageTimes = new ConcurrentHashMap<>();
     private final Map<UUID, DuplicateStamp> lastDuplicateStamps = new ConcurrentHashMap<>();
     private final Map<String, Long> processedEnvelopeKeys = new ConcurrentHashMap<>();
+    private final Runnable expiredMuteCleanup = this::deleteExpiredMutes;
+    private final Map<String, CompletableFuture<Boolean>> remoteInFlight = new LinkedHashMap<>();
+    private final Set<CompletableFuture<Boolean>> externalResults = new LinkedHashSet<>();
     // 加载失败的玩家集合：这些玩家的缓存数据不可信，saveStateAsync 必须跳过，避免默认状态覆盖 DB 真实数据
-    private final Set<UUID> failedLoads = ConcurrentHashMap.newKeySet();
     private final java.util.function.Supplier<TabRefreshable> tabRefreshableProvider;
     private java.util.function.Supplier<EventBusCapability> eventBusProvider;
     private final String completionUiId;
@@ -94,13 +134,17 @@ public final class ChatService implements Listener {
     private final VanillaItemNameBridge vanillaItemNameBridge;
 
     private CrossServerChannel crossServerChannel;
+    private ChatRelay chatRelay;
+    private String networkId;
     private RedPacketService redPacketService;
     private BukkitTask cleanupTask;
     private boolean paperChatEventRegistered;
     private volatile boolean paperChatEventObserved;
     private java.util.function.BiConsumer<Player, Collection<String>> completionAdder;
     private java.util.function.BiConsumer<Player, Collection<String>> completionRemover;
-    private java.util.function.Supplier<xuanmo.arcartxsuite.api.capability.TooltipDataCapable> tooltipDataProvider;
+    private java.util.function.Supplier<AbyssPartyAccess> partyProvider = () -> null;
+    private Supplier<RegionChatAccess> regionChatProvider = () -> null;
+    private ChatLinks links;
 
     public ChatService(
         JavaPlugin plugin,
@@ -138,6 +182,7 @@ public final class ChatService implements Listener {
         this.tabRefreshableProvider = tabRefreshableProvider;
         this.configuration = Objects.requireNonNull(configuration);
         this.repository = Objects.requireNonNull(repository);
+        this.moderation = new ChatModeration(this, repository);
         this.packetBridge = Objects.requireNonNull(packetBridge);
         this.itemStackBridge = Objects.requireNonNull(itemStackBridge);
         this.completionUiId = completionUiId;
@@ -146,14 +191,19 @@ public final class ChatService implements Listener {
         this.messages = messages;
         this.vanillaItemNameBridge = vanillaItemNameBridge;
         this.contentModerator = contentModerator != null ? contentModerator : new NoopContentModerator();
-        this.ioExecutor = Executors.newSingleThreadExecutor(runnable -> {
+        this.guardRemoteIgnores = repository.supportsIgnoreGuards();
+        this.publicDelivery = new ChatDeliveryQueue(task -> Bukkit.getScheduler().runTask(plugin, task),
+            task -> Bukkit.getScheduler().runTaskLater(plugin, task, 10),
+            deliveryPolicyVersion::get, failure -> logger.log(java.util.logging.Level.WARNING, "聊天投递失败", failure),
+            guardRemoteIgnores ? repository::lockRouteStates : null);
+        this.ioExecutor = new ModuleExecutor(1, 1, 0, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>(), runnable -> {
             Thread thread = new Thread(runnable, "AXS-Chat-IO");
             thread.setDaemon(true);
             return thread;
         });
     }
 
-    private String message(String key, Object... args) {
+    String message(String key, Object... args) {
         return messages == null ? "" : messages.get(key, args);
     }
 
@@ -168,6 +218,240 @@ public final class ChatService implements Listener {
         this.redPacketService = redPacketService;
     }
 
+    public void setPartyProvider(java.util.function.Supplier<AbyssPartyAccess> provider) {
+        this.partyProvider = provider;
+    }
+
+    public void setRegionChatProvider(Supplier<RegionChatAccess> provider) {
+        this.regionChatProvider = provider;
+    }
+
+    RegionChatAccess regionChatAccess(ChatChannelDefinition channel) {
+        ChatChannelMode mode = channel.mode();
+        return mode == ChatChannelMode.NORMAL || mode == ChatChannelMode.GLOBAL ? regionChatProvider.get() : null;
+    }
+
+    AbyssPartyAccess.PartySnapshot partyOf(Player player) {
+        AbyssPartyAccess access = partyProvider.get();
+        return access == null || player == null ? null : access.partyOf(player.getUniqueId());
+    }
+
+    public void sendPartyMessage(Player sender, String text, Consumer<ChatOperationResult> result) {
+        ChatChannelDefinition party = partyChannel();
+        if (party == null) result.accept(ChatOperationResult.failure(message("result.no-channel")));
+        else queueChatMessage(new ChatConnection(sender, AuthAccess.snapshot(sender.getUniqueId())), text, party, result);
+    }
+
+    ChatChannelDefinition partyChannel() {
+        return configuration.channels().values().stream()
+            .filter(channel -> channel.mode() == ChatChannelMode.PARTY).findFirst().orElse(null);
+    }
+
+    public void setLinks(ChatLinks links) {
+        this.links = links;
+    }
+
+    public ChatLinks links() {
+        return links;
+    }
+
+    String linkMessage(String key) {
+        return message(key);
+    }
+
+    ChatOperationResult linkResult(String key) {
+        return ChatOperationResult.failure(message(key));
+    }
+
+    void recordLinkSend(Player player, String label) {
+        trackMessageFingerprint(player.getUniqueId(), label);
+    }
+
+    private boolean canReceiveLink(ChatChannelDefinition channel, Player sender, Player recipient, UUID target,
+                                   Map<UUID, RouteState> routes, RegionChatAccess regionAccess) {
+        UUID senderId = sender.getUniqueId();
+        if (!xuanmo.arcartxsuite.api.auth.AuthAccess.admitted(senderId)
+                || (!channel.sendPermission().isBlank() && !sender.hasPermission(channel.sendPermission()))) return false;
+        UUID viewer = recipient.getUniqueId();
+        if (channel.mode() != ChatChannelMode.PRIVATE) {
+            return canReceiveAudience(channel, sender, senderId, recipient)
+                && canReceiveRoute(routes.get(viewer), routes.get(senderId), senderId, recipient)
+                && (regionAccess == null || regionAccess.canReceivePublic(recipient));
+        }
+        if (!sender.hasPermission(PRIVATE_PERMISSION)) return false;
+        if (target == null) return false;
+        if (!viewer.equals(senderId) && !viewer.equals(target)) return false;
+        if (!canReceiveChannel(channel, Bukkit.getPlayer(target))) return false;
+        ChatPlayerState from = routedState(routes, senderId);
+        ChatPlayerState to = routedState(routes, target);
+        return from != null && to != null && to.acceptsPrivateMessages()
+            && !from.ignores(target) && !to.ignores(senderId);
+    }
+
+    void sendLink(Player sender, ChatChannelDefinition selected, String label,
+                  BiFunction<ChatChannelDefinition, List<Player>, ChatOperationResult> send,
+                  Consumer<ChatOperationResult> result) {
+        UUID id = sender.getUniqueId();
+        var actor = new ChatConnection(sender, AuthAccess.snapshot(id));
+        if (!actor.isCurrent()) return;
+        var audience = captureAudience(selected, sender, id, Set.of());
+        List<UUID> viewers = audience.stream().map(connection -> connection.snapshot().playerId()).toList();
+        long channelAtSubmission = channelChanges.getOrDefault(id, 0L);
+        UUID privateTarget = replyTargetId(id);
+        var party = partyOf(sender);
+        if (!publicDelivery.offer(() -> {
+            ChatChannelDefinition channel = selected != null ? selected
+                : configuration.channel(repository.loadState(id, configuration.defaultChannelId()).currentChannelId());
+            if (channel == null) return new PreparedLink(null, null, Map.of());
+            List<UUID> routeIds = channel.mode() != ChatChannelMode.PRIVATE ? viewers
+                : privateTarget == null || privateTarget.equals(id) ? List.of(id) : List.of(id, privateTarget);
+            return new PreparedLink(channel, loadActiveMute(id), loadDeliveryRoutes(routeIds, channel.id(), id));
+        }, prepared -> true, prepared -> !pendingMuteWrites.containsKey(id) &&
+                ignoreWritesPending.stream().noneMatch(prepared.routes()::containsKey), (prepared, failure) -> {
+            if (!actor.isCurrent()) return;
+            if (failure != null) {
+                logStorageFailure(failure);
+                result.accept(storageUnavailable());
+                return;
+            }
+            ChatChannelDefinition channel = prepared.channel();
+            if (channel == null) {
+                result.accept(linkResult("result.no-channel"));
+                return;
+            }
+            boolean privateLink = channel.mode() == ChatChannelMode.PRIVATE;
+            if ((selected == null && channelChanges.getOrDefault(id, 0L) != channelAtSubmission)
+                    || (privateLink && !Objects.equals(privateTarget, replyTargetId(id)))) {
+                result.accept(linkResult("result.channel-changed-while-sending"));
+                return;
+            }
+            var currentParty = channel.mode() == ChatChannelMode.PARTY ? partyOf(sender) : null;
+            if (channel.mode() == ChatChannelMode.PARTY
+                    && (party == null || currentParty == null || !party.id().equals(currentParty.id()))) {
+                result.accept(linkResult("result.party-required"));
+                return;
+            }
+            ChatOperationResult validation = validateBeforeSend(sender, label, channel, privateLink, prepared.mute());
+            if (!validation.success()) {
+                result.accept(validation);
+                return;
+            }
+            RegionChatAccess regionAccess = regionChatAccess(channel);
+            if (regionAccess != null && !regionAccess.canSendPublic(sender)) {
+                result.accept(linkResult("result.region-speak-denied"));
+                return;
+            }
+            List<Player> recipients = new ArrayList<>();
+            for (ChatConnection connection : audience) {
+                if (connection.isCurrent()
+                        && canReceiveLink(channel, sender, connection.player(), privateTarget, prepared.routes(), regionAccess)) {
+                    recipients.add(connection.player());
+                }
+            }
+            result.accept(send.apply(channel, recipients));
+        })) result.accept(storageUnavailable());
+    }
+
+    void checkLinkAudience(ChatChannelDefinition channel, Player sender, Player viewer, Consumer<Boolean> result) {
+        UUID senderId = sender.getUniqueId();
+        UUID viewerId = viewer.getUniqueId();
+        var actor = new ChatConnection(viewer, AuthAccess.snapshot(viewerId));
+        UUID target = channel.mode() == ChatChannelMode.PRIVATE ? replyTargetId(senderId) : null;
+        Set<UUID> ids = new LinkedHashSet<>();
+        ids.add(senderId);
+        ids.add(viewerId);
+        if (target != null) ids.add(target);
+        if (!publicDelivery.offer(() -> loadRouteChunk(ids, channel.id(), null), routes -> true,
+            routes -> ignoreWritesPending.stream().noneMatch(ids::contains), (routes, failure) -> {
+                if (!actor.isCurrent()) return;
+                if (failure != null) logStorageFailure(failure);
+                result.accept(failure == null
+                    && (channel.mode() != ChatChannelMode.PRIVATE || Objects.equals(target, replyTargetId(senderId)))
+                    && canReceiveLink(channel, sender, viewer, target, routes, regionChatAccess(channel)));
+            })) result.accept(false);
+    }
+
+    private record PreparedLink(ChatChannelDefinition channel, ChatMuteRecord mute, Map<UUID, RouteState> routes) {}
+
+    public CompletionStage<Boolean> receiveExternal(String channelId, UUID linkedPlayerId, String format,
+                                                     String rawMessage, Set<UUID> mentions) {
+        ChatChannelDefinition channel = configuration.channel(channelId);
+        if (isStopping() || channel == null || !channel.permitsExternalRelay() || rawMessage == null
+                || rawMessage.isBlank() || rawMessage.length() > configuration.maxLength()
+                || !canSendExternal(channel, linkedPlayerId)) {
+            return CompletableFuture.completedFuture(false);
+        }
+        ContentModerator.ModerationResult moderated = contentModerator.filter(rawMessage);
+        if (moderated.blocked()) return CompletableFuture.completedFuture(false);
+        String text = format.replace("{message}", ChatColor.stripColor(moderated.text()));
+        RegionChatAccess regionAccess = regionChatAccess(channel);
+        var audience = captureAudience(channel, null, linkedPlayerId, Set.of());
+        if (regionAccess != null) audience.removeIf(connection -> !regionAccess.canReceivePublic(connection.player()));
+        List<UUID> ids = audience.stream().map(connection -> connection.snapshot().playerId()).toList();
+        Set<UUID> mentioned = Set.copyOf(mentions);
+        var result = new CompletableFuture<Boolean>();
+        externalResults.add(result);
+        if (!publicDelivery.offer(() -> {
+            ChatMuteRecord mute = linkedPlayerId == null ? null : loadActiveMute(linkedPlayerId);
+            return new ExternalRoute(mute, loadDeliveryRoutes(ids, channel.id(), linkedPlayerId));
+        }, route -> true, route -> (linkedPlayerId == null || !pendingMuteWrites.containsKey(linkedPlayerId))
+                && ignoreWritesPending.stream().noneMatch(route.routes()::containsKey), (route, failure) -> {
+            externalResults.remove(result);
+            if (failure != null) {
+                logStorageFailure(failure);
+                result.complete(false);
+                return;
+            }
+            try {
+                if (isStopping() || (route.mute() != null && route.mute().active(Instant.now()))
+                        || !canSendExternal(channel, linkedPlayerId)) {
+                    result.complete(false);
+                    return;
+                }
+                deliverExternal(channel, linkedPlayerId, text, mentioned, audience, route.routes());
+                result.complete(true);
+            } catch (RuntimeException | LinkageError error) {
+                result.completeExceptionally(error);
+            }
+        })) {
+            externalResults.remove(result);
+            result.complete(false);
+        }
+        return result.copy();
+    }
+
+    private boolean canSendExternal(ChatChannelDefinition channel, UUID linkedPlayerId) {
+        RegionChatAccess regionAccess = regionChatAccess(channel);
+        boolean requiresPermission = !channel.sendPermission().isBlank();
+        Player linked = linkedPlayerId != null && (requiresPermission || regionAccess != null)
+            ? Bukkit.getPlayer(linkedPlayerId) : null;
+        if (requiresPermission && (linked == null || !linked.isOnline()
+                || !AuthAccess.admitted(linkedPlayerId) || !linked.hasPermission(channel.sendPermission()))) return false;
+        return linked == null || regionAccess == null || regionAccess.canSendPublic(linked);
+    }
+
+    private void deliverExternal(ChatChannelDefinition channel, UUID senderId, String text, Set<UUID> mentions,
+                                 List<ChatConnection> audience, Map<UUID, RouteState> routes) {
+        RegionChatAccess regionAccess = regionChatAccess(channel);
+        RouteState sender = senderId == null ? null : routes.get(senderId);
+        boolean mentionsEnabled = configuration.functions().mentionEnabled() && !mentions.isEmpty();
+        for (ChatConnection connection : audience) {
+            Player recipient = connection.player();
+            UUID id = connection.snapshot().playerId();
+            RouteState route = routes.get(id);
+            if (!connection.isCurrent() || !canReceiveAdmittedAudience(channel, null, senderId, recipient)
+                    || !canReceiveRoute(route, sender, senderId, recipient)
+                    || (regionAccess != null && !regionAccess.canReceivePublic(recipient))) continue;
+            recipient.sendMessage(text);
+            if (mentionsEnabled && mentions.contains(id) && !id.equals(senderId) && route.player().acceptsMentions()) {
+                queueUnreadMention(id);
+                sendSystemCard(recipient, "mention", Map.of("message", message("links.external-mention")));
+            }
+        }
+    }
+
+    private record ExternalRoute(ChatMuteRecord mute, Map<UUID, RouteState> routes) {}
+
     /**
      * 红包服务实例，供玩家/管理员命令调用。未接入时返回 {@code null}。
      */
@@ -175,33 +459,31 @@ public final class ChatService implements Listener {
         return redPacketService;
     }
 
-    /**
-     * 注入 Tooltip 数据提供者（由 ChatModule 在 startService 后设置）。
-     * <p>
-     * 用于聊天物品预览时，将客户端采集的动态 tooltip 文本行注入物品 NBT Lore，
-     * 使 ArcartX 客户端 UI 能显示 TACZ 枪属性和 Apotheosis affix 等内容。
-     */
-    public void setTooltipDataProvider(
-            java.util.function.Supplier<xuanmo.arcartxsuite.api.capability.TooltipDataCapable> tooltipDataProvider) {
-        this.tooltipDataProvider = tooltipDataProvider;
-    }
-
-    public void start() throws Exception {
-        repository.initialize();
-        crossServerChannel = crossServer.openChannel(
-            "chat",
-            configuration.crossServer(),
-            delivery -> handleRemotePayload(delivery.payload())
-        );
+    public void start(@org.jetbrains.annotations.Nullable String initializedNetworkId) throws Exception {
+        networkId = initializedNetworkId;
+        if (networkId != null) {
+            crossServerChannel = crossServer.openChannelCompleting("chat-v2", configuration.crossServer(),
+                delivery -> handleRemotePayload(delivery.payload(), delivery.nodeId(), delivery.timestamp()));
+            var journal = configuration.crossServer().enabled() ? repository.relayJournal() : null;
+            if (journal != null) {
+                chatRelay = new ChatRelay(journal, nodeId(),
+                    this::onPrimary, this::handleRelayPayload, publicDelivery::startAdmittedRemoteBatch, logger);
+            }
+        } else if (configuration.crossServer().enabled()) {
+            logger.warning("Chat 跨服需要各节点共用同一 MySQL 数据库，本节点保持本地聊天。");
+        }
         Bukkit.getPluginManager().registerEvents(this, plugin);
         registerPaperChatEventIfAvailable();
         initMentionCompletionReflection();
         for (Player player : Bukkit.getOnlinePlayers()) {
-            if (!xuanmo.arcartxsuite.api.auth.AuthAccess.admitted(player.getUniqueId())) continue;
-            touchProfile(player, true);
-            state(player.getUniqueId());
-            currentMute(player.getUniqueId());
+            AuthSnapshot session = AuthAccess.snapshot(player.getUniqueId());
+            if (!session.admitted()) continue;
+            var connection = new ChatConnection(player, session);
+            admittedAudience.put(session.playerId(), connection);
+            touchProfile(player, connection);
         }
+        publishAudience();
+        if (chatRelay != null) chatRelay.start(admittedAudience.keySet());
         cleanupTask = Bukkit.getScheduler().runTaskTimer(plugin, this::runCleanup, CLEANUP_PERIOD_TICKS, CLEANUP_PERIOD_TICKS);
         broadcastCompletionPlayerList();
     }
@@ -217,6 +499,24 @@ public final class ChatService implements Listener {
     }
 
     public void shutdown() {
+        stopping = true;
+        moderationCallbacks.close();
+        for (var result : moderationMainResults) result.completeExceptionally(new java.util.concurrent.CancellationException("Chat is stopping"));
+        for (var result : moderationResults) result.completeExceptionally(new java.util.concurrent.CancellationException("Chat is stopping"));
+        CompletionStage<Void> relayStopped = chatRelay == null ? CompletableFuture.completedFuture(null) : chatRelay.stopped();
+        CompletionStage<Void> rewardsStopped = redPacketService == null ? CompletableFuture.completedFuture(null) : redPacketService.databaseStopped();
+        databaseStopped = CompletableFuture.allOf(databaseStopped.toCompletableFuture(),
+            ioExecutor.stopped().toCompletableFuture(), publicDelivery.stopped().toCompletableFuture(),
+            relayStopped.toCompletableFuture(), rewardsStopped.toCompletableFuture(), moderationCallbacks.stopped().toCompletableFuture());
+        ioExecutor.shutdown();
+        if (chatRelay != null) {
+            chatRelay.close();
+            chatRelay = null;
+        }
+        publicDelivery.close();
+        List.copyOf(externalResults).forEach(result -> result.complete(false));
+        externalResults.clear();
+        if (links != null) links.close();
         if (redPacketService != null) {
             redPacketService.shutdown();
             redPacketService = null;
@@ -232,13 +532,6 @@ public final class ChatService implements Listener {
             crossServerChannel.close();
             crossServerChannel = null;
         }
-        ioExecutor.shutdown();
-        try {
-            ioExecutor.awaitTermination(2L, TimeUnit.SECONDS);
-        } catch (InterruptedException exception) {
-            Thread.currentThread().interrupt();
-        }
-        repository.close();
         states.clear();
         profiles.clear();
         mutes.clear();
@@ -246,8 +539,17 @@ public final class ChatService implements Listener {
         lastMessageTimes.clear();
         lastDuplicateStamps.clear();
         processedEnvelopeKeys.clear();
-        failedLoads.clear();
+        remoteInFlight.clear();
+        channelChanges.clear();
+        admittedAudience.clear();
+        publishedAudience = ChatAudience.EMPTY;
     }
+
+    public CompletionStage<Void> databaseStopped() { return databaseStopped.toCompletableFuture().copy(); }
+
+    public boolean isStopping() { return stopping || ioExecutor.isShutdown(); }
+
+    public void setReloadGate(ChatReloadGate gate) { reloadGate = gate; }
 
     public ChatModuleConfiguration configuration() {
         return configuration;
@@ -270,7 +572,7 @@ public final class ChatService implements Listener {
     }
 
     public boolean crossServerActive() {
-        return crossServerChannel != null && crossServerChannel.isActive();
+        return chatRelay != null || crossServerChannel != null && crossServerChannel.isActive();
     }
 
     public List<String> channelIds() {
@@ -278,41 +580,46 @@ public final class ChatService implements Listener {
     }
 
     public ChatPlayerState getCachedState(UUID playerUuid) {
-        return playerUuid == null ? null : state(playerUuid);
+        return playerUuid == null ? null : states.get(playerUuid);
+    }
+
+    public ChatPlayerState readState(UUID playerUuid) {
+        return state(playerUuid);
     }
 
     public ChatMuteRecord getCachedMute(UUID playerUuid) {
-        return playerUuid == null ? null : currentMute(playerUuid);
+        return playerUuid == null ? null : mutes.get(playerUuid);
     }
 
-    /**
-     * 返回当前缓存中所有禁言记录的快照映射（UUID → ChatMuteRecord）。
-     * <p>
-     * 返回的是缓存 Map 的副本，调用方修改不会影响内部缓存。
-     * 可能包含已过期但尚未被清理任务移除的记录，调用方应自行用
-     * {@link ChatMuteRecord#active(Instant)} 过滤。
-     *
-     * @return 禁言缓存快照
-     */
-    public Map<UUID, ChatMuteRecord> getAllCachedMutes() {
-        return new java.util.HashMap<>(mutes);
+    public CompletionStage<Boolean> queryMute(UUID playerUuid) {
+        return readModeration(() -> loadActiveMute(playerUuid) != null);
+    }
+
+    public CompletionStage<List<MuteInfo>> activeMutes(int limit, int offset) {
+        if (limit < 1 || limit > 100 || offset < 0) {
+            return CompletableFuture.failedFuture(new IllegalArgumentException("Invalid mute page"));
+        }
+        return readModeration(() -> repository.loadActiveMutes(Instant.now(), limit, offset));
+    }
+
+    private <T> CompletionStage<T> readModeration(java.util.concurrent.Callable<T> query) {
+        if (isStopping() || !moderationReadSlots.tryAcquire()) {
+            return CompletableFuture.failedFuture(new RejectedExecutionException("Chat moderation reads unavailable"));
+        }
+        return moderationIo(query, false).whenComplete((value, failure) -> moderationReadSlots.release()).copy();
     }
 
     public String replyTargetName(UUID playerUuid) {
-        if (playerUuid == null) {
-            return "";
-        }
-        UUID targetUuid = replyTargets.get(playerUuid);
-        if (targetUuid == null) {
-            return "";
-        }
-        Player online = Bukkit.getPlayer(targetUuid);
-        if (online != null) {
-            return online.getName();
-        }
-        ChatPlayerProfile profile = profile(targetUuid);
-        return profile == null ? "" : profile.lastKnownName();
+        ReplyTarget target = playerUuid == null ? null : replyTargets.get(playerUuid);
+        return target == null ? "" : target.name();
     }
+
+    private UUID replyTargetId(UUID playerUuid) {
+        ReplyTarget target = replyTargets.get(playerUuid);
+        return target == null ? null : target.id();
+    }
+
+    private record ReplyTarget(UUID id, String name) {}
 
     public String channelDisplayName(String channelId) {
         ChatChannelDefinition channel = channel(channelId);
@@ -328,34 +635,6 @@ public final class ChatService implements Listener {
         return names;
     }
 
-    public ChatOperationResult handleChatMessage(Player sender, String rawMessage) {
-        if (sender == null || !sender.isOnline()) {
-            return ChatOperationResult.failure(message("result.player-offline"));
-        }
-        if (!xuanmo.arcartxsuite.api.auth.AuthAccess.admitted(sender.getUniqueId()))
-            return ChatOperationResult.failure("请先完成登录验证。");
-        ChatPlayerState state = state(sender.getUniqueId());
-        ChatChannelDefinition channel = channel(state.currentChannelId());
-        if (channel == null) {
-            channel = channel(configuration.defaultChannelId());
-        }
-        if (channel == null) {
-            return ChatOperationResult.failure(message("result.no-channel"));
-        }
-        if (channel.mode() == ChatChannelMode.PRIVATE) {
-            UUID targetUuid = replyTargets.get(sender.getUniqueId());
-            if (targetUuid == null) {
-                return ChatOperationResult.failure(message("result.private-no-target"));
-            }
-            ChatPlayerProfile targetProfile = profile(targetUuid);
-            if (targetProfile == null) {
-                return ChatOperationResult.failure(message("result.private-target-unavailable"));
-            }
-            return dispatchPrivateMessage(sender, targetProfile, rawMessage, channel, false);
-        }
-        return dispatchChannelMessage(sender, rawMessage, channel);
-    }
-
     public ChatOperationResult changeChannel(Player player, String channelId) {
         ChatChannelDefinition channel = channel(channelId);
         if (channel == null) {
@@ -364,29 +643,34 @@ public final class ChatService implements Listener {
         if (!channel.sendPermission().isBlank() && !player.hasPermission(channel.sendPermission())) {
             return ChatOperationResult.failure(message("result.channel-no-permission"));
         }
-        ChatPlayerState updated = state(player.getUniqueId()).withCurrentChannel(channel.id(), Instant.now());
-        states.put(player.getUniqueId(), updated);
-        saveStateAsync(updated);
+        if (channel.mode() == ChatChannelMode.PARTY && partyOf(player) == null) {
+            return ChatOperationResult.failure(message("result.party-required"));
+        }
+        ChatPlayerState previous = state(player.getUniqueId());
+        if (previous == null || !saveState(previous.withCurrentChannel(channel.id(), Instant.now()), StateField.CHANNEL)) {
+            return storageUnavailable();
+        }
+        channelChanges.merge(player.getUniqueId(), 1L, Long::sum);
         refreshTab(player, "chat-channel");
         return ChatOperationResult.success(message("result.channel-switched", channel.displayName()));
     }
 
     public ChatOperationResult setAcceptsPrivate(Player player, Boolean enabled) {
         ChatPlayerState previous = state(player.getUniqueId());
+        if (previous == null) return storageUnavailable();
         boolean nextValue = enabled == null ? !previous.acceptsPrivateMessages() : enabled.booleanValue();
         ChatPlayerState updated = previous.withAcceptsPrivateMessages(nextValue, Instant.now());
-        states.put(player.getUniqueId(), updated);
-        saveStateAsync(updated);
+        if (!saveState(updated, StateField.PRIVATE_MESSAGES)) return storageUnavailable();
         refreshTab(player, "chat-toggle-private");
         return ChatOperationResult.success(message("result.private-toggle", nextValue ? "开启" : "关闭"));
     }
 
     public ChatOperationResult setAcceptsMentions(Player player, Boolean enabled) {
         ChatPlayerState previous = state(player.getUniqueId());
+        if (previous == null) return storageUnavailable();
         boolean nextValue = enabled == null ? !previous.acceptsMentions() : enabled.booleanValue();
         ChatPlayerState updated = previous.withAcceptsMentions(nextValue, Instant.now());
-        states.put(player.getUniqueId(), updated);
-        saveStateAsync(updated);
+        if (!saveState(updated, StateField.MENTIONS)) return storageUnavailable();
         refreshTab(player, "chat-toggle-mentions");
         return ChatOperationResult.success(message("result.mentions-toggle", nextValue ? "开启" : "关闭"));
     }
@@ -396,10 +680,10 @@ public final class ChatService implements Listener {
             return ChatOperationResult.failure(message("result.socialspy-no-permission"));
         }
         ChatPlayerState previous = state(player.getUniqueId());
+        if (previous == null) return storageUnavailable();
         boolean nextValue = enabled == null ? !previous.socialSpyEnabled() : enabled.booleanValue();
         ChatPlayerState updated = previous.withSocialSpyEnabled(nextValue, Instant.now());
-        states.put(player.getUniqueId(), updated);
-        saveStateAsync(updated);
+        if (!saveState(updated, StateField.SOCIAL_SPY)) return storageUnavailable();
         refreshTab(player, "chat-social-spy");
         return ChatOperationResult.success(message("result.socialspy-toggle", nextValue ? "开启" : "关闭"));
     }
@@ -410,9 +694,9 @@ public final class ChatService implements Listener {
             return ChatOperationResult.failure(message("result.player-not-found", playerName));
         }
         ChatPlayerState previous = state(profile.playerUuid());
+        if (previous == null) return storageUnavailable();
         ChatPlayerState updated = previous.withSocialSpyEnabled(enabled, Instant.now());
-        states.put(profile.playerUuid(), updated);
-        saveStateAsync(updated);
+        if (!saveState(updated, StateField.SOCIAL_SPY)) return storageUnavailable();
         Player online = Bukkit.getPlayer(profile.playerUuid());
         if (online != null) {
             online.sendMessage(PREFIX + ChatColor.YELLOW + message("result.socialspy-notify", operatorName, enabled ? "开启" : "关闭"));
@@ -421,135 +705,352 @@ public final class ChatService implements Listener {
         return ChatOperationResult.success(message("result.socialspy-set", profile.lastKnownName(), enabled));
     }
 
-    public ChatOperationResult ignore(Player player, String targetName) {
-        ChatPlayerProfile target = resolveProfileByName(targetName);
-        if (target == null) {
-            return ChatOperationResult.failure(message("result.player-not-found", targetName));
-        }
-        if (player.getUniqueId().equals(target.playerUuid())) {
-            return ChatOperationResult.failure(message("result.ignore-self"));
-        }
-        ChatPlayerState previous = state(player.getUniqueId());
-        LinkedHashSet<UUID> ignored = new LinkedHashSet<>(previous.ignoredPlayers());
-        if (!ignored.add(target.playerUuid())) {
-            return ChatOperationResult.failure(message("result.already-ignored", target.lastKnownName()));
-        }
-        ChatPlayerState updated = previous.withIgnoredPlayers(ignored, Instant.now());
-        states.put(player.getUniqueId(), updated);
-        saveStateAsync(updated);
-        saveIgnoredAsync(updated.playerUuid(), updated.ignoredPlayers());
-        refreshTab(player, "chat-ignore");
-        return ChatOperationResult.success(message("result.ignored", target.lastKnownName()));
+    public void ignore(Player player, String targetName, Consumer<ChatOperationResult> result) {
+        queueIgnore(player, targetName, true, result);
     }
 
-    public ChatOperationResult unignore(Player player, String targetName) {
-        ChatPlayerProfile target = resolveProfileByName(targetName);
-        if (target == null) {
-            return ChatOperationResult.failure(message("result.player-not-found", targetName));
-        }
-        ChatPlayerState previous = state(player.getUniqueId());
-        LinkedHashSet<UUID> ignored = new LinkedHashSet<>(previous.ignoredPlayers());
-        if (!ignored.remove(target.playerUuid())) {
-            return ChatOperationResult.failure(message("result.not-ignored", target.lastKnownName()));
-        }
-        ChatPlayerState updated = previous.withIgnoredPlayers(ignored, Instant.now());
-        states.put(player.getUniqueId(), updated);
-        saveStateAsync(updated);
-        saveIgnoredAsync(updated.playerUuid(), updated.ignoredPlayers());
-        refreshTab(player, "chat-unignore");
-        return ChatOperationResult.success(message("result.unignored", target.lastKnownName()));
+    public void unignore(Player player, String targetName, Consumer<ChatOperationResult> result) {
+        queueIgnore(player, targetName, false, result);
     }
 
-    public ChatOperationResult sendPrivateMessage(Player sender, String targetName, String message) {
-        ChatChannelDefinition channel = privateChannel();
-        if (channel == null) {
-            return ChatOperationResult.failure(message("result.no-private-channel"));
+    private void queueIgnore(Player player, String targetName, boolean ignored, Consumer<ChatOperationResult> result) {
+        ChatConnection actor = new ChatConnection(player, AuthAccess.snapshot(player.getUniqueId()));
+        if (!actor.isCurrent()) return;
+        if (!pendingIgnoreCommands.tryAcquire()) {
+            result.accept(storageUnavailable());
+            return;
         }
-        ChatPlayerProfile target = resolveProfileByName(targetName);
-        if (target == null) {
-            return ChatOperationResult.failure(message("result.player-not-found", targetName));
+        if (!ignoreWritesPending.add(actor.snapshot().playerId())) {
+            pendingIgnoreCommands.release();
+            result.accept(storageUnavailable());
+            return;
         }
-        return dispatchPrivateMessage(sender, target, message, channel, false);
+        IgnoreCommand command = new IgnoreCommand(actor, targetName, ignored, result);
+        try {
+            Player online = Bukkit.getPlayerExact(targetName);
+            ChatPlayerProfile localTarget = online == null ? null
+                : new ChatPlayerProfile(online.getUniqueId(), online.getName(), Instant.now(), nodeId());
+            executeIgnore(command, () -> resolveIgnore(command, localTarget));
+        } catch (RuntimeException failure) {
+            failIgnore(command, failure);
+        }
     }
 
-    public ChatOperationResult reply(Player sender, String message) {
-        ChatChannelDefinition channel = privateChannel();
-        if (channel == null) {
-            return ChatOperationResult.failure(message("result.no-private-channel"));
+    private void executeIgnore(IgnoreCommand command, Runnable work) {
+        try {
+            ioExecutor.execute(() -> {
+                try {
+                    if (isCurrentIgnoreSession(command.actor().snapshot())) work.run();
+                    else finishIgnore(command, null);
+                } catch (RuntimeException failure) {
+                    failIgnore(command, failure);
+                }
+            });
+        } catch (RejectedExecutionException stopped) {
+            finishIgnore(command, storageUnavailable());
         }
-        UUID targetUuid = replyTargets.get(sender.getUniqueId());
-        if (targetUuid == null) {
-            return ChatOperationResult.failure(message("result.no-reply-target"));
-        }
-        ChatPlayerProfile target = profile(targetUuid);
-        if (target == null) {
-            return ChatOperationResult.failure(message("result.reply-target-missing"));
-        }
-        return dispatchPrivateMessage(sender, target, message, channel, true);
     }
 
-    public ChatOperationResult mutePlayer(String playerName, Instant expiresAt, String reason, String mutedBy) {
-        ChatPlayerProfile target = resolveProfileByName(playerName);
-        if (target == null) {
-            return ChatOperationResult.failure(message("result.player-not-found", playerName));
+    private void failIgnore(IgnoreCommand command, RuntimeException failure) {
+        logger.log(java.util.logging.Level.WARNING, "处理聊天忽略命令失败", failure);
+        finishIgnore(command, storageUnavailable());
+    }
+
+    private void finishIgnore(IgnoreCommand command, ChatOperationResult outcome) {
+        try {
+            onPrimary(() -> {
+                try {
+                    if (ioExecutor.isShutdown() || outcome == null) return;
+                    if (outcome.success()) publishCrossServer("axs_chat_policy");
+                    if (!command.actor().isCurrent()) return;
+                    if (outcome.success()) refreshTab(command.actor().player(), command.ignored() ? "chat-ignore" : "chat-unignore");
+                    command.result().accept(outcome);
+                } finally {
+                    releaseIgnore(command);
+                }
+            });
+        } catch (org.bukkit.plugin.IllegalPluginAccessException stopped) {
+            releaseIgnore(command);
         }
-        ChatMuteRecord record = new ChatMuteRecord(
-            target.playerUuid(),
-            mutedBy == null ? "" : mutedBy,
-            reason == null ? "" : reason,
-            Instant.now(),
-            expiresAt
-        );
-        mutes.put(target.playerUuid(), record);
-        saveMuteAsync(record);
-        Player online = Bukkit.getPlayer(target.playerUuid());
-        if (online != null) {
-            boolean cardSent = sendSystemCard(
-                online,
-                "mute",
-                Map.of(
-                    "message", "你已被禁言",
-                    "reason", record.reason().isBlank() ? "无" : record.reason(),
-                    "mutedBy", record.mutedBy(),
-                    "remaining", record.remainingText(Instant.now())
-                )
-            );
-            if (!cardSent) {
-                online.sendMessage(PREFIX + ChatColor.RED + message("result.muted-notify", record.remainingText(Instant.now())));
+    }
+
+    private void releaseIgnore(IgnoreCommand command) {
+        deliveryPolicyVersion.incrementAndGet();
+        if (ignoreWritesPending.remove(command.actor().snapshot().playerId())) pendingIgnoreCommands.release();
+    }
+
+    private boolean isCurrentIgnoreSession(AuthSnapshot previous) {
+        AuthSnapshot current = AuthAccess.snapshot(previous.playerId());
+        return !ioExecutor.isShutdown() && current.admitted() && current.generation() == previous.generation()
+            && Objects.equals(current.connectionId(), previous.connectionId());
+    }
+
+    private void resolveIgnore(IgnoreCommand command, ChatPlayerProfile target) {
+        if (target == null) {
+            for (ChatPlayerProfile profile : profiles.values()) {
+                if (profile.lastKnownName().equalsIgnoreCase(command.targetName())) {
+                    target = profile;
+                    break;
+                }
             }
-            refreshTab(online, "chat-muted");
         }
-        return ChatOperationResult.success(message("result.muted", target.lastKnownName()));
+        if (target == null) {
+            try {
+                target = repository.findProfileByName(command.targetName()).orElse(null);
+            } catch (SQLException exception) {
+                logStorageFailure(exception);
+            }
+        }
+        if (target != null) {
+            updateIgnore(command, target);
+        } else {
+            onPrimary(() -> {
+                try {
+                    resolveOfflineIgnore(command);
+                } catch (RuntimeException failure) {
+                    failIgnore(command, failure);
+                }
+            });
+        }
     }
 
-    public ChatOperationResult unmutePlayer(String playerName) {
-        ChatPlayerProfile target = resolveProfileByName(playerName);
-        if (target == null) {
-            return ChatOperationResult.failure(message("result.player-not-found", playerName));
+    private void resolveOfflineIgnore(IgnoreCommand command) {
+        if (ioExecutor.isShutdown() || !command.actor().isCurrent()) {
+            finishIgnore(command, null);
+            return;
         }
-        mutes.remove(target.playerUuid());
-        deleteMuteAsync(target.playerUuid());
-        Player online = Bukkit.getPlayer(target.playerUuid());
-        if (online != null) {
-            online.sendMessage(PREFIX + ChatColor.GREEN + message("result.unmuted-notify"));
-            refreshTab(online, "chat-unmuted");
+        for (org.bukkit.OfflinePlayer offline : Bukkit.getOfflinePlayers()) {
+            if (offline == null) continue;
+            String name = offline.getName();
+            if (name == null || !name.equalsIgnoreCase(command.targetName())) continue;
+            ChatPlayerProfile target = new ChatPlayerProfile(offline.getUniqueId(), name, Instant.now(), "");
+            executeIgnore(command, () -> {
+                try {
+                    repository.upsertProfile(target);
+                } catch (SQLException exception) {
+                    logStorageFailure(exception);
+                }
+                updateIgnore(command, target);
+            });
+            return;
         }
-        return ChatOperationResult.success(message("result.unmuted", target.lastKnownName()));
+        finishIgnore(command, ChatOperationResult.failure(message("result.player-not-found", command.targetName())));
+    }
+
+    private void updateIgnore(IgnoreCommand command, ChatPlayerProfile target) {
+        AuthSnapshot actor = command.actor().snapshot();
+        boolean ignored = command.ignored();
+        UUID playerId = actor.playerId();
+        profiles.put(target.playerUuid(), target);
+        if (ignored && playerId.equals(target.playerUuid())) {
+            finishIgnore(command, ChatOperationResult.failure(message("result.ignore-self")));
+            return;
+        }
+        if (!isCurrentIgnoreSession(actor)) {
+            finishIgnore(command, null);
+            return;
+        }
+        try {
+            if (!repository.setIgnored(playerId, target.playerUuid(), ignored)) {
+                finishIgnore(command, ChatOperationResult.failure(message(
+                    ignored ? "result.already-ignored" : "result.not-ignored", target.lastKnownName())));
+                return;
+            }
+            state(playerId);
+            finishIgnore(command, ChatOperationResult.success(
+                message(ignored ? "result.ignored" : "result.unignored", target.lastKnownName())));
+        } catch (SQLException exception) {
+            logStorageFailure(exception);
+            finishIgnore(command, storageUnavailable());
+        }
+    }
+
+    private record IgnoreCommand(ChatConnection actor, String targetName, boolean ignored,
+                                 Consumer<ChatOperationResult> result) {}
+
+    public void sendPrivateMessage(Player sender, String targetName, String message, Consumer<ChatOperationResult> result) {
+        ChatChannelDefinition channel = privateChannel();
+        if (channel == null) {
+            result.accept(ChatOperationResult.failure(message("result.no-private-channel")));
+            return;
+        }
+        Player online = Bukkit.getPlayerExact(targetName);
+        ChatPlayerProfile target = online == null ? null
+            : new ChatPlayerProfile(online.getUniqueId(), online.getName(), Instant.now(), nodeId());
+        queueChatMessage(new ChatConnection(sender, AuthAccess.snapshot(sender.getUniqueId())), message, channel,
+            new PrivateRecipient(targetName, false, target), result);
+    }
+
+    public void reply(Player sender, String message, Consumer<ChatOperationResult> result) {
+        ChatChannelDefinition channel = privateChannel();
+        if (channel == null) {
+            result.accept(ChatOperationResult.failure(message("result.no-private-channel")));
+            return;
+        }
+        queueChatMessage(new ChatConnection(sender, AuthAccess.snapshot(sender.getUniqueId())), message, channel,
+            new PrivateRecipient(null, true, null), result);
+    }
+
+    public CompletionStage<ChatOperationResult> mutePlayer(String playerName, Instant expiresAt, String reason, String mutedBy) {
+        return changeMute(playerName, expiresAt, reason, mutedBy, true);
+    }
+
+    public CompletionStage<ChatOperationResult> unmutePlayer(String playerName, String operator) {
+        return changeMute(playerName, null, "", operator, false);
+    }
+
+    private CompletionStage<ChatOperationResult> changeMute(String playerName, Instant expiry, String reason, String operator, boolean mute) {
+        if (!Bukkit.isPrimaryThread()) return CompletableFuture.failedFuture(new IllegalStateException("Submit moderation on the server thread"));
+        if (isStopping() || !moderationSlots.tryAcquire()) return CompletableFuture.completedFuture(storageUnavailable());
+        var result = new CompletableFuture<ChatOperationResult>();
+        moderationResults.add(result);
+        result.whenComplete((value, error) -> { moderationResults.remove(result); moderationSlots.release(); });
+        if (playerName == null || playerName.isBlank()) { result.complete(ChatOperationResult.failure(message("result.player-not-found", playerName))); return result.copy(); }
+        Player online = Bukkit.getPlayerExact(playerName);
+        ChatPlayerProfile cached = online == null ? profiles.values().stream()
+            .filter(profile -> playerName.equalsIgnoreCase(profile.lastKnownName())).findFirst().orElse(null)
+            : new ChatPlayerProfile(online.getUniqueId(), online.getName(), Instant.now(), nodeId());
+        CompletionStage<ChatPlayerProfile> target = cached != null ? CompletableFuture.completedFuture(cached)
+            : moderationIo(() -> repository.findProfileByName(playerName).orElse(null), false)
+                .thenCompose(found -> found != null ? CompletableFuture.completedFuture(found)
+                    : moderationMain(() -> resolveOfflineProfileByName(playerName)));
+        target.thenCompose(profile -> {
+            if (profile == null) return CompletableFuture.completedFuture(ChatOperationResult.failure(message("result.player-not-found", playerName)));
+            UUID id = profile.playerUuid();
+            pendingMuteWrites.merge(id, 1, Integer::sum);
+            deliveryPolicyVersion.incrementAndGet();
+            return moderationIo(() -> {
+                Instant now = Instant.now();
+                ChatMuteRecord record = mute ? new ChatMuteRecord(id, operator == null ? "" : operator,
+                    reason == null ? "" : reason, now, expiry) : null;
+                ChatModerationReceipt receipt = new ChatModerationReceipt(UUID.randomUUID(), id, profile.lastKnownName(),
+                    mute ? "MUTE" : "UNMUTE", operator == null ? "" : operator, reason == null ? "" : reason, nodeId(), now, expiry);
+                if (mute) repository.saveMute(record, receipt); else repository.deleteMute(id, receipt);
+                return new CommittedMute(profile, record, receipt);
+            }, true).whenComplete((value, failure) -> {
+                deliveryPolicyVersion.incrementAndGet();
+                pendingMuteWrites.compute(id, (key, count) -> count == null || count <= 1 ? null : count - 1);
+            }).thenApply(committed -> {
+                if (!isStopping()) try {
+                    onPrimary(() -> moderationCallbacks.call(() -> {
+                        if (isStopping()) return null;
+                        if (committed.record() == null) mutes.remove(id); else mutes.put(id, committed.record());
+                        publishCrossServer("axs_chat_policy");
+                        publishCrossServer("axs_mod|" + committed.receipt().id());
+                        notifyMuteChange(committed.receipt(), committed.record());
+                        return null;
+                    }, null));
+                } catch (RuntimeException closing) { if (!isStopping()) logger.warning("禁言已提交，通知发送失败: " + closing.getMessage()); }
+                return ChatOperationResult.success(message(mute ? "result.muted" : "result.unmuted", profile.lastKnownName())
+                    + " " + message("moderation.receipt-id", committed.receipt().id()));
+            });
+        }).whenComplete((value, failure) -> {
+            if (failure != null) {
+                Throwable cause = failure;
+                while (cause instanceof java.util.concurrent.CompletionException && cause.getCause() != null) cause = cause.getCause();
+                if (cause instanceof SQLException sql) { logStorageFailure(sql); result.complete(storageUnavailable()); }
+                else result.completeExceptionally(cause);
+            } else result.complete(value);
+        });
+        return result.copy();
+    }
+
+    private record CommittedMute(ChatPlayerProfile profile, ChatMuteRecord record, ChatModerationReceipt receipt) {}
+
+    private <T> CompletableFuture<T> moderationIo(java.util.concurrent.Callable<T> task, boolean write) {
+        var result = new CompletableFuture<T>();
+        try {
+            ioExecutor.execute(() -> {
+                try {
+                    if (!write && isStopping()) throw new java.util.concurrent.CancellationException("Chat is stopping");
+                    result.complete(task.call());
+                } catch (Throwable failure) { result.completeExceptionally(failure); }
+            });
+        } catch (RejectedExecutionException stopped) { result.completeExceptionally(stopped); }
+        return result;
+    }
+
+    private <T> CompletionStage<T> moderationMain(Supplier<T> task) {
+        var result = new CompletableFuture<T>();
+        moderationMainResults.add(result);
+        result.whenComplete((value, error) -> moderationMainResults.remove(result));
+        if (isStopping()) result.completeExceptionally(new java.util.concurrent.CancellationException("Chat is stopping"));
+        else try {
+            onPrimary(() -> {
+                boolean ran = moderationCallbacks.call(() -> {
+                    try { result.complete(task.get()); } catch (Throwable failure) { result.completeExceptionally(failure); }
+                    return true;
+                }, false);
+                if (!ran) result.completeExceptionally(new java.util.concurrent.CancellationException("Chat is stopping"));
+            });
+        } catch (RuntimeException closing) { result.completeExceptionally(closing); }
+        return result;
+    }
+
+    public void replyModeration(CommandSender sender, ChatOperationResult result, Throwable failure) {
+        if (isStopping()) return;
+        onPrimary(() -> moderationCallbacks.call(() -> {
+            if (isStopping() || !sender.hasPermission("arcartxsuite.admin")) return null;
+            if (sender instanceof Player player && (!player.isOnline() || Bukkit.getPlayer(player.getUniqueId()) != player
+                || !AuthAccess.admitted(player.getUniqueId()))) return null;
+            ChatOperationResult reply = failure == null ? result : storageUnavailable();
+            sender.sendMessage((messages == null ? "" : messages.get("prefix")) + (reply.success() ? ChatColor.GREEN : ChatColor.RED) + reply.message());
+            return null;
+        }, null));
+    }
+
+    public void inspectModeration(CommandSender operator, String action, String argument) {
+        moderation.inspect(operator, action, argument);
+    }
+
+    private void notifyMuteChange(ChatModerationReceipt receipt, ChatMuteRecord record) {
+        Player player = Bukkit.getPlayer(receipt.playerId());
+        if (player == null || !player.isOnline()
+                || !xuanmo.arcartxsuite.api.auth.AuthAccess.admitted(receipt.playerId())) return;
+        if (record == null) {
+            player.sendMessage(PREFIX + ChatColor.GREEN + message("result.unmuted-notify"));
+            refreshTab(player, "chat-unmuted");
+            return;
+        }
+        String remaining = record.remainingText(Instant.now());
+        boolean sent = sendSystemCard(player, "mute", Map.of(
+            "message", "你已被禁言",
+            "reason", record.reason().isBlank() ? "无" : record.reason(),
+            "mutedBy", record.mutedBy(),
+            "remaining", remaining
+        ));
+        if (!sent) player.sendMessage(PREFIX + ChatColor.RED + message("result.muted-notify", remaining));
+        refreshTab(player, "chat-muted");
+    }
+
+    public void showHistory(Player viewer, String channel) {
+        moderation.history(viewer, channel);
+    }
+
+    public void reportMessage(Player viewer, String id, String reason) {
+        moderation.report(viewer, id, reason);
     }
 
 
     @EventHandler(ignoreCancelled = true)
     public void onAsyncPlayerChat(AsyncPlayerChatEvent event) {
+        ChatReloadGate gate = reloadGate;
+        if (gate != null && gate.reject(event)) return;
         if (configuration.forceChatTakeover()) {
             forceCancelLegacyChatEvent(event);
             return;
         }
+        // Paper copies the legacy cancellation into AsyncChatEvent. Let its modern
+        // handler own ordinary native messages when it is available.
+        if (paperChatEventRegistered) return;
         event.setCancelled(true);
         dispatchOrDeferToPaper(event.getPlayer(), event.getMessage());
     }
 
     @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = false)
     public void onAsyncPlayerChatForceTakeover(AsyncPlayerChatEvent event) {
+        ChatReloadGate gate = reloadGate;
+        if (gate != null && gate.reject(event)) return;
         if (!configuration.forceChatTakeover()) {
             return;
         }
@@ -559,6 +1060,8 @@ public final class ChatService implements Listener {
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = false)
     public void onAsyncPlayerChatForceFinalCancel(AsyncPlayerChatEvent event) {
+        ChatReloadGate gate = reloadGate;
+        if (gate != null && gate.reject(event)) return;
         if (configuration.forceChatTakeover()) {
             forceCancelLegacyChatEvent(event);
         }
@@ -583,9 +1086,11 @@ public final class ChatService implements Listener {
     public void onAdmission(xuanmo.arcartxsuite.api.auth.AuthAdmissionEvent event) {
         Player player=Bukkit.getPlayer(event.snapshot().playerId());
         if(player==null) return;
-        touchProfile(player, true);
-        state(player.getUniqueId());
-        currentMute(player.getUniqueId());
+        var connection = new ChatConnection(player, event.snapshot());
+        admittedAudience.put(event.snapshot().playerId(), connection);
+        publishAudience();
+        if (chatRelay != null) chatRelay.audienceChanged(admittedAudience.keySet());
+        touchProfile(player, connection);
         updateMentionCompletions(player, true);
         broadcastCompletionPlayerList();
         RedPacketService service = redPacketService;
@@ -597,7 +1102,10 @@ public final class ChatService implements Listener {
     @EventHandler
     public void onRestriction(xuanmo.arcartxsuite.api.auth.AuthRestrictionEvent event) {
         UUID uuid=event.previous().playerId();
+        withdrawAudience(uuid);
         replyTargets.remove(uuid);
+        moderation.forget(uuid);
+        if (links != null) links.clearLocation(uuid);
         Player player=Bukkit.getPlayer(uuid);
         if(player!=null) updateMentionCompletions(player,false);
         broadcastCompletionPlayerList();
@@ -605,25 +1113,31 @@ public final class ChatService implements Listener {
 
     @EventHandler
     public void onPlayerQuit(PlayerQuitEvent event) {
-        if(xuanmo.arcartxsuite.api.auth.AuthAccess.admitted(event.getPlayer().getUniqueId())) touchProfile(event.getPlayer(), true);
+        if (AuthAccess.admitted(event.getPlayer().getUniqueId())) touchProfile(event.getPlayer(), null);
         UUID uuid = event.getPlayer().getUniqueId();
+        withdrawAudience(uuid);
         states.remove(uuid);
+        mutes.remove(uuid);
         replyTargets.remove(uuid);
+        moderation.forget(uuid);
+        if (links != null) links.clearLocation(uuid);
         lastMessageTimes.remove(uuid);
         lastDuplicateStamps.remove(uuid);
-        failedLoads.remove(uuid);
+        channelChanges.remove(uuid);
         updateMentionCompletions(event.getPlayer(), false);
         broadcastCompletionPlayerList();
     }
 
-    private ChatOperationResult dispatchChannelMessage(Player sender, String rawMessage, ChatChannelDefinition channel) {
-        String message = sanitizeAndValidateOutgoingMessage(sender, rawMessage);
-        if (message == null) {
-            return ChatOperationResult.failure(message("result.empty-message"));
-        }
-        ChatOperationResult validation = validateBeforeSend(sender, message, channel, false);
+    private ChatOperationResult dispatchChannelMessage(Player sender, String rawMessage, ChatChannelDefinition channel,
+            ChatMuteRecord mute, List<ChatConnection> audience, Map<UUID, RouteState> routes) {
+        String message = rawMessage;
+        ChatOperationResult validation = validateBeforeSend(sender, message, channel, false, mute);
         if (!validation.success()) {
             return validation;
+        }
+        RegionChatAccess regionAccess = regionChatAccess(channel);
+        if (regionAccess != null && !regionAccess.canSendPublic(sender)) {
+            return ChatOperationResult.failure(message("result.region-speak-denied"));
         }
 
         String processedMessage = applyCustomComponents(message);
@@ -671,13 +1185,13 @@ public final class ChatService implements Listener {
             mentionResult.mentionAll(),
             new ArrayList<>(mentionResult.mentionedNames()),
             processedContent.itemPreview(),
-            processedMessage
+            processedMessage,
+            channel.audienceKey()
         );
         rememberEnvelope(envelope.dedupeKey());
-        deliverPublicEnvelope(envelope, channel, sender);
-        if (channel.crossServer() && crossServerActive()) {
-            crossServerChannel.publish(ChatEnvelopeCodec.encode(envelope));
-        }
+        boolean relay = channel.permitsCrossServer() && crossServerActive();
+        Set<UUID> delivered = deliverPreparedPublic(envelope, channel, sender, audience, routes, relay);
+        if (relay) publishChatEnvelope(sender, envelope, delivered);
         trackMessageFingerprint(sender.getUniqueId(), processedMessage);
         publishChatEvent(sender, channel.id(), "channel");
         if (channel.permitsExternalRelay()) {
@@ -692,7 +1206,10 @@ public final class ChatService implements Listener {
         ChatPlayerProfile targetProfile,
         String rawMessage,
         ChatChannelDefinition channel,
-        boolean replyMode
+        boolean replyMode,
+        ChatMuteRecord mute,
+        List<ChatConnection> audience,
+        Map<UUID, RouteState> routes
     ) {
         if (targetProfile == null) {
             return ChatOperationResult.failure(message("result.target-missing"));
@@ -704,23 +1221,32 @@ public final class ChatService implements Listener {
         if (message == null) {
             return ChatOperationResult.failure(message("result.empty-message"));
         }
-        ChatOperationResult validation = validateBeforeSend(sender, message, channel, true);
+        ChatOperationResult validation = validateBeforeSend(sender, message, channel, true, mute);
         if (!validation.success()) {
             return validation;
         }
 
-        Player localTarget = Bukkit.getPlayer(targetProfile.playerUuid());
+        ChatPlayerState senderState = routedState(routes, sender.getUniqueId());
+        if (senderState == null) return storageUnavailable();
+        if (senderState.ignores(targetProfile.playerUuid())) {
+            return ChatOperationResult.failure(message("result.target-ignored"));
+        }
+        Player localTarget = onlineRecipient(audience, targetProfile.playerUuid());
         if (localTarget != null) {
             if(!xuanmo.arcartxsuite.api.auth.AuthAccess.admitted(localTarget.getUniqueId()))
                 return ChatOperationResult.failure(message("result.target-offline"));
-            ChatPlayerState targetState = state(localTarget.getUniqueId());
+            ChatPlayerState targetState = routedState(routes, localTarget.getUniqueId());
+            if (targetState == null) return storageUnavailable();
+            if (!canReceiveChannel(channel, localTarget)) {
+                return ChatOperationResult.failure(message("result.target-rejects"));
+            }
             if (!targetState.acceptsPrivateMessages()) {
                 return ChatOperationResult.failure(message("result.target-rejects"));
             }
             if (targetState.ignores(sender.getUniqueId())) {
                 return ChatOperationResult.failure(message("result.target-ignored"));
             }
-        } else if (!crossServerActive()) {
+        } else if (Bukkit.getPlayer(targetProfile.playerUuid()) != null || !channel.permitsCrossServer() || !crossServerActive()) {
             return ChatOperationResult.failure(message("result.target-offline"));
         }
 
@@ -777,26 +1303,70 @@ public final class ChatService implements Listener {
             false,
             List.of(),
             processedContent.itemPreview(),
-            processedMessage
+            processedMessage,
+            channel.audienceKey()
         );
         rememberEnvelope(envelope.dedupeKey());
-        deliverPrivateEnvelope(envelope, sender, localTarget);
-        if (channel.crossServer() && crossServerActive()) {
-            crossServerChannel.publish(ChatEnvelopeCodec.encode(envelope));
-        }
-        replyTargets.put(sender.getUniqueId(), targetProfile.playerUuid());
-        if (localTarget != null) {
-            replyTargets.put(localTarget.getUniqueId(), sender.getUniqueId());
-        }
-        refreshTab(sender, replyMode ? "chat-reply" : "chat-msg");
-        if (localTarget != null) {
-            refreshTab(localTarget, "chat-msg-target");
-        }
+        Runnable addressed = () -> {
+            deliverPrivateEnvelope(envelope, channel, sender, localTarget, audience, routes);
+            replyTargets.put(sender.getUniqueId(), new ReplyTarget(targetProfile.playerUuid(), targetProfile.lastKnownName()));
+            if (localTarget != null) replyTargets.put(localTarget.getUniqueId(), new ReplyTarget(sender.getUniqueId(), sender.getName()));
+            refreshTab(sender, replyMode ? "chat-reply" : "chat-msg");
+            if (localTarget != null) refreshTab(localTarget, "chat-msg-target");
+        };
+        addressed.run();
         trackMessageFingerprint(sender.getUniqueId(), processedMessage);
+        if (localTarget == null) {
+            publishChatEnvelope(sender, envelope, Set.of(), () ->
+                sender.sendMessage(PREFIX + ChatColor.GREEN + message("result.private-relay-accepted")));
+            return new ChatOperationResult(true, "", true);
+        }
         return ChatOperationResult.success(message("result.private-sent"));
     }
 
-    private ChatOperationResult validateBeforeSend(Player sender, String message, ChatChannelDefinition channel, boolean privateMessage) {
+    void prepareRedPacketSend(Player sender, String wish, BiConsumer<RedPacketPermission, ChatOperationResult> ready) {
+        UUID id = sender.getUniqueId();
+        var actor = new ChatConnection(sender, AuthAccess.snapshot(id));
+        long channelAtSubmission = channelChanges.getOrDefault(id, 0L);
+        if (!publicDelivery.offer(() -> {
+            long revision = deliveryPolicyVersion.get();
+            var state = repository.loadState(id, configuration.defaultChannelId());
+            return new RedPacketPermission(configuration.channel(state.currentChannelId()), loadActiveMute(id), revision);
+        }, permission -> true, permission -> !pendingMuteWrites.containsKey(id), (permission, failure) -> {
+            if (!actor.isCurrent()) {
+                ready.accept(null, linkResult("result.player-offline"));
+            } else if (failure != null) {
+                logStorageFailure(failure);
+                ready.accept(null, storageUnavailable());
+            } else if (channelChanges.getOrDefault(id, 0L) != channelAtSubmission) {
+                ready.accept(null, linkResult("result.channel-changed-while-sending"));
+            } else if (!RedPacketService.usableChannel(permission.channel(), sender)) {
+                ready.accept(null, linkResult("result.no-channel"));
+            } else {
+                ready.accept(permission, validateRedPacketSend(sender, wish, permission));
+            }
+        })) ready.accept(null, storageUnavailable());
+    }
+
+    boolean redPacketPolicyCurrent(UUID senderId, RedPacketPermission permission) {
+        return !isStopping() && permission.revision() == deliveryPolicyVersion.get()
+            && !pendingMuteWrites.containsKey(senderId);
+    }
+
+    ChatOperationResult validateRedPacketSend(Player sender, String wish, RedPacketPermission permission) {
+        if (!redPacketPolicyCurrent(sender.getUniqueId(), permission)) {
+            return linkResult("result.channel-changed-while-sending");
+        }
+        var validation = validateBeforeSend(sender, wish, permission.channel(), false, permission.mute());
+        if (!validation.success()) return validation;
+        var regions = regionChatAccess(permission.channel());
+        return regions != null && !regions.canSendPublic(sender) ? linkResult("result.region-speak-denied") : validation;
+    }
+
+    record RedPacketPermission(ChatChannelDefinition channel, ChatMuteRecord mute, long revision) {}
+
+    private ChatOperationResult validateBeforeSend(Player sender, String message, ChatChannelDefinition channel,
+                                                   boolean privateMessage, ChatMuteRecord muteRecord) {
         if (sender == null || !sender.isOnline()) {
             return ChatOperationResult.failure(message("result.player-offline"));
         }
@@ -808,7 +1378,9 @@ public final class ChatService implements Listener {
         if (privateMessage && !sender.hasPermission(PRIVATE_PERMISSION)) {
             return ChatOperationResult.failure(message("result.private-no-permission"));
         }
-        ChatMuteRecord muteRecord = currentMute(sender.getUniqueId());
+        if (channel.mode() == ChatChannelMode.PARTY && partyOf(sender) == null) {
+            return ChatOperationResult.failure(message("result.party-required"));
+        }
         if (muteRecord != null && muteRecord.active(Instant.now())) {
             boolean cardSent = sendSystemCard(
                 sender,
@@ -842,6 +1414,14 @@ public final class ChatService implements Listener {
             }
         }
         return ChatOperationResult.success("ok");
+    }
+
+    String moderateRedPacketWish(String wish) {
+        String text = wish == null ? "" : wish.strip();
+        if (text.length() > Math.min(255, configuration.maxLength())) return null;
+        if (text.isEmpty()) return "";
+        ContentModerator.ModerationResult result = contentModerator.filter(text);
+        return result.blocked() || result.text().length() > 255 ? null : result.text();
     }
 
     private String sanitizeAndValidateOutgoingMessage(Player sender, String rawMessage) {
@@ -892,20 +1472,7 @@ public final class ChatService implements Listener {
             return null;
         }
 
-        // 如果 Tooltip 模块可用，将客户端采集的动态 tooltip 文本行注入物品 NBT Lore
-        // 使 ArcartX 客户端 UI 能显示 TACZ 枪属性和 Apotheosis affix 等内容
-        ItemStack itemForSerialization = itemStack;
-        if (tooltipDataProvider != null) {
-            xuanmo.arcartxsuite.api.capability.TooltipDataCapable tooltipCap = tooltipDataProvider.get();
-            if (tooltipCap != null) {
-                java.util.List<String> tooltipLines = tooltipCap.getTooltipLines(sender, itemStack);
-                if (tooltipLines != null && !tooltipLines.isEmpty()) {
-                    itemForSerialization = tooltipCap.injectLore(itemStack, tooltipLines);
-                }
-            }
-        }
-
-        Optional<String> itemJson = itemStackBridge.itemToPreviewJson(itemForSerialization);
+        Optional<String> itemJson = itemStackBridge.itemToPreviewJson(itemStack);
         if (itemJson.isEmpty()) {
             return null;
         }
@@ -923,23 +1490,75 @@ public final class ChatService implements Listener {
         );
     }
 
-    private void deliverPublicEnvelope(ChatEnvelope envelope, ChatChannelDefinition channel, Player localSender) {
-        UUID senderUuid = parseUuid(envelope.senderUuid());
-        for (Player recipient : Bukkit.getOnlinePlayers()) {
-            if (!canReceivePublic(channel, localSender, senderUuid, recipient)) {
-                continue;
-            }
-            boolean mentionCardSent = sendMentionCardIfNeeded(recipient, envelope, channel);
-            if (!mentionCardSent) {
-                if (!sendItemPreviewCard(recipient, envelope, channel)) {
-                    sendChatComponents(recipient, envelope.renderedText(), envelope.itemPreview(), true);
-                }
-            }
-        }
-        sendConsole(envelope.consoleText(), envelope.itemPreview());
+    private Map<UUID, RouteState> loadDeliveryRoutes(List<UUID> audience, String channelId, UUID senderUuid)
+            throws SQLException {
+        return loadDeliveryRoutes(audience, channelId, senderUuid, null);
     }
 
-    private void deliverPrivateEnvelope(ChatEnvelope envelope, Player localSender, Player localTarget) {
+    private Map<UUID, RouteState> loadDeliveryRoutes(List<UUID> audience, String channelId, UUID senderUuid,
+                                                     ChatRepository.GuardedRoutes guard) throws SQLException {
+        Map<UUID, RouteState> routes = new LinkedHashMap<>();
+        for (int start = 0; start < audience.size(); start += 150) {
+            Set<UUID> ids = new LinkedHashSet<>(audience.subList(start, Math.min(start + 150, audience.size())));
+            routes.putAll(loadRouteChunk(ids, channelId, guard));
+        }
+        if (senderUuid != null && !routes.containsKey(senderUuid)) {
+            routes.putAll(loadRouteChunk(Set.of(senderUuid), channelId, guard));
+        }
+        return routes;
+    }
+
+    private Map<UUID, RouteState> loadRouteChunk(Set<UUID> ids, String channelId, ChatRepository.GuardedRoutes guard)
+            throws SQLException {
+        String defaultChannel = configuration.defaultChannelId();
+        return guard == null ? repository.loadRouteStates(ids, channelId, defaultChannel)
+            : guard.loadRouteStates(ids, channelId, defaultChannel);
+    }
+
+    private Set<UUID> deliverPreparedPublic(ChatEnvelope envelope, ChatChannelDefinition channel, Player localSender,
+            List<ChatConnection> audience, Map<UUID, RouteState> routes, boolean recordRecipients) {
+        return deliverPreparedPublic(envelope, channel, localSender, audience, routes, recordRecipients, null);
+    }
+
+    private Set<UUID> deliverPreparedPublic(ChatEnvelope envelope, ChatChannelDefinition channel, Player localSender,
+            List<ChatConnection> audience, Map<UUID, RouteState> routes, boolean recordRecipients, Set<UUID> sentInAttempt) {
+        UUID senderUuid = parseUuid(envelope.senderUuid());
+        RouteState senderRoute = routes.get(senderUuid);
+        Set<UUID> delivered = recordRecipients ? new LinkedHashSet<>() : Set.of();
+        PublicPresentation presentation = new PublicPresentation(envelope, channel);
+        boolean party = channel.mode() == ChatChannelMode.PARTY;
+        ChatModeration.Seen sharedHistory = party ? null : moderation.describe(channel, envelope, null);
+        RegionChatAccess regionAccess = regionChatAccess(channel);
+        for (ChatConnection connection : audience) {
+            Player recipient = connection.player();
+            UUID recipientId = connection.snapshot().playerId();
+            if (sentInAttempt != null && sentInAttempt.contains(recipientId)) continue;
+            if (!connection.isCurrent() || !canReceiveAdmittedAudience(channel, localSender, senderUuid, recipient)) continue;
+            RouteState route = routes.get(recipientId);
+            if (!canReceiveRoute(route, senderRoute, senderUuid, recipient)) {
+                continue;
+            }
+            if (regionAccess != null && !regionAccess.canReceivePublic(recipient)) continue;
+            if (!sendMentionCardIfNeeded(recipient, envelope, route.player(), presentation)
+                && !presentation.sendItemCard(recipient)) {
+                presentation.sendText(recipient);
+            }
+            if (recordRecipients) delivered.add(recipientId);
+            if (sentInAttempt != null) sentInAttempt.add(recipientId);
+            if (party) moderation.record(recipient, channel, envelope);
+            else moderation.record(recipient, sharedHistory);
+        }
+        sendConsole(envelope.consoleText(), envelope.itemPreview());
+        return delivered;
+    }
+
+    private void deliverPrivateEnvelope(ChatEnvelope envelope, ChatChannelDefinition channel, Player localSender,
+            Player localTarget, List<ChatConnection> audience, Map<UUID, RouteState> routes) {
+        deliverPrivateEnvelope(envelope, channel, localSender, localTarget, audience, routes, null);
+    }
+
+    private void deliverPrivateEnvelope(ChatEnvelope envelope, ChatChannelDefinition channel, Player localSender,
+            Player localTarget, List<ChatConnection> audience, Map<UUID, RouteState> routes, Set<UUID> sentInAttempt) {
         if (localSender != null && localSender.isOnline() && xuanmo.arcartxsuite.api.auth.AuthAccess.admitted(localSender.getUniqueId())) {
             boolean cardSent = sendPrivateCard(localSender, envelope, true);
             if (!cardSent) {
@@ -947,79 +1566,209 @@ public final class ChatService implements Listener {
                     sendChatComponents(localSender, envelope.renderedText(), envelope.itemPreview(), true);
                 }
             }
+            moderation.record(localSender, channel, envelope);
         }
 
-        if (localTarget != null && localTarget.isOnline() && xuanmo.arcartxsuite.api.auth.AuthAccess.admitted(localTarget.getUniqueId())) {
+        if (localTarget != null && localTarget.isOnline() && AuthAccess.admitted(localTarget.getUniqueId())
+                && (sentInAttempt == null || !sentInAttempt.contains(localTarget.getUniqueId()))) {
             boolean cardSent = sendPrivateCard(localTarget, envelope, false);
             if (!cardSent) {
                 if (!sendItemPreviewCard(localTarget, envelope, privateChannel())) {
                     sendChatComponents(localTarget, envelope.renderedTargetText(), envelope.itemPreview(), true);
                 }
             }
+            if (sentInAttempt != null) sentInAttempt.add(localTarget.getUniqueId());
+            moderation.record(localTarget, channel, envelope);
         }
 
         UUID senderUuid = parseUuid(envelope.senderUuid());
         UUID targetUuid = parseUuid(envelope.targetUuid());
-        for (Player viewer : Bukkit.getOnlinePlayers()) {
-            if (!xuanmo.arcartxsuite.api.auth.AuthAccess.admitted(viewer.getUniqueId())) continue;
+        BaseComponent[] spyComponents = null;
+        for (ChatConnection connection : audience) {
+            Player viewer = connection.player();
+            if (sentInAttempt != null && sentInAttempt.contains(viewer.getUniqueId())) continue;
+            if (!connection.isCurrent() || !viewer.hasPermission(SOCIAL_SPY_PERMISSION)) continue;
             if (senderUuid != null && senderUuid.equals(viewer.getUniqueId())) {
                 continue;
             }
             if (targetUuid != null && targetUuid.equals(viewer.getUniqueId())) {
                 continue;
             }
-            ChatPlayerState state = state(viewer.getUniqueId());
-            if (!state.socialSpyEnabled() || !viewer.hasPermission(SOCIAL_SPY_PERMISSION)) {
+            ChatPlayerState state = routedState(routes, viewer.getUniqueId());
+            if (state == null || !state.socialSpyEnabled()) {
                 continue;
             }
-            sendChatComponents(viewer, envelope.renderedSpyText(), envelope.itemPreview(), true);
+            if (spyComponents == null) {
+                spyComponents = ChatFormatSupport.buildComponents(envelope.renderedSpyText(), envelope.itemPreview(), true);
+            }
+            viewer.spigot().sendMessage(spyComponents);
+            if (sentInAttempt != null) sentInAttempt.add(viewer.getUniqueId());
         }
         sendConsole(envelope.consoleText(), envelope.itemPreview());
     }
 
-    private void handleRemotePayload(String payload) {
-        if (payload == null || payload.isBlank()) {
-            return;
+    private CompletionStage<Boolean> handleRemotePayload(String payload, String sourceNode, long timestamp) {
+        if (payload == null || networkId == null || !payload.startsWith(networkId + "|")) {
+            return RELAY_HANDLED;
+        }
+        return handleRelayPayload(payload.substring(networkId.length() + 1), sourceNode, timestamp);
+    }
+
+    private CompletionStage<Boolean> handleRelayPayload(String payload, String sourceNode, long timestamp) {
+        if ("axs_chat_policy".equals(payload)) {
+            deliveryPolicyVersion.incrementAndGet();
+            return RELAY_HANDLED;
+        }
+        if (payload.startsWith("axs_mod|")) {
+            return handleRemoteModeration(parseUuid(payload.substring("axs_mod|".length())), sourceNode);
         }
         if (payload.startsWith(RedPacketService.CROSS_PREFIX)) {
             RedPacketService service = redPacketService;
             if (service != null) {
-                service.handleRemotePayload(payload);
+                service.handleRemotePayload(payload, sourceNode);
             }
-            return;
+            return RELAY_HANDLED;
         }
+        return handleRemoteChat(payload, sourceNode, timestamp);
+    }
+
+    private CompletionStage<Boolean> handleRemoteChat(String payload, String sourceNode, long timestamp) {
+        if (!publicDelivery.hasRoom()) return null;
+        ChatEnvelopeCodec.Delivery delivery;
         try {
-            handleRemoteEnvelope(ChatEnvelopeCodec.decode(payload));
-        } catch (Exception exception) {
+            delivery = ChatEnvelopeCodec.decodeDelivery(payload);
+        } catch (org.bukkit.configuration.InvalidConfigurationException | RuntimeException exception) {
             this.logger.warning("解析跨服聊天消息失败: " + exception.getMessage());
+            return RELAY_HANDLED;
+        }
+        if (!sourceNode.equals(delivery.envelope().originNodeId())) return RELAY_HANDLED;
+        return handleRemoteEnvelope(delivery.envelope(), delivery.originRecipients(), timestamp);
+    }
+
+    private CompletionStage<Boolean> handleRemoteModeration(UUID id, String sourceNode) {
+        if (id == null) return RELAY_HANDLED;
+        String key = "mute:" + id + ":" + sourceNode;
+        if (processedEnvelopeKeys.containsKey(key)) return RELAY_HANDLED;
+        var pending = remoteInFlight.get(key);
+        if (pending != null) return pending;
+
+        var finished = new CompletableFuture<Boolean>();
+        if (!publicDelivery.offerRemote(() -> {
+            ChatModerationReceipt receipt = repository.findModerationReceipt(id).orElse(null);
+            if (receipt == null || !receipt.node().equals(sourceNode)) return null;
+            if (pendingMuteWrites.containsKey(receipt.playerId())) {
+                throw new SQLTransientException("Moderation write pending");
+            }
+            return new RemoteModeration(receipt, loadActiveMute(receipt.playerId()));
+        }, result -> {
+            if (result != null && rememberEnvelope(key)) applyRemoteModeration(result);
+            remoteInFlight.remove(key);
+            finished.complete(true);
+        }, () -> {
+            remoteInFlight.remove(key);
+            finished.complete(false);
+        })) return null;
+        remoteInFlight.put(key, finished);
+        return finished;
+    }
+
+    private void applyRemoteModeration(RemoteModeration result) {
+        ChatModerationReceipt receipt = result.receipt();
+        if (Bukkit.getPlayer(receipt.playerId()) == null) return;
+        ChatMuteRecord active = result.active();
+        if (active != null && !active.active(Instant.now())) active = null;
+        cacheMute(receipt.playerId(), active);
+        boolean current = "MUTE".equals(receipt.action())
+            ? active != null && active.createdAt().equals(receipt.createdAt()) && active.mutedBy().equals(receipt.operator())
+            : "UNMUTE".equals(receipt.action()) && active == null;
+        if (current) notifyMuteChange(receipt, active);
+    }
+
+    private record RemoteModeration(ChatModerationReceipt receipt, ChatMuteRecord active) {}
+
+    private CompletionStage<Boolean> handleRemoteEnvelope(ChatEnvelope envelope, Set<UUID> originRecipients,
+                                                            long timestamp) {
+        if (envelope == null || processedEnvelopeKeys.containsKey(envelope.dedupeKey())) return RELAY_HANDLED;
+        CompletableFuture<Boolean> pending = remoteInFlight.get(envelope.dedupeKey());
+        if (pending != null) return pending;
+        ChatChannelDefinition channel = configuration.channel(envelope.channelId());
+        UUID senderId = parseUuid(envelope.senderUuid());
+        if (channel == null || !channel.permitsCrossServer() || senderId == null
+                || !channel.audienceKey().equals(envelope.audienceKey())
+                || envelope.privateMessage() != (channel.mode() == ChatChannelMode.PRIVATE)
+                || envelope.staffMessage() != (channel.mode() == ChatChannelMode.STAFF)) {
+            return RELAY_HANDLED;
+        }
+        Set<UUID> recoveryAudience = null;
+        if (chatRelay != null && chatRelay.isRecovery(timestamp)) {
+            if (chatRelay.waitingForRejoin(admittedAudience.keySet())) return null;
+            recoveryAudience = chatRelay.previousAudience();
+        }
+        if (envelope.privateMessage()) return queueRemotePrivate(envelope, channel, senderId, recoveryAudience);
+
+        List<ChatConnection> audience = captureAudience(channel, null, senderId, originRecipients);
+        restrictRecoveredAudience(audience, recoveryAudience);
+        Set<UUID> sentInAttempt = new java.util.HashSet<>();
+        return queueRemoteDelivery(envelope, channel, senderId, audience,
+            routes -> deliverPreparedPublic(envelope, channel, null, audience, routes, false, sentInAttempt));
+    }
+
+    private CompletionStage<Boolean> queueRemotePrivate(ChatEnvelope envelope, ChatChannelDefinition channel,
+                                                         UUID senderId, Set<UUID> recoveryAudience) {
+        UUID targetId = parseUuid(envelope.targetUuid());
+        if (targetId == null || (recoveryAudience != null && !recoveryAudience.contains(targetId))
+                || !canReceiveChannel(channel, Bukkit.getPlayer(targetId))) return RELAY_HANDLED;
+        List<ChatConnection> audience = captureAudience(null, null, senderId, Set.of());
+        restrictRecoveredAudience(audience, recoveryAudience);
+        Set<UUID> sentInAttempt = new java.util.HashSet<>();
+        return queueRemoteDelivery(envelope, channel, senderId, audience, routes -> {
+            Player target = onlineRecipient(audience, targetId);
+            if (!canReceiveChannel(channel, target)) return;
+            ChatPlayerState targetState = routedState(routes, targetId);
+            ChatPlayerState senderState = routedState(routes, senderId);
+            if (targetState == null || senderState == null || !targetState.acceptsPrivateMessages()
+                || targetState.ignores(senderId) || senderState.ignores(targetId)) return;
+            deliverPrivateEnvelope(envelope, channel, null, target, audience, routes, sentInAttempt);
+            replyTargets.put(targetId, new ReplyTarget(senderId, envelope.senderName()));
+            refreshTab(target, "chat-remote-msg");
+        });
+    }
+
+    private static void restrictRecoveredAudience(List<ChatConnection> audience, Set<UUID> recoveryAudience) {
+        if (recoveryAudience != null) {
+            audience.removeIf(connection -> !recoveryAudience.contains(connection.snapshot().playerId()));
         }
     }
 
-    private void handleRemoteEnvelope(ChatEnvelope envelope) {
-        if (envelope == null || !rememberEnvelope(envelope.dedupeKey())) {
-            return;
+    private CompletionStage<Boolean> queueRemoteDelivery(ChatEnvelope envelope, ChatChannelDefinition channel,
+            UUID senderId, List<ChatConnection> audience, Consumer<Map<UUID, RouteState>> deliver) {
+        List<UUID> ids = audience.stream().map(connection -> connection.snapshot().playerId()).toList();
+        String key = envelope.dedupeKey();
+        var receipt = new CompletableFuture<Boolean>();
+        Consumer<Map<UUID, RouteState>> complete = routes -> {
+            deliver.accept(routes);
+            rememberEnvelope(key);
+            remoteInFlight.remove(key);
+            receipt.complete(true);
+        };
+        Runnable abandoned = () -> {
+            remoteInFlight.remove(key);
+            receipt.complete(false);
+        };
+        boolean offered;
+        if (guardRemoteIgnores && !ids.isEmpty()) {
+            Set<UUID> actors = new LinkedHashSet<>(ids);
+            actors.add(senderId);
+            offered = publicDelivery.offerGuardedRemote(actors, ids.size(),
+                guard -> actors.size() <= 150 ? loadRouteChunk(actors, channel.id(), guard)
+                    : loadDeliveryRoutes(ids, channel.id(), senderId, guard),
+                complete, abandoned);
+        } else {
+            offered = publicDelivery.offerRemote(() -> loadDeliveryRoutes(ids, channel.id(), senderId), complete, abandoned);
         }
-        ChatChannelDefinition channel = channel(envelope.channelId());
-        if (channel == null) {
-            return;
-        }
-        if (envelope.privateMessage()) {
-            Player localTarget = parseUuid(envelope.targetUuid()) == null ? null : Bukkit.getPlayer(parseUuid(envelope.targetUuid()));
-            if (localTarget != null) {
-                ChatPlayerState targetState = state(localTarget.getUniqueId());
-                UUID senderUuid = parseUuid(envelope.senderUuid());
-                if (!targetState.acceptsPrivateMessages() || (senderUuid != null && targetState.ignores(senderUuid))) {
-                    localTarget = null;
-                }
-            }
-            deliverPrivateEnvelope(envelope, null, localTarget);
-            if (localTarget != null) {
-                replyTargets.put(localTarget.getUniqueId(), parseUuid(envelope.senderUuid()));
-                refreshTab(localTarget, "chat-remote-msg");
-            }
-            return;
-        }
-        deliverPublicEnvelope(envelope, channel, null);
+        if (!offered) return null;
+        remoteInFlight.put(key, receipt);
+        return receipt;
     }
 
     private void registerPaperChatEventIfAvailable() {
@@ -1087,6 +1836,8 @@ public final class ChatService implements Listener {
         if (!eventClass.isInstance(event)) {
             return;
         }
+        ChatReloadGate gate = reloadGate;
+        if (gate != null && gate.reject(event)) return;
         try {
             Object rawPlayer = getPlayerMethod.invoke(event);
             Object rawMessage = messageMethod.invoke(event);
@@ -1328,34 +2079,230 @@ public final class ChatService implements Listener {
     }
 
     private void scheduleChatMessage(Player player, String message) {
-        var admission=xuanmo.arcartxsuite.api.auth.AuthAccess.snapshot(player.getUniqueId());
-        if(!admission.admitted()) return;
-        Bukkit.getScheduler().runTask(plugin, () -> {
-            var current=xuanmo.arcartxsuite.api.auth.AuthAccess.snapshot(player.getUniqueId());
-            if(!player.isOnline() || !current.admitted() || !java.util.Objects.equals(current.connectionId(),admission.connectionId())
-                    || current.generation()!=admission.generation()) return;
-            ChatOperationResult result = handleChatMessage(player, message);
-            if (!result.success() && !result.cardNotified()) {
+        ChatConnection sender = new ChatConnection(player, AuthAccess.snapshot(player.getUniqueId()));
+        if (!sender.snapshot().admitted()) return;
+        queueChatMessage(sender, message, null, result -> {
+            if (sender.isCurrent() && !result.success() && !result.cardNotified()) {
                 player.sendMessage(PREFIX + ChatColor.RED + result.message());
             }
         });
     }
 
-    boolean canReceivePublic(ChatChannelDefinition channel, Player localSender, UUID senderUuid, Player recipient) {
+    private void withdrawAudience(UUID id) {
+        if (admittedAudience.remove(id) != null) {
+            publishAudience();
+            if (chatRelay != null) chatRelay.audienceChanged(admittedAudience.keySet());
+        }
+    }
+
+    private void publishAudience() {
+        publishedAudience = new ChatAudience(List.copyOf(admittedAudience.values()), List.copyOf(admittedAudience.keySet()));
+    }
+
+    private void queueChatMessage(ChatConnection sender, String rawMessage, ChatChannelDefinition selected,
+                                  Consumer<ChatOperationResult> result) {
+        queueChatMessage(sender, rawMessage, selected, null, result);
+    }
+
+    private void queueChatMessage(ChatConnection sender, String rawMessage, ChatChannelDefinition selected,
+                                  PrivateRecipient privateRecipient, Consumer<ChatOperationResult> result) {
+        boolean nativeInput = selected == null && privateRecipient == null;
+        if (!sender.snapshot().admitted() || (!nativeInput && !sender.isCurrent())) return;
+        String text = rawMessage == null ? "" : rawMessage.trim();
+        if (text.isBlank() || text.length() > configuration.maxLength()) {
+            onPrimary(() -> {
+                if (!sender.isCurrent()) return;
+                sanitizeAndValidateOutgoingMessage(sender.player(), text);
+                result.accept(ChatOperationResult.failure(message("result.empty-message")));
+            });
+            return;
+        }
+        UUID id = sender.snapshot().playerId();
+        long channelAtSubmission = channelChanges.getOrDefault(id, 0L);
+        String targetName = privateRecipient == null ? null : privateRecipient.name();
+        boolean reply = privateRecipient != null && privateRecipient.reply();
+        ChatAudience snapshot = publishedAudience;
+        List<ChatConnection> audience = nativeInput ? snapshot.connections()
+            : captureAudience(privateRecipient == null ? selected : null, sender.player(), id, Set.of());
+        List<UUID> ids = nativeInput ? snapshot.playerIds()
+            : audience.stream().map(connection -> connection.snapshot().playerId()).toList();
+        if (!publicDelivery.offer(() -> {
+            ChatChannelDefinition channel = selected;
+            if (channel == null) {
+                ChatPlayerState state = repository.loadState(id, configuration.defaultChannelId());
+                channel = configuration.channel(state.currentChannelId());
+            }
+            if (channel == null) return new PreparedChat(null, null, Map.of(), null, "result.no-channel", null);
+            ChatMuteRecord mute = repository.loadMute(id).orElse(null);
+            if (channel.mode() == ChatChannelMode.PRIVATE) {
+                UUID targetId = targetName == null ? replyTargetId(id) : null;
+                if (targetName == null && targetId == null) {
+                    String error = reply ? "result.no-reply-target" : "result.private-no-target";
+                    return new PreparedChat(channel, mute, Map.of(), null, error, null);
+                }
+                ChatPlayerProfile exactLocal = privateRecipient == null ? null : privateRecipient.exactLocal();
+                ChatPlayerProfile target = exactLocal == null ? loadPrivateProfile(targetName, targetId) : exactLocal;
+                if (target == null) {
+                    String error = targetName != null ? "result.player-not-found"
+                        : reply ? "result.reply-target-missing" : "result.private-target-unavailable";
+                    return new PreparedChat(channel, mute, Map.of(), null, error, targetId);
+                }
+                return new PreparedChat(channel, mute, loadDeliveryRoutes(ids, channel.id(), id), target, null, targetId);
+            }
+            return new PreparedChat(channel, mute, loadDeliveryRoutes(ids, channel.id(), id), null, null, null);
+        }, prepared -> targetName != null || prepared.channel() == null || prepared.channel().mode() != ChatChannelMode.PRIVATE
+            || Objects.equals(prepared.replyTarget(), replyTargetId(id)), prepared -> !pendingMuteWrites.containsKey(id) && ignoreChangesSettled(prepared), (prepared, failure) -> {
+            if (!sender.isCurrent()) return;
+            if (selected == null && channelChanges.getOrDefault(id, 0L) != channelAtSubmission) {
+                result.accept(ChatOperationResult.failure(message("result.channel-changed-while-sending")));
+                return;
+            }
+            if (failure != null) {
+                logStorageFailure(failure);
+                result.accept(storageUnavailable());
+            } else if (prepared.error() != null) {
+                result.accept(ChatOperationResult.failure(message(prepared.error(), targetName)));
+            } else if (prepared.channel().mode() == ChatChannelMode.PRIVATE) {
+                result.accept(dispatchPrivateMessage(sender.player(), prepared.target(), text, prepared.channel(),
+                    reply, prepared.mute(), audience, prepared.routes()));
+            } else {
+                result.accept(dispatchChannelMessage(sender.player(), text, prepared.channel(), prepared.mute(), audience, prepared.routes()));
+            }
+        })) onPrimary(() -> {
+            if (sender.isCurrent()) result.accept(storageUnavailable());
+        });
+    }
+
+    private boolean ignoreChangesSettled(PreparedChat prepared) {
+        for (UUID owner : ignoreWritesPending) {
+            if (prepared.routes().containsKey(owner)
+                || (prepared.target() != null && prepared.target().playerUuid().equals(owner))) return false;
+        }
+        return true;
+    }
+
+    void onPrimary(Runnable task) {
+        if (Bukkit.isPrimaryThread()) task.run();
+        else Bukkit.getScheduler().runTask(plugin, task);
+    }
+
+    private ChatPlayerProfile loadPrivateProfile(String name, UUID targetId) throws SQLException {
+        if (targetId != null) {
+            ChatPlayerProfile known = profiles.get(targetId);
+            return known == null ? repository.loadProfile(targetId).orElse(null) : known;
+        }
+        return repository.findProfileByName(name).orElse(null);
+    }
+
+    private static ChatPlayerState routedState(Map<UUID, RouteState> routes, UUID id) {
+        RouteState route = routes.get(id);
+        return route == null ? null : route.player();
+    }
+
+    private static Player onlineRecipient(List<ChatConnection> audience, UUID id) {
+        for (ChatConnection connection : audience) {
+            if (connection.snapshot().playerId().equals(id) && connection.isCurrent()) return connection.player();
+        }
+        return null;
+    }
+
+    private List<ChatConnection> captureAudience(ChatChannelDefinition channel, Player sender, UUID senderId,
+                                                 Set<UUID> seenAtOrigin) {
+        List<ChatConnection> audience = new ArrayList<>();
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            UUID id = player.getUniqueId();
+            if (seenAtOrigin.contains(id)) continue;
+            AuthSnapshot snapshot = AuthAccess.snapshot(id);
+            if (snapshot.admitted() && (channel == null || canReceiveAdmittedAudience(channel, sender, senderId, player))) {
+                audience.add(new ChatConnection(player, snapshot));
+            }
+        }
+        return audience;
+    }
+
+    private record PreparedChat(ChatChannelDefinition channel, ChatMuteRecord mute, Map<UUID, RouteState> routes,
+                                ChatPlayerProfile target, String error, UUID replyTarget) {}
+
+    private record PrivateRecipient(String name, boolean reply, ChatPlayerProfile exactLocal) {}
+
+    private record ChatAudience(List<ChatConnection> connections, List<UUID> playerIds) {
+        private static final ChatAudience EMPTY = new ChatAudience(List.of(), List.of());
+    }
+
+    private record ChatConnection(Player player, AuthSnapshot snapshot) {
+        boolean isCurrent() {
+            UUID id = snapshot.playerId();
+            return player.isOnline() && Bukkit.getPlayer(id) == player && isAdmitted();
+        }
+
+        boolean isAdmitted() {
+            if (!snapshot.admitted()) return false;
+            AuthSnapshot now = AuthAccess.snapshot(snapshot.playerId());
+            return now.admitted() && Objects.equals(now.connectionId(), snapshot.connectionId())
+                && now.generation() == snapshot.generation();
+        }
+    }
+
+    boolean routeRedPacket(ChatChannelDefinition channel, Player sender, UUID senderId, Player singleViewer,
+                           Consumer<List<Player>> deliver) {
+        List<ChatConnection> audience = singleViewer == null ? captureAudience(channel, sender, senderId, Set.of())
+            : List.of(new ChatConnection(singleViewer, AuthAccess.snapshot(singleViewer.getUniqueId())));
+        if (audience.isEmpty()) {
+            deliver.accept(List.of());
+            return true;
+        }
+        List<UUID> ids = audience.stream().map(connection -> connection.snapshot().playerId()).toList();
+        return publicDelivery.offer(() -> loadDeliveryRoutes(ids, channel.id(), senderId), routes -> true,
+            routes -> ignoreWritesPending.stream().noneMatch(routes::containsKey), (routes, failure) -> {
+                if (failure != null) {
+                    logStorageFailure(failure);
+                    deliver.accept(List.of());
+                    return;
+                }
+                RegionChatAccess regionAccess = regionChatAccess(channel);
+                RouteState source = senderId == null ? null : routes.get(senderId);
+                List<Player> recipients = new ArrayList<>();
+                for (ChatConnection connection : audience) {
+                    Player viewer = connection.player();
+                    if (connection.isCurrent() && canReceiveChannel(channel, viewer)
+                        && canReceiveAdmittedAudience(channel, sender, senderId, viewer)
+                        && canReceiveRoute(routes.get(viewer.getUniqueId()), source, senderId, viewer)
+                        && (regionAccess == null || regionAccess.canReceivePublic(viewer))) {
+                        recipients.add(viewer);
+                    }
+                }
+                deliver.accept(recipients);
+            });
+    }
+
+    private boolean canReceiveRoute(RouteState route, RouteState senderRoute, UUID senderUuid, Player recipient) {
+        if (route == null) return false;
+        if (recipient.getUniqueId().equals(senderUuid)) return true;
+        return route.subscribed() && !route.quiet() && (senderUuid == null
+            || (senderRoute != null && !route.player().ignores(senderUuid) && !senderRoute.player().ignores(recipient.getUniqueId())));
+    }
+
+    private boolean canReceiveAudience(ChatChannelDefinition channel, Player localSender, UUID senderUuid, Player recipient) {
         if (recipient == null || !recipient.isOnline()) {
             return false;
         }
         if (!xuanmo.arcartxsuite.api.auth.AuthAccess.admitted(recipient.getUniqueId())) return false;
+        return canReceiveAdmittedAudience(channel, localSender, senderUuid, recipient);
+    }
+
+    private boolean canReceiveAdmittedAudience(ChatChannelDefinition channel, Player localSender,
+                                               UUID senderUuid, Player recipient) {
+        if (channel.mode() == ChatChannelMode.PARTY) {
+            AbyssPartyAccess.PartySnapshot source = partyOf(localSender);
+            AbyssPartyAccess.PartySnapshot target = partyOf(recipient);
+            if (source == null || target == null || !source.id().equals(target.id())) return false;
+        }
         if (senderUuid != null && senderUuid.equals(recipient.getUniqueId())) {
             return true;
         }
-        if (!channel.receivePermission().isBlank() && !recipient.hasPermission(channel.receivePermission())) {
-            return false;
-        }
-        if (senderUuid != null && state(recipient.getUniqueId()).ignores(senderUuid)) {
-            return false;
-        }
-        if (localSender != null && channel.mode() == ChatChannelMode.NORMAL && channel.range() > 0.0D) {
+        if (!channel.receivePermission().isBlank() && !recipient.hasPermission(channel.receivePermission())) return false;
+        if (channel.range() > 0.0D) {
+            if (localSender == null || channel.mode() != ChatChannelMode.NORMAL) return false;
             if (!Objects.equals(localSender.getWorld(), recipient.getWorld())) {
                 return false;
             }
@@ -1364,30 +2311,36 @@ public final class ChatService implements Listener {
         return true;
     }
 
-    private boolean sendMentionCardIfNeeded(Player recipient, ChatEnvelope envelope, ChatChannelDefinition channel) {
-        if (recipient == null || envelope.privateMessage()) {
+    boolean canReceiveChannel(ChatChannelDefinition channel, Player recipient) {
+        return recipient != null && recipient.isOnline()
+            && xuanmo.arcartxsuite.api.auth.AuthAccess.admitted(recipient.getUniqueId())
+            && (channel.receivePermission().isBlank() || recipient.hasPermission(channel.receivePermission()));
+    }
+
+    private boolean sendMentionCardIfNeeded(Player recipient, ChatEnvelope envelope, ChatPlayerState recipientState,
+                                             PublicPresentation presentation) {
+        if (recipient == null || envelope.privateMessage() || !configuration.functions().mentionEnabled()) {
             return false;
         }
-        ChatPlayerState recipientState = state(recipient.getUniqueId());
-        if (!recipientState.acceptsMentions()) {
+        if (recipientState == null || !recipientState.acceptsMentions()) {
             return false;
         }
-        boolean mentioned = envelope.mentionAll();
-        if (!mentioned) {
-            for (String name : envelope.mentionedNames()) {
-                if (recipient.getName().equalsIgnoreCase(name)) {
-                    mentioned = true;
-                    break;
-                }
-            }
-        }
+        boolean mentioned = presentation.mentions(recipient);
         if (!mentioned) {
             return false;
+        }
+        UUID id = recipient.getUniqueId();
+        if (!id.toString().equals(envelope.senderUuid())) {
+            queueUnreadMention(id);
         }
         String cardId = configuration.cards().mentionCardId();
         if (cardId.isBlank()) {
             return false;
         }
+        return packetBridge.sendChatCard(recipient, cardId, presentation.mentionPayload());
+    }
+
+    private Map<String, String> mentionPayload(ChatEnvelope envelope, ChatChannelDefinition channel) {
         Map<String, String> payload = new LinkedHashMap<>();
         payload.put("senderName", envelope.senderName());
         payload.put("senderDisplayName", envelope.senderDisplayName());
@@ -1397,7 +2350,56 @@ public final class ChatService implements Listener {
         for (int i = 0; i < lines.size(); i++) {
             payload.put("msg" + i, lines.get(i));
         }
-        return packetBridge.sendChatCard(recipient, cardId, payload);
+        return payload;
+    }
+
+    public ChatOperationResult channelPreference(Player player, String channelId, boolean quietField, boolean value) {
+        ChatChannelDefinition channel = configuration.channel(channelId);
+        if (channel == null || channel.mode() == ChatChannelMode.PRIVATE
+                || !canReceiveChannel(channel, player)
+                || (channel.mode() == ChatChannelMode.PARTY && partyOf(player) == null)) {
+            return ChatOperationResult.failure(message("result.unknown-channel", channelId));
+        }
+        try {
+            repository.setChannelPreference(player.getUniqueId(), channel.id(), quietField, value);
+            deliveryPolicyChanged();
+            return ChatOperationResult.success(message(quietField ? "links.quiet-changed" : "links.subscription-changed",
+                channel.displayName(), value ? "开启" : "关闭"));
+        } catch (SQLException exception) {
+            logStorageFailure(exception);
+            return storageUnavailable();
+        }
+    }
+
+    private void queueUnreadMention(UUID id) {
+        ioExecutor.execute(() -> {
+            try {
+                repository.addUnreadMention(id);
+            } catch (SQLException exception) {
+                logStorageFailure(exception);
+            }
+        });
+    }
+
+    public void readMentions(Player player) {
+        UUID id = player.getUniqueId();
+        var session = xuanmo.arcartxsuite.api.auth.AuthAccess.snapshot(id);
+        ioExecutor.execute(() -> {
+            if (!session.admitted()) return;
+            String reply;
+            try {
+                reply = message("links.mentions-read", repository.takeUnreadMentions(id));
+            } catch (SQLException exception) {
+                logStorageFailure(exception);
+                reply = message("result.storage-unavailable");
+            }
+            String text = reply;
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                var current = xuanmo.arcartxsuite.api.auth.AuthAccess.snapshot(id);
+                if (player.isOnline() && current.admitted() && current.generation() == session.generation()
+                        && Objects.equals(current.connectionId(), session.connectionId())) player.sendMessage(PREFIX + text);
+            });
+        });
     }
 
     private boolean sendPrivateCard(Player recipient, ChatEnvelope envelope, boolean senderSide) {
@@ -1425,6 +2427,10 @@ public final class ChatService implements Listener {
         if (cardId.isBlank()) {
             return false;
         }
+        return packetBridge.sendChatCard(recipient, cardId, itemPreviewPayload(envelope, channel));
+    }
+
+    private Map<String, String> itemPreviewPayload(ChatEnvelope envelope, ChatChannelDefinition channel) {
         String itemName = ChatColor.stripColor(envelope.itemPreview().displayText());
 
         Map<String, String> payload = new LinkedHashMap<>();
@@ -1435,7 +2441,54 @@ public final class ChatService implements Listener {
         payload.put("itemMaterial", envelope.itemPreview().materialKey());
         payload.put("channel", channel == null ? envelope.channelId() : channel.displayName());
         payload.put("itemJson", envelope.itemPreview().itemJson());
-        return packetBridge.sendChatCard(recipient, cardId, payload);
+        return payload;
+    }
+
+    /** Lazily builds presentation shared by the recipients of this one envelope. */
+    private final class PublicPresentation {
+        private final ChatEnvelope envelope;
+        private final ChatChannelDefinition channel;
+        private Set<String> mentionedNames;
+        private Map<String, String> mention;
+        private Map<String, String> item;
+        private BaseComponent[] components;
+
+        PublicPresentation(ChatEnvelope envelope, ChatChannelDefinition channel) {
+            this.envelope = envelope;
+            this.channel = channel;
+        }
+
+        boolean mentions(Player player) {
+            if (envelope.mentionAll()) return true;
+            if (mentionedNames == null) {
+                mentionedNames = new java.util.HashSet<>();
+                for (String name : envelope.mentionedNames()) mentionedNames.add(name.toLowerCase(Locale.ROOT));
+                if (!nodeId().equals(envelope.originNodeId())) {
+                    mentionedNames.addAll(ChatMentionSupport.parseMentions(envelope.rawMessage(), onlinePlayerNames(), false)
+                        .mentionedNames());
+                }
+            }
+            return mentionedNames.contains(player.getName().toLowerCase(Locale.ROOT));
+        }
+
+        Map<String, String> mentionPayload() {
+            if (mention == null) mention = java.util.Collections.unmodifiableMap(ChatService.this.mentionPayload(envelope, channel));
+            return mention;
+        }
+
+        boolean sendItemCard(Player player) {
+            String cardId = configuration.cards().itemPreviewCardId();
+            if (cardId.isBlank() || envelope.itemPreview() == null || envelope.itemPreview().itemJson().isBlank()) return false;
+            if (item == null) item = java.util.Collections.unmodifiableMap(itemPreviewPayload(envelope, channel));
+            return packetBridge.sendChatCard(player, cardId, item);
+        }
+
+        void sendText(Player player) {
+            if (components == null) {
+                components = ChatFormatSupport.buildComponents(envelope.renderedText(), envelope.itemPreview(), true);
+            }
+            player.spigot().sendMessage(components);
+        }
     }
 
     private boolean sendSystemCard(Player recipient, String type, Map<String, String> values) {
@@ -1467,25 +2520,74 @@ public final class ChatService implements Listener {
         return configuration.channel(channelId);
     }
 
-    /** 玩家当前所在频道，缺失时回退默认频道。 */
-    ChatChannelDefinition currentChannel(Player player) {
-        if (player == null) {
-            return channel(configuration.defaultChannelId());
-        }
-        ChatChannelDefinition channel = channel(state(player.getUniqueId()).currentChannelId());
-        return channel == null ? channel(configuration.defaultChannelId()) : channel;
+    /** 玩家选中的频道。无效的选择需要玩家重新切换。 */
+    long channelRevision(UUID playerId) {
+        return channelChanges.getOrDefault(playerId, 0L);
     }
 
     /** 向跨服通道发布自定义负载（红包等非聊天信封消息）。 */
     void publishCrossServer(String payload) {
-        if (crossServerChannel != null && crossServerChannel.isActive()) {
-            crossServerChannel.publish(payload);
+        ChatRelay relay = chatRelay;
+        if (relay != null && ChatRelay.fits(payload)) {
+            relay.publish(UUID.randomUUID(), payload).whenComplete((accepted, failure) -> {
+                if (failure != null || !Boolean.TRUE.equals(accepted)) {
+                    logger.warning("Chat 跨服状态通知未入队");
+                }
+            });
+        } else {
+            CrossServerChannel channel = crossServerChannel;
+            String network = networkId;
+            if (channel != null && channel.isActive() && network != null) {
+                channel.publish(network + "|" + payload);
+            }
         }
+    }
+
+    private void publishChatEnvelope(Player sender, ChatEnvelope envelope, Set<UUID> originRecipients) {
+        publishChatEnvelope(sender, envelope, originRecipients, null);
+    }
+
+    private void publishChatEnvelope(Player sender, ChatEnvelope envelope, Set<UUID> originRecipients,
+                                     Runnable acceptedAction) {
+        CrossServerChannel channel = crossServerChannel;
+        if (channel == null || networkId == null) {
+            sender.sendMessage(PREFIX + ChatColor.RED + message("result.relay-unavailable"));
+            return;
+        }
+        ChatConnection connection = new ChatConnection(sender, AuthAccess.snapshot(sender.getUniqueId()));
+        ChatRelay relay = chatRelay;
+        String payload = ChatEnvelopeCodec.encodeForTransport(envelope, originRecipients);
+        String network = networkId;
+        CompletionStage<Boolean> receipt;
+        if (relay != null && ChatRelay.fits(payload)) {
+            receipt = relay.publish(UUID.fromString(envelope.messageId()), payload);
+        } else if (relay != null) {
+            // Messages above the journal size limit require durable Redis delivery.
+            receipt = channel.publishDurably(network + "|" + payload);
+        } else {
+            receipt = channel.publishWithReceipt(network + "|" + payload);
+        }
+        receipt
+            .whenComplete((accepted, failure) -> {
+                boolean submitted = failure == null && Boolean.TRUE.equals(accepted);
+                if (submitted && acceptedAction == null) return;
+                onPrimary(() -> {
+                    if (crossServerChannel == channel && connection.isCurrent()) {
+                        if (submitted) acceptedAction.run();
+                        else sender.sendMessage(PREFIX + ChatColor.RED + message("result.relay-unavailable"));
+                    }
+                });
+            });
+    }
+
+    private void deliveryPolicyChanged() {
+        deliveryPolicyVersion.incrementAndGet();
+        publishCrossServer("axs_chat_policy");
     }
 
     private ChatChannelDefinition privateChannel() {
         ChatChannelDefinition exact = configuration.channel("private");
-        if (exact != null) {
+        if (exact != null && exact.mode() == ChatChannelMode.PRIVATE) {
             return exact;
         }
         for (ChatChannelDefinition definition : configuration.channels().values()) {
@@ -1497,101 +2599,32 @@ public final class ChatService implements Listener {
     }
 
     private ChatPlayerState state(UUID playerUuid) {
-        if (playerUuid == null) {
-            return ChatPlayerState.createDefault(new UUID(0L, 0L), configuration.defaultChannelId());
-        }
-        ChatPlayerState cached = states.get(playerUuid);
-        if (cached != null) {
-            return cached;
-        }
-        // 首次加载失败时短暂等待后重试一次，应对 DB 连接短暂抖动
-        for (int attempt = 0; attempt < 2; attempt++) {
-            try {
-                ChatPlayerState loaded = repository.loadState(playerUuid, configuration.defaultChannelId());
-                states.put(playerUuid, loaded);
-                failedLoads.remove(playerUuid);
-                return loaded;
-            } catch (SQLException exception) {
-                if (attempt == 0) {
-                    this.logger.warning("读取聊天状态失败（将重试一次）: " + exception.getMessage());
-                    try { Thread.sleep(500); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
-                } else {
-                    this.logger.warning("读取聊天状态失败（重试仍失败）: " + exception.getMessage());
-                    // 不缓存默认状态，避免 saveStateAsync 把默认数据写回 DB 覆盖真实数据
-                    // 标记为加载失败，saveStateAsync 将跳过该玩家
-                    failedLoads.add(playerUuid);
-                    return ChatPlayerState.createDefault(playerUuid, configuration.defaultChannelId());
-                }
-            }
-        }
-        // 理论上不会走到这里
-        failedLoads.add(playerUuid);
-        return ChatPlayerState.createDefault(playerUuid, configuration.defaultChannelId());
-    }
-
-    /**
-     * 判断玩家上次加载聊天状态是否失败，缓存中无可信数据。
-     *
-     * @param playerUuid 玩家 UUID
-     * @return {@code true} 表示上次加载失败，缓存中无可信数据
-     */
-    public boolean isLoadFailed(UUID playerUuid) {
-        return failedLoads.contains(playerUuid);
-    }
-
-    private ChatMuteRecord currentMute(UUID playerUuid) {
-        if (playerUuid == null) {
-            return null;
-        }
-        ChatMuteRecord cached = mutes.get(playerUuid);
-        if (cached != null) {
-            if (!cached.active(Instant.now())) {
-                mutes.remove(playerUuid);
-                deleteMuteAsync(playerUuid);
-                return null;
-            }
-            return cached;
-        }
         try {
-            Optional<ChatMuteRecord> loaded = repository.loadMute(playerUuid);
-            if (loaded.isEmpty()) {
-                return null;
-            }
-            ChatMuteRecord record = loaded.get();
-            if (!record.active(Instant.now())) {
-                deleteMuteAsync(playerUuid);
-                return null;
-            }
-            mutes.put(playerUuid, record);
-            return record;
+            ChatPlayerState loaded = repository.loadState(playerUuid, configuration.defaultChannelId());
+            states.put(playerUuid, loaded);
+            return loaded;
         } catch (SQLException exception) {
-            this.logger.warning("读取聊天禁言状态失败: " + exception.getMessage());
+            states.remove(playerUuid);
+            logStorageFailure(exception);
             return null;
         }
     }
 
-    private ChatPlayerProfile profile(UUID playerUuid) {
-        if (playerUuid == null) {
-            return null;
-        }
-        Player online = Bukkit.getPlayer(playerUuid);
-        if (online != null) {
-            ChatPlayerProfile profile = new ChatPlayerProfile(playerUuid, online.getName(), Instant.now(), nodeId());
-            profiles.put(playerUuid, profile);
-            return profile;
-        }
-        ChatPlayerProfile cached = profiles.get(playerUuid);
-        if (cached != null) {
-            return cached;
-        }
-        try {
-            Optional<ChatPlayerProfile> loaded = repository.loadProfile(playerUuid);
-            loaded.ifPresent(value -> profiles.put(playerUuid, value));
-            return loaded.orElse(null);
-        } catch (SQLException exception) {
-            this.logger.warning("读取聊天玩家档案失败: " + exception.getMessage());
-            return null;
-        }
+    private ChatMuteRecord loadActiveMute(UUID playerUuid) throws SQLException {
+        return repository.loadMute(playerUuid).filter(record -> record.active(Instant.now())).orElse(null);
+    }
+
+    private void cacheMute(UUID playerUuid, ChatMuteRecord mute) {
+        if (mute == null) mutes.remove(playerUuid);
+        else mutes.put(playerUuid, mute);
+    }
+
+    private ChatOperationResult storageUnavailable() {
+        return ChatOperationResult.failure(message("result.storage-unavailable"));
+    }
+
+    void logStorageFailure(SQLException exception) {
+        logger.warning("聊天存储操作失败: " + exception.getMessage());
     }
 
     private ChatPlayerProfile resolveProfileByName(String playerName) {
@@ -1623,6 +2656,10 @@ public final class ChatService implements Listener {
         } catch (SQLException exception) {
             this.logger.warning("按名称查找聊天玩家档案失败: " + exception.getMessage());
         }
+        return resolveOfflineProfileByName(playerName);
+    }
+
+    private ChatPlayerProfile resolveOfflineProfileByName(String playerName) {
         for (org.bukkit.OfflinePlayer offlinePlayer : Bukkit.getOfflinePlayers()) {
             if (offlinePlayer == null || offlinePlayer.getUniqueId() == null || offlinePlayer.getName() == null) {
                 continue;
@@ -1643,10 +2680,7 @@ public final class ChatService implements Listener {
         return null;
     }
 
-    private void touchProfile(Player player, boolean persist) {
-        if (player == null) {
-            return;
-        }
+    private void touchProfile(Player player, ChatConnection joining) {
         ChatPlayerProfile profile = new ChatPlayerProfile(
             player.getUniqueId(),
             player.getName(),
@@ -1654,24 +2688,70 @@ public final class ChatService implements Listener {
             nodeId()
         );
         profiles.put(profile.playerUuid(), profile);
-        if (persist) {
-            saveProfileAsync(profile);
+        ioExecutor.execute(() -> {
+            saveProfile(profile);
+            if (joining != null && !isStopping() && joining.isAdmitted()) warmDisplayState(joining);
+        });
+    }
+
+    private void warmDisplayState(ChatConnection connection) {
+        UUID id = connection.snapshot().playerId();
+        ChatPlayerState previous = states.get(id);
+        long version = deliveryPolicyVersion.get();
+        try {
+            ChatPlayerState state = repository.loadState(id, configuration.defaultChannelId());
+            ChatMuteRecord mute = loadActiveMute(id);
+            if (isStopping()) return;
+            onPrimary(() -> {
+                if (isStopping() || !connection.isCurrent()) return;
+                if (previous == null) states.putIfAbsent(id, state);
+                else states.replace(id, previous, state);
+                if (deliveryPolicyVersion.get() == version) cacheMute(id, mute);
+            });
+        } catch (SQLException exception) {
+            logStorageFailure(exception);
         }
     }
 
     private void runCleanup() {
         long now = System.currentTimeMillis();
-        processedEnvelopeKeys.entrySet().removeIf(entry -> now - entry.getValue() > ENVELOPE_TTL_MILLIS);
-        lastDuplicateStamps.entrySet().removeIf(entry -> now - entry.getValue().atMillis() > Math.max(ENVELOPE_TTL_MILLIS, configuration.duplicateWindowMillis()));
-        lastMessageTimes.entrySet().removeIf(entry -> now - entry.getValue() > Math.max(ENVELOPE_TTL_MILLIS, configuration.cooldownMillis() + ENVELOPE_TTL_MILLIS));
-        for (Map.Entry<UUID, ChatMuteRecord> entry : new ArrayList<>(mutes.entrySet())) {
-            if (!entry.getValue().active(Instant.now())) {
-                mutes.remove(entry.getKey());
-                deleteMuteAsync(entry.getKey());
+        if (links != null) links.prune();
+        expireTimestamps(processedEnvelopeKeys, now - ENVELOPE_TTL_MILLIS);
+        long duplicateCutoff = now - Math.max(ENVELOPE_TTL_MILLIS, configuration.duplicateWindowMillis());
+        for (var entry : lastDuplicateStamps.entrySet()) {
+            DuplicateStamp stamp = entry.getValue();
+            if (stamp.atMillis() < duplicateCutoff) lastDuplicateStamps.remove(entry.getKey(), stamp);
+        }
+        long cooldownCutoff = now - Math.max(ENVELOPE_TTL_MILLIS, configuration.cooldownMillis() + ENVELOPE_TTL_MILLIS);
+        expireTimestamps(lastMessageTimes, cooldownCutoff);
+        if (!mutes.isEmpty()) {
+            Instant cutoff = Instant.now();
+            for (var entry : mutes.entrySet()) {
+                ChatMuteRecord mute = entry.getValue();
+                if (!mute.active(cutoff)) mutes.remove(entry.getKey(), mute);
             }
         }
+        ioExecutor.execute(expiredMuteCleanup);
         // 清理离线玩家的 profile 缓存，保留在线玩家
-        profiles.entrySet().removeIf(entry -> Bukkit.getPlayer(entry.getKey()) == null);
+        for (var entry : profiles.entrySet()) {
+            UUID id = entry.getKey();
+            if (Bukkit.getPlayer(id) == null) profiles.remove(id, entry.getValue());
+        }
+    }
+
+    private static void expireTimestamps(Map<?, Long> timestamps, long cutoff) {
+        for (var entry : timestamps.entrySet()) {
+            Long timestamp = entry.getValue();
+            if (timestamp < cutoff) timestamps.remove(entry.getKey(), timestamp);
+        }
+    }
+
+    private void deleteExpiredMutes() {
+        try {
+            repository.deleteExpiredMutes(Instant.now());
+        } catch (SQLException exception) {
+            logStorageFailure(exception);
+        }
     }
 
     private boolean rememberEnvelope(String dedupeKey) {
@@ -1687,59 +2767,28 @@ public final class ChatService implements Listener {
         lastDuplicateStamps.put(playerUuid, new DuplicateStamp(ChatFormatSupport.normalizeForDuplicateCheck(message), now));
     }
 
-    private void saveStateAsync(ChatPlayerState state) {
-        // 跳过加载失败的玩家：缓存中的状态不可信，写回会覆盖 DB 真实数据
-        if (failedLoads.contains(state.playerUuid())) {
-            this.logger.info("跳过加载失败玩家的状态保存 [" + state.playerUuid() + "]");
-            return;
+    private boolean saveState(ChatPlayerState state, StateField field) {
+        try {
+            repository.saveState(state, field);
+            deliveryPolicyChanged();
+        } catch (SQLException exception) {
+            logStorageFailure(exception);
+            return false;
         }
-        ioExecutor.execute(() -> {
-            try {
-                repository.saveState(state);
-            } catch (SQLException exception) {
-                this.logger.warning("保存聊天状态失败: " + exception.getMessage());
-            }
-        });
-    }
-
-    private void saveIgnoredAsync(UUID playerUuid, Set<UUID> ignoredPlayers) {
-        ioExecutor.execute(() -> {
-            try {
-                repository.saveIgnoredPlayers(playerUuid, ignoredPlayers);
-            } catch (SQLException exception) {
-                this.logger.warning("保存聊天忽略列表失败: " + exception.getMessage());
-            }
-        });
-    }
-
-    private void saveMuteAsync(ChatMuteRecord muteRecord) {
-        ioExecutor.execute(() -> {
-            try {
-                repository.saveMute(muteRecord);
-            } catch (SQLException exception) {
-                this.logger.warning("保存聊天禁言状态失败: " + exception.getMessage());
-            }
-        });
-    }
-
-    private void deleteMuteAsync(UUID playerUuid) {
-        ioExecutor.execute(() -> {
-            try {
-                repository.deleteMute(playerUuid);
-            } catch (SQLException exception) {
-                this.logger.warning("删除聊天禁言状态失败: " + exception.getMessage());
-            }
-        });
+        state(state.playerUuid());
+        return true;
     }
 
     private void saveProfileAsync(ChatPlayerProfile profile) {
-        ioExecutor.execute(() -> {
-            try {
-                repository.upsertProfile(profile);
-            } catch (SQLException exception) {
-                this.logger.warning("保存聊天玩家档案失败: " + exception.getMessage());
-            }
-        });
+        ioExecutor.execute(() -> saveProfile(profile));
+    }
+
+    private void saveProfile(ChatPlayerProfile profile) {
+        try {
+            repository.upsertProfile(profile);
+        } catch (SQLException exception) {
+            this.logger.warning("保存聊天玩家档案失败: " + exception.getMessage());
+        }
     }
 
     private void refreshTab(Player viewer, String reason) {

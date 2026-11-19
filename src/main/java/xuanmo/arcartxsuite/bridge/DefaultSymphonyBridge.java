@@ -88,10 +88,20 @@ public final class DefaultSymphonyBridge implements SymphonyBridge {
 
     @Override
     public void setAttribute(Player player, String attributeId, boolean percent, double value, String sourceKey) {
+        setAttribute(player, attributeId, percent ? ModifierOperation.MULTIPLY_TOTAL : ModifierOperation.ADD,
+            value, sourceKey);
+    }
+
+    @Override
+    public void setAttribute(Player player, String attributeId, ModifierOperation mode, double value, String sourceKey) {
         if (!available || player == null || attributeId == null || sourceKey == null) return;
         try {
             AttributeKey key = parseAttributeKey(attributeId);
-            AttributeOperation operation = percent ? AttributeOperation.MULTIPLY_TOTAL : AttributeOperation.ADD;
+            AttributeOperation operation = switch (mode) {
+                case ADD -> AttributeOperation.ADD;
+                case MULTIPLY_BASE -> AttributeOperation.MULTIPLY_BASE;
+                case MULTIPLY_TOTAL -> AttributeOperation.MULTIPLY_TOTAL;
+            };
             AttributeModifier modifier = new AttributeModifier(
                 sourceKey, key, operation, value, 0, false, null, null
             );
@@ -131,6 +141,19 @@ public final class DefaultSymphonyBridge implements SymphonyBridge {
             return symphonyApi.getAttributes().value(entity, key);
         } catch (Exception | LinkageError e) {
             return 0.0;
+        }
+    }
+
+    @Override
+    public Map<String, Double> attributeValues(LivingEntity entity) {
+        if (!available || entity == null) return Map.of();
+        try {
+            Map<String, Double> values = new java.util.HashMap<>();
+            symphonyApi.getAttributes().snapshot(entity).getValues()
+                .forEach((key, value) -> values.put(key.getValue(), value));
+            return Map.copyOf(values);
+        } catch (RuntimeException | LinkageError exception) {
+            return Map.of();
         }
     }
 

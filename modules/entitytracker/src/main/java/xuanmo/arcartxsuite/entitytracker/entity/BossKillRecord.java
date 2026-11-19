@@ -1,6 +1,7 @@
 package xuanmo.arcartxsuite.entitytracker.entity;
 
 import java.time.LocalDateTime;
+import com.google.gson.annotations.SerializedName;
 
 /**
  * Boss 击杀记录实体，属于 entitytracker 模块的数据实体层。
@@ -11,19 +12,23 @@ import java.time.LocalDateTime;
  */
 public class BossKillRecord {
 
-    private Long id;
-    private String bossId;
-    private String bossDisplayName;
-    private LocalDateTime killTime;
-    private String serverName;
-    private String participantsJson;
-    private String dropsJson;
-    private int totalDamage;
-    private int durationSeconds;
-    private String worldName;
-    private Double locationX;
-    private Double locationY;
-    private Double locationZ;
+    @SerializedName("id") private Long id;
+    @SerializedName("settlementKey") private String settlementKey;
+
+    public String getSettlementKey() { return settlementKey; }
+    public void setSettlementKey(String value) { settlementKey = value; }
+    @SerializedName("bossId") private String bossId;
+    @SerializedName("bossDisplayName") private String bossDisplayName;
+    @SerializedName("killTime") private LocalDateTime killTime;
+    @SerializedName("serverName") private String serverName;
+    @SerializedName("participantsJson") private String participantsJson;
+    @SerializedName("dropsJson") private String dropsJson;
+    @SerializedName("totalDamage") private int totalDamage;
+    @SerializedName("durationSeconds") private int durationSeconds;
+    @SerializedName("worldName") private String worldName;
+    @SerializedName("locationX") private Double locationX;
+    @SerializedName("locationY") private Double locationY;
+    @SerializedName("locationZ") private Double locationZ;
 
     public Long getId() {
         return id;

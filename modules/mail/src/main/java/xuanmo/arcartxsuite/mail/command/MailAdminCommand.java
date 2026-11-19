@@ -8,12 +8,14 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.command.CommandSender;
+import org.bukkit.command.ConsoleCommandSender;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -31,7 +33,7 @@ import xuanmo.arcartxsuite.mail.service.MailService;
  */
 public final class MailAdminCommand implements ModuleCommandHandler {
 
-    private static final List<String> ACTIONS = List.of("help", "status", "open", "preset", "cdk", "admin");
+    private static final List<String> ACTIONS = List.of("help", "status", "open", "preset", "cdk", "admin", "claim-review");
     private static final Pattern DURATION_PATTERN = Pattern.compile("^(\\d+)([smhd])$", Pattern.CASE_INSENSITIVE);
     private static final List<String> MULTI_TARGETS = List.of("all-online", "all-registered");
     private static final Duration CONFIRM_TTL = Duration.ofSeconds(30);
@@ -98,9 +100,47 @@ public final class MailAdminCommand implements ModuleCommandHandler {
             case "preset" -> handlePreset(sender, args);
             case "cdk" -> handleCdk(sender, args);
             case "admin" -> handleAdmin(sender);
+            case "claim-review" -> handleClaimReview(sender, args);
             default -> sender.sendMessage(fullMsg("common.unknown", label));
         }
         return true;
+    }
+
+    private void handleClaimReview(CommandSender sender, String[] args) {
+        if (!(sender instanceof ConsoleCommandSender)) {
+            sender.sendMessage(fullMsg("admin.claim-review-console"));
+            return;
+        }
+        if (args.length != 4 && args.length != 6) {
+            sender.sendMessage(fullMsg("admin.claim-review-usage"));
+            return;
+        }
+        MailService service = serviceProvider.get();
+        if (service == null) {
+            sender.sendMessage(fullMsg("common.service-down"));
+            return;
+        }
+        try {
+            UUID owner = UUID.fromString(args[2]);
+            long mailId = Long.parseLong(args[3]);
+            if (mailId <= 0) throw new IllegalArgumentException("Invalid mail ID");
+            MailOperationResult result;
+            if (args.length == 4) {
+                result = service.inspectClaimReview(owner, mailId);
+            } else {
+                String resolution = args[5].toLowerCase(Locale.ROOT);
+                if (!resolution.equals("confirmed") && !resolution.equals("retry") && !resolution.equals("interrupted")) {
+                    sender.sendMessage(fullMsg("admin.claim-review-usage"));
+                    return;
+                }
+                UUID attempt = UUID.fromString(args[4]);
+                result = resolution.equals("interrupted") ? service.isolateInterruptedClaim(owner, mailId, attempt, sender.getName())
+                    : service.resolveClaimReview(owner, mailId, attempt, resolution.equals("confirmed"), sender.getName());
+            }
+            sender.sendMessage((result.success() ? ChatColor.GREEN : ChatColor.RED) + result.message());
+        } catch (IllegalArgumentException exception) {
+            sender.sendMessage(fullMsg("admin.claim-review-usage"));
+        }
     }
 
     private void handleAdmin(CommandSender sender) {
@@ -174,6 +214,7 @@ public final class MailAdminCommand implements ModuleCommandHandler {
         sender.sendMessage(fullMsg("help.preset.delete", cmd));
         sender.sendMessage(fullMsg("help.preset.reload", cmd));
         sender.sendMessage(fullMsg("help.admin", cmd));
+        if (sender instanceof ConsoleCommandSender) sender.sendMessage(fullMsg("help.claim-review", cmd));
         sender.sendMessage(fullMsg("help.cdk.create", cmd));
         sender.sendMessage(fullMsg("help.cdk.info", cmd));
         sender.sendMessage(fullMsg("help.cdk.list", cmd));
@@ -226,8 +267,12 @@ public final class MailAdminCommand implements ModuleCommandHandler {
                 sender.sendMessage((messages != null ? messages.get("prefix") : "") + (result.success() ? ChatColor.GREEN : ChatColor.RED) + result.message());
             }
             case "reload" -> {
-                MailOperationResult result = svc.reloadPresets();
-                sender.sendMessage((messages != null ? messages.get("prefix") : "") + (result.success() ? ChatColor.GREEN : ChatColor.RED) + result.message());
+                var reload = svc.reloadPresets().toCompletableFuture();
+                if (!reload.isDone()) sender.sendMessage(fullMsg("admin.preset-reloading"));
+                reload.thenAccept(result -> {
+                    if (Bukkit.isPrimaryThread() && !svc.isStopping()) sender.sendMessage(
+                        (messages != null ? messages.get("prefix") : "") + (result.success() ? ChatColor.GREEN : ChatColor.RED) + result.message());
+                });
             }
             default -> sender.sendMessage(fullMsg("admin.preset.sub-list"));
         }

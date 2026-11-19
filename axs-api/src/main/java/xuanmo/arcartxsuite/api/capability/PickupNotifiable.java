@@ -54,4 +54,8 @@ public interface PickupNotifiable {
     default boolean notifyPickup(@NotNull Player player, @NotNull ItemStack itemStack, int amount) {
         return false;
     }
+
+    /** Same notice with a previously rendered preview for this exact item, normalized to one unit. */
+    boolean notifyPickupPrepared(@NotNull Player player, @NotNull ItemStack itemStack, int amount,
+                                         @NotNull String previewJson);
 }

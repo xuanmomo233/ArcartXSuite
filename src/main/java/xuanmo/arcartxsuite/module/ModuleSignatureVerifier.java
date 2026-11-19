@@ -1,7 +1,12 @@
 package xuanmo.arcartxsuite.module;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.charset.StandardCharsets;
+import java.security.GeneralSecurityException;
 import java.security.KeyFactory;
+import java.security.MessageDigest;
 import java.security.PublicKey;
 import java.security.Signature;
 import java.util.ArrayList;
@@ -25,7 +30,12 @@ import xuanmo.arcartxsuite.api.ModuleDescriptor;
  */
 public final class ModuleSignatureVerifier {
 
+    private static final int MAX_LOCAL_JAR_BYTES = 128 * 1024 * 1024;
+    private static final int ED25519_SIGNATURE_BYTES = 64;
+    private static final byte[] LOCAL_JAR_DOMAIN = "AXS local module JAR v1\0".getBytes(StandardCharsets.UTF_8);
+
     private final List<PublicKey> publicKeys;
+    private final boolean required;
     private final Logger logger;
 
     /**
@@ -34,7 +44,8 @@ public final class ModuleSignatureVerifier {
      */
     public ModuleSignatureVerifier(List<String> publicKeyBase64List, Logger logger) {
         this.logger = logger;
-        if (publicKeyBase64List == null || publicKeyBase64List.isEmpty()) {
+        this.required = publicKeyBase64List != null && !publicKeyBase64List.isEmpty();
+        if (!required) {
             this.publicKeys = Collections.emptyList();
             return;
         }
@@ -50,11 +61,48 @@ public final class ModuleSignatureVerifier {
             }
         }
         this.publicKeys = Collections.unmodifiableList(keys);
+        if (keys.isEmpty()) {
+            logger.severe("[ModuleSignature] 已配置签名公钥，但没有可用的 Ed25519 公钥，拒绝加载模块。");
+        }
     }
 
     /** 是否启用了签名验证 */
     public boolean isEnabled() {
-        return !publicKeys.isEmpty();
+        return required;
+    }
+
+    /** Returns the exact bytes verified against the detached signature, or null if untrusted. */
+    byte[] verifiedLocalJar(Path jar) {
+        if (publicKeys.isEmpty()) return null;
+        Path sidecar = jar.resolveSibling(jar.getFileName() + ".sig");
+        try {
+            byte[] signature;
+            try (var input = Files.newInputStream(sidecar)) {
+                signature = input.readNBytes(ED25519_SIGNATURE_BYTES + 1);
+            }
+            if (signature.length != ED25519_SIGNATURE_BYTES) {
+                throw new IOException("无效的 Ed25519 签名长度");
+            }
+            long size = Files.size(jar);
+            if (size <= 0 || size > MAX_LOCAL_JAR_BYTES) throw new IOException("本地 JAR 大小超出验签范围");
+            byte[] bytes;
+            try (var input = Files.newInputStream(jar)) {
+                bytes = input.readNBytes((int) size + 1);
+            }
+            if (bytes.length != size) throw new IOException("读取期间 JAR 大小发生变化");
+            byte[] digest = MessageDigest.getInstance("SHA-256").digest(bytes);
+            for (PublicKey key : publicKeys) {
+                Signature verifier = Signature.getInstance("Ed25519");
+                verifier.initVerify(key);
+                verifier.update(LOCAL_JAR_DOMAIN);
+                verifier.update(digest);
+                if (verifier.verify(signature)) return bytes;
+            }
+            logger.warning("[ModuleSignature] 本地 JAR 签名不匹配: " + jar.getFileName());
+        } catch (IOException | GeneralSecurityException e) {
+            logger.warning("[ModuleSignature] 无法验签本地 JAR " + jar.getFileName() + ": " + e.getMessage());
+        }
+        return null;
     }
 
     /**
@@ -65,9 +113,8 @@ public final class ModuleSignatureVerifier {
      * @return true = 验证通过（或无公钥不验证）；false = 签名缺失或验证失败
      */
     public boolean verify(ModuleDescriptor descriptor) {
-        if (publicKeys.isEmpty()) {
-            return true; // 未配置公钥，跳过验证（向后兼容）
-        }
+        if (!required) return true;
+        if (publicKeys.isEmpty()) return false;
         String sigB64 = descriptor.signature();
         if (sigB64 == null || sigB64.isBlank()) {
             logger.warning("[ModuleSignature] 模块 " + descriptor.id() + " 缺少 signature，拒绝加载。");

@@ -16,6 +16,8 @@ dependencies {
     testImplementation("org.spigotmc:spigot-api:1.20.1-R0.1-SNAPSHOT")
     testImplementation(files(rootProject.project(":axs-api").layout.buildDirectory.dir("classes/java/main"))
         .builtBy(":axs-api:compileJava"))
+    testRuntimeOnly("org.xerial:sqlite-jdbc:3.46.0.0")
+    testRuntimeOnly("com.mysql:mysql-connector-j:8.4.0")
 }
 
 tasks.compileTestJava {
@@ -25,6 +27,8 @@ tasks.compileTestJava {
 
 tasks.test {
     useJUnitPlatform()
+    systemProperty("java.io.tmpdir", temporaryDir.absolutePath)
+    inputs.property("durableMysqlUrl", providers.environmentVariable("AXS_EVENTPACKET_MYSQL_URL").orElse(""))
 }
 
 tasks.compileJava {

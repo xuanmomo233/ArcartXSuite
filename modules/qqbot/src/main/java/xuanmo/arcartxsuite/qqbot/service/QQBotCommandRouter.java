@@ -38,8 +38,11 @@ public final class QQBotCommandRouter {
     private volatile Supplier<MailDispatchable> mailProvider;
     private volatile QQBotSignInService signInService;
     private volatile boolean closed;
+    private final xuanmo.arcartxsuite.api.scheduler.ModuleCallback primaryCalls =
+        new xuanmo.arcartxsuite.api.scheduler.ModuleCallback(() -> {});
     private final SlidingWindowRateLimiter<Long> commandBudget = new SlidingWindowRateLimiter<>(5, 10000L, 4096);
-    public void close() { closed = true; commandBudget.clear(); }
+    public void close() { closed = true; primaryCalls.close(); commandBudget.clear(); }
+    java.util.concurrent.CompletionStage<Void> stopped() { return primaryCalls.stopped(); }
 
     // ── 反射缓存：Paper getTPS / NMS recentTps，避免每次调用都反射查找 ──
     private static final Method GET_TPS_METHOD;
@@ -946,7 +949,10 @@ public final class QQBotCommandRouter {
     private void runOnMain(Runnable operation) {
         if (closed) return;
         try {
-            Bukkit.getScheduler().runTask(plugin, () -> { if (!closed) operation.run(); });
+            Bukkit.getScheduler().runTask(plugin, () -> primaryCalls.call(() -> {
+                if (!closed) operation.run();
+                return null;
+            }, null));
         } catch (org.bukkit.plugin.IllegalPluginAccessException stopped) {
             logger.fine("QQBot 已停止，取消旧群指令");
         }

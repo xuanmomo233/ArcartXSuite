@@ -1,6 +1,7 @@
 package xuanmo.arcartxsuite.vanilla.service;
 
 import xuanmo.arcartxsuite.api.inventory.InventoryItems;
+import xuanmo.arcartxsuite.api.inventory.ItemPresentation;
 import java.util.*;
 import java.util.function.*;
 import org.bukkit.*;
@@ -22,8 +23,13 @@ import xuanmo.arcartxsuite.vanilla.recipe.*;
 public final class ArtisanWorkbenchService implements Listener,AutoCloseable {
     private static final class State {
         final InventoryView view;final WorkshopType type;
-        ItemStack[] inputs;String token="",patternToken="",patternIdentity="",sent="";
-        ArtisanNativeAccess.Loom loom;Map<String,Object> previews=Map.of();long lastPush=-100;
+        ItemStack[] inputs;
+        ItemStack result;
+        String token="",patternToken="",resultName="";
+        int layers;
+        ArtisanNativeAccess.Loom loom;
+        Map<String,Object> previews=Map.of(), sent;
+        long nextPush;
         State(InventoryView view,WorkshopType type){this.view=view;this.type=type;}
     }
     private final PacketBridgeAPI bridge;
@@ -31,13 +37,14 @@ public final class ArtisanWorkbenchService implements Listener,AutoCloseable {
     private final RecipeMaterialPlanner planner;
     private final Function<WorkshopType,String> ui;
     private final Predicate<Player> busy;
-    private final NativeOfferBook icons;
+    private final ItemPresentation items;
     private final ArtisanNativeAccess nativeAccess=new ArtisanNativeAccess();
     private final EquipmentNativeAccess reachability=new EquipmentNativeAccess();
     private final Map<UUID,State> states=new HashMap<>();
     private BukkitTask task;private long ticks;
     public ArtisanWorkbenchService(Plugin plugin,PacketBridgeAPI bridge,ItemBridgeAPI items,VanillaItemNameBridge names,VanillaConfiguration config,RecipeMaterialPlanner planner,Function<WorkshopType,String> ui,Predicate<Player> busy){
-        this.bridge=bridge;this.config=config;this.planner=planner;this.ui=ui;this.busy=busy;icons=new NativeOfferBook(items,names);
+        this.bridge=bridge;this.config=config;this.planner=planner;this.ui=ui;this.busy=busy;
+        this.items = new ItemPresentation(items, names);
         var enabled=Arrays.stream(WorkshopType.values()).filter(t->t.artisan()&&config.enabled(t)).toList();
         if(!enabled.isEmpty()){
             int interval=enabled.stream().mapToInt(config::interval).min().orElse(2);
@@ -51,40 +58,68 @@ public final class ArtisanWorkbenchService implements Listener,AutoCloseable {
     private void poll(){
         for(UUID id:List.copyOf(states.keySet())){
             State s=states.get(id);Player p=Bukkit.getPlayer(id);
-            if(p==null||!p.isOnline()||p.getOpenInventory()!=s.view){states.remove(id);continue;}
-            if(ticks-s.lastPush>=config.interval(s.type)||s.sent.isEmpty()){s.lastPush=ticks;push(p,s);}
+            if(s==null||p==null||!p.isOnline()||p.getOpenInventory()!=s.view){states.remove(id);continue;}
+            if (ticks >= s.nextPush) push(p, s);
         }
     }
     private static ItemStack copy(ItemStack i){return InventoryItems.copy(i);}
     private static boolean empty(ItemStack i){return InventoryItems.empty(i);}
     private void refresh(Player p,State s){
-        ItemStack[] inputs=new ItemStack[s.type.inputCount()];for(int i=0;i<inputs.length;i++)inputs[i]=copy(s.view.getTopInventory().getItem(i));
-        boolean changed=!Arrays.equals(inputs,s.inputs);
-        if(changed){s.inputs=inputs;s.token=UUID.randomUUID().toString();}
+        Inventory inventory = s.view.getTopInventory();
+        ItemStack[] inputs = s.inputs == null ? new ItemStack[s.type.inputCount()] : s.inputs;
+        for (int i = 0; i < inputs.length; i++) {
+            ItemStack item = inventory.getItem(i);
+            if (empty(item)) item = null;
+            if (!Objects.equals(inputs[i], item)) {
+                if (inputs == s.inputs) inputs = inputs.clone();
+                inputs[i] = copy(item);
+            }
+        }
+        boolean changed = inputs != s.inputs;
+        if (changed) {
+            s.inputs = inputs;
+            s.token = UUID.randomUUID().toString();
+            if (s.type == WorkshopType.LOOM) {
+                s.layers = inputs[0] != null && inputs[0].getItemMeta() instanceof BannerMeta meta ? meta.numberOfPatterns() : 0;
+            }
+        }
         if(s.type==WorkshopType.LOOM){
-            s.loom=nativeAccess.loom(p);
-            String identity=s.loom==null?"unsupported":s.loom.choices().stream().map(ArtisanNativeAccess.Choice::code).toList().toString();
-            if(changed||!identity.equals(s.patternIdentity)||s.patternToken.isEmpty()){
-                s.patternIdentity=identity;s.patternToken=UUID.randomUUID().toString();Map<String,Object> previews=new LinkedHashMap<>();
+            var previous = s.loom == null ? null : s.loom.choices();
+            s.loom = nativeAccess.loom(p, changed ? null : s.loom);
+            var choices = s.loom == null ? null : s.loom.choices();
+            if (changed || !Objects.equals(previous, choices) || s.patternToken.isEmpty()) {
+                s.patternToken=UUID.randomUUID().toString();Map<String,Object> previews=new LinkedHashMap<>();
                 if(s.loom!=null)for(var choice:s.loom.choices()){
                     ItemStack preview=copy(inputs[0]);
                     if(preview!=null&&preview.getItemMeta() instanceof BannerMeta meta&&choice.pattern()!=null&&inputs[1]!=null){
                         try{DyeColor dye=DyeColor.valueOf(inputs[1].getType().name().replace("_DYE",""));meta.addPattern(new Pattern(dye,choice.pattern()));preview.setItemMeta(meta);}catch(IllegalArgumentException ignored){ }
                     }
-                    previews.put(Integer.toString(choice.index()),Map.of("index",choice.index(),"name",patternName(choice),"icon",icons.icon(preview)));
+                    previews.put(Integer.toString(choice.index()),Map.of("index",choice.index(),"name",patternName(choice),"icon",items.icon(preview)));
                 }
                 s.previews=previews;
             }
         }
     }
     private void push(Player p,State s){
-        if(!bridge.isUiOpen(p,ui.apply(s.type)))return;
-        refresh(p,s);Inventory inv=s.view.getTopInventory();ItemStack first=s.inputs[0],result=copy(inv.getItem(s.type.resultSlot()));
-        Map<String,Object> packet=new LinkedHashMap<>();packet.put("token",s.token);packet.put("hasItem",!empty(first));packet.put("hasResult",result!=null);packet.put("resultName",icons.name(result));
+        s.nextPush = ticks + config.interval(s.type);
+        String uiId = ui.apply(s.type);
+        if (!bridge.isUiOpen(p, uiId)) {
+            s.sent = null;
+            return;
+        }
+        refresh(p,s);
+        Inventory inv=s.view.getTopInventory();
+        ItemStack first=s.inputs[0], result=inv.getItem(s.type.resultSlot());
+        if (empty(result)) result = null;
+        if (!Objects.equals(result, s.result)) {
+            s.result = copy(result);
+            s.resultName = items.name(s.result);
+        }
+        Map<String,Object> packet=new LinkedHashMap<>();packet.put("token",s.token);packet.put("hasItem",!empty(first));packet.put("hasResult",result!=null);packet.put("resultName",s.resultName);
         if(s.type==WorkshopType.LOOM){
             packet.put("patterns",s.previews);packet.put("patternCount",s.previews.size());packet.put("patternToken",s.patternToken);packet.put("selected",s.loom==null?-1:s.loom.selected());packet.put("supported",s.loom!=null);
-            int layers=first!=null&&first.getItemMeta() instanceof BannerMeta meta?meta.numberOfPatterns():0;packet.put("layers",layers);
-            packet.put("status",s.loom==null?"当前服务端不支持纹样选择":empty(first)?"先放入旗帜，再选择染料":layers>=6?"旗帜已达原版纹样层数上限":empty(s.inputs[1])?"放入染料，或点击颜色补足":s.previews.isEmpty()?"没有可用纹样，请检查旗帜和染料":"选择纹样后，从真实产物槽领取");
+            packet.put("layers",s.layers);
+            packet.put("status",s.loom==null?"当前服务端不支持纹样选择":empty(first)?"先放入旗帜，再选择染料":s.layers>=6?"旗帜已达原版纹样层数上限":empty(s.inputs[1])?"放入染料，或点击颜色补足":s.previews.isEmpty()?"没有可用纹样，请检查旗帜和染料":"选择纹样后，从真实产物槽领取");
         }else if(s.type==WorkshopType.CARTOGRAPHY){
             MapView map=first!=null&&first.getType()==Material.FILLED_MAP&&first.getItemMeta() instanceof MapMeta meta&&meta.hasMapView()?meta.getMapView():null;
             packet.put("mapInfo",map==null?"放入已绘制的地图":"地图 #"+map.getId()+" · 比例 "+map.getScale().ordinal()+" / 4 · "+(map.isLocked()?"已锁定":"未锁定"));
@@ -93,7 +128,7 @@ public final class ArtisanWorkbenchService implements Listener,AutoCloseable {
         }else{
             packet.put("status",result!=null?"取出产物时按原版规则返还经验":empty(first)&&empty(s.inputs[1])?"放入装备或附魔书，可用同类物品修复":"当前输入没有可领取的产物，请检查物品组合");
         }
-        String signature=packet.toString();if(signature.equals(s.sent))return;s.sent=signature;bridge.sendPacket(p,ui.apply(s.type),"artisan_state",packet);
+        if (!packet.equals(s.sent) && bridge.sendPacket(p, uiId, "artisan_state", packet)) s.sent = packet;
     }
     private void notice(Player p,State s,String message){bridge.sendPacket(p,ui.apply(s.type),"ui_notice",Map.of("message",message));}
     private boolean writable(Player p,State s){
@@ -104,11 +139,12 @@ public final class ArtisanWorkbenchService implements Listener,AutoCloseable {
     }
     public boolean handle(Player p,WorkshopType type,String action,List<String> data){
         if(!type.artisan()||!config.enabled(type)||!type.matches(p.getOpenInventory()))return false;
-        State s=attach(p,type);refresh(p,s);
+        State s=attach(p,type);
         switch(action){
-            case "artisan_open","refresh_artisan" -> {s.sent="";push(p,s);}
+            case "artisan_open","refresh_artisan" -> {s.sent=null;push(p,s);}
             case "loom_select" -> {
                 if(type!=WorkshopType.LOOM||data.size()<3||!writable(p,s))return true;
+                refresh(p,s);
                 int index;try{index=Integer.parseInt(data.get(1));}catch(NumberFormatException e){return true;}
                 if(!s.patternToken.equals(data.get(2))||s.loom==null||index<0||index>=s.loom.choices().size()){notice(p,s,"纹样或材料已变化，请重新选择");push(p,s);return true;}
                 boolean selected=nativeAccess.select(p,index);p.updateInventory();
@@ -116,6 +152,7 @@ public final class ArtisanWorkbenchService implements Listener,AutoCloseable {
             }
             case "loom_dye","map_fill" -> {
                 if(data.size()<3||!writable(p,s))return true;
+                refresh(p,s);
                 if(!s.token.equals(data.get(2))||empty(s.inputs[0])){notice(p,s,"目标物品已变化，请重新选择");return true;}
                 Material material;
                 if(action.equals("loom_dye")&&type==WorkshopType.LOOM){

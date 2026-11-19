@@ -9,6 +9,7 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.AbstractAXSModule;
+import xuanmo.arcartxsuite.api.ClientInitializedHandler;
 import xuanmo.arcartxsuite.api.ModuleCommandHandler;
 import xuanmo.arcartxsuite.api.ModuleDescriptor;
 import xuanmo.arcartxsuite.api.UiBinding;
@@ -48,6 +49,7 @@ public final class AfkRewardModule extends AbstractAXSModule implements ModuleCo
     private AfkRewardConfiguration configuration;
     private AfkRewardRepository repository;
     private AfkRewardService service;
+    private xuanmo.arcartxsuite.api.storage.ModuleStorage storageScope;
     private AfkRewardListener listener;
     private AfkRewardAdminCommand adminCommand;
 
@@ -114,7 +116,15 @@ public final class AfkRewardModule extends AbstractAXSModule implements ModuleCo
     }
 
     @Override
-    protected void startService() throws Exception {
+    protected @NotNull ClientInitializedHandler createInitializedHandler() {
+        return player -> {
+            AfkRewardService current = service;
+            if (current != null) current.onClientInitialized(player);
+        };
+    }
+
+    @Override
+    protected java.util.concurrent.CompletionStage<Void> prepareService() throws Exception {
         // 加载区域独立配置文件
         String effectiveAreasDir = configuration.areasDirectory();
         java.util.Map<String, xuanmo.arcartxsuite.afkreward.model.AfkArea> loadedAreas =
@@ -127,16 +137,21 @@ public final class AfkRewardModule extends AbstractAXSModule implements ModuleCo
         javax.sql.DataSource afkDs;
         if (configuration.storage().hasOverride()) {
             afkDesc = configuration.storage().toDescriptor();
-            afkDs = storageManager.resolveModuleDataSource("afkreward", null, dataFolder, afkDesc);
+            storageScope = storageManager.openModuleStorage("afkreward", null, dataFolder, afkDesc);
+            afkDs = storageScope.dataSource();
         } else {
             afkDesc = storageManager.getDescriptor()
                 .withTablePrefix(configuration.storage().tablePrefix());
-            afkDs = storageManager.resolveModuleDataSource("afkreward",
+            storageScope = storageManager.openModuleStorage("afkreward",
                 configuration.storage().sqliteFileName(), dataFolder, null);
+            afkDs = storageScope.dataSource();
         }
         repository = new AfkRewardRepository(afkDs, afkDesc, dataFolder, logger);
-        repository.initialize();
+        return storageScope.initialize(repository::initialize);
+    }
 
+    @Override
+    protected void startService() throws Exception {
         service = new AfkRewardService(
             plugin, configuration, repository, logger, messages(),
             () -> getCapability(MailDispatchable.class),
@@ -146,7 +161,7 @@ public final class AfkRewardModule extends AbstractAXSModule implements ModuleCo
         );
         service.setEventBusProvider(() -> getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
         service.setItemSourceRegistry(itemSourceRegistry);
-        service.setItemRewardDispatcher(itemRewardDispatcher);
+        service.setPendingRewardService(pendingRewardService);
         UiBinding hudBinding = null;
         if (configuration.ui().registerUiOnEnable()) {
             hudBinding = registerModuleUi(HUD_UI_FILE_PATH, configuration.ui().uiId(), true);
@@ -160,21 +175,28 @@ public final class AfkRewardModule extends AbstractAXSModule implements ModuleCo
         adminCommand = new AfkRewardAdminCommand(() -> service, messages());
 
         // UI 绑定
+        AfkRewardService svc = service;
+        AfkRewardRepository repo = repository;
         registerCapability(xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable.class,
             new xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable() {
                 @Override public @NotNull String moduleId() { return "afkreward"; }
                 @Override public int purgePlayerData(@NotNull java.util.UUID playerUuid) {
-                    try { return repository.deletePlayerData(playerUuid); }
+                    try { return svc.callApi(() -> {
+                        try { return repo.deletePlayerData(playerUuid); }
+                        catch (Exception error) { throw new IllegalStateException(error); }
+                    }, -1); }
                     catch (Exception e) { logger.warning("AfkReward purge 失败: " + e.getMessage()); return -1; }
                 }
                 @Override public int purgeAllPlayerData() {
-                    try { return repository.deleteAllPlayerData(); }
+                    try { return svc.callApi(() -> {
+                        try { return repo.deleteAllPlayerData(); }
+                        catch (Exception error) { throw new IllegalStateException(error); }
+                    }, -1); }
                     catch (Exception e) { logger.warning("AfkReward purgeAll 失败: " + e.getMessage()); return -1; }
                 }
             });
 
         // 注册 AfkRewardDispatchable capability
-        AfkRewardService svc = service;
         registerCapability(AfkRewardDispatchable.class, new AfkRewardDispatchable() {
             @Override public boolean isAfk(@NotNull java.util.UUID playerUuid) {
                 return svc != null && svc.isInManualAfk(playerUuid);
@@ -195,7 +217,7 @@ public final class AfkRewardModule extends AbstractAXSModule implements ModuleCo
                 return st != null ? st.mode.name() : null;
             }
             @Override public boolean startManualAfk(@NotNull org.bukkit.entity.Player player, @NotNull String areaName) {
-                return svc != null && svc.startManualAfk(player, areaName);
+                return svc.callApi(() -> svc.startManualAfk(player, areaName), false);
             }
         });
 
@@ -207,17 +229,21 @@ public final class AfkRewardModule extends AbstractAXSModule implements ModuleCo
 
     @Override
     protected void stopService() {
-        if (service != null) {
-            service.shutdown();
-            service = null;
+        var current = service;
+        var scope = storageScope;
+        service = null;
+        repository = null;
+        storageScope = null;
+        try { if (current != null) current.shutdown(); }
+        finally {
+            var stopped = current == null ? java.util.concurrent.CompletableFuture.<Void>completedFuture(null)
+                : current.databaseStopped();
+            trackShutdown(stopped);
+            if (scope != null) { scope.retireAfter(stopped); trackShutdown(scope.retired()); }
+            listener = null;
+            adminCommand = null;
+            configuration = null;
         }
-        if (repository != null) {
-            storageManager.closeModuleDataSource("afkreward");
-            repository = null;
-        }
-        listener = null;
-        adminCommand = null;
-        configuration = null;
     }
 
     @Override

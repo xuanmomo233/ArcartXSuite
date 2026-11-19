@@ -36,6 +36,9 @@ import xuanmo.arcartxsuite.api.bridge.ApiStability;
  */
 @PublicCapability
 public interface EventBusCapability {
+    String MARKET_AUCTION_PURCHASED = "axs.market.auction_purchased";
+    String BATTLEPASS_AUCTION_CONSUMER = "battlepass/auction";
+    String EVENTPACKET_AUCTION_CONSUMER = "eventpacket/auction-purchase-rules";
 
     /**
      * 发布一个事件到总线（类型安全版本）。
@@ -89,11 +92,13 @@ public interface EventBusCapability {
     boolean hasPublisher(@NotNull String topic);
     /** Whether at least one current exact or wildcard subscriber accepts this topic. Not a delivery acknowledgement. */
     boolean hasSubscribers(@NotNull String topic);
-    /** Authentication facts only. Complete true after every current confirmed subscriber commits its receipt.
-     * No subscribers, rejection, exceptions and failed persistence return false and leave the fact pending. */
+    /** Complete true after every current confirmed subscriber commits its receipt.
+     * Auction confirmations are optional when no confirmed subscriber is registered on this node.
+     * A producer can replay the same {@code event_id}, including after a restart or on another node. */
     java.util.concurrent.CompletionStage<Boolean> publishConfirmed(@NotNull String topic,@Nullable Player player,@NotNull Map<String,String> payload);
-    /** Stable consumer identity. The handler must deduplicate event_id with its durable business write.
-     * Called on the publishing thread; storage work must be asynchronous. */
+    /** Stable consumer identity. Commit the {@code event_id} and business write in the same transaction.
+     * Use shared storage when the same consumer runs on multiple nodes. A duplicate already committed
+     * should complete successfully. Called on the publishing thread. Run storage work asynchronously. */
     String subscribeConfirmed(@NotNull String consumer,@NotNull String topic,@NotNull ConfirmedHandler handler);
     @FunctionalInterface interface ConfirmedHandler {
         java.util.concurrent.CompletionStage<Void> handle(@NotNull BusEvent event);

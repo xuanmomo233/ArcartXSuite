@@ -54,7 +54,7 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
 
     private BattlePassModuleConfiguration configuration;
     private BattlePassService service;
-    private xuanmo.arcartxsuite.api.auth.AuthConsumerStore authStore;
+    private xuanmo.arcartxsuite.api.storage.ModuleStorage storageScope;
     private JdbcBattlePassRepository repository;
     private BattlePassAdminCommand adminCommand;
     private BattlePassPacketHandler packetHandler;
@@ -119,8 +119,11 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
             itemStackBridge,
             this::msg
         );
+        packetHandler.setNavigationProviders(
+            () -> getCapability(xuanmo.arcartxsuite.api.capability.MapNavigable.class),
+            () -> getCapability(xuanmo.arcartxsuite.api.capability.QuestGpsNavigable.class));
         service.setUiRefreshListener(packetHandler::onServiceRefresh);
-        return PacketHandlerSpec.of(packetHandler, 0, null, null);
+        return PacketHandlerSpec.of(packetHandler, 0, BattlePassPacketHandler.PACKET_ID, "battlepass");
     }
 
     @Override
@@ -130,14 +133,15 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
         }
         File dataFolder = configFile.getParentFile();
         // 首次安装时导出默认任务文件
-        ensureTaskDefaults(dataFolder);
+        YamlConfiguration yaml = YamlConfiguration.loadConfiguration(configFile);
+        ensureTaskDefaults(dataFolder, yaml.getString("tasks.tasks-directory", "tasks"));
         // 首次安装时导出默认奖励文件
         ensureRewardDefaults(dataFolder);
         configuration = BattlePassModuleConfiguration.load(
-            YamlConfiguration.loadConfiguration(configFile), dataFolder, logger, ariaBridge);
+            yaml, dataFolder, logger, ariaBridge);
     }
 
-    private void ensureTaskDefaults(File dataFolder) {
+    private void ensureTaskDefaults(File dataFolder, String configuredDirectory) {
         File tasksDir = new File(dataFolder, "tasks");
         if (!tasksDir.exists()) {
             tasksDir.mkdirs();
@@ -148,6 +152,8 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
                 exportResource("tasks/" + taskFile, target, false);
             }
         }
+        File integrationTasks = new File(dataFolder, configuredDirectory + "/integrations.yml");
+        if (!integrationTasks.exists()) exportResource("tasks/integrations.yml", integrationTasks, false);
     }
 
     private void ensureRewardDefaults(File dataFolder) {
@@ -164,46 +170,52 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
     }
 
     @Override
-    protected void startService() throws Exception {
-        xuanmo.arcartxsuite.api.auth.AuthConsumerStore.requireReady("battlepass");
+    protected java.util.concurrent.CompletionStage<Void> prepareService() throws Exception {
         xuanmo.arcartxsuite.api.storage.StorageDescriptor bpDesc;
         javax.sql.DataSource bpDs;
         if (configuration.storage().hasOverride()) {
             bpDesc = configuration.storage().toDescriptor();
-            bpDs = storageManager.resolveModuleDataSource("battlepass", null, dataFolder, bpDesc);
+            storageScope = storageManager.openModuleStorage("battlepass", null, dataFolder, bpDesc);
+            bpDs = storageScope.dataSource();
         } else {
             bpDesc = storageManager.getDescriptor().withTablePrefix("");
-            bpDs = storageManager.resolveModuleDataSource("battlepass",
+            storageScope = storageManager.openModuleStorage("battlepass",
                 configuration.storage().sqliteFileName(), dataFolder, null);
+            bpDs = storageScope.dataSource();
         }
-        authStore=xuanmo.arcartxsuite.api.auth.AuthConsumerStore.open("battlepass",bpDs);
-        JdbcBattlePassRepository repo = new JdbcBattlePassRepository(authStore, bpDesc, dataFolder, logger);
-        repo.initialize();
-        repository = repo;
+        repository = new JdbcBattlePassRepository(bpDs, bpDesc, dataFolder, logger);
+        return storageScope.initialize(repository::initialize);
+    }
 
-        UiBinding mainBinding = registerModuleUi(MAIN_UI_FILE_PATH, configuration.ui().mainId(), true);
-        UiBinding tasksBinding = registerModuleUi(TASKS_UI_FILE_PATH, configuration.ui().tasksId(), true);
-        UiBinding rewardsBinding = registerModuleUi(REWARDS_UI_FILE_PATH, configuration.ui().rewardsId(), true);
-        UiBinding settlementBinding = registerModuleUi(SETTLEMENT_UI_FILE_PATH, configuration.ui().settlementId(), true);
-        if (mainBinding.registeredUiId() == null || tasksBinding.registeredUiId() == null
-            || rewardsBinding.registeredUiId() == null || settlementBinding.registeredUiId() == null) {
+    @Override
+    protected void startService() throws Exception {
+        var repo = repository;
+        boolean registerUi = configuration.ui().registerOnEnable();
+        UiBinding mainBinding = registerModuleUi(MAIN_UI_FILE_PATH, configuration.ui().mainId(), registerUi);
+        UiBinding tasksBinding = registerModuleUi(TASKS_UI_FILE_PATH, configuration.ui().tasksId(), registerUi);
+        UiBinding rewardsBinding = registerModuleUi(REWARDS_UI_FILE_PATH, configuration.ui().rewardsId(), registerUi);
+        UiBinding settlementBinding = registerModuleUi(SETTLEMENT_UI_FILE_PATH, configuration.ui().settlementId(), registerUi);
+        if (registerUi && (mainBinding.registeredUiId() == null || tasksBinding.registeredUiId() == null
+            || rewardsBinding.registeredUiId() == null || settlementBinding.registeredUiId() == null)) {
             throw new IllegalStateException("BattlePass UI 注册失败");
         }
 
-        service = new BattlePassService(plugin, configuration, repo, logger,
-            itemSourceRegistry, currencyManager,
-            () -> getCapability(xuanmo.arcartxsuite.api.capability.MailDispatchable.class),
-            itemRewardDispatcher, pendingRewardService,
-            new xuanmo.arcartxsuite.api.icon.IconResolver(itemStackBridge, itemSourceRegistry));
+        service = new BattlePassService(plugin, configuration, repo, logger, pendingRewardService);
         service.setEventBusProvider(() -> getCapability(
             xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
+        service.setAbyssResultProvider(() -> getCapability(
+            xuanmo.arcartxsuite.api.capability.AbyssRunResultAccess.class),
+            crossServer == null ? "local" : crossServer.nodeId());
         service.start();
+        BattlePassService svc = service;
 
         registerCapability(DatabaseMigratable.class, new DatabaseMigratable() {
             @Override public @NotNull String moduleId() { return "battlepass"; }
             @Override public @NotNull xuanmo.arcartxsuite.api.storage.MigrationResult migrateDatabase(
                     @NotNull xuanmo.arcartxsuite.api.storage.StorageDescriptor target, boolean overwrite) {
-                return repo.migrateData(target, overwrite);
+                var unavailable = new xuanmo.arcartxsuite.api.storage.MigrationResult(false,0,0);
+                unavailable.addError("BattlePass 正在停用");
+                return svc.callApi(() -> repo.migrateData(target, overwrite),unavailable);
             }
             @Override public @NotNull xuanmo.arcartxsuite.api.storage.StorageDescriptor currentDescriptor() {
                 return repo.getDescriptor();
@@ -213,11 +225,17 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
         registerCapability(PlayerDataPurgeable.class, new PlayerDataPurgeable() {
             @Override public @NotNull String moduleId() { return "battlepass"; }
             @Override public int purgePlayerData(@NotNull java.util.UUID playerUuid) {
-                try { return repo.deletePlayerData(playerUuid); }
+                try { return svc.callApi(() -> {
+                    try { return repo.deletePlayerData(playerUuid); }
+                    catch(Exception failure) { throw new IllegalStateException(failure); }
+                },-1); }
                 catch (Exception e) { logger.warning("BattlePass purge 失败: " + e.getMessage()); return -1; }
             }
             @Override public int purgeAllPlayerData() {
-                try { return repo.deleteAllPlayerData(); }
+                try { return svc.callApi(() -> {
+                    try { return repo.deleteAllPlayerData(); }
+                    catch(Exception failure) { throw new IllegalStateException(failure); }
+                },-1); }
                 catch (Exception e) { logger.warning("BattlePass purgeAll 失败: " + e.getMessage()); return -1; }
             }
         });
@@ -225,67 +243,58 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
         registerCapability(xuanmo.arcartxsuite.api.capability.BattlePassAccess.class,
             new xuanmo.arcartxsuite.api.capability.BattlePassAccess() {
                 @Override public boolean isSeasonActive() {
-                    return service != null && service.isSeasonActive();
+                    return svc.callApi(svc::isSeasonActive,false);
                 }
-                @Override public int addXp(@NotNull org.bukkit.entity.Player player, int xp) {
-                    return service != null ? service.addXp(player, xp) : 0;
+                @Override public java.util.concurrent.CompletionStage<Integer> addXp(@NotNull org.bukkit.entity.Player player, int xp) {
+                    return svc.addXpAsync(player,xp);
                 }
-                @Override public void setXp(@NotNull org.bukkit.entity.Player player, int xp) {
-                    if (service != null) service.setXp(player, xp);
+                @Override public java.util.concurrent.CompletionStage<Void> setXp(@NotNull org.bukkit.entity.Player player, int xp) {
+                    return svc.setXpAsync(player,xp);
                 }
-                @Override public void removeXp(@NotNull org.bukkit.entity.Player player, int xp) {
-                    if (service != null) service.removeXp(player, xp);
+                @Override public java.util.concurrent.CompletionStage<Void> removeXp(@NotNull org.bukkit.entity.Player player, int xp) {
+                    return svc.removeXpAsync(player,xp);
                 }
-                @Override public void setLevel(@NotNull org.bukkit.entity.Player player, int level) {
-                    if (service != null) service.setLevel(player, level);
+                @Override public java.util.concurrent.CompletionStage<Void> setLevel(@NotNull org.bukkit.entity.Player player, int level) {
+                    return svc.setLevelAsync(player,level);
                 }
-                @Override public boolean unlockTier(@NotNull org.bukkit.entity.Player player,
+                @Override public java.util.concurrent.CompletionStage<Boolean> unlockTier(@NotNull org.bukkit.entity.Player player,
                         @NotNull String tier) {
-                    if (service == null) return false;
                     try {
-                        return service.unlockTier(player,
+                        return svc.unlockTierAsync(player,
                             xuanmo.arcartxsuite.battlepass.model.BattlePassPlayerProgress.PassTier
                                 .valueOf(tier.toUpperCase(java.util.Locale.ROOT)));
                     } catch (IllegalArgumentException e) {
-                        return false;
+                        return java.util.concurrent.CompletableFuture.failedFuture(e);
                     }
                 }
-                @Override public int claimAllRewards(@NotNull org.bukkit.entity.Player player) {
-                    return service != null ? service.claimAllRewards(player) : 0;
+                @Override public java.util.concurrent.CompletionStage<Integer> claimAllRewards(@NotNull org.bukkit.entity.Player player) {
+                    return svc.claimAllRewardsAsync(player);
                 }
-                @Override public void updateTaskProgress(@NotNull org.bukkit.entity.Player player,
+                @Override public java.util.concurrent.CompletionStage<Void> updateTaskProgress(@NotNull org.bukkit.entity.Player player,
                         @NotNull String taskId, int increment) {
-                    if (service != null) service.updateTaskProgress(player, taskId, increment);
+                    return svc.updateTaskProgressAsync(player, taskId, increment);
                 }
-                @Override public void resetProgress(@NotNull java.util.UUID playerUuid) {
-                    if (service != null) service.resetPlayerProgress(playerUuid);
+                @Override public java.util.concurrent.CompletionStage<Void> resetProgress(@NotNull java.util.UUID playerUuid) {
+                    return svc.resetProgressAsync(playerUuid);
                 }
             });
 
-        adminCommand = new BattlePassAdminCommand(() -> service, this::msg, MODULE_VERSION);
-        logger.fine("BattlePass 模块已载入 | 赛季=" + configuration.season().seasonId()
-            + " | 跨服=" + (configuration.crossServer().enabled() ? "ON" : "OFF"));
+        adminCommand = new BattlePassAdminCommand(plugin, () -> service, this::msg, MODULE_VERSION);
+        logger.fine("BattlePass 模块已载入 | 赛季=" + configuration.season().seasonId());
     }
 
     @Override
     protected void stopService() {
-        BattlePassService retiringService=service;
-        java.util.concurrent.CompletionStage<Void> drained=java.util.concurrent.CompletableFuture.completedFuture(null);
-        if (service != null) {
-            drained=service.shutdown();
-            service = null;
+        var current=service;var scope=storageScope;
+        service=null;repository=null;storageScope=null;
+        try {
+            if(current!=null) current.shutdown();
+        }finally {
+            var stopped=current==null?java.util.concurrent.CompletableFuture.<Void>completedFuture(null):current.databaseStopped();
+            trackShutdown(stopped);
+            if(scope!=null){scope.retireAfter(stopped);trackShutdown(scope.retired());}
+            packetHandler=null;adminCommand=null;configuration=null;
         }
-        if (repository != null) {
-            repository = null;
-        }
-        if(authStore!=null) {
-            authStore.retire(drained,retiringService==null?null:retiringService::finishShutdown,()->storageManager.closeModuleDataSource("battlepass"))
-                .whenComplete((ignored,error)->{ if(error!=null) logger.warning("BattlePass 数据源释放失败，请重启后重试"); else logger.fine("BattlePass 数据源已释放"); });
-            authStore=null;
-        }
-        packetHandler = null;
-        adminCommand = null;
-        configuration = null;
     }
 
     @Override
@@ -297,7 +306,7 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
     @Override
     protected @NotNull Map<String, TabExecutor> commandBindings() {
         BattlePassPlayerCommand cmd = new BattlePassPlayerCommand(
-            () -> packetHandler, () -> service, messages());
+            plugin, () -> packetHandler, () -> service, messages());
         Map<String, TabExecutor> map = new LinkedHashMap<>();
         map.put("bp", cmd);
         map.put("battlepass", cmd);

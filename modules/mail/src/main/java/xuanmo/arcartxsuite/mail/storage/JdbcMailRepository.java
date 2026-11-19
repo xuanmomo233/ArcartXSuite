@@ -1,7 +1,6 @@
 package xuanmo.arcartxsuite.mail.storage;
 
 import java.io.File;
-import java.sql.DatabaseMetaData;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -10,8 +9,10 @@ import java.sql.Statement;
 import java.sql.Types;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.logging.Logger;
@@ -39,6 +40,14 @@ import xuanmo.arcartxsuite.mail.model.MailStatus;
  * 实现 {@link MailRepository} 接口供 {@link xuanmo.arcartxsuite.mail.service.MailService} 调用。
  */
 public final class JdbcMailRepository extends AbstractModuleRepository implements MailRepository {
+    private static final int ATTACHMENT_READ_BATCH = 256;
+    private static final int DELETE_BATCH = 128;
+    private static final String DELETABLE_STATUS = "status IN ('UNREAD', 'READ', 'CLAIMED') AND claim_phase = 'NONE'";
+    private static final String INSERT_LOG = "INSERT INTO mail_logs (player_uuid, log_type, content, created_at) VALUES (?, ?, ?, ?)";
+    private static final String INBOX_VIEW_COLUMNS =
+        "id, owner_uuid, sender_uuid, sender_name, source_type, preset_id, cdk_code, subject, body, status, "
+        + "created_at, expires_at, updated_at, claimed_at, deleted_at";
+    private final Logger mailLogger;
 
     /**
      * 构造邮件 JDBC 仓储。
@@ -52,17 +61,44 @@ public final class JdbcMailRepository extends AbstractModuleRepository implement
     public JdbcMailRepository(DataSource dataSource, StorageDescriptor descriptor,
                               File dataFolder, Logger logger) {
         super("AXS-Mail", dataSource, descriptor, dataFolder, logger);
+        this.mailLogger = logger;
     }
 
     @Override
     protected void onInitialize(Connection conn) throws SQLException {
         createTables(conn);
-        ensureSchemaUpgrade(conn);
+        ensureClaimColumns(conn);
+    }
+
+    private void ensureClaimColumns(Connection connection) throws SQLException {
+        Map<String, String> required = Map.of(
+            "claim_step", "INTEGER NOT NULL DEFAULT 0",
+            "claim_phase", "VARCHAR(16) NOT NULL DEFAULT 'NONE'",
+            "claim_attempt", "VARCHAR(36) NULL");
+        for (var entry : required.entrySet()) {
+            if (hasMailColumn(connection, entry.getKey())) continue;
+            try (Statement statement = connection.createStatement()) {
+                statement.executeUpdate("ALTER TABLE mail_entries ADD COLUMN " + entry.getKey() + " " + entry.getValue());
+            } catch (SQLException failure) {
+                // Another node can finish the same initialization while this node waits for the DDL lock.
+                if (!hasMailColumn(connection, entry.getKey())) throw failure;
+            }
+        }
+    }
+
+    private boolean hasMailColumn(Connection connection, String name) throws SQLException {
+        try (ResultSet columns = connection.getMetaData().getColumns(connection.getCatalog(), null, "mail_entries", name)) {
+            while (columns.next()) {
+                if ("mail_entries".equalsIgnoreCase(columns.getString("TABLE_NAME"))
+                    && name.equalsIgnoreCase(columns.getString("COLUMN_NAME"))) return true;
+            }
+            return false;
+        }
     }
 
     @Override
     protected List<String> playerDataTables() {
-        return List.of("mail_player_profiles", "mail_entries", "mail_logs", "mail_cdk_claims");
+        return List.of("mail_player_profiles", "mail_entries", "mail_logs", "mail_cdk_claims", "mail_delivery_receipts");
     }
 
     @Override
@@ -74,7 +110,8 @@ public final class JdbcMailRepository extends AbstractModuleRepository implement
             "mail_attachments",
             "mail_logs",
             "mail_cdk_definitions",
-            "mail_cdk_claims"
+            "mail_cdk_claims",
+            "mail_delivery_receipts"
         );
     }
 
@@ -144,10 +181,101 @@ public final class JdbcMailRepository extends AbstractModuleRepository implement
 
     @Override
     public MailInsertResult insertMail(MailMessage message) throws SQLException {
+        return new MailInsertResult(insertMail(null, message).id());
+    }
+
+    @Override
+    public DurableInsert insertDurableMail(String operationKey, MailMessage message) throws SQLException {
+        if (operationKey == null || !operationKey.matches("[a-f0-9]{64}")) {
+            throw new IllegalArgumentException("Invalid mail operation key");
+        }
+        return insertMail(operationKey, message);
+    }
+
+    @Override
+    public long resolvePlayerSend(String operationKey, UUID recipient) throws SQLException {
+        try (Connection connection = getConnection()) {
+            // The unique key serializes this decision with the original transaction, even after a lost commit reply.
+            try {
+                reserveDeliveryReceipt(connection, operationKey, recipient, -1L);
+                return 0L;
+            } catch (SQLException failure) {
+                long existing = deliveryReceipt(connection, operationKey, recipient);
+                if (existing != 0L) return Math.max(0L, existing);
+                throw failure;
+            }
+        }
+    }
+
+    @Override
+    public long readPlayerSendReceipt(String operationKey, UUID recipient) throws SQLException {
+        try (Connection connection = getConnection()) {
+            return deliveryReceipt(connection, operationKey, recipient);
+        }
+    }
+
+    private DurableInsert insertMail(String operationKey, MailMessage message) throws SQLException {
         try (Connection connection = getConnection()) {
             connection.setAutoCommit(false);
-            try (PreparedStatement statement = connection.prepareStatement(mailInsertSql(), Statement.RETURN_GENERATED_KEYS)) {
-                writeMail(statement, message, false);
+            try {
+                if (operationKey != null) {
+                    try {
+                        reserveDeliveryReceipt(connection, operationKey, message.ownerUuid(), 0L);
+                    } catch (SQLException failure) {
+                        connection.rollback();
+                        long existing = deliveryReceipt(connection, operationKey, message.ownerUuid());
+                        if (existing > 0) return new DurableInsert(existing, true);
+                        throw failure;
+                    }
+                }
+                long mailId = insertMailAndAttachments(connection, message);
+                if (operationKey != null) {
+                    try (PreparedStatement update = connection.prepareStatement(
+                        "UPDATE mail_delivery_receipts SET mail_id=? WHERE player_uuid=? AND operation_key=?"
+                    )) {
+                        update.setLong(1, mailId);
+                        update.setString(2, message.ownerUuid().toString());
+                        update.setString(3, operationKey);
+                        if (update.executeUpdate() != 1) throw new SQLException("Mail receipt reservation is missing");
+                    }
+                }
+                connection.commit();
+                return new DurableInsert(mailId, false);
+            } catch (SQLException | RuntimeException failure) {
+                connection.rollback();
+                throw failure;
+            } finally {
+                connection.setAutoCommit(true);
+            }
+        }
+    }
+
+    private static void reserveDeliveryReceipt(Connection connection, String key, UUID owner, long mailId) throws SQLException {
+        try (PreparedStatement reserve = connection.prepareStatement(
+            "INSERT INTO mail_delivery_receipts (player_uuid, operation_key, mail_id) VALUES (?, ?, ?)"
+        )) {
+            reserve.setString(1, owner.toString());
+            reserve.setString(2, key);
+            reserve.setLong(3, mailId);
+            if (reserve.executeUpdate() != 1) throw new SQLException("Mail receipt reservation failed");
+        }
+    }
+
+    private long deliveryReceipt(Connection connection, String operationKey, UUID player) throws SQLException {
+        try (PreparedStatement query = connection.prepareStatement(
+            "SELECT mail_id FROM mail_delivery_receipts WHERE player_uuid=? AND operation_key=?"
+        )) {
+            query.setString(1, player.toString());
+            query.setString(2, operationKey);
+            try (ResultSet rows = query.executeQuery()) {
+                return rows.next() ? rows.getLong(1) : 0L;
+            }
+        }
+    }
+
+    private long insertMailAndAttachments(Connection connection, MailMessage message) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement(mailInsertSql(), Statement.RETURN_GENERATED_KEYS)) {
+                writeMail(statement, message);
                 statement.executeUpdate();
                 long mailId;
                 try (ResultSet generatedKeys = statement.getGeneratedKeys()) {
@@ -175,31 +303,155 @@ public final class JdbcMailRepository extends AbstractModuleRepository implement
                     }
                 }
 
-                connection.commit();
-                return new MailInsertResult(mailId);
-            } catch (SQLException exception) {
-                connection.rollback();
-                throw exception;
-            } finally {
-                connection.setAutoCommit(true);
-            }
+            return mailId;
         }
     }
 
     @Override
-    public void updateMailState(MailMessage message) throws SQLException {
+    public boolean transitionMailState(MailMessage message, MailStatus next, Instant now) throws SQLException {
         try (Connection connection = getConnection();
-             PreparedStatement statement = connection.prepareStatement(mailUpdateSql())) {
-            writeMail(statement, message, true);
-            statement.executeUpdate();
+             PreparedStatement statement = connection.prepareStatement("""
+                 UPDATE mail_entries SET status = ?, updated_at = ?, deleted_at = ?
+                 WHERE id = ? AND owner_uuid = ? AND status = ? AND claim_phase = 'NONE'
+                 """)) {
+            statement.setString(1, next.name());
+            statement.setLong(2, now.toEpochMilli());
+            if (next == MailStatus.DELETED) statement.setLong(3, now.toEpochMilli());
+            else statement.setNull(3, java.sql.Types.BIGINT);
+            statement.setLong(4, message.id());
+            statement.setString(5, message.ownerUuid().toString());
+            statement.setString(6, message.status().name());
+            return statement.executeUpdate() == 1;
         }
+    }
+
+    @Override
+    public boolean markUnreadRead(UUID ownerUuid, long mailId, Instant now) throws SQLException {
+        try (Connection connection = getConnection(); PreparedStatement statement = connection.prepareStatement(
+            "UPDATE mail_entries SET status = 'READ', updated_at = ?, deleted_at = NULL "
+                + "WHERE owner_uuid = ? AND id = ? AND status = 'UNREAD' AND claim_phase = 'NONE'")) {
+            statement.setLong(1, now.toEpochMilli());
+            statement.setString(2, ownerUuid.toString());
+            statement.setLong(3, mailId);
+            return statement.executeUpdate() == 1;
+        }
+    }
+
+    @Override
+    public int deleteInbox(UUID ownerUuid, boolean allowUnclaimed, Instant now) throws SQLException {
+        try (Connection connection = getConnection()) {
+            if (isMysql()) {
+                // Limit this to the next transaction. MariaDB's snapshot isolation rejects
+                // locking a row changed since an earlier consistent read at REPEATABLE READ.
+                try (Statement statement = connection.createStatement()) {
+                    statement.execute("SET TRANSACTION ISOLATION LEVEL READ COMMITTED");
+                }
+            }
+            connection.setAutoCommit(false);
+            int deleted = 0;
+            try {
+                if (!isMysql()) {
+                    // Take SQLite's writer lock before reading the candidates.
+                    try (Statement writer = connection.createStatement()) {
+                        writer.executeUpdate("UPDATE mail_entries SET id = id WHERE 0 = 1");
+                    }
+                }
+                long upperId = newestInboxId(connection, ownerUuid);
+                DeleteCandidate before = null;
+                while (upperId > 0) {
+                    var rows = deleteCandidates(connection, ownerUuid, allowUnclaimed, upperId, now.toEpochMilli(), before);
+                    if (rows.isEmpty()) break;
+                    before = rows.get(rows.size() - 1);
+                    var allowed = rows.stream().filter(row -> allowUnclaimed || row.claimed() || row.commands().isBlank()).toList();
+                    if (!allowed.isEmpty()) deleted += deleteMailboxBatch(connection, ownerUuid, allowed, now);
+                    if (rows.size() < DELETE_BATCH) break;
+                }
+                connection.commit();
+            } catch (SQLException | RuntimeException failure) {
+                try { connection.rollback(); }
+                catch (SQLException rollback) { failure.addSuppressed(rollback); }
+                throw failure;
+            }
+            // As with individual log writes, pruning runs only after the audit rows are committed.
+            if (deleted > 0) {
+                try {
+                    connection.setAutoCommit(true);
+                    pruneLog(connection, ownerUuid);
+                } catch (SQLException failure) {
+                    mailLogger.warning("邮件删除日志已提交，历史裁剪暂未完成: " + failure.getMessage());
+                }
+            }
+            return deleted;
+        }
+    }
+
+    private long newestInboxId(Connection connection, UUID owner) throws SQLException {
+        try (PreparedStatement query = connection.prepareStatement("SELECT MAX(id) FROM mail_entries WHERE owner_uuid = ?")) {
+            query.setString(1, owner.toString());
+            try (ResultSet rows = query.executeQuery()) { return rows.next() ? rows.getLong(1) : 0; }
+        }
+    }
+
+    private record DeleteCandidate(long id, long createdAt, String subject, String commands, boolean claimed) {}
+
+    private List<DeleteCandidate> deleteCandidates(Connection connection, UUID owner, boolean allowUnclaimed,
+                                                   long upperId, long issuedAt, DeleteCandidate before) throws SQLException {
+        String sql = "SELECT id, created_at, subject, claim_commands, status FROM mail_entries WHERE owner_uuid = ?"
+            + " AND id <= ? AND created_at <= ? AND " + DELETABLE_STATUS
+            + (allowUnclaimed ? "" : " AND (status = 'CLAIMED' OR NOT EXISTS "
+                + "(SELECT 1 FROM mail_attachments a WHERE a.mail_id = mail_entries.id))")
+            + (before == null ? "" : " AND (created_at < ? OR (created_at = ? AND id < ?))")
+            + " ORDER BY created_at DESC, id DESC LIMIT ?" + (isMysql() ? " FOR UPDATE" : "");
+        try (PreparedStatement query = connection.prepareStatement(sql)) {
+            query.setString(1, owner.toString());
+            query.setLong(2, upperId);
+            query.setLong(3, issuedAt);
+            int parameter = 4;
+            if (before != null) {
+                query.setLong(parameter++, before.createdAt());
+                query.setLong(parameter++, before.createdAt());
+                query.setLong(parameter++, before.id());
+            }
+            query.setInt(parameter, DELETE_BATCH);
+            var result = new ArrayList<DeleteCandidate>();
+            try (ResultSet rows = query.executeQuery()) {
+                while (rows.next()) {
+                    result.add(new DeleteCandidate(rows.getLong("id"), rows.getLong("created_at"),
+                        nullToEmpty(rows.getString("subject")), nullToEmpty(rows.getString("claim_commands")),
+                        "CLAIMED".equalsIgnoreCase(rows.getString("status"))));
+                }
+            }
+            return result;
+        }
+    }
+
+    private int deleteMailboxBatch(Connection connection, UUID owner, List<DeleteCandidate> mails, Instant now) throws SQLException {
+        String markers = String.join(",", java.util.Collections.nCopies(mails.size(), "?"));
+        String sql = "UPDATE mail_entries SET status = 'DELETED', deleted_at = ?, updated_at = ? "
+            + "WHERE owner_uuid = ? AND " + DELETABLE_STATUS + " AND id IN (" + markers + ")";
+        try (PreparedStatement update = connection.prepareStatement(sql)) {
+            update.setLong(1, now.toEpochMilli());
+            update.setLong(2, now.toEpochMilli());
+            update.setString(3, owner.toString());
+            for (int i = 0; i < mails.size(); i++) update.setLong(i + 4, mails.get(i).id());
+            if (update.executeUpdate() != mails.size()) throw new SQLException("Mail deletion candidates changed while locked");
+        }
+        try (PreparedStatement insert = connection.prepareStatement(INSERT_LOG)) {
+            for (var mail : mails) {
+                bindLog(insert, new MailLogEntry(0, owner, "delete", "删除邮件: " + mail.subject(), now));
+                insert.addBatch();
+            }
+            insert.executeBatch();
+        }
+        return mails.size();
     }
 
     @Override
     public boolean tryClaimMail(UUID ownerUuid, long mailId, Instant now) throws SQLException {
         String sql = """
             UPDATE mail_entries SET status = 'CLAIMED', claimed_at = ?, updated_at = ?
-            WHERE id = ? AND owner_uuid = ? AND status IN ('UNREAD', 'READ')
+            WHERE id = ? AND owner_uuid = ? AND status IN ('UNREAD', 'READ') AND claim_phase = 'NONE'
+                AND (expires_at IS NULL OR expires_at > ?)
             """;
         try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(sql)) {
@@ -207,8 +459,176 @@ public final class JdbcMailRepository extends AbstractModuleRepository implement
             statement.setLong(2, now.toEpochMilli());
             statement.setLong(3, mailId);
             statement.setString(4, ownerUuid.toString());
+            statement.setLong(5, now.toEpochMilli());
             return statement.executeUpdate() > 0;
         }
+    }
+
+    @Override
+    public ClaimProgress loadClaimProgress(UUID ownerUuid, long mailId) throws SQLException {
+        try (Connection connection = getConnection();
+             PreparedStatement statement = connection.prepareStatement(
+                 "SELECT claim_step, claim_phase, claim_attempt FROM mail_entries WHERE id = ? AND owner_uuid = ?")) {
+            statement.setLong(1, mailId);
+            statement.setString(2, ownerUuid.toString());
+            try (ResultSet result = statement.executeQuery()) {
+                if (!result.next()) throw new SQLException("Missing mail " + mailId);
+                return readClaimProgress(result);
+            }
+        }
+    }
+
+    @Override
+    public boolean reserveClaimStep(UUID ownerUuid, long mailId, int step, UUID attempt, Instant now) throws SQLException {
+        try (Connection connection = getConnection();
+             PreparedStatement statement = connection.prepareStatement(RESERVE_CLAIM)) {
+            return reserveClaim(statement, ownerUuid, mailId, step, attempt, now);
+        }
+    }
+
+    private static final String RESERVE_CLAIM = """
+                 UPDATE mail_entries SET status = 'CLAIM_REVIEW', claim_phase = 'EXECUTING',
+                     claim_attempt = ?, claimed_at = NULL, updated_at = ?
+                 WHERE id = ? AND owner_uuid = ? AND claim_step = ?
+                   AND ((status = 'CLAIM_PENDING' AND claim_phase = 'READY')
+                       OR (status IN ('UNREAD', 'READ') AND claim_phase = 'NONE'
+                       AND (expires_at IS NULL OR expires_at > ?)))
+                 """;
+
+    private static boolean reserveClaim(PreparedStatement statement, UUID owner, long mailId, int step,
+                                        UUID attempt, Instant now) throws SQLException {
+        statement.setString(1, attempt.toString());
+        statement.setLong(2, now.toEpochMilli());
+        statement.setLong(3, mailId);
+        statement.setString(4, owner.toString());
+        statement.setInt(5, step);
+        statement.setLong(6, now.toEpochMilli());
+        return statement.executeUpdate() == 1;
+    }
+
+    @Override
+    public boolean reserveItemClaims(UUID owner, List<ItemClaim> items, List<UUID> previousReceipts, Instant now) throws SQLException {
+        return itemClaimTransaction(connection -> {
+            if (!previousReceipts.isEmpty() && hasUnconfirmedItemReceipts(connection, owner, previousReceipts)) return false;
+            try (PreparedStatement statement = connection.prepareStatement(RESERVE_CLAIM)) {
+                for (var item : items) {
+                    if (!reserveClaim(statement, owner, item.mailId(), item.step(), item.attempt(), now)) return false;
+                }
+            }
+            return true;
+        });
+    }
+
+    private boolean hasUnconfirmedItemReceipts(Connection connection, UUID owner, List<UUID> attempts) throws SQLException {
+        String markers = String.join(",", java.util.Collections.nCopies(attempts.size(), "?"));
+        try (PreparedStatement query = connection.prepareStatement(
+            "SELECT 1 FROM mail_entries WHERE owner_uuid=? AND claim_attempt IN (" + markers + ") LIMIT 1")) {
+            query.setString(1, owner.toString());
+            for (int i = 0; i < attempts.size(); i++) query.setString(i + 2, attempts.get(i).toString());
+            try (ResultSet rows = query.executeQuery()) { return rows.next(); }
+        }
+    }
+
+    @Override
+    public boolean finishItemClaims(UUID owner, List<ItemClaim> items, boolean delivered, Instant now) throws SQLException {
+        return itemClaimTransaction(connection -> {
+            try (PreparedStatement statement = connection.prepareStatement(UPDATE_CLAIM)) {
+                for (var item : items) {
+                    var claim = new ClaimProgress(item.step(), ClaimPhase.EXECUTING, item.attempt());
+                    if (!updateClaim(statement, owner, item.mailId(), claim, item.step() + (delivered ? 1 : 0),
+                        delivered && item.last(), now)) return false;
+                }
+            }
+            return true;
+        });
+    }
+
+    @FunctionalInterface
+    private interface ItemClaimWork {
+        boolean apply(Connection connection) throws SQLException;
+    }
+
+    private boolean itemClaimTransaction(ItemClaimWork work) throws SQLException {
+        try (Connection connection = getConnection()) {
+            connection.setAutoCommit(false);
+            try {
+                boolean updated = work.apply(connection);
+                if (updated) connection.commit();
+                else connection.rollback();
+                return updated;
+            } catch (SQLException | RuntimeException failure) {
+                connection.rollback();
+                throw failure;
+            } finally {
+                connection.setAutoCommit(true);
+            }
+        }
+    }
+
+    @Override
+    public boolean markClaimReview(UUID ownerUuid, long mailId, int step, UUID attempt, Instant now) throws SQLException {
+        try (Connection connection = getConnection();
+             PreparedStatement statement = connection.prepareStatement("""
+                 UPDATE mail_entries SET claim_phase = 'REVIEW', updated_at = ?
+                 WHERE id = ? AND owner_uuid = ? AND status = 'CLAIM_REVIEW'
+                   AND claim_step = ? AND claim_phase = 'EXECUTING' AND claim_attempt = ?
+                 """)) {
+            statement.setLong(1, now.toEpochMilli());
+            statement.setLong(2, mailId);
+            statement.setString(3, ownerUuid.toString());
+            statement.setInt(4, step);
+            statement.setString(5, attempt.toString());
+            return statement.executeUpdate() == 1;
+        }
+    }
+
+    @Override
+    public boolean completeClaimStep(UUID ownerUuid, long mailId, ClaimProgress expected, boolean finished, Instant now) throws SQLException {
+        if (expected.phase() != ClaimPhase.EXECUTING && expected.phase() != ClaimPhase.REVIEW) return false;
+        return updateClaimProgress(ownerUuid, mailId, expected, expected.step() + 1, finished, now);
+    }
+
+    @Override
+    public boolean releaseReviewedClaimStep(UUID ownerUuid, long mailId, ClaimProgress expected, Instant now) throws SQLException {
+        if (expected.phase() != ClaimPhase.REVIEW) return false;
+        return updateClaimProgress(ownerUuid, mailId, expected, expected.step(), false, now);
+    }
+
+    @Override
+    public boolean releaseUnstartedClaimStep(UUID ownerUuid, long mailId, ClaimProgress expected, Instant now) throws SQLException {
+        if (expected.phase() != ClaimPhase.EXECUTING) return false;
+        return updateClaimProgress(ownerUuid, mailId, expected, expected.step(), false, now);
+    }
+
+    private boolean updateClaimProgress(UUID ownerUuid, long mailId, ClaimProgress expected, int nextStep,
+                                        boolean finished, Instant now) throws SQLException {
+        try (Connection connection = getConnection();
+             PreparedStatement statement = connection.prepareStatement(UPDATE_CLAIM)) {
+            return updateClaim(statement, ownerUuid, mailId, expected, nextStep, finished, now);
+        }
+    }
+
+    private static final String UPDATE_CLAIM = """
+                 UPDATE mail_entries SET status = ?, claim_phase = ?, claim_step = ?, claim_attempt = NULL,
+                     claimed_at = ?, updated_at = ?
+                 WHERE id = ? AND owner_uuid = ? AND status = 'CLAIM_REVIEW'
+                   AND claim_step = ? AND claim_phase = ? AND claim_attempt = ?
+                 """;
+
+    private static boolean updateClaim(PreparedStatement statement, UUID owner, long mailId, ClaimProgress expected,
+                                       int nextStep, boolean finished, Instant now) throws SQLException {
+        statement.setString(1, finished ? MailStatus.CLAIMED.name() : MailStatus.CLAIM_PENDING.name());
+        statement.setString(2, finished ? ClaimPhase.NONE.name() : ClaimPhase.READY.name());
+        statement.setInt(3, nextStep);
+        if (finished) statement.setLong(4, now.toEpochMilli());
+        else statement.setNull(4, java.sql.Types.BIGINT);
+        statement.setLong(5, now.toEpochMilli());
+        statement.setLong(6, mailId);
+        statement.setString(7, owner.toString());
+        statement.setInt(8, expected.step());
+        statement.setString(9, expected.phase().name());
+        statement.setString(10, expected.attempt().toString());
+        return statement.executeUpdate() == 1;
     }
 
     @Override
@@ -238,16 +658,107 @@ public final class JdbcMailRepository extends AbstractModuleRepository implement
             statement.setString(1, ownerUuid.toString());
             try (ResultSet resultSet = statement.executeQuery()) {
                 while (resultSet.next()) {
-                    messages.add(readMail(connection, resultSet));
+                    messages.add(readMail(resultSet, List.of()));
+                }
+            }
+            return hydrateAttachments(connection, messages, null);
+        }
+    }
+
+    @Override
+    public Optional<ClaimMail> loadClaimMail(UUID ownerUuid, long mailId) throws SQLException {
+        try (Connection connection = getConnection(); PreparedStatement statement = connection.prepareStatement(
+            "SELECT * FROM mail_entries WHERE owner_uuid=? AND id=?")) {
+            statement.setString(1, ownerUuid.toString());
+            statement.setLong(2, mailId);
+            try (ResultSet rows = statement.executeQuery()) {
+                if (!rows.next()) return Optional.empty();
+                return Optional.of(new ClaimMail(readMail(connection, rows), readClaimProgress(rows)));
+            }
+        }
+    }
+
+    @Override
+    public List<ClaimMail> loadClaimablePage(UUID ownerUuid, long beforeId, int limit, Instant now) throws SQLException {
+        String sql = "SELECT * FROM mail_entries WHERE owner_uuid=? AND id<? AND " + claimableSql()
+            + " AND (claim_phase='READY' OR expires_at IS NULL OR expires_at>?)"
+            + " AND (claim_commands<>'' OR EXISTS (SELECT 1 FROM mail_attachments WHERE mail_id=mail_entries.id))"
+            + " ORDER BY id DESC LIMIT ?";
+        try (Connection connection = getConnection(); PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, ownerUuid.toString());
+            statement.setLong(2, beforeId);
+            statement.setLong(3, now.toEpochMilli());
+            statement.setInt(4, limit);
+            List<ClaimMail> mails = new ArrayList<>();
+            try (ResultSet rows = statement.executeQuery()) {
+                while (rows.next()) {
+                    mails.add(new ClaimMail(readMail(rows, List.of()), readClaimProgress(rows)));
+                }
+            }
+            if (mails.isEmpty()) return List.of();
+            Map<Long, List<MailAttachment>> attachments = loadAttachments(connection,
+                mails.stream().map(entry -> entry.mail().id()).toList(), null);
+            return mails.stream().map(entry -> new ClaimMail(
+                entry.mail().withAttachments(attachments.getOrDefault(entry.mail().id(), List.of())), entry.progress())).toList();
+        }
+    }
+
+    private static ClaimProgress readClaimProgress(ResultSet rows) throws SQLException {
+        return new ClaimProgress(rows.getInt("claim_step"), ClaimPhase.valueOf(rows.getString("claim_phase")),
+            parseUuid(rows.getString("claim_attempt")));
+    }
+
+    private List<MailMessage> hydrateAttachments(Connection connection, List<MailMessage> mails, Long previewMailId) throws SQLException {
+        if (mails.isEmpty()) return List.of();
+        var attachments = loadAttachments(connection, mails.stream().map(MailMessage::id).toList(), previewMailId);
+        return mails.stream().map(mail -> mail.withAttachments(attachments.getOrDefault(mail.id(), List.of()))).toList();
+    }
+
+    private Map<Long, List<MailAttachment>> loadAttachments(Connection connection, List<Long> ids, Long previewMailId) throws SQLException {
+        String columns = previewMailId == null
+            ? "item_data, icon" : "CASE WHEN mail_id = ? THEN item_data END AS item_data, CASE WHEN mail_id = ? THEN icon END AS icon";
+        Map<Long, List<MailAttachment>> result = new HashMap<>();
+        for (int start = 0; start < ids.size(); start += ATTACHMENT_READ_BATCH) {
+            int end = Math.min(ids.size(), start + ATTACHMENT_READ_BATCH);
+            String markers = String.join(",", java.util.Collections.nCopies(end - start, "?"));
+            String sql = "SELECT mail_id, id, sort_order, attachment_type, vault_amount, currency_id, currency_amount, description, "
+                + columns + " FROM mail_attachments WHERE mail_id IN (" + markers + ") ORDER BY mail_id, sort_order, id";
+            try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                int parameter = 1;
+                if (previewMailId != null) {
+                    statement.setLong(parameter++, previewMailId);
+                    statement.setLong(parameter++, previewMailId);
+                }
+                for (int i = start; i < end; i++) statement.setLong(parameter++, ids.get(i));
+                try (ResultSet rows = statement.executeQuery()) {
+                    while (rows.next()) {
+                        result.computeIfAbsent(rows.getLong("mail_id"), ignored -> new ArrayList<>()).add(readAttachment(rows));
+                    }
                 }
             }
         }
-        return List.copyOf(messages);
+        result.replaceAll((id, values) -> List.copyOf(values));
+        return result;
     }
 
     @Override
     public MailPage<MailMessage> loadInboxPage(UUID ownerUuid, MailInboxQuery query) throws SQLException {
-        int totalItems = countInbox(ownerUuid, query.filter());
+        try (Connection connection = getConnection()) {
+            return loadInboxPage(connection, ownerUuid, query, countInbox(connection, ownerUuid, query.filter()), null);
+        }
+    }
+
+    @Override
+    public InboxView loadInboxView(UUID ownerUuid, MailInboxQuery query, long selectedMailId) throws SQLException {
+        try (Connection connection = getConnection()) {
+            var counts = loadInboxCounts(connection, ownerUuid, query.filter());
+            var page = loadInboxPage(connection, ownerUuid, query, counts.filteredCount(), selectedMailId);
+            return new InboxView(page, counts.stats(), selectedMailId(page.entries(), selectedMailId));
+        }
+    }
+
+    private MailPage<MailMessage> loadInboxPage(Connection connection, UUID ownerUuid, MailInboxQuery query,
+                                                int totalItems, Long previewMailId) throws SQLException {
         if (totalItems <= 0) {
             return MailPage.empty(query.page(), query.pageSize());
         }
@@ -256,26 +767,36 @@ public final class JdbcMailRepository extends AbstractModuleRepository implement
         int offset = (page - 1) * query.pageSize();
         String condition = filterCondition(query.filter());
         List<MailMessage> messages = new ArrayList<>();
-        String sql = "SELECT * FROM mail_entries WHERE owner_uuid = ?" + condition + " ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?";
-        try (Connection connection = getConnection();
-             PreparedStatement statement = connection.prepareStatement(sql)) {
+        String columns = previewMailId == null ? "*" : INBOX_VIEW_COLUMNS;
+        String sql = "SELECT " + columns + " FROM mail_entries WHERE owner_uuid = ?" + condition
+            + " ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?";
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setString(1, ownerUuid.toString());
             statement.setInt(2, query.pageSize());
             statement.setInt(3, offset);
             try (ResultSet resultSet = statement.executeQuery()) {
                 while (resultSet.next()) {
-                    messages.add(readMail(connection, resultSet));
+                    messages.add(readMail(resultSet, List.of(), previewMailId == null));
                 }
             }
         }
-        return new MailPage<>(List.copyOf(messages), page, query.pageSize(), totalItems, totalPages);
+        Long selected = previewMailId == null ? null : selectedMailId(messages, previewMailId);
+        return new MailPage<>(hydrateAttachments(connection, messages, selected), page, query.pageSize(), totalItems, totalPages);
+    }
+
+    private static long selectedMailId(List<MailMessage> messages, long requested) {
+        for (MailMessage message : messages) if (message.id() == requested) return requested;
+        return messages.isEmpty() ? 0 : messages.get(0).id();
     }
 
     @Override
     public int countInbox(UUID ownerUuid, MailInboxFilter filter) throws SQLException {
+        try (Connection connection = getConnection()) { return countInbox(connection, ownerUuid, filter); }
+    }
+
+    private int countInbox(Connection connection, UUID ownerUuid, MailInboxFilter filter) throws SQLException {
         String sql = "SELECT COUNT(*) AS total_count FROM mail_entries WHERE owner_uuid = ?" + filterCondition(filter);
-        try (Connection connection = getConnection();
-             PreparedStatement statement = connection.prepareStatement(sql)) {
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setString(1, ownerUuid.toString());
             try (ResultSet resultSet = statement.executeQuery()) {
                 return resultSet.next() ? resultSet.getInt("total_count") : 0;
@@ -285,55 +806,70 @@ public final class JdbcMailRepository extends AbstractModuleRepository implement
 
     @Override
     public MailMailboxStats loadStats(UUID ownerUuid) throws SQLException {
+        try (Connection connection = getConnection()) { return loadInboxCounts(connection, ownerUuid, MailInboxFilter.ALL).stats(); }
+    }
+
+    private record InboxCounts(MailMailboxStats stats, int filteredCount) {}
+
+    private InboxCounts loadInboxCounts(Connection connection, UUID ownerUuid, MailInboxFilter filter) throws SQLException {
+        String source = switch (filter) {
+            case SYSTEM, PLAYER, PRESET, CDK -> filter.name();
+            default -> null;
+        };
         int total = 0;
         int unread = 0;
         int claimable = 0;
-        try (Connection connection = getConnection();
-             PreparedStatement statement = connection.prepareStatement(
+        int sourceCount = 0;
+        try (PreparedStatement statement = connection.prepareStatement(
                  "SELECT COUNT(*) AS total_count, "
                      + "SUM(CASE WHEN status = 'UNREAD' THEN 1 ELSE 0 END) AS unread_count, "
-                     + "SUM(CASE WHEN status IN ('UNREAD', 'READ') "
+                      + "SUM(CASE WHEN " + claimableSql() + " "
                      + "AND (claim_commands <> '' OR EXISTS (SELECT 1 FROM mail_attachments a WHERE a.mail_id = mail_entries.id)) "
-                     + "THEN 1 ELSE 0 END) AS claimable_count "
-                     + "FROM mail_entries WHERE owner_uuid = ? AND status <> 'DELETED'"
+                     + "THEN 1 ELSE 0 END) AS claimable_count"
+                     + (source == null ? "" : ", SUM(CASE WHEN source_type = ? THEN 1 ELSE 0 END) AS source_count")
+                     + " FROM mail_entries WHERE owner_uuid = ? AND status <> 'DELETED'"
              )) {
-            statement.setString(1, ownerUuid.toString());
+            int parameter = 1;
+            if (source != null) statement.setString(parameter++, source);
+            statement.setString(parameter, ownerUuid.toString());
             try (ResultSet resultSet = statement.executeQuery()) {
                 if (resultSet.next()) {
                     total = resultSet.getInt("total_count");
                     unread = resultSet.getInt("unread_count");
                     claimable = resultSet.getInt("claimable_count");
+                    if (source != null) sourceCount = resultSet.getInt("source_count");
                 }
             }
         }
-        return new MailMailboxStats(total, unread, claimable);
+        int filtered = switch (filter) {
+            case ALL -> total;
+            case UNREAD -> unread;
+            case CLAIMABLE -> claimable;
+            default -> sourceCount;
+        };
+        return new InboxCounts(new MailMailboxStats(total, unread, claimable), filtered);
     }
 
     @Override
     public void appendLog(MailLogEntry entry) throws SQLException {
         try (Connection connection = getConnection()) {
-            connection.setAutoCommit(false);
-            try (PreparedStatement insert = connection.prepareStatement(
-                "INSERT INTO mail_logs (player_uuid, log_type, content, created_at) VALUES (?, ?, ?, ?)"
-            );
-                 PreparedStatement cleanup = connection.prepareStatement(logCleanupSql())) {
-                insert.setString(1, entry.playerUuid().toString());
-                insert.setString(2, nullToEmpty(entry.type()));
-                insert.setString(3, nullToEmpty(entry.content()));
-                insert.setLong(4, epochMilli(entry.createdAt()));
+            connection.setAutoCommit(true);
+            try (PreparedStatement insert = connection.prepareStatement(INSERT_LOG)) {
+                bindLog(insert, entry);
                 insert.executeUpdate();
-
-                cleanup.setString(1, entry.playerUuid().toString());
-                cleanup.setString(2, entry.playerUuid().toString());
-                cleanup.executeUpdate();
-                connection.commit();
-            } catch (SQLException exception) {
-                connection.rollback();
-                throw exception;
-            } finally {
-                connection.setAutoCommit(true);
             }
+            // Commit the new audit entry before pruning. Concurrent appenders must not hold
+            // their inserted-row locks while deleting older rows for the same player.
+            try { pruneLog(connection,entry.playerUuid()); }
+            catch (SQLException failure) { mailLogger.warning("邮件日志已保存，历史裁剪暂未完成: " + failure.getMessage()); }
         }
+    }
+
+    private static void bindLog(PreparedStatement insert, MailLogEntry entry) throws SQLException {
+        insert.setString(1, entry.playerUuid().toString());
+        insert.setString(2, nullToEmpty(entry.type()));
+        insert.setString(3, nullToEmpty(entry.content()));
+        insert.setLong(4, epochMilli(entry.createdAt()));
     }
 
     @Override
@@ -389,7 +925,7 @@ public final class JdbcMailRepository extends AbstractModuleRepository implement
             try {
                 try (PreparedStatement expireStatement = connection.prepareStatement(
                     "UPDATE mail_entries SET status = 'EXPIRED', updated_at = ? "
-                        + "WHERE status IN ('UNREAD', 'READ') AND expires_at IS NOT NULL AND expires_at <= ?"
+                        + "WHERE status IN ('UNREAD', 'READ') AND claim_phase = 'NONE' AND expires_at IS NOT NULL AND expires_at <= ?"
                 )) {
                     expireStatement.setLong(1, epochMilli(now));
                     expireStatement.setLong(2, epochMilli(now));
@@ -444,24 +980,54 @@ public final class JdbcMailRepository extends AbstractModuleRepository implement
     }
 
     @Override
-    public void saveCdk(MailCdkDefinition definition) throws SQLException {
+    public boolean createCdk(MailCdkDefinition definition) throws SQLException {
         try (Connection connection = getConnection();
-             PreparedStatement statement = connection.prepareStatement(cdkUpsertSql())) {
-            statement.setString(1, definition.code());
-            statement.setString(2, definition.presetId());
-            statement.setInt(3, definition.maxClaims());
-            statement.setInt(4, definition.claimedCount());
-            if (definition.expiresAt() == null) {
-                statement.setNull(5, Types.BIGINT);
-            } else {
-                statement.setLong(5, definition.expiresAt().toEpochMilli());
-            }
-            statement.setBoolean(6, definition.enabled());
-            statement.setString(7, nullToEmpty(definition.createdBy()));
-            statement.setLong(8, epochMilli(definition.createdAt()));
-            statement.setLong(9, epochMilli(definition.updatedAt()));
-            statement.executeUpdate();
+             PreparedStatement statement = connection.prepareStatement(CDK_INSERT)) {
+            bindCdk(statement, definition);
+            return statement.executeUpdate() == 1;
+        } catch (SQLException failure) {
+            if (duplicateCdk(failure)) return false;
+            throw failure;
         }
+    }
+
+    @Override
+    public void syncPresetCdks(List<PresetCdk> definitions) throws SQLException {
+        if (definitions.isEmpty()) return;
+        try (Connection connection = getConnection()) {
+            connection.setAutoCommit(false);
+            try (PreparedStatement statement = connection.prepareStatement(cdkUpsertSql())) {
+                for (var entry : definitions) {
+                    bindCdk(statement, entry.definition());
+                    statement.setBoolean(10, entry.relativeExpiry());
+                    statement.addBatch();
+                }
+                statement.executeBatch();
+                connection.commit();
+            } catch (SQLException | RuntimeException | Error failure) {
+                try { connection.rollback(); }
+                catch (SQLException rollback) { failure.addSuppressed(rollback); }
+                throw failure;
+            }
+        }
+    }
+
+    private void bindCdk(PreparedStatement statement, MailCdkDefinition definition) throws SQLException {
+        statement.setString(1, definition.code());
+        statement.setString(2, definition.presetId());
+        statement.setInt(3, definition.maxClaims());
+        statement.setInt(4, definition.claimedCount());
+        if (definition.expiresAt() == null) statement.setNull(5, Types.BIGINT);
+        else statement.setLong(5, definition.expiresAt().toEpochMilli());
+        statement.setBoolean(6, definition.enabled());
+        statement.setString(7, nullToEmpty(definition.createdBy()));
+        statement.setLong(8, epochMilli(definition.createdAt()));
+        statement.setLong(9, epochMilli(definition.updatedAt()));
+    }
+
+    private boolean duplicateCdk(SQLException failure) {
+        int code = failure.getErrorCode();
+        return isMysql() ? code == 1062 : code == 19 || code == 1555 || code == 2067;
     }
 
     @Override
@@ -516,109 +1082,70 @@ public final class JdbcMailRepository extends AbstractModuleRepository implement
     }
 
     @Override
-    public CdkClaimResult claimCdk(String code, UUID playerUuid, Instant now) throws SQLException {
+    public CdkRedemption redeemCdk(String code, UUID playerUuid, Instant now,
+                                   java.util.function.Function<String, MailMessage> mailForPreset) throws SQLException {
         try (Connection connection = getConnection()) {
             connection.setAutoCommit(false);
             try {
-                Optional<MailCdkDefinition> optionalDefinition = loadCdk(connection, code);
-                if (optionalDefinition.isEmpty()) {
-                    connection.rollback();
-                    return CdkClaimResult.failure("CDK 不存在。", null);
+                // Write first so SQLite obtains the writer lock before any reads. MySQL holds the CDK row
+                // through mail insertion, keeping a concurrent preset change out of this redemption.
+                boolean reserved;
+                try (PreparedStatement update = connection.prepareStatement("""
+                    UPDATE mail_cdk_definitions SET claimed_count = claimed_count + 1, updated_at = ?
+                    WHERE code = ? AND enabled = ? AND (expires_at IS NULL OR expires_at > ?) AND claimed_count < max_claims
+                    """)) {
+                    update.setLong(1, epochMilli(now));
+                    update.setString(2, code);
+                    update.setBoolean(3, true);
+                    update.setLong(4, epochMilli(now));
+                    reserved = update.executeUpdate() == 1;
                 }
-                MailCdkDefinition definition = optionalDefinition.get();
-                if (!definition.enabled()) {
+                var definition = loadCdk(connection, code).orElse(null);
+                if (!reserved) {
                     connection.rollback();
-                    return CdkClaimResult.failure("该 CDK 已禁用。", definition);
+                    return new CdkRedemption(null, cdkRejection(definition, now));
                 }
-                if (definition.expired(now)) {
+                if (definition == null) throw new SQLException("Missing reserved CDK");
+                MailMessage mail = mailForPreset.apply(definition.presetId());
+                if (mail == null) {
                     connection.rollback();
-                    return CdkClaimResult.failure("该 CDK 已过期。", definition);
+                    return new CdkRedemption(null, "player.cdk-preset-unavailable");
                 }
-                if (definition.claimedCount() >= definition.maxClaims()) {
-                    connection.rollback();
-                    return CdkClaimResult.failure("该 CDK 已被领完。", definition);
+                if (!playerUuid.equals(mail.ownerUuid()) || !code.equals(mail.cdkCode())
+                    || !definition.presetId().equals(mail.presetId()) || mail.sourceType() != MailSourceType.CDK) {
+                    throw new SQLException("CDK mail does not match the reserved redemption");
                 }
 
-                try (PreparedStatement insertClaim = connection.prepareStatement(
+                try (PreparedStatement claim = connection.prepareStatement(
                     "INSERT INTO mail_cdk_claims (code, player_uuid, claimed_at) VALUES (?, ?, ?)"
                 )) {
-                    insertClaim.setString(1, code);
-                    insertClaim.setString(2, playerUuid.toString());
-                    insertClaim.setLong(3, epochMilli(now));
-                    insertClaim.executeUpdate();
-                } catch (SQLException exception) {
+                    claim.setString(1, code);
+                    claim.setString(2, playerUuid.toString());
+                    claim.setLong(3, epochMilli(now));
+                    claim.executeUpdate();
+                } catch (SQLException failure) {
+                    if (!duplicateCdk(failure)) throw failure;
                     connection.rollback();
-                    return CdkClaimResult.failure("你已经兑换过这个 CDK。", definition);
+                    return new CdkRedemption(null, "player.cdk-already-redeemed");
                 }
 
-                try (PreparedStatement updateDefinition = connection.prepareStatement(
-                    "UPDATE mail_cdk_definitions SET claimed_count = claimed_count + 1, updated_at = ? "
-                        + "WHERE code = ? AND enabled = ? AND (expires_at IS NULL OR expires_at > ?) AND claimed_count < max_claims"
-                )) {
-                    updateDefinition.setLong(1, epochMilli(now));
-                    updateDefinition.setString(2, code);
-                    updateDefinition.setBoolean(3, true);
-                    updateDefinition.setLong(4, epochMilli(now));
-                    if (updateDefinition.executeUpdate() <= 0) {
-                        connection.rollback();
-                        return CdkClaimResult.failure("该 CDK 当前无法兑换。", definition);
-                    }
-                }
-
+                insertMailAndAttachments(connection, mail);
                 connection.commit();
-                return CdkClaimResult.success(
-                    new MailCdkDefinition(
-                        definition.code(),
-                        definition.presetId(),
-                        definition.maxClaims(),
-                        definition.claimedCount() + 1,
-                        definition.expiresAt(),
-                        definition.enabled(),
-                        definition.createdBy(),
-                        definition.createdAt(),
-                        now
-                    )
-                );
-            } catch (SQLException exception) {
-                connection.rollback();
-                throw exception;
-            } finally {
-                connection.setAutoCommit(true);
+                return new CdkRedemption(mail, null);
+            } catch (SQLException | RuntimeException | Error failure) {
+                try { connection.rollback(); }
+                catch (SQLException rollback) { failure.addSuppressed(rollback); }
+                throw failure;
             }
         }
     }
 
-    @Override
-    public void releaseCdkClaim(String code, UUID playerUuid) throws SQLException {
-        try (Connection connection = getConnection()) {
-            connection.setAutoCommit(false);
-            try {
-                try (PreparedStatement deleteClaim = connection.prepareStatement(
-                    "DELETE FROM mail_cdk_claims WHERE code = ? AND player_uuid = ?"
-                )) {
-                    deleteClaim.setString(1, code);
-                    deleteClaim.setString(2, playerUuid.toString());
-                    if (deleteClaim.executeUpdate() <= 0) {
-                        connection.rollback();
-                        return;
-                    }
-                }
-                try (PreparedStatement decrement = connection.prepareStatement(
-                    "UPDATE mail_cdk_definitions SET claimed_count = claimed_count - 1, updated_at = ? "
-                        + "WHERE code = ? AND claimed_count > 0"
-                )) {
-                    decrement.setLong(1, System.currentTimeMillis());
-                    decrement.setString(2, code);
-                    decrement.executeUpdate();
-                }
-                connection.commit();
-            } catch (SQLException exception) {
-                connection.rollback();
-                throw exception;
-            } finally {
-                connection.setAutoCommit(true);
-            }
-        }
+    private String cdkRejection(MailCdkDefinition definition, Instant now) {
+        if (definition == null) return "player.cdk-not-found";
+        if (!definition.enabled()) return "player.cdk-disabled";
+        if (definition.expired(now)) return "player.cdk-expired";
+        if (definition.claimedCount() >= definition.maxClaims()) return "player.cdk-exhausted";
+        return "player.cdk-claim-failed";
     }
 
     @Override
@@ -657,6 +1184,14 @@ public final class JdbcMailRepository extends AbstractModuleRepository implement
 
     private void createTables(Connection connection) throws SQLException {
         try (Statement statement = connection.createStatement()) {
+            statement.execute("""
+                CREATE TABLE IF NOT EXISTS mail_delivery_receipts (
+                    player_uuid VARCHAR(36) NOT NULL,
+                    operation_key CHAR(64) NOT NULL,
+                    mail_id BIGINT NOT NULL,
+                    PRIMARY KEY (player_uuid, operation_key)
+                )
+                """ + (isMysql() ? " ENGINE=InnoDB" : ""));
             if (!isMysql()) {
                 statement.execute("""
                     CREATE TABLE IF NOT EXISTS mail_player_profiles (
@@ -681,6 +1216,9 @@ public final class JdbcMailRepository extends AbstractModuleRepository implement
                         subject TEXT NOT NULL,
                         body TEXT NOT NULL,
                         status TEXT NOT NULL,
+                        claim_step INTEGER NOT NULL DEFAULT 0,
+                        claim_phase VARCHAR(16) NOT NULL DEFAULT 'NONE',
+                        claim_attempt VARCHAR(36) NULL,
                         claim_commands TEXT NOT NULL,
                         claim_conditions TEXT NOT NULL,
                         created_at INTEGER NOT NULL,
@@ -764,6 +1302,9 @@ public final class JdbcMailRepository extends AbstractModuleRepository implement
                         subject TEXT NOT NULL,
                         body TEXT NOT NULL,
                         status VARCHAR(32) NOT NULL,
+                        claim_step INTEGER NOT NULL DEFAULT 0,
+                        claim_phase VARCHAR(16) NOT NULL DEFAULT 'NONE',
+                        claim_attempt VARCHAR(36) NULL,
                         claim_commands TEXT NOT NULL,
                         claim_conditions TEXT NOT NULL,
                         created_at BIGINT NOT NULL,
@@ -827,24 +1368,6 @@ public final class JdbcMailRepository extends AbstractModuleRepository implement
         }
     }
 
-    private void ensureSchemaUpgrade(Connection connection) throws SQLException {
-        try (Statement statement = connection.createStatement()) {
-            if (!columnExists(connection, "mail_attachments", "currency_id")) {
-                statement.execute(alterTableAddColumnSql("mail_attachments", "currency_id", isMysql() ? "VARCHAR(64) NULL" : "TEXT NULL"));
-            }
-            if (!columnExists(connection, "mail_attachments", "currency_amount")) {
-                statement.execute(alterTableAddColumnSql("mail_attachments", "currency_amount", "DOUBLE NOT NULL DEFAULT 0"));
-                statement.execute("UPDATE mail_attachments SET currency_amount = vault_amount WHERE attachment_type = 'VAULT'");
-            }
-            if (!columnExists(connection, "mail_attachments", "icon")) {
-                statement.execute(alterTableAddColumnSql("mail_attachments", "icon", isMysql() ? "VARCHAR(255) NOT NULL DEFAULT ''" : "TEXT NOT NULL DEFAULT ''"));
-            }
-            if (!tableExists(connection, "mail_logs")) {
-                createTables(connection);
-            }
-        }
-    }
-
     private Optional<MailCdkDefinition> loadCdk(Connection connection, String code) throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement(
             "SELECT code, preset_id, max_claims, claimed_count, expires_at, enabled, created_by, created_at, updated_at "
@@ -885,9 +1408,16 @@ public final class JdbcMailRepository extends AbstractModuleRepository implement
     }
 
     private MailMessage readMail(Connection connection, ResultSet resultSet) throws SQLException {
-        long id = resultSet.getLong("id");
+        return readMail(resultSet, loadAttachments(connection, resultSet.getLong("id")));
+    }
+
+    private MailMessage readMail(ResultSet resultSet, List<MailAttachment> attachments) throws SQLException {
+        return readMail(resultSet, attachments, true);
+    }
+
+    private MailMessage readMail(ResultSet resultSet, List<MailAttachment> attachments, boolean includeClaimRules) throws SQLException {
         return new MailMessage(
-            id,
+            resultSet.getLong("id"),
             UUID.fromString(resultSet.getString("owner_uuid")),
             parseUuid(resultSet.getString("sender_uuid")),
             nullToEmpty(resultSet.getString("sender_name")),
@@ -897,9 +1427,9 @@ public final class JdbcMailRepository extends AbstractModuleRepository implement
             nullToEmpty(resultSet.getString("subject")),
             nullToEmpty(resultSet.getString("body")),
             MailStatus.parse(resultSet.getString("status")),
-            loadAttachments(connection, id),
-            deserializeLines(resultSet.getString("claim_commands")),
-            deserializeConditions(resultSet.getString("claim_conditions")),
+            attachments,
+            includeClaimRules ? deserializeLines(resultSet.getString("claim_commands")) : List.of(),
+            includeClaimRules ? deserializeConditions(resultSet.getString("claim_conditions")) : List.of(),
             readInstant(resultSet, "created_at"),
             readNullableInstant(resultSet, "expires_at"),
             readInstant(resultSet, "updated_at"),
@@ -917,35 +1447,30 @@ public final class JdbcMailRepository extends AbstractModuleRepository implement
             statement.setLong(1, mailId);
             try (ResultSet resultSet = statement.executeQuery()) {
                 while (resultSet.next()) {
-                    MailAttachmentType attachmentType = MailAttachmentType.parse(resultSet.getString("attachment_type"));
-                    String currencyId = nullToEmpty(resultSet.getString("currency_id"));
-                    double amount = resultSet.getDouble("currency_amount");
-                    if ((attachmentType == MailAttachmentType.CURRENCY || attachmentType == MailAttachmentType.VAULT) && amount <= 0.0D) {
-                        amount = resultSet.getDouble("vault_amount");
-                    }
-                    if (attachmentType == MailAttachmentType.VAULT) {
-                        attachmentType = MailAttachmentType.CURRENCY;
-                        currencyId = currencyId.isBlank() ? "money" : currencyId;
-                    }
-                    attachments.add(
-                        new MailAttachment(
-                            resultSet.getLong("id"),
-                            resultSet.getInt("sort_order"),
-                            attachmentType,
-                            nullToEmpty(resultSet.getString("item_data")),
-                            currencyId,
-                            amount,
-                            nullToEmpty(resultSet.getString("description")),
-                            xuanmo.arcartxsuite.mail.util.MailIconCodec.fromYamlString(resultSet.getString("icon"))
-                        )
-                    );
+                    attachments.add(readAttachment(resultSet));
                 }
             }
         }
         return List.copyOf(attachments);
     }
 
-    private void writeMail(PreparedStatement statement, MailMessage message, boolean update) throws SQLException {
+    private MailAttachment readAttachment(ResultSet rows) throws SQLException {
+        MailAttachmentType type = MailAttachmentType.parse(rows.getString("attachment_type"));
+        String currency = nullToEmpty(rows.getString("currency_id"));
+        double amount = rows.getDouble("currency_amount");
+        if ((type == MailAttachmentType.CURRENCY || type == MailAttachmentType.VAULT) && amount <= 0.0D) {
+            amount = rows.getDouble("vault_amount");
+        }
+        if (type == MailAttachmentType.VAULT) {
+            type = MailAttachmentType.CURRENCY;
+            if (currency.isBlank()) currency = "money";
+        }
+        return new MailAttachment(rows.getLong("id"), rows.getInt("sort_order"), type,
+            nullToEmpty(rows.getString("item_data")), currency, amount, nullToEmpty(rows.getString("description")),
+            xuanmo.arcartxsuite.mail.util.MailIconCodec.fromYamlString(rows.getString("icon")));
+    }
+
+    private void writeMail(PreparedStatement statement, MailMessage message) throws SQLException {
         statement.setString(1, message.ownerUuid().toString());
         setNullableString(statement, 2, message.senderUuid() == null ? null : message.senderUuid().toString());
         statement.setString(3, nullToEmpty(message.senderName()));
@@ -974,10 +1499,6 @@ public final class JdbcMailRepository extends AbstractModuleRepository implement
         } else {
             statement.setLong(16, message.deletedAt().toEpochMilli());
         }
-        if (update) {
-            statement.setLong(17, message.id());
-            statement.setString(18, message.ownerUuid().toString());
-        }
     }
 
     private String playerProfileUpsertSql() {
@@ -986,22 +1507,22 @@ public final class JdbcMailRepository extends AbstractModuleRepository implement
                 INSERT INTO mail_player_profiles (player_uuid, last_known_name, last_known_name_lower, last_send_at, last_seen_at, last_server)
                 VALUES (?, ?, ?, ?, ?, ?)
                 ON CONFLICT(player_uuid) DO UPDATE SET
-                    last_known_name = excluded.last_known_name,
-                    last_known_name_lower = excluded.last_known_name_lower,
-                    last_send_at = excluded.last_send_at,
-                    last_seen_at = excluded.last_seen_at,
-                    last_server = excluded.last_server
+                    last_known_name = CASE WHEN excluded.last_seen_at >= last_seen_at THEN excluded.last_known_name ELSE last_known_name END,
+                    last_known_name_lower = CASE WHEN excluded.last_seen_at >= last_seen_at THEN excluded.last_known_name_lower ELSE last_known_name_lower END,
+                    last_server = CASE WHEN excluded.last_seen_at >= last_seen_at THEN excluded.last_server ELSE last_server END,
+                    last_send_at = MAX(last_send_at, excluded.last_send_at),
+                    last_seen_at = MAX(last_seen_at, excluded.last_seen_at)
                 """;
         }
         return """
             INSERT INTO mail_player_profiles (player_uuid, last_known_name, last_known_name_lower, last_send_at, last_seen_at, last_server)
             VALUES (?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
-                last_known_name = VALUES(last_known_name),
-                last_known_name_lower = VALUES(last_known_name_lower),
-                last_send_at = VALUES(last_send_at),
-                last_seen_at = VALUES(last_seen_at),
-                last_server = VALUES(last_server)
+                last_known_name = IF(VALUES(last_seen_at) >= last_seen_at, VALUES(last_known_name), last_known_name),
+                last_known_name_lower = IF(VALUES(last_seen_at) >= last_seen_at, VALUES(last_known_name_lower), last_known_name_lower),
+                last_server = IF(VALUES(last_seen_at) >= last_seen_at, VALUES(last_server), last_server),
+                last_send_at = GREATEST(last_send_at, VALUES(last_send_at)),
+                last_seen_at = GREATEST(last_seen_at, VALUES(last_seen_at))
             """;
     }
 
@@ -1022,60 +1543,49 @@ public final class JdbcMailRepository extends AbstractModuleRepository implement
             """;
     }
 
-    private String mailUpdateSql() {
-        return """
-            UPDATE mail_entries SET
-                owner_uuid = ?, sender_uuid = ?, sender_name = ?, source_type = ?, preset_id = ?, cdk_code = ?,
-                subject = ?, body = ?, status = ?, claim_commands = ?, claim_conditions = ?,
-                created_at = ?, expires_at = ?, updated_at = ?, claimed_at = ?, deleted_at = ?
-            WHERE id = ? AND owner_uuid = ?
-            """;
-    }
+    private static final String CDK_INSERT = """
+        INSERT INTO mail_cdk_definitions (code, preset_id, max_claims, claimed_count, expires_at, enabled, created_by, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """;
 
     private String cdkUpsertSql() {
         if (!isMysql()) {
-            return """
-                INSERT INTO mail_cdk_definitions (code, preset_id, max_claims, claimed_count, expires_at, enabled, created_by, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            return CDK_INSERT + """
                 ON CONFLICT(code) DO UPDATE SET
                     preset_id = excluded.preset_id,
                     max_claims = excluded.max_claims,
-                    claimed_count = excluded.claimed_count,
-                    expires_at = excluded.expires_at,
+                    expires_at = CASE WHEN ? THEN mail_cdk_definitions.created_at + (excluded.expires_at - excluded.created_at)
+                        ELSE excluded.expires_at END,
                     enabled = excluded.enabled,
-                    created_by = excluded.created_by,
-                    created_at = excluded.created_at,
                     updated_at = excluded.updated_at
                 """;
         }
-        return """
-            INSERT INTO mail_cdk_definitions (code, preset_id, max_claims, claimed_count, expires_at, enabled, created_by, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        return CDK_INSERT + """
             ON DUPLICATE KEY UPDATE
                 preset_id = VALUES(preset_id),
                 max_claims = VALUES(max_claims),
-                claimed_count = VALUES(claimed_count),
-                expires_at = VALUES(expires_at),
+                expires_at = CASE WHEN ? THEN created_at + (VALUES(expires_at) - VALUES(created_at))
+                    ELSE VALUES(expires_at) END,
                 enabled = VALUES(enabled),
-                created_by = VALUES(created_by),
-                created_at = VALUES(created_at),
                 updated_at = VALUES(updated_at)
             """;
     }
 
-    private String logCleanupSql() {
-        return """
-            DELETE FROM mail_logs
-            WHERE player_uuid = ?
-              AND id NOT IN (
-                SELECT id FROM (
-                    SELECT id FROM mail_logs
-                    WHERE player_uuid = ?
-                    ORDER BY created_at DESC, id DESC
-                    LIMIT 100
-                ) retained
-              )
-            """;
+    private void pruneLog(Connection connection,UUID player) throws SQLException {
+        long cutoffTime,cutoffId;
+        try (PreparedStatement query=connection.prepareStatement(
+                "SELECT created_at,id FROM mail_logs WHERE player_uuid=? ORDER BY created_at DESC,id DESC LIMIT 1 OFFSET 99")) {
+            query.setString(1,player.toString());
+            try (ResultSet rows=query.executeQuery()) {
+                if (!rows.next()) return;
+                cutoffTime=rows.getLong(1);cutoffId=rows.getLong(2);
+            }
+        }
+        try (PreparedStatement cleanup=connection.prepareStatement(
+                "DELETE FROM mail_logs WHERE player_uuid=? AND (created_at<? OR (created_at=? AND id<?))")) {
+            cleanup.setString(1,player.toString());cleanup.setLong(2,cutoffTime);cleanup.setLong(3,cutoffTime);cleanup.setLong(4,cutoffId);
+            cleanup.executeUpdate();
+        }
     }
 
     private static void setNullableString(PreparedStatement statement, int index, String value) throws SQLException {
@@ -1119,7 +1629,7 @@ public final class JdbcMailRepository extends AbstractModuleRepository implement
         String activeOnly = " AND status <> 'DELETED'";
         return activeOnly + switch (normalized) {
             case UNREAD -> " AND status = 'UNREAD'";
-            case CLAIMABLE -> " AND status IN ('UNREAD', 'READ') AND "
+            case CLAIMABLE -> " AND " + claimableSql() + " AND "
                 + "(claim_commands <> '' OR EXISTS (SELECT 1 FROM mail_attachments a WHERE a.mail_id = mail_entries.id))";
             case SYSTEM -> " AND source_type = 'SYSTEM'";
             case PLAYER -> " AND source_type = 'PLAYER'";
@@ -1127,6 +1637,11 @@ public final class JdbcMailRepository extends AbstractModuleRepository implement
             case CDK -> " AND source_type = 'CDK'";
             case ALL -> "";
         };
+    }
+
+    private static String claimableSql() {
+        return "((status IN ('UNREAD', 'READ') AND claim_phase = 'NONE') "
+            + "OR (status = 'CLAIM_PENDING' AND claim_phase = 'READY'))";
     }
 
     private static String serializeLines(List<String> values) {
@@ -1170,31 +1685,4 @@ public final class JdbcMailRepository extends AbstractModuleRepository implement
         return List.copyOf(conditions);
     }
 
-    private static boolean tableExists(Connection connection, String tableName) throws SQLException {
-        DatabaseMetaData metadata = connection.getMetaData();
-        try (ResultSet resultSet = metadata.getTables(connection.getCatalog(), null, tableName, null)) {
-            if (resultSet.next()) {
-                return true;
-            }
-        }
-        try (ResultSet resultSet = metadata.getTables(connection.getCatalog(), null, tableName.toUpperCase(Locale.ROOT), null)) {
-            return resultSet.next();
-        }
-    }
-
-    private static boolean columnExists(Connection connection, String tableName, String columnName) throws SQLException {
-        DatabaseMetaData metadata = connection.getMetaData();
-        try (ResultSet resultSet = metadata.getColumns(connection.getCatalog(), null, tableName, columnName)) {
-            if (resultSet.next()) {
-                return true;
-            }
-        }
-        try (ResultSet resultSet = metadata.getColumns(connection.getCatalog(), null, tableName.toUpperCase(Locale.ROOT), columnName.toUpperCase(Locale.ROOT))) {
-            return resultSet.next();
-        }
-    }
-
-    private String alterTableAddColumnSql(String tableName, String columnName, String columnDefinition) {
-        return "ALTER TABLE " + tableName + " ADD COLUMN " + columnName + " " + columnDefinition;
-    }
 }

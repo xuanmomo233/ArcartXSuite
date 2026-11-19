@@ -1,6 +1,6 @@
 package xuanmo.arcartxsuite.questgps.chemdah;
 
-/** Main-thread reload coalescing with generation checks for callbacks queued before shutdown. */
+/** Coalesces reload notifications from any thread into one main-thread rebuild. */
 final class DeferredViewRefresh implements AutoCloseable {
     interface Scheduler {
         Runnable schedule(Runnable action);
@@ -17,25 +17,27 @@ final class DeferredViewRefresh implements AutoCloseable {
         this.action = action;
     }
 
-    void start() {
+    synchronized void start() {
         if (!active) {
             active = true;
             generation++;
         }
     }
 
-    void request() {
+    synchronized void request() {
         if (!active || cancellation != null) return;
         long scheduledGeneration = generation;
         cancellation = scheduler.schedule(() -> {
-            if (!active || scheduledGeneration != generation) return;
-            cancellation = null;
+            synchronized (this) {
+                if (!active || scheduledGeneration != generation) return;
+                cancellation = null;
+            }
             action.run();
         });
     }
 
     @Override
-    public void close() {
+    public synchronized void close() {
         active = false;
         generation++;
         if (cancellation != null) cancellation.run();

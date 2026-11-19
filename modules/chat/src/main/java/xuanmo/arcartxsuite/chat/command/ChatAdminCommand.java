@@ -27,8 +27,9 @@ import xuanmo.arcartxsuite.chat.service.RedPacketService;
  */
 public final class ChatAdminCommand implements ModuleCommandHandler {
 
-    private static final List<String> ACTIONS = List.of("help", "status", "mute", "unmute", "spy", "redpacket");
-    private static final List<String> REDPACKET_KEYWORDS = List.of("normal", "lucky", "list", "reload");
+    private static final List<String> ACTIONS = List.of("help", "status", "mute", "unmute", "spy", "redpacket",
+        "mutehistory", "receipt", "reports", "closereport");
+    private static final List<String> REDPACKET_KEYWORDS = List.of("normal", "lucky", "list", "reload", "ledger", "resolve");
     private static final Pattern DURATION_PATTERN = Pattern.compile("^(\\d+)([smhd])$", Pattern.CASE_INSENSITIVE);
 
     private final Supplier<ChatService> serviceProvider;
@@ -61,6 +62,11 @@ public final class ChatAdminCommand implements ModuleCommandHandler {
             case "unmute" -> handleUnmute(sender, args);
             case "spy" -> handleSpy(sender, args);
             case "redpacket" -> handleRedPacket(sender, label, args);
+            case "mutehistory", "receipt", "reports", "closereport" -> {
+                ChatService service = serviceProvider.get();
+                if (service == null) sender.sendMessage(fullMsg("common.service-down"));
+                else service.inspectModeration(sender, action, args.length >= 3 ? args[2] : "");
+            }
             default -> sender.sendMessage(fullMsg("common.unknown", label));
         }
         return true;
@@ -114,16 +120,14 @@ public final class ChatAdminCommand implements ModuleCommandHandler {
         if (args.length < 4) { sender.sendMessage(fullMsg("mute.usage")); return; }
         Instant expiresAt = parseDuration(args[3]);
         String reason = args.length >= 5 ? joinArgs(args, 4) : "";
-        ChatOperationResult result = svc.mutePlayer(args[2], expiresAt, reason, sender.getName());
-        sender.sendMessage((messages != null ? messages.get("prefix") : "") + (result.success() ? ChatColor.GREEN : ChatColor.RED) + result.message());
+        svc.mutePlayer(args[2], expiresAt, reason, sender.getName()).whenComplete((result, failure) -> svc.replyModeration(sender, result, failure));
     }
 
     private void handleUnmute(CommandSender sender, String[] args) {
         ChatService svc = serviceProvider.get();
         if (svc == null) { sender.sendMessage(fullMsg("common.service-down")); return; }
         if (args.length < 3) { sender.sendMessage(fullMsg("unmute.usage")); return; }
-        ChatOperationResult result = svc.unmutePlayer(args[2]);
-        sender.sendMessage((messages != null ? messages.get("prefix") : "") + (result.success() ? ChatColor.GREEN : ChatColor.RED) + result.message());
+        svc.unmutePlayer(args[2], sender.getName()).whenComplete((result, failure) -> svc.replyModeration(sender, result, failure));
     }
 
     private void handleSpy(CommandSender sender, String[] args) {
@@ -151,8 +155,16 @@ public final class ChatAdminCommand implements ModuleCommandHandler {
         if (rp == null) { sender.sendMessage(fullMsg("redpacket.disabled")); return; }
         if (args.length < 3) { sender.sendMessage(fullMsg("redpacket.admin-usage", "/" + label + " chat")); return; }
         String sub = args[2].toLowerCase(Locale.ROOT);
-        ChatOperationResult result;
         switch (sub) {
+            case "ledger" -> {
+                rp.showLedger(sender);
+                return;
+            }
+            case "resolve" -> {
+                if (args.length == 5) rp.reconcile(sender, args[3], args[4].toLowerCase(Locale.ROOT));
+                else sender.sendMessage(fullMsg("redpacket.ledger-usage"));
+                return;
+            }
             case "list" -> {
                 List<String> ids = rp.presetIds();
                 sender.sendMessage(fullMsg("redpacket.preset-list", ids.isEmpty() ? "-" : String.join(", ", ids)));
@@ -180,7 +192,7 @@ public final class ChatAdminCommand implements ModuleCommandHandler {
                     return;
                 }
                 String wish = args.length >= 6 ? joinArgs(args, 5) : "";
-                result = rp.sendAdminPacket(sender, RedPacketType.parse(sub), total, count, wish);
+                rp.sendAdminPacket(sender, RedPacketType.parse(sub), total, count, wish, result -> sendPacketResult(sender, result));
             }
             default -> {
                 Integer count = null;
@@ -192,9 +204,12 @@ public final class ChatAdminCommand implements ModuleCommandHandler {
                         return;
                     }
                 }
-                result = rp.sendPresetPacket(sender, sub, count);
+                rp.sendPresetPacket(sender, sub, count, result -> sendPacketResult(sender, result));
             }
         }
+    }
+
+    private void sendPacketResult(CommandSender sender, ChatOperationResult result) {
         sender.sendMessage((messages != null ? messages.get("prefix") : "")
             + (result.success() ? ChatColor.GREEN : ChatColor.RED) + result.message());
     }

@@ -46,6 +46,7 @@ player:
     details: "&7/pickup details&f - 打开或关闭详细面板"
 
 hints:
+  collection-review: "&e本次收取结果需要核对，请联系管理员。凭证：{0}"
   scanner-only: "&e此操作只适用于扫描模式。"
   no-items: "&e附近没有可操作的物品，或此操作未启用。"
   collection-summary: "&a仓库收取 {0} 件，背包收取 {1} 件，未收取 {2} 件。"

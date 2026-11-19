@@ -1,0 +1,34 @@
+root_control:
+  type: card
+  attribute:
+    width: "Math.max(420, val.link_title.width + 44)"
+    height: "120"
+  children:
+    background:
+      type: Texture
+      attribute:
+        width: "self.parent.width"
+        height: "self.parent.height"
+        normal: ~24,46,60,240
+        shape: ~round_rect
+        radius: 12
+      action:
+        click: |-
+          Chat.say('/chat open ' + self.parent.data['token'])
+    title:
+      type: Text
+      val: link_title
+      attribute:
+        x: 22
+        y: 12
+        fontSize: 38
+        through: true
+        texts: "'§f' + self.parent.data['title']"
+    action_label:
+      type: Text
+      attribute:
+        x: 22
+        y: 66
+        fontSize: 32
+        through: true
+        texts: "'§b' + self.parent.data['action']"

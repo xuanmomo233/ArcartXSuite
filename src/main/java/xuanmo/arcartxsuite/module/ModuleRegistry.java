@@ -5,6 +5,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -26,7 +28,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.NotNull;
 import xuanmo.arcartxsuite.api.AXSModule;
 import xuanmo.arcartxsuite.api.ClientInitializedHandler;
-import xuanmo.arcartxsuite.api.ClientPacketHandler;
+import xuanmo.arcartxsuite.api.PacketHandlerSpec;
 import xuanmo.arcartxsuite.api.ModuleCommandHandler;
 import xuanmo.arcartxsuite.api.ModuleContext;
 import xuanmo.arcartxsuite.api.ModuleDescriptor;
@@ -62,6 +64,7 @@ import xuanmo.arcartxsuite.security.ClientPacketGuard;
 public final class ModuleRegistry {
 
     private static final Logger LOGGER = new PluginConsoleLogger("AXS-ModuleRegistry", null);
+    private static final List<String> ADMISSION_MODULES = List.of("loginview", "essentials");
 
     private final JavaPlugin plugin;
     /** 业务核心实例（用于 ConfigSpec 注册诊断），由 SuiteCoreImpl 在构造后注入。 */
@@ -72,6 +75,7 @@ public final class ModuleRegistry {
     private final ItemBridgeAPI itemStackBridge;
     private final PropBridgeAPI propBridge;
     private final ClientPacketGuard packetGuard;
+    private final ClientPacketQueue queuedClientPackets;
     private final KeybindService keybindService;
     private final TaczCombatBridge taczCombatBridge;
     private final CrossServerService crossServerService;
@@ -79,6 +83,7 @@ public final class ModuleRegistry {
     private final PlaceholderResolverAPI placeholderResolver;
     private final ArcartXWorldTextureService worldTextureBridge;
     private final xuanmo.arcartxsuite.api.storage.StorageManager storageManager;
+    private final xuanmo.arcartxsuite.bridge.PendingCommandReceipts pendingCommandReceipts;
     private final xuanmo.arcartxsuite.api.scheduler.SchedulerAPI scheduler;
     /** 持续药水效果服务：持有在 Registry 层，GlobalBridgeFactory 重建时实例不变，避免重复调度任务 */
     private final xuanmo.arcartxsuite.bridge.DefaultPotionAuraService potionAuraService;
@@ -91,14 +96,32 @@ public final class ModuleRegistry {
     private GlobalBridgeFactory globalBridgeFactory;
     private volatile xuanmo.arcartxsuite.auth.runtime.LoginViewAuthentication authenticationRuntime;
     private xuanmo.arcartxsuite.auth.runtime.AdmissionGuard admissionGuard;
-    private boolean shuttingDown;
+    private volatile boolean shuttingDown;
+    private java.util.concurrent.CompletableFuture<Void> shutdownCompletion;
 
-    public void shutdown() {
+    public java.util.concurrent.CompletionStage<Void> shutdown() {
+        if (shutdownCompletion != null) return shutdownCompletion.copy();
+        var completed = new java.util.concurrent.CompletableFuture<Void>();
+        shutdownCompletion = completed;
         shuttingDown = true;
-        unloadAll();
+        Throwable failure = null;
+        try { unloadAll(); }
+        catch (Throwable error) { failure = error; }
+        try { if (globalBridgeFactory != null) globalBridgeFactory.detachGlobalListeners(); }
+        catch (Throwable error) { if (failure == null) failure = error; else failure.addSuppressed(error); }
+        Throwable detachFailure = failure;
+        java.util.concurrent.CompletableFuture.allOf(retiringModules.values()
+            .toArray(java.util.concurrent.CompletableFuture[]::new)).whenComplete((ignored, resourceFailure) -> {
+                Throwable problem = detachFailure == null ? resourceFailure : detachFailure;
+                if (detachFailure != null && resourceFailure != null && detachFailure != resourceFailure) detachFailure.addSuppressed(resourceFailure);
+                if (problem == null) completed.complete(null); else completed.completeExceptionally(problem);
+            });
+        return completed.copy();
     }
 
-    synchronized xuanmo.arcartxsuite.auth.runtime.HostAuthentication authenticationRuntime() {
+    TaczCombatBridge taczCombatBridge() { return taczCombatBridge; }
+
+    synchronized xuanmo.arcartxsuite.auth.runtime.LoginViewAuthentication authenticationRuntime() {
         if (authenticationRuntime == null) {
             xuanmo.arcartxsuite.api.auth.AuthAccess.install(() -> authenticationRuntime);
             if(admissionGuard==null) {
@@ -116,6 +139,11 @@ public final class ModuleRegistry {
 
     /** 按 id 排列的已加载模块，保持加载顺序 */
     private final LinkedHashMap<String, LoadedModule> modules = new LinkedHashMap<>();
+    private final java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.CompletableFuture<Void>> retiringModules = new java.util.concurrent.ConcurrentHashMap<>();
+    private final java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.CompletableFuture<Boolean>> pendingLoads = new java.util.concurrent.ConcurrentHashMap<>();
+    private volatile java.util.concurrent.CompletableFuture<ReloadSummary> reloadingAll;
+    private CompletableFuture<LoadSummary> loadingLocal;
+    private volatile boolean eventPacketAuctionConsumerRequired;
     /** 外部模块注册的命令处理器 */
     private final LinkedHashMap<String, ModuleCommandHandler> commandHandlers = new LinkedHashMap<>();
 
@@ -148,13 +176,23 @@ public final class ModuleRegistry {
         this.placeholderResolver = placeholderResolver;
         this.worldTextureBridge = worldTextureBridge;
         this.storageManager = storageManager;
+        this.pendingCommandReceipts = new xuanmo.arcartxsuite.bridge.PendingCommandReceipts(storageManager, LOGGER);
         this.scheduler = scheduler;
         this.potionAuraService = new xuanmo.arcartxsuite.bridge.DefaultPotionAuraService(plugin);
         this.modAttributeService = new xuanmo.arcartxsuite.bridge.DefaultModAttributeService(plugin);
         this.capabilityRegistry = new CapabilityRegistry();
         this.clientPacketRouter = new ClientPacketRouter(packetGuard);
+        this.queuedClientPackets = new ClientPacketQueue(
+            task -> scheduler.scheduleAtFixedRate(plugin, task, 1L, 1L), System::nanoTime, LOGGER);
         this.globalBridgeFactory = new GlobalBridgeFactory(plugin, placeholderResolver, storageManager, this, capabilityRegistry);
-        List<String> sigPubKeys = plugin.getConfig().getStringList("module-signature-public-keys");
+        String signatureKeysPath = "module-signature-public-keys";
+        Object configuredKeys = plugin.getConfig().get(signatureKeysPath);
+        List<String> sigPubKeys = plugin.getConfig().getStringList(signatureKeysPath);
+        if (configuredKeys != null && sigPubKeys.isEmpty()
+            && !(configuredKeys instanceof List<?> rawKeys && rawKeys.isEmpty())) {
+            LOGGER.severe("[ModuleSignature] module-signature-public-keys 必须是 Ed25519 公钥列表。");
+            sigPubKeys = List.of("");
+        }
         if (plugin.getConfig().contains("module-signature-public-key")) {
             LOGGER.warning("[ModuleSignature] Legacy setting module-signature-public-key is no longer supported; use module-signature-public-keys (list). The legacy value will be ignored.");
         }
@@ -195,7 +233,7 @@ public final class ModuleRegistry {
     /**
      * 扫描 modules/ 目录，解析描述符、验证密码、拓扑排序、加载和启用模块。
      */
-    public LoadSummary loadAll() {
+    public CompletionStage<LoadSummary> loadAll(java.util.function.Supplier<CompletionStage<Void>> prepareHostStorage) {
         if (packetBridge != null) {
             packetBridge.resetUiRegistrationCount();
         }
@@ -206,13 +244,23 @@ public final class ModuleRegistry {
 
         // 0. 初始化全局桥接单例（即使 modules/ 为空或后续热加载也需要）
         initializeGlobalBridges();
+        return enableConfiguredLocalModules(loadRootConfig(), prepareHostStorage.get());
+    }
 
+    private CompletionStage<LoadSummary> enableConfiguredLocalModules(YamlConfiguration rootConfig) {
+        return enableConfiguredLocalModules(rootConfig, CompletableFuture.completedFuture(null));
+    }
+
+    private CompletionStage<LoadSummary> enableConfiguredLocalModules(YamlConfiguration rootConfig, CompletionStage<Void> hostReady) {
+        if (loadingLocal != null) return loadingLocal.copy();
+        boolean eventPacketEnabled = isModuleEnabled(rootConfig, "eventpacket");
+        if (!eventPacketEnabled) eventPacketAuctionConsumerRequired = false;
         File[] jarFiles = modulesDir.isDirectory()
             ? modulesDir.listFiles((dir, name) -> name.endsWith(".jar"))
             : null;
         if (jarFiles == null || jarFiles.length == 0) {
             LOGGER.fine("模块目录为空，未加载任何模块。");
-            return new LoadSummary(0, 0, 0, 0, 0, List.of(), List.of(), List.of());
+            return hostReady.thenApply(ignored -> emptyLoadSummary());
         }
 
         // 1. 解析描述符
@@ -230,9 +278,9 @@ public final class ModuleRegistry {
                 LOGGER.warning("扫描模块 Jar 失败: " + jarFile.getName() + " | " + exception.getMessage());
             }
         }
+        if (eventPacketEnabled && discovered.containsKey("eventpacket")) eventPacketAuctionConsumerRequired = true;
 
         // 2. enabled 检查
-        YamlConfiguration rootConfig = loadRootConfig();
         Map<String, DiscoveredModule> authorized = new LinkedHashMap<>();
         List<String> skippedModules = new ArrayList<>();
         List<String> enabledModules = new ArrayList<>();
@@ -240,6 +288,7 @@ public final class ModuleRegistry {
         for (Map.Entry<String, DiscoveredModule> entry : discovered.entrySet()) {
             String id = entry.getKey();
             DiscoveredModule dm = entry.getValue();
+            if (modules.containsKey(id)) continue;
 
             String enabledPath = "modules." + id + ".enabled";
             if (!isModuleEnabled(rootConfig, id)) {
@@ -266,34 +315,26 @@ public final class ModuleRegistry {
         }
 
         // 4. 按序加载与启用
+        var result = new CompletableFuture<LoadSummary>();
+        loadingLocal = result;
+        CompletionStage<Void> sequence = CompletableFuture.completedFuture(null);
         for (String id : sorted) {
-            DiscoveredModule dm = authorized.get(id);
-            if (dm == null) {
-                continue;
-            }
-            try {
-                if (loadAndEnable(dm)) {
-                    enabledModules.add(dm.descriptor.name());
-                } else {
-                    skippedModules.add(dm.descriptor.name());
-                }
-            } catch (Exception exception) {
-                LOGGER.log(Level.SEVERE, "加载模块 " + dm.descriptor.name() + " 失败", exception);
-                failedModules.add(dm.descriptor.name());
-                cleanupFailedModule(id);
-            } catch (LinkageError error) {
-                LOGGER.log(Level.SEVERE, "加载模块 " + dm.descriptor.name() + " 失败，缺少运行依赖或依赖版本不兼容", error);
-                failedModules.add(dm.descriptor.name());
-                cleanupFailedModule(id);
-            } catch (StackOverflowError error) {
-                LOGGER.log(Level.SEVERE, "加载模块 " + dm.descriptor.name() + " 时发生 StackOverflowError"
-                    + "（可能由配置树循环引用或递归方法无终止条件引起）", error);
-                failedModules.add(dm.descriptor.name());
-                cleanupFailedModule(id);
-            }
+            var dm = authorized.get(id);
+            if (!ADMISSION_MODULES.contains(id)) sequence = sequence.thenCompose(ignored -> hostReady);
+            sequence = sequence.thenCompose(ignored -> {
+                if (result.isDone() || shuttingDown) return CompletableFuture.completedFuture(null);
+                return tryLoad(dm).handle((enabled, failure) -> {
+                    if (failure != null) failedModules.add(dm.descriptor.name());
+                    else if (enabled) enabledModules.add(dm.descriptor.name());
+                    else skippedModules.add(dm.descriptor.name());
+                    return null;
+                });
+            });
         }
-
-        return new LoadSummary(
+        sequence.thenCompose(ignored -> hostReady).whenComplete((ignored, failure) -> {
+            if (loadingLocal == result) loadingLocal = null;
+            if (failure != null) { result.completeExceptionally(failure); return; }
+            result.complete(new LoadSummary(
             discovered.size(),
             enabledModules.size(),
             skippedModules.size(),
@@ -302,18 +343,30 @@ public final class ModuleRegistry {
             enabledModules,
             skippedModules,
             failedModules
-        );
+            ));
+        });
+        return result.copy();
+    }
+
+    private static LoadSummary emptyLoadSummary() {
+        return new LoadSummary(0, 0, 0, 0, 0, List.of(), List.of(), List.of());
     }
 
     /**
      * 逆序禁用并卸载所有模块。
      */
     public void unloadAll() {
+        if (loadingLocal != null) loadingLocal.completeExceptionally(new java.util.concurrent.CancellationException("模块已卸载"));
+        if (reloadingAll != null) reloadingAll.completeExceptionally(new java.util.concurrent.CancellationException("模块已卸载"));
+        pendingLoads.values().forEach(result -> result.complete(false));
+        List<CompletableFuture<Boolean>> interrupted = new ArrayList<>();
         List<String> ids = new ArrayList<>(modules.keySet());
         Collections.reverse(ids);
         for (String id : ids) {
             LoadedModule loaded = modules.get(id);
-            if (loaded != null && loaded.isEnabled()) {
+            if (loaded != null) {
+                if (loaded.enabling() != null) interrupted.add(loaded.enabling());
+                loaded.setEnabling(null);
                 disableModule(loaded);
             }
         }
@@ -325,6 +378,7 @@ public final class ModuleRegistry {
         }
         modules.clear();
         clearAllRegistrations();
+        interrupted.forEach(result -> result.complete(false));
         if ((shuttingDown || !plugin.isEnabled()) && authenticationRuntime != null) {
             authenticationRuntime.close();
             authenticationRuntime = null;
@@ -345,28 +399,75 @@ public final class ModuleRegistry {
     /**
      * 重载指定模块（不卸载 ClassLoader）。
      */
-    public boolean reloadModule(String moduleId) {
+    public java.util.concurrent.CompletionStage<Boolean> reloadModule(String moduleId) {
+        if (!org.bukkit.Bukkit.isPrimaryThread()) return onPrimaryStage(() -> reloadModule(moduleId));
         LoadedModule loaded = modules.get(moduleId);
-        if (loaded == null || !loaded.isEnabled()) {
+        if (loaded != null && loaded.reloading() != null) return loaded.reloading().copy();
+        if (loaded == null || !loaded.isEnabled() || shuttingDown) {
             LOGGER.warning("模块未加载或未启用，无法重载: " + moduleId);
-            return false;
+            return java.util.concurrent.CompletableFuture.completedFuture(false);
         }
+        boolean inPlace = loaded.instance().reloadsInPlace();
+        var result = new java.util.concurrent.CompletableFuture<Boolean>();
+        loaded.setReloading(result);
         try {
-            DefaultModuleContext context = loaded.context();
-            if (context != null) {
-                context.unregisterKeybindHandlers();
+            if (!inPlace) {
+                loaded.setEnabled(false);
+                DefaultModuleContext context = loaded.context();
+                if (context != null) context.unregisterKeybindHandlers();
+                removeCommandHandlers(loaded);
+                removePacketHandlers(moduleId);
+                removeInitializedHandlers(moduleId);
+                removeCapabilities(moduleId);
             }
-            removePacketHandlers(moduleId);
-            removeInitializedHandlers(moduleId);
-            removeCapabilities(moduleId);
-            loaded.instance().onReload();
-            LOGGER.info(loaded.descriptor().name() + " 模块已重载。");
-            return true;
+            loaded.instance().onReload().whenComplete((ignored, failure) ->
+                dispatchReloadCompletion(loaded, result, inPlace, failure));
         } catch (Exception | LinkageError exception) {
-            LOGGER.log(Level.SEVERE, loaded.descriptor().name() + " 模块重载失败", exception);
-            cleanupFailedModule(moduleId);
-            return false;
+            finishReload(loaded, result, inPlace, exception);
         }
+        return result.copy();
+    }
+
+    private void dispatchReloadCompletion(LoadedModule loaded, java.util.concurrent.CompletableFuture<Boolean> result,
+                                          boolean inPlace, Throwable failure) {
+        Runnable finish = () -> finishReload(loaded, result, inPlace, failure);
+        try {
+            if (org.bukkit.Bukkit.isPrimaryThread()) finish.run();
+            else if (!plugin.isEnabled()) result.complete(false);
+            else org.bukkit.Bukkit.getScheduler().runTask(plugin, finish);
+        } catch (RuntimeException | LinkageError error) {
+            result.complete(false);
+        }
+    }
+
+    private void finishReload(LoadedModule loaded, java.util.concurrent.CompletableFuture<Boolean> result,
+                              boolean inPlace, Throwable failure) {
+        String id = loaded.descriptor().id();
+        if (modules.get(id) != loaded || loaded.reloading() != result) {
+            result.complete(false);
+            return;
+        }
+        loaded.setReloading(null);
+        try {
+            if (failure != null) {
+                LOGGER.log(Level.SEVERE, loaded.descriptor().name() + " 模块重载失败", failure);
+                if (!inPlace) cleanupFailedModule(id);
+                result.complete(false);
+                return;
+            }
+            if (!inPlace) registerModuleEntryPoints(loaded);
+            LOGGER.info(loaded.descriptor().name() + " 模块已重载。");
+            result.complete(true);
+        } catch (RuntimeException | LinkageError error) {
+            if (!inPlace) cleanupFailedModule(id);
+            result.complete(false);
+        }
+    }
+
+    private void abandonReload(LoadedModule loaded) {
+        var pending = loaded.reloading();
+        loaded.setReloading(null);
+        if (pending != null) pending.complete(false);
     }
 
     /**
@@ -376,15 +477,18 @@ public final class ModuleRegistry {
      * @return 是否成功卸载
      */
     public boolean unloadModule(String moduleId) {
+        var pending = pendingLoads.get(moduleId);
+        if (pending != null) pending.complete(false);
         LoadedModule loaded = modules.get(moduleId);
         if (loaded == null) {
+            if (pending != null) return true;
             LOGGER.warning("模块未加载，无法卸载: " + moduleId);
             return false;
         }
         // 检查反向依赖：若其他已启用模块声明依赖它，则禁止卸载
         List<String> dependents = new ArrayList<>();
         for (LoadedModule other : modules.values()) {
-            if (other == loaded || !other.isEnabled()) continue;
+            if (other == loaded || (!other.isEnabled() && other.enabling() == null && other.reloading() == null)) continue;
             if (other.descriptor().depends().contains(moduleId)) {
                 dependents.add(other.descriptor().id());
             }
@@ -394,14 +498,13 @@ public final class ModuleRegistry {
             return false;
         }
 
-        if (loaded.isEnabled()) {
-            disableModule(loaded);
-        } else {
-            clearModuleRegistrations(loaded);
-        }
-        modules.remove(moduleId);
+        var enabling = loaded.enabling();
+        loaded.setEnabling(null);
+        disableModule(loaded);
+        modules.remove(moduleId, loaded);
         closeClassLoader(loaded);
-        LOGGER.info(loaded.descriptor().name() + " 模块已卸载，ClassLoader 已释放。");
+        if (enabling != null) enabling.complete(false);
+        LOGGER.info(loaded.descriptor().name() + " 模块已卸载，ClassLoader 在后台资源退出后释放。");
         return true;
     }
 
@@ -411,43 +514,40 @@ public final class ModuleRegistry {
      * @param jarBytes 解密后的 jar 字节数组
      * @return 是否成功加载并启用
      */
-    public boolean loadCloudModule(byte[] jarBytes) {
-        return loadCloudModule(jarBytes, null);
-    }
-
     /**
      * 加载云端模块：从内存中的 jar 字节数组直接加载并启用。
      *
      * @param jarBytes   解密后的 jar 字节数组
-     * @param moduleSeed 方案 B 的逐类解密种子（= 云端下发的 32 字节 moduleKey）；null 时回退本体 root_seed
+     * @param moduleSeed 云端下发的 32 字节 moduleKey
      * @return 是否成功加载并启用
      */
-    public boolean loadCloudModule(byte[] jarBytes, byte[] moduleSeed) {
-        initializeGlobalBridges();
+    public CompletionStage<Boolean> loadCloudModule(String expectedId, byte[] jarBytes, byte[] moduleSeed) {
+        if (shuttingDown || moduleSeed == null || moduleSeed.length != 32) return CompletableFuture.completedFuture(false);
         String cloudModuleId = null;
         try {
             ModuleDescriptor descriptor = ModuleDescriptorParser.parse(jarBytes);
             cloudModuleId = descriptor.id();
+            if (!cloudModuleId.equals(expectedId)) {
+                LOGGER.warning("云端模块 id 与请求不符，拒绝加载: " + expectedId + " / " + cloudModuleId);
+                return CompletableFuture.completedFuture(false);
+            }
+            initializeGlobalBridges();
             String moduleId = cloudModuleId;
             if (modules.containsKey(moduleId)) {
                 LOGGER.info("云端模块 " + moduleId + " 已加载，跳过。");
-                return false;
+                return CompletableFuture.completedFuture(false);
             }
             if (!isModuleEnabled(loadRootConfig(), moduleId)) {
                 LOGGER.fine("云端模块 " + moduleId + " 已在 config.yml 中关闭，跳过加载。");
-                return false;
+                return CompletableFuture.completedFuture(false);
             }
             if (packetBridge != null) {
                 packetBridge.resetUiRegistrationCount();
             }
-            boolean ok = loadAndEnable(new DiscoveredModule(descriptor, jarBytes, moduleSeed));
-            if (!ok) {
-                cleanupFailedModule(moduleId);
-            }
-            return ok;
+            return tryLoad(new DiscoveredModule(descriptor, jarBytes, moduleSeed)).exceptionally(failure -> false);
         } catch (Exception | LinkageError exception) {
             LOGGER.log(Level.SEVERE, "加载云端模块失败", exception);
-            return false;
+            return CompletableFuture.completedFuture(false);
         } catch (StackOverflowError error) {
             // StackOverflowError 是 VirtualMachineError，不会被上面的 catch(Exception|LinkageError) 捕获。
             // 模块加载过程中的无限递归（如配置树循环引用、toString/equals 循环）会抛出此错误，
@@ -458,14 +558,20 @@ public final class ModuleRegistry {
             if (cloudModuleId != null) {
                 cleanupFailedModule(cloudModuleId);
             }
-            return false;
+            return CompletableFuture.completedFuture(false);
         }
     }
 
-    public boolean validateCloudModule(byte[] jarBytes, byte[] moduleSeed) {
-        initializeGlobalBridges();
+    public boolean validateCloudModule(String expectedId, byte[] jarBytes, byte[] moduleSeed) {
+        if (shuttingDown) return false;
+        if (moduleSeed == null || moduleSeed.length != 32) return false;
         try {
             ModuleDescriptor descriptor = ModuleDescriptorParser.parse(jarBytes);
+            if (!descriptor.id().equals(expectedId)) {
+                LOGGER.warning("云端模块 id 与请求不符，拒绝更新: " + expectedId + " / " + descriptor.id());
+                return false;
+            }
+            initializeGlobalBridges();
             if (!isModuleEnabled(loadRootConfig(), descriptor.id())) {
                 LOGGER.fine("云端模块 " + descriptor.id() + " 已在 config.yml 中关闭，跳过加载。");
                 return false;
@@ -509,10 +615,60 @@ public final class ModuleRegistry {
      *
      * @return 是否成功加载并启用
      */
-    public boolean loadModuleById(String moduleId) {
+    public java.util.concurrent.CompletionStage<Boolean> loadModuleById(String moduleId) {
+        var result = new java.util.concurrent.CompletableFuture<Boolean>();
+        var existing = pendingLoads.putIfAbsent(moduleId, result);
+        if (existing != null) return existing.copy();
+        var deadline = new java.util.concurrent.CompletableFuture<Void>();
+        deadline.orTimeout(30, java.util.concurrent.TimeUnit.SECONDS).whenComplete((ignored, failure) -> {
+            if (failure != null) result.completeExceptionally(failure);
+        });
+        var retiring = retiringModules.get(moduleId);
+        var idle = retiring == null ? java.util.concurrent.CompletableFuture.<Void>completedFuture(null) : retiring;
+        idle.whenComplete((ignored, failure) -> {
+            deadline.complete(null);
+            if (deadline.isCompletedExceptionally()) result.completeExceptionally(new java.util.concurrent.TimeoutException("旧模块资源尚未退出"));
+            if (failure != null || result.isDone()) {
+                if (failure != null) result.completeExceptionally(failure);
+                pendingLoads.remove(moduleId, result);
+                return;
+            }
+            onPrimaryStage(() -> {
+                if (result.isDone()) return java.util.concurrent.CompletableFuture.completedFuture(false);
+                return loadModuleByIdNow(moduleId);
+            }).whenComplete((loaded, error) -> {
+                pendingLoads.remove(moduleId, result);
+                if (error != null) result.completeExceptionally(error);
+                else result.complete(loaded);
+            });
+        });
+        return result.copy();
+    }
+
+    private <T> java.util.concurrent.CompletionStage<T> onPrimaryStage(
+            java.util.function.Supplier<? extends java.util.concurrent.CompletionStage<T>> action) {
+        var result = new java.util.concurrent.CompletableFuture<T>();
+        Runnable run = () -> {
+            try {
+                if (shuttingDown) throw new java.util.concurrent.CancellationException("宿主正在关闭");
+                action.get().whenComplete((value, failure) -> {
+                    if (failure != null) result.completeExceptionally(failure);
+                    else result.complete(value);
+                });
+            } catch (Exception | LinkageError failure) { result.completeExceptionally(failure); }
+        };
+        try {
+            if (org.bukkit.Bukkit.isPrimaryThread()) run.run();
+            else if (!plugin.isEnabled()) result.completeExceptionally(new java.util.concurrent.CancellationException("宿主已关闭"));
+            else org.bukkit.Bukkit.getScheduler().runTask(plugin, run);
+        } catch (RuntimeException | LinkageError failure) { result.completeExceptionally(failure); }
+        return result.copy();
+    }
+
+    private CompletionStage<Boolean> loadModuleByIdNow(String moduleId) {
         if (modules.containsKey(moduleId)) {
             LOGGER.warning("模块已加载: " + moduleId + "，如需重启请使用 reload 或 unload + load。");
-            return false;
+            return CompletableFuture.completedFuture(false);
         }
         YamlConfiguration rootConfig = loadRootConfig();
         String enabledPath = "modules." + moduleId + ".enabled";
@@ -541,17 +697,17 @@ public final class ModuleRegistry {
             } else {
                 LOGGER.fine("模块 " + moduleId + " 已在 config.yml 中关闭，无法热加载。");
             }
-            return false;
+            return CompletableFuture.completedFuture(false);
         }
 
         initializeGlobalBridges();
         if (!modulesDir.isDirectory()) {
             LOGGER.warning("模块目录不存在: " + modulesDir.getAbsolutePath());
-            return false;
+            return CompletableFuture.completedFuture(false);
         }
         File[] jarFiles = modulesDir.listFiles((dir, name) -> name.endsWith(".jar"));
         if (jarFiles == null) {
-            return false;
+            return CompletableFuture.completedFuture(false);
         }
         for (File jarFile : jarFiles) {
             try (JarFile jar = new JarFile(jarFile)) {
@@ -562,28 +718,13 @@ public final class ModuleRegistry {
                 if (packetBridge != null) {
                     packetBridge.resetUiRegistrationCount();
                 }
-                try {
-                    boolean ok = loadAndEnable(new DiscoveredModule(descriptor, jarFile));
-                    if (!ok) {
-                        cleanupFailedModule(descriptor.id());
-                    }
-                    return ok;
-                } catch (Exception | LinkageError exception) {
-                    LOGGER.log(Level.SEVERE, "热加载模块 " + descriptor.name() + " 失败", exception);
-                    cleanupFailedModule(descriptor.id());
-                    return false;
-                } catch (StackOverflowError error) {
-                    LOGGER.log(Level.SEVERE, "热加载模块 " + descriptor.name() + " 时发生 StackOverflowError"
-                        + "（可能由配置树循环引用或递归方法无终止条件引起）", error);
-                    cleanupFailedModule(descriptor.id());
-                    return false;
-                }
+                return tryLoad(new DiscoveredModule(descriptor, jarFile)).exceptionally(failure -> false);
             } catch (IOException | ModuleLoadException exception) {
                 LOGGER.warning("解析模块 Jar 失败: " + jarFile.getName() + " | " + exception.getMessage());
             }
         }
         LOGGER.warning("modules/ 目录未找到模块 id: " + moduleId);
-        return false;
+        return CompletableFuture.completedFuture(false);
     }
 
     private volatile List<String> discoverableCache;
@@ -617,19 +758,119 @@ public final class ModuleRegistry {
         return discoverableCache;
     }
 
-    /**
-     * 重载所有已启用的模块。
-     * <p>
-     * 重载前先重新初始化全局桥接（currencies / attribute-bridges 等从宿主 config.yml 读取的配置），
-     * 确保本体 config 的变更在 reloadAll 时一并生效。
-     */
-    public void reloadAll() {
-        initializeGlobalBridges();
-        for (LoadedModule loaded : modules.values()) {
-            if (loaded.isEnabled()) {
-                reloadModule(loaded.descriptor().id());
-            }
+    public record ReloadSummary(List<String> stopped, List<String> started, List<String> failed, Set<String> pendingCloud) {}
+
+    /** Applies configured module state on the server thread. Cloud downloads are scheduled by the caller. */
+    public java.util.concurrent.CompletionStage<ReloadSummary> reloadAll() {
+        if (!org.bukkit.Bukkit.isPrimaryThread()) return onPrimaryStage(this::reloadAll);
+        if (loadingLocal != null) return loadingLocal.thenCompose(ignored -> reloadAll());
+        if (reloadingAll != null) return reloadingAll.copy();
+        YamlConfiguration root = readModuleReloadConfig();
+        if (root == null) return java.util.concurrent.CompletableFuture.completedFuture(
+            new ReloadSummary(List.of(), List.of(), List.of("config.yml"), Set.of()));
+        if (!isModuleEnabled(root, "eventpacket")) eventPacketAuctionConsumerRequired = false;
+        List<String> stopped = new ArrayList<>();
+        List<String> failed = new ArrayList<>();
+        stopDisabledModules(root, stopped, failed);
+        var result = new java.util.concurrent.CompletableFuture<ReloadSummary>();
+        reloadingAll = result;
+        result.orTimeout(30, java.util.concurrent.TimeUnit.SECONDS);
+        var idle = java.util.concurrent.CompletableFuture.allOf(retiringModules.values().toArray(java.util.concurrent.CompletableFuture<?>[]::new));
+        idle.whenComplete((ignored, failure) -> {
+            onPrimaryStage(() -> {
+                if (failure != null) return java.util.concurrent.CompletableFuture.<ReloadSummary>failedFuture(failure);
+                if (result.isDone()) return java.util.concurrent.CompletableFuture.<ReloadSummary>failedFuture(
+                    new java.util.concurrent.CancellationException("重载请求已结束"));
+                return reloadConfiguredModules(root, stopped, failed, () -> !result.isDone());
+            }).whenComplete((summary, error) -> {
+                if (reloadingAll == result) reloadingAll = null;
+                if (error != null) result.completeExceptionally(error);
+                else result.complete(summary);
+            });
+        });
+        return result.copy();
+    }
+
+    private java.util.concurrent.CompletionStage<ReloadSummary> reloadConfiguredModules(
+            YamlConfiguration root, List<String> stopped, List<String> failed, java.util.function.BooleanSupplier active) {
+        globalBridgeFactory.reload();
+        if (authenticationRuntime != null && authenticationRuntime.isAdmissionSuspended()
+            && !isModuleLoaded("loginview") && !isModuleEnabled(root, "loginview")) {
+            authenticationRuntime.setLoginViewEnabled(false);
         }
+        java.util.concurrent.CompletionStage<Void> reloaded = java.util.concurrent.CompletableFuture.completedFuture(null);
+        for (LoadedModule loaded : List.copyOf(modules.values())) {
+            String id = loaded.descriptor().id();
+            reloaded = reloaded.thenCompose(ignored -> {
+                if (shuttingDown || !active.getAsBoolean()) return java.util.concurrent.CompletableFuture.failedFuture(
+                    new java.util.concurrent.CancellationException("宿主正在关闭"));
+                if ((loaded.isEnabled() || loaded.reloading() != null) && modules.get(id) == loaded && isModuleEnabled(root, id)
+                    && loaded.descriptor().depends().stream().allMatch(this::isModuleLoaded)) {
+                    return reloadModule(id).thenAccept(ok -> { if (!ok) failed.add(id); });
+                }
+                return java.util.concurrent.CompletableFuture.completedFuture(null);
+            });
+        }
+        return reloaded.thenCompose(ignored -> {
+            if (!active.getAsBoolean()) throw new java.util.concurrent.CancellationException("重载请求已结束");
+            stopDisabledModules(root, stopped, failed);
+            return enableConfiguredLocalModules(root);
+        }).thenApply(loads -> {
+            failed.addAll(loads.failedModules());
+            Set<String> pendingCloud = new java.util.LinkedHashSet<>();
+            var configured = root.getConfigurationSection("modules");
+            for (String id : configured.getKeys(false)) {
+                if (isModuleEnabled(root, id) && !isModuleLoaded(id)) pendingCloud.add(id);
+            }
+            return new ReloadSummary(List.copyOf(stopped), loads.enabledModules(), List.copyOf(failed), Set.copyOf(pendingCloud));
+        });
+    }
+
+    /** Retry local modules whose hard dependencies have just finished loading from the cloud. */
+    public CompletionStage<LoadSummary> enableConfiguredLocalModules() {
+        YamlConfiguration root = readModuleReloadConfig();
+        return root == null ? CompletableFuture.completedFuture(emptyLoadSummary()) : enableConfiguredLocalModules(root);
+    }
+
+    private YamlConfiguration readModuleReloadConfig() {
+        YamlConfiguration root = new YamlConfiguration();
+        try {
+            root.load(new File(plugin.getDataFolder(), "config.yml"));
+            if (!root.isConfigurationSection("modules")) {
+                LOGGER.warning("config.yml 缺少 modules 节，无法应用模块启停。");
+                return null;
+            }
+            return root;
+        } catch (IOException | org.bukkit.configuration.InvalidConfigurationException e) {
+            LOGGER.log(Level.WARNING, "无法读取模块启停配置", e);
+            return null;
+        }
+    }
+
+    private void stopDisabledModules(YamlConfiguration root, List<String> stopped, List<String> failed) {
+        var running = modules.values().stream().map(LoadedModule::descriptor).toList();
+        for (String id : modulesToStop(running, moduleId -> isModuleEnabled(root, moduleId))) {
+            if (unloadModule(id)) stopped.add(id);
+            else failed.add(id);
+        }
+    }
+
+    static List<String> modulesToStop(List<ModuleDescriptor> running, java.util.function.Predicate<String> configuredEnabled) {
+        Set<String> available = new HashSet<>();
+        for (var module : running) if (configuredEnabled.test(module.id())) available.add(module.id());
+        boolean removed;
+        do {
+            removed = false;
+            for (var module : running) {
+                if (!available.containsAll(module.depends())) removed |= available.remove(module.id());
+            }
+        } while (removed);
+        List<String> stopped = new ArrayList<>();
+        for (int i = running.size() - 1; i >= 0; i--) {
+            String id = running.get(i).id();
+            if (!available.contains(id)) stopped.add(id);
+        }
+        return stopped;
     }
 
     // ─── 查询 ────────────────────────────────────────────────
@@ -706,6 +947,11 @@ public final class ModuleRegistry {
         return new CloudModuleSnapshot(bytes, seed);
     }
 
+    public java.util.concurrent.CompletionStage<Void> retirement(String moduleId) {
+        var retiring = retiringModules.get(moduleId);
+        return retiring == null ? java.util.concurrent.CompletableFuture.completedFuture(null) : retiring.copy();
+    }
+
     public Map<String, ModuleCommandHandler> commandHandlerMap() {
         return Collections.unmodifiableMap(commandHandlers);
     }
@@ -720,8 +966,31 @@ public final class ModuleRegistry {
 
     // ─── 内部方法 ─────────────────────────────────────────────
 
-    private boolean loadAndEnable(DiscoveredModule dm) throws Exception {
+    private CompletionStage<Boolean> tryLoad(DiscoveredModule dm) {
+        if (shuttingDown || modules.containsKey(dm.descriptor.id())) return CompletableFuture.completedFuture(false);
+        if ("eventpacket".equals(dm.descriptor.id())) eventPacketAuctionConsumerRequired = true;
+        return loadAndEnableResult(dm).whenComplete((ignored, failure) -> {
+            if (failure != null) LOGGER.log(Level.SEVERE, "加载模块 " + dm.descriptor.name() + " 失败", failure);
+        });
+    }
+
+    boolean requiresEventPacketAuctionConsumer() { return eventPacketAuctionConsumerRequired; }
+
+    private CompletionStage<Boolean> loadAndEnableResult(DiscoveredModule dm) {
+        try {
+            return loadAndEnable(dm);
+        } catch (Exception | LinkageError | StackOverflowError failure) {
+            cleanupFailedModule(dm.descriptor.id());
+            return CompletableFuture.failedFuture(failure);
+        }
+    }
+
+    private CompletionStage<Boolean> loadAndEnable(DiscoveredModule dm) throws Exception {
         ModuleDescriptor descriptor = dm.descriptor;
+        if (retiringModules.containsKey(descriptor.id())) {
+            LOGGER.warning("模块旧实例尚未退出，暂不能启用: " + descriptor.id());
+            return CompletableFuture.completedFuture(false);
+        }
         File jarFile = dm.jarFile;
         byte[] jarBytes = dm.jarBytes;
 
@@ -730,11 +999,11 @@ public final class ModuleRegistry {
             org.bukkit.plugin.Plugin dep = Bukkit.getPluginManager().getPlugin(externalPlugin);
             if (dep == null) {
                 LOGGER.warning(descriptor.name() + " 模块需要 " + externalPlugin + " 插件，已跳过加载。");
-                return false;
+                return CompletableFuture.completedFuture(false);
             }
             if (!dep.isEnabled()) {
                 LOGGER.warning(descriptor.name() + " 模块依赖的外部插件 " + externalPlugin + " 已安装但未启用，已跳过加载。");
-                return false;
+                return CompletableFuture.completedFuture(false);
             }
         }
 
@@ -742,7 +1011,7 @@ public final class ModuleRegistry {
         for (String depId : descriptor.depends()) {
             if (!isModuleLoaded(depId)) {
                 LOGGER.warning(descriptor.name() + " 模块依赖 " + depId + " 未就绪，已跳过加载。");
-                return false;
+                return CompletableFuture.completedFuture(false);
             }
         }
 
@@ -756,9 +1025,15 @@ public final class ModuleRegistry {
             }
         }
 
-        // 数字签名验证（如配置了公钥则强制校验）
-        if (!signatureVerifier.verify(descriptor)) {
-            return false;
+        if (jarFile != null && signatureVerifier.isEnabled()) {
+            jarBytes = signatureVerifier.verifiedLocalJar(jarFile.toPath());
+            if (jarBytes == null) return CompletableFuture.completedFuture(false);
+            if (!descriptor.equals(ModuleDescriptorParser.parse(jarBytes))) {
+                LOGGER.warning("模块描述在发现与验签之间发生变化: " + jarFile.getName());
+                return CompletableFuture.completedFuture(false);
+            }
+        } else if (jarFile == null && !signatureVerifier.verify(descriptor)) {
+            return CompletableFuture.completedFuture(false);
         }
 
         // 创建 ClassLoader（本地 jar 或内存 bytes）
@@ -800,9 +1075,9 @@ public final class ModuleRegistry {
             scheduler
         );
 
-        LoadedModule loaded = jarBytes != null
-            ? new LoadedModule(descriptor, instance, classLoader, jarBytes, dm.moduleSeed())
-            : new LoadedModule(descriptor, instance, classLoader, jarFile);
+        LoadedModule loaded = jarFile != null
+            ? new LoadedModule(descriptor, instance, classLoader, jarFile)
+            : new LoadedModule(descriptor, instance, classLoader, jarBytes, dm.moduleSeed());
         loaded.setContext(context);
         modules.put(descriptor.id(), loaded);
 
@@ -823,18 +1098,44 @@ public final class ModuleRegistry {
                 + "（可能由配置树循环引用引起），已跳过诊断。", error);
         }
 
-        // 启用
-        boolean success = false;
+        var result = new CompletableFuture<Boolean>();
+        loaded.setEnabling(result);
+        instance.onEnable(context).whenComplete((enabled, failure) ->
+            onPrimaryStage(() -> {
+                finishEnable(loaded, result, Boolean.TRUE.equals(enabled), failure);
+                return CompletableFuture.completedFuture(null);
+            }).whenComplete((ignored, dispatchFailure) -> {
+                if (dispatchFailure != null) result.completeExceptionally(dispatchFailure);
+            }));
+        return result;
+    }
+
+    private void finishEnable(LoadedModule loaded, CompletableFuture<Boolean> result, boolean enabled, Throwable failure) {
+        var descriptor = loaded.descriptor();
+        if (modules.get(descriptor.id()) != loaded || loaded.enabling() != result) return;
+        loaded.setEnabling(null);
         try {
-            if("loginview".equals(descriptor.id())) {
-                authenticationRuntime();
-                authenticationRuntime.setLoginViewEnabled(true);
+            if (!enabled || failure != null) {
+                cleanupFailedModule(descriptor.id());
+                if (failure != null) result.completeExceptionally(failure);
+                else result.complete(false);
+                return;
             }
-            success = instance.onEnable(context);
-        } finally {
-            if(!success) cleanupFailedModule(descriptor.id());
+            if ("loginview".equals(descriptor.id())) {
+                authenticationRuntime().setLoginViewEnabled(true);
+            }
+            registerModuleEntryPoints(loaded);
+            LOGGER.fine(descriptor.name() + " v" + descriptor.version() + " 模块已启用。");
+            result.complete(true);
+        } catch (Exception | LinkageError | StackOverflowError error) {
+            try { cleanupFailedModule(descriptor.id()); }
+            finally { result.completeExceptionally(error); }
         }
-        if (success) {
+    }
+
+    private void registerModuleEntryPoints(LoadedModule loaded) {
+            var descriptor = loaded.descriptor();
+            var instance = loaded.instance();
             loaded.setEnabled(true);
             // 注册声明归属该模块的客户端按键（keybinds.<entry>.module 包含此 id 的条目）
             if (keybindService != null) {
@@ -848,15 +1149,10 @@ public final class ModuleRegistry {
             } else {
                 commandHandlers.put(descriptor.id(), new DefaultModuleCommandHandler(descriptor));
             }
-            LOGGER.fine(descriptor.name() + " v" + descriptor.version() + " 模块已启用。");
-            return true;
-        } else {
-            LOGGER.warning(descriptor.name() + " 模块 onEnable 返回 false，已清理并卸载。");
-            return false;
-        }
     }
 
     private void disableModule(LoadedModule loaded) {
+        abandonReload(loaded);
         try {
             loaded.instance().onDisable();
         } catch (Exception | LinkageError exception) {
@@ -870,6 +1166,37 @@ public final class ModuleRegistry {
     }
 
     private void closeClassLoader(LoadedModule loaded) {
+        var services = loaded.instance().shutdownCompletion().toCompletableFuture();
+        var context = loaded.context();
+        var tasks = context == null ? java.util.concurrent.CompletableFuture.completedFuture(null)
+            : context.cancelScheduledTasks().toCompletableFuture();
+        var released = new java.util.concurrent.CompletableFuture<Void>();
+        String id = loaded.descriptor().id();
+        retiringModules.put(id, released);
+        java.util.concurrent.CompletableFuture.allOf(services, tasks).whenComplete((ignored, failure) -> {
+            Throwable problem = failure;
+            try {
+                if (failure != null) {
+                    LOGGER.log(Level.WARNING, loaded.descriptor().name() + " 后台资源退出异常", failure);
+                }
+            } catch (RuntimeException | LinkageError loggingFailure) {
+                if (problem == null) problem = loggingFailure;
+                else problem.addSuppressed(loggingFailure);
+            } finally {
+                try { closeRetiredClassLoader(loaded); }
+                catch (RuntimeException | LinkageError closeFailure) {
+                    if (problem == null) problem = closeFailure;
+                    else problem.addSuppressed(closeFailure);
+                }
+                if (problem == null) {
+                    retiringModules.remove(id, released);
+                    released.complete(null);
+                } else released.completeExceptionally(problem);
+            }
+        });
+    }
+
+    private void closeRetiredClassLoader(LoadedModule loaded) {
         try {
             if (loaded.classLoader() instanceof java.io.Closeable closeable) {
                 closeable.close();
@@ -886,6 +1213,7 @@ public final class ModuleRegistry {
         if (loaded == null) {
             return;
         }
+        abandonReload(loaded);
         loaded.setEnabled(false);
         try {
             try { releaseLoginViewAuthentication(moduleId); }
@@ -906,6 +1234,7 @@ public final class ModuleRegistry {
         String moduleId = loaded.descriptor().id();
         DefaultModuleContext context = loaded.context();
         if (context != null) {
+            context.cancelScheduledTasks();
             context.unbindCommands();
             context.unregisterKeybindHandlers();
         }
@@ -929,6 +1258,7 @@ public final class ModuleRegistry {
 
     private void clearAllRegistrations() {
         clientPacketRouter.clearAll();
+        queuedClientPackets.clear(shuttingDown);
         commandHandlers.clear();
         capabilityRegistry.clearAll();
     }
@@ -953,6 +1283,10 @@ public final class ModuleRegistry {
         List<String> sorted = new ArrayList<>();
         Set<String> visited = new HashSet<>();
         Set<String> visiting = new HashSet<>();
+        // 先安装登录和封禁检查，再等其他模块完成数据库准备。
+        for (String id : ADMISSION_MODULES) {
+            if (dependencyGraph.containsKey(id)) topologicalVisit(id, dependencyGraph, visited, visiting, sorted, cyclicModules);
+        }
         for (String id : dependencyGraph.keySet()) {
             if (!visited.contains(id)) {
                 topologicalVisit(id, dependencyGraph, visited, visiting, sorted, cyclicModules);
@@ -995,6 +1329,10 @@ public final class ModuleRegistry {
         return globalBridgeFactory.itemSourceRegistry();
     }
 
+    public ItemBridgeAPI itemStackBridge() {
+        return itemStackBridge;
+    }
+
     /** 获取统一物品奖励发放器 */
     public xuanmo.arcartxsuite.api.item.ItemRewardDispatcher itemRewardDispatcher() {
         return globalBridgeFactory.itemRewardDispatcher();
@@ -1003,6 +1341,14 @@ public final class ModuleRegistry {
     /** 获取统一待发放奖励服务 */
     public xuanmo.arcartxsuite.api.item.PendingRewardService pendingRewardService() {
         return globalBridgeFactory.pendingRewardService();
+    }
+
+    xuanmo.arcartxsuite.bridge.PendingCommandReceipts pendingCommandReceipts() {
+        return pendingCommandReceipts;
+    }
+
+    public java.util.concurrent.CompletionStage<Void> stopPendingCommandReceipts() {
+        return pendingCommandReceipts.stop();
     }
 
     /** 获取原版物品中文名称桥接 */
@@ -1092,18 +1438,8 @@ public final class ModuleRegistry {
     /**
      * 注册客户端包处理器（由 DefaultModuleContext 调用）。
      */
-    void registerClientPacketHandler(String moduleId, ClientPacketHandler handler, int priority) {
-        clientPacketRouter.registerPacketHandler(moduleId, handler, priority);
-    }
-
-    void registerClientPacketHandler(
-        String moduleId,
-        ClientPacketHandler handler,
-        int priority,
-        String packetId,
-        String guardModule
-    ) {
-        clientPacketRouter.registerPacketHandler(moduleId, handler, priority, packetId, guardModule);
+    void registerClientPacketHandler(String moduleId, PacketHandlerSpec spec) {
+        clientPacketRouter.registerPacketHandler(moduleId, spec);
     }
 
     /**
@@ -1134,7 +1470,24 @@ public final class ModuleRegistry {
      * @return true 表示包已被某个处理器消费
      */
     public boolean routeClientPacket(Player player, String packetId, List<String> data) {
-        return clientPacketRouter.routeClientPacket(player, packetId, data);
+        if (shuttingDown || player == null || packetId == null || data == null) return true;
+        var playerId = player.getUniqueId();
+        if (packetGuard != null && !packetGuard.allowIngress(playerId, packetId, data)) return true;
+        if (Bukkit.isPrimaryThread()) {
+            return !player.isOnline() || clientPacketRouter.routeClientPacket(player, packetId, data);
+        }
+        var routeToken = clientPacketRouter.routeToken(packetId);
+        if (routeToken == null) return true;
+        var session = ClientPacketRouter.isAuthPacket(packetId) ? null
+            : xuanmo.arcartxsuite.api.auth.AuthAccess.snapshot(playerId);
+        if (session != null && !session.admitted()) return true;
+        queuedClientPackets.offer(playerId, () -> {
+            List<String> copy = List.copyOf(data);
+            return () -> {
+                if (!shuttingDown) clientPacketRouter.routeQueuedPacket(player, packetId, copy, session, routeToken);
+            };
+        });
+        return true;
     }
 
     /**

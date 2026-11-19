@@ -35,7 +35,9 @@ public record MenuCommandBinding(
         if (regex) {
             return compiledRegex != null && compiledRegex.matcher(commandLine).matches();
         }
+        int length = pattern.length();
         return pattern.equalsIgnoreCase(commandLine)
-            || commandLine.toLowerCase().startsWith(pattern.toLowerCase() + " ");
+            || commandLine.length() > length && commandLine.charAt(length) == ' '
+                && commandLine.regionMatches(true, 0, pattern, 0, length);
     }
 }

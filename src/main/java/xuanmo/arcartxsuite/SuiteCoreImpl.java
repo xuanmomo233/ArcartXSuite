@@ -18,6 +18,8 @@ import xuanmo.arcartxsuite.api.config.ConfigIssueSeverity;
 import xuanmo.arcartxsuite.api.config.ConfigSyncSpec;
 import xuanmo.arcartxsuite.api.config.ModuleConfigSpec;
 import xuanmo.arcartxsuite.api.config.SyncPolicy;
+import xuanmo.arcartxsuite.api.config.ValidationRule;
+import xuanmo.arcartxsuite.api.config.ValueType;
 import xuanmo.arcartxsuite.bootstrap.SuiteCore;
 import xuanmo.arcartxsuite.command.ArcartXSuiteCommand;
 import xuanmo.arcartxsuite.config.diagnostic.ConfigDiagnosisStore;
@@ -36,6 +38,7 @@ import xuanmo.arcartxsuite.module.VersionCheckService;
 import xuanmo.arcartxsuite.cloud.CloudModuleService;
 import xuanmo.arcartxsuite.security.ClientPacketGuard;
 import xuanmo.arcartxsuite.security.ClientPacketGuardConfiguration;
+import xuanmo.arcartxsuite.security.GroundTransferGuard;
 import xuanmo.arcartxsuite.security.MohistCompat;
 import xuanmo.arcartxsuite.security.NativeBridge;
 import xuanmo.arcartxsuite.security.protection.ProtectionInit;
@@ -61,8 +64,14 @@ public final class SuiteCoreImpl implements SuiteCore {
 
     /** 宿主真实插件实例（Bukkit 注册的 JavaPlugin）。 */
     private JavaPlugin host;
+    private java.util.concurrent.CompletableFuture<Void> shutdownCompletion;
+    private final java.util.concurrent.CompletableFuture<Void> hostStorageReady = new java.util.concurrent.CompletableFuture<>();
+    private final java.util.concurrent.CompletableFuture<Void> crossServerModulesReady = new java.util.concurrent.CompletableFuture<>();
+    private java.util.concurrent.CompletableFuture<SecondaryPasswordService> preparedPasswords;
+    private java.util.concurrent.CompletableFuture<Boolean> rewardStorageRetry;
 
     private ClientPacketGuard clientPacketGuard;
+    private final GroundTransferGuard groundTransferGuard = new GroundTransferGuard();
     private ClientPacketGuardConfiguration clientPacketGuardConfiguration;
     private ModuleRegistry moduleRegistry;
     private PlaceholderResolverImpl placeholderResolver;
@@ -145,6 +154,7 @@ public final class SuiteCoreImpl implements SuiteCore {
     @Override
     public void onEnable(JavaPlugin host) {
         this.host = host;
+        groundTransferGuard.register(host);
         TemporaryOpExecutor.init(
             new File(getDataFolder(), "data/temp-op-ledger"),
             getLogger()
@@ -201,7 +211,7 @@ public final class SuiteCoreImpl implements SuiteCore {
 
         // 4. 跨服传输
         crossServerService = new CrossServerService(host);
-        crossServerService.start();
+        crossServerService.start(crossServerModulesReady);
 
         // 5. 客户端事件转发到 ModuleRegistry
         clientEventLifecycleManager = new ClientEventLifecycleManager(host, () -> moduleRegistry);
@@ -213,9 +223,11 @@ public final class SuiteCoreImpl implements SuiteCore {
         // 7. 统一数据源管理器（1.4.0+）
         try {
             storageManager = new xuanmo.arcartxsuite.storage.StorageManagerImpl(getConfig(), getDataFolder());
-            consoleInfo("统一数据源已初始化 (" + (storageManager.getDescriptor().isMysql() ? "MySQL" : "SQLite") + ")");
+            consoleInfo("统一数据源已配置 (" + (storageManager.getDescriptor().isMysql() ? "MySQL" : "SQLite") + ")");
         } catch (Exception e) {
-            consoleError("统一数据源初始化失败: " + e.getMessage());
+            consoleError("统一数据源配置失败: " + e.getMessage());
+            Bukkit.getPluginManager().disablePlugin(host);
+            return;
         }
 
         // 8. ModuleRegistry：扫描并加载所有外部模块
@@ -225,7 +237,7 @@ public final class SuiteCoreImpl implements SuiteCore {
             getLogger(),
             crossServerService != null ? crossServerService.nodeId() : "single",
             crossServerService,
-            storageManager != null ? storageManager.getDataSource() : null,
+            storageManager.getDataSource(),
             "axs_scheduler_leader");
         schedulerService.start();
 
@@ -246,44 +258,9 @@ public final class SuiteCoreImpl implements SuiteCore {
             schedulerService
         );
         moduleRegistry.attachCore(this);
-        // 待发放奖励认领标识：跨服部署时用 nodeId 标记认领方，便于诊断与 TTL 回收
-        if (crossServerService != null
-            && moduleRegistry.pendingRewardService() instanceof xuanmo.arcartxsuite.bridge.DefaultPendingRewardService prs) {
-            prs.setClaimOwner(crossServerService.nodeId());
-        }
         // 外部插件公开 API 门面：AxsCapabilities.get() 直连 capability 注册表，
         // 仅 @PublicCapability 标记的类型对外可见（过滤逻辑在 axs-api 门面侧）
         xuanmo.arcartxsuite.api.AxsCapabilities.setLookup(moduleRegistry::getCapability);
-        try {
-            long timeoutSeconds = getConfig().getLong(
-                "security.secondary-password.unlock-timeout-seconds", 1800L);
-            int passwordMinLength = getConfig().getInt(
-                "security.secondary-password.min-length", 4);
-            int passwordMaxLength = getConfig().getInt(
-                "security.secondary-password.max-length", 32);
-            String storageBase = "security.secondary-password.storage";
-            xuanmo.arcartxsuite.api.storage.StorageDescriptor descriptor =
-                "mysql".equalsIgnoreCase(getConfig().getString(storageBase + ".mode", "sqlite"))
-                    ? xuanmo.arcartxsuite.api.storage.StorageDescriptor.mysql(
-                        getConfig().getString(storageBase + ".mysql.host", "127.0.0.1"),
-                        getConfig().getInt(storageBase + ".mysql.port", 3306),
-                        getConfig().getString(storageBase + ".mysql.database", "arcartxsuite"),
-                        getConfig().getString(storageBase + ".mysql.username", "root"),
-                        getConfig().getString(storageBase + ".mysql.password", ""),
-                        getConfig().getInt(storageBase + ".pool-size", 4),
-                        "")
-                    : xuanmo.arcartxsuite.api.storage.StorageDescriptor.sqlite("secondary-password.db");
-            secondaryPasswordService = new SecondaryPasswordService(
-                getDataFolder(), timeoutSeconds, passwordMinLength, passwordMaxLength,
-                storageManager.resolveModuleDataSource("secondary-password", null, getDataFolder(), descriptor),
-                descriptor, getLogger());
-            moduleRegistry.registerCoreCapability(
-                xuanmo.arcartxsuite.api.capability.SecondaryPasswordAccess.class,
-                secondaryPasswordService);
-        } catch (Exception exception) {
-            consoleError("统一二级密码服务初始化失败: " + exception.getMessage());
-        }
-
         // 8.5 多边形选区管理器（核心 capability，供 fishing/afkreward 等模块使用）
         polygonSelectionManager = new xuanmo.arcartxsuite.selection.DefaultPolygonSelectionManager();
         String selectionWand = getConfig().getString("selection.wand-item", "STICK");
@@ -304,25 +281,7 @@ public final class SuiteCoreImpl implements SuiteCore {
             consoleInfo("检测到 SystemMail 插件，已注册邮件降级适配器（MailDispatchable → SystemMail）");
         }
 
-        ModuleRegistry.LoadSummary summary = moduleRegistry.loadAll();
-        consoleInfo(
-            "模块加载完成: 发现 " + summary.discoveredCount()
-                + " | 已启用 " + summary.enabledCount()
-                + " | 已跳过 " + summary.skippedCount()
-                + " | 失败 " + summary.failedCount()
-        );
-        if (!summary.enabledModules().isEmpty()) {
-            consoleInfo("启用模块: " + String.join(", ", summary.enabledModules()));
-        }
-        if (!summary.skippedModules().isEmpty()) {
-            consoleInfo(ChatColor.GRAY + "跳过模块: " + String.join(", ", summary.skippedModules()));
-        }
-        if (!summary.failedModules().isEmpty()) {
-            consoleWarn("失败模块: " + String.join(", ", summary.failedModules()));
-        }
-
-        // 汇总因归属模块未启用而本次未注册的客户端按键（云端下发启用时仍可自动注册）
-        keybindService.reportDeferred();
+        var localModules = moduleRegistry.loadAll(this::prepareHostStorage);
 
         // 9. 聊天签名绕过（Paper 1.21+ 混合登录兼容）
         // 在宿主准入运行时就绪后处理聊天会话，账号分类不能代替签名状态。
@@ -332,13 +291,8 @@ public final class SuiteCoreImpl implements SuiteCore {
         );
         chatSignBypassService.initialize();
 
-        // 10. 云端模块同步（异步，不阻塞启动；只要配置了 qq+password 就自动连接）
+        // 云端同步等待本地依赖就绪。
         cloudModuleService = new CloudModuleService(this, moduleRegistry);
-        cloudModuleService.syncModules().thenRun(() -> {
-            Bukkit.getScheduler().runTask(host, () ->
-                consoleInfo("[Cloud] 云端模块同步完成")
-            );
-        });
 
         // 11. 注册主命令
         PluginCommand command = getCommand("arcartxsuite");
@@ -347,10 +301,6 @@ public final class SuiteCoreImpl implements SuiteCore {
             command.setExecutor(handler);
             command.setTabCompleter(handler);
         }
-
-        // 12. 跑一轮全量诊断（只报警，不写盘）
-        runConfigDiagnosis(null, false);
-        printConfigDiagnosisSummary();
 
         // 13. 异步版本检查
         versionCheckService = new VersionCheckService(host);
@@ -387,6 +337,112 @@ public final class SuiteCoreImpl implements SuiteCore {
             });
         }
 
+        localModules.whenComplete((summary, failure) -> {
+            if (!host.isEnabled()) return;
+            if (failure != null) {
+                crossServerModulesReady.completeExceptionally(failure);
+                consoleError("模块加载未完成: " + failure.getMessage());
+                return;
+            }
+            try { finishModuleStartup(summary); }
+            catch (RuntimeException | LinkageError startupFailure) {
+                crossServerModulesReady.completeExceptionally(startupFailure);
+                getLogger().log(java.util.logging.Level.SEVERE, "模块启动收尾失败", startupFailure);
+            }
+        });
+    }
+
+    private java.util.concurrent.CompletionStage<Void> prepareHostStorage() {
+        var registry = moduleRegistry;
+        var storage = storageManager;
+        var rewards = (xuanmo.arcartxsuite.bridge.DefaultPendingRewardService) registry.pendingRewardService();
+        if (crossServerService != null) rewards.setClaimOwner(crossServerService.nodeId());
+        var config = getConfig();
+        var folder = getDataFolder();
+        var logger = getLogger();
+        long timeoutSeconds = config.getLong("security.secondary-password.unlock-timeout-seconds", 1800L);
+        int minLength = config.getInt("security.secondary-password.min-length", 4);
+        int maxLength = config.getInt("security.secondary-password.max-length", 32);
+        String base = "security.secondary-password.storage";
+        var descriptor = "mysql".equalsIgnoreCase(config.getString(base + ".mode", "sqlite"))
+            ? xuanmo.arcartxsuite.api.storage.StorageDescriptor.mysql(
+                config.getString(base + ".mysql.host", "127.0.0.1"), config.getInt(base + ".mysql.port", 3306),
+                config.getString(base + ".mysql.database", "arcartxsuite"), config.getString(base + ".mysql.username", "root"),
+                config.getString(base + ".mysql.password", ""), config.getInt(base + ".pool-size", 4), "")
+            : xuanmo.arcartxsuite.api.storage.StorageDescriptor.sqlite("secondary-password.db");
+        preparedPasswords = storage.prepareHost(() -> {
+            rewards.initialize();
+            try {
+                return new SecondaryPasswordService(folder, timeoutSeconds, minLength, maxLength,
+                    storage.resolveModuleDataSource("secondary-password", null, folder, descriptor), descriptor, logger);
+            } catch (Exception | LinkageError failure) {
+                logger.log(java.util.logging.Level.SEVERE, "统一二级密码服务初始化失败", failure);
+                return null;
+            }
+        });
+        preparedPasswords.whenComplete((passwords, failure) -> {
+            if (hostStorageReady.isDone()) return;
+            Runnable publish = () -> {
+                if (hostStorageReady.isDone() || !host.isEnabled()) return;
+                try {
+                    if (failure != null) throw new java.util.concurrent.CompletionException(failure);
+                    if (passwords != null) {
+                        secondaryPasswordService = passwords;
+                        registry.registerCoreCapability(xuanmo.arcartxsuite.api.capability.SecondaryPasswordAccess.class, passwords);
+                    }
+                    resumePendingRewards(rewards);
+                    hostStorageReady.complete(null);
+                } catch (RuntimeException | LinkageError publishFailure) {
+                    hostStorageReady.completeExceptionally(publishFailure);
+                }
+            };
+            try {
+                if (Bukkit.isPrimaryThread()) publish.run();
+                else Bukkit.getScheduler().runTask(host, publish);
+            } catch (RuntimeException | LinkageError dispatchFailure) {
+                hostStorageReady.completeExceptionally(dispatchFailure);
+            }
+        });
+        return hostStorageReady.copy();
+    }
+
+    private void resumePendingRewards(xuanmo.arcartxsuite.bridge.DefaultPendingRewardService rewards) {
+        if (!rewards.storageReady()) return;
+        rewards.startPendingItemDelivery();
+        for (var player : Bukkit.getOnlinePlayers()) rewards.flushPlayer(player);
+    }
+
+    private void retryPendingRewardStorage() {
+        if (storageManager == null || moduleRegistry == null || !hostStorageReady.isDone()
+            || (rewardStorageRetry != null && !rewardStorageRetry.isDone())) return;
+        if (!(moduleRegistry.pendingRewardService() instanceof xuanmo.arcartxsuite.bridge.DefaultPendingRewardService rewards)
+            || rewards.storageReady()) return;
+        rewardStorageRetry = storageManager.prepareHost(() -> {
+            rewards.initialize();
+            return rewards.storageReady();
+        });
+        rewardStorageRetry.thenAccept(ready -> {
+            if (!ready || !host.isEnabled()) return;
+            Bukkit.getScheduler().runTask(host, () -> {
+                if (shutdownCompletion == null) resumePendingRewards(rewards);
+            });
+        });
+    }
+
+    private void finishModuleStartup(ModuleRegistry.LoadSummary summary) {
+        consoleInfo("模块加载完成: 发现 " + summary.discoveredCount()
+            + " | 已启用 " + summary.enabledCount() + " | 已跳过 " + summary.skippedCount()
+            + " | 失败 " + summary.failedCount());
+        if (!summary.enabledModules().isEmpty()) consoleInfo("启用模块: " + String.join(", ", summary.enabledModules()));
+        if (!summary.skippedModules().isEmpty()) consoleInfo(ChatColor.GRAY + "跳过模块: " + String.join(", ", summary.skippedModules()));
+        if (!summary.failedModules().isEmpty()) consoleWarn("失败模块: " + String.join(", ", summary.failedModules()));
+        keybindService.reportDeferred();
+        runConfigDiagnosis(null, false);
+        printConfigDiagnosisSummary();
+        cloudModuleService.syncModules().whenComplete((ignored, failure) -> {
+            crossServerModulesReady.complete(null);
+            if (failure == null) consoleInfo("[Cloud] 云端模块同步完成");
+        });
         consoleInfo(ChatColor.GREEN + "加载完成");
     }
 
@@ -419,13 +475,17 @@ public final class SuiteCoreImpl implements SuiteCore {
         configDiagnosisStore = new ConfigDiagnosisStore();
 
         // 宿主 config.yml 作为一个 ModuleConfigSpec
-        hostConfigSpecs.add(ModuleConfigSpec.basic(
+        hostConfigSpecs.add(new ModuleConfigSpec(
             "axs-core",
             new ConfigSyncSpec("config.yml", "config.yml",
                 SyncPolicy.builder()
                     .dynamicSection("currencies")
                     .dynamicSection("keybinds")
-                    .build())
+                    .build()),
+            1, "config-version", "", List.of(
+                ValidationRule.of("moderation.ignore-separators", ValueType.BOOLEAN),
+                ValidationRule.of("moderation.redact.enabled", ValueType.BOOLEAN)
+            )
         ));
 
         // 启动时清理过期诊断/备份目录
@@ -527,65 +587,67 @@ public final class SuiteCoreImpl implements SuiteCore {
     }
 
     @Override
-    public void onDisable() {
-        // 注意：本地混合代理是独立进程，由 start-mixed-auth 脚本管理，此处无需停止。
-        if (chatSignBypassService != null) {
-            chatSignBypassService.shutdown();
-            chatSignBypassService = null;
-        }
-        if (keybindService != null) {
-            keybindService.shutdown();
-            keybindService = null;
-        }
-        if (cloudModuleService != null) {
-            cloudModuleService.stopHeartbeat();
-        }
+    public java.util.concurrent.CompletionStage<Void> onDisable() {
+        if (shutdownCompletion != null) return shutdownCompletion.copy();
+        var completed = new java.util.concurrent.CompletableFuture<Void>();
+        shutdownCompletion = completed;
+        crossServerModulesReady.cancel(false);
+        var sequence = new xuanmo.arcartxsuite.lifecycle.ShutdownSequence(getLogger());
+        if (chatSignBypassService != null) sequence.stop("聊天签名桥", chatSignBypassService::shutdown);
+        if (keybindService != null) sequence.stop("按键入口", keybindService::shutdown);
+        if (cloudModuleService != null) sequence.await("云端任务", cloudModuleService::shutdown);
         if (moduleRegistry != null) {
-            moduleRegistry.shutdown();
-            // Mod 属性修饰器挂在实体上不会像药水效果那样自行衰减，停用时主动移除
-            moduleRegistry.modAttributes().shutdown();
-            moduleRegistry = null;
+            var modules = moduleRegistry;
+            if (modules.pendingRewardService() instanceof xuanmo.arcartxsuite.bridge.DefaultPendingRewardService rewards) {
+                sequence.await("待发物品存档核对", rewards::stopPendingItemDelivery);
+            }
+            sequence.await("模块及类加载器", modules::shutdown);
+            sequence.stop("Mod 属性清理", () -> modules.modAttributes().shutdown());
         }
-        xuanmo.arcartxsuite.api.AxsCapabilities.setLookup(null);
-        if (schedulerService != null) {
-            schedulerService.shutdown();
-            schedulerService = null;
-        }
-        if (storageManager != null) {
-            storageManager.shutdown();
-            storageManager = null;
-        }
-        if (secondaryPasswordService != null) {
-            secondaryPasswordService.close();
-            secondaryPasswordService = null;
-        }
-        if (polygonSelectionManager != null) {
-            polygonSelectionManager.clearAll();
-            polygonSelectionManager = null;
-        }
-        if (crossServerService != null) {
-            crossServerService.shutdown();
-            crossServerService = null;
-        }
-        if (clientEventLifecycleManager != null) {
-            clientEventLifecycleManager.stop();
-        }
-        if (bridgeLifecycleManager != null) {
-            bridgeLifecycleManager.shutdown();
-        }
-        if (clientPacketGuard != null) {
-            clientPacketGuard.shutdown();
-            clientPacketGuard = null;
-        }
-        xuanmo.arcartxsuite.api.command.ThrottledCommandExecutor.shutdown();
+        sequence.stop("能力入口", () -> xuanmo.arcartxsuite.api.AxsCapabilities.setLookup(null));
+        if (schedulerService != null) sequence.await("调度器", schedulerService::shutdown);
+        hostStorageReady.completeExceptionally(new java.util.concurrent.CancellationException("宿主正在关闭"));
+        if (preparedPasswords != null) sequence.await("二级密码任务", () ->
+            preparedPasswords.handle((passwords, failure) -> passwords).thenCompose(passwords -> {
+                if (passwords == null) return java.util.concurrent.CompletableFuture.completedFuture(null);
+                passwords.close();
+                return passwords.stopped();
+            }));
+        if (polygonSelectionManager != null) sequence.stop("选区", polygonSelectionManager::clearAll);
+        if (crossServerService != null) sequence.await("跨服后台任务", crossServerService::shutdown);
+        if (clientEventLifecycleManager != null) sequence.stop("客户端入口", clientEventLifecycleManager::stop);
+        if (bridgeLifecycleManager != null) sequence.stop("ArcartX 桥接", bridgeLifecycleManager::shutdown);
+        if (clientPacketGuard != null) sequence.stop("客户端包守卫", clientPacketGuard::shutdown);
+        sequence.stop("掉落物守卫", groundTransferGuard::unregister);
+        sequence.stop("命令入口", xuanmo.arcartxsuite.api.command.ThrottledCommandExecutor::shutdown);
+        if (moduleRegistry != null) sequence.await("命令奖励回执", moduleRegistry::stopPendingCommandReceipts);
+        var storage = storageManager;
+        chatSignBypassService = null;
+        keybindService = null;
+        cloudModuleService = null;
+        moduleRegistry = null;
+        schedulerService = null;
+        secondaryPasswordService = null;
+        polygonSelectionManager = null;
+        crossServerService = null;
+        storageManager = null;
+        clientPacketGuard = null;
         clientPacketGuardConfiguration = null;
-        // 保护子系统的关闭由宿主薄壳负责（ProtectionInit.shutdown）。
+        sequence.finish(() -> storage == null ? java.util.concurrent.CompletableFuture.completedFuture(null) : storage.shutdown())
+            .whenComplete((ignored, failure) -> {
+                if (failure == null) {
+                    try { getLogger().info("Suite 后台资源已全部退出。"); }
+                    catch (Throwable ignoredLogging) { /* Server logging may already be stopped by another JVM hook. */ }
+                    finally { completed.complete(null); }
+                } else completed.completeExceptionally(failure);
+            });
+        return completed.copy();
     }
 
     // ─── 公共访问 ─────────────────────────────────────────────
 
     public ModuleRegistry getModuleRegistry() {
-        return moduleRegistry;
+        return hostStorageReady.isDone() && !hostStorageReady.isCompletedExceptionally() ? moduleRegistry : null;
     }
 
     public SecondaryPasswordService getSecondaryPasswordService() {
@@ -684,6 +746,7 @@ public final class SuiteCoreImpl implements SuiteCore {
 
         // 5. 重新跑一轮全量配置诊断（只报警，不写盘）
         runConfigDiagnosis(null, false);
+        retryPendingRewardStorage();
 
         consoleInfo("宿主 config.yml 已热重载（部分子系统需重启生效，详见 /axs reload 提示）。");
     }

@@ -1,13 +1,10 @@
 package xuanmo.arcartxsuite.fishing.settlement;
 
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.logging.Logger;
-import org.bukkit.Bukkit;
-import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.script.AriaBridge;
@@ -51,7 +48,7 @@ public final class SettlementEngine {
      *
      * @param uuid 玩家 UUID
      */
-    public void settlePlayer(@NotNull UUID uuid) {
+    public int settlePlayer(@NotNull UUID uuid) {
         FishingSeasonData seasonData = repository.loadSeasonData(uuid, seasonId);
         FishingPermanentData permData = repository.loadPermanentData(uuid);
         int collectionCount = repository.loadCollection(uuid).size();
@@ -64,28 +61,36 @@ public final class SettlementEngine {
         bindings.put("collection_count", collectionCount);
         bindings.put("season_id", seasonId);
 
-        Player player = Bukkit.getPlayer(uuid);
+        var completed = repository.completedRewardKeys(uuid, seasonId);
+        int failed = 0;
         for (SettlementDefinition settlement : settlements) {
             if (evaluateCondition(settlement.condition(), bindings)) {
                 for (SeasonRewardDefinition reward : settlement.rewards()) {
-                    dispatcher.dispatch(player, uuid, reward, settlement.description());
+                    String key = RewardDispatcher.rewardKey("settlement", reward.rewardId());
+                    if (!completed.contains(key) && !dispatcher.dispatch(uuid, key, reward, settlement.description())) {
+                        failed++;
+                    }
                 }
                 logger.fine("玩家 " + uuid + " 命中结算条目: " + settlement.id());
             }
         }
+        return failed;
     }
 
     /**
-     * 对所有在线玩家执行赛季结算（离线玩家在上线时由 pending 补发）。
+     * 按调用方提供的玩家快照计算结算并提交持久奖励。
      */
-    public void settleAllOnline() {
-        for (Player player : Bukkit.getOnlinePlayers()) {
+    public int settlePlayers(List<UUID> players) {
+        int failed = 0;
+        for (UUID playerId : players) {
             try {
-                settlePlayer(player.getUniqueId());
+                failed += settlePlayer(playerId);
             } catch (Exception e) {
-                logger.warning("结算玩家 " + player.getName() + " 失败: " + e.getMessage());
+                failed++;
+                logger.warning("结算玩家 " + playerId + " 失败: " + e.getMessage());
             }
         }
+        return failed;
     }
 
     /**

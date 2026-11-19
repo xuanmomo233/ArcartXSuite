@@ -1,0 +1,7 @@
+from-version: 2
+to-version: 3
+description: "重命名 MMOItems 属性槽配置，保留已填写的槽位 ID。"
+operations:
+  - type: rename
+    from: backpack.mmoitems-accessory-slots
+    to: backpack.mmoitems-attribute-slots

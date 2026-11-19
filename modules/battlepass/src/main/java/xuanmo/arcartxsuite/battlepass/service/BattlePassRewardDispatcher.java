@@ -1,338 +1,104 @@
 package xuanmo.arcartxsuite.battlepass.service;
 
-import java.math.BigDecimal;
+import com.google.gson.Gson;
+import com.google.gson.JsonParser;
+import java.sql.SQLException;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
-import java.util.function.Supplier;
-import java.util.logging.Logger;
-import org.bukkit.Bukkit;
-import org.bukkit.OfflinePlayer;
-import org.bukkit.entity.Player;
-import org.bukkit.inventory.ItemStack;
-import org.bukkit.plugin.java.JavaPlugin;
-import org.jetbrains.annotations.Nullable;
-import xuanmo.arcartxsuite.api.bridge.ItemBridgeAPI;
-import xuanmo.arcartxsuite.api.item.ItemRewardDispatcher;
-import xuanmo.arcartxsuite.api.capability.MailDispatchable;
-import xuanmo.arcartxsuite.api.capability.mail.MailAttachmentSpec;
-import xuanmo.arcartxsuite.api.capability.mail.MailPresetRequest;
-import xuanmo.arcartxsuite.api.capability.mail.MailSendRequest;
-import xuanmo.arcartxsuite.api.capability.mail.MailSendResult;
-import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI;
-import xuanmo.arcartxsuite.api.currency.CurrencyTransactionResult;
-import xuanmo.arcartxsuite.api.icon.IconDefinition;
-import xuanmo.arcartxsuite.api.icon.IconResolver;
-import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
+import xuanmo.arcartxsuite.api.item.PendingRewardService;
+import xuanmo.arcartxsuite.api.item.PendingRewardService.PendingReward;
 import xuanmo.arcartxsuite.battlepass.model.BattlePassReward;
-import xuanmo.arcartxsuite.api.command.ThrottledCommandExecutor;
+import xuanmo.arcartxsuite.battlepass.storage.BattlePassRepository;
 
-/**
- * 战令奖励发放器，负责根据奖励类型执行实际的奖励发放逻辑。
- * <p>
- * 支持四种奖励类型：
- * <ul>
- *   <li>{@code command} — 以控制台身份执行命令列表，支持 {@code {player}} 占位符</li>
- *   <li>{@code item} — 通过 {@link ItemSourceRegistry} 生成物品并直接放入玩家背包</li>
- *   <li>{@code currency} — 通过 {@link CurrencyBridgeAPI} 向玩家发放货币</li>
- *   <li>{@code mail} — 通过 {@link MailDispatchable} 发送邮件（预设 ID 或带物品附件的邮件）</li>
- * </ul>
- * 命令执行和物品发放在主线程同步调度。mail 类型在 Mail 模块不可用时降级为直接发放物品。
- */
-public final class BattlePassRewardDispatcher {
+/** Shares the same durable reward request between player claims and season settlement. */
+final class BattlePassRewardDispatcher {
+    enum Result { ACCEPTED, ALREADY_ACCEPTED, RETRY }
 
-    private final JavaPlugin plugin;
-    private final Logger logger;
-    private final @Nullable ItemSourceRegistry itemSourceRegistry;
-    private final @Nullable CurrencyBridgeAPI currencyManager;
-    private volatile Supplier<MailDispatchable> mailProvider;
-    private ItemRewardDispatcher itemRewardDispatcher;
-    private @Nullable IconResolver itemResolver;
+    private static final String MODULE_ID = "battlepass";
+    private static final Gson GSON = new Gson();
+    private record StoredRewards(UUID receiptStoreId, List<PendingReward> rewards) {}
+    private final BattlePassRepository repository;
+    private final PendingRewardService pending;
 
-    /**
-     * 构造奖励发放器。
-     *
-     * @param plugin             插件实例
-     * @param logger             日志记录器
-     * @param itemSourceRegistry 物品来源注册表，可为 null（item 类型奖励将无法发放）
-     * @param currencyManager    货币管理器，可为 null（currency 类型奖励将无法发放）
-     * @param mailProvider       MailDispatchable 提供者，可为 null（mail 类型奖励将降级发放）
-     */
-    public BattlePassRewardDispatcher(JavaPlugin plugin, Logger logger,
-                                       @Nullable ItemSourceRegistry itemSourceRegistry,
-                                       @Nullable CurrencyBridgeAPI currencyManager,
-                                       @Nullable Supplier<MailDispatchable> mailProvider) {
-        this.plugin = plugin;
-        this.logger = logger;
-        this.itemSourceRegistry = itemSourceRegistry;
-        this.currencyManager = currencyManager;
-        this.mailProvider = mailProvider;
+    BattlePassRewardDispatcher(BattlePassRepository repository, PendingRewardService pending) {
+        this.repository = repository;
+        this.pending = pending;
     }
 
-    /**
-     * 注入统一物品奖励发放器。
-     * <p>
-     * 注入后 item 类型奖励的物品发放（含背包满转邮件兜底）统一由 ItemRewardDispatcher 处理。
-     *
-     * @param itemRewardDispatcher 统一物品奖励发放器
-     */
-    public void setItemRewardDispatcher(ItemRewardDispatcher itemRewardDispatcher) {
-        this.itemRewardDispatcher = itemRewardDispatcher;
-    }
-
-    /**
-     * 注入奖励物品解析器。
-     * <p>
-     * 注入后 item 类型奖励的物品生成（从 IconDefinition 到 ItemStack）由 BattlePassItemResolver 处理，
-     * 支持外部物品库、自定义 NBT、custom-model-data、glow、skull-texture、color 等属性。
-     *
-     * @param itemResolver 奖励物品解析器
-     */
-    public void setItemResolver(IconResolver itemResolver) {
-        this.itemResolver = itemResolver;
-    }
-
-    /**
-     * 向在线玩家发放指定奖励。
-     * <p>
-     * item 类型通过 ItemRewardDispatcher 统一发放（放入背包→背包满转邮件→无邮件则掉落），
-     * currency 直接加，command 直接执行，mail 走邮箱。
-     *
-     * @param player 目标玩家
-     * @param reward 要发放的奖励
-     */
-    public java.util.concurrent.CompletableFuture<Boolean> dispatch(Player player, BattlePassReward reward) {
-        if (player == null || !player.isOnline()) {
-            return java.util.concurrent.CompletableFuture.completedFuture(false);
-        }
-        String type = reward.type();
-        switch (type.toLowerCase()) {
-            case "command" -> { return dispatchCommands(player, reward.commands()); }
-            case "item" -> { return java.util.concurrent.CompletableFuture.completedFuture(dispatchItem(player, reward)); }
-            case "currency" -> { return dispatchCurrency(player, reward); }
-            case "mail" -> { return dispatchMail(player, player.getUniqueId(), player.getName(), reward); }
-            default -> {
-                logger.warning("未知奖励类型 [" + type + "]: " + reward.rewardId());
-                return java.util.concurrent.CompletableFuture.completedFuture(false);
-            }
-        }
-    }
-
-    /**
-     * 向离线玩家发放指定奖励。
-     * <p>
-     * 返回是否已成功发放：
-     * <ul>
-     *   <li>mail 类型 → 通过 mail 发送，返回 true</li>
-     *   <li>currency / command / item 类型 → 无法离线发放，返回 false（需上线后补发）</li>
-     * </ul>
-     *
-     * @param playerUuid 玩家 UUID
-     * @param playerName 玩家名
-     * @param reward     要发放的奖励
-     * @return {@code true} 表示已成功发放，{@code false} 表示需上线后补发
-     */
-    public boolean dispatchOffline(UUID playerUuid, String playerName, BattlePassReward reward) {
-        if (playerUuid == null || reward == null) return false;
-        String type = reward.type();
-        if ("mail".equalsIgnoreCase(type)) {
-            dispatchMail(null, playerUuid, playerName, reward);
-            return true;
-        }
-        // currency / command / item → 需上线后补发
-        return false;
-    }
-
-    private java.util.concurrent.CompletableFuture<Boolean> dispatchCommands(Player player, List<String> commands) {
-        java.util.concurrent.CompletableFuture<Boolean> future = new java.util.concurrent.CompletableFuture<>();
-        if (commands == null || commands.isEmpty()) {
-            future.complete(true);
-            return future;
-        }
-        Bukkit.getScheduler().runTask(plugin, () -> {
-            for (String raw : commands) {
-                if (raw == null || raw.isBlank()) continue;
-                String command = raw.replace("{player}", xuanmo.arcartxsuite.api.command.CommandSanitizer.validatePlayerName(player.getName()))
-                    .replace("{uuid}", player.getUniqueId().toString());
-                if (command.startsWith("/")) command = command.substring(1);
-                try {
-                    ThrottledCommandExecutor.dispatch( command);
-                } catch (Exception e) {
-                    logger.warning("执行战令奖励命令失败: " + command + " | " + e.getMessage());
-                }
-            }
-            future.complete(true);
-        });
-        return future;
-    }
-
-    private boolean dispatchItem(Player player, BattlePassReward reward) {
-        IconDefinition itemDef = reward.item();
-        if (itemDef == null) {
-            logger.warning("物品奖励缺少 item 定义: " + reward.rewardId());
-            return false;
-        }
-        if (itemResolver == null) {
-            logger.warning("物品解析器不可用，无法发放物品奖励: " + reward.rewardId());
-            return false;
-        }
-        ItemStack item = itemResolver.resolveItemStack(player, itemDef);
-        if (item == null) {
-            logger.warning("物品奖励生成失败: " + reward.rewardId());
-            return false;
-        }
-        ItemRewardDispatcher.DispatchOptions options = ItemRewardDispatcher.DispatchOptions.builder("battlepass")
-            .sourceDetail("reward:" + reward.rewardId())
-            .overflowMailSubject("战令奖励溢出物品")
-            .overflowMailBody("您的背包已满，战令奖励物品通过邮件补发。")
-            .overflowMailSenderName("战令")
-            .build();
-        return itemRewardDispatcher.dispatchItem(player, item, options).success();
-    }
-
-    private java.util.concurrent.CompletableFuture<Boolean> dispatchCurrency(Player player, BattlePassReward reward) {
-        String currencyId = reward.currency();
-        double amount = reward.currencyAmount();
-        if (currencyId == null || currencyId.isBlank() || amount <= 0) {
-            logger.warning("货币奖励配置无效: " + reward.rewardId()
-                + " currency=" + currencyId + " amount=" + amount);
-            return java.util.concurrent.CompletableFuture.completedFuture(false);
-        }
-        if (currencyManager == null) {
-            logger.warning("货币管理器不可用，无法发放货币奖励: " + reward.rewardId());
-            return java.util.concurrent.CompletableFuture.completedFuture(false);
-        }
-        CurrencyBridgeAPI.CurrencyBridge bridge = currencyManager.bridge(currencyId);
-        if (bridge == null || !bridge.available()) {
-            logger.warning("货币桥接不可用: " + currencyId + "，奖励 " + reward.rewardId() + " 发放失败");
-            return java.util.concurrent.CompletableFuture.completedFuture(false);
-        }
-        java.util.concurrent.CompletableFuture<Boolean> future = new java.util.concurrent.CompletableFuture<>();
-        Bukkit.getScheduler().runTask(plugin, () -> {
-            CurrencyTransactionResult result =
-                bridge.deposit(player, BigDecimal.valueOf(amount));
-            if (!result.success()) {
-                logger.warning("货币发放失败: " + reward.rewardId()
-                    + " currency=" + currencyId + " amount=" + amount
-                    + " reason=" + result.message());
-            }
-            future.complete(result.success());
-        });
-        return future;
-    }
-
-    /**
-     * 通过 mail 模块发放奖励。
-     * <p>
-     * 支持两种模式：
-     * <ul>
-     *   <li>预设模式：配置了 mail-preset-id，调用 {@link MailDispatchable#dispatchPreset}</li>
-     *   <li>直接模式：配置了 mail-subject/mail-body/item，调用 {@link MailDispatchable#sendItemMail}</li>
-     * </ul>
-     * Mail 模块不可用时：
-     * <ul>
-     *   <li>预设模式：降级为执行命令（commands 字段）</li>
-     *   <li>直接模式且有物品：降级为直接发放物品（在线时放入背包，离线时跳过）</li>
-     *   <li>直接模式无物品：降级为执行命令</li>
-     * </ul>
-     *
-     * @param onlinePlayer 在线玩家实例，离线发放时为 null
-     * @param playerUuid   玩家 UUID
-     * @param playerName   玩家名
-     * @param reward       奖励定义
-     */
-    private java.util.concurrent.CompletableFuture<Boolean> dispatchMail(@Nullable Player onlinePlayer, UUID playerUuid, String playerName, BattlePassReward reward) {
-        MailDispatchable mail = mailProvider != null ? mailProvider.get() : null;
-        if (mail == null) {
-            // Mail 模块不可用，降级处理
-            logger.fine("Mail 模块不可用，降级发放奖励: " + reward.rewardId());
-            return fallbackFromMail(onlinePlayer, reward);
-        }
-        java.util.concurrent.CompletableFuture<Boolean> future = new java.util.concurrent.CompletableFuture<>();
-        List<String> presetIds = reward.mailPresets();
-        if (presetIds != null && !presetIds.isEmpty()) {
-            // 预设模式（异步发送，失败时降级为直接发放）
-            Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-                boolean allSuccess = xuanmo.arcartxsuite.api.capability.mail.MailPresetHelper.dispatchPresets(
-                    mailProvider, playerName, presetIds, "battlepass", logger);
-                if (!allSuccess) {
-                    logger.warning("邮件预设发送存在失败，降级为直接发放: player=" + playerName
-                        + " reward=" + reward.rewardId());
-                    Bukkit.getScheduler().runTask(plugin, () ->
-                        fallbackFromMail(onlinePlayer, reward).whenComplete((ok, err) ->
-                            future.complete(err == null && Boolean.TRUE.equals(ok))));
-                } else {
-                    future.complete(true);
-                }
-            });
-            return future;
-        }
-        // 直接模式：发送带物品附件的邮件
-        String subject = reward.mailSubject() != null ? reward.mailSubject() : "战令奖励";
-        String body = reward.mailBody() != null ? reward.mailBody() : "您收到了战令奖励，请查收附件。";
-        IconDefinition itemDef = reward.item();
-        if (itemDef == null) {
-            // 无物品附件，降级为执行命令
-            logger.fine("mail 类型奖励无物品附件，降级为执行命令: " + reward.rewardId());
-            return fallbackFromMail(onlinePlayer, reward);
-        }
-        if (itemResolver == null) {
-            logger.warning("物品解析器不可用，无法生成 mail 类型奖励物品: " + reward.rewardId());
-            return java.util.concurrent.CompletableFuture.completedFuture(false);
-        }
-        ItemStack item = itemResolver.resolveItemStack(onlinePlayer, itemDef);
-        if (item == null) {
-            logger.warning("mail 类型奖励物品生成失败: " + reward.rewardId());
-            return java.util.concurrent.CompletableFuture.completedFuture(false);
-        }
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            try {
-                MailSendResult result = mail.sendMail(MailSendRequest.builder(playerUuid, subject, body)
-                    .attachment(MailAttachmentSpec.item(item))
-                    .senderName("战令")
-                    .sourceModule("battlepass")
-                    .build());
-                if (!result.success()) {
-                    logger.warning("带附件邮件发送失败: player=" + playerName
-                        + "，降级为直接发放物品 — " + result.message());
-                    Bukkit.getScheduler().runTask(plugin, () ->
-                        fallbackFromMail(onlinePlayer, reward).whenComplete((ok, err) ->
-                            future.complete(err == null && Boolean.TRUE.equals(ok))));
-                } else {
-                    future.complete(true);
-                }
-            } catch (Exception e) {
-                logger.warning("带附件邮件发送异常: " + e.getMessage());
-                future.complete(false);
-            }
-        });
-        return future;
-    }
-
-    /**
-     * Mail 模块不可用时的降级发放逻辑。
-     * <p>
-     * 返回合并结果：物品或命令任一路成功即视为已发放。
-     */
-    private java.util.concurrent.CompletableFuture<Boolean> fallbackFromMail(@Nullable Player player, BattlePassReward reward) {
-        if (player == null || !player.isOnline()) {
-            // 离线玩家无法降级发放，记录日志
-            logger.fine("离线玩家无法降级发放 mail 奖励: " + reward.rewardId());
-            return java.util.concurrent.CompletableFuture.completedFuture(false);
-        }
-        java.util.concurrent.CompletableFuture<Boolean> future = new java.util.concurrent.CompletableFuture<>();
-        boolean itemOk = false;
-        // 优先尝试发放物品
-        if (reward.item() != null) {
-            itemOk = dispatchItem(player, reward);
-        }
-        // 再执行命令（如果有）
-        boolean finalItemOk = itemOk;
-        if (reward.commands() != null && !reward.commands().isEmpty()) {
-            dispatchCommands(player, reward.commands()).whenComplete((ok, err) ->
-                future.complete(finalItemOk || (err == null && Boolean.TRUE.equals(ok))));
+    Result accept(UUID player, String season, String rewardId, BattlePassReward reward) throws SQLException {
+        if (pending == null) return Result.RETRY;
+        boolean sharedProgress = repository.sharedProgress();
+        UUID storeId = sharedProgress ? pending.rewardReceiptStoreId() : null;
+        if (sharedProgress && storeId == null) return Result.RETRY;
+        var batch = createBatch(player, rewardId, reward);
+        String payload = batch.isEmpty() ? null
+            : GSON.toJson(sharedProgress ? new StoredRewards(storeId, batch) : batch);
+        var request = repository.stageReward(player, season, rewardId, payload);
+        if (request == null) return Result.RETRY;
+        // Retry with the original payload even if the reward configuration has changed.
+        List<PendingReward> staged;
+        if (sharedProgress) {
+            var original = JsonParser.parseString(request.payload());
+            if (!original.isJsonObject()) return Result.RETRY;
+            var stored = GSON.fromJson(original, StoredRewards.class);
+            if (!storeId.equals(stored.receiptStoreId()) || stored.rewards() == null) return Result.RETRY;
+            staged = stored.rewards();
         } else {
-            future.complete(itemOk);
+            staged = Arrays.asList(GSON.fromJson(request.payload(), PendingReward[].class));
         }
-        return future;
+        if (staged.isEmpty() || !pending.savePendingBatchConfirmed("battlepass:" + request.id(), staged)) {
+            return Result.RETRY;
+        }
+        if (repository.completeReward(player, season, rewardId, request.id())) return Result.ACCEPTED;
+        return repository.loadClaimedRewards(player, season).contains(rewardId) ? Result.ALREADY_ACCEPTED : Result.RETRY;
+    }
+
+    void flushOnline(org.bukkit.entity.Player player) {
+        if (pending != null) pending.flushPlayer(player);
+    }
+
+    private List<PendingReward> createBatch(UUID player, String rewardId, BattlePassReward reward) {
+        String description = "战令奖励 " + rewardId;
+        return switch (reward.type().toLowerCase(Locale.ROOT)) {
+            case "item" -> reward.item() == null ? List.of() : List.of(item(player, description, reward, false));
+            case "currency" -> reward.currency() == null || reward.currency().isBlank()
+                    || !Double.isFinite(reward.currencyAmount()) || reward.currencyAmount() <= 0
+                ? List.of()
+                : List.of(PendingReward.currency(player, MODULE_ID, reward.currency(), reward.currencyAmount(), description));
+            case "command" -> commands(player, description, reward);
+            case "title" -> targetReward(player, description, reward.targetId(), PendingReward.Type.TITLE);
+            case "map-anchor" -> targetReward(player, description, reward.targetId(), PendingReward.Type.MAP_ANCHOR);
+            case "mail" -> {
+                if (reward.mailPresets() != null && !reward.mailPresets().isEmpty()) {
+                    yield reward.mailPresets().stream().filter(preset -> !preset.isBlank())
+                        .map(preset -> PendingReward.mailPreset(player, MODULE_ID, List.of(preset), description)).toList();
+                }
+                yield reward.item() == null ? commands(player, description, reward)
+                    : List.of(item(player, description, reward, true));
+            }
+            default -> List.of();
+        };
+    }
+
+    private static List<PendingReward> targetReward(UUID player, String description, String target, PendingReward.Type type) {
+        if (target == null || target.isBlank()) return List.of();
+        return List.of(new PendingReward(0, player, MODULE_ID, type,
+            GSON.toJson(java.util.Map.of("targetId", target.trim())), description, System.currentTimeMillis(), 0));
+    }
+
+    private static List<PendingReward> commands(UUID player, String description, BattlePassReward reward) {
+        if (reward.commands() == null) return List.of();
+        var commands = reward.commands().stream().filter(command -> !command.isBlank()).toList();
+        return commands.isEmpty() ? List.of() : List.of(PendingReward.command(player, MODULE_ID, commands, description));
+    }
+
+    private static PendingReward item(UUID player, String description, BattlePassReward reward, boolean mail) {
+        String subject = mail ? (reward.mailSubject() == null ? "战令奖励" : reward.mailSubject()) : null;
+        String body = mail ? (reward.mailBody() == null ? "您收到了战令奖励，请查收附件。" : reward.mailBody()) : null;
+        var spec = new PendingReward.ItemSpec(reward.item(), subject, body);
+        return new PendingReward(0, player, MODULE_ID, PendingReward.Type.ITEM_SPEC, GSON.toJson(spec),
+            description, System.currentTimeMillis(), 0);
     }
 }

@@ -50,19 +50,27 @@ final class WarehousePacketFactory {
     /**
      * 构建仓库存取界面的数据包，包含分页槽位、选中物品、背包信息、容量与权限状态。
      */
-    Map<String, Object> buildStoragePacket(Player player, WarehouseService.ViewState state) throws Exception {
-        List<SlotItemRecord> visibleSlots = visibleSlots(state);
-        String slotOrder = visibleSlots.stream().map(i -> String.valueOf(i.slot())).collect(Collectors.joining(","));
-        service.debug("buildStoragePacket visibleSlots order: " + slotOrder);
+    Map<String, Object> buildStoragePacket(Player player, WarehouseService.ViewState state,
+                                           WarehousePreview.Warehouses preview, SecondaryPasswordAccess.Status status) throws Exception {
+        List<SlotItemRecord> orderedSlots = orderedSlots(state.ownerType(), state.ownerId(), state.warehouseId(), state.sortId());
+        List<SlotItemRecord> visibleSlots = visibleSlots(state, orderedSlots);
+        if (service.configuration.debug()) {
+            String slotOrder = visibleSlots.stream().map(i -> String.valueOf(i.slot())).collect(Collectors.joining(","));
+            service.debug("buildStoragePacket visibleSlots order: " + slotOrder);
+        }
         Map<String, Object> slots = new LinkedHashMap<>();
-        Map<String, Object> packet = basePacket(player, state);
+        Map<String, WarehouseRecord> personal = preview == null ? service.personalWarehouseMap(player.getUniqueId()) : preview.personal();
+        Map<String, Object> packet = basePacket(player, state, preview, status, personal);
         int pageSize = pageSize();
         int pageTotal = Math.max(1, (visibleSlots.size() + pageSize - 1) / pageSize);
         state.setPage(Math.max(1, Math.min(state.page(), pageTotal)));
         int start = (state.page() - 1) * pageSize;
-        Map<Integer,SlotItemRecord> pageItems=new LinkedHashMap<>();
-        List<Integer> indices=visibleSlots.subList(start,Math.min(visibleSlots.size(),start+pageSize)).stream().map(SlotItemRecord::slot).toList();
-        for(var full:service.repository.loadSlots(state.ownerType(),state.ownerId(),state.warehouseId(),indices))pageItems.put(full.slot(),full);
+        Map<Integer, SlotItemRecord> pageItems = new LinkedHashMap<>();
+        List<Integer> indices = visibleSlots.subList(start, Math.min(visibleSlots.size(), start + pageSize)).stream()
+            .map(SlotItemRecord::slot).toList();
+        for (SlotItemRecord full : service.repository.loadSlots(state.ownerType(), state.ownerId(), state.warehouseId(), indices)) {
+            pageItems.put(full.slot(), full);
+        }
         Map<Integer, SlotItemRecord> displayedSlots = new LinkedHashMap<>();
         for (int displaySlot = 0; displaySlot < pageSize; displaySlot++) {
             int index = start + displaySlot;
@@ -87,39 +95,45 @@ final class WarehousePacketFactory {
                 }
             }
         }
-        String slotKeys = String.join(",", slots.keySet());
         String viewKey = state.ownerType() + ':' + state.ownerId() + ':' + state.warehouseId() + ':' + state.page()
             + ':' + state.categoryId() + ':' + state.sortId() + ':' + state.search();
         if (!viewKey.equals(state.displayedView) || !displayedSlots.equals(state.displayedSlots)) {
-            service.issueActionToken(player, service.storageRuntimeUiId);
+            if (preview == null) service.issueActionToken(player, service.storageRuntimeUiId);
             state.displayedSlots.clear();
             state.displayedSlots.putAll(displayedSlots);
             state.displayedView = viewKey;
         }
-        service.debug("buildStoragePacket slots keys order: " + slotKeys);
+        if (service.configuration.debug()) {
+            service.debug("buildStoragePacket slots keys order: " + String.join(",", slots.keySet()));
+        }
         int selectedDisplaySlot = selectedDisplaySlot(state, visibleSlots);
-        SlotItemRecord selected = service.validSlot(state.selectedSlot())
-            ? service.repository.loadSlot(state.ownerType(), state.ownerId(), state.warehouseId(), state.selectedSlot()).orElse(null)
-            : null;
+        int selectedSlot = state.selectedSlot();
+        SlotItemRecord selected = null;
+        if (service.validSlot(selectedSlot)) {
+            selected = pageItems.get(selectedSlot);
+            if (selected == null) {
+                selected = service.repository.loadSlot(state.ownerType(), state.ownerId(), state.warehouseId(), selectedSlot).orElse(null);
+            }
+        }
         packet.put("ui", "storage");
-        packet.put("action_token", service.storageActionTokens.getOrDefault(player.getUniqueId(), ""));
+        packet.put("action_token", preview == null ? service.storageActionTokens.getOrDefault(player.getUniqueId(), "") : "");
         packet.put("sortId", state.sortId());
         packet.put("sortText", sortText(state.sortId()));
         packet.put("slots", slots);
-        packet.put("slotCount", pageSize);
         packet.put("selectedSlot", selectedDisplaySlot);
-        packet.put("selectedActualSlot", state.selectedSlot());
+        packet.put("selectedActualSlot", selectedSlot);
         packet.put("selectedItem", selected == null ? emptySelectionPacket() : slotPacket(selected));
         packet.put("backpack", backpackPacket(player));
         packet.put("page", state.page());
         packet.put("pageTotal", pageTotal);
         packet.put("pageText", state.page() + "/" + pageTotal);
-        packet.put("usedSlots", service.countSlots(state.ownerType(), state.ownerId(), state.warehouseId()));
+        long usedSlots = orderedSlots.size();
+        packet.put("usedSlots", usedSlots);
         packet.put("matchedSlots", visibleSlots.size());
-        putCapacityFields(player, state, packet);
+        putCapacityFields(player, state, packet, preview, personal.get(state.warehouseId()), usedSlots);
         packet.put("readOnly", !service.canModifyCurrent(player, state));
         packet.put("sharedEditMode", WarehouseService.OWNER_SHARED.equals(state.ownerType()) && state.sharedEditMode());
-        packet.put("sharedCanEdit", service.sharedCanEdit(player, state));
+        packet.put("sharedCanEdit", preview == null && service.sharedCanEdit(player, state));
         packet.put("lockOwner", service.lockOwnerName(state));
         packet.put("maxPersonalCount", ((java.util.Map<?,?>) packet.getOrDefault("personalWarehouses", java.util.Map.of())).size());
         packet.put("maxSharedCount", ((java.util.Map<?,?>) packet.getOrDefault("sharedWarehouses", java.util.Map.of())).size());
@@ -130,14 +144,19 @@ final class WarehousePacketFactory {
     /**
      * 构建共享管理界面的数据包，包含成员列表、搜索结果、自动拾取设置等。
      */
-    Map<String, Object> buildManagePacket(Player player, WarehouseService.ViewState state) throws Exception {
-        Map<String, Object> packet = basePacket(player, state);
+    Map<String, Object> buildManagePacket(Player player, WarehouseService.ViewState state,
+                                          SecondaryPasswordAccess.Status status) throws Exception {
+        Map<String, WarehouseRecord> personal = service.personalWarehouseMap(player.getUniqueId());
+        Map<String, Object> packet = basePacket(player, state, null, status, personal);
         Map<String, Object> sharedMembers = sharedMemberPacket(player, state);
         Map<String, Object> searchResults = searchResultPacket(state);
         packet.put("ui", "manage");
         packet.put("action_token", service.manageActionTokens.getOrDefault(player.getUniqueId(), ""));
-        putCapacityFields(player, state, packet);
+        putCapacityFields(player, state, packet, null, personal.get(state.warehouseId()),
+            service.countSlots(state.ownerType(), state.ownerId(), state.warehouseId()));
         packet.put("sharedMembers", sharedMembers);
+        packet.put("sharedActivityAllowed", currentSharedRecord(player, state)
+            .map(record -> player.getUniqueId().equals(record.ownerUuid())).orElse(false));
         packet.put("sharedMemberTexts", fieldMap(sharedMembers, "text"));
         packet.put("sharedMemberNames", fieldMap(sharedMembers, "name"));
         packet.put("sharedMemberRoles", fieldMap(sharedMembers, "role"));
@@ -163,8 +182,10 @@ final class WarehousePacketFactory {
     /**
      * 构建银行界面的数据包，包含活期余额、定期产品和当前定期列表。
      */
-    Map<String, Object> buildBankPacket(Player player, WarehouseService.ViewState state) throws Exception {
-        Map<String, Object> packet = basePacket(player, state);
+    Map<String, Object> buildBankPacket(Player player, WarehouseService.ViewState state,
+                                        SecondaryPasswordAccess.Status status) throws Exception {
+        Map<String, WarehouseRecord> personal = service.personalWarehouseMap(player.getUniqueId());
+        Map<String, Object> packet = basePacket(player, state, null, status, personal);
         Map<String, Object> balances = bankBalancePacket(player);
         Map<String, Object> products = depositProductPacket(player, state.selectedCurrency());
         Map<String, Object> fixedDeposits = fixedDepositPacket(player);
@@ -183,16 +204,18 @@ final class WarehousePacketFactory {
         return packet;
     }
 
-    Map<String, Object> basePacket(Player player, WarehouseService.ViewState state) throws Exception {
+    private Map<String, Object> basePacket(Player player, WarehouseService.ViewState state,
+                                          WarehousePreview.Warehouses preview, SecondaryPasswordAccess.Status status,
+                                          Map<String, WarehouseRecord> personal) throws Exception {
         Map<String, Object> packet = new LinkedHashMap<>();
         Map<String, Object> categories = categoryPacket();
         Map<String, Object> personalWarehouses;
         Map<String, Object> sharedWarehouses;
-        if (state.previewMode() && state.previewTargetUuid() != null) {
-            personalWarehouses = previewPersonalWarehousePacket(state.previewTargetUuid());
-            sharedWarehouses = previewSharedWarehousePacket(state.previewTargetUuid());
+        if (preview != null) {
+            personalWarehouses = previewPersonalWarehousePacket(personal.values());
+            sharedWarehouses = previewSharedWarehousePacket(preview.shared().values());
         } else {
-            personalWarehouses = personalWarehousePacket(player);
+            personalWarehouses = personalWarehousePacket(personal);
             sharedWarehouses = sharedWarehousePacket(player);
         }
         Map<String, Object> manageWarehouses = manageWarehousePacket(personalWarehouses, sharedWarehouses, state);
@@ -200,16 +223,15 @@ final class WarehousePacketFactory {
         packet.put("ownerType", state.ownerType());
         packet.put("ownerId", state.ownerId());
         packet.put("warehouseId", state.warehouseId());
-        packet.put("warehouseName", currentWarehouseName(player, state));
+        packet.put("warehouseName", preview == null
+            ? currentWarehouseName(player, state, personal.get(state.warehouseId())) : previewWarehouseName(state, preview));
         packet.put("previewMode", state.previewMode());
         packet.put("categoryId", state.categoryId());
         packet.put("search", state.search());
         packet.put("categories", categories);
         packet.put("categoryTexts", fieldMap(categories, "text"));
-        SecondaryPasswordAccess passwordAccess = service.secondaryPasswordSupplier == null
-            ? null : service.secondaryPasswordSupplier.get();
-        packet.put("unlocked", passwordAccess != null && passwordAccess.isUnlocked(player));
-        packet.put("hasPassword", passwordAccess != null && passwordAccess.isPasswordSet(player));
+        packet.put("unlocked", status.unlocked());
+        packet.put("hasPassword", status.passwordSet());
         packet.put("personalWarehouses", personalWarehouses);
         packet.put("personalWarehouseTexts", fieldMap(personalWarehouses, "text"));
         packet.put("sharedWarehouses", sharedWarehouses);
@@ -280,59 +302,45 @@ final class WarehousePacketFactory {
         return result;
     }
 
-    Map<String, Object> personalWarehousePacket(Player player) throws Exception {
+    private Map<String, Object> personalWarehousePacket(Map<String, WarehouseRecord> records) {
         Map<String, Object> result = new LinkedHashMap<>();
-        Map<String, WarehouseRecord> records = service.personalWarehouseMap(player.getUniqueId());
         int idx = 0;
         for (WarehouseDefinition definition : service.configuration.warehouses().values()) {
-            if (!records.containsKey(definition.id())) {
+            WarehouseRecord record = records.get(definition.id());
+            if (record == null) {
                 continue;
             }
-            WarehouseRecord record = records.get(definition.id());
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("id", definition.id());
             row.put("name", ChatColor.translateAlternateColorCodes('&', definition.displayName()));
             row.put("text", service.message("ui.warehouse-name", ChatColor.translateAlternateColorCodes('&', definition.displayName())));
-            row.put("capacity", resolveCapacity(WarehouseService.OWNER_PERSONAL, player.getUniqueId().toString(), definition.id()));
+            row.put("capacity", Math.max(0L, personalCapacity(definition, record)));
             result.put(Integer.toString(idx), row);
             idx++;
         }
         return result;
     }
 
-    Map<String, Object> previewPersonalWarehousePacket(UUID targetUuid) throws Exception {
+    Map<String, Object> previewPersonalWarehousePacket(java.util.Collection<WarehouseRecord> records) {
         Map<String, Object> result = new LinkedHashMap<>();
-        Map<String, WarehouseRecord> records = service.personalWarehouseMap(targetUuid);
         int idx = 0;
-        for (WarehouseDefinition definition : service.configuration.warehouses().values()) {
-            if (!records.containsKey(definition.id())) {
-                continue;
-            }
-            WarehouseRecord record = records.get(definition.id());
-            if (!record.showcaseEnabled()) {
-                continue;
-            }
-            String name = record.customName() == null || record.customName().isBlank()
-                ? ChatColor.translateAlternateColorCodes('&', definition.displayName())
-                : record.customName();
+        for (WarehouseRecord record : records) {
+            String name = previewPersonalName(record);
             Map<String, Object> row = new LinkedHashMap<>();
-            row.put("id", definition.id());
+            row.put("id", record.warehouseId());
             row.put("name", name);
             row.put("text", service.message("ui.warehouse-name", name));
-            row.put("capacity", resolveCapacity(WarehouseService.OWNER_PERSONAL, targetUuid.toString(), definition.id()));
+            row.put("capacity", personalCapacity(service.configuration.warehouse(record.warehouseId()), record));
             result.put(Integer.toString(idx), row);
             idx++;
         }
         return result;
     }
 
-    Map<String, Object> previewSharedWarehousePacket(UUID targetUuid) throws Exception {
+    Map<String, Object> previewSharedWarehousePacket(java.util.Collection<SharedWarehouseRecord> records) {
         Map<String, Object> result = new LinkedHashMap<>();
         int idx = 0;
-        for (SharedWarehouseRecord shared : service.repository.loadSharedWarehousesByOwner(targetUuid)) {
-            if (!shared.showcaseEnabled()) {
-                continue;
-            }
+        for (SharedWarehouseRecord shared : records) {
             Map<String, Object> rowMap = new LinkedHashMap<>();
             rowMap.put("id", shared.id());
             rowMap.put("name", shared.name());
@@ -617,60 +625,68 @@ final class WarehousePacketFactory {
         return result;
     }
 
-    void putCapacityFields(Player player, WarehouseService.ViewState state, Map<String, Object> packet) throws Exception {
+    private void putCapacityFields(Player player, WarehouseService.ViewState state, Map<String, Object> packet,
+                                   WarehousePreview.Warehouses preview, WarehouseRecord personal, long used) throws Exception {
         String ownerType = state.ownerType();
-        long capacity = currentWarehouseCapacity(player, ownerType, state.ownerId(), state.warehouseId());
-        long used = service.countSlots(ownerType, state.ownerId(), state.warehouseId());
+        WarehouseDefinition definition = service.configuration.warehouse(state.warehouseId());
+        SharedWarehouseRecord shared = null;
+        long capacity = WarehouseService.SLOT_COUNT;
+        int level = 1;
+        if (WarehouseService.OWNER_SHARED.equals(ownerType)) {
+            shared = preview == null ? currentSharedRecord(player, state).orElse(null) : preview.shared().get(state.warehouseId());
+            if (shared != null) {
+                capacity = shared.capacity();
+                level = shared.level();
+            }
+        } else if (preview != null) {
+            capacity = personalCapacity(definition, personal);
+            level = personal.level();
+        } else if (WarehouseService.OWNER_PERSONAL.equals(ownerType)) {
+            capacity = Math.max(0L, personalCapacity(definition, personal));
+        }
         packet.put("capacity", capacity);
         packet.put("used", used);
         packet.put("capacityText", used + "/" + capacity);
         packet.put("slotCount", capacity);
         packet.put("pageSize", pageSize());
-        packet.put("level", 1);
+        packet.put("level", level);
         packet.put("canUpgrade", false);
         packet.put("slotPriceText", "");
         packet.put("slotPriceAmount", 0.0);
         packet.put("slotCurrencyName", "");
         packet.put("nextUpgradeText", service.message("ui.upgrade-unavailable"));
+        if (preview != null) return;
         if (WarehouseService.OWNER_SHARED.equals(state.ownerType())) {
-            Optional<SharedWarehouseRecord> shared = currentSharedRecord(player, state);
-            if (shared.isEmpty()) {
+            if (shared == null) {
                 packet.put("nextUpgradeText", service.message("ui.select-shared"));
                 return;
             }
-            SharedWarehouseRecord record = shared.get();
-            packet.put("level", record.level());
             Map<Integer, WarehouseLevelDefinition> levels = service.configuration.shared().levels();
             if (levels.isEmpty()) {
                 packet.put("nextUpgradeText", service.message("ui.shared-upgrade-not-configured"));
                 return;
             }
-            WarehouseLevelDefinition next = levels.get(record.level() + 1);
+            WarehouseLevelDefinition next = levels.get(shared.level() + 1);
             if (next == null) {
                 packet.put("nextUpgradeText", service.message("ui.max-level"));
                 return;
             }
-            if (!"owner".equalsIgnoreCase(record.viewerRole())) {
+            if (!"owner".equalsIgnoreCase(shared.viewerRole())) {
                 packet.put("nextUpgradeText", service.message("ui.shared-upgrade-owner"));
                 return;
             }
-            WarehouseModuleConfiguration.UpgradeCost cost = upgradeCost(levels, record.level());
+            WarehouseModuleConfiguration.UpgradeCost cost = upgradeCost(levels, shared.level());
             packet.put("canUpgrade", true);
             packet.put("nextUpgradeText", cost == null
                 ? service.message("ui.upgrade-to", next.level(), next.capacity())
                 : service.message("ui.upgrade-to-cost", next.level(), next.capacity(), service.formatCurrencyWithName(cost.currencyId(), cost.amount())));
             return;
         }
-        if (!WarehouseService.OWNER_PERSONAL.equals(state.ownerType())) {
-            return;
-        }
-        WarehouseDefinition definition = service.configuration.warehouse(state.warehouseId());
-        WarehouseRecord record = service.personalWarehouseMap(player.getUniqueId()).get(state.warehouseId());
-        if (definition == null || record == null) {
+        if (!WarehouseService.OWNER_PERSONAL.equals(ownerType) || definition == null || personal == null) {
             return;
         }
         // 逐格解锁模型：canUpgrade → 是否还能再买一格；nextUpgradeText → 槽位价格提示。
-        long unlocked = definition.baseSlots() + Math.max(0L, record.extraSlots());
+        long unlocked = personalCapacity(definition, personal);
         if (unlocked >= definition.maxSlots()) {
             packet.put("nextUpgradeText", service.message("ui.buy-slots-maxed"));
             return;
@@ -749,9 +765,9 @@ final class WarehousePacketFactory {
         };
     }
 
-    List<SlotItemRecord> visibleSlots(WarehouseService.ViewState state) {
+    private List<SlotItemRecord> visibleSlots(WarehouseService.ViewState state, List<SlotItemRecord> orderedSlots) {
         String normalizedSearch = WarehouseTexts.normalizeToken(state.search());
-        return orderedSlots(state.ownerType(), state.ownerId(), state.warehouseId(), state.sortId()).stream()
+        return orderedSlots.stream()
             .filter(item -> service.slotMatches(item, state.categoryId(), normalizedSearch))
             .toList();
     }
@@ -829,8 +845,8 @@ final class WarehousePacketFactory {
         return resolveCapacity(ownerType, ownerId, warehouseId);
     }
 
-    String currentWarehouseName(Player player, WarehouseService.ViewState state) throws Exception {
-        UUID lookupUuid = state.previewMode() && state.previewTargetUuid() != null ? state.previewTargetUuid() : player.getUniqueId();
+    private String currentWarehouseName(Player player, WarehouseService.ViewState state, WarehouseRecord record) throws Exception {
+        UUID lookupUuid = player.getUniqueId();
         if (WarehouseService.OWNER_SHARED.equals(state.ownerType())) {
             return service.repository.loadSharedWarehousesByOwner(lookupUuid).stream()
                 .filter(shared -> shared.id().equals(state.ownerId()))
@@ -838,12 +854,30 @@ final class WarehousePacketFactory {
                 .findFirst()
                 .orElse("共享仓库");
         }
-        WarehouseRecord record = service.personalWarehouseMap(lookupUuid).get(state.warehouseId());
         if (record != null && record.customName() != null && !record.customName().isBlank()) {
             return record.customName();
         }
         WarehouseDefinition definition = service.configuration.warehouse(state.warehouseId());
         return definition == null ? "个人仓库" : ChatColor.translateAlternateColorCodes('&', definition.displayName());
+    }
+
+    private String previewWarehouseName(WarehouseService.ViewState state, WarehousePreview.Warehouses preview) {
+        String id = state.warehouseId();
+        return WarehouseService.OWNER_SHARED.equals(state.ownerType())
+            ? preview.shared().get(id).name() : previewPersonalName(preview.personal().get(id));
+    }
+
+    private String previewPersonalName(WarehouseRecord record) {
+        if (record.customName() != null && !record.customName().isBlank()) return record.customName();
+        WarehouseDefinition definition = service.configuration.warehouse(record.warehouseId());
+        return definition == null ? record.warehouseId() : ChatColor.translateAlternateColorCodes('&', definition.displayName());
+    }
+
+    private long personalCapacity(WarehouseDefinition definition, WarehouseRecord record) {
+        if (definition == null) {
+            return 0L;
+        }
+        return definition.baseSlots() + (record == null ? 0L : Math.max(0L, record.extraSlots()));
     }
 
     String firstPersonalWarehouseId() {

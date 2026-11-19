@@ -1,6 +1,7 @@
 package xuanmo.arcartxsuite.fishing.model;
 
 import java.util.Map;
+import java.util.List;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.icon.IconDefinition;
@@ -30,10 +31,13 @@ public record BaitDefinition(
     boolean isDefault,
     @NotNull Map<String, Double> fishAttractModifiers,
     double treasureChanceBoost,
-    int maxDurabilityBonus
+    int maxDurabilityBonus,
+    @NotNull List<FightEffect> fightEffects
 ) {
 
     public double attractModifier(@NotNull String fishId) {
         return fishAttractModifiers.getOrDefault(fishId, 1.0);
     }
+
+    public record FightEffect(String fishId, FishBehaviorType action, int extraRecoveryTicks) {}
 }

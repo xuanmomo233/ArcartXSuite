@@ -1,6 +1,9 @@
 package xuanmo.arcartxsuite.menu.service;
 
+import xuanmo.arcartxsuite.menu.config.MenuButtonDefinition;
+import xuanmo.arcartxsuite.menu.config.MenuDefinition;
 import xuanmo.arcartxsuite.menu.config.MenuLayoutType;
+import xuanmo.arcartxsuite.menu.service.MenuPacketFactory.MenuView;
 
 /**
  * 菜单会话，记录玩家当前打开的菜单状态，包括菜单 ID、布局类型、运行时 UI ID、页索引和点击时间戳。
@@ -14,6 +17,11 @@ public final class MenuSession {
     private final String runtimeUiId;
     private int pageIndex;
     private long lastClickAt;
+    private int actionDepth;
+    private int publishedPageIndex = -1;
+    private MenuDefinition publishedDefinition;
+    private MenuView publishedView;
+    private boolean tokenConsumed;
 
     /**
      * 构造菜单会话。
@@ -91,5 +99,47 @@ public final class MenuSession {
      */
     public void markClick(long timestamp) {
         this.lastClickAt = timestamp;
+    }
+
+    void beginActions() {
+        actionDepth++;
+    }
+
+    void endActions() {
+        actionDepth--;
+    }
+
+    boolean actionsRunning() {
+        return actionDepth > 0;
+    }
+
+    boolean isPublished(MenuDefinition definition) {
+        return publishedView != null && publishedDefinition == definition && publishedPageIndex == pageIndex;
+    }
+
+    MenuButtonDefinition displayedButton(MenuDefinition definition, String buttonId, boolean footer) {
+        return isPublished(definition) ? (footer ? publishedView.footers() : publishedView.buttons()).get(buttonId) : null;
+    }
+
+    MenuView publishedView() { return publishedView; }
+
+    boolean tokenConsumed() { return tokenConsumed; }
+
+    void consumeToken() { tokenConsumed = true; }
+
+    boolean unchanged(MenuDefinition definition, MenuView view) {
+        return !tokenConsumed && isPublished(definition)
+            && (publishedView == view || publishedView.payload().equals(view.payload()));
+    }
+
+    void invalidatePublication() {
+        publishedView = null;
+    }
+
+    void published(MenuDefinition definition, int pageIndex, MenuView view) {
+        publishedDefinition = definition;
+        publishedPageIndex = pageIndex;
+        publishedView = view;
+        tokenConsumed = false;
     }
 }

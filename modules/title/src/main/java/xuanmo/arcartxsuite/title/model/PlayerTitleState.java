@@ -54,10 +54,20 @@ public record PlayerTitleState(
      * @return 清理后的状态；若无变化则返回 {@code this}
      */
     public PlayerTitleState sanitize(Instant now) {
+        return sanitize(now, false);
+    }
+
+    /** 清理过期记录和无效展示，保留尚未到生效时间的持有记录。 */
+    public PlayerTitleState sanitizeStored(Instant now) {
+        return sanitize(now, true);
+    }
+
+    private PlayerTitleState sanitize(Instant now, boolean keepFuture) {
+        if (isSanitized(now, keepFuture)) return this;
         LinkedHashMap<String, PlayerOwnedTitle> sanitized = new LinkedHashMap<>();
         for (Map.Entry<String, PlayerOwnedTitle> entry : ownedTitles.entrySet()) {
             PlayerOwnedTitle ownedTitle = entry.getValue();
-            if (ownedTitle == null || !ownedTitle.isEffective(now)) {
+            if (ownedTitle == null || ownedTitle.isExpired(now) || !keepFuture && !ownedTitle.isActive(now)) {
                 continue;
             }
             sanitized.put(entry.getKey(), ownedTitle);
@@ -67,7 +77,8 @@ public record PlayerTitleState(
         for (Map.Entry<String, String> entry : equippedTitleIdsByGroup.entrySet()) {
             String groupId = normalize(entry.getKey());
             String titleId = normalize(entry.getValue());
-            if (groupId.isBlank() || titleId.isBlank() || !sanitized.containsKey(titleId)) {
+            PlayerOwnedTitle equipped = sanitized.get(titleId);
+            if (groupId.isBlank() || titleId.isBlank() || equipped == null || !equipped.isEffective(now)) {
                 continue;
             }
             sanitizedEquipped.put(groupId, titleId);
@@ -90,6 +101,19 @@ public record PlayerTitleState(
         return new PlayerTitleState(playerUuid, sanitizedEquipped, sanitized, sanitizedDisplayTitleId, now);
     }
 
+    private boolean isSanitized(Instant now, boolean keepFuture) {
+        for (PlayerOwnedTitle owned : ownedTitles.values()) {
+            if (owned == null || owned.isExpired(now) || !keepFuture && !owned.isActive(now)) return false;
+        }
+        // 装备和展示标识在构造时已规范化。
+        for (String titleId : equippedTitleIdsByGroup.values()) {
+            PlayerOwnedTitle equipped = ownedTitles.get(titleId);
+            if (equipped == null || !equipped.isEffective(now)) return false;
+        }
+        return displayTitleId.isBlank()
+            || ownedTitles.containsKey(displayTitleId) && equippedTitleIdsByGroup.containsValue(displayTitleId);
+    }
+
     /**
      * 授予称号，若已拥有则刷新发放信息（保留原隐藏状态）。
      *
@@ -102,10 +126,16 @@ public record PlayerTitleState(
      * @return 授予后的新状态
      */
     public PlayerTitleState grant(String titleId, Instant grantedAt, Instant activatesAt, Instant expiresAt, Instant now, String grantedBy) {
+        boolean hidden = ownedTitles.containsKey(titleId) && ownedTitles.get(titleId).hidden();
+        return withOwnedTitle(new PlayerOwnedTitle(titleId, hidden, grantedAt, activatesAt, expiresAt, now, grantedBy), now);
+    }
+
+    /** 应用数据库已确认的持有记录。 */
+    public PlayerTitleState withOwnedTitle(PlayerOwnedTitle title, Instant now) {
+        if (title.equals(ownedTitles.get(title.titleId()))) return sanitizeStored(now);
         LinkedHashMap<String, PlayerOwnedTitle> updatedTitles = new LinkedHashMap<>(ownedTitles);
-        boolean hidden = updatedTitles.containsKey(titleId) && updatedTitles.get(titleId).hidden();
-        updatedTitles.put(titleId, new PlayerOwnedTitle(titleId, hidden, grantedAt, activatesAt, expiresAt, now, grantedBy));
-        return new PlayerTitleState(playerUuid, equippedTitleIdsByGroup, updatedTitles, displayTitleId, now).sanitize(now);
+        updatedTitles.put(title.titleId(), title);
+        return new PlayerTitleState(playerUuid, equippedTitleIdsByGroup, updatedTitles, displayTitleId, now).sanitizeStored(now);
     }
 
     /**

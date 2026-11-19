@@ -39,11 +39,13 @@ final class WarehouseTexts {
      */
     static String loreText(ItemStack itemStack) {
         ItemMeta meta = itemStack == null ? null : itemStack.getItemMeta();
-        if (meta == null || !meta.hasLore() || meta.getLore() == null || meta.getLore().isEmpty()) {
+        if (meta == null || !meta.hasLore()) {
             return "";
         }
+        List<String> lore = meta.getLore();
+        if (lore == null || lore.isEmpty()) return "";
         StringBuilder builder = new StringBuilder();
-        for (String line : meta.getLore()) {
+        for (String line : lore) {
             if (builder.length() > 0) {
                 builder.append('\n');
             }

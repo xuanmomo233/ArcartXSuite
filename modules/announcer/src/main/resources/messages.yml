@@ -29,6 +29,7 @@ help:
 
 # ── status ────────────────────────────────────────────
 status:
+  dropped: "&7公告队列满时拒收的条数: &f{0}"
   title: "&6Announcer 状态"
   active: "&7活跃公告: &f{0}"
   initialized: "&7已初始化玩家: &f{0}"
@@ -39,6 +40,7 @@ status:
 
 # ── broadcast ─────────────────────────────────────────
 broadcast:
+  queue-full: "&c待播公告队列已满，请稍后重试。"
   service-down: "&c广播服务未启动。"
   cross-server-disabled: "&c跨服通道未启用，请先在模块配置中开启 cross-server.enabled，并在宿主 config.yml 配置 cross-server。"
   usage: "&e用法: /{0} announcer {1} <文本>"
@@ -56,6 +58,7 @@ subtitle:
   play-usage: "&e用法: /{0} announcer subtitle play <玩家> <字幕组ID>"
   play-success: "&a已向 {0} 播放字幕组: {1}"
   play-not-found: "&c字幕组不存在: {0}"
+  play-unavailable: "&c字幕组 {0} 的界面未能打开，请稍后重试。"
   stop-usage: "&e用法: /{0} announcer subtitle stop <玩家>"
   stop-success: "&a已停止 {0} 的字幕播放。"
   unknown: "&e未知字幕命令: {0}。可用: list, play, stop"

@@ -1,5 +1,6 @@
 package xuanmo.arcartxsuite.market.recycle;
 
+import xuanmo.arcartxsuite.market.MarketWork;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
@@ -25,6 +26,7 @@ import xuanmo.arcartxsuite.market.storage.MarketRepository;
 public final class RecycleProtectionService implements AutoCloseable {
     private record Cached(RecyclePreferences preferences,Map<String,ItemStack> templates,boolean unreadable,long loadedAt) {}
     private final JavaPlugin plugin;
+    private final MarketWork work;
     private final MarketRepository repository;
     private final RecycleConfiguration config;
     private final VanillaItemNameBridge names;
@@ -38,9 +40,9 @@ public final class RecycleProtectionService implements AutoCloseable {
     private final AtomicLong sequence=new AtomicLong();
     private volatile boolean closed;
 
-    public RecycleProtectionService(JavaPlugin plugin,MarketRepository repository,RecycleConfiguration config,VanillaItemNameBridge names,
+    public RecycleProtectionService(MarketWork work, JavaPlugin plugin,MarketRepository repository,RecycleConfiguration config,VanillaItemNameBridge names,
                                      BiConsumer<Player,RecyclePreferences> refreshed,Consumer<Player> unavailable,Logger logger){
-        this.plugin=plugin;this.repository=repository;this.config=config;this.names=names;this.refreshed=refreshed;this.unavailable=unavailable;this.logger=logger;
+        this.plugin=plugin;this.work = work;this.repository=repository;this.config=config;this.names=names;this.refreshed=refreshed;this.unavailable=unavailable;this.logger=logger;
     }
     public void clear(UUID player){cache.remove(player);generations.remove(player);}
     @Override public void close(){closed=true;cache.clear();generations.clear();loading.clear();changing.clear();}
@@ -80,12 +82,12 @@ public final class RecycleProtectionService implements AutoCloseable {
         UUID id=player.getUniqueId();if(closed || changing.contains(id))return;
         long generation=generations.computeIfAbsent(id,key->sequence.incrementAndGet());
         if(loading.putIfAbsent(id,generation)!=null)return;
-        Bukkit.getScheduler().runTaskAsynchronously(plugin,()->{
+        work.async(()->{
             RecyclePreferences preferences=null;
             try{if(!closed)preferences=repository.recyclePreferences(id,config.defaultAutoRecycle());}
             catch(RuntimeException exception){logger.warning("[RecycleGuard] "+exception.getMessage());}
             if(closed){loading.remove(id,generation);return;}final RecyclePreferences result=preferences;
-            Bukkit.getScheduler().runTask(plugin,()->{
+            work.main(()->{
                 loading.remove(id,generation);Player online=Bukkit.getPlayer(id);
                 if(closed || online==null || !online.isOnline() || changing.contains(id))return;
                 if(generations.getOrDefault(id,-1L)!=generation){request(online);return;}
@@ -153,13 +155,13 @@ public final class RecycleProtectionService implements AutoCloseable {
         if(!changing.add(id)){completed.accept(false,"保护设置正在更新，请等待");return;}
         generations.put(id,sequence.incrementAndGet());
         notifyUnavailable(player);
-        Bukkit.getScheduler().runTaskAsynchronously(plugin,()->{
+        work.async(()->{
             boolean success=false;String error=null;RecyclePreferences updated=null;
             try{success=repository.updateRecyclePreferences(id,version,action,enabled,rule,config.maxProtectionRules());updated=repository.recyclePreferences(id,config.defaultAutoRecycle());}
             catch(RuntimeException exception){error=exception instanceof IllegalArgumentException?exception.getMessage():"保存结果暂不可确认，请刷新核对";logger.warning("[RecycleGuard] "+exception.getMessage());}
             if(closed){changing.remove(id);return;}
             final boolean saved=success;final String failure=error;final RecyclePreferences result=updated;
-            Bukkit.getScheduler().runTask(plugin,()->{
+            work.main(()->{
                 Player online=Bukkit.getPlayer(id);if(closed){changing.remove(id);return;}
                 boolean readable=false;
                 try{

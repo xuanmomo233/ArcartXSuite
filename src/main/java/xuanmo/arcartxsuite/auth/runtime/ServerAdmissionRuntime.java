@@ -13,16 +13,24 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
 import xuanmo.arcartxsuite.api.auth.*;
 import xuanmo.arcartxsuite.api.capability.*;
+import xuanmo.arcartxsuite.module.SimpleEventBus;
 
 /** Normal server admission while the LoginView module is absent, disabled, or unloaded. */
 final class ServerAdmissionRuntime implements HostAuthentication,Listener {
+    private static final String PRESENCE_TOPIC = "axs.auth.presence_day_started";
     private record Connection(Player player,AuthSnapshot snapshot,long joinedAt) {}
+    private static final class DailyPresence {
+        final String date;
+        CompletableFuture<Boolean> receipt;
+
+        DailyPresence(String date) { this.date = date; }
+    }
 
     private final JavaPlugin plugin;
     private final Supplier<EventBusCapability> events;
     private final ZoneId timezone;
     private final Map<UUID,Connection> connections=new ConcurrentHashMap<>();
-    private final Map<UUID,String> presenceDates=new HashMap<>();
+    private final Map<UUID,DailyPresence> dailyPresence=new HashMap<>();
     private BukkitTask presenceTask;
     private boolean active;
 
@@ -47,7 +55,7 @@ final class ServerAdmissionRuntime implements HostAuthentication,Listener {
             AuthSnapshot.Stage.ADMITTED,"server",Set.of(),"SERVER_ADMITTED");
         var connection=new Connection(player,state,System.nanoTime());
         connections.put(profile,connection);
-        presenceDates.remove(profile);
+        dailyPresence.remove(profile);
         Bukkit.getScheduler().runTask(plugin,()->{
             if(!active || connections.get(profile)!=connection || !player.isOnline()) return;
             Bukkit.getPluginManager().callEvent(new AuthAdmissionEvent(state));
@@ -63,14 +71,34 @@ final class ServerAdmissionRuntime implements HostAuthentication,Listener {
 
     private void presence() {
         var bus=events.get();
-        if(bus==null || !bus.hasSubscribers("axs.auth.presence_day_started")) return;
+        if(!active || bus==null || !bus.hasSubscribers(PRESENCE_TOPIC)) return;
+        var localBus=bus instanceof SimpleEventBus local ? local : null;
+        boolean hasConfirmed=localBus==null || localBus.hasConfirmedSubscriber(PRESENCE_TOPIC);
         String date=LocalDate.now(timezone).toString();
         for(var entry:connections.entrySet()) {
             UUID profile=entry.getKey();
-            if(date.equals(presenceDates.get(profile))) continue;
-            presenceDates.put(profile,date);
-            bus.publish("axs.auth.presence_day_started",entry.getValue().player(),Map.of("profile_id",profile.toString(),
-                "business_date",date,"timezone",timezone.getId(),"event_id","server:"+profile+":"+date,"provider","server"));
+            Connection connection=entry.getValue();
+            if(connections.get(profile)!=connection || !connection.player().isOnline()) continue;
+            var fact=dailyPresence.get(profile);
+            if(fact==null || !fact.date.equals(date)) {
+                fact=new DailyPresence(date);
+                dailyPresence.put(profile,fact);
+            }
+            var previous=fact.receipt;
+            if(previous!=null && (!previous.isDone()
+                || (!previous.isCompletedExceptionally() && Boolean.TRUE.equals(previous.getNow(false)))
+                || !hasConfirmed)) continue;
+            var payload=Map.of("profile_id",profile.toString(),"business_date",date,"timezone",timezone.getId(),
+                "event_id","server:"+profile+":"+date,"provider","server");
+            try {
+                var receipt = previous==null && localBus!=null
+                    ? localBus.publishAuthFact(PRESENCE_TOPIC,connection.player(),payload)
+                    : bus.publishConfirmed(PRESENCE_TOPIC,connection.player(),payload);
+                fact.receipt=receipt.toCompletableFuture();
+            } catch(RuntimeException | LinkageError failure) {
+                fact.receipt=CompletableFuture.completedFuture(false);
+                plugin.getLogger().warning("登录任务回执未确认，将重新提交：" + failure.getClass().getSimpleName());
+            }
         }
     }
 
@@ -84,7 +112,7 @@ final class ServerAdmissionRuntime implements HostAuthentication,Listener {
         UUID profile=event.getPlayer().getUniqueId();
         var connection=connections.get(profile);
         if(connection!=null && connection.player()==event.getPlayer() && connections.remove(profile,connection))
-            presenceDates.remove(profile);
+            dailyPresence.remove(profile);
     }
 
     @Override public AuthSnapshot snapshot(UUID profile) {
@@ -140,6 +168,6 @@ final class ServerAdmissionRuntime implements HostAuthentication,Listener {
         if(presenceTask!=null) presenceTask.cancel();
         HandlerList.unregisterAll(this);
         connections.clear();
-        presenceDates.clear();
+        dailyPresence.clear();
     }
 }

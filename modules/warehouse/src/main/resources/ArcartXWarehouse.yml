@@ -21,9 +21,9 @@ settings:
   # 默认 4MB；MySQL max_allowed_packet 较小时可再调低。
   max-item-bytes: 4194304
 
-# 跨服共享仓库编辑锁；MySQL 共享库 + 多子服时建议开启。连接参数见宿主 config.yml cross-server 节。
+# 跨服同步共享仓库编辑锁与公开预览撤回。连接参数见宿主 config.yml cross-server 节。
 cross-server:
-  enabled: false  # 是否启用跨服编辑锁
+  enabled: false  # 是否启用 Warehouse 跨服同步
 
 ui:
   ui-id: "AXS:warehouse_storage"  # 仓库存储界面 UI ID

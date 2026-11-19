@@ -198,7 +198,16 @@ public final class AbyssPlayerCommand implements TabExecutor {
                 }
             }
             case "accept" -> {
-                var result = pm.accept(player);
+                PartyManager.JoinResult result;
+                if (args.length == 1) {
+                    result = pm.accept(player);
+                } else {
+                    try {
+                        result = pm.accept(player, java.util.UUID.fromString(args[1]));
+                    } catch (IllegalArgumentException exception) {
+                        result = PartyManager.JoinResult.NO_INVITE;
+                    }
+                }
                 if (result instanceof PartyManager.JoinResult.Ok ok) {
                     ok.party().appendFeed(null, player.getName() + " 加入了队伍");
                     ok.party().broadcast(service.msg("party.joined", "player", player.getName()));
@@ -302,7 +311,8 @@ public final class AbyssPlayerCommand implements TabExecutor {
                     player.sendMessage(service.msg("error.not-in-party"));
                     return true;
                 }
-                boolean ready = pm.toggleReady(player);
+                boolean ready = args.length > 1 && ("on".equalsIgnoreCase(args[1]) || "off".equalsIgnoreCase(args[1]))
+                    ? pm.setReady(player, "on".equalsIgnoreCase(args[1])) : pm.toggleReady(player);
                 player.sendMessage(service.msg(ready ? "party.ready-on" : "party.ready-off"));
                 pushUpdate(party);
             }

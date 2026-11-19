@@ -44,7 +44,7 @@ ui:
           var.bidHeld = packet['held']
           var.bidDeadline = packet['deadline']
           var.bidProtection = packet['protection']
-          val.自定义出价输入.setContent(var.tradeAmount)
+          var.bidInputPending = var.tradeAmount
           var.bidDirty = false
         } else {
           var.bidCanSubmit = false
@@ -83,44 +83,22 @@ ui:
         }
       }
       if(var.maxCategoryCount != oldMaxCategoryCount){
-        while(val.分类列表.childrenCount() > 1){
-          val.分类列表.get(1).remove()
-        }
-        if(var.maxCategoryCount > 1){
-          for(i in range(1, var.maxCategoryCount - 1)){
-            key = i.round()
-          if(val.分类列表['分类项'] != none) {
-            e = val.分类列表['分类项'].copy('分类项' + key)
-            e.entryKey = key
-          }
+        var.分类列表网格数据 = []
+        if((var.maxCategoryCount - 1) >= 0){
+          for(网格序号 in range(0, var.maxCategoryCount - 1)){
+            var.分类列表网格数据.add(网格序号.round())
           }
         }
       }
       if(var.maxListingCount != oldMaxListingCount){
-        while(val.物品列表.childrenCount() > 1){
-          val.物品列表.get(1).remove()
-        }
-        if(var.maxListingCount > 1){
-          for(i in range(1, var.maxListingCount - 1)){
-            key = i.round()
-          if(val.物品列表['拍卖卡片'] != none) {
-            e = val.物品列表['拍卖卡片'].copy('拍卖卡片' + key)
-            e.entryKey = key
-          }
+        var.物品列表网格数据 = []
+        if((var.maxListingCount - 1) >= 0){
+          for(网格序号 in range(0, var.maxListingCount - 1)){
+            var.物品列表网格数据.add(网格序号.round())
           }
         }
       }
-      if(var.maxListingCount > 0){
-        for(i in range(0, var.maxListingCount - 1)){
-          key = i.round()
-          if(val.物品列表 != none){
-            e = val.物品列表.get(key)
-            if(e != none && e['物品图标'] != none){
-              e['物品图标'].seticon()
-            }
-          }
-        }
-      }
+      var.物品列表图标待刷新 = true
       var.actionBusy = false
   action:
     seconds: |-
@@ -130,7 +108,7 @@ ui:
         var.refreshSeconds = 0
         if(!var.showTradeConfirm){
           Packet.send(var.packetId, 'auction_list', var.page, var.currentCategory, var.search, 'refresh')
-        } else if(var.tradeMode == 'bid' && !var.bidDirty && !var.quoteBusy){
+        } elif(var.tradeMode == 'bid' && !var.bidDirty && !var.quoteBusy){
           var.quoteBusy = true
           Packet.send(var.packetId, 'auction_quote', var.tradeId, var.tradeAmount)
         }
@@ -153,6 +131,7 @@ ui:
       var.quoteBusy = false
       var.bidCanSubmit = false
       var.bidDirty = false
+      var.bidInputPending = none
       var.bidReason = ''
       var.search = ''
       var.categoryTexts = {}
@@ -173,6 +152,14 @@ ui:
       var.contentW = var.viewW - 420
       var.scrollW = var.contentW - 72
       var.cardW = (var.scrollW - 32) / 3
+    tick: |-
+      if(var.bidInputPending != none && val.自定义出价输入 != none){
+        if(var.showTradeConfirm && var.tradeMode == 'bid' && val.自定义出价输入.getContent() != var.bidInputPending){
+          val.自定义出价输入.setContent(var.bidInputPending)
+          var.bidDirty = false
+        }
+        var.bidInputPending = none
+      }
     open: |-
       Packet.send(var.packetId, 'auction_list', '0', 'all', none)
     resize: |-
@@ -185,6 +172,26 @@ ui:
       var.contentW = var.viewW - 420
       var.scrollW = var.contentW - 72
       var.cardW = (var.scrollW - 32) / 3
+
+tasks:
+  refresh-repeat-grid-icons:
+    type: loop
+    time: 100
+    cycle: 100
+    run: |-
+      if(var.物品列表图标待刷新 == true && var.物品列表网格数据 != none && val.物品列表 != none && val.物品列表.childrenCount() == var.物品列表网格数据.size()){
+        var.物品列表图标待刷新 = false
+        if(var.物品列表网格数据.size() > 0){
+          for(网格序号 in range(0, var.物品列表网格数据.size() - 1)){
+            网格项 = val.物品列表.get(网格序号.round())
+            if(网格项 != none){
+              if(网格项['物品图标'] != none){
+                网格项['物品图标'].seticon()
+              }
+            }
+          }
+        }
+      }
 
 controls:
   # ── 全屏毛玻璃底 ──────────────────────────────────
@@ -582,15 +589,19 @@ controls:
             children:
               分类列表:
                 val: 分类列表
-                type: VStack
+                type: RepeatGrid
                 attribute:
+                  items: "var.分类列表网格数据"
+                  flow: ~row
+                  column: 1
+                  spaceBetweenY: 8
+                  maxSize: "var.分类列表网格数据 == none ? 0 : var.分类列表网格数据.size()"
                   width: 254
-                  spaceBetween: 8
                 children:
                   分类项:
                     type: Canvas
                     attribute:
-                      entryKey: 0.round()
+                      entryKey: self.item
                       entry: var.categories[self.entryKey]
                       visible: self.entry != none
                       width: 254
@@ -881,8 +892,11 @@ controls:
             children:
               物品列表:
                 val: 物品列表
-                type: HGrid
+                type: RepeatGrid
                 attribute:
+                  items: "var.物品列表网格数据"
+                  flow: ~row
+                  maxSize: "var.物品列表网格数据 == none ? 0 : var.物品列表网格数据.size()"
                   width: "var.scrollW"
                   column: 3
                   spaceBetweenX: 16
@@ -891,7 +905,7 @@ controls:
                   拍卖卡片:
                     type: Canvas
                     attribute:
-                      entryKey: 0.round()
+                      entryKey: self.item
                       entry: var.listings[self.entryKey]
                       visible: self.entry != none
                       width: "var.cardW"
@@ -1259,193 +1273,254 @@ controls:
         type: Texture
         attribute:
           point: ~stretch_all
-          normal: ~0,0,0,180
-      面板:
-        type: Canvas
+          normal: ~12,19,33,178
+      自适应弹窗:
+        type: Adaptive
         attribute:
           point: ~middle_center
-          width: 800
-          height: "var.tradeMode == 'bid' ? 580 : 260"
+          width: 1920
+          height: 1080
         children:
-          背景:
-            type: Texture
-            attribute:
-              point: ~stretch_all
-              through: true
-              normal: ~36,38,48,245
-          标题:
-            type: Text
-            attribute:
-              point: ~top_center
-              y: 24
-              texts: "var.tradeMode == 'bid' ? '&f竞价：' + var.tradeName : '&f确认下架'"
-              fontSize: 36
-              through: true
-          内容:
-            type: Text
-            attribute:
-              point: ~top_center
-              y: 80
-              texts: "var.tradeMode == 'bid' ? var.bidReason : var.tradeConfirmText"
-              fontSize: 28
-              through: true
-          自定义出价输入:
-            type: TextBox
-            val: 自定义出价输入
-            attribute:
-              point: ~top_center
-              y: 140
-              width: 260
-              height: 44
-              length: 32
-              inputPattern: "^[0-9.]*$"
-              emptyText: "~&7输入你的出价"
-              visible: "var.tradeMode == 'bid'"
-              editable: "!var.quoteBusy && !var.actionBusy"
-              fontSize: 32
-            action:
-              textChange: |-
-                var.tradeAmount = self.getContent()
-                var.bidDirty = true
-              enter: |-
-                var.quoteBusy = true
-                Packet.send(var.packetId, 'auction_quote', var.tradeId, var.tradeAmount)
-          最低出价:
+          面板:
             type: Canvas
             attribute:
-              point: ~top_center
-              x: -280
-              y: 138
-              width: 160
-              height: 48
-              visible: "var.tradeMode == 'bid'"
-              enable: "!var.quoteBusy && !var.actionBusy"
-            action:
-              clickLeft: |-
-                var.quoteBusy = true
-                Packet.send(var.packetId, 'auction_quote', var.tradeId, '0')
+              point: ~middle_center
+              width: 800
+              height: "var.tradeMode == 'bid' ? 580 : 260"
             children:
-              文字:
-                type: Text
+              背景:
+                type: Texture
                 attribute:
-                  point: ~middle_center
-                  texts: "~&b最低有效出价"
-                  fontSize: 26
+                  point: ~stretch_all
                   through: true
-          更新报价:
-            type: Canvas
-            attribute:
-              point: ~top_center
-              x: 280
-              y: 138
-              width: 160
-              height: 48
-              visible: "var.tradeMode == 'bid'"
-              enable: "!var.quoteBusy && !var.actionBusy"
-            action:
-              clickLeft: |-
-                var.quoteBusy = true
-                Packet.send(var.packetId, 'auction_quote', var.tradeId, var.tradeAmount)
-            children:
-              文字:
+                  normal: ~32,43,62,250
+                  shape: ~round_rect
+                  radius: 12
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~86,145,225,200
+              标题:
                 type: Text
                 attribute:
-                  point: ~middle_center
-                  texts: "~&b更新报价"
-                  fontSize: 26
+                  point: ~top_center
+                  y: 24
+                  texts: "var.tradeMode == 'bid' ? '&f竞价：' + var.tradeName : '&f确认下架'"
+                  fontSize: 36
                   through: true
-          当前竞价:
-            type: Text
-            attribute:
-              point: ~top_center
-              y: 220
-              visible: "var.tradeMode == 'bid'"
-              texts: "'&7当前: ' + var.bidCurrent + '；领先: ' + var.bidHighest"
-              fontSize: 24
-              through: true
-          最低金额:
-            type: Text
-            attribute:
-              point: ~top_center
-              y: 264
-              visible: "var.tradeMode == 'bid'"
-              texts: "'&7最低有效出价: &e' + var.bidMinimum"
-              fontSize: 24
-              through: true
-          本次扣款:
-            type: Text
-            attribute:
-              point: ~top_center
-              y: 308
-              visible: "var.tradeMode == 'bid'"
-              texts: "'&7已冻结 ' + var.bidHeld + '；本次追加扣款 &e' + var.bidDebit"
-              fontSize: 24
-              through: true
-          截止时间:
-            type: Text
-            attribute:
-              point: ~top_center
-              y: 352
-              visible: "var.tradeMode == 'bid'"
-              texts: "'&7当前截止时间: ' + var.bidDeadline"
-              fontSize: 24
-              through: true
-          延时规则:
-            type: Text
-            attribute:
-              point: ~top_center
-              y: 396
-              visible: "var.tradeMode == 'bid'"
-              texts: "'&6' + var.bidProtection"
-              fontSize: 24
-              through: true
-          扣款说明:
-            type: Text
-            attribute:
-              point: ~top_center
-              y: 440
-              visible: "var.tradeMode == 'bid'"
-              texts: "'&7被他人超价后原押金进入退款队列；领先者再次加价仅扣差额'"
-              fontSize: 24
-              through: true
-          确认:
-            type: Canvas
-            attribute:
-              point: ~bottom_left
-              x: 90
-              y: -24
-              width: 240
-              height: 48
-              enable: "!var.actionBusy && var.actionToken != '' && (var.tradeMode == 'cancel' || (!var.quoteBusy && !var.bidDirty && var.bidCanSubmit))"
-            action:
-              clickLeft: |-
-                var.showTradeConfirm = false
-                var.actionBusy = true
-                var.executeTrade()
-            children:
-              文字:
+              内容:
                 type: Text
                 attribute:
-                  point: ~middle_center
-                  texts: "~&a确认"
+                  point: ~top_center
+                  y: 80
+                  texts: "var.tradeMode == 'bid' ? var.bidReason : var.tradeConfirmText"
+                  fontSize: 28
+                  through: true
+              自定义出价输入:
+                type: TextBox
+                val: 自定义出价输入
+                attribute:
+                  point: ~top_center
+                  y: 140
+                  width: 260
+                  height: 44
+                  length: 32
+                  inputPattern: ~^[0-9.]*$
+                  emptyText: "~&7输入你的出价"
+                  visible: "var.tradeMode == 'bid'"
+                  editable: "!var.quoteBusy && !var.actionBusy"
                   fontSize: 32
-                  through: true
-          取消:
-            type: Canvas
-            attribute:
-              point: ~bottom_right
-              x: -90
-              y: -24
-              width: 240
-              height: 48
-            action:
-              clickLeft: |-
-                var.showTradeConfirm = false
-            children:
-              文字:
+                action:
+                  textChange: |-
+                    var.tradeAmount = self.getContent()
+                    var.bidDirty = true
+                  enter: |-
+                    var.quoteBusy = true
+                    Packet.send(var.packetId, 'auction_quote', var.tradeId, var.tradeAmount)
+              最低出价:
+                type: Canvas
+                attribute:
+                  point: ~top_center
+                  x: -280
+                  y: 138
+                  width: 160
+                  height: 48
+                  visible: "var.tradeMode == 'bid'"
+                  enable: "!var.quoteBusy && !var.actionBusy"
+                action:
+                  clickLeft: |-
+                    var.quoteBusy = true
+                    Packet.send(var.packetId, 'auction_quote', var.tradeId, '0')
+                children:
+                  按钮底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      shape: ~round_rect
+                      radius: 8
+                      normal: "self.parent.enable == false ? '44,56,75,225' : (self.parent.isHovered() ? '55,91,139,255' : '40,61,91,248')"
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~103,151,219,215
+                  文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: "~&f最低有效出价"
+                      fontSize: 26
+                      through: true
+              更新报价:
+                type: Canvas
+                attribute:
+                  point: ~top_center
+                  x: 280
+                  y: 138
+                  width: 160
+                  height: 48
+                  visible: "var.tradeMode == 'bid'"
+                  enable: "!var.quoteBusy && !var.actionBusy"
+                action:
+                  clickLeft: |-
+                    var.quoteBusy = true
+                    Packet.send(var.packetId, 'auction_quote', var.tradeId, var.tradeAmount)
+                children:
+                  按钮底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      shape: ~round_rect
+                      radius: 8
+                      normal: "self.parent.enable == false ? '44,56,75,225' : (self.parent.isHovered() ? '55,91,139,255' : '40,61,91,248')"
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~103,151,219,215
+                  文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: "~&f更新报价"
+                      fontSize: 26
+                      through: true
+              当前竞价:
                 type: Text
                 attribute:
-                  point: ~middle_center
-                  texts: "~&f取消"
-                  fontSize: 32
+                  point: ~top_center
+                  y: 220
+                  visible: "var.tradeMode == 'bid'"
+                  texts: "'&7当前: ' + var.bidCurrent + '；领先: ' + var.bidHighest"
+                  fontSize: 24
                   through: true
+              最低金额:
+                type: Text
+                attribute:
+                  point: ~top_center
+                  y: 264
+                  visible: "var.tradeMode == 'bid'"
+                  texts: "'&7最低有效出价: &e' + var.bidMinimum"
+                  fontSize: 24
+                  through: true
+              本次扣款:
+                type: Text
+                attribute:
+                  point: ~top_center
+                  y: 308
+                  visible: "var.tradeMode == 'bid'"
+                  texts: "'&7已冻结 ' + var.bidHeld + '；本次追加扣款 &e' + var.bidDebit"
+                  fontSize: 24
+                  through: true
+              截止时间:
+                type: Text
+                attribute:
+                  point: ~top_center
+                  y: 352
+                  visible: "var.tradeMode == 'bid'"
+                  texts: "'&7当前截止时间: ' + var.bidDeadline"
+                  fontSize: 24
+                  through: true
+              延时规则:
+                type: Text
+                attribute:
+                  point: ~top_center
+                  y: 396
+                  visible: "var.tradeMode == 'bid'"
+                  texts: "'&6' + var.bidProtection"
+                  fontSize: 24
+                  through: true
+              扣款说明:
+                type: Text
+                attribute:
+                  point: ~top_center
+                  y: 440
+                  visible: "var.tradeMode == 'bid'"
+                  texts: "'&7被他人超价后原押金进入退款队列；领先者再次加价仅扣差额'"
+                  fontSize: 24
+                  through: true
+              确认:
+                type: Canvas
+                attribute:
+                  point: ~bottom_left
+                  x: 90
+                  y: -24
+                  width: 240
+                  height: 48
+                  enable: "!var.actionBusy && var.actionToken != '' && (var.tradeMode == 'cancel' || (!var.quoteBusy && !var.bidDirty && var.bidCanSubmit))"
+                action:
+                  clickLeft: |-
+                    var.showTradeConfirm = false
+                    var.actionBusy = true
+                    var.executeTrade()
+                children:
+                  按钮底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      shape: ~round_rect
+                      radius: 8
+                      normal: "self.parent.enable == false ? '44,56,75,225' : (self.parent.isHovered() ? '94,199,151,255' : '49,143,105,250')"
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~121,215,178,225
+                  文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: "~&f确认"
+                      fontSize: 32
+                      through: true
+              取消:
+                type: Canvas
+                attribute:
+                  point: ~bottom_right
+                  x: -90
+                  y: -24
+                  width: 240
+                  height: 48
+                action:
+                  clickLeft: |-
+                    var.showTradeConfirm = false
+                children:
+                  按钮底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      shape: ~round_rect
+                      radius: 8
+                      normal: "self.parent.enable == false ? '44,56,75,225' : (self.parent.isHovered() ? '55,91,139,255' : '40,61,91,248')"
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~103,151,219,215
+                  文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: "~&f取消"
+                      fontSize: 32
+                      through: true

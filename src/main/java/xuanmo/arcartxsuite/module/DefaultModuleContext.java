@@ -10,6 +10,7 @@ import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.logging.Logger;
 import org.bukkit.Bukkit;
@@ -23,7 +24,7 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.event.Listener;
 import org.bukkit.plugin.java.JavaPlugin;
 import xuanmo.arcartxsuite.api.ClientInitializedHandler;
-import xuanmo.arcartxsuite.api.ClientPacketHandler;
+import xuanmo.arcartxsuite.api.PacketHandlerSpec;
 import xuanmo.arcartxsuite.api.ModuleContext;
 import xuanmo.arcartxsuite.api.UiBinding;
 import xuanmo.arcartxsuite.api.bridge.ClientBridgeAPI;
@@ -74,12 +75,14 @@ final class DefaultModuleContext implements ModuleContext {
     private final CrossServerService crossServerService;
     private final StorageManager storageManager;
     private final SchedulerAPI scheduler;
+    private volatile ModuleScheduler moduleScheduler;
 
 
     // 模块注册的资源（onDisable 时自动清理）
     private final List<Listener> registeredListeners = new ArrayList<>();
     private final List<String> registeredCommandNames = new ArrayList<>();
     private final Map<String, PluginCommand> dynamicCommands = new HashMap<>();
+    private final ModuleCommandBindings commandBindings = new ModuleCommandBindings();
     private final List<xuanmo.arcartxsuite.api.KeybindHandler> registeredKeybindHandlers = new ArrayList<>();
 
     private final PlaceholderResolverAPI placeholderResolver;
@@ -122,6 +125,7 @@ final class DefaultModuleContext implements ModuleContext {
         this.placeholderResolver = placeholderResolver;
         this.storageManager = storageManager;
         this.scheduler = scheduler;
+        this.moduleScheduler = new ModuleScheduler(scheduler, logger);
         this.expansionRegistry = resolveExpansionRegistry(logger);
     }
 
@@ -333,7 +337,18 @@ final class DefaultModuleContext implements ModuleContext {
 
     @Override
     public @NotNull SchedulerAPI scheduler() {
-        return scheduler;
+        return moduleScheduler;
+    }
+
+    @Override
+    public void beginScheduledTasks() {
+        moduleScheduler.close();
+        moduleScheduler = new ModuleScheduler(scheduler, logger);
+    }
+
+    @Override
+    public java.util.concurrent.CompletionStage<Void> cancelScheduledTasks() {
+        return moduleScheduler.close();
     }
 
     @Override
@@ -390,11 +405,26 @@ final class DefaultModuleContext implements ModuleContext {
             return;
         }
         // 命令未在 plugin.yml 声明，尝试通过 CommandMap 动态注册
-        if (registerDynamicCommand(commandName, executor)) {
+        if (registerDynamicCommand(commandName, executor, null)) {
             logger.fine("命令 '" + commandName + "' 已通过 CommandMap 动态注册");
         } else {
             logger.warning("命令 '" + commandName + "' 未在 plugin.yml 中声明，且动态注册失败，跳过绑定");
         }
+    }
+
+    @Override
+    public void registerCommand(String commandName, TabExecutor executor, boolean protectExisting) {
+        registerCommand(commandName, executor, protectExisting, null);
+    }
+
+    @Override
+    public void registerCommand(String commandName, TabExecutor executor, boolean protectExisting, String permission) {
+        String label = commandName.toLowerCase(Locale.ROOT).trim();
+        if (label.isEmpty() || label.contains(":") || label.contains("/") || label.chars().anyMatch(Character::isWhitespace)) {
+            logger.warning("命令简写 '" + commandName + "' 无效，跳过注册");
+            return;
+        }
+        registerDynamicCommand(label, executor, protectExisting, permission);
     }
 
     /**
@@ -412,18 +442,22 @@ final class DefaultModuleContext implements ModuleContext {
      * @param executor    命令执行器
      * @return {@code true} 表示注册成功
      */
-    private boolean registerDynamicCommand(String commandName, TabExecutor executor) {
+    private boolean registerDynamicCommand(String commandName, TabExecutor executor, Boolean protectExisting) {
+        return registerDynamicCommand(commandName, executor, protectExisting, null);
+    }
+
+    private boolean registerDynamicCommand(String commandName, TabExecutor executor, Boolean protectExisting, String permission) {
         try {
             CommandMap commandMap = getCommandMap();
             if (commandMap == null) return false;
             Command existing = commandMap.getCommand(commandName);
-            if (existing instanceof PluginCommand pc && pc.getPlugin() == plugin) {
+            if (protectExisting == null && existing instanceof PluginCommand pc && pc.getPlugin() == plugin) {
                 pc.setExecutor(executor);
                 pc.setTabCompleter(executor);
                 dynamicCommands.put(commandName, pc);
                 return true;
             }
-            PluginCommand newCommand = dynamicCommands.get(commandName);
+            PluginCommand newCommand = protectExisting == null ? dynamicCommands.get(commandName) : null;
             if (newCommand == null) {
                 // 用反射创建 PluginCommand（构造函数需要 Plugin 参数）
                 java.lang.reflect.Constructor<PluginCommand> ctor =
@@ -432,15 +466,27 @@ final class DefaultModuleContext implements ModuleContext {
                 newCommand = ctor.newInstance(commandName, plugin);
                 applyCommandMetadata(newCommand, commandName);
             }
+            if (permission != null) newCommand.setPermission(permission.isEmpty() ? null : permission);
             newCommand.setExecutor(executor);
             newCommand.setTabCompleter(executor);
-            // label 被其他插件占用时 register 仍保留 <fallback>:<name> 前缀形式
-            if (existing != null) {
-                logger.info("命令 '" + commandName + "' 已被其他插件注册，将仅通过 "
-                    + plugin.getName().toLowerCase() + ":" + commandName + " 前缀形式可用");
+            if (protectExisting != null) {
+                Map<String, Command> known = knownCommands(commandMap);
+                if (known == null) {
+                    logger.warning("无法访问命令注册表，跳过注册 /" + commandName);
+                    return false;
+                }
+                if (!commandBindings.register(commandMap, known, newCommand, protectExisting, logger)) {
+                    return false;
+                }
+            } else {
+                String namespace = plugin.getName().toLowerCase(Locale.ROOT);
+                boolean registered = commandMap.register(namespace, newCommand);
+                if (!registered && existing != null) {
+                    logger.info("命令 /" + commandName + " 与" + ModuleCommandBindings.describeSource(existing)
+                        + "的命令冲突，本模块使用 /" + namespace + ":" + commandName);
+                }
+                dynamicCommands.put(commandName, newCommand);
             }
-            commandMap.register(plugin.getName().toLowerCase(), newCommand);
-            dynamicCommands.put(commandName, newCommand);
             syncCommandsSafely();
             return true;
         } catch (Exception e) {
@@ -510,9 +556,8 @@ final class DefaultModuleContext implements ModuleContext {
      * 读取 SimpleCommandMap 的 knownCommands（含 Paper 子类实现）。
      */
     @SuppressWarnings("unchecked")
-    private Map<String, Command> knownCommands() {
+    private Map<String, Command> knownCommands(CommandMap commandMap) {
         try {
-            CommandMap commandMap = getCommandMap();
             if (commandMap == null) return null;
             Class<?> type = commandMap.getClass();
             while (type != null) {
@@ -528,6 +573,31 @@ final class DefaultModuleContext implements ModuleContext {
             logger.warning("获取 knownCommands 失败: " + e.getMessage());
         }
         return null;
+    }
+
+    @Override
+    public CommandRegistrationInfo inspectCommand(String label) {
+        CommandMap commandMap = getCommandMap();
+        if (commandMap == null) return new CommandRegistrationInfo("查询不可用", null, null);
+        String key = label.trim().toLowerCase(Locale.ROOT);
+        String qualified = plugin.getName().toLowerCase(Locale.ROOT) + ":" + key;
+        Command command = commandMap.getCommand(key);
+        Command previous = commandBindings.previous(key, command);
+        String owner = command == null ? "未注册" : commandBindings.owns(key, command) ? moduleId
+            : ModuleCommandBindings.describeSource(command);
+        String moduleAlias = commandBindings.owns(qualified, commandMap.getCommand(qualified)) ? qualified : null;
+        return new CommandRegistrationInfo(owner, moduleAlias, previous == null ? null : ModuleCommandBindings.describeSource(previous));
+    }
+
+    @Override
+    public void unregisterDynamicCommands() {
+        if (!commandBindings.isEmpty()) {
+            Map<String, Command> known = knownCommands(getCommandMap());
+            if (known != null) {
+                commandBindings.unregister(known);
+                syncCommandsSafely();
+            }
+        }
     }
 
     /**
@@ -549,8 +619,9 @@ final class DefaultModuleContext implements ModuleContext {
      * （含别名与 fallback 前缀条目），使命令名立即可被其他插件使用。
      */
     void unbindCommands() {
+        unregisterDynamicCommands();
         if (!dynamicCommands.isEmpty()) {
-            Map<String, Command> known = knownCommands();
+            Map<String, Command> known = knownCommands(getCommandMap());
             if (known != null) {
                 known.values().removeIf(dynamicCommands::containsValue);
             }
@@ -582,23 +653,8 @@ final class DefaultModuleContext implements ModuleContext {
     // ─── 新增：客户端事件路由 ────────────────────────────────
 
     @Override
-    public void registerClientPacketHandler(ClientPacketHandler handler) {
-        registerClientPacketHandler(handler, 0);
-    }
-
-    @Override
-    public void registerClientPacketHandler(ClientPacketHandler handler, int priority) {
-        registry.registerClientPacketHandler(moduleId, handler, priority);
-    }
-
-    @Override
-    public void registerClientPacketHandler(
-        ClientPacketHandler handler,
-        int priority,
-        String packetId,
-        String guardModule
-    ) {
-        registry.registerClientPacketHandler(moduleId, handler, priority, packetId, guardModule);
+    public void registerClientPacketHandler(PacketHandlerSpec spec) {
+        registry.registerClientPacketHandler(moduleId, spec);
     }
 
     @Override

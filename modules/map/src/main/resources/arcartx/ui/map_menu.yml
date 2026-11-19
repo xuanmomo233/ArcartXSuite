@@ -3,7 +3,7 @@
 # 前置依赖: ArcartX + ArcartX-Suite-Map 客户端 mod；Map 模块启用后会自动注册或导出。
 # 启用开关: config.yml -> modules.map.enabled + modules.map.password
 # 关联文件: ArcartXMap.yml、ui/map_hud.yml
-# 重载命令: /axs map reload
+# 重载命令: /axs reload map
 #
 # 大地图渲染由 ArcartX-Suite-Map 客户端 mod 完全接管：
 #   - UI 的 tick 每帧调用 mapRenderer.setRegion() 传地图渲染区屏幕坐标
@@ -29,6 +29,7 @@ ui:
       var.playerWorldId = packet['playerWorldId']
       var.litEnabled = packet['litEnabled']
       var.litRegions = packet['litRegions']
+      var.regionBoundaries = packet['regionBoundaries']
       var.worldRows = packet['worldRows']
       var.anchorRows = packet['anchorRows']
       var.waypointRows = packet['waypointRows']
@@ -93,70 +94,51 @@ ui:
       }
       // 池化条目：entryKey 自绑定行数据（entry: var.xxxRows[self.entryKey]），
       // 数据刷新无需重建——仅 maxXxxCount 变化时才删建，消掉 update 闪烁。
-      var.worldTpl = val.world_entry['地图项目']
-      if(var.worldTpl != none && var.maxWorldCount != var.lastWorldPool) {
-        var.lastWorldPool = var.maxWorldCount
-        while(val.world_entry.childrenCount() > 1){
-          val.world_entry.get(1).remove()
+      if(var.world_entryRows == none || var.world_entryRows.size() != (var.maxWorldCount)){
+        网格数据 = []
+        if((var.maxWorldCount) > 0){
+          for(网格序号 in range(0, (var.maxWorldCount) - 1)){
+            网格数据.add(网格序号.round())
+          }
         }
-        for(i in range(1, var.maxWorldCount - 1)){
-          var.key = i.round()
-          var.entry = var.worldTpl.copy('地图项目' + var.key)
-          var.entry.entryKey = var.key
-        }
+        var.world_entryRows = 网格数据
       }
       // 浏览面板分类列表：与世界列表同款模板复制（模板=栈子0，复制 max-1 份）
-      if(val.browse_anchor != none && val.browse_anchor['浏览锚点项'] != none && var.maxAnchorCount != var.lastAnchorPool) {
-        var.lastAnchorPool = var.maxAnchorCount
-        while(val.browse_anchor.childrenCount() > 1){
-          val.browse_anchor.get(1).remove()
-        }
-        if(var.maxAnchorCount > 1) {
-          for(i in range(1, var.maxAnchorCount - 1)){
-            var.key = i.round()
-            var.entry = val.browse_anchor['浏览锚点项'].copy('浏览锚点项' + var.key)
-            var.entry.entryKey = var.key
+      if(var.browse_anchorRows == none || var.browse_anchorRows.size() != (var.maxAnchorCount)){
+        网格数据 = []
+        if((var.maxAnchorCount) > 0){
+          for(网格序号 in range(0, (var.maxAnchorCount) - 1)){
+            网格数据.add(网格序号.round())
           }
         }
+        var.browse_anchorRows = 网格数据
       }
-      if(val.browse_waypoint != none && val.browse_waypoint['浏览路径点项'] != none && var.maxWaypointCount != var.lastWaypointPool) {
-        var.lastWaypointPool = var.maxWaypointCount
-        while(val.browse_waypoint.childrenCount() > 1){
-          val.browse_waypoint.get(1).remove()
-        }
-        if(var.maxWaypointCount > 1) {
-          for(i in range(1, var.maxWaypointCount - 1)){
-            var.key = i.round()
-            var.entry = val.browse_waypoint['浏览路径点项'].copy('浏览路径点项' + var.key)
-            var.entry.entryKey = var.key
+      if(var.browse_waypointRows == none || var.browse_waypointRows.size() != (var.maxWaypointCount)){
+        网格数据 = []
+        if((var.maxWaypointCount) > 0){
+          for(网格序号 in range(0, (var.maxWaypointCount) - 1)){
+            网格数据.add(网格序号.round())
           }
         }
+        var.browse_waypointRows = 网格数据
       }
-      if(val.browse_pin != none && val.browse_pin['浏览标记点项'] != none && var.maxPinCount != var.lastPinPool) {
-        var.lastPinPool = var.maxPinCount
-        while(val.browse_pin.childrenCount() > 1){
-          val.browse_pin.get(1).remove()
-        }
-        if(var.maxPinCount > 1) {
-          for(i in range(1, var.maxPinCount - 1)){
-            var.key = i.round()
-            var.entry = val.browse_pin['浏览标记点项'].copy('浏览标记点项' + var.key)
-            var.entry.entryKey = var.key
+      if(var.browse_pinRows == none || var.browse_pinRows.size() != (var.maxPinCount)){
+        网格数据 = []
+        if((var.maxPinCount) > 0){
+          for(网格序号 in range(0, (var.maxPinCount) - 1)){
+            网格数据.add(网格序号.round())
           }
         }
+        var.browse_pinRows = 网格数据
       }
-      if(val.browse_external != none && val.browse_external['浏览其它项'] != none && var.maxExternalCount != var.lastExternalPool) {
-        var.lastExternalPool = var.maxExternalCount
-        while(val.browse_external.childrenCount() > 1){
-          val.browse_external.get(1).remove()
-        }
-        if(var.maxExternalCount > 1) {
-          for(i in range(1, var.maxExternalCount - 1)){
-            var.key = i.round()
-            var.entry = val.browse_external['浏览其它项'].copy('浏览其它项' + var.key)
-            var.entry.entryKey = var.key
+      if(var.browse_externalRows == none || var.browse_externalRows.size() != (var.maxExternalCount)){
+        网格数据 = []
+        if((var.maxExternalCount) > 0){
+          for(网格序号 in range(0, (var.maxExternalCount) - 1)){
+            网格数据.add(网格序号.round())
           }
         }
+        var.browse_externalRows = 网格数据
       }
       if(var.mapRenderer != none) {
         var.mapRenderer.beginMarkers()
@@ -202,6 +184,7 @@ ui:
       var.playerWorldId = packet['playerWorldId']
       var.litEnabled = packet['litEnabled']
       var.litRegions = packet['litRegions']
+      var.regionBoundaries = packet['regionBoundaries']
       var.worldRows = packet['worldRows']
       var.anchorRows = packet['anchorRows']
       var.waypointRows = packet['waypointRows']
@@ -266,70 +249,51 @@ ui:
       }
       // 池化条目：entryKey 自绑定行数据（entry: var.xxxRows[self.entryKey]），
       // 数据刷新无需重建——仅 maxXxxCount 变化时才删建，消掉 update 闪烁。
-      var.worldTpl = val.world_entry['地图项目']
-      if(var.worldTpl != none && var.maxWorldCount != var.lastWorldPool) {
-        var.lastWorldPool = var.maxWorldCount
-        while(val.world_entry.childrenCount() > 1){
-          val.world_entry.get(1).remove()
+      if(var.world_entryRows == none || var.world_entryRows.size() != (var.maxWorldCount)){
+        网格数据 = []
+        if((var.maxWorldCount) > 0){
+          for(网格序号 in range(0, (var.maxWorldCount) - 1)){
+            网格数据.add(网格序号.round())
+          }
         }
-        for(i in range(1, var.maxWorldCount - 1)){
-          var.key = i.round()
-          var.entry = var.worldTpl.copy('地图项目' + var.key)
-          var.entry.entryKey = var.key
-        }
+        var.world_entryRows = 网格数据
       }
       // 浏览面板分类列表：与世界列表同款模板复制（模板=栈子0，复制 max-1 份）
-      if(val.browse_anchor != none && val.browse_anchor['浏览锚点项'] != none && var.maxAnchorCount != var.lastAnchorPool) {
-        var.lastAnchorPool = var.maxAnchorCount
-        while(val.browse_anchor.childrenCount() > 1){
-          val.browse_anchor.get(1).remove()
-        }
-        if(var.maxAnchorCount > 1) {
-          for(i in range(1, var.maxAnchorCount - 1)){
-            var.key = i.round()
-            var.entry = val.browse_anchor['浏览锚点项'].copy('浏览锚点项' + var.key)
-            var.entry.entryKey = var.key
+      if(var.browse_anchorRows == none || var.browse_anchorRows.size() != (var.maxAnchorCount)){
+        网格数据 = []
+        if((var.maxAnchorCount) > 0){
+          for(网格序号 in range(0, (var.maxAnchorCount) - 1)){
+            网格数据.add(网格序号.round())
           }
         }
+        var.browse_anchorRows = 网格数据
       }
-      if(val.browse_waypoint != none && val.browse_waypoint['浏览路径点项'] != none && var.maxWaypointCount != var.lastWaypointPool) {
-        var.lastWaypointPool = var.maxWaypointCount
-        while(val.browse_waypoint.childrenCount() > 1){
-          val.browse_waypoint.get(1).remove()
-        }
-        if(var.maxWaypointCount > 1) {
-          for(i in range(1, var.maxWaypointCount - 1)){
-            var.key = i.round()
-            var.entry = val.browse_waypoint['浏览路径点项'].copy('浏览路径点项' + var.key)
-            var.entry.entryKey = var.key
+      if(var.browse_waypointRows == none || var.browse_waypointRows.size() != (var.maxWaypointCount)){
+        网格数据 = []
+        if((var.maxWaypointCount) > 0){
+          for(网格序号 in range(0, (var.maxWaypointCount) - 1)){
+            网格数据.add(网格序号.round())
           }
         }
+        var.browse_waypointRows = 网格数据
       }
-      if(val.browse_pin != none && val.browse_pin['浏览标记点项'] != none && var.maxPinCount != var.lastPinPool) {
-        var.lastPinPool = var.maxPinCount
-        while(val.browse_pin.childrenCount() > 1){
-          val.browse_pin.get(1).remove()
-        }
-        if(var.maxPinCount > 1) {
-          for(i in range(1, var.maxPinCount - 1)){
-            var.key = i.round()
-            var.entry = val.browse_pin['浏览标记点项'].copy('浏览标记点项' + var.key)
-            var.entry.entryKey = var.key
+      if(var.browse_pinRows == none || var.browse_pinRows.size() != (var.maxPinCount)){
+        网格数据 = []
+        if((var.maxPinCount) > 0){
+          for(网格序号 in range(0, (var.maxPinCount) - 1)){
+            网格数据.add(网格序号.round())
           }
         }
+        var.browse_pinRows = 网格数据
       }
-      if(val.browse_external != none && val.browse_external['浏览其它项'] != none && var.maxExternalCount != var.lastExternalPool) {
-        var.lastExternalPool = var.maxExternalCount
-        while(val.browse_external.childrenCount() > 1){
-          val.browse_external.get(1).remove()
-        }
-        if(var.maxExternalCount > 1) {
-          for(i in range(1, var.maxExternalCount - 1)){
-            var.key = i.round()
-            var.entry = val.browse_external['浏览其它项'].copy('浏览其它项' + var.key)
-            var.entry.entryKey = var.key
+      if(var.browse_externalRows == none || var.browse_externalRows.size() != (var.maxExternalCount)){
+        网格数据 = []
+        if((var.maxExternalCount) > 0){
+          for(网格序号 in range(0, (var.maxExternalCount) - 1)){
+            网格数据.add(网格序号.round())
           }
         }
+        var.browse_externalRows = 网格数据
       }
       if(var.mapRenderer != none) {
         var.mapRenderer.beginMarkers()
@@ -432,6 +396,11 @@ ui:
         // 点亮区域：litEnabled=false → 传 none（全亮不遮罩）；true → 传已解锁区域并集
         var.mapRenderer.setLitRegions('' + var.selectedWorldId,
           var.litEnabled == true ? var.litRegions : none)
+        try {
+          var.mapRenderer.setProtectedRegions('' + var.selectedWorldId,
+            var.regionBoundaries == none ? '' : '' + var.regionBoundaries)
+        } catch(e) {
+        }
       }
       var.call_syncWorldDims = -> {
         if(var.syncWorldDims != none) {
@@ -577,6 +546,8 @@ ui:
       var.filterUnlocked = false
       var.sortDistance = false
       var.showKeyHelp = false
+      var.mapHelpGroups = []
+      var.mapHelpScroll = 0
       var.deletePromptVisible = false
       Packet.send(var.packetId, 'browse_options', '', false, 'name')
     close: |-
@@ -715,11 +686,10 @@ controls:
               关闭按钮:
                 type: Canvas
                 attribute:
-                  tip: ~&f关闭地图
                   point: ~top_right
-                  x: -68
+                  x: -28
                   y: 26
-                  width: 44
+                  width: 86
                   height: 44
                 action:
                   clickLeft: |-
@@ -738,7 +708,7 @@ controls:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      texts: ~&f✕
+                      texts: ~&f关闭
                       fontSize: 36
                       through: true
           # ─── 地图已全屏渲染（mod 在 UI 下层绘制），此处只留加载提示 ───
@@ -1609,11 +1579,10 @@ controls:
           浏览标记按钮:
             type: Canvas
             attribute:
-              tip: ~&f标记浏览
               point: ~top_left
-              x: 116
+              x: 156
               y: "var.viewH - 96"
-              width: 72
+              width: 116
               height: 72
             action:
               clickLeft: |-
@@ -1635,22 +1604,21 @@ controls:
                   stroke:
                     width: "self.isHovered() ? '4' : '3'"
                     color: ~255,255,255,255
-              浏览标记按钮图标:
+              浏览标记按钮文字:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  texts: "var.browsePanelOpen ? '&b☰' : '&f☰'"
-                  fontSize: "var.browsePanelOpen ? '56' : '40'"
+                  texts: "var.browsePanelOpen ? '&6收起标记' : '&f浏览标记'"
+                  fontSize: 30
                   through: true
           # ─── 左下角：图层切换按钮（地表↔洞穴二态；仅当前维度生效，浏览其他世界时点击无视觉变化）───
           图层按钮:
             type: Canvas
             attribute:
-              tip: ~&f切换图层（地表/洞穴）
               point: ~top_left
-              x: 204
+              x: 284
               y: "var.viewH - 96"
-              width: 72
+              width: 126
               height: 72
               enable: "var.mapRenderer != none"
             action:
@@ -1676,18 +1644,17 @@ controls:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  texts: "var.mapRenderer.isMenuCaveView() ? '&b洞穴' : '&f地表'"
+                  texts: "var.mapRenderer != none && var.mapRenderer.isMenuCaveView() ? '&6图层 洞穴' : '&f图层 地表'"
                   fontSize: 30
                   through: true
           # ─── 左下角：洞穴切片深度循环（16/30/48/64，Xaero CAVE_MODE_DEPTH；也可按 N）───
           洞深按钮:
             type: Canvas
             attribute:
-              tip: ~&f循环洞穴层深度；快捷键可自行绑定
               point: ~top_left
-              x: 288
+              x: 422
               y: "var.viewH - 96"
-              width: 72
+              width: 132
               height: 72
               enable: "var.mapRenderer != none"
             action:
@@ -1713,7 +1680,7 @@ controls:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  texts: "'&f深' + var.mapRenderer.getCaveDepthText()"
+                  texts: "var.mapRenderer != none ? '&f洞穴深度 ' + var.mapRenderer.getCaveDepthText() : '&f洞穴深度'"
                   fontSize: 30
                   through: true
           # ─── 标记浏览面板：内部顶部分类按钮 + 滚动条目列表 ───
@@ -2048,18 +2015,22 @@ controls:
                     children:
                       # ── 锚点列表（browseCategory 过滤；条目由 init/update copy 循环生成） ──
                       锚点列表:
-                        type: VStack
+                        type: RepeatGrid
                         val: browse_anchor
                         attribute:
+                          items: "var.browse_anchorRows"
+                          flow: ~row
+                          column: 1
+                          spaceBetweenY: 10
+                          maxSize: "var.browse_anchorRows == none ? 0 : var.browse_anchorRows.size()"
                           width: 398
-                          spaceBetween: 10
                           visible: "var.browseCategory == 'anchor'"
                         children:
                           浏览锚点项:
                             type: Canvas
                             attribute:
                               tip: "self.entry != none ? '&f' + self.entry['displayName'] + ' · 点击定位并选中' : ''"
-                              entryKey: 0.round()
+                              entryKey: self.item
                               entry: var.browseAnchorRows[self.entryKey]
                               visible: self.entry != none
                               width: 398
@@ -2115,18 +2086,22 @@ controls:
                                   through: true
                       # ── 路径点列表 ──
                       路径点列表:
-                        type: VStack
+                        type: RepeatGrid
                         val: browse_waypoint
                         attribute:
+                          items: "var.browse_waypointRows"
+                          flow: ~row
+                          column: 1
+                          spaceBetweenY: 10
+                          maxSize: "var.browse_waypointRows == none ? 0 : var.browse_waypointRows.size()"
                           width: 398
-                          spaceBetween: 10
                           visible: "var.browseCategory == 'waypoint'"
                         children:
                           浏览路径点项:
                             type: Canvas
                             attribute:
                               tip: "self.entry != none ? '&f' + self.entry['name'] + ' · 点击定位并选中' : ''"
-                              entryKey: 0.round()
+                              entryKey: self.item
                               entry: var.browseWaypointRows[self.entryKey]
                               visible: self.entry != none
                               width: 398
@@ -2182,18 +2157,22 @@ controls:
                                   through: true
                       # ── 标记点列表 ──
                       标记点列表:
-                        type: VStack
+                        type: RepeatGrid
                         val: browse_pin
                         attribute:
+                          items: "var.browse_pinRows"
+                          flow: ~row
+                          column: 1
+                          spaceBetweenY: 10
+                          maxSize: "var.browse_pinRows == none ? 0 : var.browse_pinRows.size()"
                           width: 398
-                          spaceBetween: 10
                           visible: "var.browseCategory == 'pin'"
                         children:
                           浏览标记点项:
                             type: Canvas
                             attribute:
                               tip: "self.entry != none ? '&f' + self.entry['name'] + ' · 点击定位并选中' : ''"
-                              entryKey: 0.round()
+                              entryKey: self.item
                               entry: var.browsePinRows[self.entryKey]
                               visible: self.entry != none
                               width: 398
@@ -2249,18 +2228,22 @@ controls:
                                   through: true
                       # ── 其它目标列表 ──
                       其它列表:
-                        type: VStack
+                        type: RepeatGrid
                         val: browse_external
                         attribute:
+                          items: "var.browse_externalRows"
+                          flow: ~row
+                          column: 1
+                          spaceBetweenY: 10
+                          maxSize: "var.browse_externalRows == none ? 0 : var.browse_externalRows.size()"
                           width: 398
-                          spaceBetween: 10
                           visible: "var.browseCategory == 'external'"
                         children:
                           浏览其它项:
                             type: Canvas
                             attribute:
                               tip: "self.entry != none ? '&f' + self.entry['name'] + ' · 点击定位并选中' : ''"
-                              entryKey: 0.round()
+                              entryKey: self.item
                               entry: var.browseExternalRows[self.entryKey]
                               visible: self.entry != none
                               width: 398
@@ -2318,11 +2301,10 @@ controls:
           世界槽位:
             type: Canvas
             attribute:
-              tip: ~&f世界列表
               point: ~top_left
               x: 28
               y: "var.viewH - 96"
-              width: 72
+              width: 116
               height: 72
             action:
               clickLeft: |-
@@ -2344,12 +2326,12 @@ controls:
                   stroke:
                     width: "self.isHovered() ? '4' : '3'"
                     color: ~255,255,255,255
-              世界槽位图标:
+              世界槽位文字:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  texts: "var.worldListOpen ? '&b◉' : '&f◎'"
-                  fontSize: "var.worldListOpen ? '72' : '81'"
+                  texts: "var.worldListOpen ? '&6收起世界' : '&f世界列表'"
+                  fontSize: 30
                   through: true
           世界槽位名:
             type: Text
@@ -2441,16 +2423,20 @@ controls:
                 children:
                   world_list:
                     val: world_entry
-                    type: VStack
+                    type: RepeatGrid
                     attribute:
+                      items: "var.world_entryRows"
+                      flow: ~row
+                      column: 1
+                      spaceBetweenY: 10
+                      maxSize: "var.world_entryRows == none ? 0 : var.world_entryRows.size()"
                       width: 328
-                      spaceBetween: 10
                     children:
                       地图项目:
                         type: Canvas
                         attribute:
                           tip: ~&f点击浏览该世界
-                          entryKey: 0.round()
+                          entryKey: self.item
                           entry: var.worldRows[self.entryKey]
                           visible: self.entry != none
                           width: 320
@@ -2548,11 +2534,10 @@ controls:
           复位按钮:
             type: Canvas
             attribute:
-              tip: ~&f回到玩家并恢复默认缩放
               point: ~top_left
-              x: 204
+              x: 566
               y: "var.viewH - 96"
-              width: 72
+              width: 116
               height: 72
               enable: "var.mapRenderer != none"
             action:
@@ -2659,11 +2644,10 @@ controls:
                   设置关闭按钮:
                     type: Canvas
                     attribute:
-                      tip: ~&f关闭设置
                       point: ~top_right
                       x: -20
                       y: 20
-                      width: 40
+                      width: 68
                       height: 40
                     action:
                       clickLeft: |-
@@ -2682,8 +2666,8 @@ controls:
                         type: Text
                         attribute:
                           point: ~middle_center
-                          texts: ~&f✕
-                          fontSize: 36
+                          texts: ~&f关闭
+                          fontSize: 28
                           through: true
                   设置顶部分隔线:
                     type: Texture
@@ -2965,7 +2949,7 @@ controls:
                       point: ~top_left
                       x: 140
                       y: 252
-                      width: 48
+                      width: 68
                       height: 48
                       enable: "var.mapRenderer != none"
                     action:
@@ -2991,8 +2975,8 @@ controls:
                         type: Text
                         attribute:
                           point: ~middle_center
-                          texts: ~&f-
-                          fontSize: 36
+                          texts: ~&f减小
+                          fontSize: 28
                           through: true
                   尺寸值文字:
                     type: Text
@@ -3009,9 +2993,9 @@ controls:
                     attribute:
                       tip: ~&f增大小地图尺寸
                       point: ~top_left
-                      x: 396
+                      x: 376
                       y: 252
-                      width: 48
+                      width: 68
                       height: 48
                       enable: "var.mapRenderer != none"
                     action:
@@ -3037,8 +3021,8 @@ controls:
                         type: Text
                         attribute:
                           point: ~middle_center
-                          texts: ~&f+
-                          fontSize: 36
+                          texts: ~&f增大
+                          fontSize: 28
                           through: true
                   缩放标签:
                     type: Text
@@ -3056,7 +3040,7 @@ controls:
                       point: ~top_left
                       x: 140
                       y: 312
-                      width: 48
+                      width: 68
                       height: 48
                       enable: "var.mapRenderer != none"
                     action:
@@ -3082,8 +3066,8 @@ controls:
                         type: Text
                         attribute:
                           point: ~middle_center
-                          texts: ~&f-
-                          fontSize: 36
+                          texts: ~&f缩小
+                          fontSize: 28
                           through: true
                   缩放值文字:
                     type: Text
@@ -3100,9 +3084,9 @@ controls:
                     attribute:
                       tip: ~&f放大地图缩放
                       point: ~top_left
-                      x: 396
+                      x: 376
                       y: 312
-                      width: 48
+                      width: 68
                       height: 48
                       enable: "var.mapRenderer != none"
                     action:
@@ -3128,8 +3112,8 @@ controls:
                         type: Text
                         attribute:
                           point: ~middle_center
-                          texts: ~&f+
-                          fontSize: 36
+                          texts: ~&f放大
+                          fontSize: 28
                           through: true
                   # ─── 右栏：实体显示 ───
                   实体分区标签:
@@ -3716,9 +3700,20 @@ controls:
               y: 100
               width: 162
               height: 36
-              tip: "'&f按键与帮助'"
             action:
               clickLeft: |-
+                // 直接读取当前绑定，去掉模组自带的末行提示和冲突提示的颜色。
+                rows = []
+                if (var.mapRenderer != none) {
+                  for (i in range(0, 15)) {
+                    line = var.mapRenderer.getKeybindLine(i)
+                    if (line != '' && !line.startsWith('在 ')) {
+                      rows.add(line.replace('§e', ''))
+                    }
+                  }
+                }
+                var.mapHelpGroups = rows
+                var.mapHelpScroll = 0
                 var.showKeyHelp = true
             children:
               底:
@@ -3784,210 +3779,223 @@ controls:
                 type: Canvas
                 attribute:
                   point: ~middle_center
-                  width: 900
-                  height: 750
+                  width: 960
+                  height: 552
                 children:
                   背景:
                     type: Texture
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: ~Frosted:30;100,100,100,255
+                      normal: ~28,33,42,255
                       shape: ~round_rect
                       radius: 16
                     effect:
                       stroke:
-                        width: 4
-                        color: ~255,255,255,255
+                        width: 2
+                        color: ~119,133,151,255
                   标题:
                     type: Text
                     attribute:
-                      point: ~top_left
-                      x: 30
-                      y: 22
-                      texts: ~&f按键与地图操作
-                      fontSize: 40
+                      x: 32
+                      y: 25
+                      texts: ~按键与地图操作
+                      color: ~247,250,255,255
+                      fontSize: 48
                       through: true
-                  绑定行0:
-                    type: Text
+                  帮助顶部横线:
+                    type: Texture
                     attribute:
-                      point: ~top_left
-                      x: 30
+                      x: 32
                       y: 78
-                      texts: "var.mapRenderer != none ? var.mapRenderer.getKeybindLine(0) : ''"
+                      width: 896
+                      height: 2
+                      normal: ~107,126,149,220
+                      through: true
+                  双栏分隔线:
+                    type: Texture
+                    attribute:
+                      x: 546
+                      y: 101
+                      width: 2
+                      height: 324
+                      normal: ~107,126,149,160
+                      through: true
+                  按键栏:
+                    type: Canvas
+                    attribute:
+                      x: 32
+                      y: 102
+                      width: 486
+                      height: 326
+                      through: true
+                    children:
+                      按键栏标题:
+                        type: Text
+                        attribute:
+                          texts: ~当前按键
+                          color: ~183,212,245,255
+                          fontSize: 37
+                          through: true
+                      按键滚动栏:
+                        type: Scroll
+                        attribute:
+                          x: 0
+                          y: 43
+                          width: 470
+                          height: 306
+                          moveY: var.mapHelpScroll
+                        action:
+                          wheel: |-
+                            excess = math.max(0, var.mapHelpGroups.size() * 34 - self.height)
+                            if (excess > 0) {
+                              var.mapHelpScroll = math.max(0, math.min(1, var.mapHelpScroll - self.wheelValue * 34 / excess))
+                            }
+                        children:
+                          按键列表:
+                            type: RepeatGrid
+                            attribute:
+                              width: 468
+                              height: math.max(self.parent.height, var.mapHelpGroups.size() * 34)
+                              items: var.mapHelpGroups
+                              flow: ~row
+                              column: 1
+                              spaceBetweenY: 10
+                              maxSize: 16
+                            children:
+                              绑定行模板:
+                                type: Canvas
+                                attribute:
+                                  width: 468
+                                  height: 24
+                                  through: true
+                                children:
+                                  绑定文字:
+                                    type: Text
+                                    attribute:
+                                      texts: self.parent.item
+                                      color: ~231,237,247,255
+                                      fontSize: 34
+                                      through: true
+                      按键滑轨:
+                        type: Texture
+                        attribute:
+                          x: 478
+                          y: 43
+                          width: 5
+                          height: 306
+                          normal: ~91,106,126,150
+                          visible: var.mapHelpGroups.size() * 34 > 306
+                          through: true
+                      按键滑块:
+                        type: Texture
+                        attribute:
+                          x: 478
+                          y: 43 + var.mapHelpScroll * (306 - self.height)
+                          width: 5
+                          height: 306 * 306 / math.max(306, var.mapHelpGroups.size() * 34)
+                          normal: ~174,208,240,255
+                          visible: var.mapHelpGroups.size() * 34 > 306
+                          through: true
+                      无绑定提示:
+                        type: Text
+                        attribute:
+                          y: 45
+                          visible: var.mapHelpGroups.size() == 0
+                          texts: ~暂无可显示的按键
+                          color: ~171,188,209,255
+                          fontSize: 32
+                          through: true
+                  操作栏:
+                    type: Canvas
+                    attribute:
+                      x: 578
+                      y: 102
+                      width: 350
+                      height: 356
+                      through: true
+                    children:
+                      操作栏标题:
+                        type: Text
+                        attribute:
+                          texts: ~地图操作
+                          color: ~183,212,245,255
+                          fontSize: 37
+                          through: true
+                      操作1:
+                        type: Text
+                        attribute:
+                          y: 48
+                          texts: ~左键  ·  选择标记或展开聚合点
+                          color: ~231,237,247,255
+                          fontSize: 32
+                          through: true
+                      操作2:
+                        type: Text
+                        attribute:
+                          y: 97
+                          texts: ~拖动  ·  平移地图
+                          color: ~231,237,247,255
+                          fontSize: 32
+                          through: true
+                      操作3:
+                        type: Text
+                        attribute:
+                          y: 146
+                          texts: ~滚轮  ·  缩放地图
+                          color: ~231,237,247,255
+                          fontSize: 32
+                          through: true
+                      操作4:
+                        type: Text
+                        attribute:
+                          y: 195
+                          texts: ~右键  ·  取消选中
+                          color: ~231,237,247,255
+                          fontSize: 32
+                          through: true
+                      操作5:
+                        type: Text
+                        attribute:
+                          y: 244
+                          texts: ~回到玩家  ·  恢复跟随与默认缩放
+                          color: ~231,237,247,255
+                          fontSize: 32
+                          through: true
+                      操作6:
+                        type: Text
+                        attribute:
+                          y: 293
+                          texts: ~Esc  ·  关闭弹窗、清除选中或退出地图
+                          color: ~231,237,247,255
+                          fontSize: 32
+                          through: true
+                  帮助底部横线:
+                    type: Texture
+                    attribute:
+                      x: 32
+                      y: 453
+                      width: 896
+                      height: 2
+                      normal: ~107,126,149,160
+                      through: true
+                  绑定说明文字:
+                    type: Text
+                    attribute:
+                      x: 32
+                      y: 480
+                      texts: ~在「选项 → 控制 → 按键绑定」修改。按 Esc 可解绑。
+                      color: ~171,188,209,255
                       fontSize: 30
-                      through: true
-                  绑定行1:
-                    type: Text
-                    attribute:
-                      point: ~top_left
-                      x: 30
-                      y: 108
-                      texts: "var.mapRenderer != none ? var.mapRenderer.getKeybindLine(1) : ''"
-                      fontSize: 30
-                      through: true
-                  绑定行2:
-                    type: Text
-                    attribute:
-                      point: ~top_left
-                      x: 30
-                      y: 138
-                      texts: "var.mapRenderer != none ? var.mapRenderer.getKeybindLine(2) : ''"
-                      fontSize: 30
-                      through: true
-                  绑定行3:
-                    type: Text
-                    attribute:
-                      point: ~top_left
-                      x: 30
-                      y: 168
-                      texts: "var.mapRenderer != none ? var.mapRenderer.getKeybindLine(3) : ''"
-                      fontSize: 30
-                      through: true
-                  绑定行4:
-                    type: Text
-                    attribute:
-                      point: ~top_left
-                      x: 30
-                      y: 198
-                      texts: "var.mapRenderer != none ? var.mapRenderer.getKeybindLine(4) : ''"
-                      fontSize: 30
-                      through: true
-                  绑定行5:
-                    type: Text
-                    attribute:
-                      point: ~top_left
-                      x: 30
-                      y: 228
-                      texts: "var.mapRenderer != none ? var.mapRenderer.getKeybindLine(5) : ''"
-                      fontSize: 30
-                      through: true
-                  绑定行6:
-                    type: Text
-                    attribute:
-                      point: ~top_left
-                      x: 30
-                      y: 258
-                      texts: "var.mapRenderer != none ? var.mapRenderer.getKeybindLine(6) : ''"
-                      fontSize: 30
-                      through: true
-                  绑定行7:
-                    type: Text
-                    attribute:
-                      point: ~top_left
-                      x: 30
-                      y: 288
-                      texts: "var.mapRenderer != none ? var.mapRenderer.getKeybindLine(7) : ''"
-                      fontSize: 30
-                      through: true
-                  绑定行8:
-                    type: Text
-                    attribute:
-                      point: ~top_left
-                      x: 30
-                      y: 318
-                      texts: "var.mapRenderer != none ? var.mapRenderer.getKeybindLine(8) : ''"
-                      fontSize: 30
-                      through: true
-                  绑定行9:
-                    type: Text
-                    attribute:
-                      point: ~top_left
-                      x: 30
-                      y: 348
-                      texts: "var.mapRenderer != none ? var.mapRenderer.getKeybindLine(9) : ''"
-                      fontSize: 30
-                      through: true
-                  绑定行10:
-                    type: Text
-                    attribute:
-                      point: ~top_left
-                      x: 30
-                      y: 378
-                      texts: "var.mapRenderer != none ? var.mapRenderer.getKeybindLine(10) : ''"
-                      fontSize: 30
-                      through: true
-                  绑定行11:
-                    type: Text
-                    attribute:
-                      point: ~top_left
-                      x: 30
-                      y: 408
-                      texts: "var.mapRenderer != none ? var.mapRenderer.getKeybindLine(11) : ''"
-                      fontSize: 30
-                      through: true
-                  绑定行12:
-                    type: Text
-                    attribute:
-                      point: ~top_left
-                      x: 30
-                      y: 438
-                      texts: "var.mapRenderer != none ? var.mapRenderer.getKeybindLine(12) : ''"
-                      fontSize: 30
-                      through: true
-                  绑定行13:
-                    type: Text
-                    attribute:
-                      point: ~top_left
-                      x: 30
-                      y: 468
-                      texts: "var.mapRenderer != none ? var.mapRenderer.getKeybindLine(13) : ''"
-                      fontSize: 30
-                      through: true
-                  绑定行14:
-                    type: Text
-                    attribute:
-                      point: ~top_left
-                      x: 30
-                      y: 498
-                      texts: "var.mapRenderer != none ? var.mapRenderer.getKeybindLine(14) : ''"
-                      fontSize: 30
-                      through: true
-                  绑定行15:
-                    type: Text
-                    attribute:
-                      point: ~top_left
-                      x: 30
-                      y: 528
-                      texts: "var.mapRenderer != none ? var.mapRenderer.getKeybindLine(15) : ''"
-                      fontSize: 30
-                      through: true
-                  鼠标说明0:
-                    type: Text
-                    attribute:
-                      point: ~top_left
-                      x: 30
-                      y: 580
-                      texts: "~&7左键选择 / 拖动平移 / 滚轮缩放 / 右键取消选中"
-                      fontSize: 28
-                      through: true
-                  鼠标说明1:
-                    type: Text
-                    attribute:
-                      point: ~top_left
-                      x: 30
-                      y: 610
-                      texts: "~&7点击聚合数字展开；回到玩家按钮恢复跟随"
-                      fontSize: 28
-                      through: true
-                  鼠标说明2:
-                    type: Text
-                    attribute:
-                      point: ~top_left
-                      x: 30
-                      y: 640
-                      texts: "~&7Esc 依次关闭弹窗、清除搜索或选中、关闭地图"
-                      fontSize: 28
                       through: true
                   关闭帮助:
                     type: Canvas
                     attribute:
-                      point: ~top_left
-                      x: 30
-                      y: 680
-                      width: 160
+                      point: ~bottom_right
+                      x: -32
+                      y: -23
+                      width: 120
                       height: 52
-                      tip: "'&f关闭'"
                     action:
                       clickLeft: |-
                         var.showKeyHelp = false
@@ -4001,16 +4009,12 @@ controls:
                           hover: ~72,76,84,255
                           shape: ~round_rect
                           radius: 12
-                        effect:
-                          stroke:
-                            width: "self.isHovered() ? '4' : '3'"
-                            color: ~255,255,255,255
                       字:
                         type: Text
                         attribute:
                           point: ~middle_center
-                          texts: "'&f关闭'"
-                          fontSize: 28
+                          texts: ~&f关闭
+                          fontSize: 32
                           through: true
           删除确认层:
             type: Canvas

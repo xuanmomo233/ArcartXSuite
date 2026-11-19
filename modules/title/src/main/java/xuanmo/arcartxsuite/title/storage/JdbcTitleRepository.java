@@ -8,6 +8,8 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Types;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -27,6 +29,36 @@ import xuanmo.arcartxsuite.title.model.PlayerTitleState;
  * 并提供过期称号批量清理功能。属于 title 模块存储层。
  */
 public final class JdbcTitleRepository extends AbstractModuleRepository implements TitleRepository {
+    private static final int EXPIRATION_BATCH_SIZE = 256;
+    private static final Instant NEW_GRANT = Instant.ofEpochMilli(Long.MIN_VALUE);
+    private static final List<String> PRESENTATION_TABLES = List.of(
+        "title_player_equipped_groups", "title_player_display_title");
+    private static final String TITLE_INSERT_SQL = """
+        INSERT INTO title_player_titles (player_uuid, title_id, hidden, granted_at, activates_at, expires_at, updated_at, granted_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """;
+    private static final String OWNED_STATE_QUERY = """
+        SELECT 'owned' AS row_kind, title_id, '' AS group_id, hidden,
+               granted_at, activates_at, expires_at, updated_at, granted_by
+        FROM title_player_titles WHERE player_uuid = ?
+        """;
+    private static final String EQUIPPED_STATE_QUERY = """
+        SELECT 'equipped' AS row_kind, title_id, group_id, 0 AS hidden, 0 AS granted_at,
+               NULL AS activates_at, NULL AS expires_at, updated_at, '' AS granted_by
+        FROM title_player_equipped_groups WHERE player_uuid = ?
+        """;
+    private static final String DISPLAY_STATE_QUERY = """
+        SELECT 'display' AS row_kind, title_id, '' AS group_id, 0 AS hidden, 0 AS granted_at,
+               NULL AS activates_at, NULL AS expires_at, updated_at, '' AS granted_by
+        FROM title_player_display_title WHERE player_uuid = ?
+        """;
+    private static final String MYSQL_STATE_QUERY = OWNED_STATE_QUERY + " UNION ALL "
+        + EQUIPPED_STATE_QUERY + " UNION ALL " + DISPLAY_STATE_QUERY
+        + " ORDER BY row_kind ASC, granted_at ASC, group_id ASC";
+    private static final List<String> SQLITE_STATE_QUERIES = List.of(
+        OWNED_STATE_QUERY + " ORDER BY granted_at ASC",
+        EQUIPPED_STATE_QUERY + " ORDER BY group_id ASC",
+        DISPLAY_STATE_QUERY);
 
     public JdbcTitleRepository(DataSource dataSource, StorageDescriptor descriptor,
                                File dataFolder, Logger logger) {
@@ -57,73 +89,62 @@ public final class JdbcTitleRepository extends AbstractModuleRepository implemen
      */
     @Override
     public PlayerTitleState loadState(UUID playerUuid) throws SQLException {
-        Instant updatedAt = Instant.EPOCH;
-
-        Map<String, PlayerOwnedTitle> ownedTitles = new LinkedHashMap<>();
-        try (Connection connection = getConnection();
-             PreparedStatement statement = connection.prepareStatement(
-                 "SELECT title_id, hidden, granted_at, activates_at, expires_at, updated_at, granted_by "
-                     + "FROM title_player_titles WHERE player_uuid = ? ORDER BY granted_at ASC"
-             )) {
-            statement.setString(1, playerUuid.toString());
-            try (ResultSet resultSet = statement.executeQuery()) {
-                while (resultSet.next()) {
-                    String titleId = resultSet.getString("title_id");
-                    ownedTitles.put(
-                        titleId,
-                        new PlayerOwnedTitle(
-                            titleId,
-                            resultSet.getBoolean("hidden"),
-                            readInstant(resultSet, "granted_at"),
-                            readNullableInstant(resultSet, "activates_at"),
-                            readNullableInstant(resultSet, "expires_at"),
-                            readInstant(resultSet, "updated_at"),
-                            nullToEmpty(resultSet.getString("granted_by"))
-                        )
-                    );
-                    Instant titleUpdatedAt = readInstant(resultSet, "updated_at");
-                    if (titleUpdatedAt.isAfter(updatedAt)) {
-                        updatedAt = titleUpdatedAt;
-                    }
+        try (Connection connection = getConnection()) {
+            if (isMysql()) return readState(connection, playerUuid);
+            connection.setAutoCommit(false);
+            try {
+                PlayerTitleState state = readState(connection, playerUuid);
+                connection.commit();
+                return state;
+            } catch (SQLException | RuntimeException failure) {
+                try {
+                    connection.rollback();
+                } catch (SQLException rollback) {
+                    failure.addSuppressed(rollback);
                 }
+                throw failure;
             }
         }
+    }
 
-        Map<String, String> equippedTitleIdsByGroup = new LinkedHashMap<>();
-        try (Connection connection = getConnection();
-             PreparedStatement statement = connection.prepareStatement(
-                 "SELECT group_id, title_id, updated_at FROM title_player_equipped_groups WHERE player_uuid = ? ORDER BY group_id ASC"
-             )) {
-            statement.setString(1, playerUuid.toString());
-            try (ResultSet resultSet = statement.executeQuery()) {
-                while (resultSet.next()) {
-                    equippedTitleIdsByGroup.put(resultSet.getString("group_id"), resultSet.getString("title_id"));
-                    Instant equippedUpdatedAt = readInstant(resultSet, "updated_at");
-                    if (equippedUpdatedAt.isAfter(updatedAt)) {
-                        updatedAt = equippedUpdatedAt;
-                    }
-                }
+    private PlayerTitleState readState(Connection connection, UUID playerUuid) throws SQLException {
+        StateRows rows = new StateRows();
+        if (isMysql()) readStateRows(connection, MYSQL_STATE_QUERY, playerUuid, 3, rows);
+        else for (String sql : SQLITE_STATE_QUERIES) readStateRows(connection, sql, playerUuid, 1, rows);
+        return new PlayerTitleState(playerUuid, rows.equipped, rows.owned, rows.display, rows.updatedAt);
+    }
+
+    private void readStateRows(Connection connection, String sql, UUID playerUuid, int parameterCount, StateRows rows)
+            throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            String playerId = playerUuid.toString();
+            for (int parameter = 1; parameter <= parameterCount; parameter++) statement.setString(parameter, playerId);
+            try (ResultSet result = statement.executeQuery()) {
+                while (result.next()) rows.add(result);
             }
         }
+    }
 
-        String displayTitleId = "";
-        try (Connection connection = getConnection();
-             PreparedStatement statement = connection.prepareStatement(
-                 "SELECT title_id, updated_at FROM title_player_display_title WHERE player_uuid = ?"
-             )) {
-            statement.setString(1, playerUuid.toString());
-            try (ResultSet resultSet = statement.executeQuery()) {
-                if (resultSet.next()) {
-                    displayTitleId = nullToEmpty(resultSet.getString("title_id"));
-                    Instant displayUpdatedAt = readInstant(resultSet, "updated_at");
-                    if (displayUpdatedAt.isAfter(updatedAt)) {
-                        updatedAt = displayUpdatedAt;
-                    }
-                }
+    private static final class StateRows {
+        private final Map<String, PlayerOwnedTitle> owned = new LinkedHashMap<>();
+        private final Map<String, String> equipped = new LinkedHashMap<>();
+        private String display = "";
+        private Instant updatedAt = Instant.EPOCH;
+
+        void add(ResultSet result) throws SQLException {
+            Instant rowUpdatedAt = readInstant(result, "updated_at");
+            if (rowUpdatedAt.isAfter(updatedAt)) updatedAt = rowUpdatedAt;
+            String titleId = result.getString("title_id");
+            switch (result.getString("row_kind")) {
+                case "owned" -> owned.put(titleId, new PlayerOwnedTitle(
+                    titleId, result.getBoolean("hidden"), readInstant(result, "granted_at"),
+                    readNullableInstant(result, "activates_at"), readNullableInstant(result, "expires_at"),
+                    rowUpdatedAt, nullToEmpty(result.getString("granted_by"))));
+                case "equipped" -> equipped.put(result.getString("group_id"), titleId);
+                case "display" -> display = nullToEmpty(titleId);
+                default -> throw new SQLException("Unknown title state row kind");
             }
         }
-
-        return new PlayerTitleState(playerUuid, equippedTitleIdsByGroup, ownedTitles, displayTitleId, updatedAt);
     }
 
     /**
@@ -136,18 +157,24 @@ public final class JdbcTitleRepository extends AbstractModuleRepository implemen
      * @throws SQLException 数据库异常
      */
     @Override
-    public void saveEquippedTitle(UUID playerUuid, String groupId, String titleId, Instant updatedAt) throws SQLException {
-        if (groupId == null || groupId.isBlank() || titleId == null || titleId.isBlank()) {
-            return;
-        }
-        try (Connection connection = getConnection();
-             PreparedStatement statement = connection.prepareStatement(equippedUpsertSql())) {
-            statement.setString(1, playerUuid.toString());
-            statement.setString(2, groupId);
-            statement.setString(3, titleId);
-            statement.setLong(4, updatedAt.toEpochMilli());
-            statement.executeUpdate();
-        }
+    public PlayerTitleState setEquippedTitle(UUID playerUuid, String groupId, String titleId, Instant updatedAt) throws SQLException {
+        if (groupId == null || groupId.isBlank()) throw new IllegalArgumentException("称号分组不能为空");
+        return mutateState(playerUuid, connection -> {
+            if (titleId == null || titleId.isBlank()) {
+                try (PreparedStatement statement = connection.prepareStatement(
+                    "DELETE FROM title_player_equipped_groups WHERE player_uuid = ? AND group_id = ?")) {
+                    statement.setString(1, playerUuid.toString());
+                    statement.setString(2, groupId);
+                    statement.executeUpdate();
+                }
+            } else {
+                try (PreparedStatement statement = connection.prepareStatement(equippedUpsertSql())) {
+                    bindEquipped(statement, playerUuid, groupId, titleId, updatedAt);
+                    statement.executeUpdate();
+                }
+            }
+            deleteInvalidDisplay(connection, playerUuid, updatedAt);
+        });
     }
 
     /**
@@ -158,34 +185,11 @@ public final class JdbcTitleRepository extends AbstractModuleRepository implemen
      * @throws SQLException 数据库异常
      */
     @Override
-    public void deleteEquippedGroup(UUID playerUuid, String groupId) throws SQLException {
-        try (Connection connection = getConnection();
-             PreparedStatement statement = connection.prepareStatement(
-                 "DELETE FROM title_player_equipped_groups WHERE player_uuid = ? AND group_id = ?"
-             )) {
-            statement.setString(1, playerUuid.toString());
-            statement.setString(2, groupId);
-            statement.executeUpdate();
-        }
-    }
-
-    /**
-     * 删除玩家所有分组中装备了指定称号的装备记录。
-     *
-     * @param playerUuid 玩家 UUID
-     * @param titleId    称号 ID
-     * @throws SQLException 数据库异常
-     */
-    @Override
-    public void deleteEquippedTitle(UUID playerUuid, String titleId) throws SQLException {
-        try (Connection connection = getConnection();
-             PreparedStatement statement = connection.prepareStatement(
-                 "DELETE FROM title_player_equipped_groups WHERE player_uuid = ? AND title_id = ?"
-             )) {
-            statement.setString(1, playerUuid.toString());
-            statement.setString(2, titleId);
-            statement.executeUpdate();
-        }
+    public PlayerTitleState clearEquippedTitles(UUID playerUuid) throws SQLException {
+        return mutateState(playerUuid, connection -> {
+            deletePlayerRows(connection, "title_player_equipped_groups", playerUuid);
+            deletePlayerRows(connection, "title_player_display_title", playerUuid);
+        });
     }
 
     /**
@@ -194,50 +198,111 @@ public final class JdbcTitleRepository extends AbstractModuleRepository implemen
      * @param playerUuid 玩家 UUID
      * @throws SQLException 数据库异常
      */
-    @Override
-    public void deleteAllEquippedGroups(UUID playerUuid) throws SQLException {
-        try (Connection connection = getConnection();
-             PreparedStatement statement = connection.prepareStatement(
-                 "DELETE FROM title_player_equipped_groups WHERE player_uuid = ?"
-             )) {
+    private void deletePlayerRows(Connection connection, String table, UUID playerUuid) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement("DELETE FROM " + table + " WHERE player_uuid = ?")) {
             statement.setString(1, playerUuid.toString());
             statement.executeUpdate();
         }
     }
 
+    private void bindEquipped(PreparedStatement statement, UUID playerUuid, String groupId, String titleId,
+                              Instant updatedAt) throws SQLException {
+        String playerId = playerUuid.toString();
+        statement.setString(1, playerId);
+        statement.setString(2, groupId);
+        statement.setString(3, titleId);
+        statement.setLong(4, updatedAt.toEpochMilli());
+        statement.setString(5, playerId);
+        statement.setString(6, titleId);
+        statement.setLong(7, updatedAt.toEpochMilli());
+        statement.setLong(8, updatedAt.toEpochMilli());
+    }
+
     /**
-     * 保存（Upsert）玩家拥有的称号记录。
+     * 原子授予称号，锁定同一持有记录并保留隐藏设置。
      *
      * @param playerUuid 玩家 UUID
-     * @param ownedTitle 拥有的称号记录
+     * @param proposal 本次授予的称号记录
+     * @param keepPermanent 是否保留已有永久持有记录
      * @throws SQLException 数据库异常
      */
     @Override
-    public void saveOwnedTitle(UUID playerUuid, PlayerOwnedTitle ownedTitle) throws SQLException {
-        try (Connection connection = getConnection();
-             PreparedStatement statement = connection.prepareStatement(titleUpsertSql())) {
+    public GrantedTitle grantOwnedTitle(UUID playerUuid, PlayerOwnedTitle proposal, boolean keepPermanent) throws SQLException {
+        return transaction(connection -> {
+            String ensureRow = TITLE_INSERT_SQL + (isMysql()
+                ? " ON DUPLICATE KEY UPDATE player_uuid = player_uuid"
+                : " ON CONFLICT(player_uuid, title_id) DO NOTHING");
+            // Distinguish a new row from a renewal while holding the ownership lock on both databases.
+            // The provisional row is replaced before commit and is never published.
+            saveOwnedRecord(connection, ensureRow, playerUuid, new PlayerOwnedTitle(proposal.titleId(),
+                proposal.hidden(), NEW_GRANT, proposal.activatesAt(), proposal.expiresAt(), proposal.updatedAt(), proposal.grantedBy()));
+            PlayerOwnedTitle existing = null;
+            String query = OWNED_STATE_QUERY + " AND title_id = ?" + (isMysql() ? " FOR UPDATE" : "");
+            try (PreparedStatement statement = connection.prepareStatement(query)) {
+                statement.setString(1, playerUuid.toString());
+                statement.setString(2, proposal.titleId());
+                try (ResultSet rows = statement.executeQuery()) {
+                    if (rows.next()) existing = new PlayerOwnedTitle(
+                        rows.getString("title_id"), rows.getBoolean("hidden"), readInstant(rows, "granted_at"),
+                        readNullableInstant(rows, "activates_at"), readNullableInstant(rows, "expires_at"),
+                        readInstant(rows, "updated_at"), nullToEmpty(rows.getString("granted_by")));
+                }
+            }
+            if (existing == null) throw new SQLException("称号持有记录未建立");
+            boolean newlyGranted = NEW_GRANT.equals(existing.grantedAt());
+            if (!newlyGranted && keepPermanent && existing.activatesAt() == null && existing.expiresAt() == null) {
+                return new GrantedTitle(existing, false);
+            }
+            PlayerOwnedTitle saved = new PlayerOwnedTitle(proposal.titleId(), existing.hidden(),
+                persistedInstant(proposal.grantedAt()), persistedInstant(proposal.activatesAt()),
+                persistedInstant(proposal.expiresAt()), persistedInstant(proposal.updatedAt()), nullToEmpty(proposal.grantedBy()));
+            Instant now = saved.grantedAt();
+            boolean clearPresentation = newlyGranted || !existing.isEffective(now) || !saved.isEffective(now);
+            if (clearPresentation) {
+                var key = List.of(new TitleKey(playerUuid.toString(), saved.titleId()));
+                for (String table : PRESENTATION_TABLES) deleteTitleRows(connection, table, key);
+            }
+            saveOwnedRecord(connection, titleUpsertSql(), playerUuid, saved);
+            return new GrantedTitle(saved, clearPresentation);
+        });
+    }
+
+    private void saveOwnedRecord(Connection connection, String sql, UUID playerUuid, PlayerOwnedTitle title) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setString(1, playerUuid.toString());
-            statement.setString(2, ownedTitle.titleId());
-            statement.setBoolean(3, ownedTitle.hidden());
-            statement.setLong(4, ownedTitle.grantedAt().toEpochMilli());
-            if (ownedTitle.activatesAt() == null) {
-                statement.setNull(5, Types.BIGINT);
-            } else {
-                statement.setLong(5, ownedTitle.activatesAt().toEpochMilli());
-            }
-            if (ownedTitle.expiresAt() == null) {
-                statement.setNull(6, Types.BIGINT);
-            } else {
-                statement.setLong(6, ownedTitle.expiresAt().toEpochMilli());
-            }
-            statement.setLong(7, ownedTitle.updatedAt().toEpochMilli());
-            statement.setString(8, nullToEmpty(ownedTitle.grantedBy()));
+            statement.setString(2, title.titleId());
+            statement.setBoolean(3, title.hidden());
+            statement.setLong(4, title.grantedAt().toEpochMilli());
+            if (title.activatesAt() == null) statement.setNull(5, Types.BIGINT);
+            else statement.setLong(5, title.activatesAt().toEpochMilli());
+            if (title.expiresAt() == null) statement.setNull(6, Types.BIGINT);
+            else statement.setLong(6, title.expiresAt().toEpochMilli());
+            statement.setLong(7, title.updatedAt().toEpochMilli());
+            statement.setString(8, nullToEmpty(title.grantedBy()));
             statement.executeUpdate();
         }
     }
 
+    private static Instant persistedInstant(Instant instant) {
+        return instant == null ? null : Instant.ofEpochMilli(instant.toEpochMilli());
+    }
+
+    @Override
+    public PlayerTitleState setOwnedTitleHidden(UUID playerUuid, String titleId, boolean hidden, Instant updatedAt) throws SQLException {
+        return mutateState(playerUuid, connection -> {
+            try (PreparedStatement statement = connection.prepareStatement(
+                "UPDATE title_player_titles SET hidden = ?, updated_at = ? WHERE player_uuid = ? AND title_id = ?")) {
+                statement.setBoolean(1, hidden);
+                statement.setLong(2, updatedAt.toEpochMilli());
+                statement.setString(3, playerUuid.toString());
+                statement.setString(4, titleId);
+                statement.executeUpdate();
+            }
+        });
+    }
+
     /**
-     * 删除玩家拥有的指定称号记录。
+     * 原子删除玩家拥有的指定称号、装备记录和展示称号。
      *
      * @param playerUuid 玩家 UUID
      * @param titleId    称号 ID
@@ -245,13 +310,28 @@ public final class JdbcTitleRepository extends AbstractModuleRepository implemen
      */
     @Override
     public void deleteOwnedTitle(UUID playerUuid, String titleId) throws SQLException {
-        try (Connection connection = getConnection();
-             PreparedStatement statement = connection.prepareStatement(
-                 "DELETE FROM title_player_titles WHERE player_uuid = ? AND title_id = ?"
-             )) {
-            statement.setString(1, playerUuid.toString());
-            statement.setString(2, titleId);
-            statement.executeUpdate();
+        try (Connection connection = getConnection()) {
+            connection.setAutoCommit(false);
+            try {
+                for (String table : List.of("title_player_titles", "title_player_equipped_groups", "title_player_display_title")) {
+                    try (PreparedStatement statement = connection.prepareStatement(
+                        "DELETE FROM " + table + " WHERE player_uuid = ? AND title_id = ?"
+                    )) {
+                        statement.setString(1, playerUuid.toString());
+                        statement.setString(2, titleId);
+                        statement.executeUpdate();
+                    }
+                }
+                checkTransactionInterrupted();
+                connection.commit();
+            } catch (SQLException | RuntimeException exception) {
+                try {
+                    connection.rollback();
+                } catch (SQLException rollback) {
+                    exception.addSuppressed(rollback);
+                }
+                throw exception;
+            }
         }
     }
 
@@ -264,15 +344,25 @@ public final class JdbcTitleRepository extends AbstractModuleRepository implemen
      * @throws SQLException 数据库异常
      */
     @Override
-    public void saveDisplayTitle(UUID playerUuid, String titleId, Instant updatedAt) throws SQLException {
-        if (titleId == null || titleId.isBlank()) {
-            return;
-        }
-        try (Connection connection = getConnection();
-             PreparedStatement statement = connection.prepareStatement(displayTitleUpsertSql())) {
+    public PlayerTitleState setDisplayTitle(UUID playerUuid, String titleId, Instant updatedAt) throws SQLException {
+        return mutateState(playerUuid, connection -> {
+            if (titleId == null || titleId.isBlank()) deletePlayerRows(connection, "title_player_display_title", playerUuid);
+            else saveDisplay(connection, playerUuid, titleId, updatedAt);
+        });
+    }
+
+    private void saveDisplay(Connection connection, UUID playerUuid, String titleId, Instant updatedAt) throws SQLException {
+        if (titleId == null || titleId.isBlank()) return;
+        try (PreparedStatement statement = connection.prepareStatement(displayTitleUpsertSql())) {
             statement.setString(1, playerUuid.toString());
             statement.setString(2, titleId);
             statement.setLong(3, updatedAt.toEpochMilli());
+            statement.setString(4, playerUuid.toString());
+            statement.setString(5, titleId);
+            statement.setLong(6, updatedAt.toEpochMilli());
+            statement.setLong(7, updatedAt.toEpochMilli());
+            statement.setString(8, playerUuid.toString());
+            statement.setString(9, titleId);
             statement.executeUpdate();
         }
     }
@@ -283,15 +373,63 @@ public final class JdbcTitleRepository extends AbstractModuleRepository implemen
      * @param playerUuid 玩家 UUID
      * @throws SQLException 数据库异常
      */
-    @Override
-    public void deleteDisplayTitle(UUID playerUuid) throws SQLException {
-        try (Connection connection = getConnection();
-             PreparedStatement statement = connection.prepareStatement(
-                 "DELETE FROM title_player_display_title WHERE player_uuid = ?"
-             )) {
+    private void deleteInvalidDisplay(Connection connection, UUID playerUuid, Instant now) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement("""
+            DELETE FROM title_player_display_title WHERE player_uuid = ?
+            AND NOT EXISTS (
+                SELECT 1 FROM title_player_equipped_groups e
+                JOIN title_player_titles t ON t.player_uuid = e.player_uuid AND t.title_id = e.title_id
+                WHERE e.player_uuid = title_player_display_title.player_uuid
+                  AND e.title_id = title_player_display_title.title_id
+                  AND (t.activates_at IS NULL OR t.activates_at <= ?)
+                  AND (t.expires_at IS NULL OR t.expires_at > ?)
+            )
+            """)) {
             statement.setString(1, playerUuid.toString());
+            statement.setLong(2, now.toEpochMilli());
+            statement.setLong(3, now.toEpochMilli());
             statement.executeUpdate();
         }
+    }
+
+    private PlayerTitleState mutateState(UUID playerUuid, StateMutation mutation) throws SQLException {
+        return transaction(connection -> {
+            mutation.apply(connection);
+            return readState(connection, playerUuid);
+        });
+    }
+
+    private <T> T transaction(SqlTransaction<T> action) throws SQLException {
+        try (Connection connection = getConnection()) {
+            connection.setAutoCommit(false);
+            try {
+                T result = action.run(connection);
+                checkTransactionInterrupted();
+                connection.commit();
+                return result;
+            } catch (SQLException | RuntimeException failure) {
+                try {
+                    connection.rollback();
+                } catch (SQLException rollback) {
+                    failure.addSuppressed(rollback);
+                }
+                throw failure;
+            }
+        }
+    }
+
+    @FunctionalInterface
+    private interface StateMutation {
+        void apply(Connection connection) throws SQLException;
+    }
+
+    @FunctionalInterface
+    private interface SqlTransaction<T> {
+        T run(Connection connection) throws SQLException;
+    }
+
+    private static void checkTransactionInterrupted() throws SQLException {
+        if (Thread.currentThread().isInterrupted()) throw new SQLException("称号事务已取消");
     }
 
     /**
@@ -303,14 +441,42 @@ public final class JdbcTitleRepository extends AbstractModuleRepository implemen
      */
     @Override
     public int deleteExpiredTitles(Instant now) throws SQLException {
-        try (Connection connection = getConnection();
-             PreparedStatement statement = connection.prepareStatement(
-                 "DELETE FROM title_player_titles WHERE expires_at IS NOT NULL AND expires_at <= ?"
-             )) {
-            statement.setLong(1, now.toEpochMilli());
+        return transaction(connection -> {
+            String select = """
+                SELECT player_uuid, title_id FROM title_player_titles
+                WHERE expires_at <= ? ORDER BY expires_at LIMIT ?
+                """ + (isMysql() ? " FOR UPDATE" : "");
+            var expired = new ArrayList<TitleKey>();
+            try (PreparedStatement statement = connection.prepareStatement(select)) {
+                statement.setLong(1, now.toEpochMilli());
+                statement.setInt(2, EXPIRATION_BATCH_SIZE);
+                try (ResultSet rows = statement.executeQuery()) {
+                    while (rows.next()) expired.add(new TitleKey(rows.getString("player_uuid"), rows.getString("title_id")));
+                }
+            }
+            if (expired.isEmpty()) return 0;
+            for (String table : PRESENTATION_TABLES) deleteTitleRows(connection, table, expired);
+            return deleteTitleRows(connection, "title_player_titles", expired);
+        });
+    }
+
+    private int deleteTitleRows(Connection connection, String table, List<TitleKey> titles) throws SQLException {
+        // Keep the leading primary-key column explicit, including for the equipment table.
+        String sql = "DELETE FROM " + table + " WHERE player_uuid IN ("
+            + String.join(",", Collections.nCopies(titles.size(), "?")) + ") AND (player_uuid, title_id) IN ("
+            + String.join(",", Collections.nCopies(titles.size(), "(?, ?)")) + ")";
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            int index = 1;
+            for (TitleKey key : titles) statement.setString(index++, key.playerUuid());
+            for (TitleKey key : titles) {
+                statement.setString(index++, key.playerUuid());
+                statement.setString(index++, key.titleId());
+            }
             return statement.executeUpdate();
         }
     }
+
+    private record TitleKey(String playerUuid, String titleId) {}
 
     private void createTables(Connection connection) throws SQLException {
         try (Statement statement = connection.createStatement()) {
@@ -386,7 +552,11 @@ public final class JdbcTitleRepository extends AbstractModuleRepository implemen
         if (!isMysql()) {
             return """
                 INSERT INTO title_player_display_title (player_uuid, title_id, updated_at)
-                VALUES (?, ?, ?)
+                SELECT ?, ?, ? FROM title_player_titles
+                WHERE player_uuid = ? AND title_id = ?
+                  AND (activates_at IS NULL OR activates_at <= ?)
+                  AND (expires_at IS NULL OR expires_at > ?)
+                  AND EXISTS (SELECT 1 FROM title_player_equipped_groups WHERE player_uuid = ? AND title_id = ?)
                 ON CONFLICT(player_uuid) DO UPDATE SET
                     title_id = excluded.title_id,
                     updated_at = excluded.updated_at
@@ -394,7 +564,11 @@ public final class JdbcTitleRepository extends AbstractModuleRepository implemen
         }
         return """
             INSERT INTO title_player_display_title (player_uuid, title_id, updated_at)
-            VALUES (?, ?, ?)
+            SELECT ?, ?, ? FROM title_player_titles
+            WHERE player_uuid = ? AND title_id = ?
+              AND (activates_at IS NULL OR activates_at <= ?)
+              AND (expires_at IS NULL OR expires_at > ?)
+              AND EXISTS (SELECT 1 FROM title_player_equipped_groups WHERE player_uuid = ? AND title_id = ?)
             ON DUPLICATE KEY UPDATE
                 title_id = VALUES(title_id),
                 updated_at = VALUES(updated_at)
@@ -405,7 +579,10 @@ public final class JdbcTitleRepository extends AbstractModuleRepository implemen
         if (!isMysql()) {
             return """
                 INSERT INTO title_player_equipped_groups (player_uuid, group_id, title_id, updated_at)
-                VALUES (?, ?, ?, ?)
+                SELECT ?, ?, ?, ? FROM title_player_titles
+                WHERE player_uuid = ? AND title_id = ?
+                  AND (activates_at IS NULL OR activates_at <= ?)
+                  AND (expires_at IS NULL OR expires_at > ?)
                 ON CONFLICT(player_uuid, group_id) DO UPDATE SET
                     title_id = excluded.title_id,
                     updated_at = excluded.updated_at
@@ -413,7 +590,10 @@ public final class JdbcTitleRepository extends AbstractModuleRepository implemen
         }
         return """
             INSERT INTO title_player_equipped_groups (player_uuid, group_id, title_id, updated_at)
-            VALUES (?, ?, ?, ?)
+            SELECT ?, ?, ?, ? FROM title_player_titles
+            WHERE player_uuid = ? AND title_id = ?
+              AND (activates_at IS NULL OR activates_at <= ?)
+              AND (expires_at IS NULL OR expires_at > ?)
             ON DUPLICATE KEY UPDATE
                 title_id = VALUES(title_id),
                 updated_at = VALUES(updated_at)
@@ -426,7 +606,6 @@ public final class JdbcTitleRepository extends AbstractModuleRepository implemen
                 INSERT INTO title_player_titles (player_uuid, title_id, hidden, granted_at, activates_at, expires_at, updated_at, granted_by)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(player_uuid, title_id) DO UPDATE SET
-                    hidden = excluded.hidden,
                     granted_at = excluded.granted_at,
                     activates_at = excluded.activates_at,
                     expires_at = excluded.expires_at,
@@ -438,7 +617,6 @@ public final class JdbcTitleRepository extends AbstractModuleRepository implemen
             INSERT INTO title_player_titles (player_uuid, title_id, hidden, granted_at, activates_at, expires_at, updated_at, granted_by)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
-                hidden = VALUES(hidden),
                 granted_at = VALUES(granted_at),
                 activates_at = VALUES(activates_at),
                 expires_at = VALUES(expires_at),

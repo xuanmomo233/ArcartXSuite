@@ -41,11 +41,6 @@ ui:
       var.result = packet['message']
       var.resultType = packet['type']
       var.unbindName = none
-      while(val.bindingList.childrenCount() > 1){ val.bindingList.get(1).remove() }
-      for(i in range(1, 9)){
-        row = val.bindingList['绑定行'].copy('绑定行' + i.round())
-        row.entryKey = 'row' + i.round()
-      }
     update: |-
       var.busy = packet['busy']
       var.packetId = packet['packetId']
@@ -424,15 +419,19 @@ controls:
                     children:
                       绑定列表:
                         val: bindingList
-                        type: VStack
+                        type: RepeatGrid
                         attribute:
+                          items: "['row0', 'row1', 'row2', 'row3', 'row4', 'row5', 'row6', 'row7', 'row8', 'row9']"
+                          flow: ~row
+                          column: 1
+                          spaceBetweenY: 6
+                          maxSize: 10
                           width: 910
-                          spaceBetween: 6
                         children:
                           绑定行:
                             type: Texture
                             attribute:
-                              entryKey: ~row0
+                              entryKey: self.item
                               entry: var.bindings[self.entryKey]
                               visible: self.entry != none
                               width: 900

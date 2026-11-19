@@ -272,6 +272,22 @@ public final class PlayerDataManager {
         });
     }
 
+    /** Capture Bukkit coordinates now and drain the recovery write even if the server stops ticking. */
+    public java.util.concurrent.CompletableFuture<Void> saveShutdownReturn(UUID player, @Nullable Location location,
+            @Nullable String owner, @Nullable UUID request, Runnable writeMarker) {
+        if (location == null || !location.isWorldLoaded() || location.getWorld() == null) {
+            return queue.write(() -> { writeMarker.run(); return null; });
+        }
+        String world = location.getWorld().getName();
+        double x = location.getX(), y = location.getY(), z = location.getZ();
+        float yaw = location.getYaw(), pitch = location.getPitch();
+        return queue.write(() -> {
+            writeMarker.run();
+            repository.savePendingLocation(player, world, x, y, z, yaw, pitch, owner, request);
+            return null;
+        });
+    }
+
     public java.util.concurrent.CompletableFuture<JdbcAbyssRepository.PendingLocation> loadPendingLocation(UUID player) {
         return queue.write(() -> repository.loadPendingLocation(player));
     }
@@ -332,5 +348,9 @@ public final class PlayerDataManager {
 
     public void shutdown() {
         queue.close();
+    }
+
+    public java.util.concurrent.CompletionStage<Void> stopped() {
+        return queue.stopped();
     }
 }

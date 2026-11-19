@@ -79,17 +79,26 @@ final class GlobalBridgeFactory {
      * 首次调用创建单例，后续调用复用已有实例仅重新加载配置。
      */
     void initialize() {
+        initialize(false);
+    }
+
+    void reload() {
+        initialize(true);
+    }
+
+    private void initialize(boolean forceModeratorRefresh) {
+        YamlConfiguration rootConfig = loadRootConfig();
         initItemSources();
-        initCurrencyAndAttributes();
+        initCurrencyAndAttributes(rootConfig);
         initScripting();
-        initEventBus();
+        initEventBus(rootConfig.getBoolean("modules.battlepass.enabled", false));
         capabilityRegistry.registerCore(xuanmo.arcartxsuite.api.capability.AuthRuntimeCapability.class, registry.authenticationRuntime());
         capabilityRegistry.registerCore(xuanmo.arcartxsuite.api.capability.BindingService.class, registry.authenticationRuntime());
         EventBusCapability authBus = capabilityRegistry.get(EventBusCapability.class);
         for (String topic : java.util.List.of("axs.auth.admission_granted", "axs.auth.profile_first_admitted", "axs.auth.presence_day_started", "axs.auth.binding_changed")) {
             authBus.registerPublisher(topic);
         }
-        initContentModerator();
+        initContentModerator(rootConfig.getConfigurationSection("moderation"), forceModeratorRefresh);
     }
 
     private void initItemSources() {
@@ -103,10 +112,10 @@ final class GlobalBridgeFactory {
         }
 
         if (pendingRewardService == null) {
-            pendingRewardService = new DefaultPendingRewardService(plugin, LOGGER, storageManager, registry);
+            pendingRewardService = new DefaultPendingRewardService(plugin, LOGGER, storageManager, registry,
+                registry.pendingCommandReceipts());
             Bukkit.getPluginManager().registerEvents(pendingRewardService, plugin);
         }
-        pendingRewardService.initialize();
         capabilityRegistry.registerCore(PendingRewardService.class, pendingRewardService);
 
         if (vanillaItemNameBridge == null) {
@@ -120,23 +129,23 @@ final class GlobalBridgeFactory {
         );
     }
 
-    private void initContentModerator() {
+    private void initContentModerator(ConfigurationSection section, boolean forceRefresh) {
         if (contentModerator == null) {
             contentModerator = new ContentModeratorImpl(plugin);
         }
-        contentModerator.initialize();
+        if (forceRefresh) contentModerator.reload(section);
+        else contentModerator.initialize(section);
     }
 
-    private void initCurrencyAndAttributes() {
+    private void initCurrencyAndAttributes(YamlConfiguration rootConfig) {
         if (currencyBridgeManager == null) {
             currencyBridgeManager = new CurrencyBridgeManager(plugin, Map.of(), placeholderResolver);
         }
-        YamlConfiguration rootConfig = loadRootConfig();
         currencyBridgeManager.registerCurrencies(parseGlobalCurrencies(rootConfig));
         currencyBridgeManager.initialize();
 
         if (attributeBridgeRegistry == null) {
-            attributeBridgeRegistry = new DefaultAttributeBridgeRegistry(plugin);
+            attributeBridgeRegistry = new DefaultAttributeBridgeRegistry(plugin, registry.taczCombatBridge());
         }
         ConfigurationSection attrBridges = rootConfig.getConfigurationSection("attribute-bridges");
         boolean apEnabled = attrBridges == null || attrBridges.getBoolean("attributeplus", true);
@@ -178,7 +187,7 @@ final class GlobalBridgeFactory {
         ScriptConditionServices.install(scriptConditionEvaluator);
     }
 
-    private void initEventBus() {
+    private void initEventBus(boolean requireAuctionProgress) {
         EventBusCapability eventBus;
         var caps = capabilityRegistry.capabilitiesMap();
         if (!caps.containsKey(EventBusCapability.class)) {
@@ -186,6 +195,10 @@ final class GlobalBridgeFactory {
             caps.put(EventBusCapability.class, eventBus);
         } else {
             eventBus = (EventBusCapability) caps.get(EventBusCapability.class);
+        }
+        if (eventBus instanceof SimpleEventBus localBus) {
+            localBus.requireAuctionProgress(requireAuctionProgress);
+            localBus.requireAuctionRules(registry::requiresEventPacketAuctionConsumer);
         }
 
         eventBus.registerPublisher("axs.currency.spent");
@@ -212,8 +225,8 @@ final class GlobalBridgeFactory {
                 }
 
                 @Override
-                public void reloadModule(@org.jetbrains.annotations.NotNull String moduleId) throws Exception {
-                    registry.reloadModule(moduleId);
+                public java.util.concurrent.CompletionStage<Boolean> reloadModule(@org.jetbrains.annotations.NotNull String moduleId) {
+                    return registry.reloadModule(moduleId);
                 }
             });
     }
@@ -258,7 +271,9 @@ final class GlobalBridgeFactory {
 
     // ─── 桥接 getter（供 ModuleRegistry 委托） ─────────────────
     void detachGlobalListeners() {
+        if (contentModerator != null) contentModerator.shutdown();
         if(pendingRewardService!=null) org.bukkit.event.HandlerList.unregisterAll(pendingRewardService);
+        if (attributeBridgeRegistry != null) attributeBridgeRegistry.shutdown();
     }
 
     DefaultItemSourceRegistry itemSourceRegistry() { return itemSourceRegistry; }
@@ -285,7 +300,7 @@ final class GlobalBridgeFactory {
     DefaultVanillaItemNameBridge vanillaItemNameBridge() { return vanillaItemNameBridge; }
     ContentModeratorImpl contentModerator() {
         if (contentModerator == null) {
-            initContentModerator();
+            initContentModerator(loadRootConfig().getConfigurationSection("moderation"), false);
         }
         return contentModerator;
     }

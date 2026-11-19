@@ -1,6 +1,7 @@
 package xuanmo.arcartxsuite.essentials;
 
 import java.io.File;
+import java.nio.file.Path;
 import java.sql.SQLException;
 import org.bukkit.Location;
 import org.bukkit.World;
@@ -45,6 +46,11 @@ import xuanmo.arcartxsuite.essentials.service.PlayerManagementService;
 import xuanmo.arcartxsuite.essentials.service.TeleportService;
 import xuanmo.arcartxsuite.essentials.service.TreeCapitatorService;
 import xuanmo.arcartxsuite.essentials.storage.EssentialsRepository;
+import xuanmo.arcartxsuite.essentials.service.InventoryInspection;
+import xuanmo.arcartxsuite.essentials.service.ModerationService;
+import xuanmo.arcartxsuite.essentials.service.WarpDirectory;
+import xuanmo.arcartxsuite.essentials.service.EssentialsWork;
+import xuanmo.arcartxsuite.api.storage.ModuleStorage;
 
 /**
  * Essentials 模块主类。
@@ -57,38 +63,24 @@ import xuanmo.arcartxsuite.essentials.storage.EssentialsRepository;
  */
 public final class EssentialsModule extends AbstractAXSModule implements ModuleCommandHandler {
 
-    private static final List<String> ACTIONS = List.of(
-        "help", "status", "reload",
-        // UI
-        "menu", "admin",
-        // 玩家管理
-        "fly", "god", "heal", "feed", "gamemode", "speed", "vanish", "afk", "back",
-        "repair", "hat", "enderchest", "workbench", "anvil", "trash", "nick", "seen",
-        // 传送
-        "home", "sethome", "delhome", "warp", "setwarp", "delwarp",
-        "spawn", "setspawn", "tpa", "tpahere", "tpaccept", "tpdeny", "tp", "top", "tppos",
-        // 世界
-        "time", "weather",
-        // 安全管理
-        "ban", "tempban", "unban", "mute", "tempmute", "unmute",
-        "kick", "warn", "sudo", "inv",
-        // 交互
-        "sit", "lay",
-        // 工具
-        "sort", "replant", "autotool"
-    );
 
     private EssentialsConfiguration configuration;
     private EssentialsRepository repository;
+    private ModuleStorage storageScope;
+    private EssentialsWork work;
+    private ModerationService moderation;
+    private InventoryInspection inventoryInspection;
     private PlayerManagementService playerService;
     private TeleportService teleportService;
     private TreeCapitatorService treeCapitatorService;
     private InventoryActionsService inventoryActionsService;
     private YamlConfiguration rawYaml;
+    private Path configPath;
     private Supplier<ChatMutable> chatMutableSupplier;
     private EssentialsMenuPacketHandler menuPacketHandler;
     private EssentialsAdminPacketHandler adminPacketHandler;
     private EssentialsCommandDelegate commandDelegate;
+    private BukkitTask commandRegistrationTask;
     private final Map<UUID, BukkitTask> poseMonitorTasks = new ConcurrentHashMap<>();
     /** 坐下姿势的坐垫实体映射（玩家 UUID → ArmorStand），与命令委派器共享以便统一清理 */
     private final Map<UUID, org.bukkit.entity.Entity> seatEntities = new ConcurrentHashMap<>();
@@ -113,8 +105,28 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
             .configFileName("ArcartXEssentials.yml")
             .messagesFileName("messages.yml")
             .currentVersion(3)
+            .syncPolicy(xuanmo.arcartxsuite.api.config.SyncPolicy.builder()
+                .dynamicSection("warps").opaqueSection("command-aliases").build())
             .validations(List.of(
-                    ValidationRule.required("storage.shared", ValueType.BOOLEAN)
+                    ValidationRule.required("storage.shared", ValueType.BOOLEAN),
+                    ValidationRule.of("command-conflict-protection", ValueType.BOOLEAN),
+                    ValidationRule.of("disabled-actions", ValueType.STRING_LIST),
+                    ValidationRule.of("warps", ValueType.SECTION),
+                    ValidationRule.of("tpa.enabled", ValueType.BOOLEAN),
+                    ValidationRule.of("tpa.cooldown-seconds", ValueType.INT).withRange(0, 3600),
+                    ValidationRule.of("tpa.max-incoming", ValueType.INT).withRange(1, 50),
+                    ValidationRule.of("tpa.max-outgoing", ValueType.INT).withRange(1, 50),
+                    ValidationRule.of("unstuck.enabled", ValueType.BOOLEAN),
+                    ValidationRule.of("unstuck.cooldown-seconds", ValueType.INT).withRange(0, 86400),
+                    ValidationRule.of("unstuck.warmup-seconds", ValueType.INT).withRange(0, 60),
+                    ValidationRule.of("unstuck.combat-seconds", ValueType.INT).withRange(0, 600),
+                    ValidationRule.of("unstuck.search-radius", ValueType.INT).withRange(1, 8),
+                    ValidationRule.of("unstuck.vertical-range", ValueType.INT).withRange(0, 8),
+                    ValidationRule.of("unstuck.only-when-stuck", ValueType.BOOLEAN),
+                    ValidationRule.of("unstuck.allowed-worlds", ValueType.STRING_LIST),
+                    ValidationRule.of("unstuck.blocked-worlds", ValueType.STRING_LIST),
+                    ValidationRule.of("moderation.allow-offline-bans", ValueType.BOOLEAN),
+                    ValidationRule.of("moderation.history-page-size", ValueType.INT).withRange(1, 25)
             ))
             .build();
     }
@@ -129,11 +141,16 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
 
     @Override
     protected @NotNull PacketHandlerSpec createPacketHandlerSpec() {
+        var runtime=work;
+        var menu=menuPacketHandler;
+        var admin=adminPacketHandler;
         return PacketHandlerSpec.of((player, packetId, data) -> {
-            if (menuPacketHandler != null && menuPacketHandler.handleClientPacket(player, packetId, data)) return true;
-            if (adminPacketHandler != null && adminPacketHandler.handleClientPacket(player, packetId, data)) return true;
-            return false;
-        }, 0, null, null);
+            return runtime.call(()->{
+                if (menu != null && menu.handleClientPacket(player, packetId, data)) return true;
+                if (admin != null && admin.handleClientPacket(player, packetId, data)) return true;
+                return false;
+            },false);
+        }, 0, EssentialsMenuPacketHandler.PACKET_ID, "essentials", EssentialsAdminPacketHandler.PACKET_ID);
     }
 
     /**
@@ -163,7 +180,7 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
      */
     @Override
     public List<String> actions() {
-        return ACTIONS;
+        return EssentialsCommandDelegate.actions();
     }
 
     /**
@@ -178,7 +195,10 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
         if (configFile == null) {
             throw new IllegalStateException("ArcartXEssentials.yml 配置文件缺失");
         }
-        rawYaml = YamlConfiguration.loadConfiguration(configFile);
+        rawYaml = new YamlConfiguration();
+        rawYaml.options().parseComments(true);
+        rawYaml.load(configFile);
+        configPath = configFile.toPath();
         configuration = EssentialsConfiguration.load(rawYaml, logger);
     }
 
@@ -189,35 +209,56 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
      * @throws Exception 启动失败时抛出
      */
     @Override
-    protected void startService() throws Exception {
+    protected java.util.concurrent.CompletionStage<Void> prepareService() throws Exception {
+        work=new EssentialsWork(plugin);
         // 共享模式：使用本体统一数据源，模块只需提供表前缀
         // 若模块配置了独立 storage 节（mode=mysql 等），则走自建模式（向后兼容）
         xuanmo.arcartxsuite.api.storage.StorageDescriptor essDesc;
         javax.sql.DataSource essDs;
         if (configuration.storage().hasOverride()) {
             essDesc = configuration.storage().toDescriptor();
-            essDs = storageManager.resolveModuleDataSource("essentials", null, dataFolder, essDesc);
+            storageScope = storageManager.openModuleStorage("essentials", null, dataFolder, essDesc);
+            essDs = storageScope.dataSource();
         } else {
             essDesc = storageManager.getDescriptor()
                 .withTablePrefix(configuration.storage().tablePrefix());
-            essDs = storageManager.resolveModuleDataSource("essentials",
+            storageScope = storageManager.openModuleStorage("essentials",
                 configuration.storage().sqliteFileName(), dataFolder, null);
+            essDs = storageScope.dataSource();
         }
         repository = new EssentialsRepository(essDs, essDesc, dataFolder, logger);
-        repository.initialize();
+        moderation = new ModerationService(repository, configuration.moderation(), logger, work);
+        var repo = repository;
+        var bans = moderation;
+        bans.beginLoadingBans();
+        registerListener(bans);
+        return storageScope.initialize(() -> {
+            repo.initialize();
+            bans.initialize();
+        });
+    }
+
+    @Override
+    protected void startService() throws Exception {
+        moderation.start(plugin);
+        inventoryInspection = new InventoryInspection();
+        registerListener(inventoryInspection);
 
         playerService = new PlayerManagementService(plugin, logger, configuration,
             () -> getCapability(TabRefreshable.class));
         playerService.start();
 
         teleportService = new TeleportService(
-            plugin, configuration, repository, playerService, logger);
+            plugin, configuration, repository, playerService, logger,
+            new WarpDirectory(repository, configPath, rawYaml, logger),
+            () -> getCapability(xuanmo.arcartxsuite.api.capability.AbyssAdmissionAccess.class),
+            () -> getCapability(xuanmo.arcartxsuite.api.capability.RegionQueryable.class), work);
         teleportService.start();
 
         // 一键砍树服务
         var treeSection = rawYaml.getConfigurationSection("tree-capitator");
         if (treeSection != null) {
-            treeCapitatorService = new TreeCapitatorService(plugin, logger, treeSection,
+            treeCapitatorService = new TreeCapitatorService(plugin, treeSection,
                 configuration.messages().treeFelled());
             treeCapitatorService.start();
         }
@@ -233,7 +274,14 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
         chatMutableSupplier = () -> getCapability(ChatMutable.class);
 
         // 注册 EssentialsQueryable capability 供 Tab/Chat 等模块查询
-        registerCapability(EssentialsQueryable.class, new EssentialsQueryableImpl());
+        registerCapability(EssentialsQueryable.class, new EssentialsQueryableImpl(playerService,teleportService,repository,chatMutableSupplier,work));
+
+        commandDelegate = new EssentialsCommandDelegate(
+            configuration, playerService, teleportService, repository,
+            inventoryActionsService, chatMutableSupplier,
+            () -> menuPacketHandler, () -> adminPacketHandler, moderation, inventoryInspection, this::inspectCommand,
+            plugin, this::messages, this::reloadSelf, poseMonitorTasks, seatEntities, work
+        );
 
         // UI 绑定与 Packet Handler 初始化
         if (packetBridge != null && packetBridge.isAvailable()) {
@@ -246,19 +294,54 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
 
             if (menuBinding.registeredUiId() != null) {
                 menuPacketHandler = new EssentialsMenuPacketHandler(
-                    plugin, packetBridge, packetGuard,
-                    playerService, teleportService, repository,
-                    inventoryActionsService, menuBinding.runtimeUiId());
+                    plugin, packetBridge, playerService, repository,
+                    inventoryActionsService, teleportService, menuBinding.runtimeUiId(), commandDelegate, work);
             }
             if (adminBinding.registeredUiId() != null) {
                 adminPacketHandler = new EssentialsAdminPacketHandler(
-                    plugin, packetBridge, packetGuard,
-                    playerService, teleportService, repository,
-                    chatMutableSupplier,
-                    () -> configuration.moderation().recordBanIp(),
-                    adminBinding.runtimeUiId());
+                    plugin, packetBridge, playerService, repository, chatMutableSupplier,
+                    teleportService.warps(), adminBinding.runtimeUiId(), commandDelegate, work);
             }
         }
+
+        EssentialsRepository essRepo = repository;
+        var runtime=work;
+        registerCapability(xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable.class,
+            new xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable() {
+                @Override public @NotNull String moduleId() { return "essentials"; }
+                @Override public int purgePlayerData(@NotNull java.util.UUID playerUuid) {
+                    return runtime.call(()->{try { return essRepo.deletePlayerData(playerUuid); }
+                    catch (Exception e) { logger.warning("Essentials purge 失败: " + e.getMessage()); return -1; }},-1);
+                }
+                @Override public int purgeAllPlayerData() {
+                    return runtime.call(()->{try { return essRepo.deleteAllPlayerData(); }
+                    catch (Exception e) { logger.warning("Essentials purgeAll 失败: " + e.getMessage()); return -1; }},-1);
+                }
+            });
+
+        registerCapability(xuanmo.arcartxsuite.api.capability.DatabaseMigratable.class,
+            new xuanmo.arcartxsuite.api.capability.DatabaseMigratable() {
+                @Override public @NotNull String moduleId() { return "essentials"; }
+                @Override public @NotNull xuanmo.arcartxsuite.api.storage.MigrationResult migrateDatabase(
+                        @NotNull xuanmo.arcartxsuite.api.storage.StorageDescriptor target, boolean overwrite) {
+                    var unavailable=new xuanmo.arcartxsuite.api.storage.MigrationResult(false,0,0);
+                    unavailable.addError("Essentials 已停用");
+                    return runtime.call(()->essRepo.migrateData(target,overwrite),unavailable);
+                }
+                @Override public @NotNull xuanmo.arcartxsuite.api.storage.StorageDescriptor currentDescriptor() {
+                    return essRepo.getDescriptor();
+                }
+            });
+
+        // 等待服务端及 POSTWORLD 插件完成初始命令注册，再判断同名命令的归属。
+        commandRegistrationTask = Bukkit.getScheduler().runTask(plugin,
+            ()->runtime.call(()->{registerShortcuts();return null;},null));
+        logger.info("Essentials 模块已启动。");
+    }
+
+    private void registerShortcuts() {
+        commandRegistrationTask = null;
+        boolean protectExisting = configuration.commandConflictProtection();
 
         // 注册 /ess 独立缩写命令，转发给 essentials 子命令处理
         registerCommand("ess", new org.bukkit.command.TabExecutor() {
@@ -281,13 +364,18 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
                 java.util.List<String> result = EssentialsModule.this.onTabComplete(sender, forwarded);
                 return result != null ? result : List.of();
             }
-        });
+        }, protectExisting);
 
         // 注册配置中定义的命令简写别名（如 /fly /god /gm 等），转发到 /essentials <action>
-        if (configuration != null && configuration.commandAliases() != null) {
+        if (!configuration.commandAliases().isEmpty()) {
             for (var entry : configuration.commandAliases().entrySet()) {
                 String alias = entry.getKey();
                 String action = entry.getValue();
+                if (!EssentialsCommandDelegate.actions().contains(action)) {
+                    logger.warning("Essentials 简写 /" + alias + " 指向未知动作 " + action);
+                    continue;
+                }
+                if (!configuration.features().actionEnabled(action)) continue;
                 registerCommand(alias, new org.bukkit.command.TabExecutor() {
                     @Override
                     public boolean onCommand(@NotNull org.bukkit.command.CommandSender sender,
@@ -312,83 +400,73 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
                         java.util.List<String> result = EssentialsModule.this.onTabComplete(sender, forwarded);
                         return result != null ? result : List.of();
                     }
-                });
+                }, protectExisting, EssentialsCommandDelegate.permissionForAction(action));
             }
-            logger.info("已注册 " + configuration.commandAliases().size() + " 个命令简写别名");
+            logger.info("已加载 " + configuration.commandAliases().size() + " 条命令简写配置");
         }
-
-        EssentialsRepository essRepo = repository;
-        registerCapability(xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable.class,
-            new xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable() {
-                @Override public @NotNull String moduleId() { return "essentials"; }
-                @Override public int purgePlayerData(@NotNull java.util.UUID playerUuid) {
-                    try { return essRepo.deletePlayerData(playerUuid); }
-                    catch (Exception e) { logger.warning("Essentials purge 失败: " + e.getMessage()); return -1; }
-                }
-                @Override public int purgeAllPlayerData() {
-                    try { return essRepo.deleteAllPlayerData(); }
-                    catch (Exception e) { logger.warning("Essentials purgeAll 失败: " + e.getMessage()); return -1; }
-                }
-            });
-
-        registerCapability(xuanmo.arcartxsuite.api.capability.DatabaseMigratable.class,
-            new xuanmo.arcartxsuite.api.capability.DatabaseMigratable() {
-                @Override public @NotNull String moduleId() { return "essentials"; }
-                @Override public @NotNull xuanmo.arcartxsuite.api.storage.MigrationResult migrateDatabase(
-                        @NotNull xuanmo.arcartxsuite.api.storage.StorageDescriptor target, boolean overwrite) {
-                    return essRepo.migrateData(target, overwrite);
-                }
-                @Override public @NotNull xuanmo.arcartxsuite.api.storage.StorageDescriptor currentDescriptor() {
-                    return essRepo.getDescriptor();
-                }
-            });
-
-        commandDelegate = new EssentialsCommandDelegate(
-            configuration, playerService, teleportService, repository,
-            inventoryActionsService, chatMutableSupplier,
-            menuPacketHandler, adminPacketHandler,
-            plugin, this::messages, this::reloadSelf, poseMonitorTasks, seatEntities
-        );
-
-        logger.info("Essentials 模块已启动。");
     }
 
     /**
      * 供 {@link EssentialsCommandDelegate} 的 reload 子命令回调：包装 {@link #onReload()}
      * 的受检异常为运行时异常，由委派器统一捕获并回报失败消息。
      */
-    private void reloadSelf() {
-        try {
-            onReload();
-        } catch (Exception e) {
-            throw new IllegalStateException(e.getMessage(), e);
-        }
-    }
+    private java.util.concurrent.CompletionStage<Void> reloadSelf() { return onReload(); }
 
     /**
      * 停止并释放全部服务层资源，按反向顺序关闭。
      */
     @Override
     protected void stopService() {
-        commandDelegate = null;
-        poseMonitorTasks.values().forEach(BukkitTask::cancel);
+        var runtime=work;var scope=storageScope;
+        work=null;storageScope=null;
+        var stages=new java.util.ArrayList<java.util.concurrent.CompletableFuture<Void>>();
+        if(runtime!=null){runtime.close();stages.add(runtime.stopped().toCompletableFuture());}
+        if (commandRegistrationTask != null) {
+            cleanup(commandRegistrationTask::cancel,stages);
+            commandRegistrationTask = null;
+        }
+        if (commandDelegate != null) {
+            cleanup(commandDelegate::shutdown, stages);
+            stages.add(commandDelegate.stopped().toCompletableFuture());
+            commandDelegate = null;
+        }
+        poseMonitorTasks.values().forEach(task->cleanup(task::cancel,stages));
         poseMonitorTasks.clear();
         seatEntities.values().forEach(entity -> {
-            if (entity.isValid()) {
-                entity.remove();
-            }
+            cleanup(()->{if(entity.isValid())entity.remove();},stages);
         });
         seatEntities.clear();
-        menuPacketHandler = null;
-        adminPacketHandler = null;
-        if (inventoryActionsService != null) { inventoryActionsService.shutdown(); inventoryActionsService = null; }
-        if (treeCapitatorService != null) { treeCapitatorService.shutdown(); treeCapitatorService = null; }
-        if (teleportService != null) { teleportService.shutdown(); teleportService = null; }
-        if (playerService != null) { playerService.shutdown(); playerService = null; }
-        if (repository != null) { repository.close(); repository = null; }
-        storageManager.closeModuleDataSource("essentials");
+        if (menuPacketHandler != null) { cleanup(menuPacketHandler::shutdown,stages); menuPacketHandler = null; }
+        if (adminPacketHandler != null) { cleanup(adminPacketHandler::shutdown,stages); adminPacketHandler = null; }
+        if (inventoryInspection != null) {
+            cleanup(inventoryInspection::closeAll,stages);
+            var inspection=inventoryInspection;cleanup(()->org.bukkit.event.HandlerList.unregisterAll(inspection),stages);
+            inventoryInspection = null;
+        }
+        if (moderation != null) {
+            cleanup(moderation::stop,stages);
+            var current=moderation;cleanup(()->org.bukkit.event.HandlerList.unregisterAll(current),stages);
+            moderation = null;
+        }
+        if (inventoryActionsService != null) { cleanup(inventoryActionsService::shutdown,stages);stages.add(inventoryActionsService.stopped().toCompletableFuture());inventoryActionsService = null; }
+        if (treeCapitatorService != null) { cleanup(treeCapitatorService::shutdown,stages);stages.add(treeCapitatorService.stopped().toCompletableFuture());treeCapitatorService = null; }
+        if (teleportService != null) { cleanup(teleportService::shutdown,stages);stages.add(teleportService.stopped().toCompletableFuture());teleportService = null; }
+        if (playerService != null) { cleanup(playerService::shutdown,stages);stages.add(playerService.stopped().toCompletableFuture());playerService = null; }
+        repository = null;
+        var stopped=java.util.concurrent.CompletableFuture.allOf(stages.toArray(java.util.concurrent.CompletableFuture[]::new));
+        trackShutdown(stopped);
+        if(scope!=null){scope.retireAfter(stopped);trackShutdown(scope.retired());}
         configuration = null;
         rawYaml = null;
+        configPath = null;
+    }
+
+    private void cleanup(Runnable operation,java.util.List<java.util.concurrent.CompletableFuture<Void>> stages) {
+        try{operation.run();}
+        catch(RuntimeException|LinkageError failure){
+            logger.log(java.util.logging.Level.WARNING,"Essentials 关闭步骤失败",failure);
+            stages.add(java.util.concurrent.CompletableFuture.failedFuture(failure));
+        }
     }
 
     /**
@@ -401,11 +479,12 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
      */
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull String label, @NotNull String[] args) {
-        if (commandDelegate == null) {
+        var delegate=commandDelegate;var runtime=work;
+        if (delegate == null||runtime==null) {
             sender.sendMessage(messages() != null ? messages().get("common.command-handler-down") : "§cEssentials 命令处理器尚未初始化。");
             return true;
         }
-        return commandDelegate.onCommand(sender, label, args);
+        return runtime.call(()->delegate.onCommand(sender,label,args),true);
     }
 
     /**
@@ -417,8 +496,9 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
      */
     @Override
     public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull String[] args) {
-        if (commandDelegate == null) return List.of();
-        return commandDelegate.onTabComplete(sender, args);
+        var delegate=commandDelegate;var runtime=work;
+        if (delegate == null||runtime==null) return List.of();
+        return runtime.call(()->delegate.onTabComplete(sender,args),List.of());
     }
 
     // ─── Sit / Lay ───
@@ -431,6 +511,31 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
     @Override
     protected List<Listener> createListeners() {
         return List.of(new Listener() {
+            @EventHandler(priority = org.bukkit.event.EventPriority.HIGHEST, ignoreCancelled = true)
+            public void onSeatClick(org.bukkit.event.player.PlayerInteractEvent event) {
+                if (event.getAction() != org.bukkit.event.block.Action.RIGHT_CLICK_BLOCK
+                    || event.getHand() != org.bukkit.inventory.EquipmentSlot.HAND
+                    || event.useInteractedBlock() == org.bukkit.event.Event.Result.DENY
+                    || (event.getItem() != null && !event.getItem().getType().isAir())
+                    || event.getPlayer().isSneaking() || commandDelegate == null) return;
+                org.bukkit.block.Block block = event.getClickedBlock();
+                if (block == null) return;
+                var data = block.getBlockData();
+                double height;
+                if (configuration.interaction().sitOnStairs() && data instanceof org.bukkit.block.data.type.Stairs stairs) {
+                    height = stairs.getHalf() == org.bukkit.block.data.Bisected.Half.TOP ? 1.0 : 0.5;
+                } else if (configuration.interaction().sitOnSlabs() && data instanceof org.bukkit.block.data.type.Slab slab
+                    && slab.getType() != org.bukkit.block.data.type.Slab.Type.DOUBLE) {
+                    height = slab.getType() == org.bukkit.block.data.type.Slab.Type.TOP ? 1.0 : 0.5;
+                } else {
+                    return;
+                }
+                if (block.getRelative(org.bukkit.block.BlockFace.UP).isPassable()
+                    && commandDelegate.sitAt(event.getPlayer(), block.getLocation().add(0.5, height, 0.5))) {
+                    event.setCancelled(true);
+                }
+            }
+
             @EventHandler
             public void onPlayerQuit(PlayerQuitEvent event) {
                 cancelPoseTask(event.getPlayer().getUniqueId());
@@ -491,52 +596,55 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
      * {@link EssentialsQueryable} 能力的内部实现，
      * 供 Tab、Chat 等外部模块查询玩家的 AFK、隐身、禁言、昵称、飞行与无敌状态。
      */
-    private final class EssentialsQueryableImpl implements EssentialsQueryable {
+    private static final class EssentialsQueryableImpl implements EssentialsQueryable {
+        private final PlayerManagementService playerService;
+        private final TeleportService teleportService;
+        private final EssentialsRepository repository;
+        private final Supplier<ChatMutable> chatMutableSupplier;
+        private final EssentialsWork runtime;
+        EssentialsQueryableImpl(PlayerManagementService players,TeleportService teleport,EssentialsRepository repository,
+                                Supplier<ChatMutable> chat,EssentialsWork runtime) {
+            this.playerService=players;this.teleportService=teleport;this.repository=repository;this.chatMutableSupplier=chat;this.runtime=runtime;
+        }
 
         @Override
         public boolean isAfk(@NotNull UUID playerUuid) {
-            return playerService != null && playerService.isAfk(playerUuid);
+            return runtime.call(()->playerService != null && playerService.isAfk(playerUuid),false);
         }
 
         @Override
         public boolean isVanished(@NotNull UUID playerUuid) {
-            return playerService != null && playerService.isVanished(playerUuid);
+            return runtime.call(()->playerService != null && playerService.isVanished(playerUuid),false);
         }
 
         @Override
-        public boolean isMuted(@NotNull UUID playerUuid) {
-            ChatMutable chatMutable = chatMutableSupplier != null ? chatMutableSupplier.get() : null;
-            if (chatMutable != null) {
-                return chatMutable.isMuted(playerUuid);
-            }
-            return false;
+        public @NotNull java.util.concurrent.CompletionStage<Boolean> isMuted(@NotNull UUID playerUuid) {
+            return runtime.call(() -> {
+                ChatMutable chatMutable = chatMutableSupplier != null ? chatMutableSupplier.get() : null;
+                return chatMutable != null ? chatMutable.isMuted(playerUuid)
+                    : java.util.concurrent.CompletableFuture.completedFuture(false);
+            }, java.util.concurrent.CompletableFuture.failedFuture(
+                new java.util.concurrent.RejectedExecutionException("Essentials retired")));
         }
 
         @Override
-        public @Nullable String getNickname(@NotNull UUID playerUuid) {
-            if (repository == null) return null;
-            try {
-                return repository.getNickname(playerUuid);
-            } catch (SQLException e) {
-                return null;
-            }
+        public java.util.concurrent.CompletionStage<String> getNickname(@NotNull UUID playerUuid) {
+            return runtime.read(() -> repository.getNickname(playerUuid));
         }
 
         @Override
         public boolean isFlying(@NotNull UUID playerUuid) {
-            Player p = Bukkit.getPlayer(playerUuid);
-            return p != null && p.isFlying();
+            return runtime.call(()->{Player p = Bukkit.getPlayer(playerUuid);return p != null && p.isFlying();},false);
         }
 
         @Override
         public boolean isGodMode(@NotNull UUID playerUuid) {
-            Player p = Bukkit.getPlayer(playerUuid);
-            return p != null && p.isInvulnerable();
+            return runtime.call(()->{Player p = Bukkit.getPlayer(playerUuid);return p != null && p.isInvulnerable();},false);
         }
 
         @Override
-        public @Nullable Location getSpawn(@NotNull World world) {
-            return teleportService != null ? teleportService.getSpawn(world) : null;
+        public java.util.concurrent.CompletionStage<Location> getSpawn(@NotNull World world) {
+            return teleportService.getSpawn(world);
         }
     }
 }

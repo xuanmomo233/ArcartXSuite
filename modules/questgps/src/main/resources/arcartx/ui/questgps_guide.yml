@@ -21,7 +21,6 @@ ui:
     #   - trackedCount: 追踪中的目标总数
     #   - quests: 追踪任务卡片字典（key="0"~"2"，value含questId/name/label/progressText/taskText/taskDesc/navText/hasNav/navWorld）
     #   - questCount: 卡片数（最多3）
-    #   - 兼容字段: questName/navWorld/navX/navY/navZ/hasNav（主追踪目标摘要）
     init: |-
       var.packetId = packet['packetId']
       var.active = packet['active']

@@ -46,45 +46,30 @@ ui:
       // ── 余额列表：仅在数量变化时重建 ──
       if(var.maxBalanceCount != oldMaxBalanceCount){
         var.刷新轮次 = (var.刷新轮次 + 1).round()
-        while(val.余额列表.childrenCount() > 1){
-          val.余额列表.get(1).remove()
-        }
-        if(var.maxBalanceCount > 1){
-          for(序号 in range(1, var.maxBalanceCount - 1)){
-            if(val.余额列表['项'] != none) {
-              项 = val.余额列表['项'].copy('余额项_' + var.刷新轮次.round() + '_' + 序号.round())
-              项.entryKey = 序号.round()
-            }
+        var.余额列表网格数据 = []
+        if((var.maxBalanceCount - 1) >= 0){
+          for(网格序号 in range(0, var.maxBalanceCount - 1)){
+            var.余额列表网格数据.add(网格序号.round())
           }
         }
       }
       // ── 产品列表：仅在数量变化时重建 ──
       if(var.maxProductCount != oldMaxProductCount){
         var.刷新轮次 = (var.刷新轮次 + 1).round()
-        while(val.产品列表.childrenCount() > 1){
-          val.产品列表.get(1).remove()
-        }
-        if(var.maxProductCount > 1){
-          for(序号 in range(1, var.maxProductCount - 1)){
-            if(val.产品列表['项'] != none) {
-              项 = val.产品列表['项'].copy('产品项_' + var.刷新轮次.round() + '_' + 序号.round())
-              项.entryKey = 序号.round()
-            }
+        var.产品列表网格数据 = []
+        if((var.maxProductCount - 1) >= 0){
+          for(网格序号 in range(0, var.maxProductCount - 1)){
+            var.产品列表网格数据.add(网格序号.round())
           }
         }
       }
       // ── 定期列表：仅在数量变化时重建 ──
       if(var.maxFixedCount != oldMaxFixedCount){
         var.刷新轮次 = (var.刷新轮次 + 1).round()
-        while(val.定期列表.childrenCount() > 1){
-          val.定期列表.get(1).remove()
-        }
-        if(var.maxFixedCount > 1){
-          for(序号 in range(1, var.maxFixedCount - 1)){
-            if(val.定期列表['项'] != none) {
-              项 = val.定期列表['项'].copy('定期项_' + var.刷新轮次.round() + '_' + 序号.round())
-              项.entryKey = 序号.round()
-            }
+        var.定期列表网格数据 = []
+        if((var.maxFixedCount - 1) >= 0){
+          for(网格序号 in range(0, var.maxFixedCount - 1)){
+            var.定期列表网格数据.add(网格序号.round())
           }
         }
       }
@@ -548,15 +533,19 @@ controls:
             children:
               余额列表:
                 val: 余额列表
-                type: VStack
+                type: RepeatGrid
                 attribute:
+                  items: "var.余额列表网格数据"
+                  flow: ~row
+                  column: 1
+                  spaceBetweenY: 8
+                  maxSize: "var.余额列表网格数据 == none ? 0 : var.余额列表网格数据.size()"
                   width: 258
-                  spaceBetween: 8
                 children:
                   项:
                     type: Canvas
                     attribute:
-                      entryKey: 0.round()
+                      entryKey: self.item
                       entry: var.balances[self.entryKey]
                       visible: self.entry != none
                       width: 258
@@ -952,15 +941,19 @@ controls:
                 children:
                   定期列表:
                     val: 定期列表
-                    type: VStack
+                    type: RepeatGrid
                     attribute:
+                      items: "var.定期列表网格数据"
+                      flow: ~row
+                      column: 1
+                      spaceBetweenY: 8
+                      maxSize: "var.定期列表网格数据 == none ? 0 : var.定期列表网格数据.size()"
                       width: var.col1W - 100
-                      spaceBetween: 8
                     children:
                       项:
                         type: Canvas
                         attribute:
-                          entryKey: 0.round()
+                          entryKey: self.item
                           entry: var.fixedDeposits[self.entryKey]
                           visible: self.entry != none
                           width: var.col1W - 100
@@ -1076,15 +1069,19 @@ controls:
                 children:
                   产品列表:
                     val: 产品列表
-                    type: VStack
+                    type: RepeatGrid
                     attribute:
+                      items: "var.产品列表网格数据"
+                      flow: ~row
+                      column: 1
+                      spaceBetweenY: 8
+                      maxSize: "var.产品列表网格数据 == none ? 0 : var.产品列表网格数据.size()"
                       width: var.col2W - 40
-                      spaceBetween: 8
                     children:
                       项:
                         type: Canvas
                         attribute:
-                          entryKey: 0.round()
+                          entryKey: self.item
                           entry: var.products[self.entryKey]
                           visible: self.entry != none
                           width: var.col2W - 40

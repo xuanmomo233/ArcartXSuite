@@ -9,6 +9,12 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
+import java.util.concurrent.CancellationException;
+import org.bukkit.Bukkit;
 import java.util.logging.Logger;
 import org.bukkit.command.TabExecutor;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -90,7 +96,13 @@ public abstract class AbstractAXSModule implements AXSModule {
     protected @NotNull xuanmo.arcartxsuite.api.modattr.ModAttributeService modAttributes;
 
 
-    private boolean ready;
+    private volatile boolean ready;
+    private boolean lifecycleOpen;
+    private CompletableFuture<Boolean> pendingEnable;
+    private volatile long lifecycleGeneration;
+    private volatile CompletableFuture<Void> pendingReload;
+    private final Set<CompletableFuture<?>> retirements = new HashSet<>();
+    private Throwable retirementFailure;
     private final Map<String, UiBinding> uiBindings = new LinkedHashMap<>();
     private MessageProvider messages; // 模块消息提供者，由 configSpec().messagesFileName() 声明后自动加载
 
@@ -219,6 +231,11 @@ public abstract class AbstractAXSModule implements AXSModule {
      */
     protected abstract void startService() throws Exception;
 
+    /** 在主线程提交数据库准备工作。完成之后才会注册入口和调用 {@link #startService()}。 */
+    protected CompletionStage<Void> prepareService() throws Exception {
+        return CompletableFuture.completedFuture(null);
+    }
+
     /**
      * 声明本模块通过 EventBus 发布的事件主题列表。
      * <p>
@@ -243,8 +260,11 @@ public abstract class AbstractAXSModule implements AXSModule {
     // ── 基类自动处理的生命周期 ─────────────────────────────────
 
     @Override
-    public final boolean onEnable(ModuleContext context) throws Exception {
+    public final CompletionStage<Boolean> onEnable(ModuleContext context) {
+        if (lifecycleOpen) return CompletableFuture.failedFuture(new IllegalStateException("模块已在启用"));
+        lifecycleOpen = true;
         this.context = context;
+        context.beginScheduledTasks();
 
         // 注入 API 字段（子类通过 protected 字段直接访问，无需 context）
         this.plugin = context.plugin();
@@ -286,7 +306,36 @@ public abstract class AbstractAXSModule implements AXSModule {
             // 1b. 导出并加载外部化消息（若声明）
             initMessages();
 
-            // 2. 导出 UI 资源并绑定
+            var prepared = prepareService().toCompletableFuture();
+            CompletableFuture<Boolean> result = new CompletableFuture<>();
+            pendingEnable = result;
+            if (prepared.isDone()) {
+                prepared.whenComplete((ignored, failure) -> finishEnable(result, failure));
+            } else {
+                trackShutdown(prepared.handle((ignored, failure) -> null));
+                prepared.whenComplete((ignored, failure) -> {
+                    if (result.isDone()) return;
+                    try {
+                        if (Bukkit.isPrimaryThread()) finishEnable(result, failure);
+                        else Bukkit.getScheduler().runTask(plugin, () -> finishEnable(result, failure));
+                    } catch (RuntimeException | LinkageError error) {
+                        result.completeExceptionally(error);
+                    }
+                });
+            }
+            return result.copy();
+        } catch (Exception | LinkageError | StackOverflowError failure) {
+            onDisable();
+            return CompletableFuture.failedFuture(failure);
+        }
+    }
+
+    private void finishEnable(CompletableFuture<Boolean> result, Throwable preparationFailure) {
+        if (pendingEnable != result) return;
+        pendingEnable = null;
+        var logger = context.logger();
+        try {
+            if (preparationFailure != null) throw new java.util.concurrent.CompletionException(preparationFailure);
             exportAndBindUi();
 
             // 3. 绑定命令（提前到 startService 之前，使用 Supplier 延迟引用服务；
@@ -334,15 +383,7 @@ public abstract class AbstractAXSModule implements AXSModule {
             }
 
             // 7. 注册客户端包处理器
-            PacketHandlerSpec packetSpec = createPacketHandlerSpec();
-            if (packetSpec.handler() != null) {
-                context.registerClientPacketHandler(
-                    packetSpec.handler(),
-                    packetSpec.priority(),
-                    packetSpec.ownershipPacketId(),
-                    packetSpec.guardModule()
-                );
-            }
+            registerClientPacketHandler(createPacketHandlerSpec());
 
             // 8. 注册客户端初始化处理器
             ClientInitializedHandler initHandler = createInitializedHandler();
@@ -351,28 +392,41 @@ public abstract class AbstractAXSModule implements AXSModule {
             }
 
             ready = true;
-            return true;
-        } catch (Exception exception) {
-            logger.severe(descriptor().name() + " 模块启动失败: " + exception.getMessage());
-            cleanupOnFailure();
-            throw exception;
-        } catch (LinkageError error) {
-            logger.severe(descriptor().name() + " 模块启动失败，缺少运行依赖或依赖版本不兼容: " + error.getMessage());
-            cleanupOnFailure();
-            throw error;
+            result.complete(true);
+        } catch (Exception | LinkageError | StackOverflowError failure) {
+            try { onDisable(); }
+            finally { result.completeExceptionally(failure); }
         }
     }
 
     @Override
     public final void onDisable() {
         ready = false;
+        lifecycleGeneration++;
+        CompletableFuture<Void> reloading = pendingReload;
+        pendingReload = null;
+        if (reloading != null) reloading.completeExceptionally(new CancellationException("模块已停用"));
+        if (!lifecycleOpen) return;
+        lifecycleOpen = false;
+        CompletableFuture<Boolean> enabling = pendingEnable;
+        pendingEnable = null;
+        try {
+            stopAndUnregister();
+        } finally {
+            if (enabling != null) enabling.completeExceptionally(new CancellationException("模块已停用"));
+        }
+    }
+
+    private void stopAndUnregister() {
         // 先关闭业务服务
         try {
             stopService();
-        } catch (Exception exception) {
+        } catch (Exception | LinkageError exception) {
             if (context != null) {
                 context.logger().warning(descriptor().name() + " 模块关闭异常: " + exception.getMessage());
             }
+        } finally {
+            cancelModuleTasks();
         }
         // 注销 UI（registerOrReloadUi 在 re-enable 时会自动重新注册）
         for (UiBinding binding : uiBindings.values()) {
@@ -383,20 +437,84 @@ public abstract class AbstractAXSModule implements AXSModule {
         uiBindings.clear();
         // 自动注销所有已注册的监听器、命令、占位符等
         if (context != null) {
+            context.unregisterDynamicCommands();
             context.unregisterListeners();
             context.expansionRegistry().unregisterAll();
         }
     }
 
     @Override
-    public void onReload() throws Exception {
-        onDisable();
-        onEnable(context);
+    public CompletionStage<Void> onReload() {
+        try {
+            onDisable();
+        } catch (Exception | LinkageError failure) {
+            return CompletableFuture.failedFuture(failure);
+        }
+        long generation = lifecycleGeneration;
+        CompletableFuture<Void> result = new CompletableFuture<>();
+        pendingReload = result;
+        shutdownCompletion().toCompletableFuture().copy().orTimeout(30, java.util.concurrent.TimeUnit.SECONDS).whenComplete((ignored, failure) -> {
+            if (failure != null) {
+                result.completeExceptionally(failure);
+                return;
+            }
+            Runnable enable = () -> {
+                if (result.isDone() || generation != lifecycleGeneration) return;
+                pendingReload = null;
+                try {
+                    if (!plugin.isEnabled()) throw new CancellationException("宿主已停用");
+                    onEnable(context).whenComplete((enabled, startFailure) -> {
+                        if (startFailure != null) result.completeExceptionally(startFailure);
+                        else if (!enabled) result.completeExceptionally(new IllegalStateException("模块启用失败"));
+                        else result.complete(null);
+                    });
+                } catch (Exception | LinkageError error) {
+                    result.completeExceptionally(error);
+                }
+            };
+            try {
+                if (Bukkit.isPrimaryThread()) enable.run();
+                else Bukkit.getScheduler().runTask(plugin, enable);
+            } catch (RuntimeException | LinkageError error) {
+                result.completeExceptionally(error);
+            }
+        });
+        return result.copy();
     }
 
     @Override
     public final boolean isReady() {
         return ready;
+    }
+
+    /**
+     * 在 stopService 中登记后台资源退出信号。Bukkit 对象清理仍由 stopService
+     * 在主线程完成；此方法只跟踪退出，不启动线程、不等待，也不执行保存。
+     * 同一实例多次快速重载时，较早一轮尚未完成的退出信号也会保留。
+     */
+    protected final void trackShutdown(CompletionStage<?> completion) {
+        CompletableFuture<?> future = completion.toCompletableFuture();
+        synchronized (retirements) {
+            retirements.add(future);
+        }
+        future.whenComplete((ignored, failure) -> {
+            synchronized (retirements) {
+                retirements.remove(future);
+                if (failure != null && retirementFailure == null) retirementFailure = failure;
+            }
+            if (failure != null && logger != null) {
+                logger.warning(descriptor().name() + " 后台资源退出异常: " + failure);
+            }
+        });
+    }
+
+    @Override
+    public final CompletionStage<Void> shutdownCompletion() {
+        synchronized (retirements) {
+            var complete = CompletableFuture.allOf(retirements.toArray(CompletableFuture<?>[]::new));
+            Throwable failure = retirementFailure;
+            return failure == null ? complete : complete.thenCompose(ignored -> CompletableFuture.failedFuture(failure));
+        }
     }
 
     // ── 子类可用的工具方法 ─────────────────────────────────────
@@ -441,8 +559,7 @@ public abstract class AbstractAXSModule implements AXSModule {
 
     protected final void registerClientPacketHandler(PacketHandlerSpec spec) {
         if (spec.handler() != null) {
-            context.registerClientPacketHandler(spec.handler(), spec.priority(),
-                spec.ownershipPacketId(), spec.guardModule());
+            context.registerClientPacketHandler(spec);
         }
     }
 
@@ -503,6 +620,19 @@ public abstract class AbstractAXSModule implements AXSModule {
     /** 延迟绑定玩家命令 */
     protected void registerCommand(String commandName, TabExecutor executor) {
         context.registerCommand(commandName, executor);
+    }
+
+    /** 动态绑定玩家命令，并指定是否保留同名的已有命令。 */
+    protected void registerCommand(String commandName, TabExecutor executor, boolean protectExisting) {
+        context.registerCommand(commandName, executor, protectExisting);
+    }
+
+    protected void registerCommand(String commandName, TabExecutor executor, boolean protectExisting, @Nullable String permission) {
+        context.registerCommand(commandName, executor, protectExisting, permission);
+    }
+
+    protected RegistrationContext.CommandRegistrationInfo inspectCommand(String label) {
+        return context.inspectCommand(label);
     }
 
     /** 注册按键事件处理器 */
@@ -605,24 +735,10 @@ public abstract class AbstractAXSModule implements AXSModule {
         }
     }
 
-    /**
-     * 启动失败时的清理。
-     */
-    private void cleanupOnFailure() {
-        try {
-            stopService();
-        } catch (Exception ignored) {
-        }
-        for (UiBinding binding : uiBindings.values()) {
-            if (binding.registeredUiId() != null && context != null) {
-                context.unregisterUi(binding.registeredUiId());
-            }
-        }
-        uiBindings.clear();
-        if (context != null) {
-            context.unregisterListeners();
-            context.expansionRegistry().unregisterAll();
-        }
+    private void cancelModuleTasks() {
+        if (context == null) return;
+        CompletionStage<Void> stopped = context.cancelScheduledTasks();
+        if (stopped != null) trackShutdown(stopped);
     }
 
     /**

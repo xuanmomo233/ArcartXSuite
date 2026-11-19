@@ -9,9 +9,7 @@ jint nativeVersion(JNIEnv *env, jclass clazz) {
 
 /**
  * 初始化保护子系统：
- * 1. 派生密钥链（root_seed → master_key → session_key）
- * 2. 验证 native 自身完整性
- * 3. 返回 0=成功，非 0=错误码
+ * 完成原生自检和宿主条目验签后，才初始化逐类解密密钥链。
  */
 jint initProtection(JNIEnv *env, jclass clazz) {
     // 验证 native 自身完整性
@@ -19,9 +17,9 @@ jint initProtection(JNIEnv *env, jclass clazz) {
         return -1; // native 库被篡改
     }
 
-    // 验证 JAR 明文层完整性（引导类哈希清单 + .enc Merkle，native 侧锚定）
+    // 验证绑定到当前 JVM CodeSource 的宿主发行包。
     if (!verify_bootstrap_classes(env)) {
-        return -3; // 插件 JAR 明文类被篡改
+        return -3; // 宿主签名清单无法验证
     }
 
     // 初始化密钥链

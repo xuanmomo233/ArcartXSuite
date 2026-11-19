@@ -28,7 +28,7 @@ public enum RegionFlag {
     VEHICLE_PLACE("vehicle-place", Category.BLOCK, "放置矿车/船"),
 
     // ─── 环境 ───
-    TNT("tnt", Category.ENVIRONMENT, "TNT 爆炸"),
+    TNT("tnt", Category.ENVIRONMENT, "炸药爆炸"),
     CREEPER_EXPLOSION("creeper-explosion", Category.ENVIRONMENT, "苦力怕爆炸"),
     OTHER_EXPLOSION("other-explosion", Category.ENVIRONMENT, "其他爆炸(末影水晶等)"),
     FIRE_SPREAD("fire-spread", Category.ENVIRONMENT, "火焰蔓延"),
@@ -58,6 +58,7 @@ public enum RegionFlag {
     // ─── 玩家 ───
     ENTRY("entry", Category.PLAYER, "玩家进入"),
     EXIT("exit", Category.PLAYER, "玩家离开"),
+    TELEPORT("teleport", Category.PLAYER, "传送"),
     ENDERPEARL("enderpearl", Category.PLAYER, "末影珍珠传送"),
     CHORUS_FRUIT("chorus-fruit", Category.PLAYER, "紫颂果传送"),
     ITEM_DROP("item-drop", Category.PLAYER, "丢弃物品"),
@@ -65,7 +66,7 @@ public enum RegionFlag {
     EXP_DROP("exp-drop", Category.PLAYER, "经验球掉落"),
     HUNGER("hunger", Category.PLAYER, "饥饿消耗"),
     HEAL("heal", Category.PLAYER, "自然恢复"),
-    FLY("fly", Category.PLAYER, "允许飞行"),
+    FLY("fly", Category.PLAYER, "飞行"),
     RIDE("ride", Category.PLAYER, "骑乘实体"),
     SLEEP("sleep", Category.PLAYER, "使用床"),
     RESPAWN_ANCHORS("respawn-anchors", Category.PLAYER, "重生锚"),
@@ -93,6 +94,40 @@ public enum RegionFlag {
     public Category category() { return category; }
     public String description() { return description; }
 
+    public boolean playerBypass() {
+        return switch (this) {
+            case PVP, DAMAGE_ANIMALS, BLOCK_BREAK, BLOCK_PLACE, USE, CHEST_ACCESS, TRAMPLE,
+                 VEHICLE_DESTROY, ENTRY, EXIT, TELEPORT, ENDERPEARL, CHORUS_FRUIT, ITEM_DROP,
+                 ITEM_PICKUP, FLY, RIDE, SLEEP, RESPAWN_ANCHORS, SEND_CHAT, RECEIVE_CHAT -> true;
+            default -> false;
+        };
+    }
+
+    public boolean memberExempt() {
+        return switch (this) {
+            case BLOCK_BREAK, BLOCK_PLACE, USE, CHEST_ACCESS, VEHICLE_DESTROY,
+                 ITEM_DROP, ITEM_PICKUP, RIDE, SLEEP -> true;
+            default -> false;
+        };
+    }
+
+    public boolean claimEditable() {
+        return memberExempt() || this == VEHICLE_PLACE || this == DAMAGE_ANIMALS || this == GREETING || this == FAREWELL
+            || this == NOTIFY_ENTER || this == NOTIFY_EXIT;
+    }
+
+    public void apply(Region region, State state, String data) {
+        if (data != null && this != GREETING && this != FAREWELL) {
+            throw new IllegalArgumentException("只有 greeting 和 farewell 支持消息文本。");
+        }
+        if (data != null && (data.length() > 1024
+            || data.chars().anyMatch(c -> Character.isISOControl(c) && c != '\n' && c != '\t'))) {
+            throw new IllegalArgumentException("消息最多 1024 个字符，且须为可显示文字。");
+        }
+        region.setFlag(this, state);
+        if (state != State.NONE && data != null) region.setFlagData(this, data);
+    }
+
     private static final Map<String, RegionFlag> BY_KEY = new LinkedHashMap<>();
     static {
         for (RegionFlag flag : values()) {
@@ -109,7 +144,11 @@ public enum RegionFlag {
     }
 
     public enum Category {
-        COMBAT, BLOCK, ENVIRONMENT, MOB, PLAYER, MISC
+        COMBAT("战斗"), BLOCK("方块"), ENVIRONMENT("环境"), MOB("生物"), PLAYER("玩家"), MISC("消息与其他");
+
+        private final String label;
+        Category(String label) { this.label = label; }
+        public String label() { return label; }
     }
 
     /**
@@ -125,6 +164,14 @@ public enum RegionFlag {
                 case "deny", "false", "no" -> DENY;
                 default -> NONE;
             };
+        }
+
+        public static State parse(String s) {
+            State state = fromString(s);
+            if (state == NONE && !"none".equalsIgnoreCase(s)) {
+                throw new IllegalArgumentException("标志状态须为 allow、deny 或 none。");
+            }
+            return state;
         }
     }
 }

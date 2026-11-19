@@ -124,8 +124,9 @@ public final class DefaultMythicLibBridge implements MythicLibBridge {
             TemporaryStatModifier handle = new TemporaryStatModifier(
                 modifierName, statId, value, ModifierType.FLAT, EquipmentSlot.OTHER, ModifierSource.OTHER
             );
-            handle.register(data, durationMillis);
-            return handle;
+            long durationTicks = (Math.max(1L, durationMillis) - 1L) / 50L + 1L;
+            handle.register(data, durationTicks);
+            return new TemporaryModifierHandle(data, handle);
         } catch (RuntimeException | LinkageError e) {
             xuanmo.arcartxsuite.module.AxsLog.logger().warning("[MythicLib] registerTemporaryModifier 失败: " + e.getMessage());
             return null;
@@ -134,11 +135,21 @@ public final class DefaultMythicLibBridge implements MythicLibBridge {
 
     @Override
     public void closeTemporaryModifier(Object handle) {
-        if (!(handle instanceof TemporaryStatModifier modifier)) return;
-        try { modifier.close(); } catch (RuntimeException | LinkageError e) {
+        if (!(handle instanceof TemporaryModifierHandle temporary)) return;
+        var modifier = temporary.modifier();
+        try {
+            try {
+                if (modifier.isActive()) modifier.close();
+            } finally {
+                // MythicLib's close cancels the expiry task without unregistering the stat.
+                modifier.unregister(temporary.playerData());
+            }
+        } catch (RuntimeException | LinkageError e) {
             xuanmo.arcartxsuite.module.AxsLog.logger().warning("[MythicLib] closeTemporaryModifier 失败: " + e.getMessage());
         }
     }
+
+    private record TemporaryModifierHandle(MMOPlayerData playerData, TemporaryStatModifier modifier) {}
 
     private void reset() {
         available = false;

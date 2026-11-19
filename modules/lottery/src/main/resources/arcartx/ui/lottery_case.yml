@@ -34,8 +34,6 @@ ui:
     # 额外职责: 若处于等待态但本次没有结果包（抽奖失败），解除等待态并回到主面板。
     update: |-
       var.costTenIconJsons = {}
-      var.动画卡片列表 = {}
-      var.奖励卡片列表 = {}
       var.packetId = packet['packetId']
       var.poolName = packet['poolName']
       var.poolDescription = packet['poolDescription']
@@ -80,108 +78,19 @@ ui:
       // Java 端直接发送 itemJsons 字典，UI 端无需循环构建
       var.itemJsons = packet['itemJsons'] != none ? packet['itemJsons'] : {}
       var.rarityNames = packet['rarityNames'] != none ? packet['rarityNames'] : (var.rarityNames != none ? var.rarityNames : {})
-      // 奖池预览网格: 按实际奖品数量重建，模板占第 1 条数据
-      // 注意: get(index)/['name'] 对 packetHandler 中动态创建的子控件不可靠，
-      // 改用 get(0) 获取 YAML 模板，复制时保存引用到 var.奖励卡片列表，seticon 阶段直接用引用。
       目标数 = var.itemCount.round()
-      现有数 = val.奖励网格.childrenCount() - 1
-      if(现有数 != 目标数 - 1){
-        // 用保存的引用移除旧复制卡片
-        if(var.奖励卡片列表 != none){
-          for(key in var.奖励卡片列表.keys()){
-            if(key != 1){
-              old = var.奖励卡片列表[key]
-              if(old != none){
-                old.remove()
-              }
-            }
-          }
-        }
-        var.奖励卡片轮次 = (var.奖励卡片轮次 + 1).round()
-        if(val.奖励网格 != none) {
-          模板 = val.奖励网格.get(0)
-          var.奖励卡片列表[1.round()] = 模板
-          if(模板 != none){
-            模板.entryKey = 1.round()
-            模板['卡片底'].entryKey = 1.round()
-            模板['稀有度条'].entryKey = 1.round()
-            模板['物品槽'].entryKey = 1.round()
-            模板['物品名'].entryKey = 1.round()
-          }
-          if(目标数 > 1){
-            for(i in range(1, 目标数 - 1)){
-              if(模板 != none){
-                e = 模板.copy('奖励卡片_' + var.奖励卡片轮次 + '_' + i.round())
-                e.entryKey = (i + 1).round()
-                e['卡片底'].entryKey = (i + 1).round()
-                e['稀有度条'].entryKey = (i + 1).round()
-                e['物品槽'].entryKey = (i + 1).round()
-                e['物品名'].entryKey = (i + 1).round()
-                var.奖励卡片列表[(i + 1).round()] = e
-              }
-            }
-          }
-        }
-      }
-      for(i in range(1, 目标数)){
-        key = i.round()
-        e = var.奖励卡片列表[key]
-        if(e != none){
-          e['物品槽'].seticon()
-        }
-      }
-      动画带数量 = 50
-      现有动画数 = val.动画卡片带.childrenCount() - 2
-      if(现有动画数 != 动画带数量 - 1 || var.动画带基数 != 目标数){
-        // 用保存的引用移除旧复制卡片
-        if(var.动画卡片列表 != none){
-          for(key in var.动画卡片列表.keys()){
-            old = var.动画卡片列表[key]
-            if(old != none){
-              old.remove()
-            }
-          }
-        }
-        var.动画带轮次 = (var.动画带轮次 + 1).round()
-        // 初始化动画带物品数据为奖池预览数据的副本，让动画卡片创建时就有颜色和图标
-        for(key in var.items.keys()){
-          var.animItems[key] = var.items[key]
-        }
-        for(key in var.itemJsons.keys()){
-          var.animItemJsons[key] = var.itemJsons[key]
-        }
-        if(val.动画卡片带 != none) {
-          动画模板 = val.动画卡片带.get(1)
-          var.动画卡片列表[0.round()] = 动画模板
-          if(动画模板 != none){
-            随机key = (math.floor(math.random() * 目标数) + 1).round()
-            动画模板.entryKey = 随机key
-            动画模板['卡片底'].entryKey = 随机key
-            动画模板['稀有度条'].entryKey = 随机key
-            动画模板['物品槽'].entryKey = 随机key
-            动画模板['物品名'].entryKey = 随机key
-          }
-          for(i in range(1, 动画带数量 - 1)){
-            iInt = i.round()
-            随机key = (math.floor(math.random() * 目标数) + 1).round()
-            if(动画模板 != none){
-              e = 动画模板.copy('动画卡片_' + var.动画带轮次 + '_' + i.round())
-              e.entryKey = 随机key
-              e['卡片底'].entryKey = 随机key
-              e['稀有度条'].entryKey = 随机key
-              e['物品槽'].entryKey = 随机key
-              e['物品名'].entryKey = 随机key
-              var.动画卡片列表[i.round()] = e
-            }
-          }
+      var.奖励卡片列表 = var.syncCaseCards(val.奖励网格, 0, var.奖励卡片列表, 目标数, '奖励卡片_')
+      var.previewIconsDirty = true
+      var.动画卡片列表 = var.syncCaseCards(val.动画卡片带, 1, var.动画卡片列表, 50, '动画卡片_')
+      if(var.动画带基数 != 目标数){
+        var.animItems = var.items
+        var.animItemJsons = var.itemJsons
+        for(key in var.动画卡片列表.keys()){
+          row = var.动画卡片列表[key]
+          row.entryKey = 目标数 > 0 ? (math.floor(math.random() * 目标数) + 1).round() : 1
         }
         var.动画带基数 = 目标数
-      }
-      for(key in var.动画卡片列表.keys()){
-        e = var.动画卡片列表[key]
-        if(e != none){
-          e['物品槽'].seticon()
-        }
+        var.spinIconsDirty = true
       }
       for(i in range(0, 3)){
         key = i.round()
@@ -199,6 +108,15 @@ ui:
         val.主面板.visible = true
       }
       var.actionBusy = false
+    read_failed: |-
+      var.actionToken = ''
+      var.actionBusy = false
+      var.actionBusySeconds = 0
+      if(var.rolling != none && var.rolling == true && var.resultPending != none && var.resultPending != true){
+        var.rolling = false
+        val.开箱动画层.visible = false
+        val.主面板.visible = true
+      }
     # packetHandler: result（单抽结果，服务端仅在确实抽到物品时下发）
     # 包字段:
     #   - resultCount: 结果数量
@@ -234,19 +152,7 @@ ui:
         entry['rarity'] = animRarities[key] != none ? animRarities[key] : ''
         var.animItems[key] = entry
       }
-      // 把动画卡片 entryKey 改成 1-50，对应 Java 发来的 50 个物品
-      for(key in var.动画卡片列表.keys()){
-        e = var.动画卡片列表[key]
-        if(e != none){
-          entryKey = (key + 1).round()
-          e.entryKey = entryKey
-          e['卡片底'].entryKey = entryKey
-          e['稀有度条'].entryKey = entryKey
-          e['物品槽'].entryKey = entryKey
-          e['物品名'].entryKey = entryKey
-          e['物品槽'].seticon()
-        }
-      }
+      self.actions['bindSpinResult']()
       // 结果已到达: 固定 spinTarget 让中线精确对准 card 38（中奖位置）
       var.滚动起点 = var.滚动位置
       var.减速 = Q4(0, 1, 1, var.spinMs)
@@ -275,56 +181,8 @@ ui:
       }
       var.resultPending = true
       var.揭晓类型 = 'batch'
-      目标数 = var.batchCount.round()
-      现有数 = val.十连网格.childrenCount() - 1
-      if(现有数 != 目标数 - 1){
-        // 用保存的引用移除旧复制卡片
-        if(var.十连卡片列表 != none){
-          for(key in var.十连卡片列表.keys()){
-            if(key != 1){
-              old = var.十连卡片列表[key]
-              if(old != none){
-                old.remove()
-              }
-            }
-          }
-        }
-        var.十连卡片列表 = {}
-        var.十连卡片轮次 = (var.十连卡片轮次 + 1).round()
-        if(val.十连网格 != none) {
-          十连模板 = val.十连网格.get(0)
-          var.十连卡片列表[1.round()] = 十连模板
-          if(十连模板 != none){
-            十连模板.entryKey = 1.round()
-            十连模板['卡片底'].entryKey = 1.round()
-            十连模板['稀有度条'].entryKey = 1.round()
-            十连模板['物品槽'].entryKey = 1.round()
-            十连模板['物品名'].entryKey = 1.round()
-            十连模板['稀有度名'].entryKey = 1.round()
-          }
-          if(目标数 > 1){
-            for(i in range(1, 目标数 - 1)){
-              if(十连模板 != none){
-                e = 十连模板.copy('十连卡片_' + var.十连卡片轮次 + '_' + i.round())
-                e.entryKey = (i + 1).round()
-                e['卡片底'].entryKey = (i + 1).round()
-                e['稀有度条'].entryKey = (i + 1).round()
-                e['物品槽'].entryKey = (i + 1).round()
-                e['物品名'].entryKey = (i + 1).round()
-                e['稀有度名'].entryKey = (i + 1).round()
-                var.十连卡片列表[(i + 1).round()] = e
-              }
-            }
-          }
-        }
-      }
-      for(i in range(1, 目标数)){
-        key = i.round()
-        e = var.十连卡片列表[key]
-        if(e != none){
-          e['物品槽'].seticon()
-        }
-      }
+      var.十连卡片列表 = var.syncCaseCards(val.十连网格, 0, var.十连卡片列表, var.batchCount.round(), '十连卡片_')
+      var.batchIconsDirty = true
       // 用 Java 端发送的 50 个伪随机物品覆盖动画带
       animCount = packet['animCount'] != none ? packet['animCount'] : 50
       animNames = packet['animItemNames'] != none ? packet['animItemNames'] : {}
@@ -340,18 +198,7 @@ ui:
         entry['rarity'] = animRarities[key] != none ? animRarities[key] : ''
         var.animItems[key] = entry
       }
-      for(key in var.动画卡片列表.keys()){
-        e = var.动画卡片列表[key]
-        if(e != none){
-          entryKey = (key + 1).round()
-          e.entryKey = entryKey
-          e['卡片底'].entryKey = entryKey
-          e['稀有度条'].entryKey = entryKey
-          e['物品槽'].entryKey = entryKey
-          e['物品名'].entryKey = entryKey
-          e['物品槽'].seticon()
-        }
-      }
+      self.actions['bindSpinResult']()
       var.滚动起点 = var.滚动位置
       var.减速 = Q4(0, 1, 1, var.spinMs)
       var.滚动曲线 = var.减速
@@ -366,27 +213,14 @@ ui:
       var.historyCount = packet['historyCount'] != none ? packet['historyCount'] : 0
       var.historyRows = packet['historyRows'] != none ? packet['historyRows'] : {}
       // 根据实际历史条目数动态创建行
-      for(i in range(0, var.historyCount)){
-        key = i.round()
-        if(i > 0){
-          existing = val.历史列表['历史行' + key]
-          if(existing == none){
-            if(val.历史列表['历史行'] != none) {
-              e = val.历史列表['历史行'].copy('历史行' + key)
-              e['时间'].entryKey = key
-              e['物品名'].entryKey = key
-              e['稀有度名'].entryKey = key
-              e['行背景'].entryKey = key
-              e['稀有度条'].entryKey = key
-            }
+      if(var.历史列表网格数据 == none || var.历史列表网格数据.size() != (var.historyCount)){
+        网格数据 = []
+        if((var.historyCount) > 0){
+          for(网格序号 in range(0, (var.historyCount) - 1)){
+            网格数据.add(网格序号.round())
           }
         }
-        if(val.历史列表 != none) {
-          row = val.历史列表.get(key)
-          if(row != none){
-            row.entryKey = key
-          }
-        }
+        var.历史列表网格数据 = 网格数据
       }
       val.历史面板.visible = true
     # packetHandler: details（奖池详情）
@@ -399,30 +233,21 @@ ui:
       var.detailCount = packet['detailCount'] != none ? packet['detailCount'] : 0
       var.detailRows = packet['detailRows'] != none ? packet['detailRows'] : {}
       // 根据实际详情条目数动态创建行
-      for(i in range(0, var.detailCount)){
-        key = i.round()
-        if(i > 0){
-          existing = val.详情列表['详情行' + key]
-          if(existing == none){
-            if(val.详情列表['详情行'] != none) {
-              e = val.详情列表['详情行'].copy('详情行' + key)
-              e['名称'].entryKey = key
-              e['稀有度'].entryKey = key
-              e['概率'].entryKey = key
-              e['行背景'].entryKey = key
-              e['稀有度条'].entryKey = key
-            }
+      if(var.详情列表网格数据 == none || var.详情列表网格数据.size() != (var.detailCount)){
+        网格数据 = []
+        if((var.detailCount) > 0){
+          for(网格序号 in range(0, (var.detailCount) - 1)){
+            网格数据.add(网格序号.round())
           }
         }
-        if(val.详情列表 != none) {
-          row = val.详情列表.get(key)
-          if(row != none){
-            row.entryKey = key
-          }
-        }
+        var.详情列表网格数据 = 网格数据
       }
       val.详情面板.visible = true
   action:
+    close: |-
+      if(var.packetId != none && var.packetId != '' && (val.历史面板.visible || val.详情面板.visible)){
+        Packet.send(var.packetId, 'close_overlay')
+      }
     seconds: |-
       if(var.actionBusy){
         var.actionBusySeconds = var.actionBusySeconds + 1
@@ -435,9 +260,72 @@ ui:
       }
     # load 事件: 初始化稀有度颜色表与界面状态变量
     load: |-
-      var.动画带轮次 = 0
-      var.十连卡片轮次 = 0
-      var.奖励卡片轮次 = 0
+      var.动画卡片列表 = {}
+      var.奖励卡片列表 = {}
+      var.十连卡片列表 = {}
+      var.cardSerial = 0
+      var.动画带基数 = -1
+      var.previewIconsDirty = false
+      var.spinIconsDirty = false
+      var.batchIconsDirty = false
+      var.syncCaseCards = -> {
+        grid = args[0]
+        templateIndex = args[1]
+        cards = args[2]
+        wanted = args[3]
+        prefix = args[4]
+        if(grid == none){ return cards }
+        template = grid.get(templateIndex)
+        if(template == none){ return cards }
+        count = Math.max(1, wanted)
+        if(cards.size() == 0){ cards[1.round()] = template }
+        current = cards.size()
+        if(count < current){
+          kept = {}
+          for(i in range(1, current)){
+            key = i.round()
+            if(i <= count){
+              kept[key] = cards[key]
+            }else{
+              cards[key].remove()
+            }
+          }
+          cards = kept
+        }
+        if(count > current){
+          for(i in range(current + 1, count)){
+            var.cardSerial = var.cardSerial + 1
+            row = template.copy(prefix + var.cardSerial.round())
+            row.entryKey = i.round()
+            row.lastIcon = ''
+            cards[i.round()] = row
+          }
+        }
+        return cards
+      }
+      var.refreshCaseIcons = -> {
+        cards = args[0]
+        count = args[1]
+        icons = args[2]
+        ready = true
+        if(count > 0){
+          for(i in range(1, count)){
+            key = i.round()
+            row = cards[key]
+            if(row == none || row['物品槽'] == none){
+              ready = false
+              continue
+            }
+            icon = icons[row.entryKey]
+            icon = icon != none && icon != '' ? icon : var.air
+            if(row.lastIcon != icon){
+              row['物品槽'].setItemIcon(icon)
+              row.lastIcon = icon
+            }
+          }
+        }
+        return ready
+      }
       var.actionToken = ''
       var.rarityNames = {}
       var.滚动位置 = 0
@@ -469,8 +357,22 @@ ui:
       val.历史面板.visible = false
       val.详情面板.visible = false
       val.资源不足提示.visible = false
+    bindSpinResult: |-
+      for(key in var.动画卡片列表.keys()){
+        var.动画卡片列表[key].entryKey = key
+      }
+      var.spinIconsDirty = true
     # tick 事件: 预热、有限减速、命中冲击和结果层表现动画
     tick: |-
+      if(var.previewIconsDirty){
+        var.previewIconsDirty = !var.refreshCaseIcons(var.奖励卡片列表, var.itemCount, var.itemJsons)
+      }
+      if(var.spinIconsDirty){
+        var.spinIconsDirty = !var.refreshCaseIcons(var.动画卡片列表, 50, var.animItemJsons)
+      }
+      if(var.batchIconsDirty){
+        var.batchIconsDirty = !var.refreshCaseIcons(var.十连卡片列表, var.batchCount, var.batchItemJsons)
+      }
       if(var.rolling != none && var.rolling == true && val.开箱滚动条 != none){
         if(var.滚动曲线 != none && var.resultPending == true){
           进度 = var.滚动曲线.get()
@@ -684,6 +586,7 @@ controls:
                         type: Canvas
                         attribute:
                           entryKey: 1.round()
+                          lastIcon: ''
                           width: 200
                           height: 180
                           scale: 0.8
@@ -692,7 +595,7 @@ controls:
                           卡片底:
                             type: Texture
                             attribute:
-                              entryKey: 1.round()
+                              entryKey: self.parent().entryKey
                               point: ~stretch_all
                               normal: ~40,40,40,255
                               shape: ~round_rect
@@ -709,14 +612,14 @@ controls:
                           稀有度条:
                             type: Texture
                             attribute:
-                              entryKey: 1.round()
+                              entryKey: self.parent().entryKey
                               point: ~horizontal_stretch_bottom
                               height: 4
                               normal: "var.items[self.entryKey] != none && var.items[self.entryKey]['rarity'] != none ? var.rarityColors[var.items[self.entryKey]['rarity']] : '128,128,128,255'"
                           物品槽:
                             type: Slot
                             attribute:
-                              entryKey: 1.round()
+                              entryKey: self.parent().entryKey
                               point: ~top_left
                               x: 48
                               y: 20
@@ -729,7 +632,7 @@ controls:
                           物品名:
                             type: Text
                             attribute:
-                              entryKey: 1.round()
+                              entryKey: self.parent().entryKey
                               point: ~bottom_left
                               x: 8
                               y: -6
@@ -1082,6 +985,7 @@ controls:
                     type: Canvas
                     attribute:
                       entryKey: 1.round()
+                      lastIcon: ''
                       width: 200
                       height: 150
                       scale: 1.5
@@ -1090,7 +994,7 @@ controls:
                       卡片底:
                         type: Texture
                         attribute:
-                          entryKey: 1.round()
+                          entryKey: self.parent().entryKey
                           point: ~stretch_all
                           normal: ~40,40,40,255
                           shape: ~round_rect
@@ -1106,7 +1010,7 @@ controls:
                       稀有度条:
                         type: Texture
                         attribute:
-                          entryKey: 1.round()
+                          entryKey: self.parent().entryKey
                           point: ~horizontal_stretch_top
                           height: 8
                           normal: "var.animItems[self.entryKey] != none && var.animItems[self.entryKey]['rarity'] != none ? var.rarityColors[var.animItems[self.entryKey]['rarity']] : '128,128,128,255'"
@@ -1117,7 +1021,7 @@ controls:
                       物品槽:
                         type: Slot
                         attribute:
-                          entryKey: 1.round()
+                          entryKey: self.parent().entryKey
                           point: ~middle_center
                           slotType: ~Icon
                           width: 100
@@ -1130,7 +1034,7 @@ controls:
                         type: Text
                         attribute:
                           through: true
-                          entryKey: 1.round()
+                          entryKey: self.parent().entryKey
                           point: ~bottom_center
                           y: -8
                           texts: "var.animItems[self.entryKey] != none && var.animItems[self.entryKey]['name'] != none ? '&f' + var.animItems[self.entryKey]['name'] : ''"
@@ -1340,6 +1244,7 @@ controls:
                 type: Canvas
                 attribute:
                   entryKey: 1.round()
+                  lastIcon: ''
                   width: 240
                   height: 280
                   y: "var.十连开始 != none && var.十连开始 > 0 ? 60 * (1 - math.max(0, math.min(1, (Time.currentTime() - var.十连开始 - self.entryKey * 70) / 500))) : 60"
@@ -1349,7 +1254,7 @@ controls:
                   卡片底:
                     type: Texture
                     attribute:
-                      entryKey: 1.round()
+                      entryKey: self.parent().entryKey
                       point: ~stretch_all
                       normal: ~40,40,40,255
                       shape: ~round_rect
@@ -1366,7 +1271,7 @@ controls:
                   稀有度条:
                     type: Texture
                     attribute:
-                      entryKey: 1.round()
+                      entryKey: self.parent().entryKey
                       point: ~horizontal_stretch_top
                       height: 6
                       normal: "var.rarityColors != none && var.batchItemRarities != none && var.rarityColors[var.batchItemRarities[self.entryKey]] != none ? var.rarityColors[var.batchItemRarities[self.entryKey]] : '128,128,128,255'"
@@ -1375,7 +1280,7 @@ controls:
                   物品槽:
                     type: Slot
                     attribute:
-                      entryKey: 1.round()
+                      entryKey: self.parent().entryKey
                       point: ~top_center
                       y: 36
                       slotType: ~Icon
@@ -1387,7 +1292,7 @@ controls:
                     type: Text
                     attribute:
                       through: true
-                      entryKey: 1.round()
+                      entryKey: self.parent().entryKey
                       point: ~bottom_center
                       y: -44
                       texts: "var.batchItemNames[self.entryKey] != none ? '&f' + var.batchItemNames[self.entryKey] : ''"
@@ -1396,7 +1301,7 @@ controls:
                     type: Text
                     attribute:
                       through: true
-                      entryKey: 1.round()
+                      entryKey: self.parent().entryKey
                       point: ~bottom_center
                       y: -16
                       texts: "var.rarityNames[var.batchItemRarities[self.entryKey]] != none ? '&7' + var.rarityNames[var.batchItemRarities[self.entryKey]] : '&7' + var.rarityNames['UNKNOWN']"
@@ -1551,7 +1456,9 @@ controls:
                   width: 120
                   height: 56
                 action:
-                  click: "val.历史面板.visible = false"
+                  click: |-
+                    val.历史面板.visible = false
+                    Packet.send(var.packetId, 'close_overlay')
                 children:
                   历史关闭背景:
                     type: Texture
@@ -1625,16 +1532,19 @@ controls:
                     }
                 children:
                   历史列表:
-                    type: VGrid
+                    type: RepeatGrid
                     val: 历史列表
                     attribute:
+                      items: "var.历史列表网格数据"
+                      flow: ~column
+                      maxSize: "var.历史列表网格数据 == none ? 0 : var.历史列表网格数据.size()"
                       row: 20
                       spaceBetweenY: 12
                     children:
                       历史行:
                         type: Canvas
                         attribute:
-                          entryKey: 0.round()
+                          entryKey: self.item
                           width: 840
                           height: 72
                           visible: "var.historyRows[self.entryKey] != none"
@@ -1642,7 +1552,7 @@ controls:
                           行背景:
                             type: Texture
                             attribute:
-                              entryKey: 0.round()
+                              entryKey: self.parent().entryKey
                               point: ~stretch_all
                               normal: ~45,50,58,200
                               hover: ~60,66,80,230
@@ -1655,7 +1565,7 @@ controls:
                           稀有度条:
                             type: Texture
                             attribute:
-                              entryKey: 0.round()
+                              entryKey: self.parent().entryKey
                               point: ~middle_left
                               x: 0
                               width: 6
@@ -1667,7 +1577,7 @@ controls:
                             type: Text
                             attribute:
                               through: true
-                              entryKey: 0.round()
+                              entryKey: self.parent().entryKey
                               point: ~middle_left
                               x: 24
                               texts: "var.historyRows[self.entryKey] != none ? '&7' + var.historyRows[self.entryKey]['timeText'] : ''"
@@ -1676,7 +1586,7 @@ controls:
                             type: Text
                             attribute:
                               through: true
-                              entryKey: 0.round()
+                              entryKey: self.parent().entryKey
                               point: ~middle_left
                               x: 260
                               texts: "var.historyRows[self.entryKey] != none ? '&f' + var.historyRows[self.entryKey]['itemName'] : ''"
@@ -1685,7 +1595,7 @@ controls:
                             type: Text
                             attribute:
                               through: true
-                              entryKey: 0.round()
+                              entryKey: self.parent().entryKey
                               point: ~middle_right
                               x: -24
                               texts: "var.rarityNames != none && var.historyRows[self.entryKey] != none && var.rarityNames[var.historyRows[self.entryKey]['rarity']] != none ? var.rarityNames[var.historyRows[self.entryKey]['rarity']] : ''"
@@ -1749,7 +1659,9 @@ controls:
                   width: 120
                   height: 56
                 action:
-                  click: "val.详情面板.visible = false"
+                  click: |-
+                    val.详情面板.visible = false
+                    Packet.send(var.packetId, 'close_overlay')
                 children:
                   详情关闭背景:
                     type: Texture
@@ -1861,16 +1773,19 @@ controls:
                     }
                 children:
                   详情列表:
-                    type: VGrid
+                    type: RepeatGrid
                     val: 详情列表
                     attribute:
+                      items: "var.详情列表网格数据"
+                      flow: ~column
+                      maxSize: "var.详情列表网格数据 == none ? 0 : var.详情列表网格数据.size()"
                       row: 45
                       spaceBetweenY: 10
                     children:
                       详情行:
                         type: Canvas
                         attribute:
-                          entryKey: 0.round()
+                          entryKey: self.item
                           width: 840
                           height: 64
                           visible: "var.detailRows[self.entryKey] != none"
@@ -1878,7 +1793,7 @@ controls:
                           行背景:
                             type: Texture
                             attribute:
-                              entryKey: 0.round()
+                              entryKey: self.parent().entryKey
                               point: ~stretch_all
                               normal: ~45,50,58,200
                               hover: ~60,66,80,230
@@ -1891,7 +1806,7 @@ controls:
                           稀有度条:
                             type: Texture
                             attribute:
-                              entryKey: 0.round()
+                              entryKey: self.parent().entryKey
                               point: ~middle_left
                               x: 24
                               width: 6
@@ -1903,7 +1818,7 @@ controls:
                             type: Text
                             attribute:
                               through: true
-                              entryKey: 0.round()
+                              entryKey: self.parent().entryKey
                               point: ~middle_left
                               x: 48
                               texts: "var.detailRows[self.entryKey] != none ? '&f' + var.detailRows[self.entryKey]['name'] : ''"
@@ -1912,7 +1827,7 @@ controls:
                             type: Text
                             attribute:
                               through: true
-                              entryKey: 0.round()
+                              entryKey: self.parent().entryKey
                               point: ~middle_left
                               x: 448
                               texts: "var.rarityNames != none && var.detailRows[self.entryKey] != none && var.rarityNames[var.detailRows[self.entryKey]['rarity']] != none ? var.rarityNames[var.detailRows[self.entryKey]['rarity']] : ''"
@@ -1921,7 +1836,7 @@ controls:
                             type: Text
                             attribute:
                               through: true
-                              entryKey: 0.round()
+                              entryKey: self.parent().entryKey
                               point: ~middle_left
                               x: 688
                               texts: "var.detailRows[self.entryKey] != none ? '&f' + var.detailRows[self.entryKey]['probability'] : ''"

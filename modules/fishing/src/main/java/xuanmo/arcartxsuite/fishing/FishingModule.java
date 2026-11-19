@@ -26,7 +26,6 @@ import xuanmo.arcartxsuite.fishing.config.FishingModuleConfiguration;
 import xuanmo.arcartxsuite.fishing.config.FatigueConfig;
 import xuanmo.arcartxsuite.fishing.fatigue.FatigueEngine;
 import xuanmo.arcartxsuite.fishing.listener.FishingListener;
-import xuanmo.arcartxsuite.fishing.model.FishingPendingReward;
 import xuanmo.arcartxsuite.fishing.packet.FishingPacketHandler;
 import xuanmo.arcartxsuite.fishing.placeholder.FishingPlaceholderExpansion;
 import xuanmo.arcartxsuite.api.icon.IconResolver;
@@ -76,7 +75,9 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
     private static final String BAITS_UI_FILE = "ui/fishing_baits.yml";
 
     private FishingModuleConfiguration configuration;
-    private FishingService service;
+    private volatile FishingService service;
+    private xuanmo.arcartxsuite.api.storage.ModuleStorage storageScope;
+    private JdbcFishingRepository repository;
     private FishingAdminCommand adminCommand;
     private String mainUiId;
     private String minigameUiId;
@@ -132,8 +133,8 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
         if (service == null) return PacketHandlerSpec.NONE;
         return PacketHandlerSpec.of(new FishingPacketHandler(
             player -> {
-                if (service == null) return null;
-                return service.getActiveMinigame(player.getUniqueId());
+                var active = service;
+                return active == null ? null : active.getActiveMinigame(player.getUniqueId());
             },
             () -> service,
             () -> mainUiId,
@@ -142,7 +143,8 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
             () -> rewardsUiId,
             () -> tasksUiId,
             () -> baitsUiId
-        ), 0, null, null);
+        ), 0, FishingPacketHandler.PACKET_ID, "fishing", FishingPacketHandler.TALENTS_PACKET_ID,
+            FishingPacketHandler.REWARDS_PACKET_ID, FishingPacketHandler.TASKS_PACKET_ID, FishingPacketHandler.BAITS_PACKET_ID);
     }
 
     @Override
@@ -174,7 +176,7 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
             "baits/bread.yml", "baits/corn.yml", "baits/worm.yml"
         });
         ensureDefinitionDir("rods", new String[]{
-            "rods/wooden_rod.yml"
+            "rods/wooden_rod.yml", "rods/light_rod.yml"
         });
         ensureDefinitionDir("treasures", new String[]{
             "treasures/ancient_coin.yml", "treasures/custom_treasure_map.yml", "treasures/lost_ring.yml",
@@ -220,22 +222,28 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
     }
 
     @Override
-    protected void startService() throws Exception {
+    protected java.util.concurrent.CompletionStage<Void> prepareService() throws Exception {
         // 共享模式：使用本体统一数据源，模块只需提供表前缀
         // 若模块配置了独立 storage 节（mode=mysql 等），则走自建模式（向后兼容）
-        JdbcFishingRepository repo;
         xuanmo.arcartxsuite.api.storage.StorageDescriptor fishDesc;
         javax.sql.DataSource fishDs;
         if (configuration.storage().hasOverride()) {
             fishDesc = configuration.storage().toDescriptor();
-            fishDs = storageManager.resolveModuleDataSource("fishing", null, dataFolder, fishDesc);
+            storageScope = storageManager.openModuleStorage("fishing", null, dataFolder, fishDesc);
+            fishDs = storageScope.dataSource();
         } else {
             fishDesc = storageManager.getDescriptor().withTablePrefix("");
-            fishDs = storageManager.resolveModuleDataSource("fishing",
+            storageScope = storageManager.openModuleStorage("fishing",
                 configuration.storage().sqliteFileName(), dataFolder, null);
+            fishDs = storageScope.dataSource();
         }
-        repo = new JdbcFishingRepository(fishDs, fishDesc, dataFolder, logger);
+        repository = new JdbcFishingRepository(fishDs, fishDesc, dataFolder, logger);
+        return storageScope.initialize(repository::initialize);
+    }
 
+    @Override
+    protected void startService() throws Exception {
+        var repo = repository;
         // 注册 UI 并获取 UI ID
         UiBinding binding0 = registerModuleUi(
             MAIN_UI_FILE,
@@ -329,10 +337,7 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
 
         IconResolver iconResolver = new IconResolver(itemStackBridge, itemSourceRegistry);
         RewardDispatcher rewardDispatcher = new RewardDispatcher(
-            pendingRewardService, itemSourceRegistry, iconResolver, () -> currencyManager,
-            () -> getCapability(xuanmo.arcartxsuite.api.capability.MailDispatchable.class),
-            itemRewardDispatcher,
-            logger, configuration.season().seasonId());
+            repo, pendingRewardService, logger, configuration.season().seasonId());
         SettlementEngine settlementEngine = new SettlementEngine(
             settlements, ariaBridge, repo, rewardDispatcher, logger, configuration.season().seasonId());
 
@@ -350,7 +355,7 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
 
         TaskEngine taskEngine = new TaskEngine(dailyTasks, weeklyTasks, seasonTasks,
             3, 3, () -> getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class),
-            () -> service, logger, plugin, repo, dataFolder, configuration.season().seasonId());
+            () -> service, logger, plugin, repo, configuration.season().seasonId());
 
         // 加载疲惫值配置
         FatigueConfig fatigueConfig;
@@ -378,30 +383,37 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
             crossServer,
             ariaBridge);
         service.setMessageProvider(messages());
+        service.configureCatchDelivery(pendingRewardService,
+            configuration.storage().hasOverride() ? null : storageManager.getDescriptor(), dataFolder.toPath());
+        var worlds = org.bukkit.Bukkit.getWorlds();
+        if (!worlds.isEmpty()) {
+            var playerData = worlds.get(0).getWorldFolder().toPath().resolve("playerdata");
+            service.configureBaitDeposits(playerData, dataFolder.toPath(), baitsUiId);
+            service.configureFishSales(playerData);
+        }
         service.setEventBusProvider(() -> getCapability(
             xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
-        service.setSignalProvider(() -> getCapability(
-            xuanmo.arcartxsuite.api.capability.SignalDispatchable.class));
         service.setCurrencyProvider(() -> currencyManager);
         service.setTitleProvider(() -> getCapability(
             xuanmo.arcartxsuite.api.capability.TitleGrantable.class));
         service.setItemMatcher(itemMatcher);
+        service.setMapProvider(() -> getCapability(xuanmo.arcartxsuite.api.capability.MapNavigable.class));
         service.start();
 
         // 启动疲惫值定时恢复任务
-        fatigueEngine.start();
-
-        // 迁移旧的 fishing pending 奖励到统一 PendingRewardService
-        migrateLegacyPendingRewards(repo);
+        fatigueEngine.start(service::isPlayerInMinigame);
 
         // 启动任务引擎（需要 eventBusProvider 已设置）
         taskEngine.start();
+        FishingService svc=service;
 
         registerCapability(DatabaseMigratable.class, new DatabaseMigratable() {
             @Override public @NotNull String moduleId() { return "fishing"; }
             @Override public @NotNull xuanmo.arcartxsuite.api.storage.MigrationResult migrateDatabase(
                     @NotNull xuanmo.arcartxsuite.api.storage.StorageDescriptor target, boolean overwrite) {
-                return repo.migrateData(target, overwrite);
+                var unavailable=new xuanmo.arcartxsuite.api.storage.MigrationResult(false,0,0);
+                unavailable.addError("Fishing 正在停用");
+                return svc.callApi(()->repo.migrateData(target,overwrite),unavailable);
             }
             @Override public @NotNull xuanmo.arcartxsuite.api.storage.StorageDescriptor currentDescriptor() {
                 return repo.getDescriptor();
@@ -411,11 +423,15 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
         registerCapability(PlayerDataPurgeable.class, new PlayerDataPurgeable() {
             @Override public @NotNull String moduleId() { return "fishing"; }
             @Override public int purgePlayerData(@NotNull java.util.UUID playerUuid) {
-                try { return repo.deletePlayerData(playerUuid); }
+                try { return svc.callApi(()->{
+                    try{return repo.deletePlayerData(playerUuid);}catch(Exception error){throw new IllegalStateException(error);}
+                },-1); }
                 catch (Exception e) { logger.warning("Fishing purge 失败: " + e.getMessage()); return -1; }
             }
             @Override public int purgeAllPlayerData() {
-                try { return repo.deleteAllPlayerData(); }
+                try { return svc.callApi(()->{
+                    try{return repo.deleteAllPlayerData();}catch(Exception error){throw new IllegalStateException(error);}
+                },-1); }
                 catch (Exception e) { logger.warning("Fishing purgeAll 失败: " + e.getMessage()); return -1; }
             }
         });
@@ -423,62 +439,55 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
         registerCapability(xuanmo.arcartxsuite.api.capability.FishingAccess.class,
             new xuanmo.arcartxsuite.api.capability.FishingAccess() {
                 @Override public boolean isInMinigame(@NotNull java.util.UUID playerUuid) {
-                    return service != null && service.isPlayerInMinigame(playerUuid);
+                    return svc.callApi(()->svc.isPlayerInMinigame(playerUuid),false);
                 }
                 @Override public boolean startMinigame(@NotNull org.bukkit.entity.Player player) {
-                    return service != null && service.startMinigame(player);
+                    return svc.callApi(()->svc.startMinigame(player),false);
                 }
                 @Override public int collectionCount(@NotNull java.util.UUID playerUuid) {
-                    return service != null ? service.getCollectionCount(playerUuid) : 0;
+                    return svc.callApi(()->svc.getCollectionCount(playerUuid),0);
                 }
                 @Override public int totalFishTypes() {
-                    return service != null ? service.getTotalFishTypes() : 0;
+                    return svc.callApi(svc::getTotalFishTypes,0);
                 }
                 @Override public void giveXp(@NotNull java.util.UUID playerUuid, int amount) {
-                    if (service != null) service.giveXp(playerUuid, amount);
+                    svc.callApi(()->{svc.giveXp(playerUuid,amount);return null;},null);
                 }
                 @Override public int fatigue(@NotNull java.util.UUID playerUuid) {
-                    return service != null ? service.getFatigue(playerUuid) : 0;
+                    return svc.callApi(()->svc.getFatigue(playerUuid),0);
                 }
                 @Override public void setFatigue(@NotNull java.util.UUID playerUuid, int value) {
-                    if (service != null) service.setFatigue(playerUuid, value);
+                    svc.callApi(()->{svc.setFatigue(playerUuid,value);return null;},null);
                 }
-                @Override public boolean claimReward(@NotNull org.bukkit.entity.Player player,
+                @Override public java.util.concurrent.CompletableFuture<Boolean> claimReward(@NotNull org.bukkit.entity.Player player,
                         @NotNull String rewardId) {
-                    return service != null && service.claimReward(player, rewardId);
+                    return svc.callApi(() -> svc.claimReward(player, rewardId), java.util.concurrent.CompletableFuture.completedFuture(false));
                 }
                 @Override public @NotNull String sellAllFish(@NotNull org.bukkit.entity.Player player) {
-                    return service != null ? service.sellAllFish(player) : "";
+                    return svc.callApi(()->svc.sellAllFish(player),"");
                 }
             });
 
         adminCommand = new FishingAdminCommand(() -> service, this::msg,
             () -> getCapability(xuanmo.arcartxsuite.api.selection.PolygonSelectionCapability.class),
             dataFolder,
-            () -> {
-                // 重新加载配置（包括水域文件）
-                File configFile = new File(dataFolder, "ArcartXFishing.yml");
-                try {
-                    loadConfiguration(configFile);
-                } catch (Exception e) {
-                    throw new RuntimeException("重载钓鱼配置失败: " + e.getMessage(), e);
-                }
-            });
+            () -> svc.callApi(()->{svc.reloadWaters(FishingModuleConfiguration.loadWaterSettings(dataFolder,logger));return null;},null));
         logger.fine("Fishing 模块已载入 | 鱼种=" + configuration.fishes().size()
             + " | 替换原版=" + configuration.fishing().replaceVanilla());
     }
 
     @Override
     protected void stopService() {
-        if (service != null) {
-            // 关闭疲惫值定时任务
-            FatigueEngine fatigueEngine = service.fatigueEngine();
-            if (fatigueEngine != null) fatigueEngine.shutdown();
-            service.shutdown();
-            service = null;
+        var current=service;var scope=storageScope;
+        repository = null;
+        service=null;storageScope=null;
+        try{if(current!=null)current.shutdown();}
+        finally{
+            var stopped=current==null?java.util.concurrent.CompletableFuture.<Void>completedFuture(null):current.databaseStopped();
+            trackShutdown(stopped);
+            if(scope!=null){scope.retireAfter(stopped);trackShutdown(scope.retired());}
+            configuration=null;
         }
-        storageManager.closeModuleDataSource("fishing");
-        configuration = null;
     }
 
     @Override
@@ -549,61 +558,5 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
         return TaskLoader.load(YamlConfiguration.loadConfiguration(file), category, logger);
     }
 
-    /**
-     * 迁移旧的 fishing pending 奖励到统一 PendingRewardService。
-     * <p>
-     * 旧版本使用 axs_fishing_pending_rewards 表存储离线玩家的待发放奖励，
-     * 新版本改用宿主的 PendingRewardService 统一管理。此方法在启动时
-     * 扫描旧表，将未发放的奖励迁移到 PendingRewardService，然后清空旧表。
-     * <p>
-     * 迁移是幂等的：如果旧表为空或不存在，直接返回。
-     */
-    private void migrateLegacyPendingRewards(JdbcFishingRepository repo) {
-        if (pendingRewardService == null) {
-            logger.fine("PendingRewardService 不可用，跳过旧 pending 数据迁移");
-            return;
-        }
-        try {
-            // 获取所有有待发放奖励的玩家 UUID
-            java.util.List<java.util.UUID> playerUuids = repo.loadAllPendingPlayerUuids();
-            if (playerUuids.isEmpty()) {
-                return;
-            }
-            int migrated = 0;
-            for (java.util.UUID uuid : playerUuids) {
-                java.util.List<FishingPendingReward> rewards = repo.loadPendingRewards(uuid);
-                for (FishingPendingReward reward : rewards) {
-                    // 根据奖励类型转换为 PendingRewardService 格式
-                    xuanmo.arcartxsuite.api.item.PendingRewardService.PendingReward pending;
-                    String type = reward.rewardType().toUpperCase(java.util.Locale.ROOT);
-                    if ("ITEM".equals(type) && reward.itemData() != null && !reward.itemData().isBlank()) {
-                        pending = xuanmo.arcartxsuite.api.item.PendingRewardService.PendingReward.itemSerialized(
-                            uuid, "fishing", reward.itemData(),
-                            reward.description() != null ? reward.description() : "legacy-pending");
-                    } else if ("CURRENCY".equals(type) && reward.currencyId() != null && !reward.currencyId().isBlank()) {
-                        pending = xuanmo.arcartxsuite.api.item.PendingRewardService.PendingReward.currency(
-                            uuid, "fishing", reward.currencyId(), reward.amount(),
-                            reward.description() != null ? reward.description() : "legacy-pending");
-                    } else if ("COMMAND".equals(type) && reward.command() != null && !reward.command().isBlank()) {
-                        pending = xuanmo.arcartxsuite.api.item.PendingRewardService.PendingReward.command(
-                            uuid, "fishing", java.util.List.of(reward.command()),
-                            reward.description() != null ? reward.description() : "legacy-pending");
-                    } else {
-                        logger.warning("跳过无法识别的旧 pending 奖励: id=" + reward.id() + " player=" + uuid
-                            + " type=" + type);
-                        continue;
-                    }
-                    pendingRewardService.savePending(pending);
-                    repo.deletePendingReward(reward.id());
-                    migrated++;
-                }
-            }
-            if (migrated > 0) {
-                logger.info("已迁移 " + migrated + " 条旧 fishing pending 奖励到统一 PendingRewardService");
-            }
-        } catch (Exception e) {
-            logger.warning("迁移旧 fishing pending 奖励失败: " + e.getMessage());
-        }
-    }
 }
 

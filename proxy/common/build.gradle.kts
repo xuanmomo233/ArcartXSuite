@@ -10,6 +10,11 @@ dependencies {
     implementation("com.zaxxer:HikariCP:5.1.0")
     implementation("org.xerial:sqlite-jdbc:3.46.0.0")
     implementation("com.mysql:mysql-connector-j:8.4.0")
+    constraints {
+        implementation("com.google.protobuf:protobuf-java:3.25.5") {
+            because("MySQL Connector/J brings a version affected by CVE-2024-7254")
+        }
+    }
     testImplementation(platform("org.junit:junit-bom:5.10.2"))
     testImplementation("org.junit.jupiter:junit-jupiter")
 }

@@ -6,6 +6,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
@@ -27,14 +28,14 @@ import xuanmo.arcartxsuite.entitytracker.command.EntityTrackerAdminCommand;
 import xuanmo.arcartxsuite.entitytracker.storage.JdbcEntityTrackerRepository;
 import xuanmo.arcartxsuite.entitytracker.service.BossKillRecordingService;
 import xuanmo.arcartxsuite.entitytracker.service.CrossServerRankingCacheService;
-import xuanmo.arcartxsuite.entitytracker.service.DropAllocationService;
 import xuanmo.arcartxsuite.entitytracker.config.EntityTrackerNewFeaturesSettings;
 import xuanmo.arcartxsuite.entitytracker.crossserver.EntityTrackerCrossServerService;
 import xuanmo.arcartxsuite.entitytracker.command.RankingRewardCommand;
 import xuanmo.arcartxsuite.entitytracker.service.RankingRewardService;
 import xuanmo.arcartxsuite.entitytracker.scheduler.RankingRewardScheduler;
 import xuanmo.arcartxsuite.entitytracker.reward.RewardActionExecutor;
-import xuanmo.arcartxsuite.api.capability.MailDispatchable;
+import xuanmo.arcartxsuite.entitytracker.reward.BossRewardItems;
+import xuanmo.arcartxsuite.api.mail.AxsMailService;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.config.ModuleConfig;
 import xuanmo.arcartxsuite.api.ModuleUiSpec;
@@ -43,6 +44,7 @@ import xuanmo.arcartxsuite.entitytracker.boss.config.PluginConfiguration;
 import xuanmo.arcartxsuite.entitytracker.boss.placeholder.EntityTrackerPlaceholderExpansion;
 import xuanmo.arcartxsuite.entitytracker.boss.platform.ServerPlatform;
 import xuanmo.arcartxsuite.entitytracker.boss.tracker.BossTrackerService;
+import xuanmo.arcartxsuite.entitytracker.boss.tracker.BossSession;
 import xuanmo.arcartxsuite.entitytracker.target.config.EntityTargetHudConfiguration;
 import xuanmo.arcartxsuite.entitytracker.target.service.EntityTargetHudService;
 
@@ -64,18 +66,24 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
     private File bossesDirectory;
     private EntityTargetHudConfiguration targetConfiguration;
     private BossTrackerService bossService;
+    private Map<UUID, BossSession> bossSessionsOnReload = Map.of();
     private EntityTargetHudService targetService;
     private RankingRewardService rewardService;
     private RankingRewardScheduler rewardScheduler;
     private xuanmo.arcartxsuite.entitytracker.reward.RewardPacketHandler rewardPacketHandler;
+    private String rewardManagerUiId;
+    private String rewardHistoryUiId;
     private CrossServerChannelConfig crossServerChannelConfig = CrossServerChannelConfig.disabled();
     private EntityTrackerNewFeaturesSettings newFeaturesSettings = EntityTrackerNewFeaturesSettings.defaults();
     private FileConfiguration moduleYaml;
     private EntityTrackerCrossServerService crossServerService;
     private BossKillRecordingService killRecordingService;
-    private DropAllocationService dropAllocationService;
     private CrossServerRankingCacheService rankingCacheService;
     private JdbcEntityTrackerRepository repository;
+    private xuanmo.arcartxsuite.api.storage.ModuleStorage storageScope;
+    private java.util.concurrent.CompletableFuture<Void> storageInitialization;
+    private xuanmo.arcartxsuite.api.scheduler.ModuleCallback runtimeCalls;
+    private final List<java.util.concurrent.CompletableFuture<Void>> retiredServices = new java.util.ArrayList<>();
     private List<String> bossRuntimeUiIds = List.of();
     private List<String> targetRuntimeUiIds = List.of();
 
@@ -122,25 +130,26 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
     @Override
     protected @NotNull PacketHandlerSpec createPacketHandlerSpec() {
         if (rewardService == null) return PacketHandlerSpec.NONE;
-        String managerUiId = getModuleUiId(REWARD_MANAGER_UI_FILE_PATH);
-        String historyUiId = getModuleUiId(REWARD_HISTORY_UI_FILE_PATH);
         rewardPacketHandler = new xuanmo.arcartxsuite.entitytracker.reward.RewardPacketHandler(
             plugin, packetBridge, packetGuard,
             rewardService, rewardScheduler,
             () -> configuration,
-            managerUiId, historyUiId,
+            rewardManagerUiId, rewardHistoryUiId,
             dataFolder, logger
         );
-        // 玩家退出时清理 UI 动作令牌与在途标记
-        org.bukkit.Bukkit.getPluginManager().registerEvents(new org.bukkit.event.Listener() {
+        return PacketHandlerSpec.of(rewardPacketHandler, 0, "AXS_ENTITY_TRACKER_REWARD", "entitytracker");
+    }
+
+    @Override
+    protected List<org.bukkit.event.Listener> createListeners() {
+        return List.of(new org.bukkit.event.Listener() {
             @org.bukkit.event.EventHandler
             public void onPlayerQuit(org.bukkit.event.player.PlayerQuitEvent event) {
                 if (rewardPacketHandler != null) {
                     rewardPacketHandler.clearPlayerState(event.getPlayer().getUniqueId());
                 }
             }
-        }, plugin);
-        return PacketHandlerSpec.of(rewardPacketHandler, 0, "AXS_ENTITY_TRACKER_REWARD", "entitytracker");
+        });
     }
 
     @Override
@@ -185,8 +194,10 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
 
     @Override
     protected void startService() throws Exception {
-
-        initializeRepositoryIfNeeded();
+        runtimeCalls = new xuanmo.arcartxsuite.api.scheduler.ModuleCallback(() -> {});
+        retiredServices.clear();
+        if (storageInitialization != null && storageInitialization.isCompletedExceptionally()) retireUnavailableStorage();
+        storageInitialization = null;
         initializePersistenceServices();
 
         // Boss tracker depends on MythicMobs/MythicBukkit. If it is absent, keep the module alive
@@ -206,7 +217,7 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
                     resolvedBossUiIds.add(bossBinding.runtimeUiId());
                 }
             }
-            if (resolvedBossUiIds.isEmpty()) {
+            if (configuration.registerUiOnEnable() && resolvedBossUiIds.isEmpty()) {
                 throw new IllegalStateException("EntityTracker Boss UI 注册失败");
             }
             bossRuntimeUiIds = List.copyOf(resolvedBossUiIds);
@@ -214,12 +225,12 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
             ServerPlatform platform = ServerPlatform.detect(plugin.getServer());
             bossService = new BossTrackerService(
                 plugin, logger, configuration, packetBridge, bossRuntimeUiIds,
-                platform, null, () -> getCapability(MailDispatchable.class),
+                platform, null, () -> getCapability(AxsMailService.class),
                 itemSourceRegistry, attributeBridge,
                 crossServerService, killRecordingService, placeholderResolver, messages(),
-                itemRewardDispatcher, pendingRewardService
+                pendingRewardService
             );
-            bossService.start();
+            bossService.start(bossSessionsOnReload);
             adminCommand = new EntityTrackerAdminCommand(() -> bossService, messages());
         } else {
             bossRuntimeUiIds = List.of();
@@ -240,9 +251,10 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
                 resolvedTargetUiIds.add(targetBinding.runtimeUiId());
             }
         }
-        if (!resolvedTargetUiIds.isEmpty()) {
+        if (!resolvedTargetUiIds.isEmpty() || !targetConfiguration.registerUiOnEnable()) {
             targetRuntimeUiIds = List.copyOf(resolvedTargetUiIds);
             PluginConfiguration bossConf = configuration;
+            BossTrackerService trackedBosses = bossService;
             targetService = new EntityTargetHudService(
                 plugin,
                 logger,
@@ -250,27 +262,38 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
                 targetConfiguration,
                 packetBridge,
                 targetRuntimeUiIds,
-                entityUuid -> bossService != null
-                    && bossService.isTrackedConfiguredBoss(entityUuid)
+                entityUuid -> trackedBosses != null
+                    && trackedBosses.isTrackedConfiguredBoss(entityUuid)
             );
             targetService.start();
         }
 
         // 初始化排行榜奖励系统
         initializeRewardSystem();
+        if (rewardService != null && packetBridge != null && packetBridge.isAvailable()) {
+            rewardManagerUiId = bindRewardUi(REWARD_MANAGER_UI_RESOURCE_PATH, REWARD_MANAGER_UI_FILE_PATH,
+                "AXS:ranking_rewards");
+            rewardHistoryUiId = bindRewardUi(REWARD_HISTORY_UI_RESOURCE_PATH, REWARD_HISTORY_UI_FILE_PATH,
+                "AXS:reward_history");
+        }
+        if (bossService != null && rewardService != null) {
+            bossService.setPeriodScoreRecorder(rewardService::recordPeriodScores);
+        }
 
         // 注册标准 capability
         if (repository != null) {
+            var currentRepository = repository;
+            var calls = runtimeCalls;
             registerCapability(xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable.class,
                 new xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable() {
                     @Override public @NotNull String moduleId() { return "entitytracker"; }
                     @Override public int purgePlayerData(@NotNull java.util.UUID playerUuid) {
-                        try { return repository.deletePlayerData(playerUuid); }
-                        catch (Exception e) { logger.warning("EntityTracker purge 失败: " + e.getMessage()); return -1; }
+                        return calls.call(() -> { try { return currentRepository.deletePlayerData(playerUuid); }
+                        catch (Exception e) { logger.warning("EntityTracker purge 失败: " + e.getMessage()); return -1; } }, -1);
                     }
                     @Override public int purgeAllPlayerData() {
-                        try { return repository.deleteAllPlayerData(); }
-                        catch (Exception e) { logger.warning("EntityTracker purgeAll 失败: " + e.getMessage()); return -1; }
+                        return calls.call(() -> { try { return currentRepository.deleteAllPlayerData(); }
+                        catch (Exception e) { logger.warning("EntityTracker purgeAll 失败: " + e.getMessage()); return -1; } }, -1);
                     }
                 });
             registerCapability(xuanmo.arcartxsuite.api.capability.DatabaseMigratable.class,
@@ -278,29 +301,32 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
                     @Override public @NotNull String moduleId() { return "entitytracker"; }
                     @Override public @NotNull xuanmo.arcartxsuite.api.storage.MigrationResult migrateDatabase(
                             @NotNull xuanmo.arcartxsuite.api.storage.StorageDescriptor target, boolean overwrite) {
-                        return repository.migrateTo(target, overwrite);
+                        var unavailable = new xuanmo.arcartxsuite.api.storage.MigrationResult(false, 0, 0);
+                        unavailable.addError("EntityTracker 已停止");
+                        return calls.call(() -> currentRepository.migrateTo(target, overwrite), unavailable);
                     }
                     @Override public @NotNull xuanmo.arcartxsuite.api.storage.StorageDescriptor currentDescriptor() {
-                        return repository.getDescriptor();
+                        return currentRepository.getDescriptor();
                     }
                 });
         }
 
+        var trackedBosses = bossService;
         registerCapability(xuanmo.arcartxsuite.api.capability.BossTrackerQueryable.class,
             new xuanmo.arcartxsuite.api.capability.BossTrackerQueryable() {
                 @Override public boolean isTrackedBoss(@NotNull java.util.UUID entityUuid) {
-                    return bossService != null && bossService.isTrackedConfiguredBoss(entityUuid);
+                    return trackedBosses != null && trackedBosses.isTrackedConfiguredBoss(entityUuid);
                 }
                 @Override public int activeSessionCount() {
-                    return bossService != null ? bossService.getActiveSessionCount() : 0;
+                    return trackedBosses != null ? trackedBosses.getActiveSessionCount() : 0;
                 }
                 @Override public int activeViewerCount() {
-                    return bossService != null ? bossService.getActiveViewerCount() : 0;
+                    return trackedBosses != null ? trackedBosses.getActiveViewerCount() : 0;
                 }
                 @Override public @NotNull List<BossSessionInfo> activeSessions(
                         @Nullable String mobIdFilter) {
-                    if (bossService == null) return List.of();
-                    return bossService.activeSessions(mobIdFilter).stream()
+                    if (trackedBosses == null) return List.of();
+                    return trackedBosses.activeSessions(mobIdFilter).stream()
                         .map(v -> new BossSessionInfo(v.entityUuid(), v.mythicMobId(),
                             v.displayName(), v.health(), v.maxHealth(),
                             v.participantCount(), v.trackedPlayerCount(), v.totalDamage()))
@@ -324,26 +350,20 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
         if (ds == null) {
             return;
         }
-        if (newFeaturesSettings.dropAllocation().enabled()) {
-            dropAllocationService = new DropAllocationService(
-                plugin, logger, newFeaturesSettings.dropAllocation(), ds, messages(), itemRewardDispatcher
-            );
-        }
         boolean crossServerRanking = newFeaturesSettings.crossServerRanking().enabled()
             && crossServerChannelConfig.enabled();
         if (crossServerRanking) {
             crossServerService = new EntityTrackerCrossServerService(
                 plugin, logger, crossServer, crossServerChannelConfig, ds
             );
+            var currentConfiguration = configuration;
             rankingCacheService = new CrossServerRankingCacheService(
                 plugin, logger,
                 newFeaturesSettings.crossServerRanking(),
                 ds,
-                () -> configuration,
+                () -> currentConfiguration,
                 () -> crossServer.nodeId()
             );
-            crossServerService.start();
-            rankingCacheService.start();
         }
         if (newFeaturesSettings.dropRecording().enabled()
             || newFeaturesSettings.dropAllocation().enabled()
@@ -352,62 +372,96 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
                 plugin, logger,
                 newFeaturesSettings,
                 ds,
-                dropAllocationService,
+                pendingRewardService,
                 crossServerService,
                 rankingCacheService,
-                () -> crossServer.nodeId()
+                () -> crossServer.nodeId(),
+                dataFolder.toPath().resolve("kill-outbox"), messages()
             );
             killRecordingService.setEventBusProvider(() -> getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
             killRecordingService.start();
             if (crossServerService != null) {
                 crossServerService.attachKillRecording(killRecordingService);
                 crossServerService.attachRankingCache(rankingCacheService);
+                crossServerService.start();
+                rankingCacheService.start();
             }
             killRecordingService.purgeOldRecords();
         }
     }
 
     @Override
+    public java.util.concurrent.CompletionStage<Void> onReload() {
+        bossSessionsOnReload = bossService == null ? Map.of() : bossService.captureSessionsForReload();
+        return super.onReload().whenComplete((ignored, failure) -> bossSessionsOnReload = Map.of()).toCompletableFuture().copy();
+    }
+
+    @Override
     protected void stopService() {
+        var scope = storageScope;
+        storageScope = null;
+        storageInitialization = null;
+        if (runtimeCalls != null) {
+            runtimeCalls.close();
+            retiredServices.add(runtimeCalls.stopped().toCompletableFuture());
+            runtimeCalls = null;
+        }
         if (targetService != null) {
-            targetService.shutdown();
+            retireService(targetService::shutdown, targetService::databaseStopped);
             targetService = null;
         }
         if (bossService != null) {
-            bossService.shutdown();
+            retireService(bossService::shutdown, bossService::databaseStopped);
             bossService = null;
         }
         
         // 关闭排行榜奖励系统
         if (rewardScheduler != null) {
-            rewardScheduler.shutdown();
+            retireService(rewardScheduler::shutdown, rewardScheduler::databaseStopped);
             rewardScheduler = null;
         }
+        if (rewardService != null) retireService(rewardService::shutdown, rewardService::databaseStopped);
         rewardService = null;
         rewardPacketHandler = null;
+        rewardManagerUiId = null;
+        rewardHistoryUiId = null;
         rewardCommand = null;
 
         if (killRecordingService != null) {
-            killRecordingService.shutdown();
+            retireService(killRecordingService::shutdown, killRecordingService::databaseStopped);
             killRecordingService = null;
         }
         if (rankingCacheService != null) {
-            rankingCacheService.shutdown();
+            retireService(rankingCacheService::shutdown, rankingCacheService::databaseStopped);
             rankingCacheService = null;
         }
-        dropAllocationService = null;
         if (crossServerService != null) {
-            crossServerService.shutdown();
+            retireService(crossServerService::shutdown, crossServerService::databaseStopped);
             crossServerService = null;
         }
-        if (repository != null) {
-            storageManager.closeModuleDataSource("entitytracker");
-            repository = null;
+        repository = null;
+        var stopped = java.util.concurrent.CompletableFuture.allOf(
+            retiredServices.toArray(java.util.concurrent.CompletableFuture[]::new));
+        retiredServices.clear();
+        trackShutdown(stopped);
+        if (scope != null) {
+            scope.retireAfter(stopped);
+            trackShutdown(scope.retired());
         }
+        adminCommand = null;
         moduleYaml = null;
         configuration = null;
         bossesDirectory = null;
         targetConfiguration = null;
+    }
+
+    private void retireService(Runnable close,
+            java.util.function.Supplier<java.util.concurrent.CompletionStage<Void>> stopped) {
+        try { close.run(); }
+        catch (RuntimeException | LinkageError failure) {
+            logger.log(java.util.logging.Level.WARNING, "EntityTracker 服务关闭失败", failure);
+            retiredServices.add(java.util.concurrent.CompletableFuture.failedFuture(failure));
+        } finally { retiredServices.add(stopped.get().toCompletableFuture()); }
     }
 
     @Override
@@ -453,20 +507,24 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
             }
 
             // 创建通用奖励执行器
-            java.util.function.Supplier<xuanmo.arcartxsuite.api.capability.MailDispatchable> mailSupplier =
-                () -> getCapability(MailDispatchable.class);
             java.util.function.BiConsumer<String, org.bukkit.entity.Player> signalDispatcher =
-                (signal, player) -> {}; // 待接入实际信号派发器
-            RewardActionExecutor actionExecutor = new RewardActionExecutor(
-                plugin, mailSupplier, signalDispatcher, itemSourceRegistry, itemRewardDispatcher, placeholderResolver
-            );
+                (signal, player) -> {
+                    var dispatcher = getCapability(xuanmo.arcartxsuite.api.capability.SignalDispatchable.class);
+                    if (dispatcher == null) throw new IllegalStateException("EventPacket 信号能力不可用");
+                    dispatcher.dispatchSignal(signal, player, java.util.Map.of());
+                };
+            var actionExecutor = new RewardActionExecutor(signalDispatcher, placeholderResolver);
 
             // 创建服务实例
+            var currentConfiguration = configuration;
             rewardService = new RankingRewardService(
-                ds, actionExecutor, plugin, logger, () -> configuration, bossesDirectory
+                ds, actionExecutor, new BossRewardItems(itemSourceRegistry, pendingRewardService),
+                () -> getCapability(AxsMailService.class), repository.getDescriptor().isMysql(), plugin, logger,
+                () -> currentConfiguration, bossesDirectory
             );
             rewardScheduler = new RankingRewardScheduler(rewardService, plugin, logger);
-            rewardCommand = new RankingRewardCommand(rewardService, rewardScheduler, new File(dataFolder, "config.yml"), logger, messages());
+            rewardCommand = new RankingRewardCommand(rewardService, rewardScheduler,
+                new File(dataFolder, "config.yml"), logger, messages(), plugin, this::openRewardUi);
 
             // 初始化调度器（传入主配置）
             rewardScheduler.initialize(moduleYaml);
@@ -474,9 +532,24 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
             logger.info("排行榜奖励系统初始化完成");
 
         } catch (Exception e) {
+            if (rewardScheduler != null) retireService(rewardScheduler::shutdown, rewardScheduler::databaseStopped);
+            if (rewardService != null) retireService(rewardService::shutdown, rewardService::databaseStopped);
+            rewardScheduler = null;
+            rewardService = null;
+            rewardCommand = null;
             logger.severe("排行榜奖励系统初始化失败: " + e.getMessage());
             // 不抛出异常，允许模块继续运行其他功能
         }
+    }
+
+    private String bindRewardUi(String resource, String file, String id) throws java.io.IOException {
+        UiBinding binding = registerModuleUi(resource, file, id, true);
+        return binding.registeredUiId() == null ? null : binding.runtimeUiId();
+    }
+
+    private boolean openRewardUi(org.bukkit.entity.Player player, boolean history) {
+        String uiId = history ? rewardHistoryUiId : rewardManagerUiId;
+        return uiId != null && packetBridge != null && packetBridge.isAvailable() && packetBridge.openUi(player, uiId);
     }
 
     private boolean hasRankingRewardsSection() {
@@ -484,9 +557,10 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
             && moduleYaml.getConfigurationSection("new-features.ranking-rewards") != null;
     }
 
-    private void initializeRepositoryIfNeeded() {
+    @Override
+    protected java.util.concurrent.CompletionStage<Void> prepareService() {
         if (!newFeaturesSettings.needsDatabase() && !hasRankingRewardsSection()) {
-            return;
+            return java.util.concurrent.CompletableFuture.completedFuture(null);
         }
         try {
             ConfigurationSection storageSection = moduleYaml.getConfigurationSection("storage");
@@ -495,16 +569,34 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
             javax.sql.DataSource etDs;
             if (storageConfig.hasOverride()) {
                 etDesc = storageConfig.toDescriptor();
-                etDs = storageManager.resolveModuleDataSource("entitytracker", null, dataFolder, etDesc);
+                storageScope = storageManager.openModuleStorage("entitytracker", null, dataFolder, etDesc);
+                etDs = storageScope.dataSource();
             } else {
                 etDesc = storageManager.getDescriptor().withTablePrefix("");
-                etDs = storageManager.resolveModuleDataSource("entitytracker",
+                storageScope = storageManager.openModuleStorage("entitytracker",
                     storageConfig.sqliteFileName(), dataFolder, null);
+                etDs = storageScope.dataSource();
             }
             repository = new JdbcEntityTrackerRepository(etDs, etDesc, dataFolder, logger);
-            repository.initialize();
+            storageInitialization = storageScope.initialize(repository::initialize).toCompletableFuture();
+            return storageInitialization.exceptionally(failure -> {
+                logger.severe("EntityTracker 数据库初始化失败: " + failure.getMessage());
+                return null;
+            });
         } catch (Exception e) {
+            retireUnavailableStorage();
             logger.severe("EntityTracker 数据库初始化失败: " + e.getMessage());
+            return java.util.concurrent.CompletableFuture.completedFuture(null);
+        }
+    }
+
+    private void retireUnavailableStorage() {
+        var scope = storageScope;
+        storageScope = null;
+        repository = null;
+        if (scope != null) {
+            scope.retireAfter(java.util.concurrent.CompletableFuture.completedFuture(null));
+            trackShutdown(scope.retired());
         }
     }
 
@@ -533,11 +625,11 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
 
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull String label, @NotNull String[] args) {
-        if (args.length > 0 && "rewards".equalsIgnoreCase(args[0])) {
+        if (args.length > 1 && "rewards".equalsIgnoreCase(args[1])) {
             // 奖励命令处理
             if (rewardCommand != null) {
-                String[] rewardArgs = args.length > 1 ? Arrays.copyOfRange(args, 1, args.length) : new String[0];
-                return rewardCommand.onCommand(sender, "rewards", rewardArgs);
+                String[] rewardArgs = Arrays.copyOfRange(args, 2, args.length);
+                return rewardCommand.onCommand(sender, label + " entitytracker rewards", rewardArgs);
             }
             sender.sendMessage("§c[EntityTracker] 排行榜奖励系统未启用。");
             return true;
@@ -553,7 +645,7 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
 
     @Override
     public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull String[] args) {
-        if (args.length == 1) {
+        if (args.length == 2) {
             // 第一层补全：包含 rewards 选项
             List<String> completions = new java.util.ArrayList<>();
             if (adminCommand != null) {
@@ -562,19 +654,20 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
                     completions.addAll(adminCompletions);
                 }
             }
-            if (rewardCommand != null && "rewards".startsWith(args[0].toLowerCase())) {
+            if (rewardCommand != null && sender.hasPermission("entitytracker.rewards.admin")
+                && "rewards".startsWith(args[1].toLowerCase(java.util.Locale.ROOT))) {
                 completions.add("rewards");
             }
             return completions;
         }
         
-        if (args.length > 1 && "rewards".equalsIgnoreCase(args[0])) {
+        if (args.length > 2 && "rewards".equalsIgnoreCase(args[1])) {
             // 奖励命令补全
             if (rewardCommand != null) {
-                String[] rewardArgs = Arrays.copyOfRange(args, 1, args.length);
+                String[] rewardArgs = Arrays.copyOfRange(args, 2, args.length);
                 return rewardCommand.onTabComplete(sender, rewardArgs);
             }
-            return List.of("manage", "history", "distribute", "status");
+            return List.of();
         }
         
         // 原有命令补全

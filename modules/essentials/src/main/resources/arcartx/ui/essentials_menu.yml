@@ -40,6 +40,9 @@ ui:
       var.page = packet['page']
       var.packetId = packet['packetId']
       var.actionToken = packet['action_token']
+      var.pageNumber = packet['pageNumber']
+      var.hasPrevious = packet['hasPrevious']
+      var.hasNext = packet['hasNext']
       var.playerName = packet['playerName']
       var.isFlying = packet['isFlying']
       var.isGod = packet['isGod']
@@ -50,12 +53,19 @@ ui:
       var.homes = packet['homes']
       var.homeCount = packet['homeCount']
       var.warps = packet['warps']
+      var.favoritesOnly = packet['favoritesOnly']
+      var.tpaRequests = packet['tpaRequests']
+      var.tpaReceiving = packet['tpaReceiving']
+      var.tpaRequestCount = packet['tpaRequestCount']
       var.warpCount = packet['warpCount']
       var.onlinePlayers = packet['onlinePlayers']
       var.replantEnabled = packet['replantEnabled']
       var.autotoolEnabled = packet['autotoolEnabled']
   action:
     load: |-
+          var.hasPrevious = 'false'
+          var.hasNext = 'false'
+          var.pageNumber = '1'
           var.flySpeed = '0'
           var.homeCount = '0'
           var.location = ''
@@ -63,6 +73,8 @@ ui:
           var.playerName = ''
           var.walkSpeed = '0'
           var.warpCount = '0'
+          var.favoritesOnly = 'false'
+          var.tpaRequestCount = 0
     open: |-
       Packet.send(var.packetId, 'refresh', 'home')
 
@@ -150,6 +162,52 @@ controls:
                   x: 244
                   texts: "'&7' + var.playerName"
                   fontSize: 36
+              分页状态:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  through: true
+                  visible: "var.hasPrevious == 'true' || var.hasNext == 'true'"
+                  texts: "'&f第 ' + var.pageNumber + ' 页'"
+                  fontSize: 24
+              上一页:
+                type: Canvas
+                attribute:
+                  point: ~middle_center
+                  x: -88
+                  width: 52
+                  height: 32
+                  visible: "var.hasPrevious == 'true'"
+                action:
+                  clickLeft: |-
+                    Packet.send(var.packetId, 'previous')
+                children:
+                  文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      through: true
+                      texts: "~&f上一页"
+                      fontSize: 21
+              下一页:
+                type: Canvas
+                attribute:
+                  point: ~middle_center
+                  x: 88
+                  width: 52
+                  height: 32
+                  visible: "var.hasNext == 'true'"
+                action:
+                  clickLeft: |-
+                    Packet.send(var.packetId, 'next')
+                children:
+                  文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      through: true
+                      texts: "~&f下一页"
+                      fontSize: 21
               关闭按钮:
                 type: Canvas
                 attribute:
@@ -565,17 +623,22 @@ controls:
                     children:
                       homes_list:
                         val: home_data
-                        type: VStack
+                        type: RepeatGrid
                         attribute:
+                          items: var.homes
+                          flow: ~row
+                          column: 1
+                          maxSize: "var.homes == none ? 0 : var.homes.size()"
+                          key: ~name
                           x: 0
                           y: 0
                           width: 726
-                          spaceBetween: 8
+                          spaceBetweenY: 8
                         children:
                           家项目:
                             type: Canvas
                             attribute:
-                              entry: var.homes[self.key]
+                              entry: self.item
                               visible: self.entry != none
                               width: 720
                               height: 60
@@ -692,6 +755,78 @@ controls:
                       y: 0
                       texts: "~&f传送点列表"
                       fontSize: 48
+                  搜索传送点:
+                    type: TextBox
+                    val: warpSearch
+                    attribute:
+                      point: ~top_right
+                      x: -246
+                      y: 0
+                      width: 230
+                      height: 34
+                      length: 64
+                      emptyText: "~名称或分组"
+                      background: ~62,66,74,210
+                      fontSize: 24
+                    action:
+                      enter: |-
+                        Packet.send(var.packetId, 'filter_warps', self.getContent(), var.favoritesOnly == 'true' ? 'favorites' : '')
+                  提交搜索:
+                    type: Canvas
+                    attribute:
+                      point: ~top_right
+                      x: -111
+                      y: 0
+                      width: 112
+                      height: 38
+                    action:
+                      clickLeft: |-
+                        Packet.send(var.packetId, 'filter_warps', val.warpSearch.getContent(), var.favoritesOnly == 'true' ? 'favorites' : '')
+                    children:
+                      背景:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: ~62,66,74,210
+                          hover: ~80,90,110,230
+                          through: true
+                          shape: ~round_rect
+                          radius: 8
+                      文字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          through: true
+                          texts: "~&f搜索"
+                          fontSize: 25
+                  仅收藏:
+                    type: Canvas
+                    attribute:
+                      point: ~top_right
+                      x: -3
+                      y: 0
+                      width: 100
+                      height: 38
+                    action:
+                      clickLeft: |-
+                        Packet.send(var.packetId, 'filter_warps', val.warpSearch.getContent(), var.favoritesOnly == 'true' ? '' : 'favorites')
+                    children:
+                      背景:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: ~62,66,74,210
+                          hover: ~80,90,110,230
+                          through: true
+                          shape: ~round_rect
+                          radius: 8
+                      文字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          through: true
+                          texts: "var.favoritesOnly == 'true' ? '&e已收藏' : '&f全部'"
+                          fontSize: 25
                   传送点滑块:
                     type: Texture
                     val: 传送点滑块
@@ -723,17 +858,22 @@ controls:
                     children:
                       warps_list:
                         val: warp_data
-                        type: VStack
+                        type: RepeatGrid
                         attribute:
+                          items: var.warps
+                          key: ~name
+                          flow: ~row
+                          column: 1
+                          spaceBetweenY: 8
+                          maxSize: "var.warps == none ? 0 : var.warps.size()"
                           x: 0
                           y: 0
                           width: 726
-                          spaceBetween: 8
                         children:
                           传送点项目:
                             type: Canvas
                             attribute:
-                              entry: var.warps[self.key]
+                              entry: self.item
                               visible: self.entry != none
                               width: 720
                               height: 56
@@ -754,9 +894,37 @@ controls:
                                 attribute:
                                   point: ~middle_left
                                   x: 20
-                                  texts: "'&e' + self.parent.entry"
+                                  texts: "'&e' + self.parent.entry['label']"
                                   fontSize: 36
                                   through: true
+                              收藏传送点:
+                                type: Canvas
+                                attribute:
+                                  point: ~middle_right
+                                  x: -118
+                                  y: 0
+                                  width: 90
+                                  height: 38
+                                action:
+                                  clickLeft: |-
+                                    Packet.send(var.packetId, 'favorite_warp', var.actionToken, self.parent.entry['name'])
+                                children:
+                                  背景:
+                                    type: Texture
+                                    attribute:
+                                      point: ~stretch_all
+                                      normal: ~62,66,74,210
+                                      hover: ~80,90,110,230
+                                      through: true
+                                      shape: ~round_rect
+                                      radius: 8
+                                  文字:
+                                    type: Text
+                                    attribute:
+                                      point: ~middle_center
+                                      through: true
+                                      texts: "~&e收藏"
+                                      fontSize: 25
                               传送点传送按钮:
                                 type: Canvas
                                 attribute:
@@ -766,7 +934,7 @@ controls:
                                   height: 40
                                 action:
                                   clickLeft: |-
-                                    Packet.send(var.packetId, 'teleport_warp', var.actionToken, self.parent.entry)
+                                    Packet.send(var.packetId, 'teleport_warp', var.actionToken, self.parent.entry['name'])
                                 children:
                                   传送底:
                                     type: Texture
@@ -828,7 +996,7 @@ controls:
                       height: 44
                     action:
                       clickLeft: |-
-                        Packet.send(var.packetId, 'accept_tpa', var.actionToken)
+                        Packet.send(var.packetId, 'navigate', 'tpa_requests')
                     children:
                       接受底:
                         type: Texture
@@ -848,7 +1016,7 @@ controls:
                         type: Text
                         attribute:
                           point: ~middle_center
-                          texts: "~&f接受"
+                          texts: "~&f待处理"
                           fontSize: 36
                           through: true
                   拒绝传送请求按钮:
@@ -861,7 +1029,7 @@ controls:
                       height: 44
                     action:
                       clickLeft: |-
-                        Packet.send(var.packetId, 'deny_tpa', var.actionToken)
+                        Packet.send(var.packetId, 'cancel_tpa', var.actionToken)
                     children:
                       拒绝底:
                         type: Texture
@@ -881,7 +1049,7 @@ controls:
                         type: Text
                         attribute:
                           point: ~middle_center
-                          texts: "~&f拒绝"
+                          texts: "~&f撤回"
                           fontSize: 36
                           through: true
                   玩家滑块:
@@ -915,17 +1083,21 @@ controls:
                     children:
                       tpa_list:
                         val: tpa_data
-                        type: VStack
+                        type: RepeatGrid
                         attribute:
+                          items: var.onlinePlayers
+                          flow: ~row
+                          column: 1
+                          spaceBetweenY: 8
+                          maxSize: "var.onlinePlayers == none ? 0 : var.onlinePlayers.size()"
                           x: 0
                           y: 0
                           width: 726
-                          spaceBetween: 8
                         children:
                           传送请求玩家项目:
                             type: Canvas
                             attribute:
-                              entry: var.onlinePlayers[self.key]
+                              entry: self.item
                               visible: self.entry != none
                               width: 720
                               height: 52
@@ -954,6 +1126,234 @@ controls:
                                   texts: "'&f' + self.parent.entry"
                                   fontSize: 36
                                   through: true
+
+              收到的请求布局:
+                type: Canvas
+                attribute:
+                  point: ~top_left
+                  x: 24
+                  y: 24
+                  width: 732
+                  height: 520
+                  visible: "var.page == 'tpa_requests'"
+                children:
+                  请求标题:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      texts: "~&f收到的传送请求"
+                      fontSize: 44
+                  接收开关:
+                    type: Canvas
+                    attribute:
+                      point: ~top_right
+                      x: -225
+                      y: 0
+                      width: 116
+                      height: 38
+                    action:
+                      clickLeft: |-
+                        Packet.send(var.packetId, 'toggle_tpa', var.actionToken)
+                    children:
+                      背景:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: ~62,66,74,210
+                          hover: ~80,90,110,230
+                          through: true
+                          shape: ~round_rect
+                          radius: 8
+                      文字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          through: true
+                          texts: "'&f接收 ' + var.tpaReceiving"
+                          fontSize: 25
+                  刷新请求:
+                    type: Canvas
+                    attribute:
+                      point: ~top_right
+                      x: -116
+                      y: 0
+                      width: 100
+                      height: 38
+                    action:
+                      clickLeft: |-
+                        Packet.send(var.packetId, 'refresh', 'tpa_requests')
+                    children:
+                      背景:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: ~62,66,74,210
+                          hover: ~80,90,110,230
+                          through: true
+                          shape: ~round_rect
+                          radius: 8
+                      文字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          through: true
+                          texts: "~&f刷新"
+                          fontSize: 25
+                  返回发送:
+                    type: Canvas
+                    attribute:
+                      point: ~top_right
+                      x: 0
+                      y: 0
+                      width: 106
+                      height: 38
+                    action:
+                      clickLeft: |-
+                        Packet.send(var.packetId, 'navigate', 'tpa')
+                    children:
+                      背景:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: ~62,66,74,210
+                          hover: ~80,90,110,230
+                          through: true
+                          shape: ~round_rect
+                          radius: 8
+                      文字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          through: true
+                          texts: "~&f发送请求"
+                          fontSize: 25
+                  空请求:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 82
+                      visible: "var.tpaRequestCount == 0"
+                      texts: "~&7暂无待处理请求"
+                      fontSize: 28
+                  请求滑块:
+                    type: Texture
+                    attribute:
+                      point: ~top_right
+                      x: -6
+                      y: 76
+                      width: 6
+                      height: 44
+                      normal: ~120,120,120,200
+                      maxDragY: 400
+                  请求滚动区:
+                    type: Scroll
+                    attribute:
+                      x: 0
+                      y: 76
+                      width: 726
+                      height: 444
+                      moveY: "self.parent['请求滑块'].getDragYRatio()"
+                    action:
+                      wheel: |-
+                        if(self.wheelValue > 0 && self.moveY > 0){
+                          self.parent['请求滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                        }
+                        if(self.wheelValue < 0 && self.moveY < 1){
+                          self.parent['请求滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                        }
+                    children:
+                      收到请求列表:
+                        type: RepeatGrid
+                        val: incomingTpaList
+                        attribute:
+                          items: var.tpaRequests
+                          key: ~sender
+                          flow: ~row
+                          column: 1
+                          spaceBetweenY: 8
+                          maxSize: "var.tpaRequests == none ? 0 : var.tpaRequests.size()"
+                          width: 726
+                        children:
+                          收到请求行:
+                            type: Canvas
+                            attribute:
+                              entry: self.item
+                              visible: self.entry != none
+                              width: 720
+                              height: 54
+                            children:
+                              请求底:
+                                type: Texture
+                                attribute:
+                                  point: ~stretch_all
+                                  normal: ~62,66,74,210
+                                  through: true
+                                  shape: ~round_rect
+                                  radius: 8
+                              请求详情:
+                                type: Text
+                                attribute:
+                                  point: ~middle_left
+                                  x: 16
+                                  through: true
+                                  texts: "'&f' + self.parent.entry['label']"
+                                  fontSize: 29
+                              接受该请求:
+                                type: Canvas
+                                attribute:
+                                  point: ~middle_right
+                                  x: -106
+                                  y: 0
+                                  width: 90
+                                  height: 38
+                                action:
+                                  clickLeft: |-
+                                    Packet.send(var.packetId, 'accept_tpa', var.actionToken, self.parent.entry['sender'])
+                                children:
+                                  背景:
+                                    type: Texture
+                                    attribute:
+                                      point: ~stretch_all
+                                      normal: ~50,140,80,210
+                                      hover: ~80,90,110,230
+                                      through: true
+                                      shape: ~round_rect
+                                      radius: 8
+                                  文字:
+                                    type: Text
+                                    attribute:
+                                      point: ~middle_center
+                                      through: true
+                                      texts: "~&f接受"
+                                      fontSize: 25
+                              拒绝该请求:
+                                type: Canvas
+                                attribute:
+                                  point: ~middle_right
+                                  x: -6
+                                  y: 0
+                                  width: 90
+                                  height: 38
+                                action:
+                                  clickLeft: |-
+                                    Packet.send(var.packetId, 'deny_tpa', var.actionToken, self.parent.entry['sender'])
+                                children:
+                                  背景:
+                                    type: Texture
+                                    attribute:
+                                      point: ~stretch_all
+                                      normal: ~180,50,50,210
+                                      hover: ~80,90,110,230
+                                      through: true
+                                      shape: ~round_rect
+                                      radius: 8
+                                  文字:
+                                    type: Text
+                                    attribute:
+                                      point: ~middle_center
+                                      through: true
+                                      texts: "~&f拒绝"
+                                      fontSize: 25
 
               # ─── 设置视图 ───
               设置布局:
@@ -1043,40 +1443,5 @@ controls:
                           point: ~middle_left
                           x: 24
                           texts: "'&f自动工具: ' + (var.autotoolEnabled == 'true' ? '&a开启' : '&c关闭')"
-                          fontSize: 36
-                          through: true
-                  # 背包整理
-                  排序按钮:
-                    type: Canvas
-                    attribute:
-                      point: ~top_left
-                      x: 0
-                      y: 200
-                      width: 360
-                      height: 56
-                    action:
-                      clickLeft: |-
-                        Packet.send(var.packetId, 'sort', var.actionToken)
-                    children:
-                      排序底:
-                        type: Texture
-                        attribute:
-                          point: ~stretch_all
-                          through: true
-                          normal: ~60,100,180,210
-                          hover: ~80,130,210,230
-                          shape: ~round_rect
-                          radius: 10
-                        effect:
-                          ripple:
-                          stroke:
-                            width: 2
-                            color: "self.isHovered() ? '120,200,255,255' : '255,255,255,180'"
-                      排序文字:
-                        type: Text
-                        attribute:
-                          point: ~middle_left
-                          x: 24
-                          texts: "~&f背包整理"
                           fontSize: 36
                           through: true

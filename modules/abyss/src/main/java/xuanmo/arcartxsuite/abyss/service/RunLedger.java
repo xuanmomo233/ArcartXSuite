@@ -193,9 +193,11 @@ public final class RunLedger implements AbyssRunLootAccess {
             documents.delete(deliveryKey(delivery.key()));
             return null;
         });
+        if (!service.running()) return;
         service.runOnMain(() -> {
+            if (!service.running()) return;
             var player = Bukkit.getPlayer(delivery.player());
-            if (service.running() && player != null) rewards.flushPlayer(player);
+            if (player != null) rewards.flushPlayer(player);
         });
     }
 

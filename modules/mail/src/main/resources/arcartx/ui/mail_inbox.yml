@@ -30,6 +30,8 @@ ui:
     load: |-
       var.filteredCount = 0
       var.attachmentItemJsons = {}
+      var.aKeys = []
+      var.messageRows = []
       var.claimableCount = 0
       var.unreadCount = 0
       var.actionBusySeconds = 0
@@ -86,8 +88,13 @@ ui:
     #   - maxMailCount: 邮件列表最大显示条数（用于动态生成列表项）
     #   - is_admin: 当前玩家是否为管理员（控制管理导航项显隐）
     init: |-
-      var.aIndex = 0
       var.messages = packet['messages']
+      var.messageRows = []
+      if(var.messages != none){
+        for(key in var.messages.keys()){
+          var.messageRows.add(var.messages[key])
+        }
+      }
       var.filterMode = packet['filter_mode']
       var.totalCount = packet['total_count']
       var.unreadCount = packet['unread_count']
@@ -106,18 +113,8 @@ ui:
       var.maxMailCount = packet['maxMailCount']
       var.isAdmin = packet['is_admin']
       var.actionBusy = false
-      while(val.mail_list.childrenCount() > 1){
-        val.mail_list.get(1).remove()
-      }
-      for(i in range(1, var.maxMailCount - 1)){
-        key = i.round()
-        if(val.mail_list['邮件项目'] != none) {
-          e = val.mail_list['邮件项目'].copy('邮件项目' + key)
-          e.entryKey = key
-        }
-      }
-      // ── 附件槽位：构建 itemJsons 字典 + 动态复制模板 ──
-      var.aKeys = var.selectedAttachments.keys()
+      var.aKeys = var.selectedAttachments != none ? var.selectedAttachments.keys() : []
+      var.attachmentItemJsons = {}
       for(key in var.aKeys){
         attEntry = var.selectedAttachments[key]
         if(attEntry != none && attEntry['itemJson'] != none && attEntry['itemJson'] != ''){
@@ -126,24 +123,7 @@ ui:
           var.attachmentItemJsons[key] = var.emptyItemJson
         }
       }
-      while(val.附件列表.childrenCount() > 1){
-        val.附件列表.get(1).remove()
-      }
-      for(key in var.aKeys){
-        if(val.附件列表['附件模板'] != none) {
-          item = val.附件列表['附件模板'].copy('附件项' + var.aIndex.round())
-          item.entryKey = key
-        }
-        var.aIndex = var.aIndex + 1
-      }
-      for(i in range(1, var.aIndex)){
-        if(val.附件列表 != none) {
-          item = val.附件列表.get(i.round())
-          if(item != none && item['附件图标'] != none){
-            item['附件图标'].seticon()
-          }
-        }
-      }
+      var.refreshAttachmentIcons = true
       // 计算当前筛选下的邮件数量，用于空列表提示
       var.filteredCount = 0
       if(var.messages != none){
@@ -164,9 +144,13 @@ ui:
       }
     # packetHandler: update（字段与 init 相同）
     update: |-
-      // 保存旧数量，用于判断是否需要重建列表
-      oldMaxMailCount = var.maxMailCount
       var.messages = packet['messages']
+      var.messageRows = []
+      if(var.messages != none){
+        for(key in var.messages.keys()){
+          var.messageRows.add(var.messages[key])
+        }
+      }
       var.filterMode = packet['filter_mode']
       var.totalCount = packet['total_count']
       var.unreadCount = packet['unread_count']
@@ -185,23 +169,8 @@ ui:
       var.maxMailCount = packet['maxMailCount']
       var.isAdmin = packet['is_admin']
       var.actionBusy = false
-      // ── 邮件列表：仅在数量变化时重建 ──
-      if(var.maxMailCount != oldMaxMailCount){
-        while(val.mail_list.childrenCount() > 1){
-          val.mail_list.get(1).remove()
-        }
-        template = val.mail_list['邮件项目']
-        if(template != none){
-          for(i in range(1, var.maxMailCount - 1)){
-            key = i.round()
-            e = template.copy('邮件项目' + key)
-            e.entryKey = key
-          }
-        }
-      }
-      // ── 附件槽位：构建 itemJsons 字典 + 数量变化时重建 ──
-      oldAttCount = var.oldAttCount
-      var.aKeys = var.selectedAttachments.keys()
+      var.aKeys = var.selectedAttachments != none ? var.selectedAttachments.keys() : []
+      var.attachmentItemJsons = {}
       for(key in var.aKeys){
         attEntry = var.selectedAttachments[key]
         if(attEntry != none && attEntry['itemJson'] != none && attEntry['itemJson'] != ''){
@@ -210,29 +179,7 @@ ui:
           var.attachmentItemJsons[key] = var.emptyItemJson
         }
       }
-      if(var.aKeys.size() != oldAttCount){
-        while(val.附件列表.childrenCount() > 1){
-          val.附件列表.get(1).remove()
-        }
-        var.aIndex = 0
-        for(key in var.aKeys){
-          if(val.附件列表['附件模板'] != none) {
-            item = val.附件列表['附件模板'].copy('附件项' + var.aIndex.round())
-            item.entryKey = key
-          }
-          var.aIndex = var.aIndex + 1
-        }
-      }
-      var.oldAttCount = var.aKeys.size()
-      // 重新触发附件图标 seticon（数据变了但 seticon 不会自动刷新）
-      for(i in range(1, val.附件列表.childrenCount())){
-        if(val.附件列表 != none) {
-          item = val.附件列表.get(i.round())
-          if(item != none && item['附件图标'] != none){
-            item['附件图标'].seticon()
-          }
-        }
-      }
+      var.refreshAttachmentIcons = true
       // 计算当前筛选下的邮件数量，用于空列表提示
       var.filteredCount = 0
       if(var.messages != none){
@@ -256,6 +203,24 @@ ui:
 # 布局: 顶栏(标题色块+标题+关闭) + 左导航(5项+摘要) + 内容区(筛选+列表+详情+操作+CDK)
 # 配色: 翠绿信使 深底浅字 — 抬升面36,38,48 凹槽28,30,40 描边60,64,82 强调80,180,120
 # fontSize: 48(顶栏标题) / 36(区域标题/按钮/信息) / 32(小标签) — 全部标准档位
+tasks:
+  refresh-attachment-icons:
+    type: loop
+    time: 100
+    cycle: 100
+    run: |-
+      if(var.refreshAttachmentIcons == true && val.附件列表 != none && val.附件列表.childrenCount() == var.aKeys.size()){
+        var.refreshAttachmentIcons = false
+        if(var.aKeys.size() > 0){
+          for(i in range(0, var.aKeys.size() - 1)){
+            item = val.附件列表.get(i.round())
+            if(item != none && item['附件图标'] != none){
+              item['附件图标'].seticon()
+            }
+          }
+        }
+      }
+
 controls:
   全屏玻璃底:
     type: Texture
@@ -861,16 +826,20 @@ controls:
                 children:
                   mail_stack:
                     val: mail_list
-                    type: VStack
+                    type: RepeatGrid
                     attribute:
+                      items: var.messageRows
+                      key: ~id
+                      maxSize: "var.messageRows == none ? 0 : var.messageRows.size()"
+                      flow: ~row
+                      column: 1
                       width: "self.parent.width - 10"
-                      spaceBetween: 8
+                      spaceBetweenY: 8
                     children:
                       邮件项目:
                         type: Canvas
                         attribute:
-                          entryKey: 0.round()
-                          entry: var.messages[self.entryKey]
+                          entry: self.item
                           width: "self.parent.width"
                           height: 88
                           visible: "self.entry != none && (var.filterMode == 'all' || (var.filterMode == 'unread' && self.entry['unread'] == true) || (var.filterMode == 'claimable' && self.entry['claimable'] == true) || (var.filterMode == 'system' && self.entry['source_type'] == 'system') || (var.filterMode == 'player' && self.entry['source_type'] == 'player') || (var.filterMode == 'preset' && self.entry['source_type'] == 'preset') || (var.filterMode == 'cdk' && self.entry['source_type'] == 'cdk'))"
@@ -1040,16 +1009,20 @@ controls:
                                 - "'&f到期 &b' + var.selectedExpiresAt"
                               fontSize: 32
                           详情附件:
-                            type: VStack
+                            type: RepeatGrid
                             val: 附件列表
                             attribute:
+                              items: var.aKeys
+                              maxSize: "var.aKeys == none ? 0 : var.aKeys.size()"
+                              flow: ~row
+                              column: 1
                               width: "self.parent.width"
-                              spaceBetween: 8
+                              spaceBetweenY: 8
                             children:
                               附件模板:
                                 type: Canvas
                                 attribute:
-                                  entryKey: none
+                                  entryKey: self.item
                                   entry: var.selectedAttachments[self.entryKey]
                                   visible: self.entryKey != none && self.entry != none
                                   width: "self.parent.width - 6"

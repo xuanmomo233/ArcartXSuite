@@ -34,6 +34,7 @@ import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
 import xuanmo.arcartxsuite.api.config.ModuleConfig;
 import xuanmo.arcartxsuite.api.ModuleUiSpec;
 import xuanmo.arcartxsuite.api.PacketHandlerSpec;
+import xuanmo.arcartxsuite.api.storage.ModuleStorage;
 
 /**
  * 地图模块主类，继承 {@code AbstractAXSModule} 并实现管理命令接口。
@@ -48,6 +49,8 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
 
     private MapModuleConfiguration configuration;
     private MapService service;
+    private ModuleStorage storageScope;
+    private JdbcMapRepository repository;
     /** reload 跨 service 实例暂存的外部运行时状态（外部目标/导航回调/委托）。 */
     private MapService.ExternalRuntime carriedExternalRuntime;
 
@@ -101,7 +104,7 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
     protected @NotNull PacketHandlerSpec createPacketHandlerSpec() {
         return PacketHandlerSpec.of(
             (player, packetId, data) ->
-                    service != null && service.handleClientPacket(player, packetId, data), 0, null, null);
+                    service != null && service.handleClientPacket(player, packetId, data), 0, configuration.client().packetId(), "map");
     }
 
     @Override
@@ -136,6 +139,21 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
     }
 
     @Override
+    protected java.util.concurrent.CompletionStage<Void> prepareService() throws Exception {
+        xuanmo.arcartxsuite.api.storage.StorageDescriptor mapDesc;
+        if (configuration.storage().hasOverride()) {
+            mapDesc = configuration.storage().toDescriptor();
+            storageScope = storageManager.openModuleStorage("map", null, dataFolder, mapDesc);
+        } else {
+            mapDesc = storageManager.getDescriptor().withTablePrefix("");
+            storageScope = storageManager.openModuleStorage("map",
+                configuration.storage().sqliteFileName(), dataFolder, null);
+        }
+        repository = new JdbcMapRepository(storageScope.dataSource(), mapDesc, dataFolder, logger);
+        return storageScope.initialize(repository::initialize);
+    }
+
+    @Override
     protected void startService() throws Exception {
 
         UiBinding menuBinding = registerModuleUi(
@@ -152,19 +170,7 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
             throw new IllegalStateException("Map UI 注册失败");
         }
 
-        // 共享模式：使用本体统一数据源，模块只需提供表前缀
-        // 若模块配置了独立 storage 节（dialect=mysql 等），则走自建模式（向后兼容）
-        xuanmo.arcartxsuite.api.storage.StorageDescriptor mapDesc;
-        javax.sql.DataSource mapDs;
-        if (configuration.storage().hasOverride()) {
-            mapDesc = configuration.storage().toDescriptor();
-            mapDs = storageManager.resolveModuleDataSource("map", null, dataFolder, mapDesc);
-        } else {
-            mapDesc = storageManager.getDescriptor().withTablePrefix("");
-            mapDs = storageManager.resolveModuleDataSource("map",
-                configuration.storage().sqliteFileName(), dataFolder, null);
-        }
-        JdbcMapRepository mapRepo = new JdbcMapRepository(mapDs, mapDesc, dataFolder, logger);
+        var mapRepo = repository;
         service = new MapService(
             plugin, logger, packetGuard, configuration,
             mapRepo,
@@ -180,17 +186,7 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
         );
         service.start();
 
-        // HUD defaultOpen 只在玩家进服时触发；reload 路径 shutdown() 已
-        // 对所有在线玩家 closeUi，这里必须补 openUi 否则 HUD 不会回来。
-        // 客户端 open 动作会回发 hud_ready → 服务端回 init 包恢复 visible。
-        if (packetBridge != null) {
-            for (Player player : Bukkit.getOnlinePlayers()) {
-                packetBridge.openUi(player, hudBinding.runtimeUiId());
-            }
-        }
-
-        // reload 续传：恢复第三方来源推送的外部目标与导航回调，并重推视图。
-        // 随后发布 axs.map.ready，来源可订阅该事件主动重推最新数据。
+        // 先恢复数据。就绪事件和 HUD 初始化放到能力及包处理器注册完成之后。
         if (carriedExternalRuntime != null) {
             service.importExternalRuntime(carriedExternalRuntime);
             carriedExternalRuntime = null;
@@ -229,6 +225,11 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
                 @NotNull List<xuanmo.arcartxsuite.api.capability.MapExternalTargetSpec> specs
             ) {
                 service.upsertExternalTargets(player, specs);
+            }
+
+            @Override
+            public boolean removeExternalTarget(@NotNull Player player, @NotNull String source, @NotNull String targetId) {
+                return service.removeExternalTarget(player, source, targetId);
             }
 
             @Override
@@ -324,10 +325,22 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
                 @Override
                 public java.util.concurrent.CompletableFuture<Boolean> unlock(
                     @NotNull Player player, @NotNull String anchorId) {
+                    return grant(player, anchorId, false);
+                }
+
+                @Override
+                public java.util.concurrent.CompletableFuture<Boolean> ensureUnlocked(
+                    @NotNull Player player, @NotNull String anchorId) {
+                    return grant(player, anchorId, true);
+                }
+
+                private java.util.concurrent.CompletableFuture<Boolean> grant(Player player, String anchorId, boolean ensure) {
                     java.util.concurrent.CompletableFuture<Boolean> future = new java.util.concurrent.CompletableFuture<>();
                     Runnable task = () -> {
                         if (service == null) { future.complete(false); return; }
-                        service.grantAnchorUnlock(player, anchorId).whenComplete((result, error) -> {
+                        var resultFuture = ensure ? service.ensureAnchorUnlock(player, anchorId)
+                            : service.grantAnchorUnlock(player, anchorId);
+                        resultFuture.whenComplete((result, error) -> {
                             if (error != null) future.completeExceptionally(error);
                             else future.complete(result.success());
                         });
@@ -381,6 +394,11 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
                 }
             });
 
+        MapService started = service;
+        scheduler.scheduleOnce(plugin, () -> {
+            if (isReady() && service == started) started.publishReady();
+        }, 1L);
+
         logger.fine(
             "Map 模块已载入，packet-id=" + configuration.client().packetId()
                 + " | menu-ui=" + menuBinding.runtimeUiId()
@@ -392,20 +410,29 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
 
     @Override
     protected void stopService() {
-        plugin.getServer().getMessenger().unregisterIncomingPluginChannel(
-            plugin, MapTerrainPushService.CHANNEL_REQUEST);
-        plugin.getServer().getMessenger().unregisterIncomingPluginChannel(
-            plugin, MapService.CHANNEL_SETTING);
-        plugin.getServer().getMessenger().unregisterOutgoingPluginChannel(
-            plugin, MapTerrainPushService.CHANNEL_TERRAIN);
-        if (service != null) {
-            // 先导出外部运行时状态再 shutdown——shutdown 会清空 externalTargets
-            carriedExternalRuntime = service.exportExternalRuntime();
-            service.shutdown();
-            storageManager.closeModuleDataSource("map");
-            service = null;
+        MapService retiring = service;
+        ModuleStorage scope = storageScope;
+        service = null;
+        storageScope = null;
+        repository = null;
+        try {
+            if (retiring != null) {
+                try { carriedExternalRuntime = retiring.exportExternalRuntime(); }
+                finally { retiring.shutdown(); }
+            }
+        } finally {
+            var stopped = retiring == null ? java.util.concurrent.CompletableFuture.<Void>completedFuture(null)
+                : retiring.databaseStopped();
+            trackShutdown(stopped);
+            if (scope != null) {
+                scope.retireAfter(stopped);
+                trackShutdown(scope.retired());
+            }
+            configuration = null;
+            plugin.getServer().getMessenger().unregisterIncomingPluginChannel(plugin, MapTerrainPushService.CHANNEL_REQUEST);
+            plugin.getServer().getMessenger().unregisterIncomingPluginChannel(plugin, MapService.CHANNEL_SETTING);
+            plugin.getServer().getMessenger().unregisterOutgoingPluginChannel(plugin, MapTerrainPushService.CHANNEL_TERRAIN);
         }
-        configuration = null;
     }
 
     @Override

@@ -33,7 +33,7 @@ ui:
           var.detailLoading = false
           var.detailReady = false
         }
-      } else if(packet['request'] == var.listRequest){
+      } elif(packet['request'] == var.listRequest){
         var.resultMsg = packet['message']
         var.loading = false
         var.hydrating = false
@@ -59,7 +59,7 @@ ui:
         var.detailReady = false
         var.detailLoading = false
       }
-      else if(var.selectedId != ''){
+      elif(var.selectedId != ''){
         var.detailReady = false
         var.detailLoading = false
       }
@@ -240,42 +240,32 @@ ui:
       }
       var.renderAuditRows = -> {
         if(val.流水行区 != none){
-          if(var.count != var.renderedCount){
-            for(key in var.auditCopies.keys()){
-              var.auditCopies[key].remove()
-            }
-            var.auditCopies = {}
-            var.auditGeneration = var.auditGeneration + 1
-            if(var.count > 1){
-              for(i in range(1, var.count - 1)){
-                e = val.流水行区.get(0).copy('流水行_' + var.auditGeneration.round() + '_' + i.round())
-                e.entryKey = i.round()
-                var.auditCopies[i.round()] = e
+          if(var.流水行区GridRows == none || var.流水行区GridRows.size() != (var.count)){
+            网格数据 = []
+            if((var.count) > 0){
+              for(网格序号 in range(0, (var.count) - 1)){
+                网格数据.add(网格序号.round())
               }
             }
-            var.renderedCount = var.count
+            var.流水行区GridRows = 网格数据
           }
+          var.renderedCount = var.count
           val.流水滑块.setDragYRatio(0)
           var.rowsRenderPending = false
         }
       }
       var.renderAuditNotes = -> {
         if(val.详情说明行区 != none){
-          if(var.noteCount != var.renderedNotes){
-            for(key in var.noteCopies.keys()){
-              var.noteCopies[key].remove()
-            }
-            var.noteCopies = {}
-            var.noteGeneration = var.noteGeneration + 1
-            if(var.noteCount > 1){
-              for(i in range(1, var.noteCount - 1)){
-                e = val.详情说明行区.get(0).copy('说明行_' + var.noteGeneration.round() + '_' + i.round())
-                e.entryKey = i.round()
-                var.noteCopies[i.round()] = e
+          if(var.详情说明行区GridRows == none || var.详情说明行区GridRows.size() != (var.noteCount)){
+            网格数据 = []
+            if((var.noteCount) > 0){
+              for(网格序号 in range(0, (var.noteCount) - 1)){
+                网格数据.add(网格序号.round())
               }
             }
-            var.renderedNotes = var.noteCount
+            var.详情说明行区GridRows = 网格数据
           }
+          var.renderedNotes = var.noteCount
           val.说明滑块.setDragYRatio(0)
           var.notesRenderPending = false
         }
@@ -788,19 +778,19 @@ controls:
                     if(var.type == 'ALL'){
                       var.type = 'AUCTION'
                     }
-                    else if(var.type == 'AUCTION'){
+                    elif(var.type == 'AUCTION'){
                       var.type = 'PSHOP'
                     }
-                    else if(var.type == 'PSHOP'){
+                    elif(var.type == 'PSHOP'){
                       var.type = 'SHOP'
                     }
-                    else if(var.type == 'SHOP'){
+                    elif(var.type == 'SHOP'){
                       var.type = 'RECYCLE'
                     }
-                    else if(var.type == 'RECYCLE'){
+                    elif(var.type == 'RECYCLE'){
                       var.type = 'EXCHANGE'
                     }
-                    else if(var.type == 'EXCHANGE'){
+                    elif(var.type == 'EXCHANGE'){
                       var.type = 'OTHER'
                     }
                     else {
@@ -836,31 +826,31 @@ controls:
                     if(var.state == 'ALL'){
                       var.state = 'PENDING'
                     }
-                    else if(var.state == 'PENDING'){
+                    elif(var.state == 'PENDING'){
                       var.state = 'ISSUES'
                     }
-                    else if(var.state == 'ISSUES'){
+                    elif(var.state == 'ISSUES'){
                       var.state = 'PREPARED'
                     }
-                    else if(var.state == 'PREPARED'){
+                    elif(var.state == 'PREPARED'){
                       var.state = 'READY'
                     }
-                    else if(var.state == 'READY'){
+                    elif(var.state == 'READY'){
                       var.state = 'RUNNING'
                     }
-                    else if(var.state == 'RUNNING'){
+                    elif(var.state == 'RUNNING'){
                       var.state = 'REVIEW'
                     }
-                    else if(var.state == 'REVIEW'){
+                    elif(var.state == 'REVIEW'){
                       var.state = 'DONE'
                     }
-                    else if(var.state == 'DONE'){
+                    elif(var.state == 'DONE'){
                       var.state = 'FAILED'
                     }
-                    else if(var.state == 'FAILED'){
+                    elif(var.state == 'FAILED'){
                       var.state = 'CANCELLED'
                     }
-                    else if(var.state == 'CANCELLED'){
+                    elif(var.state == 'CANCELLED'){
                       var.state = 'EXPIRED'
                     }
                     else {
@@ -965,16 +955,20 @@ controls:
                 val.流水滑块.setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
             children:
               流水行区:
-                type: VStack
+                type: RepeatGrid
                 val: 流水行区
                 attribute:
+                  items: "var.流水行区GridRows"
+                  flow: ~row
+                  column: 1
+                  spaceBetweenY: 10
+                  maxSize: "var.流水行区GridRows == none ? 0 : var.流水行区GridRows.size()"
                   width: "var.listW"
-                  spaceBetween: 10
                 children:
                   流水行:
                     type: Canvas
                     attribute:
-                      entryKey: 0.round()
+                      entryKey: self.item
                       entry: var.rows[self.entryKey]
                       visible: "self.entry != none"
                       width: "var.listW"
@@ -994,42 +988,20 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: "self.parent.entry['id'] == var.selectedId ? '~48,79,98,245' : '~37,48,65,235'"
+                          normal: "self.parent.entry['id'] == var.selectedId ? '48,79,98,245' : '37,48,65,235'"
                           shape: ~round_rect
                           radius: 8
                       物品名称:
-                        type: Scroll
+                        type: Text
                         attribute:
                           x: "16"
                           y: "12"
                           width: "var.listW - 270"
                           height: 34
-                          scrollAnim: none
-                          moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
-                        action:
-                          enter: |-
-                            self.scrollAnim = Lerp(0,1,2500)
-                          leave: |-
-                            self.scrollAnim = none
-                          clickLeft: |-
-                            if(var.loading || var.hydrating){
-                              return
-                            }
-                            var.selectedId = self.parent.entry['id']
-                            var.detailReady = false
-                            var.beginDetail()
-                            var.ignoreDetail = false
-                            var.detailAge = 0
-                            Packet.send(var.packetId, 'audit_detail', var.selectedId, var.detailRequest)
-                        children:
-                          文本:
-                            type: Text
-                            attribute:
-                              x: 0
-                              y: 0
-                              texts: "self.parent.parent.entry != none ? '&f' + self.parent.parent.entry['item'] : ''"
-                              fontSize: 26
-                              through: true
+                          texts: "self.parent.entry != none ? '&f' + self.parent.entry['item'] : ''"
+                          fontSize: 26
+                          limit: 44
+                          through: true
                       金额:
                         type: Text
                         attribute:
@@ -1039,71 +1011,27 @@ controls:
                           fontSize: 24
                           through: true
                       记录类型:
-                        type: Scroll
+                        type: Text
                         attribute:
                           x: "16"
                           y: "48"
                           width: "var.listW - 40"
                           height: 28
-                          scrollAnim: none
-                          moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
-                        action:
-                          enter: |-
-                            self.scrollAnim = Lerp(0,1,2500)
-                          leave: |-
-                            self.scrollAnim = none
-                          clickLeft: |-
-                            if(var.loading || var.hydrating){
-                              return
-                            }
-                            var.selectedId = self.parent.entry['id']
-                            var.detailReady = false
-                            var.beginDetail()
-                            var.ignoreDetail = false
-                            var.detailAge = 0
-                            Packet.send(var.packetId, 'audit_detail', var.selectedId, var.detailRequest)
-                        children:
-                          文本:
-                            type: Text
-                            attribute:
-                              x: 0
-                              y: 0
-                              texts: "self.parent.parent.entry != none ? '&b' + self.parent.parent.entry['kind'] + ' / ' + self.parent.parent.entry['state'] : ''"
-                              fontSize: 22
-                              through: true
+                          texts: "self.parent.entry != none ? '&b' + self.parent.entry['kind'] + ' / ' + self.parent.entry['state'] : ''"
+                          fontSize: 22
+                          limit: 64
+                          through: true
                       玩家时间:
-                        type: Scroll
+                        type: Text
                         attribute:
                           x: "16"
                           y: "82"
                           width: "var.listW - 40"
                           height: 28
-                          scrollAnim: none
-                          moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
-                        action:
-                          enter: |-
-                            self.scrollAnim = Lerp(0,1,2500)
-                          leave: |-
-                            self.scrollAnim = none
-                          clickLeft: |-
-                            if(var.loading || var.hydrating){
-                              return
-                            }
-                            var.selectedId = self.parent.entry['id']
-                            var.detailReady = false
-                            var.beginDetail()
-                            var.ignoreDetail = false
-                            var.detailAge = 0
-                            Packet.send(var.packetId, 'audit_detail', var.selectedId, var.detailRequest)
-                        children:
-                          文本:
-                            type: Text
-                            attribute:
-                              x: 0
-                              y: 0
-                              texts: "self.parent.parent.entry != none ? '&7' + self.parent.parent.entry['player'] + ' · ' + self.parent.parent.entry['time'] : ''"
-                              fontSize: 20
-                              through: true
+                          texts: "self.parent.entry != none ? '&7' + self.parent.entry['player'] + ' · ' + self.parent.entry['time'] : ''"
+                          fontSize: 20
+                          limit: 74
+                          through: true
           详情占位:
             type: Text
             attribute:
@@ -1452,16 +1380,20 @@ controls:
                     val.说明滑块.setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
                 children:
                   详情说明行区:
-                    type: VStack
+                    type: RepeatGrid
                     val: 详情说明行区
                     attribute:
+                      items: "var.详情说明行区GridRows"
+                      flow: ~row
+                      column: 1
+                      spaceBetweenY: 8
+                      maxSize: "var.详情说明行区GridRows == none ? 0 : var.详情说明行区GridRows.size()"
                       width: "var.detailW - 40"
-                      spaceBetween: 8
                     children:
                       说明行:
                         type: Text
                         attribute:
-                          entryKey: 0.round()
+                          entryKey: self.item
                           visible: "var.notes[self.entryKey] != none"
                           texts: "'&7' + var.notes[self.entryKey]"
                           height: 28

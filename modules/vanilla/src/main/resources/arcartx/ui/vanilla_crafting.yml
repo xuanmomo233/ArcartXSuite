@@ -21,6 +21,13 @@ ui:
     load: |-
       // 服务器在 UI 注册前写入仓库布局能力。
       var.whLayoutEnabled = false
+      var.recipeDetailOpen = false
+      var.detailRows = {}
+      var.detailMax = 0
+      var.detailQuantity = '1'
+      var.detailShown = 1
+      var.detailLoaded = false
+      var.detailWarehouse = false
       var.carrying = false
       var.whAvailable = false
       var.whResolved = false
@@ -176,6 +183,14 @@ ui:
         }
       }
   packetHandler:
+    recipe_details: |-
+      if(var.recipeDetailOpen && packet['key'] == var.recipeSelection){
+        var.detailRows = packet['rows']
+        var.detailMax = packet['maximum']
+        var.detailShown = packet['quantity']
+        var.detailWarehouse = packet['warehouseAvailable']
+        var.detailLoaded = true
+      }
     recipe_admin_access: var.recipeAdmin = packet['enabled']
     warehouse_panel: |-
       var.whAvailable = packet['available']
@@ -210,6 +225,7 @@ ui:
       var.previewDirty = true
     placement_state: |-
       var.fillBusy = packet['busy']
+      if(var.fillBusy){ var.recipeDetailOpen = false }
       var.fillMessage = packet['message']
       if(!packet['busy']){
         noticeMessage = packet['message']
@@ -2367,7 +2383,7 @@ controls:
                 attribute:
                   x: 34
                   y: 622
-                  texts: ~&8左键取一组 · 右键取半组
+                  texts: ~&8左键一组 · 右键半组 · 到背包
                   fontSize: 28
                   through: true
               页码:
@@ -2562,8 +2578,11 @@ controls:
                     action:
                       clickLeft: var.whMenu = ''
                   选项网格:
-                    type: HGrid
+                    type: RepeatGrid
                     attribute:
+                      items: "[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]"
+                      flow: ~row
+                      maxSize: 12
                       x: 16
                       y: 56
                       width: 600
@@ -2571,12 +2590,6 @@ controls:
                       column: 3
                       spaceBetweenX: 12
                       spaceBetweenY: 8
-                    action:
-                      create: |-
-                        for(i in range(1, 11)){
-                          choice = self['选项'].copy('选项' + i.round())
-                          choice.index = i.round()
-                        }
                     children:
                       选项:
                         type: Canvas
@@ -2585,7 +2598,7 @@ controls:
                           y: 0
                           width: 192
                           height: 36
-                          index: 0.round()
+                          index: self.item
                           entry: 'var.whMenu == ''category'' ? var.whCategories[(var.whMenuPage * 12 + self.index).round()] : var.whSortOptions[(var.whMenuPage
                             * 12 + self.index).round()]'
                           visible: self.entry != none
@@ -3172,10 +3185,17 @@ controls:
                   y: 732
                   width: 180
                   height: 40
-                  enable: var.recipeSelection != '' && !var.carrying && !var.fillBusy
-                  alpha: 'var.recipeSelection != '''' && !var.carrying && !var.fillBusy ? 1 : 0.45'
+                  enable: var.recipeSelection != '' && !var.fillBusy
+                  alpha: 'var.recipeSelection != '''' && !var.fillBusy ? 1 : 0.45'
                 action:
-                  clickLeft: Packet.send('AXS:vanilla_crafting', 'place_ingredients', var.recipeSelection)
+                  clickLeft: |-
+                    var.recipeDetailOpen = true
+                    var.detailRows = {}
+                    var.detailMax = 0
+                    var.detailQuantity = '1'
+                    var.detailShown = 1
+                    var.detailLoaded = false
+                    Packet.send('AXS:vanilla_crafting', 'inspect_recipe', var.recipeSelection, '1')
                 children:
                   底色:
                     type: Texture
@@ -3197,7 +3217,7 @@ controls:
                     attribute:
                       x: 0
                       y: 0
-                      texts: ~&f填入材料
+                      texts: ~&f材料与填料
                       fontSize: 32
                       through: true
                       point: ~middle_center
@@ -3244,6 +3264,935 @@ controls:
                       point: ~middle_center
                 action:
                   clickLeft: Packet.send('AXS:vanilla_crafting', 'show_recipe_book')
+      配方详情遮罩:
+        type: Texture
+        attribute:
+          point: ~middle_center
+          width: 1920
+          height: 1080
+          normal: ~18,15,13,110
+          visible: var.recipeDetailOpen
+          through: false
+        action:
+          clickLeft: var.recipeDetailOpen = false
+      配方详情面板:
+        type: Canvas
+        attribute:
+          x: 0
+          y: 0
+          width: 900
+          height: 730
+          point: ~middle_center
+          visible: var.recipeDetailOpen
+        children:
+          面板底:
+            type: Texture
+            attribute:
+              x: 0
+              y: 0
+              width: 900
+              height: 730
+              normal: ~247,236,217,255
+              shape: ~round_rect
+              radius: 12
+              through: true
+            effect:
+              stroke:
+                width: 3
+                color: ~151,126,80,255
+          标题:
+            type: Text
+            attribute:
+              x: 26
+              y: 24
+              texts: '''&0'' + var.recipeName'
+              fontSize: 39
+              through: true
+              limit: 30
+          关闭:
+            type: Canvas
+            attribute:
+              x: 828
+              y: 19
+              width: 48
+              height: 44
+            children:
+              底色:
+                type: Texture
+                attribute:
+                  x: 0
+                  y: 0
+                  width: 48
+                  height: 44
+                  normal: 'self.isHovered() ? ''158,118,73,255'' : ''128,91,57,255'''
+                  shape: ~round_rect
+                  radius: 6
+                  through: true
+                effect:
+                  stroke:
+                    width: 3
+                    color: ~125,99,68,255
+              文字:
+                type: Text
+                attribute:
+                  x: 0
+                  y: 0
+                  texts: ~&f×
+                  fontSize: 28
+                  through: true
+                  point: ~middle_center
+            action:
+              clickLeft: var.recipeDetailOpen = false
+          份数提示:
+            type: Text
+            attribute:
+              x: 26
+              y: 78
+              texts: '''&8明细按 '' + var.detailShown.round() + '' 份计算 · 当前最多可填 '' + var.detailMax.round() + '' 份'''
+              fontSize: 27
+              through: true
+          材料来源提示:
+            type: Text
+            attribute:
+              x: 26
+              y: 611
+              texts: '!var.detailLoaded ? ''&8正在读取材料'' : (var.detailWarehouse ? '''' : ''&8按工位与背包中的材料计算'')'
+              fontSize: 24
+              through: true
+          表头底:
+            type: Texture
+            attribute:
+              x: 24
+              y: 123
+              width: 852
+              height: 40
+              normal: ~220,200,167,255
+              shape: ~round_rect
+              radius: 5
+              through: true
+            effect:
+              stroke:
+                width: 3
+                color: ~151,126,80,255
+          数量:
+            type: Canvas
+            attribute:
+              x: 26
+              y: 657
+              width: 156
+              height: 46
+            children:
+              底色:
+                type: Texture
+                attribute:
+                  x: 0
+                  y: 0
+                  width: 156
+                  height: 46
+                  normal: ~232,224,207,255
+                  shape: ~round_rect
+                  radius: 6
+                  through: true
+                effect:
+                  stroke:
+                    width: 3
+                    color: ~151,126,80,255
+              输入:
+                type: TextBox
+                attribute:
+                  x: 12
+                  y: 7
+                  width: 132
+                  height: 32
+                  length: 3
+                  emptyText: ~&8份数 1～64
+                  fontSize: 28
+                action:
+                  textChange: var.detailQuantity = self.getContent()
+          预览:
+            type: Canvas
+            attribute:
+              x: 198
+              y: 657
+              width: 116
+              height: 46
+            children:
+              底色:
+                type: Texture
+                attribute:
+                  x: 0
+                  y: 0
+                  width: 116
+                  height: 46
+                  normal: 'self.isHovered() ? ''158,118,73,255'' : ''128,91,57,255'''
+                  shape: ~round_rect
+                  radius: 6
+                  through: true
+                effect:
+                  stroke:
+                    width: 3
+                    color: ~125,99,68,255
+              文字:
+                type: Text
+                attribute:
+                  x: 0
+                  y: 0
+                  texts: ~&f预览
+                  fontSize: 28
+                  through: true
+                  point: ~middle_center
+            action:
+              clickLeft: Packet.send('AXS:vanilla_crafting', 'inspect_recipe', var.recipeSelection, var.detailQuantity)
+          预览最多:
+            type: Canvas
+            attribute:
+              x: 328
+              y: 657
+              width: 132
+              height: 46
+            children:
+              底色:
+                type: Texture
+                attribute:
+                  x: 0
+                  y: 0
+                  width: 132
+                  height: 46
+                  normal: 'self.isHovered() ? ''158,118,73,255'' : ''128,91,57,255'''
+                  shape: ~round_rect
+                  radius: 6
+                  through: true
+                effect:
+                  stroke:
+                    width: 3
+                    color: ~125,99,68,255
+              文字:
+                type: Text
+                attribute:
+                  x: 0
+                  y: 0
+                  texts: ~&f预览最多
+                  fontSize: 28
+                  through: true
+                  point: ~middle_center
+            action:
+              clickLeft: Packet.send('AXS:vanilla_crafting', 'inspect_recipe', var.recipeSelection, 'max')
+          填入:
+            type: Canvas
+            attribute:
+              x: 550
+              y: 657
+              width: 142
+              height: 46
+              enable: '!var.carrying && !var.fillBusy'
+              alpha: '(!var.carrying && !var.fillBusy) ? 1 : 0.45'
+            children:
+              底色:
+                type: Texture
+                attribute:
+                  x: 0
+                  y: 0
+                  width: 142
+                  height: 46
+                  normal: 'self.isHovered() ? ''158,118,73,255'' : ''128,91,57,255'''
+                  shape: ~round_rect
+                  radius: 6
+                  through: true
+                effect:
+                  stroke:
+                    width: 3
+                    color: ~125,99,68,255
+              文字:
+                type: Text
+                attribute:
+                  x: 0
+                  y: 0
+                  texts: ~&f填入份数
+                  fontSize: 28
+                  through: true
+                  point: ~middle_center
+            action:
+              clickLeft: |-
+                Packet.send('AXS:vanilla_crafting', 'place_ingredients', var.recipeSelection, var.detailQuantity)
+          填入最多:
+            type: Canvas
+            attribute:
+              x: 706
+              y: 657
+              width: 168
+              height: 46
+              enable: '!var.carrying && !var.fillBusy && var.detailMax > 0'
+              alpha: '(!var.carrying && !var.fillBusy && var.detailMax > 0) ? 1 : 0.45'
+            children:
+              底色:
+                type: Texture
+                attribute:
+                  x: 0
+                  y: 0
+                  width: 168
+                  height: 46
+                  normal: 'self.isHovered() ? ''158,118,73,255'' : ''128,91,57,255'''
+                  shape: ~round_rect
+                  radius: 6
+                  through: true
+                effect:
+                  stroke:
+                    width: 3
+                    color: ~125,99,68,255
+              文字:
+                type: Text
+                attribute:
+                  x: 0
+                  y: 0
+                  texts: ~&f填入最多
+                  fontSize: 28
+                  through: true
+                  point: ~middle_center
+            action:
+              clickLeft: |-
+                Packet.send('AXS:vanilla_crafting', 'place_ingredients', var.recipeSelection, 'max')
+          表头name:
+            type: Text
+            attribute:
+              x: 26
+              y: 132
+              texts: ~&0材料
+              fontSize: 26
+              through: true
+          表头need:
+            type: Text
+            attribute:
+              x: 319
+              y: 132
+              texts: ~&0需求
+              fontSize: 26
+              through: true
+          表头workbench:
+            type: Text
+            attribute:
+              x: 419
+              y: 132
+              texts: ~&0工位
+              fontSize: 26
+              through: true
+          表头backpack:
+            type: Text
+            attribute:
+              x: 519
+              y: 132
+              texts: ~&0背包
+              fontSize: 26
+              through: true
+          表头warehouse:
+            type: Text
+            attribute:
+              x: 619
+              y: 132
+              texts: ~&0仓库可用
+              fontSize: 26
+              through: true
+          表头missing:
+            type: Text
+            attribute:
+              x: 782
+              y: 132
+              texts: ~&0缺口
+              fontSize: 26
+              through: true
+          行底0:
+            type: Texture
+            attribute:
+              x: 24
+              y: 171
+              width: 852
+              height: 39
+              normal: ~234,221,199,255
+              shape: ~round_rect
+              radius: 4
+              through: true
+              visible: var.detailRows[0.round()] != none
+          行0_name:
+            type: Text
+            attribute:
+              x: 30
+              y: 179
+              texts: 'var.detailRows[0.round()] == none ? '''' : ''&0'' + var.detailRows[0.round()][''name'']'
+              fontSize: 26
+              through: true
+              limit: 24
+          行0_need:
+            type: Text
+            attribute:
+              x: 320
+              y: 179
+              texts: 'var.detailRows[0.round()] == none ? '''' : ''&0'' + var.detailRows[0.round()][''need'']'
+              fontSize: 26
+              through: true
+              limit: 8
+          行0_workbench:
+            type: Text
+            attribute:
+              x: 420
+              y: 179
+              texts: 'var.detailRows[0.round()] == none ? '''' : ''&0'' + var.detailRows[0.round()][''workbench'']'
+              fontSize: 26
+              through: true
+              limit: 8
+          行0_backpack:
+            type: Text
+            attribute:
+              x: 520
+              y: 179
+              texts: 'var.detailRows[0.round()] == none ? '''' : ''&0'' + var.detailRows[0.round()][''backpack'']'
+              fontSize: 26
+              through: true
+              limit: 8
+          行0_warehouse:
+            type: Text
+            attribute:
+              x: 620
+              y: 179
+              texts: 'var.detailRows[0.round()] == none ? '''' : ''&0'' + var.detailRows[0.round()][''warehouse'']'
+              fontSize: 26
+              through: true
+              limit: 10
+          行0_missing:
+            type: Text
+            attribute:
+              x: 784
+              y: 179
+              texts: 'var.detailRows[0.round()] == none ? '''' : ''&0'' + var.detailRows[0.round()][''missing'']'
+              fontSize: 26
+              through: true
+              limit: 8
+          行底1:
+            type: Texture
+            attribute:
+              x: 24
+              y: 218
+              width: 852
+              height: 39
+              normal: ~234,221,199,255
+              shape: ~round_rect
+              radius: 4
+              through: true
+              visible: var.detailRows[1.round()] != none
+          行1_name:
+            type: Text
+            attribute:
+              x: 30
+              y: 226
+              texts: 'var.detailRows[1.round()] == none ? '''' : ''&0'' + var.detailRows[1.round()][''name'']'
+              fontSize: 26
+              through: true
+              limit: 24
+          行1_need:
+            type: Text
+            attribute:
+              x: 320
+              y: 226
+              texts: 'var.detailRows[1.round()] == none ? '''' : ''&0'' + var.detailRows[1.round()][''need'']'
+              fontSize: 26
+              through: true
+              limit: 8
+          行1_workbench:
+            type: Text
+            attribute:
+              x: 420
+              y: 226
+              texts: 'var.detailRows[1.round()] == none ? '''' : ''&0'' + var.detailRows[1.round()][''workbench'']'
+              fontSize: 26
+              through: true
+              limit: 8
+          行1_backpack:
+            type: Text
+            attribute:
+              x: 520
+              y: 226
+              texts: 'var.detailRows[1.round()] == none ? '''' : ''&0'' + var.detailRows[1.round()][''backpack'']'
+              fontSize: 26
+              through: true
+              limit: 8
+          行1_warehouse:
+            type: Text
+            attribute:
+              x: 620
+              y: 226
+              texts: 'var.detailRows[1.round()] == none ? '''' : ''&0'' + var.detailRows[1.round()][''warehouse'']'
+              fontSize: 26
+              through: true
+              limit: 10
+          行1_missing:
+            type: Text
+            attribute:
+              x: 784
+              y: 226
+              texts: 'var.detailRows[1.round()] == none ? '''' : ''&0'' + var.detailRows[1.round()][''missing'']'
+              fontSize: 26
+              through: true
+              limit: 8
+          行底2:
+            type: Texture
+            attribute:
+              x: 24
+              y: 265
+              width: 852
+              height: 39
+              normal: ~234,221,199,255
+              shape: ~round_rect
+              radius: 4
+              through: true
+              visible: var.detailRows[2.round()] != none
+          行2_name:
+            type: Text
+            attribute:
+              x: 30
+              y: 273
+              texts: 'var.detailRows[2.round()] == none ? '''' : ''&0'' + var.detailRows[2.round()][''name'']'
+              fontSize: 26
+              through: true
+              limit: 24
+          行2_need:
+            type: Text
+            attribute:
+              x: 320
+              y: 273
+              texts: 'var.detailRows[2.round()] == none ? '''' : ''&0'' + var.detailRows[2.round()][''need'']'
+              fontSize: 26
+              through: true
+              limit: 8
+          行2_workbench:
+            type: Text
+            attribute:
+              x: 420
+              y: 273
+              texts: 'var.detailRows[2.round()] == none ? '''' : ''&0'' + var.detailRows[2.round()][''workbench'']'
+              fontSize: 26
+              through: true
+              limit: 8
+          行2_backpack:
+            type: Text
+            attribute:
+              x: 520
+              y: 273
+              texts: 'var.detailRows[2.round()] == none ? '''' : ''&0'' + var.detailRows[2.round()][''backpack'']'
+              fontSize: 26
+              through: true
+              limit: 8
+          行2_warehouse:
+            type: Text
+            attribute:
+              x: 620
+              y: 273
+              texts: 'var.detailRows[2.round()] == none ? '''' : ''&0'' + var.detailRows[2.round()][''warehouse'']'
+              fontSize: 26
+              through: true
+              limit: 10
+          行2_missing:
+            type: Text
+            attribute:
+              x: 784
+              y: 273
+              texts: 'var.detailRows[2.round()] == none ? '''' : ''&0'' + var.detailRows[2.round()][''missing'']'
+              fontSize: 26
+              through: true
+              limit: 8
+          行底3:
+            type: Texture
+            attribute:
+              x: 24
+              y: 312
+              width: 852
+              height: 39
+              normal: ~234,221,199,255
+              shape: ~round_rect
+              radius: 4
+              through: true
+              visible: var.detailRows[3.round()] != none
+          行3_name:
+            type: Text
+            attribute:
+              x: 30
+              y: 320
+              texts: 'var.detailRows[3.round()] == none ? '''' : ''&0'' + var.detailRows[3.round()][''name'']'
+              fontSize: 26
+              through: true
+              limit: 24
+          行3_need:
+            type: Text
+            attribute:
+              x: 320
+              y: 320
+              texts: 'var.detailRows[3.round()] == none ? '''' : ''&0'' + var.detailRows[3.round()][''need'']'
+              fontSize: 26
+              through: true
+              limit: 8
+          行3_workbench:
+            type: Text
+            attribute:
+              x: 420
+              y: 320
+              texts: 'var.detailRows[3.round()] == none ? '''' : ''&0'' + var.detailRows[3.round()][''workbench'']'
+              fontSize: 26
+              through: true
+              limit: 8
+          行3_backpack:
+            type: Text
+            attribute:
+              x: 520
+              y: 320
+              texts: 'var.detailRows[3.round()] == none ? '''' : ''&0'' + var.detailRows[3.round()][''backpack'']'
+              fontSize: 26
+              through: true
+              limit: 8
+          行3_warehouse:
+            type: Text
+            attribute:
+              x: 620
+              y: 320
+              texts: 'var.detailRows[3.round()] == none ? '''' : ''&0'' + var.detailRows[3.round()][''warehouse'']'
+              fontSize: 26
+              through: true
+              limit: 10
+          行3_missing:
+            type: Text
+            attribute:
+              x: 784
+              y: 320
+              texts: 'var.detailRows[3.round()] == none ? '''' : ''&0'' + var.detailRows[3.round()][''missing'']'
+              fontSize: 26
+              through: true
+              limit: 8
+          行底4:
+            type: Texture
+            attribute:
+              x: 24
+              y: 359
+              width: 852
+              height: 39
+              normal: ~234,221,199,255
+              shape: ~round_rect
+              radius: 4
+              through: true
+              visible: var.detailRows[4.round()] != none
+          行4_name:
+            type: Text
+            attribute:
+              x: 30
+              y: 367
+              texts: 'var.detailRows[4.round()] == none ? '''' : ''&0'' + var.detailRows[4.round()][''name'']'
+              fontSize: 26
+              through: true
+              limit: 24
+          行4_need:
+            type: Text
+            attribute:
+              x: 320
+              y: 367
+              texts: 'var.detailRows[4.round()] == none ? '''' : ''&0'' + var.detailRows[4.round()][''need'']'
+              fontSize: 26
+              through: true
+              limit: 8
+          行4_workbench:
+            type: Text
+            attribute:
+              x: 420
+              y: 367
+              texts: 'var.detailRows[4.round()] == none ? '''' : ''&0'' + var.detailRows[4.round()][''workbench'']'
+              fontSize: 26
+              through: true
+              limit: 8
+          行4_backpack:
+            type: Text
+            attribute:
+              x: 520
+              y: 367
+              texts: 'var.detailRows[4.round()] == none ? '''' : ''&0'' + var.detailRows[4.round()][''backpack'']'
+              fontSize: 26
+              through: true
+              limit: 8
+          行4_warehouse:
+            type: Text
+            attribute:
+              x: 620
+              y: 367
+              texts: 'var.detailRows[4.round()] == none ? '''' : ''&0'' + var.detailRows[4.round()][''warehouse'']'
+              fontSize: 26
+              through: true
+              limit: 10
+          行4_missing:
+            type: Text
+            attribute:
+              x: 784
+              y: 367
+              texts: 'var.detailRows[4.round()] == none ? '''' : ''&0'' + var.detailRows[4.round()][''missing'']'
+              fontSize: 26
+              through: true
+              limit: 8
+          行底5:
+            type: Texture
+            attribute:
+              x: 24
+              y: 406
+              width: 852
+              height: 39
+              normal: ~234,221,199,255
+              shape: ~round_rect
+              radius: 4
+              through: true
+              visible: var.detailRows[5.round()] != none
+          行5_name:
+            type: Text
+            attribute:
+              x: 30
+              y: 414
+              texts: 'var.detailRows[5.round()] == none ? '''' : ''&0'' + var.detailRows[5.round()][''name'']'
+              fontSize: 26
+              through: true
+              limit: 24
+          行5_need:
+            type: Text
+            attribute:
+              x: 320
+              y: 414
+              texts: 'var.detailRows[5.round()] == none ? '''' : ''&0'' + var.detailRows[5.round()][''need'']'
+              fontSize: 26
+              through: true
+              limit: 8
+          行5_workbench:
+            type: Text
+            attribute:
+              x: 420
+              y: 414
+              texts: 'var.detailRows[5.round()] == none ? '''' : ''&0'' + var.detailRows[5.round()][''workbench'']'
+              fontSize: 26
+              through: true
+              limit: 8
+          行5_backpack:
+            type: Text
+            attribute:
+              x: 520
+              y: 414
+              texts: 'var.detailRows[5.round()] == none ? '''' : ''&0'' + var.detailRows[5.round()][''backpack'']'
+              fontSize: 26
+              through: true
+              limit: 8
+          行5_warehouse:
+            type: Text
+            attribute:
+              x: 620
+              y: 414
+              texts: 'var.detailRows[5.round()] == none ? '''' : ''&0'' + var.detailRows[5.round()][''warehouse'']'
+              fontSize: 26
+              through: true
+              limit: 10
+          行5_missing:
+            type: Text
+            attribute:
+              x: 784
+              y: 414
+              texts: 'var.detailRows[5.round()] == none ? '''' : ''&0'' + var.detailRows[5.round()][''missing'']'
+              fontSize: 26
+              through: true
+              limit: 8
+          行底6:
+            type: Texture
+            attribute:
+              x: 24
+              y: 453
+              width: 852
+              height: 39
+              normal: ~234,221,199,255
+              shape: ~round_rect
+              radius: 4
+              through: true
+              visible: var.detailRows[6.round()] != none
+          行6_name:
+            type: Text
+            attribute:
+              x: 30
+              y: 461
+              texts: 'var.detailRows[6.round()] == none ? '''' : ''&0'' + var.detailRows[6.round()][''name'']'
+              fontSize: 26
+              through: true
+              limit: 24
+          行6_need:
+            type: Text
+            attribute:
+              x: 320
+              y: 461
+              texts: 'var.detailRows[6.round()] == none ? '''' : ''&0'' + var.detailRows[6.round()][''need'']'
+              fontSize: 26
+              through: true
+              limit: 8
+          行6_workbench:
+            type: Text
+            attribute:
+              x: 420
+              y: 461
+              texts: 'var.detailRows[6.round()] == none ? '''' : ''&0'' + var.detailRows[6.round()][''workbench'']'
+              fontSize: 26
+              through: true
+              limit: 8
+          行6_backpack:
+            type: Text
+            attribute:
+              x: 520
+              y: 461
+              texts: 'var.detailRows[6.round()] == none ? '''' : ''&0'' + var.detailRows[6.round()][''backpack'']'
+              fontSize: 26
+              through: true
+              limit: 8
+          行6_warehouse:
+            type: Text
+            attribute:
+              x: 620
+              y: 461
+              texts: 'var.detailRows[6.round()] == none ? '''' : ''&0'' + var.detailRows[6.round()][''warehouse'']'
+              fontSize: 26
+              through: true
+              limit: 10
+          行6_missing:
+            type: Text
+            attribute:
+              x: 784
+              y: 461
+              texts: 'var.detailRows[6.round()] == none ? '''' : ''&0'' + var.detailRows[6.round()][''missing'']'
+              fontSize: 26
+              through: true
+              limit: 8
+          行底7:
+            type: Texture
+            attribute:
+              x: 24
+              y: 500
+              width: 852
+              height: 39
+              normal: ~234,221,199,255
+              shape: ~round_rect
+              radius: 4
+              through: true
+              visible: var.detailRows[7.round()] != none
+          行7_name:
+            type: Text
+            attribute:
+              x: 30
+              y: 508
+              texts: 'var.detailRows[7.round()] == none ? '''' : ''&0'' + var.detailRows[7.round()][''name'']'
+              fontSize: 26
+              through: true
+              limit: 24
+          行7_need:
+            type: Text
+            attribute:
+              x: 320
+              y: 508
+              texts: 'var.detailRows[7.round()] == none ? '''' : ''&0'' + var.detailRows[7.round()][''need'']'
+              fontSize: 26
+              through: true
+              limit: 8
+          行7_workbench:
+            type: Text
+            attribute:
+              x: 420
+              y: 508
+              texts: 'var.detailRows[7.round()] == none ? '''' : ''&0'' + var.detailRows[7.round()][''workbench'']'
+              fontSize: 26
+              through: true
+              limit: 8
+          行7_backpack:
+            type: Text
+            attribute:
+              x: 520
+              y: 508
+              texts: 'var.detailRows[7.round()] == none ? '''' : ''&0'' + var.detailRows[7.round()][''backpack'']'
+              fontSize: 26
+              through: true
+              limit: 8
+          行7_warehouse:
+            type: Text
+            attribute:
+              x: 620
+              y: 508
+              texts: 'var.detailRows[7.round()] == none ? '''' : ''&0'' + var.detailRows[7.round()][''warehouse'']'
+              fontSize: 26
+              through: true
+              limit: 10
+          行7_missing:
+            type: Text
+            attribute:
+              x: 784
+              y: 508
+              texts: 'var.detailRows[7.round()] == none ? '''' : ''&0'' + var.detailRows[7.round()][''missing'']'
+              fontSize: 26
+              through: true
+              limit: 8
+          行底8:
+            type: Texture
+            attribute:
+              x: 24
+              y: 547
+              width: 852
+              height: 39
+              normal: ~234,221,199,255
+              shape: ~round_rect
+              radius: 4
+              through: true
+              visible: var.detailRows[8.round()] != none
+          行8_name:
+            type: Text
+            attribute:
+              x: 30
+              y: 555
+              texts: 'var.detailRows[8.round()] == none ? '''' : ''&0'' + var.detailRows[8.round()][''name'']'
+              fontSize: 26
+              through: true
+              limit: 24
+          行8_need:
+            type: Text
+            attribute:
+              x: 320
+              y: 555
+              texts: 'var.detailRows[8.round()] == none ? '''' : ''&0'' + var.detailRows[8.round()][''need'']'
+              fontSize: 26
+              through: true
+              limit: 8
+          行8_workbench:
+            type: Text
+            attribute:
+              x: 420
+              y: 555
+              texts: 'var.detailRows[8.round()] == none ? '''' : ''&0'' + var.detailRows[8.round()][''workbench'']'
+              fontSize: 26
+              through: true
+              limit: 8
+          行8_backpack:
+            type: Text
+            attribute:
+              x: 520
+              y: 555
+              texts: 'var.detailRows[8.round()] == none ? '''' : ''&0'' + var.detailRows[8.round()][''backpack'']'
+              fontSize: 26
+              through: true
+              limit: 8
+          行8_warehouse:
+            type: Text
+            attribute:
+              x: 620
+              y: 555
+              texts: 'var.detailRows[8.round()] == none ? '''' : ''&0'' + var.detailRows[8.round()][''warehouse'']'
+              fontSize: 26
+              through: true
+              limit: 10
+          行8_missing:
+            type: Text
+            attribute:
+              x: 784
+              y: 555
+              texts: 'var.detailRows[8.round()] == none ? '''' : ''&0'' + var.detailRows[8.round()][''missing'']'
+              fontSize: 26
+              through: true
+              limit: 8
       居中操作提示:
         type: Canvas
         attribute:

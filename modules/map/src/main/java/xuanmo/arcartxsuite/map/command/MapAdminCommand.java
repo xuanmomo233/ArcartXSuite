@@ -3,6 +3,7 @@ package xuanmo.arcartxsuite.map.command;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.UUID;
 import java.util.function.Supplier;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
@@ -23,7 +24,8 @@ import xuanmo.arcartxsuite.map.service.MapService;
  */
 public final class MapAdminCommand implements ModuleCommandHandler {
 
-    private static final List<String> ACTIONS = List.of("help", "status", "open", "list", "anchors", "unlock", "refresh");
+    private static final List<String> ACTIONS = List.of("help", "status", "open", "list", "anchors", "unlock", "unlock-review", "refresh");
+    private static final List<String> REVIEW_ACTIONS = List.of("inspect", "confirm", "cancel");
 
     private final Supplier<MapService> serviceProvider;
     private final MessageProvider messages;
@@ -65,6 +67,7 @@ public final class MapAdminCommand implements ModuleCommandHandler {
             case "list" -> handleList(sender);
             case "anchors" -> handleAnchors(sender, args);
             case "unlock" -> handleUnlock(sender, args);
+            case "unlock-review" -> handleUnlockReview(sender, args);
             case "refresh" -> handleRefresh(sender, args);
             default -> sender.sendMessage(fullMsg("common.unknown", label));
         }
@@ -95,6 +98,9 @@ public final class MapAdminCommand implements ModuleCommandHandler {
         if (args.length == 4 && "unlock".equalsIgnoreCase(args[1])) {
             return filter(svc.configuredAnchorIds(), args[3]);
         }
+        if (args.length == 4 && "unlock-review".equalsIgnoreCase(args[1]) && sender.hasPermission("arcartxsuite.admin")) {
+            return filter(REVIEW_ACTIONS, args[3]);
+        }
         return List.of();
     }
 
@@ -106,7 +112,29 @@ public final class MapAdminCommand implements ModuleCommandHandler {
         sender.sendMessage(fullMsg("help.list", cmd));
         sender.sendMessage(fullMsg("help.anchors", cmd));
         sender.sendMessage(fullMsg("help.unlock", cmd));
+        if (sender.hasPermission("arcartxsuite.admin")) sender.sendMessage(fullMsg("help.unlock-review", cmd));
         sender.sendMessage(fullMsg("help.refresh", cmd));
+    }
+
+    private void handleUnlockReview(CommandSender sender, String[] args) {
+        if (!sender.hasPermission("arcartxsuite.admin")) { sender.sendMessage(fullMsg("common.no-permission")); return; }
+        MapService svc = serviceProvider.get();
+        if (svc == null) { sender.sendMessage(fullMsg("common.service-down")); return; }
+        String decision = args.length == 4 ? args[3].toLowerCase(Locale.ROOT) : "";
+        if (!REVIEW_ACTIONS.contains(decision)) { sender.sendMessage(fullMsg("unlock-review.usage")); return; }
+        UUID reservation;
+        try {
+            reservation = UUID.fromString(args[2]);
+            if (!reservation.toString().equalsIgnoreCase(args[2])) throw new IllegalArgumentException();
+        } catch (IllegalArgumentException invalid) {
+            sender.sendMessage(fullMsg("unlock-review.usage"));
+            return;
+        }
+        svc.reviewAnchorUnlock(reservation, decision, sender.getName()).whenComplete((result, failure) -> {
+            if (!Bukkit.isPrimaryThread()) return;
+            if (failure != null) sender.sendMessage(fullMsg("unlock-review.failed", reservation));
+            else sender.sendMessage(fullMsg("unlock-review.result", result.message()));
+        });
     }
 
     /** /axs map refresh <worldId> —— 手动刷该世界预加载版本号，客户端下次同步自动重拉地形。 */
@@ -148,7 +176,7 @@ public final class MapAdminCommand implements ModuleCommandHandler {
         Player target = Bukkit.getPlayer(args[2]);
         if (target == null) { sender.sendMessage(fullMsg("open.not-online", args[2])); return; }
         String worldId = args.length >= 4 ? args[3] : "";
-        MapOperationResult result = svc.openMenuFor(target, worldId);
+        MapOperationResult result = svc.openMenuForAdmin(sender, target, worldId);
         sender.sendMessage((messages != null ? messages.get("prefix") : "") + (result.success() ? ChatColor.GREEN : ChatColor.RED) + result.message());
     }
 

@@ -75,7 +75,31 @@ class FishingUiResourceTest {
         assertTrue(release.contains("!var.dragMoved"));
         assertTrue(release.contains("var.actionToken"));
         assertTrue(release.contains("canLevelUp"));
-        assertTrue(yaml.getString("ui.action.tick").contains("mx != var.lastMouseX || my != var.lastMouseY"));
+        assertTrue(yaml.getString("ui.action.tick").contains("if(var.isDragging && !var.dragMoved)"));
+    }
+
+    @Test
+    void viewportPansFromLiveCursorAndCommitsTheDisplayedPosition() throws Exception {
+        var yaml = load("talents");
+        var refs = new HashMap<String, ConfigurationSection>();
+        visit(yaml.getConfigurationSection("controls"), refs);
+        var viewport = refs.get("天赋视口");
+        String release = yaml.getString("ui.action.releaseLeft");
+        String tick = yaml.getString("ui.action.tick");
+        String wheel = viewport.getString("action.wheel");
+        for (String axis : List.of("X", "Y")) {
+            String move = viewport.getString("attribute.move" + axis);
+            assertTrue(move.contains("var.isDragging && var.dragSpan" + axis + " > 0"));
+            assertTrue(move.contains("Mouse." + axis.toLowerCase(java.util.Locale.ROOT) + "()"));
+            assertTrue(move.contains("math.max(0, math.min(1,"));
+            int commit = release.indexOf("var.pan" + axis + " = val.天赋视口.move" + axis);
+            assertTrue(commit >= 0 && commit < release.indexOf("var.isDragging = false"));
+            assertTrue(wheel.contains("oldS" + axis + " = self.move" + axis));
+            assertFalse(tick.contains("var.pan" + axis + " ="));
+        }
+        assertFalse(refs.containsKey("横向滑块"));
+        assertFalse(refs.containsKey("竖向滑块"));
+        assertFalse(refs.get("天赋节点模板").getString("children.节点图标.attribute.normal").contains("Frosted"));
     }
 
     @Test

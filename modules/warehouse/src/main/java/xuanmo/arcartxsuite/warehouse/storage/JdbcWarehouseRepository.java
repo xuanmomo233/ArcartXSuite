@@ -30,40 +30,187 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
 
     @Override
     public boolean applySlotChanges(List<SlotChange> changes) throws SQLException {
-        return materialMutation(changes, null, null);
+        return materialMutation(changes, null, null, null, null, 0);
     }
 
+    @Override
+    public boolean applySharedSlotChanges(List<SlotChange> changes, SharedActor actor) throws SQLException {
+        return materialMutation(changes, null, null, actor, null, 0);
+    }
+
+    @Override
+    public boolean stageInventoryTransfer(MaterialTransfer transfer, List<SlotChange> changes, SharedActor actor) throws SQLException {
+        boolean withdrawal = INVENTORY_WITHDRAW_RESERVED.equals(transfer.state());
+        if (!INVENTORY_TRANSFER.equals(transfer.adapter()) || changes.isEmpty()
+            || (!withdrawal && !INVENTORY_DEPOSIT.equals(transfer.state()))) {
+            return false;
+        }
+        return materialMutation(changes, transfer, null, actor, null, 0);
+    }
+
+    @Override
+    public boolean settleInventoryTransfer(MaterialTransfer transfer, List<SlotChange> changes, SharedActor actor,
+                                           boolean restored) throws SQLException {
+        boolean validState = restored ? INVENTORY_WITHDRAW_RESERVED.equals(transfer.state())
+            : INVENTORY_WITHDRAW.equals(transfer.state()) || INVENTORY_DEPOSIT.equals(transfer.state());
+        if (!INVENTORY_TRANSFER.equals(transfer.adapter()) || changes.isEmpty()
+            || !validState) return false;
+        return materialMutation(changes, null, null, actor, null, 0, null, new InventorySettlement(transfer, restored));
+    }
+
+    private record InventorySettlement(MaterialTransfer transfer, boolean restored) { }
+
     @Override public boolean escrowMaterials(List<SlotChange> changes, MaterialTransfer transfer) throws SQLException {
-        return materialMutation(changes, transfer, null);
+        return materialMutation(changes, transfer, null, null, null, 0);
     }
 
     @Override public boolean restoreHeldMaterialTransfer(MaterialTransfer transfer, List<SlotChange> reverse) throws SQLException {
-        return materialMutation(reverse, null, transfer);
+        return materialMutation(reverse, null, transfer, null, null, 0);
     }
 
-    private boolean materialMutation(List<SlotChange> changes, MaterialTransfer create, MaterialTransfer restore) throws SQLException {
+    @Override public boolean commitGroundDeposit(List<SlotChange> changes, MaterialTransfer transfer, long storedAmount)
+        throws SQLException {
+        if (storedAmount <= 0 || changes.isEmpty()) return false;
+        long total = 0;
+        for (SlotChange change : changes) {
+            if (!matchesGroundTarget(change.before(), transfer) || !matchesGroundTarget(change.after(), transfer)
+                || change.after() == null) return false;
+            long delta = change.after().amount() - (change.before() == null ? 0 : change.before().amount());
+            if (delta <= 0) return false;
+            total += delta;
+        }
+        if (total != storedAmount) return false;
+        return materialMutation(changes, null, null, null, transfer, storedAmount);
+    }
+
+    private static boolean matchesGroundTarget(SlotItemRecord row, MaterialTransfer transfer) {
+        return row == null || ("personal".equals(row.ownerType()) && transfer.ownerId().equals(row.ownerId())
+            && transfer.warehouseId().equals(row.warehouseId()));
+    }
+
+    @Override
+    public boolean commitRewardDeposit(List<SlotChange> changes, MaterialTransfer receipt) throws SQLException {
+        if (!"reward-overflow-v1".equals(receipt.adapter())) return false;
+        if ("REWARD_DECLINED".equals(receipt.state())) {
+            return changes.isEmpty() && materialMutation(changes, receipt, null, null, null, 0);
+        }
+        if (!"REWARD_STORED".equals(receipt.state()) || changes.isEmpty()) return false;
+        for (var change : changes) {
+            if (change.after() == null || !matchesGroundTarget(change.before(), receipt)
+                || !matchesGroundTarget(change.after(), receipt)
+                || change.after().amount() <= (change.before() == null ? 0 : change.before().amount())) return false;
+        }
+        return materialMutation(changes, receipt, null, null, null, 0);
+    }
+
+    private boolean materialMutation(List<SlotChange> changes, MaterialTransfer create, MaterialTransfer restore,
+                                     SharedActor actor, MaterialTransfer groundDeposit, long storedAmount) throws SQLException {
+        return materialMutation(changes, create, restore, actor, groundDeposit, storedAmount, null);
+    }
+
+    private boolean materialMutation(List<SlotChange> changes, MaterialTransfer create, MaterialTransfer restore,
+                                     SharedActor actor, MaterialTransfer groundDeposit, long storedAmount,
+                                     GroundSource source) throws SQLException {
+        return materialMutation(changes, create, restore, actor, groundDeposit, storedAmount, source, null);
+    }
+
+    private boolean materialMutation(List<SlotChange> changes, MaterialTransfer create, MaterialTransfer restore,
+                                     SharedActor actor, MaterialTransfer groundDeposit, long storedAmount,
+                                     GroundSource source, InventorySettlement inventorySettlement) throws SQLException {
         try (Connection connection = getConnection()) {
             boolean autoCommit = connection.getAutoCommit();
             connection.setAutoCommit(false);
             try {
+                boolean stageInventory = create != null && INVENTORY_TRANSFER.equals(create.adapter());
+                boolean stageDeposit = stageInventory && INVENTORY_DEPOSIT.equals(create.state());
+                boolean restoreWithdrawal = inventorySettlement != null && inventorySettlement.restored();
+                boolean completeWithdrawal = inventorySettlement != null
+                    && INVENTORY_WITHDRAW.equals(inventorySettlement.transfer().state());
+                if (stageInventory) {
+                    if (!inventoryScopeExists(connection, create, changes, actor, true)
+                        || inventoryTransferPending(connection, create)) {
+                        connection.rollback();
+                        return false;
+                    }
+                }
+                if (inventorySettlement != null && !settleInventory(connection, inventorySettlement, changes, actor)) {
+                    connection.rollback();
+                    return false;
+                }
+                if (create != null && "REWARD_STORED".equals(create.state())) {
+                    try (PreparedStatement owner = connection.prepareStatement(
+                            "SELECT warehouse_id FROM warehouse_personal WHERE player_uuid=? AND warehouse_id=?"
+                                + (isMysql() ? " FOR UPDATE" : ""))) {
+                        owner.setString(1, create.ownerId());
+                        owner.setString(2, create.warehouseId());
+                        try (ResultSet row = owner.executeQuery()) {
+                            if (!row.next()) { connection.rollback(); return false; }
+                        }
+                    }
+                }
+                if (groundDeposit != null) {
+                    if ("ground-source-v1".equals(groundDeposit.adapter())) {
+                        try (PreparedStatement claim = connection.prepareStatement(
+                            "UPDATE warehouse_ground_sources SET state='COMMITTED' WHERE id=? AND owner_id=? AND stored_amount=? AND state='PREPARED'")) {
+                            claim.setString(1, groundDeposit.id()); claim.setString(2, groundDeposit.ownerId());
+                            claim.setLong(3, storedAmount);
+                            if (claim.executeUpdate() != 1) { connection.rollback(); return false; }
+                        }
+                    }
+                    try (PreparedStatement guard = connection.prepareStatement(
+                        "UPDATE warehouse_material_transfers SET state='PICKUP_DONE',updated_at=?,note=?"
+                            + " WHERE id=? AND owner_id=? AND state='PICKUP'")) {
+                        guard.setLong(1, System.currentTimeMillis());
+                        guard.setString(2, Long.toString(storedAmount));
+                        guard.setString(3, groundDeposit.id());
+                        guard.setString(4, groundDeposit.ownerId());
+                        if (guard.executeUpdate() != 1) { connection.rollback(); return false; }
+                    }
+                    try (PreparedStatement warehouse = connection.prepareStatement(
+                        "SELECT warehouse_id FROM warehouse_personal WHERE player_uuid=? AND warehouse_id=?"
+                            + (isMysql() ? " FOR UPDATE" : ""))) {
+                        warehouse.setString(1, groundDeposit.ownerId());
+                        warehouse.setString(2, groundDeposit.warehouseId());
+                        try (ResultSet owner = warehouse.executeQuery()) {
+                            if (!owner.next()) { connection.rollback(); return false; }
+                        }
+                    }
+                }
                 if (restore != null) {
                     try (PreparedStatement scope = connection.prepareStatement("SELECT warehouse_id FROM warehouse_personal WHERE player_uuid=? AND warehouse_id=?")) {
                         scope.setString(1,restore.ownerId());scope.setString(2,restore.warehouseId());
                         try (ResultSet owner=scope.executeQuery()) { if(!owner.next()){connection.rollback();return false;} }
                     }
-                    try (PreparedStatement guard = connection.prepareStatement("UPDATE warehouse_material_transfers SET state='RETURNED',updated_at=?,note='未授权交付，已原位回仓' WHERE id=? AND owner_id=? AND state='HELD'")) {
+                    try (PreparedStatement guard = connection.prepareStatement("UPDATE warehouse_material_transfers SET state='RETURNED',updated_at=?,note='未执行交付，已原位回仓' WHERE id=? AND owner_id=? AND state='HELD'")) {
                         guard.setLong(1, System.currentTimeMillis()); guard.setString(2, restore.id()); guard.setString(3, restore.ownerId());
                         if (guard.executeUpdate() != 1) { connection.rollback(); return false; }
                     }
                 }
-                for (SlotChange change : changes) {
+                if (actor != null && inventorySettlement == null && !lockSharedMutation(connection, changes, actor)) {
+                    connection.rollback();
+                    return false;
+                }
+                for (SlotChange change : stageDeposit || completeWithdrawal ? List.<SlotChange>of() : changes) {
                     SlotItemRecord before = change.before();
                     SlotItemRecord after = change.after();
+                    if (actor == null && ((before != null && "shared".equals(before.ownerType()))
+                        || (after != null && "shared".equals(after.ownerType())))) {
+                        connection.rollback();
+                        return false;
+                    }
                     if (before == null) {
                         try (PreparedStatement statement = connection.prepareStatement(
                             "INSERT INTO warehouse_slots (owner_type,owner_id,warehouse_id,slot,item_hash,category_id,display_name,material_id,search_text,pinyin,initials,item_data,item_json,amount,created_at,updated_at,lore_text) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")) {
                             bindSlot(statement, after);
-                            statement.executeUpdate();
+                            try {
+                                statement.executeUpdate();
+                            } catch (SQLException conflict) {
+                                if (inventorySettlement == null || conflict.getErrorCode() != (isMysql() ? 1062 : 19)) {
+                                    throw conflict;
+                                }
+                                connection.rollback();
+                                return false;
+                            }
                         }
                     } else {
                         boolean delete = after == null;
@@ -87,6 +234,15 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
                     }
                 }
                 if (create != null) {
+                    if (source != null) {
+                        try (PreparedStatement insert = connection.prepareStatement(
+                            "INSERT INTO warehouse_ground_sources(id,owner_id,world_id,entity_id,chunk_x,chunk_z,original_amount,stored_amount,state) VALUES(?,?,?,?,?,?,?,?,'PREPARED')")) {
+                            insert.setString(1,source.id()); insert.setString(2,source.owner());
+                            insert.setString(3,source.world()); insert.setString(4,source.entity());
+                            insert.setInt(5,source.chunkX()); insert.setInt(6,source.chunkZ());
+                            insert.setInt(7,source.original()); insert.setInt(8,source.stored()); insert.executeUpdate();
+                        }
+                    }
                     try (PreparedStatement insert = connection.prepareStatement("INSERT INTO warehouse_material_transfers (id,owner_id,warehouse_id,server_id,run_id,state,adapter,target_id,evidence,payload,created_at,updated_at,note) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)")) {
                         insert.setString(1,create.id()); insert.setString(2,create.ownerId()); insert.setString(3,create.warehouseId());
                         insert.setString(4,create.serverId()); insert.setString(5,create.runId()); insert.setString(6,create.state());
@@ -94,6 +250,10 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
                         insert.setString(10,create.payload()); insert.setLong(11,create.createdAt()); insert.setLong(12,create.updatedAt()); insert.setString(13,create.note());
                         insert.executeUpdate();
                     }
+                }
+                if (actor != null && !stageInventory && !restoreWithdrawal
+                    && (!completeWithdrawal || sharedWarehouseExists(connection, inventorySettlement.transfer().warehouseId()))) {
+                    appendSharedActivity(connection, changes, actor);
                 }
                 connection.commit();
                 return true;
@@ -106,11 +266,314 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
         }
     }
 
+    private boolean inventoryScopeExists(Connection connection, MaterialTransfer transfer, List<SlotChange> changes,
+                                         SharedActor actor, boolean requireWarehouse) throws SQLException {
+        if ("shared".equals(transfer.target())) {
+            return actor != null && actor.id().toString().equals(transfer.ownerId()) && changes.stream().allMatch(change ->
+                sharedSlotIn(change.before(), transfer.warehouseId()) && sharedSlotIn(change.after(), transfer.warehouseId()));
+        }
+        if (!"personal".equals(transfer.target()) || actor != null || changes.stream().anyMatch(change ->
+            !matchesGroundTarget(change.before(), transfer) || !matchesGroundTarget(change.after(), transfer))) return false;
+        if (!requireWarehouse) return true;
+        try (PreparedStatement query = connection.prepareStatement(
+            "SELECT warehouse_id FROM warehouse_personal WHERE player_uuid=? AND warehouse_id=?"
+                + (isMysql() ? " FOR UPDATE" : ""))) {
+            query.setString(1, transfer.ownerId());
+            query.setString(2, transfer.warehouseId());
+            try (ResultSet rows = query.executeQuery()) { return rows.next(); }
+        }
+    }
+
+    private boolean sharedWarehouseExists(Connection connection, String warehouseId) throws SQLException {
+        try (PreparedStatement query = connection.prepareStatement(
+            "SELECT id FROM warehouse_shared WHERE id=?" + (isMysql() ? " FOR UPDATE" : ""))) {
+            query.setString(1, warehouseId);
+            try (ResultSet rows = query.executeQuery()) { return rows.next(); }
+        }
+    }
+
+    private boolean inventoryTransferPending(Connection connection, MaterialTransfer transfer) throws SQLException {
+        try (PreparedStatement query = connection.prepareStatement(
+            "SELECT id FROM warehouse_material_transfers WHERE owner_id=? AND server_id=? AND adapter=? "
+                + "AND state IN ('MANUAL_DEPOSIT','MANUAL_RESERVED','MANUAL_WITHDRAW','REVIEW') LIMIT 1"
+                + (isMysql() ? " FOR UPDATE" : ""))) {
+            query.setString(1, transfer.ownerId());
+            query.setString(2, transfer.serverId());
+            query.setString(3, INVENTORY_TRANSFER);
+            try (ResultSet rows = query.executeQuery()) { return rows.next(); }
+        }
+    }
+
+    private boolean settleInventory(Connection connection, InventorySettlement settlement, List<SlotChange> changes,
+                                    SharedActor actor) throws SQLException {
+        MaterialTransfer transfer = settlement.transfer();
+        boolean completeWithdrawal = INVENTORY_WITHDRAW.equals(transfer.state()) && !settlement.restored();
+        if (!inventoryScopeExists(connection, transfer, changes, actor, !completeWithdrawal)
+            || (!completeWithdrawal && actor != null && !sharedWarehouseExists(connection, transfer.warehouseId()))) {
+            return false;
+        }
+        try (PreparedStatement guard = connection.prepareStatement(
+            "UPDATE warehouse_material_transfers SET state=?,updated_at=?,note=? "
+                + "WHERE id=? AND owner_id=? AND server_id=? AND state=? AND adapter=?")) {
+            guard.setString(1, settlement.restored() ? "RETURNED" : INVENTORY_DONE);
+            guard.setLong(2, System.currentTimeMillis());
+            guard.setString(3, settlement.restored() ? "背包未收到，已原位回仓" : "背包与仓库均已确认");
+            guard.setString(4, transfer.id());
+            guard.setString(5, transfer.ownerId());
+            guard.setString(6, transfer.serverId());
+            guard.setString(7, transfer.state());
+            guard.setString(8, INVENTORY_TRANSFER);
+            return guard.executeUpdate() == 1;
+        }
+    }
+
+    private String databaseMillis() {
+        return isMysql() ? "CAST(UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3)) * 1000 AS SIGNED)"
+            : "CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)";
+    }
+
+    private boolean lockSharedMutation(Connection connection, List<SlotChange> changes, SharedActor actor)
+        throws SQLException {
+        if (changes.isEmpty()) return true;
+        SlotItemRecord first = changes.get(0).before() == null ? changes.get(0).after() : changes.get(0).before();
+        String id = first.ownerId();
+        for (SlotChange change : changes) {
+            if (!sharedSlotIn(change.before(), id) || !sharedSlotIn(change.after(), id)) return false;
+        }
+        // Acquire a write lock on the lease row before touching slots. A takeover cannot pass
+        // the lease check until the slot changes and activity entries have committed.
+        if (!renewSharedLease(connection, id, actor.id(), actor.leaseToken(), 60_000L)) return false;
+        return hasSharedWriteRole(connection, id, actor.id(), true);
+    }
+
+    private static boolean sharedSlotIn(SlotItemRecord slot, String id) {
+        return slot == null || ("shared".equals(slot.ownerType())
+            && id.equals(slot.ownerId()) && id.equals(slot.warehouseId()));
+    }
+
+    private boolean hasSharedWriteRole(Connection connection, String id, UUID player, boolean lock) throws SQLException {
+        String sql = """
+            SELECT m.role FROM warehouse_shared_members m JOIN warehouse_shared s ON s.id = m.shared_id
+            WHERE m.shared_id = ? AND m.player_uuid = ? AND m.role IN ('owner', 'member')
+            """ + (lock && isMysql() ? " FOR UPDATE" : "");
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, id);
+            statement.setString(2, player.toString());
+            try (ResultSet result = statement.executeQuery()) {
+                return result.next();
+            }
+        }
+    }
+
+    @Override
+    public boolean acquireSharedLease(String id, UUID player, UUID token, String name, String node, long durationMs)
+        throws SQLException {
+        String now = databaseMillis();
+        try (Connection connection = getConnection()) {
+            connection.setAutoCommit(false);
+            try {
+                int acquired;
+                try (PreparedStatement update = connection.prepareStatement("UPDATE warehouse_shared_leases"
+                    + " SET actor_uuid=?,lease_token=?,actor_name=?,node_id=?,expires_at=" + now + "+?"
+                    + " WHERE shared_id=? AND expires_at<=" + now)) {
+                    update.setString(1, player.toString());
+                    update.setString(2, token.toString());
+                    update.setString(3, name);
+                    update.setString(4, node);
+                    update.setLong(5, durationMs);
+                    update.setString(6, id);
+                    acquired = update.executeUpdate();
+                }
+                if (acquired == 0) {
+                    String insertSql = "INSERT INTO warehouse_shared_leases "
+                        + "(shared_id,actor_uuid,lease_token,actor_name,node_id,expires_at) VALUES (?,?,?,?,?," + now + "+?)";
+                    try (PreparedStatement insert = connection.prepareStatement(insertSql)) {
+                        insert.setString(1, id);
+                        insert.setString(2, player.toString());
+                        insert.setString(3, token.toString());
+                        insert.setString(4, name);
+                        insert.setString(5, node);
+                        insert.setLong(6, durationMs);
+                        acquired = insert.executeUpdate();
+                    } catch (SQLException duplicate) {
+                        if (duplicate.getErrorCode() != (isMysql() ? 1062 : 19)) throw duplicate;
+                    }
+                }
+                if (acquired != 1 || !hasSharedWriteRole(connection, id, player, true)) {
+                    connection.rollback();
+                    return false;
+                }
+                connection.commit();
+                return true;
+            } catch (SQLException | RuntimeException failure) {
+                try { connection.rollback(); }
+                catch (SQLException rollback) { failure.addSuppressed(rollback); }
+                throw failure;
+            }
+        }
+    }
+
+    @Override
+    public boolean renewSharedLease(String id, UUID player, UUID token, long durationMs) throws SQLException {
+        try (Connection connection = getConnection()) {
+            return renewSharedLease(connection, id, player, token, durationMs);
+        }
+    }
+
+    private boolean renewSharedLease(Connection connection, String id, UUID player, UUID token, long durationMs)
+        throws SQLException {
+        String now = databaseMillis();
+        try (PreparedStatement statement = connection.prepareStatement("UPDATE warehouse_shared_leases SET expires_at="
+            + "CASE WHEN expires_at >= " + now + "+? THEN expires_at + 1 ELSE " + now + "+? END"
+            + " WHERE shared_id=? AND actor_uuid=? AND lease_token=? AND expires_at>" + now
+            + " AND EXISTS (SELECT 1 FROM warehouse_shared_members m JOIN warehouse_shared s ON s.id=m.shared_id"
+            + " WHERE m.shared_id=warehouse_shared_leases.shared_id AND m.player_uuid=warehouse_shared_leases.actor_uuid"
+            + " AND m.role IN ('owner','member'))")) {
+            statement.setLong(1, durationMs);
+            statement.setLong(2, durationMs);
+            statement.setString(3, id);
+            statement.setString(4, player.toString());
+            statement.setString(5, token.toString());
+            return statement.executeUpdate() == 1;
+        }
+    }
+
+    @Override
+    public void releaseSharedLease(String id, UUID player, UUID token) throws SQLException {
+        try (Connection connection = getConnection();
+             PreparedStatement statement = connection.prepareStatement(
+                 "DELETE FROM warehouse_shared_leases WHERE shared_id=? AND actor_uuid=? AND lease_token=?")) {
+            statement.setString(1, id);
+            statement.setString(2, player.toString());
+            statement.setString(3, token.toString());
+            statement.executeUpdate();
+        }
+    }
+
+    @Override
+    public Optional<SharedLease> sharedLease(String id) throws SQLException {
+        try (Connection connection = getConnection();
+             PreparedStatement statement = connection.prepareStatement(
+                 "SELECT actor_uuid,lease_token,actor_name,node_id FROM warehouse_shared_leases WHERE shared_id=? AND expires_at>"
+                     + databaseMillis())) {
+            statement.setString(1, id);
+            try (ResultSet result = statement.executeQuery()) {
+                return result.next() ? Optional.of(new SharedLease(UUID.fromString(result.getString(1)),
+                    UUID.fromString(result.getString(2)), result.getString(3), result.getString(4))) : Optional.empty();
+            }
+        }
+    }
+
+    private void appendSharedActivity(Connection connection, List<SlotChange> changes, SharedActor actor) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement(
+            "INSERT INTO warehouse_shared_activity (id,warehouse_id,actor_uuid,actor_name,action,item_name,material_id,amount,created_at) VALUES (?,?,?,?,?,?,?,?,?)")) {
+            long now = System.currentTimeMillis();
+            for (SlotChange change : changes) {
+                SlotItemRecord row = change.after() == null ? change.before() : change.after();
+                if (!"shared".equals(row.ownerType())) throw new SQLException("记录对象不是共享仓库");
+                long before = change.before() == null ? 0 : change.before().amount();
+                long after = change.after() == null ? 0 : change.after().amount();
+                long delta = after - before;
+                if (delta == 0) continue;
+                statement.setString(1, UUID.randomUUID().toString());
+                statement.setString(2, row.warehouseId());
+                statement.setString(3, actor.id().toString());
+                statement.setString(4, actor.name());
+                statement.setString(5, actor.discarded() ? "discard" : delta > 0 ? "deposit" : "withdraw");
+                statement.setString(6, row.displayName());
+                statement.setString(7, row.materialId());
+                statement.setLong(8, Math.abs(delta));
+                statement.setLong(9, now);
+                statement.addBatch();
+            }
+            statement.executeBatch();
+        }
+    }
+
+    @Override
+    public List<SharedActivity> sharedActivity(String warehouseId, UUID owner, String member, String item,
+                                               long since, int offset, int limit) throws SQLException {
+        String sql = """
+            SELECT a.actor_name, a.action, a.item_name, a.amount, a.created_at
+            FROM warehouse_shared_activity a JOIN warehouse_shared s ON s.id = a.warehouse_id
+            WHERE a.warehouse_id = ? AND s.owner_uuid = ? AND a.created_at >= ?
+              AND (LOWER(a.actor_name) LIKE ? ESCAPE '!' OR a.actor_uuid LIKE ? ESCAPE '!')
+              AND (LOWER(a.item_name) LIKE ? ESCAPE '!' OR LOWER(a.material_id) LIKE ? ESCAPE '!')
+            ORDER BY a.created_at DESC, a.id DESC LIMIT ? OFFSET ?
+            """;
+        try (Connection connection = getConnection(); PreparedStatement query = connection.prepareStatement(sql)) {
+            query.setString(1, warehouseId);
+            query.setString(2, owner.toString());
+            query.setLong(3, since);
+            query.setString(4, activityFilter(member));
+            query.setString(5, activityFilter(member));
+            query.setString(6, activityFilter(item));
+            query.setString(7, activityFilter(item));
+            query.setInt(8, limit);
+            query.setInt(9, offset);
+            try (ResultSet rows = query.executeQuery()) {
+                List<SharedActivity> result = new ArrayList<>();
+                while (rows.next()) result.add(new SharedActivity(rows.getString(1), rows.getString(2),
+                    rows.getString(3), rows.getLong(4), rows.getLong(5)));
+                return List.copyOf(result);
+            }
+        }
+    }
+
+    private String activityFilter(String text) {
+        return "%" + text.toLowerCase(java.util.Locale.ROOT).replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%";
+    }
+
     @Override public boolean transitionMaterialTransfer(String id, String owner, String from, String to, String note) throws SQLException {
         try (Connection c=getConnection(); PreparedStatement q=c.prepareStatement("UPDATE warehouse_material_transfers SET state=?,updated_at=?,note=? WHERE id=? AND owner_id=? AND state=?")) {
             q.setString(1,to); q.setLong(2,System.currentTimeMillis()); q.setString(3,note); q.setString(4,id); q.setString(5,owner); q.setString(6,from);
             return q.executeUpdate()==1;
         }
+    }
+
+    @Override public boolean prepareGroundSource(MaterialTransfer transfer, GroundSource source) throws SQLException {
+        return materialMutation(List.of(), transfer, null, null, null, 0, source);
+    }
+
+    @Override public GroundSource groundSource(String id) throws SQLException {
+        try (Connection c = getConnection(); PreparedStatement q = c.prepareStatement(
+                "SELECT * FROM warehouse_ground_sources WHERE id=?")) {
+            q.setString(1, id);
+            try (ResultSet r = q.executeQuery()) {
+                return r.next() ? new GroundSource(id, r.getString("owner_id"), r.getString("world_id"), r.getString("entity_id"),
+                    r.getInt("chunk_x"), r.getInt("chunk_z"), r.getInt("original_amount"), r.getInt("stored_amount"), r.getString("state")) : null;
+            }
+        }
+    }
+
+    @Override public boolean finishGroundSource(GroundSource source, boolean committed) throws SQLException {
+        try (Connection c = getConnection()) {
+            c.setAutoCommit(false);
+            try (PreparedStatement update = c.prepareStatement("UPDATE warehouse_ground_sources SET state=? WHERE id=? AND state=?");
+                 PreparedStatement receipt = c.prepareStatement(
+                     "UPDATE warehouse_material_transfers SET state=?,updated_at=?,note=? WHERE id=? AND owner_id=? AND state=?")) {
+                update.setString(1, committed ? "SETTLED" : "RETURNED");
+                update.setString(2, source.id());
+                update.setString(3, committed ? "COMMITTED" : "PREPARED");
+                if (update.executeUpdate() != 1) { c.rollback(); return false; }
+                receipt.setString(1, committed ? "PICKUP_SETTLED" : "PICKUP_RETURN");
+                receipt.setLong(2, System.currentTimeMillis());
+                receipt.setString(3, committed ? source.stored() + " 件已入库，余量已确认" : "未入库，原掉落物已释放");
+                receipt.setString(4, source.id()); receipt.setString(5, source.owner());
+                receipt.setString(6, committed ? "PICKUP_DONE" : "PICKUP");
+                if (receipt.executeUpdate() != 1) { c.rollback(); return false; }
+                c.commit();
+                return true;
+            } catch (SQLException | RuntimeException failure) {
+                c.rollback();
+                throw failure;
+            }
+        }
+    }
+
+    @Override
+    public boolean supportsParallelGroundSettlement() {
+        return isMysql();
     }
 
     private static MaterialTransfer readMaterialTransfer(ResultSet r) throws SQLException {
@@ -124,15 +587,31 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
         }
     }
 
-    @Override public List<MaterialTransfer> oldMaterialTransfers(String server, String run, int limit) throws SQLException {
-        try (Connection c=getConnection(); PreparedStatement q=c.prepareStatement("SELECT * FROM warehouse_material_transfers WHERE server_id=? AND state IN ('HELD','APPLYING','APPLIED') AND (run_id<>? OR (state='HELD' AND created_at<?)) ORDER BY created_at LIMIT ?")) {
-            q.setString(1,server); q.setString(2,run); q.setLong(3,System.currentTimeMillis()-30000L); q.setInt(4,Math.min(100,Math.max(1,limit)));
+    @Override public java.util.Optional<MaterialTransfer> pendingInventoryTransfer(UUID player, String serverId) throws SQLException {
+        try (Connection connection = getConnection(); PreparedStatement query = connection.prepareStatement(
+            "SELECT * FROM warehouse_material_transfers WHERE owner_id=? AND server_id=? AND adapter=? "
+             + "AND state IN ('MANUAL_DEPOSIT','MANUAL_RESERVED','MANUAL_WITHDRAW') LIMIT 1")) {
+            query.setString(1, player.toString());
+            query.setString(2, serverId);
+            query.setString(3, INVENTORY_TRANSFER);
+            try (ResultSet rows = query.executeQuery()) {
+                return rows.next() ? java.util.Optional.of(readMaterialTransfer(rows)) : java.util.Optional.empty();
+            }
+        }
+    }
+
+    @Override public List<MaterialTransfer> oldMaterialTransfers(String server, String run, String afterId, int limit) throws SQLException {
+        try (Connection c=getConnection(); PreparedStatement q=c.prepareStatement(
+                "SELECT * FROM warehouse_material_transfers WHERE server_id=? AND state IN ('HELD','APPLYING','APPLIED','MANUAL_DEPOSIT','MANUAL_RESERVED','MANUAL_WITHDRAW') "
+                    + "AND (run_id<>? OR (state IN ('HELD','MANUAL_DEPOSIT','MANUAL_RESERVED','MANUAL_WITHDRAW') AND created_at<?)) AND id>? ORDER BY id LIMIT ?")) {
+            q.setString(1,server); q.setString(2,run); q.setLong(3,System.currentTimeMillis()-30000L);
+            q.setString(4,afterId); q.setInt(5,Math.min(100,Math.max(1,limit)));
             try (ResultSet r=q.executeQuery()) { List<MaterialTransfer> rows=new ArrayList<>(); while(r.next()) rows.add(readMaterialTransfer(r)); return rows; }
         }
     }
 
     @Override public List<MaterialTransfer> materialTransfers(String owner, int limit) throws SQLException {
-        try (Connection c=getConnection(); PreparedStatement q=c.prepareStatement("SELECT * FROM warehouse_material_transfers WHERE owner_id=? AND state IN ('HELD','APPLYING','REVIEW') ORDER BY created_at DESC LIMIT ?")) {
+        try (Connection c=getConnection(); PreparedStatement q=c.prepareStatement("SELECT * FROM warehouse_material_transfers WHERE owner_id=? AND state IN ('HELD','APPLYING','REVIEW','PICKUP','PICKUP_DONE','PICKUP_RETURN','MANUAL_DEPOSIT','MANUAL_RESERVED','MANUAL_WITHDRAW') ORDER BY created_at DESC LIMIT ?")) {
             q.setString(1,owner); q.setInt(2,Math.min(100,Math.max(1,limit)));
             try (ResultSet r=q.executeQuery()) { List<MaterialTransfer> rows=new ArrayList<>(); while(r.next()) rows.add(readMaterialTransfer(r)); return rows; }
         }
@@ -167,6 +646,24 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
     protected void onInitialize(Connection conn) throws SQLException {
         createTables(conn);
         migrateSchema(conn);
+        if (!hasBankReceiptKind(conn)) {
+            try (Statement statement = conn.createStatement()) {
+                statement.execute("ALTER TABLE warehouse_bank_withdrawals ADD COLUMN receipt_kind VARCHAR(16) NOT NULL DEFAULT 'WITHDRAWAL'");
+            } catch (SQLException failure) {
+                if (!hasBankReceiptKind(conn)) throw failure;
+            }
+        }
+    }
+
+    private boolean hasBankReceiptKind(Connection connection) throws SQLException {
+        try (ResultSet columns = connection.getMetaData().getColumns(connection.getCatalog(), null,
+                "warehouse_bank_withdrawals", "%")) {
+            while (columns.next()) {
+                if ("warehouse_bank_withdrawals".equalsIgnoreCase(columns.getString("TABLE_NAME"))
+                    && "receipt_kind".equalsIgnoreCase(columns.getString("COLUMN_NAME"))) return true;
+            }
+            return false;
+        }
     }
 
     /**
@@ -180,7 +677,7 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
     @Override
     protected int onPurgePlayerData(UUID playerUuid) throws SQLException {
         List<String> statements = List.of(
-            "UPDATE warehouse_material_transfers SET state='REVIEW',note='玩家数据已清理，禁止自动补发' WHERE owner_id=? AND state IN ('HELD','APPLYING','APPLIED')",
+            "UPDATE warehouse_material_transfers SET state='REVIEW',note='玩家数据已清理，禁止自动补发' WHERE owner_id=? AND state IN ('HELD','APPLYING','APPLIED','MANUAL_DEPOSIT','MANUAL_RESERVED','MANUAL_WITHDRAW')",
             "DELETE FROM warehouse_slots WHERE owner_type='personal' AND owner_id=?",
             "DELETE FROM warehouse_slots WHERE owner_type='shared' AND owner_id IN (SELECT id FROM warehouse_shared WHERE owner_uuid=?)",
             "DELETE FROM warehouse_shared_members WHERE shared_id IN (SELECT id FROM warehouse_shared WHERE owner_uuid=?)",
@@ -190,8 +687,9 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
             "DELETE FROM warehouse_pending_transfers WHERE to_uuid=?",
             "DELETE FROM warehouse_shared WHERE owner_uuid=?",
             "DELETE FROM warehouse_personal WHERE player_uuid=?",
-            "DELETE FROM warehouse_bank_balances WHERE player_uuid=?",
+            "DELETE FROM warehouse_bank_withdrawals WHERE player_uuid=?",
             "DELETE FROM warehouse_fixed_deposits WHERE player_uuid=?",
+            "DELETE FROM warehouse_bank_balances WHERE player_uuid=?",
             "DELETE FROM warehouse_pins WHERE player_uuid=?",
             "DELETE FROM warehouse_player_settings WHERE player_uuid=?"
         );
@@ -226,13 +724,16 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
             "warehouse_personal",
             "warehouse_slots",
             "warehouse_bank_balances",
+            "warehouse_bank_withdrawals",
             "warehouse_fixed_deposits",
             "warehouse_shared",
             "warehouse_shared_members",
             "warehouse_pending_transfers",
             "warehouse_player_settings",
             "warehouse_pins",
-            "warehouse_material_transfers"
+            "warehouse_material_transfers",
+            "warehouse_ground_sources",
+            "warehouse_shared_activity"
         );
     }
 
@@ -325,6 +826,19 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
             statement.setString(4, playerUuid.toString());
             statement.setString(5, warehouseId);
             statement.executeUpdate();
+        }
+    }
+
+    @Override
+    public void ensureDefaultPersonalWarehouse(UUID playerUuid, String warehouseId, long now) throws SQLException {
+        String sql = "INSERT INTO warehouse_personal (player_uuid,warehouse_id,level,custom_name,updated_at) VALUES (?,?,1,'',?)"
+            + (isMysql() ? " ON DUPLICATE KEY UPDATE warehouse_id = warehouse_id"
+                : " ON CONFLICT(player_uuid,warehouse_id) DO NOTHING");
+        try (Connection connection = getConnection(); PreparedStatement insert = connection.prepareStatement(sql)) {
+            insert.setString(1, playerUuid.toString());
+            insert.setString(2, warehouseId);
+            insert.setLong(3, now);
+            insert.executeUpdate();
         }
     }
 
@@ -678,7 +1192,7 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
                 INSERT INTO warehouse_bank_balances (player_uuid, currency_id, balance, updated_at)
                 VALUES (?, ?, ?, ?)
                 ON DUPLICATE KEY UPDATE
-                    balance = balance + VALUES(balance),
+                    balance = CAST(balance AS DECIMAL(38,8)) + CAST(VALUES(balance) AS DECIMAL(38,8)),
                     updated_at = VALUES(updated_at)
                 """;
         try (Connection connection = getConnection();
@@ -759,22 +1273,28 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
      * @return {@code true} 表示扣减成功；余额不足或金额无效时返回 {@code false}
      * @throws SQLException 写入失败时抛出
      */
-    @Override
-    public boolean debitBankBalance(UUID playerUuid, String currencyId, BigDecimal amount, long updatedAt) throws SQLException {
+    private boolean debitBankBalanceOnConnection(Connection connection, UUID playerUuid, String currencyId,
+                                                  BigDecimal amount, long updatedAt) throws SQLException {
         if (amount.compareTo(BigDecimal.ZERO) <= 0) {
             return false;
         }
         if (!isMysql()) {
-            // SQLite：读-改-CAS 写，BigDecimal 精确比较，杜绝 REAL 浮点误差的透支/误拒
-            return debitBankBalanceSqlite(playerUuid, currencyId, amount, updatedAt);
+            // The caller has already acquired SQLite's write lock by inserting the corresponding record.
+            String currentText = selectBankBalanceText(connection, playerUuid, currencyId);
+            if (currentText == null) return false;
+            BigDecimal current = decimal(currentText);
+            if (current.compareTo(amount) < 0) return false;
+            if (!updateBankBalanceCas(connection, playerUuid, currencyId, currentText, current.subtract(amount), updatedAt)) {
+                throw new SQLException("银行余额在交易中发生变化");
+            }
+            return true;
         }
         String sql = """
                 UPDATE warehouse_bank_balances
-                SET balance = CAST(balance AS DECIMAL(38,8)) - ?, updated_at = ?
-                WHERE player_uuid = ? AND currency_id = ? AND CAST(balance AS DECIMAL(38,8)) >= ?
+                SET balance = CAST(balance AS DECIMAL(38,8)) - CAST(? AS DECIMAL(38,8)), updated_at = ?
+                WHERE player_uuid = ? AND currency_id = ? AND CAST(balance AS DECIMAL(38,8)) >= CAST(? AS DECIMAL(38,8))
                 """;
-        try (Connection connection = getConnection();
-             PreparedStatement statement = connection.prepareStatement(sql)) {
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setString(1, amount.toPlainString());
             statement.setLong(2, updatedAt);
             statement.setString(3, playerUuid.toString());
@@ -784,25 +1304,116 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
         }
     }
 
-    /** SQLite 分支：BigDecimal 精确读改写 + CAS，余额不足返回 false。 */
-    private boolean debitBankBalanceSqlite(UUID playerUuid, String currencyId, BigDecimal amount, long updatedAt) throws SQLException {
+    @FunctionalInterface
+    private interface BankMutation {
+        boolean apply(Connection connection) throws SQLException;
+    }
+
+    private boolean bankTransaction(BankMutation mutation) throws SQLException {
         try (Connection connection = getConnection()) {
-            for (int attempt = 0; attempt < BALANCE_CAS_MAX_RETRIES; attempt++) {
-                String currentText = selectBankBalanceText(connection, playerUuid, currencyId);
-                if (currentText == null) {
-                    return false; // 无余额行即余额不足
+            connection.setAutoCommit(false);
+            try {
+                boolean changed = mutation.apply(connection);
+                if (changed) connection.commit();
+                else connection.rollback();
+                return changed;
+            } catch (SQLException | RuntimeException failure) {
+                try {
+                    connection.rollback();
+                } catch (SQLException rollbackFailure) {
+                    failure.addSuppressed(rollbackFailure);
                 }
-                BigDecimal current = decimal(currentText);
-                if (current.compareTo(amount) < 0) {
-                    return false;
-                }
-                BigDecimal updated = current.subtract(amount);
-                if (updateBankBalanceCas(connection, playerUuid, currencyId, currentText, updated, updatedAt)) {
-                    return true;
-                }
+                throw failure;
             }
         }
-        throw new SQLException("debitBankBalance CAS 重试耗尽: " + playerUuid + " " + currencyId);
+    }
+
+    @Override
+    public boolean beginBankWithdrawal(BankTransfer withdrawal) throws SQLException {
+        return bankTransaction(connection -> {
+            insertBankReceipt(connection, withdrawal, BankReceiptKind.WITHDRAWAL);
+            return debitBankBalanceOnConnection(connection, withdrawal.playerUuid(), withdrawal.currencyId(),
+                withdrawal.amount(), withdrawal.createdAt());
+        });
+    }
+
+    @Override
+    public void finishBankWithdrawal(BankTransfer withdrawal, boolean credited) throws SQLException {
+        if (!bankTransaction(connection -> {
+            if (!deleteBankReceipt(connection, withdrawal, BankReceiptKind.WITHDRAWAL)) return false;
+            if (!credited) creditBankBalanceOnConnection(connection, withdrawal.playerUuid(), withdrawal.currencyId(),
+                withdrawal.amount(), System.currentTimeMillis());
+            return true;
+        })) throw new SQLException("提现凭证已变化: " + withdrawal.id());
+    }
+
+    private enum BankReceiptKind { WITHDRAWAL, DEPOSIT, DEPOSIT_REFUND }
+
+    private static void insertBankReceipt(Connection connection, BankTransfer transfer, BankReceiptKind kind) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement("""
+                INSERT INTO warehouse_bank_withdrawals (id, player_uuid, currency_id, amount, receipt_kind, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """)) {
+            bindBankReceipt(statement, transfer, kind);
+            statement.setLong(6, transfer.createdAt());
+            statement.executeUpdate();
+        }
+    }
+
+    private static void bindBankReceipt(PreparedStatement statement, BankTransfer transfer, BankReceiptKind kind) throws SQLException {
+        statement.setString(1, transfer.id());
+        statement.setString(2, transfer.playerUuid().toString());
+        statement.setString(3, transfer.currencyId());
+        statement.setString(4, transfer.amount().toPlainString());
+        statement.setString(5, kind.name());
+    }
+
+    private static boolean deleteBankReceipt(Connection connection, BankTransfer transfer, BankReceiptKind kind) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement("""
+                DELETE FROM warehouse_bank_withdrawals
+                WHERE id=? AND player_uuid=? AND currency_id=? AND amount=? AND receipt_kind=?
+                """)) {
+            bindBankReceipt(statement, transfer, kind);
+            return statement.executeUpdate() == 1;
+        }
+    }
+
+    @Override
+    public void beginBankDeposit(BankTransfer deposit) throws SQLException {
+        try (Connection connection = getConnection()) {
+            insertBankReceipt(connection, deposit, BankReceiptKind.DEPOSIT);
+        }
+    }
+
+    @Override
+    public void creditBankDeposit(BankTransfer deposit) throws SQLException {
+        if (!bankTransaction(connection -> {
+            if (!deleteBankReceipt(connection, deposit, BankReceiptKind.DEPOSIT)) return false;
+            creditBankBalanceOnConnection(connection, deposit.playerUuid(), deposit.currencyId(),
+                deposit.amount(), System.currentTimeMillis());
+            return true;
+        })) throw new SQLException("存款凭证已变化: " + deposit.id());
+    }
+
+    @Override
+    public boolean reserveBankDepositRefund(BankTransfer deposit) throws SQLException {
+        try (Connection connection = getConnection();
+             PreparedStatement statement = connection.prepareStatement("""
+                 UPDATE warehouse_bank_withdrawals SET receipt_kind='DEPOSIT_REFUND'
+                 WHERE id=? AND player_uuid=? AND currency_id=? AND amount=? AND receipt_kind=?
+                 """)) {
+            bindBankReceipt(statement, deposit, BankReceiptKind.DEPOSIT);
+            return statement.executeUpdate() == 1;
+        }
+    }
+
+    @Override
+    public void closeBankDeposit(BankTransfer deposit, boolean refunded) throws SQLException {
+        try (Connection connection = getConnection()) {
+            if (!deleteBankReceipt(connection, deposit, refunded ? BankReceiptKind.DEPOSIT_REFUND : BankReceiptKind.DEPOSIT)) {
+                throw new SQLException("存款凭证已变化: " + deposit.id());
+            }
+        }
     }
 
     /**
@@ -962,7 +1573,7 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
                 INSERT INTO warehouse_bank_balances (player_uuid, currency_id, balance, updated_at)
                 VALUES (?, ?, ?, ?)
                 ON DUPLICATE KEY UPDATE
-                    balance = balance + VALUES(balance),
+                    balance = CAST(balance AS DECIMAL(38,8)) + CAST(VALUES(balance) AS DECIMAL(38,8)),
                     updated_at = VALUES(updated_at)
                 """;
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
@@ -974,16 +1585,17 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
         }
     }
 
-    /**
-     * 创建一条定期存款记录。
-     *
-     * @param deposit 定期存款记录
-     * @throws SQLException 写入失败时抛出
-     */
     @Override
-    public void createFixedDeposit(FixedDepositRecord deposit) throws SQLException {
-        try (Connection connection = getConnection();
-             PreparedStatement statement = connection.prepareStatement(
+    public boolean purchaseFixedDeposit(FixedDepositRecord deposit) throws SQLException {
+        return bankTransaction(connection -> {
+            insertFixedDeposit(connection, deposit);
+            return debitBankBalanceOnConnection(connection, deposit.playerUuid(), deposit.currencyId(),
+                deposit.principal(), deposit.createdAt());
+        });
+    }
+
+    private void insertFixedDeposit(Connection connection, FixedDepositRecord deposit) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement(
                  "INSERT INTO warehouse_fixed_deposits (id, player_uuid, product_id, currency_id, principal, interest_rate, created_at, matures_at, claimed, claimed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
              )) {
             statement.setString(1, deposit.id());
@@ -1415,13 +2027,22 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
      */
     @Override
     public void deleteSharedWarehouse(String sharedId, UUID ownerUuid) throws SQLException {
+        deleteSharedWarehouse(sharedId, ownerUuid, null, 0);
+    }
+
+    @Override
+    public void deleteSharedWarehouse(String sharedId, UUID ownerUuid, UUID leaseToken, long leaseDurationMs) throws SQLException {
         try (Connection connection = getConnection()) {
             boolean previousAutoCommit = connection.getAutoCommit();
             connection.setAutoCommit(false);
             try (PreparedStatement slots = connection.prepareStatement("DELETE FROM warehouse_slots WHERE owner_type = 'shared' AND owner_id = ?");
                  PreparedStatement members = connection.prepareStatement("DELETE FROM warehouse_shared_members WHERE shared_id = ?");
                  PreparedStatement pending = connection.prepareStatement("DELETE FROM warehouse_pending_transfers WHERE shared_id = ?");
+                 PreparedStatement activity = connection.prepareStatement("DELETE FROM warehouse_shared_activity WHERE warehouse_id = ?");
                  PreparedStatement shared = connection.prepareStatement("DELETE FROM warehouse_shared WHERE id = ? AND owner_uuid = ?")) {
+                if (leaseToken != null && !renewSharedLease(connection, sharedId, ownerUuid, leaseToken, leaseDurationMs)) {
+                    throw new SQLException("共享仓库租约已变化，删除已取消");
+                }
                 slots.setString(1, sharedId);
                 slots.executeUpdate();
                 members.setString(1, sharedId);
@@ -1431,6 +2052,8 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
                 shared.setString(1, sharedId);
                 shared.setString(2, ownerUuid.toString());
                 if (shared.executeUpdate() != 1) throw new SQLException("共享仓库所有权已变化，删除已取消");
+                activity.setString(1, sharedId);
+                activity.executeUpdate();
                 connection.commit();
             } catch (SQLException exception) {
                 connection.rollback();
@@ -1754,9 +2377,29 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
 
     private void createTables(Connection connection) throws SQLException {
         try (Statement statement = connection.createStatement()) {
+            statement.execute("""
+                CREATE TABLE IF NOT EXISTS warehouse_shared_leases (
+                    shared_id VARCHAR(64) PRIMARY KEY, actor_uuid VARCHAR(36) NOT NULL,
+                    lease_token VARCHAR(36) NOT NULL, actor_name VARCHAR(64) NOT NULL,
+                    node_id VARCHAR(128) NOT NULL, expires_at BIGINT NOT NULL
+                )
+                """ + (isMysql() ? " ENGINE=InnoDB" : ""));
             statement.execute("CREATE TABLE IF NOT EXISTS warehouse_material_transfers (id VARCHAR(36) PRIMARY KEY, owner_id VARCHAR(36) NOT NULL, warehouse_id VARCHAR(64) NOT NULL, server_id VARCHAR(36) NOT NULL, run_id VARCHAR(36) NOT NULL, state VARCHAR(16) NOT NULL, adapter VARCHAR(64) NOT NULL, target_id VARCHAR(255) NOT NULL, evidence "
                 + (isMysql() ? "LONGTEXT" : "TEXT") + " NOT NULL, payload " + (isMysql() ? "LONGTEXT" : "TEXT") + " NOT NULL, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, note VARCHAR(255) NOT NULL)");
-            for (String index : List.of("CREATE INDEX warehouse_material_owner_idx ON warehouse_material_transfers(owner_id,state,created_at)", "CREATE INDEX warehouse_material_recovery_idx ON warehouse_material_transfers(server_id,state,created_at)")) {
+            statement.execute("CREATE TABLE IF NOT EXISTS warehouse_ground_sources (id VARCHAR(36) PRIMARY KEY,"
+                + "owner_id VARCHAR(36) NOT NULL, world_id VARCHAR(36) NOT NULL, entity_id VARCHAR(36) NOT NULL,"
+                + "chunk_x INT NOT NULL, chunk_z INT NOT NULL, original_amount INT NOT NULL, stored_amount INT NOT NULL, state VARCHAR(16) NOT NULL)"
+                + (isMysql() ? " ENGINE=InnoDB" : ""));
+            statement.execute("""
+                CREATE TABLE IF NOT EXISTS warehouse_shared_activity (
+                    id VARCHAR(36) PRIMARY KEY, warehouse_id VARCHAR(64) NOT NULL,
+                    actor_uuid VARCHAR(36) NOT NULL, actor_name VARCHAR(64) NOT NULL,
+                    action VARCHAR(12) NOT NULL, item_name TEXT NOT NULL, material_id VARCHAR(128) NOT NULL,
+                    amount BIGINT NOT NULL, created_at BIGINT NOT NULL
+                )
+                """);
+            for (String index : List.of("CREATE INDEX warehouse_material_owner_idx ON warehouse_material_transfers(owner_id,state,created_at)", "CREATE INDEX warehouse_material_recovery_idx ON warehouse_material_transfers(server_id,state,created_at)",
+                "CREATE INDEX warehouse_shared_activity_order_idx ON warehouse_shared_activity(warehouse_id,created_at,id)")) {
                 try { statement.execute(index); }
                 catch (SQLException exception) {
                     String message = String.valueOf(exception.getMessage()).toLowerCase(java.util.Locale.ROOT);
@@ -1826,6 +2469,16 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
                     balance VARCHAR(64) NOT NULL,
                     updated_at BIGINT NOT NULL,
                     PRIMARY KEY (player_uuid, currency_id)
+                )
+                """);
+            statement.execute("""
+                CREATE TABLE IF NOT EXISTS warehouse_bank_withdrawals (
+                    id VARCHAR(36) PRIMARY KEY,
+                    player_uuid VARCHAR(36) NOT NULL,
+                    currency_id VARCHAR(64) NOT NULL,
+                    amount VARCHAR(64) NOT NULL,
+                    receipt_kind VARCHAR(16) NOT NULL DEFAULT 'WITHDRAWAL',
+                    created_at BIGINT NOT NULL
                 )
                 """);
             statement.execute("""

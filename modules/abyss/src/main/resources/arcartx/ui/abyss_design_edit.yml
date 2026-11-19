@@ -12,8 +12,7 @@
 #     design_line_add/set/del <objKey> <field> [idx] [text] <token>
 #     design_back <token>                           返回主面板
 #
-# 实现要点: copy 后立即访问子控件不可靠，下一帧挂载后再预填真实值。
-# 行/组重建走引用字典 + 轮次名；
+# RepeatGrid 复用字段、分组和脚本行。等待当前行挂载后再预填输入框。
 # 编辑态 var.editField 按字段名匹配组卡。
 ui:
   isHud: false
@@ -43,7 +42,7 @@ ui:
       var.groupCount = packet['groupCount']
       var.editField = ''
       var.editI = -1
-      var.rebuildPhase = 1
+      self.actions['bindRows']()
     update: |-
       var.objId = packet['objId']
       var.summary = packet['summary']
@@ -54,7 +53,7 @@ ui:
       var.groupCount = packet['groupCount']
       var.editField = ''
       var.editI = -1
-      var.rebuildPhase = 1
+      self.actions['bindRows']()
   action:
     close: |-
       if(var.actionToken != '' && var.viewNonce != ''){
@@ -73,8 +72,6 @@ ui:
       var.icon = ''
       var.summary = ''
       var.dirty = false
-      var.已建_字段容器 = -1
-      var.已建_组容器 = -1
       var.viewNonce = ''
       sx = Screen.getWidth() / 1920
       sy = Screen.getHeight() / 1080
@@ -87,10 +84,9 @@ ui:
       var.packetId = 'abyss'
       var.editI = -1
       var.editField = ''
-      var.字段引用 = {}
-      var.组引用 = {}
-      var.行引用 = {}
-      var.轮次 = 0
+      var.fieldKeys = []
+      var.groupKeys = []
+      var.lineKeys = {}
     resize: |-
       sx = Screen.getWidth() / 1920
       sy = Screen.getHeight() / 1080
@@ -103,82 +99,64 @@ ui:
     open: |-
       Packet.send('abyss', 'view_ready', 'design_edit')
       Sound.self('minecraft:block.note_block.pling', 0.8, 8)
-    # Three frames: remove generated descendants, mount groups, then expand each group's own line template.
-    # Never clone a parent while its template still contains generated child rows.
+    bindRows: |-
+      var.rebuildPhase = 1
+      fieldKeys = []
+      if(var.fieldCount > 0){
+        for(fi in range(0, var.fieldCount - 1)){
+          fieldKeys.add(fi.round())
+        }
+      }
+      groupKeys = []
+      lineKeys = {}
+      if(var.groupCount > 0){
+        for(gi in range(0, var.groupCount - 1)){
+          key = gi.round()
+          groupKeys.add(key)
+          group = var.groupRows['' + gi.round()]
+          indices = []
+          if(group['lineCount'] > 0){
+            for(li in range(0, group['lineCount'] - 1)){
+              indices.add(li.round())
+            }
+          }
+          lineKeys[key] = indices
+        }
+      }
+      var.lineKeys = lineKeys
+      var.fieldKeys = fieldKeys
+      var.groupKeys = groupKeys
     tick: |-
-      if(var.rebuildPhase == 1){
-        self.actions['clearGenerated']()
-        var.rebuildPhase = 2
-      }elif(var.rebuildPhase == 2){
-        self.actions['copyGroups']()
-        var.rebuildPhase = 3
-      }elif(var.rebuildPhase == 3){
+      if(var.rebuildPhase == 1 && val.字段容器 != none && val.组容器 != none && val.字段容器.childrenCount() == var.fieldCount && val.组容器.childrenCount() == var.groupCount){
         self.actions['fillFields']()
-        self.actions['copyLines']()
-        var.rebuildPhase = 0
       }
     fillFields: |-
       val.rename_input.setContent(var.objId)
+      ready = true
       if(var.fieldCount > 0){
         for(fi in range(0, var.fieldCount - 1)){
           field = var.fieldRows['' + fi.round()]
           if(field['editor'] == 'TEXT' || field['editor'] == 'NUMBER'){
-            row = fi == 0 ? val.字段容器.get(0) : var.字段引用[fi.round()]
-            row['输入壳']['输入框'].setContent(field['value'])
-          }
-        }
-      }
-    clearGenerated: |-
-      for(groupKey in var.行引用.keys()){
-        for(lineKey in var.行引用[groupKey].keys()){
-          var.行引用[groupKey][lineKey].remove()
-        }
-      }
-      for(key in var.组引用.keys()){ var.组引用[key].remove() }
-      for(key in var.字段引用.keys()){ var.字段引用[key].remove() }
-      var.行引用 = {}
-      var.组引用 = {}
-      var.字段引用 = {}
-      var.轮次 = (var.轮次 + 1).round()
-    copyGroups: |-
-      模板 = val.字段容器.get(0)
-      模板.entryKey = 0.round()
-      if(var.fieldCount > 1){
-        for(i in range(1, var.fieldCount - 1)){
-          行 = 模板.copy('字段行_' + var.轮次 + '_' + i.round())
-          行.entryKey = i.round()
-          var.字段引用[i.round()] = 行
-        }
-      }
-      组模板 = val.组容器.get(0)
-      组模板.entryKey = 0.round()
-      if(var.groupCount > 1){
-        for(i in range(1, var.groupCount - 1)){
-          组 = 组模板.copy('组卡_' + var.轮次 + '_' + i.round())
-          组.entryKey = i.round()
-          var.组引用[i.round()] = 组
-        }
-      }
-    copyLines: |-
-      if(var.groupCount > 0){
-        for(gi in range(0, var.groupCount - 1)){
-          gObj = var.groupRows['' + gi.round()]
-          gCtl = gi == 0 ? val.组容器.get(0) : var.组引用[gi.round()]
-          if(gCtl != none){
-            行容器 = gCtl['行容器']
-            行模板 = 行容器.get(0)
-            行模板.entryKey = 0.round()
-            var.行引用['' + gi.round()] = {}
-            if(gObj['lineCount'] > 1){
-              for(li in range(1, gObj['lineCount'] - 1)){
-                行 = 行模板.copy('行_' + var.轮次 + '_' + gi.round() + '_' + li.round())
-                行.entryKey = li.round()
-                var.行引用['' + gi.round()][li.round()] = 行
-              }
+            row = val.字段容器.get(fi.round())
+            if(row != none && row['输入壳'] != none && row['输入壳']['输入框'] != none){
+              row['输入壳']['输入框'].setContent(field['value'])
+            }else{
+              ready = false
             }
           }
         }
       }
+      if(var.groupCount > 0){
+        for(gi in range(0, var.groupCount - 1)){
+          group = val.组容器.get(gi.round())
+          if(group != none && group['追加框'] != none && group['追加框']['框'] != none && group['追加框']['框']['输入框'] != none){
+            group['追加框']['框']['输入框'].setContent('')
+          }else{
+            ready = false
+          }
+        }
+      }
+      if(ready){ var.rebuildPhase = 0 }
 controls:
   全屏磨砂:
     type: Texture
@@ -394,20 +372,23 @@ controls:
             }
         children:
           字段容器:
-            type: VStack
+            type: RepeatGrid
             val: 字段容器
             attribute:
-              maxSize: 2147483647
+              items: var.fieldKeys
+              maxSize: var.fieldKeys.size()
+              flow: ~row
+              column: 1
               width: "var.colW - 56"
-              spaceBetween: 12
+              spaceBetweenY: 12
             children:
               字段行:
                 type: Canvas
                 attribute:
                   width: "var.colW - 56"
                   height: 72
-                  entryKey: 0.round()
-                  entry: "var.fieldRows[self.entryKey]"
+                  entryKey: self.item
+                  entry: "var.fieldRows['' + self.entryKey]"
                   visible: "self.entry != none"
                 children:
                   行底:
@@ -648,20 +629,23 @@ controls:
             }
         children:
           组容器:
-            type: VStack
+            type: RepeatGrid
             val: 组容器
             attribute:
-              maxSize: 2147483647
+              items: var.groupKeys
+              maxSize: var.groupKeys.size()
+              flow: ~row
+              column: 1
               width: "var.colW - 56"
-              spaceBetween: 18
+              spaceBetweenY: 18
             children:
               组卡:
                 type: Canvas
                 attribute:
                   width: "var.colW - 56"
                   height: "self.entry['lineCount'] * 62 + 224"
-                  entryKey: 0.round()
-                  entry: "var.groupRows[self.entryKey]"
+                  entryKey: self.item
+                  entry: "var.groupRows['' + self.entryKey]"
                   visible: "self.entry != none"
                 children:
                   卡底:
@@ -711,21 +695,25 @@ controls:
                           fontSize: 29
                           through: true
                   行容器:
-                    type: VStack
+                    type: RepeatGrid
                     attribute:
+                      items: "var.lineKeys[self.parent().entryKey] != none ? var.lineKeys[self.parent().entryKey] : []"
+                      maxSize: "self.parent().entry != none ? self.parent().entry['lineCount'] : 0"
+                      flow: ~row
+                      column: 1
                       point: ~top_left
                       x: 18
                       y: 86
                       width: "var.colW - 96"
-                      spaceBetween: 8
+                      spaceBetweenY: 8
                     children:
                       行:
                         type: Canvas
                         attribute:
                           width: "var.colW - 96"
                           height: 54
-                          entryKey: 0.round()
-                          entry: "self.parent.parent.entry['lines'][self.entryKey]"
+                          entryKey: self.item
+                          entry: "self.parent.parent.entry['lines']['' + self.entryKey]"
                           visible: "self.entry != none"
                         children:
                           行底:
@@ -807,8 +795,8 @@ controls:
                               clickLeft: |-
                                 if(var.editField != '' && var.editField != self.parent.parent.parent.entry['field']){
                                   for(gi in range(0, var.groupCount - 1)){
-                                    group = gi == 0 ? val.组容器.get(0) : var.组引用[gi.round()]
-                                    if(group.entry['field'] == var.editField){ group['追加框']['框']['输入框'].setContent('') }
+                                    group = val.组容器.get(gi.round())
+                                    if(group != none && group.entry['field'] == var.editField){ group['追加框']['框']['输入框'].setContent('') }
                                   }
                                 }
                                 var.editField = self.parent.parent.parent.entry['field']

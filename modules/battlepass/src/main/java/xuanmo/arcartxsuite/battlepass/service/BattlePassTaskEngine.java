@@ -1,18 +1,24 @@
 package xuanmo.arcartxsuite.battlepass.service;
 
+import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BiConsumer;
 import java.util.function.Supplier;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
+import xuanmo.arcartxsuite.api.auth.AuthAccess;
 import xuanmo.arcartxsuite.api.capability.EventBusCapability;
+import xuanmo.arcartxsuite.api.capability.RegionProtectionQueryable;
+import xuanmo.arcartxsuite.battlepass.condition.EventPayloadCondition;
 import xuanmo.arcartxsuite.battlepass.config.BattlePassModuleConfiguration;
 import xuanmo.arcartxsuite.battlepass.model.BattlePassTask;
 import xuanmo.arcartxsuite.battlepass.source.BukkitEventSourceListener;
@@ -20,13 +26,8 @@ import xuanmo.arcartxsuite.battlepass.source.BukkitEventSourceListener;
 /**
  * 战令任务引擎，负责监听事件并驱动任务进度更新。
  * <p>
- * 支持双事件源：ArcartX EventBus（优先）和原版 Bukkit 事件（降级）。
- * 启动时为每个任务模板检测发布者是否已注册：
- * <ul>
- *   <li>若 EventBus 已有该 topic 的发布者 → 订阅 EventBus</li>
- *   <li>否则，若任务配置了 bukkit-event → 注册原版 Bukkit 监听器</li>
- * </ul>
- * 确保不依赖其他 ArcartX 模块也能正常工作，且不会重复计数。
+ * EventBus 订阅跨发布模块的加载和重载持续存在。
+ * 配置的 Bukkit 降级事件只在 EventBus 尚无该主题的发布者时计数。
  */
 public final class BattlePassTaskEngine {
 
@@ -82,53 +83,31 @@ public final class BattlePassTaskEngine {
 
         Map<String, List<BiConsumer<Player, Map<String, String>>>> callbacksByEvent =
             new HashMap<>();
+        Map<String, List<BattlePassTask>> gameplayTopics = new LinkedHashMap<>();
+        List<BattlePassTask> auctionTasks = new ArrayList<>();
 
         int eventBusCount = 0;
         int bukkitCount = 0;
-        int skippedCount = 0;
+        int unavailableCount = 0;
         // MythicMobs 事件回调（独立收集，因 MythicMobs 为可选依赖，需通过独立监听器注册）
         List<BiConsumer<Player, Map<String, String>>> mythicCallbacks = new ArrayList<>();
 
         for (BattlePassTask task : configuration.tasks().all()) {
             String topic = task.eventTopic();
-            boolean hasTopic = topic != null && !topic.isEmpty();
-
-            // 判断事件源优先级：
-            // 1. 有 event-topic 且 EventBus 已有发布者 → 使用 EventBus
-            // 2. 有 bukkit-event → 使用 Bukkit 事件（无论 event-topic 是否存在）
-            // 3. 有 event-topic 但无发布者且无 bukkit-event → 跳过
-            // 4. 两者都没有 → 跳过
-            boolean useEventBus = hasTopic && shouldUseEventBus(topic);
-
-            if (useEventBus) {
-                // 使用 EventBus
-                String subId;
-                if(topic.equals("axs.auth.presence_day_started") || topic.equals("axs.auth.profile_first_admitted")) {
-                    String consumer="battlepass/"+UUID.nameUUIDFromBytes((configuration.season().seasonId()+"/"+task.taskId()).getBytes(java.nio.charset.StandardCharsets.UTF_8));
-                    subscriptionIds.add(eventBus.subscribe(topic, event -> {
-                        var player = event.player();
-                        if ("server".equals(event.payload().get("provider")) && player != null && player.isOnline()) {
-                            handleEvent(player, task, event.payload());
-                        }
-                    }));
-                    subId=eventBus.subscribeConfirmed(consumer,topic,event->{
-                        var player=event.player();
-                        if(!active || player==null || !player.isOnline() || !xuanmo.arcartxsuite.api.auth.AuthAccess.admitted(player.getUniqueId()))
-                            return java.util.concurrent.CompletableFuture.failedFuture(new IllegalStateException("Player unavailable"));
-                        if(!task.matchesConditions(player,event.payload())) return java.util.concurrent.CompletableFuture.completedFuture(null);
-                        var date=event.payload().containsKey("business_date")?java.time.LocalDate.parse(event.payload().get("business_date")):java.time.LocalDate.now();
-                        return service.acceptAuthFact(player,task.taskId(),Math.max(0,task.calculateIncrement(player,event.payload())),event.payload().get("event_id"),date);
-                    });
-                } else subId = eventBus.subscribe(topic, event -> {
-                    if (event.player() == null || !event.player().isOnline()) return;
-                    handleEvent(event.player(), task, event.payload());
-                });
-                if (subId != null) {
-                    subscriptionIds.add(subId);
+            boolean hasTopic = topic != null && !topic.isBlank();
+            boolean subscribed = hasTopic && eventBus != null;
+            if (subscribed) {
+                if (EventBusCapability.MARKET_AUCTION_PURCHASED.equals(topic)) {
+                    auctionTasks.add(task);
+                } else if (hasIndependentFact(task)) {
+                    subscriptionIds.add(subscribe(task));
                     eventBusCount++;
-                    logger.fine("TaskEngine 订阅 EventBus: topic=" + topic + " task=" + task.taskId());
+                } else {
+                    gameplayTopics.computeIfAbsent(topic, ignored -> new ArrayList<>()).add(task);
                 }
-            } else if (task.bukkitEvent() != null && (!hasTopic || !topic.startsWith("axs.auth."))) {
+            }
+            int taskBukkitCount = 0;
+            if (task.bukkitEvent() != null && (!hasTopic || !topic.startsWith("axs.auth."))) {
                 // 使用 Bukkit 事件（支持多个事件类）
                 for (String bukkitClass : task.bukkitEvent().eventClasses()) {
                     if (!BukkitEventSourceListener.isSupportedBukkitEvent(bukkitClass)) {
@@ -139,6 +118,7 @@ public final class BattlePassTaskEngine {
                     String normalizedClass = BukkitEventSourceListener.normalizeBukkitEventClass(bukkitClass);
                     BiConsumer<Player, Map<String, String>> callback = (player, payload) -> {
                         try {
+                            if (subscribed && hasPublisher(topic)) return;
                             handleEvent(player, task, mapPayload(payload, task.bukkitEvent().payloadFields()));
                         } catch (Exception e) {
                             logger.log(Level.WARNING,
@@ -153,23 +133,40 @@ public final class BattlePassTaskEngine {
                         callbacksByEvent.computeIfAbsent(normalizedClass, ignored -> new ArrayList<>())
                             .add(callback);
                     }
-                    bukkitCount++;
-                    logger.info("TaskEngine 使用 Bukkit 事件: event="
+                    taskBukkitCount++;
+                    logger.fine("TaskEngine 注册 Bukkit 事件: event="
                         + bukkitClass + " task=" + task.taskId()
-                        + (hasTopic ? " (topic=" + topic + " 无发布者，降级)" : ""));
+                        + (hasTopic ? " (EventBus 降级)" : ""));
                 }
-            } else if (hasTopic) {
-                logger.warning("TaskEngine 跳过任务（EventBus 无发布者且无 bukkit-event 降级）: task="
-                    + task.taskId() + " topic=" + topic);
-                skippedCount++;
-            } else {
-                logger.warning("TaskEngine 跳过任务（无可用事件源）: task=" + task.taskId());
-                skippedCount++;
+            }
+            bukkitCount += taskBukkitCount;
+            if (!subscribed && taskBukkitCount == 0) {
+                logger.warning("TaskEngine 无可用事件源: task=" + task.taskId() + " topic=" + topic);
+                unavailableCount++;
             }
         }
 
+        for (var route : gameplayTopics.entrySet()) {
+            List<GameplayTask> tasks = route.getValue().stream()
+                .map(task -> new GameplayTask(task,
+                    task.conditions().stream().anyMatch(condition -> !(condition instanceof EventPayloadCondition))))
+                .toList();
+            subscriptionIds.add(eventBus.subscribe(route.getKey(), event -> handleGameplayEvent(tasks, event)));
+        }
+        if (eventBus != null) {
+            List<BattlePassTask> tasks = List.copyOf(auctionTasks);
+            subscriptionIds.add(eventBus.subscribeConfirmed(EventBusCapability.BATTLEPASS_AUCTION_CONSUMER,
+                EventBusCapability.MARKET_AUCTION_PURCHASED, event -> {
+                    if (!active) return CompletableFuture.failedFuture(new IllegalStateException("BattlePass is not active"));
+                    var writes = tasks.stream().map(task -> handleBusinessEvent(task, event)).toArray(CompletableFuture<?>[]::new);
+                    return CompletableFuture.allOf(writes);
+                }));
+            eventBusCount++;
+        }
+        eventBusCount += gameplayTopics.size();
+
         logger.info("TaskEngine.start 完成: eventBus订阅=" + eventBusCount
-            + " bukkit事件=" + bukkitCount + " 跳过=" + skippedCount
+            + " bukkit事件=" + bukkitCount + " 无可用事件源=" + unavailableCount
             + " | 总任务数=" + configuration.tasks().all().size());
 
         // 注册原版 Bukkit 事件监听器
@@ -182,16 +179,130 @@ public final class BattlePassTaskEngine {
         }
     }
 
-    /**
-     * 判断某个 EventBus topic 是否已有发布者注册。
-     * <p>
-     * 通过 {@link EventBusCapability#hasPublisher(String)} API 查询，
-     * 无需维护硬编码的 topic → moduleId 映射。
-     *
-     * @param topic EventBus 主题
-     * @return true 表示已有发布者注册，应使用 EventBus；false 表示需要降级
-     */
-    private boolean shouldUseEventBus(String topic) {
+    private static boolean hasIndependentFact(BattlePassTask task) {
+        return switch (task.eventTopic()) {
+            case BattlePassTask.PRESENCE_TOPIC, "axs.auth.profile_first_admitted",
+                "axs.market.npc_exchange_completed",
+                "axs.onlinerewards.signin_completed" -> true;
+            case RegionProtectionQueryable.REGION_CHANGE_TOPIC -> task.taskId().equals("weekly-region-explore");
+            default -> false;
+        };
+    }
+
+    private String subscribe(BattlePassTask task) {
+        String topic = task.eventTopic();
+        boolean presence = BattlePassTask.PRESENCE_TOPIC.equals(topic);
+        if (presence || "axs.auth.profile_first_admitted".equals(topic)) {
+            String consumerKey = configuration.season().seasonId() + "/" + task.taskId();
+            String consumer = "battlepass/" + UUID.nameUUIDFromBytes(consumerKey.getBytes(StandardCharsets.UTF_8));
+            return eventBus.subscribeConfirmed(consumer, topic, event -> {
+                Player player = event.player();
+                if (!active || player == null || !player.isOnline() || !AuthAccess.admitted(player.getUniqueId())) {
+                    return CompletableFuture.failedFuture(new IllegalStateException("Player unavailable"));
+                }
+                Map<String, String> payload = event.payload();
+                if (!task.matchesConditions(player, payload)) return CompletableFuture.completedFuture(null);
+                String eventId = payload.get("event_id");
+                String date = payload.get("business_date");
+                if (eventId == null || eventId.isBlank() || (presence && date == null)) {
+                    return CompletableFuture.failedFuture(new IllegalArgumentException("Missing authentication fact fields"));
+                }
+                LocalDate businessDate = date == null ? LocalDate.now() : LocalDate.parse(date);
+                return service.acceptAuthFact(player, task.taskId(), task.calculateIncrement(player, payload), eventId, businessDate);
+            });
+        }
+        if (topic.equals("axs.market.npc_exchange_completed") || topic.equals("axs.onlinerewards.signin_completed")) {
+            return eventBus.subscribe(topic, event -> handleBusinessEvent(task, event));
+        }
+        return eventBus.subscribe(topic, event -> handleRegionVisit(task, event));
+    }
+
+    private record GameplayTask(BattlePassTask task, boolean readsPlayerState) {}
+
+    private void handleGameplayEvent(List<GameplayTask> tasks, EventBusCapability.BusEvent event) {
+        Player player = event.player();
+        if (!active || player == null || !player.isOnline()) return;
+        if (tasks.size() == 1) {
+            handleEvent(player, tasks.get(0).task(), event.payload());
+            return;
+        }
+        UUID uuid = player.getUniqueId();
+        if (!AuthAccess.admitted(uuid)) return;
+        Map<String, String> payload = event.payload();
+        Map<String, Integer> increments = null;
+        for (GameplayTask route : tasks) {
+            if (!active) return;
+            BattlePassTask task = route.task();
+            try {
+                if (route.readsPlayerState()) {
+                    // Stateful conditions may read progress already advanced by an earlier task on this event.
+                    var earlier = increments;
+                    increments = null;
+                    applyGameplayProgress(player, uuid, earlier);
+                    handleEvent(player, task, payload);
+                    if (!AuthAccess.admitted(uuid)) return;
+                    continue;
+                }
+                if (!task.matchesConditions(player, payload)) continue;
+                int amount = task.calculateIncrement(player, payload);
+                if (amount <= 0 || !triggerLimiter.tryAcquire(uuid, task.taskId(), task.limits())) continue;
+                if (increments == null) increments = new LinkedHashMap<>();
+                increments.merge(task.taskId(), amount, (a, b) -> (int) Math.min((long) a + b, Integer.MAX_VALUE));
+            } catch (RuntimeException | LinkageError error) {
+                logger.log(Level.WARNING, "任务 " + task.taskId() + " 处理事件失败", error);
+            }
+        }
+        applyGameplayProgress(player, uuid, increments);
+    }
+
+    private void applyGameplayProgress(Player player, UUID uuid, Map<String, Integer> increments) {
+        if (active && increments != null && AuthAccess.admitted(uuid)) service.updateTaskProgress(player, increments);
+    }
+
+    private void handleRegionVisit(BattlePassTask task, EventBusCapability.BusEvent event) {
+        Player player = event.player();
+        if (!active || player == null || !player.isOnline() || !AuthAccess.admitted(player.getUniqueId())) return;
+        var payload = event.payload();
+        if (!"enter".equals(payload.get("type")) || !task.matchesConditions(player, payload)) return;
+        String region = payload.get("region_uuid");
+        UUID regionId;
+        try {
+            if (region == null) return;
+            regionId = UUID.fromString(region);
+        } catch (IllegalArgumentException ignored) {
+            return;
+        }
+        int increment = task.calculateIncrement(player, payload);
+        if (increment <= 0 || !triggerLimiter.tryAcquire(player.getUniqueId(), task.taskId(), task.limits())) return;
+        service.acceptTaskFactForAssignment(player.getUniqueId(), task.taskId(), increment, regionId.toString(), LocalDate.now())
+            .whenComplete((ignored, error) -> {
+                if (error != null && active) logger.log(Level.WARNING, "区域探索任务计数失败", error);
+            });
+    }
+
+    private CompletableFuture<Void> handleBusinessEvent(BattlePassTask task, EventBusCapability.BusEvent event) {
+        if (!active) return CompletableFuture.failedFuture(new IllegalStateException("BattlePass is not active"));
+        var payload = event.payload();
+        Player player = event.player();
+        String topic = event.topic();
+        boolean auction = topic.equals("axs.market.auction_purchased");
+        String key = payload.get(auction ? "listing_id" : "event_id");
+        if (key == null || key.isBlank()) return CompletableFuture.completedFuture(null);
+        String playerId = payload.get(auction ? "buyer_uuid" : "player_uuid");
+        UUID uuid = playerId == null ? (player == null ? null : player.getUniqueId()) : UUID.fromString(playerId);
+        if (uuid == null || (player != null && !uuid.equals(player.getUniqueId()))) return CompletableFuture.completedFuture(null);
+        if (topic.equals("axs.onlinerewards.signin_completed")
+                && (player == null || !AuthAccess.admitted(uuid))) return CompletableFuture.completedFuture(null);
+        if (!task.matchesConditions(player, payload)) return CompletableFuture.completedFuture(null);
+        String date = payload.get("business_date");
+        LocalDate businessDate = date == null ? LocalDate.now() : LocalDate.parse(date);
+        return service.acceptTaskFact(uuid, task.taskId(), task.calculateIncrement(player, payload), key, businessDate)
+            .whenComplete((ignored, error) -> {
+                if (error != null && active) logger.log(Level.WARNING, "联动任务计数失败: " + task.taskId(), error);
+            }).toCompletableFuture();
+    }
+
+    private boolean hasPublisher(String topic) {
         if (eventBus == null) return false;
         try {
             return eventBus.hasPublisher(topic);
@@ -291,13 +402,16 @@ public final class BattlePassTaskEngine {
 
     private Map<String, String> mapPayload(Map<String, String> payload, Map<String, String> fields) {
         if (fields == null || fields.isEmpty()) return payload;
-        Map<String, String> mapped = new java.util.LinkedHashMap<>(payload);
+        Map<String, String> mapped = null;
         for (Map.Entry<String, String> entry : fields.entrySet()) {
             String value = payload.get(entry.getValue());
             if (value == null) value = resolvePayloadExpression(payload, entry.getValue());
-            if (value != null) mapped.put(entry.getKey(), value);
+            if (value != null && !value.equals(payload.get(entry.getKey()))) {
+                if (mapped == null) mapped = new LinkedHashMap<>(payload);
+                mapped.put(entry.getKey(), value);
+            }
         }
-        return mapped;
+        return mapped == null ? payload : mapped;
     }
 
     private String resolvePayloadExpression(Map<String, String> payload, String expression) {
@@ -312,7 +426,7 @@ public final class BattlePassTaskEngine {
 
     private void handleEvent(Player player, BattlePassTask task, Map<String, String> payload) {
         if (!active) return;
-        if (!xuanmo.arcartxsuite.api.auth.AuthAccess.admitted(player.getUniqueId())) return;
+        if (!AuthAccess.admitted(player.getUniqueId())) return;
         if (!task.matchesConditions(player, payload)) return;
         int increment = task.calculateIncrement(player, payload);
         if (increment > 0

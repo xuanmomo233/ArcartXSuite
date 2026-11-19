@@ -93,6 +93,7 @@ public final class CloudModuleService {
 
     private final SuiteCoreImpl plugin;
     private final ModuleRegistry registry;
+    private final CloudTasks tasks;
 
     /** 为 true 时输出签名、密钥 hash 等敏感诊断日志（见 config.yml cloud.debug）。 */
 
@@ -131,6 +132,7 @@ public final class CloudModuleService {
 
     private final Map<String, CompletableFuture<Void>> downloading = new ConcurrentHashMap<>();
     private final ResponseSignatureVerifier responseSignatureVerifier = new ResponseSignatureVerifier();
+    private final String suiteRelease;
 
     private BukkitTask heartbeatTask;
     private final long pluginStartTime = System.currentTimeMillis();
@@ -138,6 +140,14 @@ public final class CloudModuleService {
     public CloudModuleService(SuiteCoreImpl plugin, ModuleRegistry registry) {
         this.plugin = plugin;
         this.registry = registry;
+        this.suiteRelease = readSuiteRelease(plugin);
+        this.tasks = new CloudTasks((action, delay, async) -> {
+            var scheduler = plugin.getServer().getScheduler();
+            BukkitTask scheduled = async
+                ? scheduler.runTaskLaterAsynchronously(plugin.host(), action, delay)
+                : scheduler.runTaskLater(plugin.host(), action, delay);
+            return scheduled::cancel;
+        });
         org.bukkit.configuration.file.FileConfiguration config = plugin.getConfig();
         this.debugLogging = config.getBoolean("cloud.debug", false);
         this.requireNativeVerify = config.getBoolean("cloud.require-native-verify", false);
@@ -149,6 +159,17 @@ public final class CloudModuleService {
         this.serverPublicKeyB64 = encodeRawEd25519PublicKey(keyPair);
 
         this.apiBaseUrl = API_BASE_URLS.get(0);
+    }
+
+    private static String readSuiteRelease(SuiteCoreImpl plugin) {
+        try (var input = plugin.getResource("axs-build.json")) {
+            if (input == null) return "";
+            String release = extractJsonField(new String(input.readNBytes(4096), StandardCharsets.UTF_8), "release");
+            return release != null && release.matches("[a-zA-Z0-9._-]+-suite\\.\\d+\\.\\d+-ci\\.[0-9a-f]{7}") ? release : "";
+        } catch (java.io.IOException failure) {
+            plugin.consoleWarn("[Cloud] 无法读取宿主发行批次: " + failure.getMessage());
+            return "";
+        }
     }
 
     private enum CloudStatus {
@@ -298,16 +319,19 @@ public final class CloudModuleService {
         int index,
         int attempt
     ) {
+        if (tasks.isClosed()) return CompletableFuture.failedFuture(new java.util.concurrent.CancellationException("云端模块服务正在停止"));
         if (endpoints == null || index >= endpoints.size()) {
             return CompletableFuture.completedFuture(new CloudResponse<>(CloudStatus.TRANSIENT, null, 0, null, operation + " exhausted", null));
         }
         String endpoint = endpoints.get(index);
         HttpRequest request = requestFactory.apply(endpoint);
-        return HTTP.sendAsync(request, bodyHandler)
+        return tasks.transfer(HTTP.sendAsync(request, bodyHandler))
             .orTimeout(REQUEST_TIMEOUT.toSeconds(), java.util.concurrent.TimeUnit.SECONDS)
             .handle((response, throwable) -> classifyResponse(endpoint, response, throwable))
             .thenCompose((CloudResponse<T> result) -> {
-                if (result.isTransient()) {
+                if (tasks.isClosed()) return CompletableFuture.failedFuture(new java.util.concurrent.CancellationException("云端模块服务正在停止"));
+                if (result.isTransient() || ("download".equals(operation)
+                    && (result.httpStatus() == 404 || result.httpStatus() == 409))) {
                     // 网络层失败（httpStatus=0：DNS/连接/超时）先延迟重试本端点一次；
                     // HTTP 层暂时性状态（429/5xx）直接换下一端点，不做无谓重试。
                     if (result.httpStatus() == 0 && attempt < 1) {
@@ -344,17 +368,20 @@ public final class CloudModuleService {
         int attempt,
         boolean sawTransient
     ) {
+        if (tasks.isClosed()) return CompletableFuture.failedFuture(new java.util.concurrent.CancellationException("云端模块服务正在停止"));
         if (endpoints == null || index >= endpoints.size()) {
             return CompletableFuture.completedFuture(new SignedCloudResponse(CloudStatus.TRANSIENT, null, 0, null, operation + " exhausted", null, null, null));
         }
         String endpoint = endpoints.get(index);
         HttpRequest request = requestFactory.apply(endpoint);
-        return HTTP.sendAsync(request, HttpResponse.BodyHandlers.ofByteArray())
+        return tasks.transfer(HTTP.sendAsync(request, HttpResponse.BodyHandlers.ofByteArray()))
             .orTimeout(REQUEST_TIMEOUT.toSeconds(), java.util.concurrent.TimeUnit.SECONDS)
             .handle((response, throwable) -> classifySignedResponse(endpoint, response, throwable))
             .thenCompose(result -> {
+                if (tasks.isClosed()) return CompletableFuture.failedFuture(new java.util.concurrent.CancellationException("云端模块服务正在停止"));
                 SignedCloudResponse processed = responseProcessor.apply(result);
-                if (processed.isTransient()) {
+                if (processed.isTransient() || ("key".equals(operation)
+                    && (processed.httpStatus() == 404 || processed.httpStatus() == 409))) {
                     if (processed.httpStatus() == 0 && attempt < 1) {
                         return retryDelay().thenCompose(v ->
                             sendSignedWithFailover(operation, requestFactory, responseProcessor, endpoints, index, attempt + 1, true));
@@ -531,15 +558,8 @@ public final class CloudModuleService {
             resp -> validateSignedResponse("bind", "[Cloud] 服务器绑定响应", resp)
         ).thenApply(resp -> {
             if (!resp.isOk()) {
-                if (resp.isTransient()) {
-
-                    plugin.consoleWarn("[Cloud] 服务器绑定暂时失败: " + resp.httpStatus() + " " + resp.message());
-
-                } else {
-
-                    plugin.consoleWarn("[Cloud] 服务器绑定失败: " + resp.httpStatus() + " " + resp.message());
-
-                }
+                plugin.consoleWarn((resp.isTransient() ? "[Cloud] 服务器绑定暂时失败，HTTP " : "[Cloud] 服务器绑定失败，HTTP ")
+                    + resp.httpStatus());
                 return new CloudResponse<>(resp.status(), null, resp.httpStatus(), resp.endpoint(), resp.message(), resp.rawBody());
             }
             rememberSuccessfulEndpoint(resp.endpoint());
@@ -554,12 +574,13 @@ public final class CloudModuleService {
                     this.moduleToken = token;
                     this.tokenExpiry = System.currentTimeMillis() + 23 * 3600 * 1000;
                 }
-                plugin.getServer().getScheduler().runTask(plugin.host(), () -> {
+                tasks.main(() -> {
                     plugin.getConfig().set("cloud.server-code", code);
                     if (responseApiKey != null && !responseApiKey.isEmpty()) {
                         plugin.getConfig().set("cloud.apiKey", responseApiKey);
                     }
                     plugin.saveConfig();
+                    return null;
                 });
 
                 plugin.consoleInfo("[Cloud] 服务器绑定成功，服务器码: " + code);
@@ -574,6 +595,10 @@ public final class CloudModuleService {
     }
 
     public CompletableFuture<Boolean> bindServer() {
+        return tasks.request(() -> bindServerRequest());
+    }
+
+    private CompletableFuture<Boolean> bindServerRequest() {
         return bindServerGate().thenApply(CloudResponse::isOk);
     }
 
@@ -582,6 +607,10 @@ public final class CloudModuleService {
 
 
     public CompletableFuture<Boolean> refreshToken() {
+        return tasks.request(() -> refreshTokenRequest());
+    }
+
+    private CompletableFuture<Boolean> refreshTokenRequest() {
         return refreshToken(false);
     }
 
@@ -591,6 +620,10 @@ public final class CloudModuleService {
 
      */
     public CompletableFuture<Boolean> forceSyncModules() {
+        return tasks.request(() -> forceSyncModulesRequest());
+    }
+
+    private CompletableFuture<Boolean> forceSyncModulesRequest() {
         if (!hasServerCode()) {
 
             plugin.consoleWarn("[Cloud] 服务器尚未绑定，无法同步。请检查 cloud.qq 和 cloud.apiKey 配置。");
@@ -623,13 +656,7 @@ public final class CloudModuleService {
         long timestamp = System.currentTimeMillis();
         String signMessage = "POST\n/v1/servers/refresh\n" + timestamp + "\n" + requestServerCode;
 
-        debugLog("[Cloud] 签名消息: " + signMessage.replace("\n", "\\n"));
-
-        debugLog("[Cloud] serverCode: " + serverCode + " | 私钥存在: " + (keyPair != null && keyPair.getPrivate() != null));
-
         String signature = sign(signMessage);
-
-        debugLog("[Cloud] 签名结果(base64): " + signature);
 
         String refreshPayload = "{"
             + "\"apiKey\":\"" + escapeJson(apiKey) + "\""
@@ -670,21 +697,12 @@ public final class CloudModuleService {
                         return CompletableFuture.completedFuture(bound);
                     });
                 }
-                if (resp.isTransient()) {
-
-                    plugin.consoleWarn("[Cloud] 刷新令牌暂时失败: " + resp.httpStatus() + " " + resp.message());
-
-                } else {
-
-                    plugin.consoleWarn("[Cloud] 刷新令牌失败: " + resp.httpStatus() + " " + body);
-
-                }
+                plugin.consoleWarn((resp.isTransient() ? "[Cloud] 刷新令牌暂时失败，HTTP " : "[Cloud] 刷新令牌失败，HTTP ")
+                    + resp.httpStatus());
                 return CompletableFuture.completedFuture(new CloudResponse<>(resp.status(), null, resp.httpStatus(), resp.endpoint(), resp.message(), body));
             }
             rememberSuccessfulEndpoint(resp.endpoint());
             String body = resp.rawBody();
-
-            debugLog("[Cloud] refresh 响应: " + body);
 
             String token = extractJsonField(body, "token");
             if (token != null) {
@@ -708,6 +726,23 @@ public final class CloudModuleService {
 
 
     public CompletableFuture<Void> syncModules() {
+        return tasks.request(() -> syncModulesRequest());
+    }
+
+    private CompletableFuture<Void> syncModulesRequest() {
+        return syncModules(null);
+    }
+
+    public CompletableFuture<Void> syncConfiguredModules(java.util.Set<String> moduleIds) {
+        return tasks.request(() -> syncConfiguredModulesRequest(moduleIds));
+    }
+
+    private CompletableFuture<Void> syncConfiguredModulesRequest(java.util.Set<String> moduleIds) {
+        if (!hasServerCode() || moduleIds.isEmpty()) return CompletableFuture.completedFuture(null);
+        return syncModules(java.util.Set.copyOf(moduleIds));
+    }
+
+    private CompletableFuture<Void> syncModules(java.util.Set<String> requested) {
 
         // 1. 未绑定则先用 QQ+apiKey 绑定服务器
 
@@ -758,7 +793,7 @@ public final class CloudModuleService {
 
                 CompletableFuture<Void> chain = CompletableFuture.completedFuture(null);
                 for (String id : mods) {
-                    if (id == null || id.isEmpty()) continue;
+                    if (id == null || id.isEmpty() || (requested != null && !requested.contains(id))) continue;
                     chain = chain.thenCompose(v -> downloadAndLoad(id));
                 }
                 return chain;
@@ -782,6 +817,64 @@ public final class CloudModuleService {
 
      */
     public CompletableFuture<Boolean> updateModule(String moduleId) {
+        return tasks.request(() -> updateModuleRequest(moduleId));
+    }
+
+    private CompletableFuture<Boolean> updateModuleRequest(String moduleId) {
+        if (!isValidModuleId(moduleId)) return updateModuleBody(moduleId, null);
+        var reserved = new CompletableFuture<Void>();
+        if (downloading.putIfAbsent(moduleId, reserved) != null) {
+            plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 已有下载或更新任务，请等待完成。");
+            return CompletableFuture.completedFuture(false);
+        }
+        var payload = new CloudPayload();
+        var actual = tasks.withCleanup(() -> updateModuleBody(moduleId, payload), payload::close);
+        actual.whenComplete((value, failure) -> {
+            downloading.remove(moduleId, reserved);
+            if (failure == null) reserved.complete(null); else reserved.completeExceptionally(failure);
+        });
+        return actual;
+    }
+
+    private CompletableFuture<Boolean> installUpdate(String moduleId, CloudPayload payload) {
+        var snapshot = new java.util.concurrent.atomic.AtomicReference<CloudModuleSnapshot>();
+        return tasks.withCleanup(() -> tasks.main(() -> {
+            if (!registry.validateCloudModule(moduleId, payload.jar, payload.seed)) return false;
+            snapshot.set(registry.createSnapshot(moduleId));
+            return !registry.isModuleLoaded(moduleId) || registry.unloadModule(moduleId);
+        }).thenCompose(unloaded -> {
+            if (!unloaded) return CompletableFuture.completedFuture(false);
+            return awaitRetirement(moduleId).thenCompose(ignored -> tasks.main(() -> {
+                if (registry.isModuleLoaded(moduleId)) return CompletableFuture.completedFuture(false);
+                return registry.loadCloudModule(moduleId, payload.jar, payload.seed);
+            }).thenCompose(stage -> stage)).thenCompose(loaded -> {
+                if (loaded) {
+                    plugin.consoleInfo("[Cloud] 模块 " + moduleId + " 更新成功并已加载");
+                    return CompletableFuture.completedFuture(true);
+                }
+                var rollback = snapshot.get();
+                if (rollback == null) return CompletableFuture.completedFuture(false);
+                return awaitRetirement(moduleId).thenCompose(ignored -> tasks.main(() -> {
+                    if (registry.isModuleLoaded(moduleId)) return CompletableFuture.completedFuture(false);
+                    return registry.loadCloudModule(moduleId, rollback.jarBytes(), rollback.moduleSeed());
+                }).thenCompose(stage -> stage)).thenApply(restored -> {
+                    if (restored) plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 更新失败，已回滚旧版本。");
+                    else plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 更新失败，旧版本未能恢复，请核对状态。");
+                    return false;
+                });
+            });
+        }), () -> {
+            var retained = snapshot.getAndSet(null);
+            if (retained != null) retained.close();
+        });
+    }
+
+    private CompletableFuture<Void> awaitRetirement(String moduleId) {
+        return registry.retirement(moduleId).toCompletableFuture().copy()
+            .orTimeout(30, java.util.concurrent.TimeUnit.SECONDS);
+    }
+
+    private CompletableFuture<Boolean> updateModuleBody(String moduleId, CloudPayload payload) {
         if (!isValidModuleId(moduleId)) {
 
             plugin.consoleWarn("[Cloud] 非法 moduleId 格式，跳过: " + moduleId);
@@ -838,6 +931,7 @@ public final class CloudModuleService {
                     return CompletableFuture.completedFuture(false);
                 }
                 return requestModuleKey(moduleId).thenCompose(keyResp -> {
+                    if (tasks.isClosed()) return CompletableFuture.failedFuture(new java.util.concurrent.CancellationException("云端模块服务正在停止"));
                     if (keyResp == null) {
 
                         plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 更新失败：无法获取解密密钥");
@@ -856,7 +950,7 @@ public final class CloudModuleService {
                     byte[] sigBytes = null;
 
                     try {
-                        key = Base64.getDecoder().decode(keyB64);
+                        key = payload.key = Base64.getDecoder().decode(keyB64);
                     } catch (IllegalArgumentException e) {
 
                         plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 更新失败：密钥不是有效的 Base64 编码");
@@ -879,11 +973,11 @@ public final class CloudModuleService {
 
                     try {
                         String sigB64 = extractJsonField(keyResp, "signature");
-                        sigBytes = (sigB64 == null || sigB64.isEmpty())
+                        sigBytes = payload.signature = (sigB64 == null || sigB64.isEmpty())
                             ? new byte[0]
                             : Base64.getDecoder().decode(sigB64);
                     } catch (IllegalArgumentException e) {
-                        sigBytes = new byte[0];
+                        sigBytes = payload.signature = new byte[0];
                     }
                     byte[] jarBytes;
                     try {
@@ -891,7 +985,7 @@ public final class CloudModuleService {
                         if (!ProtectionEnvironment.ensureCleanEnvironment()) {
                     throw new IllegalStateException("Protection environment compromised");
                 }
-                jarBytes = NativeBridge.n10(axb, key, sigBytes);
+                jarBytes = payload.jar = NativeBridge.n10(axb, key, sigBytes);
 
                     } catch (Exception e) {
 
@@ -905,55 +999,8 @@ public final class CloudModuleService {
 
                         return CompletableFuture.completedFuture(false);
                     }
-                    final byte[] finalJarBytes = jarBytes;
-                    final byte[] moduleSeed = key.clone();
-
-                    final byte[] keyToWipe = key;
-                    final byte[] sigBytesToWipe = sigBytes;
-                    if (!registry.validateCloudModule(finalJarBytes, moduleSeed)) {
-
-                        plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 更新失败：新模块未通过本地校验");
-
-                        return CompletableFuture.completedFuture(false);
-                    }
-                    CompletableFuture<Boolean> result = new CompletableFuture<>();
-                    CloudModuleSnapshot snapshot = registry.createSnapshot(moduleId);
-                    plugin.getServer().getScheduler().runTask(plugin.host(), () -> {
-                        try {
-                            boolean unloaded = true;
-                            if (registry.isModuleLoaded(moduleId)) {
-                                unloaded = registry.unloadModule(moduleId);
-                            }
-                            if (!unloaded) {
-                                plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 卸载失败，保留当前版本。");
-                                result.complete(false);
-                                return;
-                            }
-                            boolean loaded = registry.loadCloudModule(finalJarBytes, moduleSeed);
-                            if (loaded) {
-                                plugin.consoleInfo("[Cloud] 模块 " + moduleId + " 更新成功并已加载");
-                                result.complete(true);
-                                return;
-                            }
-                            if (snapshot != null && registry.loadCloudModule(snapshot.jarBytes(), snapshot.moduleSeed())) {
-                                plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 更新失败，已回滚旧版本");
-                            } else {
-                                plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 更新失败且旧版本回滚失败");
-                            }
-                            result.complete(false);
-                        } finally {
-                            if (snapshot != null) {
-                                snapshot.close();
-                            }
-                            if (keyToWipe != null) {
-                                java.util.Arrays.fill(keyToWipe, (byte) 0);
-                            }
-                            if (sigBytesToWipe != null) {
-                                java.util.Arrays.fill(sigBytesToWipe, (byte) 0);
-                            }
-                        }
-                    });
-                    return result;
+                    payload.seed = key.clone();
+                    return installUpdate(moduleId, payload);
                 });
             });
         });
@@ -969,7 +1016,11 @@ public final class CloudModuleService {
 
      */
     public CompletableFuture<Boolean> updateAllModules() {
-        List<String> loadedCloud = registry.getLoadedCloudModuleIds();
+        return tasks.request(() -> updateAllModulesRequest());
+    }
+
+    private CompletableFuture<Boolean> updateAllModulesRequest() {
+        return tasks.main(registry::getLoadedCloudModuleIds).thenCompose(loadedCloud -> {
         if (loadedCloud.isEmpty()) {
 
             plugin.consoleInfo("[Cloud] 没有已加载的云端模块需要更新。");
@@ -985,6 +1036,7 @@ public final class CloudModuleService {
             chain = chain.thenCompose(prev -> updateModule(id).thenApply(current -> prev && current));
         }
         return chain;
+        });
     }
 
     private static final java.util.regex.Pattern MODULE_ID_PATTERN = java.util.regex.Pattern.compile("^[a-zA-Z0-9_-]+$");
@@ -1028,28 +1080,17 @@ public final class CloudModuleService {
         plugin.consoleInfo("[Cloud] 模块 " + moduleId + " " + operation + " 失败，" + delay + "ms 后第 " + attempt + "/" + maxRetries + " 次重试...");
 
 
-        CompletableFuture<T> future = new CompletableFuture<>();
-        plugin.getServer().getScheduler().runTaskLaterAsynchronously(plugin.host(), () -> {
-            supplier.get().thenAccept(result -> {
-                if (result != null || attempt >= maxRetries) {
-                    future.complete(result);
-                } else {
-                    retryWithDelay(moduleId, operation, attempt + 1, maxRetries, baseDelayMs, supplier)
-                        .thenAccept(future::complete)
-                        .exceptionally(ex -> {
-                            future.completeExceptionally(ex);
-                            return null;
-                        });
-                }
-            }).exceptionally(ex -> {
-                future.completeExceptionally(ex);
-                return null;
-            });
-        }, delay / 50L); // Bukkit tick = 50ms
-        return future;
+        return tasks.delay(delay / 50L).thenCompose(ignored -> supplier.get()).thenCompose(result -> {
+            if (result != null || attempt >= maxRetries) return CompletableFuture.completedFuture(result);
+            return retryWithDelay(moduleId, operation, attempt + 1, maxRetries, baseDelayMs, supplier);
+        });
     }
 
     private CompletableFuture<Void> downloadAndLoad(String moduleId) {
+        return tasks.request(() -> downloadAndLoadRequest(moduleId));
+    }
+
+    private CompletableFuture<Void> downloadAndLoadRequest(String moduleId) {
         if (!isValidModuleId(moduleId)) {
 
             plugin.consoleWarn("[Cloud] 非法 moduleId 格式，跳过: " + moduleId);
@@ -1073,9 +1114,8 @@ public final class CloudModuleService {
             return existing;
         }
         CompletableFuture<Void> placeholder = new CompletableFuture<>();
-        if (downloading.putIfAbsent(moduleId, placeholder) != null) {
-            return downloading.get(moduleId);
-        }
+        var competing = downloading.putIfAbsent(moduleId, placeholder);
+        if (competing != null) return competing;
 
 
         plugin.consoleInfo("[Cloud] 开始同步模块: " + moduleId + " (native 版本: " + NativeBridge.n0() + ")");
@@ -1122,8 +1162,15 @@ public final class CloudModuleService {
 
      */
     private CompletableFuture<Void> decryptAndLoad(String moduleId, byte[] axb, boolean isRetry) {
+        if (tasks.isClosed()) return CompletableFuture.failedFuture(new java.util.concurrent.CancellationException("云端模块服务正在停止"));
+        var payload = new CloudPayload();
+        return tasks.withCleanup(() -> decryptAndLoadBody(moduleId, axb, isRetry, payload), payload::close);
+    }
+
+    private CompletableFuture<Void> decryptAndLoadBody(String moduleId, byte[] axb, boolean isRetry, CloudPayload payload) {
 
         return retryAsync(moduleId, "密钥获取", 3, 2000L, () -> requestModuleKey(moduleId)).thenCompose(keyResp -> {
+            if (tasks.isClosed()) return CompletableFuture.failedFuture(new java.util.concurrent.CancellationException("云端模块服务正在停止"));
 
             if (keyResp == null) {
 
@@ -1143,7 +1190,7 @@ public final class CloudModuleService {
             byte[] sigBytes = null;
 
             try {
-                key = Base64.getDecoder().decode(keyB64);
+                key = payload.key = Base64.getDecoder().decode(keyB64);
             } catch (IllegalArgumentException e) {
 
                 plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 同步中止：密钥不是有效的 Base64 编码");
@@ -1186,11 +1233,11 @@ public final class CloudModuleService {
 
 
             try {
-                sigBytes = (sigB64 == null || sigB64.isEmpty())
+                sigBytes = payload.signature = (sigB64 == null || sigB64.isEmpty())
                     ? new byte[0]
                     : Base64.getDecoder().decode(sigB64);
             } catch (IllegalArgumentException e) {
-                sigBytes = new byte[0];
+                sigBytes = payload.signature = new byte[0];
             }
             byte[] jarBytes;
             try {
@@ -1200,7 +1247,7 @@ public final class CloudModuleService {
                 if (!ProtectionEnvironment.ensureCleanEnvironment()) {
                     throw new IllegalStateException("Protection environment compromised");
                 }
-                jarBytes = NativeBridge.n10(axb, key, sigBytes);
+                jarBytes = payload.jar = NativeBridge.n10(axb, key, sigBytes);
             } catch (Exception e) {
 
                 plugin.consoleWarn("[Cloud] 模块 " + moduleId + " native 解密抛异常: " + e.getClass().getSimpleName() + " - " + e.getMessage());
@@ -1249,59 +1296,25 @@ public final class CloudModuleService {
 
             plugin.consoleInfo("[Cloud] 模块 " + moduleId + " 解密成功: " + jarBytes.length + " 字节");
 
-            final byte[] finalJarBytes = jarBytes;
-
-            // 方案 B：把云端下发的 moduleKey 同时作为逐类解密种子下传给 ByteArrayModuleClassLoader（n11），
-
-            // 使模块逐类加密与本体 root_seed 解耦、自包含。clone 一份，避免被后续清理影响。
-
-            final byte[] moduleSeed = key.clone();
-
-            final byte[] keyToWipe = key;
-            final byte[] sigBytesToWipe = sigBytes;
-
-            plugin.getServer().getScheduler().runTask(plugin.host(), () -> {
-
-                try {
+            payload.seed = key.clone();
+            return tasks.main(() -> {
                 if (registry.isModuleLoaded(moduleId)) {
-
                     plugin.consoleInfo("[Cloud] 模块 " + moduleId + " 已加载，跳过重复加载");
-
-                    return;
+                    return CompletableFuture.<Void>completedFuture(null);
                 }
-                boolean ok = registry.loadCloudModule(finalJarBytes, moduleSeed);
-                if (ok) {
-
-                    plugin.consoleInfo("[Cloud] 模块 " + moduleId + " 已加载");
-
-                } else {
-
-                    plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 加载失败：可能缺少依赖或该模块已在 config.yml 中关闭");
-
-                }
-
-            } finally {
-
-                if (keyToWipe != null) {
-
-                    java.util.Arrays.fill(keyToWipe, (byte) 0);
-
-                }
-
-                if (sigBytesToWipe != null) {
-
-                    java.util.Arrays.fill(sigBytesToWipe, (byte) 0);
-
-                }
-
-            }
-
-            });
-            return CompletableFuture.<Void>completedFuture(null);
+                return registry.loadCloudModule(moduleId, payload.jar, payload.seed).thenAccept(loaded -> {
+                    if (loaded) plugin.consoleInfo("[Cloud] 模块 " + moduleId + " 已加载");
+                    else plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 加载失败，请核对依赖与模块开关。");
+                });
+            }).thenCompose(stage -> stage);
         });
     }
 
     private CompletableFuture<byte[]> downloadAxb(String moduleId) {
+        if (suiteRelease.isEmpty()) {
+            plugin.consoleWarn("[Cloud] 当前宿主缺少发行批次，无法获取云端模块。");
+            return CompletableFuture.completedFuture(null);
+        }
         CachedAxb cached = cachedAxb.get(moduleId);
         if (cached != null && cached.expiresAt > System.currentTimeMillis()) {
 
@@ -1313,6 +1326,7 @@ public final class CloudModuleService {
             "download",
             endpoint -> HttpRequest.newBuilder()
                 .uri(URI.create(endpoint + "/v1/modules/" + moduleId + "/download"))
+                .header("X-Suite-Release", suiteRelease)
                 .header("X-Module-Token", moduleToken)
                 .header("X-Server-Code", serverCode)
                 .header("X-Fingerprint", sha256(generateFingerprint()))
@@ -1357,24 +1371,24 @@ public final class CloudModuleService {
                 .header("X-Module-Token", moduleToken)
                 .header("X-Server-Code", serverCode)
                 .header("X-Fingerprint", sha256(generateFingerprint()))
-                .POST(HttpRequest.BodyPublishers.ofString("{}"))
+                .POST(HttpRequest.BodyPublishers.ofString("{\"version\":\"" + suiteRelease + "\"}"))
                 .build(),
             resp -> validateSignedResponse("key:" + moduleId, "[Cloud] 获取模块 " + moduleId + " 密钥响应", resp)
         ).thenApply(resp -> {
             if (!resp.isOk()) {
                 if (resp.isTransient()) {
 
-                    plugin.consoleWarn("[Cloud] 获取模块 " + moduleId + " 密钥暂时失败: " + resp.httpStatus() + " " + resp.message());
+                    plugin.consoleWarn("[Cloud] 获取模块 " + moduleId + " 密钥暂时失败，HTTP " + resp.httpStatus());
 
                 } else {
 
-                    plugin.consoleWarn("[Cloud] 获取模块 " + moduleId + " 密钥被拒绝: " + resp.httpStatus() + " " + resp.message());
+                    plugin.consoleWarn("[Cloud] 获取模块 " + moduleId + " 密钥被拒绝，HTTP " + resp.httpStatus());
 
                 }
                 return null;
             }
             String body = resp.rawBody();
-            if (body == null || body.isEmpty()) {
+            if (body == null || body.isEmpty() || !suiteRelease.equals(extractJsonField(body, "version"))) {
 
                 plugin.consoleWarn("[Cloud] 获取模块 " + moduleId + " 密钥成功但响应体为空");
 
@@ -1401,11 +1415,33 @@ public final class CloudModuleService {
 
 
     private void startHeartbeat() {
-        if (heartbeatTask != null) return;
-        heartbeatTask = plugin.getServer().getScheduler().runTaskTimerAsynchronously(plugin.host(), this::sendHeartbeat, 30L * 20L, 30L * 20L);
+        if (tasks.isClosed() || !plugin.host().isEnabled() || heartbeatTask != null) return;
+        heartbeatTask = plugin.getServer().getScheduler().runTaskTimerAsynchronously(plugin.host(), () -> tasks.request(this::sendHeartbeat), 30L * 20L, 30L * 20L);
 
         plugin.consoleInfo("[Cloud] 心跳任务已启动（30秒/次）");
 
+    }
+
+    public java.util.concurrent.CompletionStage<Void> shutdown() {
+        Throwable heartbeatFailure = null;
+        try { stopHeartbeat(); }
+        catch (Throwable failure) { heartbeatFailure = failure; }
+        var exited = tasks.shutdown();
+        if (heartbeatFailure != null) {
+            Throwable original = heartbeatFailure;
+            exited = exited.handle((ignored, failure) -> {
+                if (failure != null && failure != original) original.addSuppressed(failure);
+                throw new java.util.concurrent.CompletionException(original);
+            });
+        }
+        return exited.whenComplete((ignored, failure) -> {
+            cachedAxb.clear();
+            downloading.clear();
+            byte[] secret = serverSecret;
+            serverSecret = null;
+            if (secret != null) java.util.Arrays.fill(secret, (byte) 0);
+            moduleToken = null;
+        });
     }
 
     public void stopHeartbeat() {
@@ -1418,8 +1454,8 @@ public final class CloudModuleService {
         }
     }
 
-    private void sendHeartbeat() {
-        if (moduleToken == null || moduleToken.isEmpty()) return;
+    private CompletableFuture<Void> sendHeartbeat() {
+        if (moduleToken == null || moduleToken.isEmpty()) return CompletableFuture.completedFuture(null);
 
         syncCounter++;
         boolean shouldSync = syncCounter >= 60 || System.currentTimeMillis() > tokenExpiry - 5 * 60 * 1000;
@@ -1462,7 +1498,7 @@ public final class CloudModuleService {
         json.append("\"modules\":[]");
         json.append("}");
 
-        sendWithFailover(
+        return sendWithFailover(
             "heartbeat",
             endpoint -> HttpRequest.newBuilder()
                 .uri(URI.create(endpoint + "/v1/heartbeat"))
@@ -1474,15 +1510,15 @@ public final class CloudModuleService {
         ).thenAccept(resp -> {
             if (resp.isOk()) {
 
-                debugLog("[Cloud] 心跳响应: " + resp.rawBody());
+                debugLog("[Cloud] 心跳上报成功，HTTP " + resp.httpStatus());
 
             } else if (resp.isTransient()) {
 
-                plugin.consoleWarn("[Cloud] 心跳暂时失败: " + resp.httpStatus() + " " + resp.message());
+                plugin.consoleWarn("[Cloud] 心跳暂时失败，HTTP " + resp.httpStatus());
 
             } else {
 
-                plugin.consoleWarn("[Cloud] 心跳上报失败: " + resp.httpStatus() + " " + resp.message());
+                plugin.consoleWarn("[Cloud] 心跳上报失败，HTTP " + resp.httpStatus());
 
             }
         }).thenRun(() -> {
@@ -1513,6 +1549,10 @@ public final class CloudModuleService {
 
      */
     private void syncModuleChanges(List<String> oldAllowed) {
+        tasks.main(() -> { syncModuleChangesMain(oldAllowed); return null; });
+    }
+
+    private void syncModuleChangesMain(List<String> oldAllowed) {
         List<String> currentAllowed = this.allowedModules;
         List<String> loadedCloud = registry.getLoadedCloudModuleIds();
 
@@ -1521,7 +1561,7 @@ public final class CloudModuleService {
 
         for (String id : loadedCloud) {
             if (!currentAllowed.contains(id)) {
-                plugin.getServer().getScheduler().runTask(plugin.host(), () -> {
+                tasks.main(() -> {
                     boolean ok = registry.unloadModule(id);
                     if (ok) {
 
@@ -1529,6 +1569,7 @@ public final class CloudModuleService {
 
                     }
                     cachedAxb.remove(id);
+                    return null;
                 });
             }
         }

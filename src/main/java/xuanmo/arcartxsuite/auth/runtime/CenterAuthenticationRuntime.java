@@ -383,6 +383,7 @@ final class CenterAuthenticationRuntime implements HostAuthentication,Listener {
         if(!connection.firstPending || connection.firstBusy || bus==null || !state.admitted()) return;
         connection.firstBusy=true;
         bus.publishConfirmed("axs.auth.profile_first_admitted",connection.player,Map.of("account_id",state.accountId().toString(),
+            "profile_id",state.playerId().toString(),"realm_id",settings.realm(),"connection_id",state.connectionId().toString(),
             "event_id",settings.realm()+":"+state.accountId()+":first","provider",state.provider())).whenComplete((confirmed,error)->{
             if(error!=null || !Boolean.TRUE.equals(confirmed)) { main(()->connection.firstBusy=false); return; }
             control(()->call(Operation.ACK_FIRST,connection.context,new JsonObject())).whenComplete((reply,failure)->main(()->{

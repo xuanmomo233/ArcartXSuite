@@ -53,6 +53,18 @@ class AdmissionChargeTest {
         var success=checker.charge(template,List.of(player));success.commit();success.commit();
         verify(cooldown,times(1)).setCooldown(player.getUniqueId(),"test",30);
     }
+    @Test void uncertainDebitIsRecordedWithoutRefundingThatMember() {
+        Player first = player(), second = player();
+        when(money.withdraw(eq(second), any())).thenReturn(CurrencyTransactionResult.unknown("timeout"));
+        var charge = checker.charge(template, List.of(first, second));
+        assertFalse(charge.ok());
+        assertTrue(charge.reviewRequired());
+        assertEquals("NATIVE_COMPENSATED", charge.memberCosts().get(first.getUniqueId()));
+        assertEquals("NATIVE_REVIEW_REQUIRED", charge.memberCosts().get(second.getUniqueId()));
+        verify(rewards).refundMoney(eq(first), eq(5d), eq("money"), anyString());
+        verify(rewards, never()).refundMoney(eq(second), anyDouble(), anyString(), anyString());
+        verifyNoInteractions(cooldown);
+    }
     @Test void duplicateRequiredItemsAreAccountedTogetherBeforeAnyMoneyIsTaken() {
         var yaml=new org.bukkit.configuration.file.YamlConfiguration();yaml.set("money-cost",5);
         yaml.set("required-items",List.of("material:DIAMOND:1","material:DIAMOND:1"));

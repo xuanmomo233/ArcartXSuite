@@ -28,6 +28,8 @@ public class ProxyConfig {
     private boolean denyOffline = true;
     private String kickOfflineMessage = "&c本服务器仅支持正版/LittleSkin 账号登录";
     private boolean autoAssignUuid = true;
+    private boolean tabListEnabled;
+    private int maxRemoteTabEntries = 80;
     private final List<YggdrasilSource> sources = new ArrayList<>();
     private Map<String,Object> authForwarding = Map.of();
     public Map<String,Object> authForwarding() { return authForwarding; }
@@ -105,6 +107,14 @@ public class ProxyConfig {
         denyOffline = readBoolean(root, "deny-offline", denyOffline);
         kickOfflineMessage = readString(root, "kick-offline-message", kickOfflineMessage);
         autoAssignUuid = readBoolean(root, "auto-assign-uuid", autoAssignUuid);
+        if (root.get("tab-list") instanceof Map<?, ?> node) {
+            Map<String, Object> tab = (Map<String, Object>) node;
+            tabListEnabled = readBoolean(tab, "enabled", false);
+            maxRemoteTabEntries = Math.max(1, Math.min(80, readInt(tab, "max-remote-entries", 80)));
+        } else {
+            tabListEnabled = false;
+            maxRemoteTabEntries = 80;
+        }
 
         // auth 配置节
         Object authNode = root.get("auth");
@@ -189,6 +199,14 @@ public class ProxyConfig {
 
     public boolean debug() {
         return debug;
+    }
+
+    public boolean tabListEnabled() {
+        return tabListEnabled;
+    }
+
+    public int maxRemoteTabEntries() {
+        return maxRemoteTabEntries;
     }
 
     public void setDebug(boolean debug) {

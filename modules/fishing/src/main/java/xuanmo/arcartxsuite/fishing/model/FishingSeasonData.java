@@ -1,9 +1,7 @@
 package xuanmo.arcartxsuite.fishing.model;
 
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import org.jetbrains.annotations.NotNull;
 import xuanmo.arcartxsuite.api.script.XpCurve;
@@ -24,7 +22,6 @@ import xuanmo.arcartxsuite.api.script.XpCurve;
  * @param talentPoints       总获得天赋点（每级 1 点累计）
  * @param unspentTalentPoints 未分配天赋点
  * @param talents            已点亮天赋节点 ID → 当前等级（1-based）
- * @param claimedRewards     已领取的等级奖励 ID 集合
  * @param fatigue            疲惫值 [0, 100]，每钓一条鱼 +1，每在线休息一分钟 -1
  * @param claimedMaxFatigueReward 是否已领取过首次疲惫值达到 100 的奖励
  */
@@ -36,20 +33,17 @@ public record FishingSeasonData(
     int talentPoints,
     int unspentTalentPoints,
     @NotNull Map<String, Integer> talents,
-    @NotNull Set<String> claimedRewards,
     int fatigue,
     boolean claimedMaxFatigueReward
 ) {
 
     public FishingSeasonData {
         if (talents == null) talents = new HashMap<>();
-        if (claimedRewards == null) claimedRewards = new HashSet<>();
         talents = new HashMap<>(talents);
-        claimedRewards = new HashSet<>(claimedRewards);
     }
 
     public static @NotNull FishingSeasonData empty(@NotNull UUID uuid, @NotNull String seasonId) {
-        return new FishingSeasonData(uuid, seasonId, 0, 0, 0, 0, new HashMap<>(), new HashSet<>(), 0, false);
+        return new FishingSeasonData(uuid, seasonId, 0, 0, 0, 0, new HashMap<>(), 0, false);
     }
 
     /**
@@ -78,7 +72,7 @@ public record FishingSeasonData(
         int newTalentPoints = talentPoints + 1;
         int newUnspent = unspentTalentPoints + 1;
         return new FishingSeasonData(uuid, seasonId, newLevel, remaining,
-            newTalentPoints, newUnspent, talents, claimedRewards, fatigue, claimedMaxFatigueReward);
+            newTalentPoints, newUnspent, talents, fatigue, claimedMaxFatigueReward);
     }
 
     /**
@@ -115,7 +109,7 @@ public record FishingSeasonData(
             newXp = Math.min(newXp, Math.max(0, cap - 1));
         }
         return new FishingSeasonData(uuid, seasonId, newLevel, newXp,
-            newTalentPoints, newUnspent, talents, claimedRewards, fatigue, claimedMaxFatigueReward);
+            newTalentPoints, newUnspent, talents, fatigue, claimedMaxFatigueReward);
     }
 
     /**
@@ -132,7 +126,7 @@ public record FishingSeasonData(
         Map<String, Integer> newTalents = new HashMap<>(talents);
         newTalents.put(nodeId, currentLevel + 1);
         return new FishingSeasonData(uuid, seasonId, level, currentXp,
-            talentPoints, unspentTalentPoints - 1, newTalents, claimedRewards, fatigue, claimedMaxFatigueReward);
+            talentPoints, unspentTalentPoints - 1, newTalents, fatigue, claimedMaxFatigueReward);
     }
 
     /**
@@ -144,20 +138,7 @@ public record FishingSeasonData(
         // 已分配的天赋点 = 每个节点的等级之和
         int spentPoints = talents.values().stream().mapToInt(Integer::intValue).sum();
         return new FishingSeasonData(uuid, seasonId, level, currentXp,
-            talentPoints, talentPoints, new HashMap<>(), claimedRewards, fatigue, claimedMaxFatigueReward);
-    }
-
-    /**
-     * 标记已领取等级奖励。
-     *
-     * @param rewardId 奖励 ID
-     * @return 更新后的新实例
-     */
-    public @NotNull FishingSeasonData withRewardClaimed(@NotNull String rewardId) {
-        Set<String> newClaimed = new HashSet<>(claimedRewards);
-        newClaimed.add(rewardId);
-        return new FishingSeasonData(uuid, seasonId, level, currentXp,
-            talentPoints, unspentTalentPoints, talents, newClaimed, fatigue, claimedMaxFatigueReward);
+            talentPoints, talentPoints, new HashMap<>(), fatigue, claimedMaxFatigueReward);
     }
 
     /**
@@ -180,7 +161,7 @@ public record FishingSeasonData(
     public @NotNull FishingSeasonData withFatigueAdded(int amount, int maxFatigue) {
         int newFatigue = Math.min(maxFatigue, fatigue + amount);
         return new FishingSeasonData(uuid, seasonId, level, currentXp,
-            talentPoints, unspentTalentPoints, talents, claimedRewards, newFatigue, claimedMaxFatigueReward);
+            talentPoints, unspentTalentPoints, talents, newFatigue, claimedMaxFatigueReward);
     }
 
     /**
@@ -192,7 +173,7 @@ public record FishingSeasonData(
     public @NotNull FishingSeasonData withFatigueReduced(int amount) {
         int newFatigue = Math.max(0, fatigue - amount);
         return new FishingSeasonData(uuid, seasonId, level, currentXp,
-            talentPoints, unspentTalentPoints, talents, claimedRewards, newFatigue, claimedMaxFatigueReward);
+            talentPoints, unspentTalentPoints, talents, newFatigue, claimedMaxFatigueReward);
     }
 
     /**
@@ -202,6 +183,6 @@ public record FishingSeasonData(
      */
     public @NotNull FishingSeasonData withMaxFatigueRewardClaimed() {
         return new FishingSeasonData(uuid, seasonId, level, currentXp,
-            talentPoints, unspentTalentPoints, talents, claimedRewards, fatigue, true);
+            talentPoints, unspentTalentPoints, talents, fatigue, true);
     }
 }

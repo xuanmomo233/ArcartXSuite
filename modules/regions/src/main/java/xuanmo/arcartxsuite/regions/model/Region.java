@@ -1,24 +1,32 @@
 package xuanmo.arcartxsuite.regions.model;
 
 import java.util.Collections;
+import java.nio.charset.StandardCharsets;
 import java.util.EnumMap;
+import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import org.bukkit.Material;
 
 /**
  * 区域定义。
  */
 public final class Region {
 
+    public enum Kind { MANAGED, CLAIM, GLOBAL }
+
     private final String id;
     private final String world;
+    private UUID uid;
+    private Kind kind = Kind.MANAGED;
     private int minX, minY, minZ;
     private int maxX, maxY, maxZ;
     private int priority;
     private String parentId;
 
+    private final Set<Material> blockedInteractions = EnumSet.noneOf(Material.class);
     private final Set<UUID> owners = new HashSet<>();
     private final Set<UUID> members = new HashSet<>();
     private final Set<String> ownerGroups = new HashSet<>();
@@ -29,6 +37,7 @@ public final class Region {
     public Region(String id, String world, int x1, int y1, int z1, int x2, int y2, int z2) {
         this.id = id;
         this.world = world;
+        this.uid = UUID.nameUUIDFromBytes(("axs:regions:" + world + ":" + id).getBytes(StandardCharsets.UTF_8));
         this.minX = Math.min(x1, x2);
         this.minY = Math.min(y1, y2);
         this.minZ = Math.min(z1, z2);
@@ -41,6 +50,11 @@ public final class Region {
 
     public String id() { return id; }
     public String world() { return world; }
+    public String key() { return world + ":" + id; }
+    public UUID uid() { return uid; }
+    public void setUid(UUID uid) { this.uid = uid; }
+    public Kind kind() { return kind; }
+    public void setKind(Kind kind) { this.kind = kind; }
     public int minX() { return minX; }
     public int minY() { return minY; }
     public int minZ() { return minZ; }
@@ -62,8 +76,35 @@ public final class Region {
         this.maxZ = Math.max(z1, z2);
     }
 
+    public Region copy(String newId) {
+        Region copy = new Region(newId, world, minX, minY, minZ, maxX, maxY, maxZ);
+        copy.uid = uid;
+        copy.blockedInteractions.addAll(blockedInteractions);
+        copy.kind = kind;
+        copy.priority = priority;
+        copy.parentId = parentId;
+        copy.owners.addAll(owners);
+        copy.members.addAll(members);
+        copy.ownerGroups.addAll(ownerGroups);
+        copy.memberGroups.addAll(memberGroups);
+        copy.flags.putAll(flags);
+        copy.flagData.putAll(flagData);
+        return copy;
+    }
+
     public long volume() {
-        return (long)(maxX - minX + 1) * (maxY - minY + 1) * (maxZ - minZ + 1);
+        return volume(minX, minY, minZ, maxX, maxY, maxZ);
+    }
+
+    static long volume(int x1, int y1, int z1, int x2, int y2, int z2) {
+        try {
+            long width = Math.abs((long) x2 - x1) + 1;
+            long height = Math.abs((long) y2 - y1) + 1;
+            long length = Math.abs((long) z2 - z1) + 1;
+            return Math.multiplyExact(Math.multiplyExact(width, height), length);
+        } catch (ArithmeticException ignored) {
+            return Long.MAX_VALUE;
+        }
     }
 
     // ─── 包含检测 ───
@@ -92,6 +133,7 @@ public final class Region {
     public void setFlag(RegionFlag flag, RegionFlag.State state) {
         if (state == RegionFlag.State.NONE) {
             flags.remove(flag);
+            flagData.remove(flag);
         } else {
             flags.put(flag, state);
         }
@@ -115,6 +157,15 @@ public final class Region {
 
     public Map<RegionFlag, String> flagData() {
         return Collections.unmodifiableMap(flagData);
+    }
+
+    public Set<Material> blockedInteractions() {
+        return Collections.unmodifiableSet(blockedInteractions);
+    }
+
+    public void setBlockedInteraction(Material material, boolean blocked) {
+        if (blocked) blockedInteractions.add(material);
+        else blockedInteractions.remove(material);
     }
 
     // ─── 成员管理 ───

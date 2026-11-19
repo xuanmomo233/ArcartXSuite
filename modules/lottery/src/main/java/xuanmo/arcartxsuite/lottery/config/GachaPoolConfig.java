@@ -55,6 +55,10 @@ public record GachaPoolConfig(
         CHARACTER, WEAPON, STANDARD
     }
 
+    public boolean hasUp5starItems() {
+        return up5starItems != null && !up5starItems.isEmpty();
+    }
+
     /**
      * 从 YAML 配置节加载 GACHA 奖池配置。
      *

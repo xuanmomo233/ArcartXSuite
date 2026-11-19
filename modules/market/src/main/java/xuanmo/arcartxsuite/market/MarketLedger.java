@@ -1,18 +1,14 @@
 package xuanmo.arcartxsuite.market;
 
 import java.math.BigDecimal;
-import java.util.List;
 import java.util.UUID;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.logging.Logger;
-import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI;
 import xuanmo.arcartxsuite.api.currency.CurrencyDefinition;
 import xuanmo.arcartxsuite.api.currency.CurrencyTransactionResult;
-import xuanmo.arcartxsuite.api.item.ItemRewardDispatcher;
-import xuanmo.arcartxsuite.market.auction.AuctionItemSerializer;
 import xuanmo.arcartxsuite.market.storage.MarketOperation;
 import xuanmo.arcartxsuite.market.storage.MarketRepository;
 
@@ -36,6 +32,40 @@ public final class MarketLedger {
     public void heartbeat() {
         repository.heartbeatMarketOwner(owner);
         repository.recoverAbandonedOperations();
+        repository.finishConfirmedShopRefunds();
+    }
+
+    public String owner() { return owner; }
+
+    public MarketOperation beginShopDebit(MarketOperation order) {
+        long now = System.currentTimeMillis();
+        var debit = new MarketOperation(UUID.randomUUID().toString(), order.id(), order.player(), "DEBIT",
+            "currency", "RUNNING", order.currency(), order.amount(), order.itemData(), "调用货币接口前记录",
+            order.owner(), now, now, order.itemName(), order.material());
+        repository.insertOperation(debit);
+        return debit;
+    }
+
+    public void recordShopDebit(MarketOperation debit, CurrencyTransactionResult result) {
+        String state = result.uncertain() ? "REVIEW" : result.success() ? "DONE" : "FAILED";
+        if (!repository.transitionOperation(debit.id(), "RUNNING", state,
+            result.uncertain() ? "扣款结果不明，禁止自动重试" : "货币接口已返回", debit.owner())) {
+            throw new IllegalStateException("货币流水落库失败: " + debit.id());
+        }
+    }
+
+    /** Associate the public purchase history with its durable order. */
+    public <T> T withShopOrder(MarketOperation order, Supplier<T> action) {
+        String previous = CURRENT.get();
+        ItemLabel previousItem = CURRENT_ITEM.get();
+        CURRENT.set(order.id());
+        CURRENT_ITEM.set(new ItemLabel(order.itemName(), order.material(), order.itemData()));
+        try {
+            return action.get();
+        } finally {
+            if (previous == null) CURRENT.remove(); else CURRENT.set(previous);
+            if (previousItem == null) CURRENT_ITEM.remove(); else CURRENT_ITEM.set(previousItem);
+        }
     }
 
     public <T> T trade(String kind, UUID player, String reference, Supplier<T> body, Predicate<T> success) {
@@ -77,14 +107,16 @@ public final class MarketLedger {
     private static MarketOperation labelled(MarketOperation operation){ItemLabel item=CURRENT_ITEM.get();return item==null?operation:operation.withItem(item.name(),item.material(),item.snapshot());}
 
     private CurrencyTransactionResult effect(Player player, String currency, BigDecimal amount, String kind,
-                                               Supplier<CurrencyTransactionResult> body) {
+                                               Supplier<CurrencyTransactionResult> body, boolean requiresReconciliation) {
         String id = UUID.randomUUID().toString();
         long now = System.currentTimeMillis();
         repository.insertOperation(labelled(new MarketOperation(id, CURRENT.get(), player.getUniqueId(), kind, "currency", "RUNNING",
             currency, amount.toPlainString(), "", "调用货币接口前记录", owner, now, now)));
         try {
             CurrencyTransactionResult result = body.get();
-            if (!repository.transitionOperation(id, "RUNNING", result.success() ? "DONE" : "FAILED", "货币接口已返回", owner)) {
+            boolean review = result.uncertain() || (result.success() && requiresReconciliation);
+            if (!repository.transitionOperation(id, "RUNNING", review ? "REVIEW" : result.success() ? "DONE" : "FAILED",
+                review ? "货币结果需核对，禁止自动重试" : "货币接口已返回", owner)) {
                 throw new IllegalStateException("货币流水落库失败: " + id);
             }
             return result;
@@ -104,11 +136,16 @@ public final class MarketLedger {
                     public boolean available() { return bridge.available(); }
                     public String unavailableReason() { return bridge.unavailableReason(); }
                     public BigDecimal balance(Player player) { return bridge.balance(player); }
+                    public boolean creditRequiresReconciliation() { return bridge.creditRequiresReconciliation(); }
+                    public boolean debitRequiresReconciliation() { return bridge.debitRequiresReconciliation(); }
                     public CurrencyTransactionResult withdraw(Player player, BigDecimal amount) {
-                        return effect(player, id, amount, "DEBIT", () -> bridge.withdraw(player, amount));
+                        boolean needsReceipt = bridge.debitRequiresReconciliation();
+                        var result = effect(player, id, amount, "DEBIT", () -> bridge.withdraw(player, amount), needsReceipt);
+                        return needsReceipt && result.success()
+                            ? CurrencyTransactionResult.unknown("扣款结果需核对") : result;
                     }
                     public CurrencyTransactionResult deposit(Player player, BigDecimal amount) {
-                        return effect(player, id, amount, "CREDIT", () -> bridge.deposit(player, amount));
+                        return effect(player, id, amount, "CREDIT", () -> bridge.deposit(player, amount), bridge.creditRequiresReconciliation());
                     }
                 };
             }
@@ -140,57 +177,17 @@ public final class MarketLedger {
             note,owner)) throw new IllegalStateException("奖励快照状态冲突: "+id);
     }
 
-    public void deliver(Player player, List<MarketOperation> tasks, CurrencyBridgeAPI currencies,
-                        AuctionItemSerializer serializer, ItemRewardDispatcher dispatcher) {
-        if (!Bukkit.isPrimaryThread()) throw new IllegalStateException("交付必须在主线程执行");
-        for (MarketOperation task : tasks) {
-            if (!player.isOnline()) return;
-            if (!"ITEM".equals(task.kind()) && !"CURRENCY".equals(task.kind()) && !"COMMAND".equals(task.kind()) && !"NOTICE".equals(task.kind())) {
-                repository.transitionOperation(task.id(),"READY","REVIEW","未知交付类型，保留记录待核对",owner);
-                continue;
-            }
-            if (!repository.transitionOperation(task.id(), "READY", "RUNNING", "交付已抢占", owner)) continue;
-            boolean called = false;
-            try {
-                boolean success;
-                if ("ITEM".equals(task.kind())) {
-                    var item = serializer.deserialize(task.itemData());
-                    if (item == null) {
-                        repository.transitionOperation(task.id(), "RUNNING", "REVIEW", "物品数据无法解析，保留记录", owner);
-                        continue;
-                    }
-                    called = true;
-                    success = dispatcher.dispatchItem(player, item, ItemRewardDispatcher.DispatchOptions.builder("market")
-                        .sourceDetail("ledger:" + task.id()).overflowMailSubject("市场交易物品交付")
-                        .overflowMailBody("背包空间不足，交易物品通过邮件发放。").overflowMailSenderName("全球市场").build()).success();
-                } else if ("NOTICE".equals(task.kind())) {
-                    called = true;
-                    String text=org.bukkit.ChatColor.translateAlternateColorCodes('&',task.itemData());
-                    if(task.reference().startsWith("notice-title:")) player.sendTitle("拍卖通知",text,10,80,20);
-                    else if(task.reference().startsWith("notice-actionbar:")) player.spigot().sendMessage(
-                        net.md_5.bungee.api.ChatMessageType.ACTION_BAR,net.md_5.bungee.api.chat.TextComponent.fromLegacyText(text));
-                    else player.sendMessage(text);
-                    success = true;
-                } else if ("COMMAND".equals(task.kind())) {
-                    called = true;
-                    success = Bukkit.dispatchCommand(Bukkit.getConsoleSender(), task.itemData());
-                } else {
-                    var bridge = currencies.bridge(task.currency());
-                    if (bridge == null || !bridge.available()) {
-                        repository.transitionOperation(task.id(), "RUNNING", "READY", "等待货币接口恢复", owner);
-                        continue;
-                    }
-                    called = true;
-                    success = bridge.deposit(player, new BigDecimal(task.amount())).success();
-                }
-                // A failed or partially applied item dispatch is not safe to replay automatically.
-                repository.transitionOperation(task.id(), "RUNNING", success ? "DONE" : "REVIEW",
-                    success ? "交付成功" : "接口报告失败，需核对是否部分交付", owner);
-            } catch (RuntimeException exception) {
-                repository.transitionOperation(task.id(), "RUNNING", called ? "REVIEW" : "READY",
-                    called ? "交付结果未知" : "交付尚未执行", owner);
-                logger.warning("[Market] 交付异常 id=" + task.id() + ": " + exception.getMessage());
-            }
+    boolean claimDelivery(MarketOperation task) {
+        return repository.transitionOperation(task.id(), "READY", "RUNNING", "交付已抢占", owner);
+    }
+
+    void flagUnknownDelivery(MarketOperation task) {
+        repository.transitionOperation(task.id(), "READY", "REVIEW", "未知交付类型，保留记录待核对", owner);
+    }
+
+    void finishDelivery(MarketOperation task, String state, String note) {
+        if (!repository.transitionOperation(task.id(), "RUNNING", state, note, owner)) {
+            throw new IllegalStateException("交付回执状态已变化: " + task.id());
         }
     }
 }

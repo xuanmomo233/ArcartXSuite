@@ -6,6 +6,8 @@ load: POSTWORLD
 depend:
   - ArcartX
 softdepend:
+  - LuckPerms
+  - Chronos
   - Chemdah
   - Adyeshach
   - MythicMobs
@@ -21,6 +23,7 @@ softdepend:
   - NeigeItems
   - Symphony
   - Overture
+  - Redact
 # 模块命令不在此声明：plugin.yml 声明的命令在插件加载时即注册进 CommandMap，
 # 模块未启用/被禁用时会持续占用命令名，与其他同功能插件冲突。
 # 模块命令元数据见 module-commands.yml，由模块启用时经 CommandMap 动态注册。
@@ -36,6 +39,8 @@ permissions:
     default: op
   arcartxsuite.vanilla.backpack.admin:
     default: op
+  arcartxsuite.vanilla.sort:
+    default: true
   arcartxsuite.vanilla.recipe.admin:
     default: op
   arcartxsuite.title.use:
@@ -76,10 +81,6 @@ permissions:
     default: true
   arcartxsuite.map.use:
     default: true
-  arcartxsuite.tab.use:
-    default: true
-  axs.tab.debug:
-    default: op
   arcartxsuite.map.admin:
     default: op
   arcartxsuite.market.use:
@@ -159,7 +160,11 @@ permissions:
     default: op
   axs.essentials.sudo:
     default: op
+  axs.essentials.sudo.others:
+    default: op
   axs.essentials.inv:
+    default: op
+  axs.essentials.inv.edit:
     default: op
   axs.essentials.sit:
     default: true
@@ -169,14 +174,18 @@ permissions:
     default: false
   axs.essentials.replant:
     default: false
-  axs.essentials.sort:
-    default: true
   axs.essentials.autotool:
     default: true
   axs.essentials.admin:
     default: op
   axs.essentials.menu:
     default: true
+  axs.essentials.unstuck:
+    default: true
+  axs.essentials.banhistory:
+    default: op
+  axs.essentials.conflicts:
+    default: op
   # ─── Regions ───
   axs.regions.select:
     default: true

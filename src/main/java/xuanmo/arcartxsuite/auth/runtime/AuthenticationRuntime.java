@@ -558,6 +558,7 @@ public final class AuthenticationRuntime implements HostAuthentication, Listener
         if(account==null || bus==null || !snapshot(profile).admitted() || !firstBusy.add(profile)) return;
         var state=snapshot(profile);
         bus.publishConfirmed("axs.auth.profile_first_admitted",connection.player(),Map.of("account_id",account.id().toString(),
+            "profile_id",profile.toString(),"realm_id",realm,"connection_id",state.connectionId().toString(),
             "event_id",realm+":"+account.id()+":first","provider",state.provider())).whenComplete((confirmed,error)->{
             if(error!=null || !Boolean.TRUE.equals(confirmed)) { main(()->firstBusy.remove(profile)); return; }
             try { worker.execute(()->{

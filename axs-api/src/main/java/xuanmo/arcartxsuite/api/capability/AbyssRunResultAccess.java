@@ -39,4 +39,10 @@ public interface AbyssRunResultAccess {
 
     /** Durable, ascending commit cursor. Process idempotently by resultId before advancing the cursor. */
     CompletableFuture<List<Committed>> committedResults(String owner, long afterSequence, int limit);
+
+    /** High-water mark used when activating a new consumer without historical backfill. */
+    CompletableFuture<Long> latestCommittedSequence();
+
+    /** Whether the result feed is read from the host's shared MySQL database. */
+    boolean usesSharedHostStorage();
 }

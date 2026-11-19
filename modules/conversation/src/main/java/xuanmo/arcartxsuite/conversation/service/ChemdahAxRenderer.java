@@ -143,8 +143,8 @@ final class ChemdahAxRenderer {
         if (state == null) {
             return;
         }
-        if (!replyId.isBlank()) {
-            state.selectReply(replyId);
+        if (!replyId.isBlank() && !state.selectReply(replyId)) {
+            return;
         }
         confirmReply(player, state, "confirm-reply");
     }

@@ -47,7 +47,8 @@ public record ChatEnvelope(
     boolean mentionAll,
     List<String> mentionedNames,
     ChatItemPreview itemPreview,
-    String rawMessage
+    String rawMessage,
+    String audienceKey
 ) {
     /**
      * 生成跨服去重键，由来源节点 ID 与消息 ID 拼接而成。

@@ -1,8 +1,9 @@
 package xuanmo.arcartxsuite.security;
 
-import java.util.ArrayDeque;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -40,14 +41,16 @@ public final class ClientPacketGuard implements PacketGuardAPI {
     /** 每个 (module, player) 维度允许的 distinct packetId 数上限——packetId 同为客户端可控字段，需防止随机 packetId 无限造桶。 */
     private static final int MAX_PACKET_IDS_PER_MODULE_PLAYER = 128;
 
+    private static final int MAX_INGRESS_FIELDS = 128;
+    private static final int MAX_INGRESS_ID_LENGTH = 128;
+    private static final int MAX_INGRESS_PACKET_BYTES = 256 * 1024;
+    private static final int MAX_INGRESS_BYTES_PER_SECOND = 1024 * 1024;
+    private static final int MAX_INGRESS_PACKETS_PER_SECOND = 128;
+
     private final JavaPlugin plugin;
     private volatile ClientPacketGuardConfiguration configuration;
     private final LongSupplier timeSupplier;
-    private final ConcurrentMap<RouteKey, GuardState> states = new ConcurrentHashMap<>();
-    /** (module|playerId|packetId) → 已见的 action 键集合，用于上限控制与清理。 */
-    private final ConcurrentMap<String, java.util.Set<String>> actionKeysByModulePlayer = new ConcurrentHashMap<>();
-    /** (module|playerId) → 已见的 packetId 集合，用于 packetId 维度上限控制。 */
-    private final ConcurrentMap<String, java.util.Set<String>> packetIdsByModulePlayer = new ConcurrentHashMap<>();
+    private final ConcurrentMap<UUID, PlayerState> players = new ConcurrentHashMap<>();
 
     private BukkitTask cleanupTask;
     private Listener quitListener;
@@ -64,7 +67,7 @@ public final class ClientPacketGuard implements PacketGuardAPI {
 
     public void start() {
         shutdown();
-        if (plugin == null || !configuration.enabled()) {
+        if (plugin == null) {
             return;
         }
         cleanupTask = Bukkit.getScheduler().runTaskTimer(
@@ -93,9 +96,7 @@ public final class ClientPacketGuard implements PacketGuardAPI {
             HandlerList.unregisterAll(quitListener);
             quitListener = null;
         }
-        states.clear();
-        actionKeysByModulePlayer.clear();
-        packetIdsByModulePlayer.clear();
+        players.forEach(this::retire);
     }
 
     /**
@@ -113,6 +114,44 @@ public final class ClientPacketGuard implements PacketGuardAPI {
         return configuration.debug();
     }
 
+    /** Transport limits also apply when per-action throttling is disabled. */
+    public boolean allowIngress(UUID playerId, String packetId, List<String> data) {
+        if (playerId == null || packetId == null || packetId.length() > MAX_INGRESS_ID_LENGTH || packetId.isBlank()
+            || data == null || data.size() > MAX_INGRESS_FIELDS) {
+            return false;
+        }
+        // Three bytes per UTF-16 code unit bounds UTF-8 size without allocating an encoded copy.
+        long bytes = 3L * packetId.length();
+        for (String field : data) {
+            if (field == null) return false;
+            bytes += 3L * field.length();
+            if (bytes > MAX_INGRESS_PACKET_BYTES) return false;
+        }
+
+        while (true) {
+            PlayerState state = players.computeIfAbsent(playerId, ignored -> new PlayerState());
+            synchronized (state) {
+                if (state.retired) continue;
+                long now = timeSupplier.getAsLong();
+                var window = state.ingress;
+                if (window == null) {
+                    window = new IngressWindow(now);
+                    state.ingress = window;
+                } else if (now < window.startedAt || now - window.startedAt >= 1000L) {
+                    window.startedAt = now;
+                    window.packets = 0;
+                    window.bytes = 0;
+                }
+                if (window.packets >= MAX_INGRESS_PACKETS_PER_SECOND || window.bytes + bytes > MAX_INGRESS_BYTES_PER_SECOND) {
+                    return false;
+                }
+                window.packets++;
+                window.bytes += (int) bytes;
+                return true;
+            }
+        }
+    }
+
     @Override
     public boolean allow(Player player, String module, String action, boolean debugLogging) {
         return allow(player, module, null, action, debugLogging);
@@ -120,218 +159,138 @@ public final class ClientPacketGuard implements PacketGuardAPI {
 
     @Override
     public boolean allow(Player player, String module, String packetId, String action, boolean debugLogging) {
-        if (player == null) {
-            return false;
-        }
-        return allow(
-            player.getUniqueId(),
-            player.getName(),
-            module,
-            packetId,
-            action,
-            debugLogging,
-            new FeedbackSink() {
-                @Override
-                public void notifyPlayer(String message) {
-                    if (!message.isBlank()) {
-                        player.sendMessage(ChatColor.translateAlternateColorCodes('&', message));
-                    }
-                }
-
-                @Override
-                public void punish(String command) {
-                    if (!command.isBlank()) {
-                        String safeName = sanitizePlayerName(player.getName());
-                        if (safeName != null) {
-                            Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command.replace("{player}", safeName).replace("<player>", safeName));
-                        }
-                    }
-                }
-            }
-        );
+        return player != null && allow(player.getUniqueId(), null, player, module, packetId, action, debugLogging, null);
     }
 
-    boolean allow(
-        UUID playerId,
-        String playerName,
-        String module,
-        String packetId,
-        String action,
-        boolean debugLogging,
-        FeedbackSink feedbackSink
-    ) {
-        if (playerId == null) {
-            // 与公开重载 allow(Player,...) 在 player==null 时返回 false 保持一致：
-            // null playerId 视为非法调用方，拒绝放行，避免未来直接传 UUID 的调用方绕过 guard。
-            return false;
-        }
-        ClientPacketGuardConfiguration config = this.configuration;
-        if (!config.enabled()) {
-            // guard 未启用时放行（与原语义一致）
-            return true;
-        }
+    boolean allow(UUID playerId, String playerName, String module, String packetId, String action,
+                  boolean debugLogging, FeedbackSink feedbackSink) {
+        return allow(playerId, playerName, null, module, packetId, action, debugLogging, feedbackSink);
+    }
+
+    private boolean allow(UUID playerId, String playerName, Player player, String module, String packetId, String action,
+                          boolean debugLogging, FeedbackSink feedbackSink) {
+        if (playerId == null) return false;
+        ClientPacketGuardConfiguration config = configuration;
+        if (!config.enabled()) return true;
 
         String normalizedModule = normalizeKey(module);
-        String normalizedPacketId = normalizeKey(packetId);
+        String normalizedPacket = normalizeKey(packetId);
         String normalizedAction = normalizeKey(action);
-        ClientPacketGuardRule rule = config.resolve(normalizedModule, normalizedAction);
-        if (!rule.enabled()) {
-            return true;
-        }
+        ClientPacketGuardRule rule = config.resolveNormalized(normalizedModule, normalizedAction);
+        if (!rule.enabled()) return true;
 
-        // packetId 上限：packetId 也是客户端可控字段，随机 packetId 会无限造桶，
-        // 超过上限直接拒绝且不记录（与 action 键上限同语义）。
-        String modulePlayerKey = normalizedModule + "|" + playerId;
-        java.util.Set<String> packetIds = packetIdsByModulePlayer.computeIfAbsent(
-            modulePlayerKey, ignored -> ConcurrentHashMap.newKeySet());
-        if (!packetIds.contains(normalizedPacketId)) {
-            if (packetIds.size() >= MAX_PACKET_IDS_PER_MODULE_PLAYER) {
-                if (debugLogging && plugin != null) {
-                    xuanmo.arcartxsuite.module.AxsLog.logger().info(
-                        "ClientPacketGuard 拒绝回包 -> player=" + playerName
-                            + " | route=" + normalizedModule + "." + normalizedAction
-                            + " | packetId=" + normalizedPacketId
-                            + " | 原因=packetId 数超上限 " + MAX_PACKET_IDS_PER_MODULE_PLAYER);
-                }
-                return false;
+        Decision decision = admit(playerId, normalizedModule, normalizedPacket, normalizedAction, rule);
+        if (decision == Decision.ALLOW) return true;
+        if (decision == Decision.NOTIFY) {
+            if (feedbackSink != null) feedbackSink.notifyPlayer(rule.notifyMessage());
+            else if (player != null && !rule.notifyMessage().isBlank()) {
+                player.sendMessage(ChatColor.translateAlternateColorCodes('&', rule.notifyMessage()));
             }
-            packetIds.add(normalizedPacketId);
-        }
-
-        // action 键上限：恶意客户端可随机化 action 无限创建 GuardState，超过上限直接拒绝且不建状态。
-        // 键集按 packetId 隔离——高基数包（tooltip 物品指纹等）只塞满自己 packetId 的桶。
-        String mpKey = modulePlayerKey + "|" + normalizedPacketId;
-        java.util.Set<String> actionKeys = actionKeysByModulePlayer.computeIfAbsent(
-            mpKey, ignored -> ConcurrentHashMap.newKeySet());
-        if (!actionKeys.contains(normalizedAction)) {
-            if (actionKeys.size() >= MAX_ACTION_KEYS_PER_MODULE_PLAYER) {
-                if (debugLogging && plugin != null) {
-                    xuanmo.arcartxsuite.module.AxsLog.logger().info(
-                        "ClientPacketGuard 拒绝回包 -> player=" + playerName
-                            + " | route=" + normalizedModule + "." + normalizedAction
-                            + " | packetId=" + normalizedPacketId
-                            + " | 原因=action 键数超上限 " + MAX_ACTION_KEYS_PER_MODULE_PLAYER);
-                }
-                return false;
-            }
-            actionKeys.add(normalizedAction);
-        }
-
-        long now = timeSupplier.getAsLong();
-        RouteKey routeKey = new RouteKey(normalizedModule, normalizedPacketId, normalizedAction, playerId);
-        GuardState state = states.computeIfAbsent(routeKey, ignored -> new GuardState());
-        boolean allowed;
-        synchronized (state) {
-            state.prune(now, rule.windowMs());
-            if (state.hitTimestamps.size() >= rule.maxHits()) {
-                state.lastTouchedAt = now;
-                if (rule.mode() == ClientPacketGuardMode.NOTIFY
-                    && (state.lastNotifyAt <= 0L || now - state.lastNotifyAt >= rule.notifyCooldownMs())) {
-                    feedbackSink.notifyPlayer(rule.notifyMessage());
-                    state.lastNotifyAt = now;
-                } else if (rule.mode() == ClientPacketGuardMode.PUNISH
-                    && (state.lastPunishAt <= 0L || now - state.lastPunishAt >= rule.punishCooldownMs())) {
-                    // 惩罚命令按 punish-cooldown-ms 冷却，防止连续超限反复执行控制台命令
-                    feedbackSink.punish(rule.punishCommand());
-                    state.lastPunishAt = now;
-                }
-                allowed = false;
-            } else {
-                state.hitTimestamps.addLast(now);
-                state.lastTouchedAt = now;
-                allowed = true;
+        } else if (decision == Decision.PUNISH) {
+            if (feedbackSink != null) feedbackSink.punish(rule.punishCommand());
+            else if (player != null && !rule.punishCommand().isBlank()) {
+                String safeName = sanitizePlayerName(player.getName());
+                if (safeName != null) Bukkit.dispatchCommand(Bukkit.getConsoleSender(),
+                    rule.punishCommand().replace("{player}", safeName).replace("<player>", safeName));
             }
         }
 
-        if (!allowed && debugLogging && plugin != null) {
+        if (debugLogging && plugin != null) {
+            String name = player == null ? playerName : player.getName();
+            String reason = switch (decision) {
+                case PACKET_LIMIT -> "packetId 数超上限 " + MAX_PACKET_IDS_PER_MODULE_PLAYER;
+                case ACTION_LIMIT -> "action 键数超上限 " + MAX_ACTION_KEYS_PER_MODULE_PLAYER;
+                default -> "windowMs=" + rule.windowMs() + " | maxHits=" + rule.maxHits() + " | mode=" + rule.mode().configValue();
+            };
             xuanmo.arcartxsuite.module.AxsLog.logger().info(
-                "ClientPacketGuard 拒绝回包 -> player="
-                    + playerName
-                    + " | route="
-                    + normalizedModule
-                    + "."
-                    + normalizedAction
-                    + " | packetId="
-                    + normalizedPacketId
-                    + " | windowMs="
-                    + rule.windowMs()
-                    + " | maxHits="
-                    + rule.maxHits()
-                    + " | mode="
-                    + rule.mode().configValue()
-            );
+                "ClientPacketGuard 拒绝回包 -> player=" + name + " | route=" + normalizedModule + "." + normalizedAction
+                    + " | packetId=" + normalizedPacket + " | 原因=" + reason);
         }
-        return allowed;
+        return false;
+    }
+
+    private Decision admit(UUID playerId, String module, String packetId, String action, ClientPacketGuardRule rule) {
+        while (true) {
+            var player = players.computeIfAbsent(playerId, ignored -> new PlayerState());
+            synchronized (player) {
+                if (player.retired) continue;
+                var packets = player.modules.computeIfAbsent(module, ignored -> new HashMap<>());
+                var actions = packets.get(packetId);
+                if (actions == null) {
+                    if (packets.size() >= MAX_PACKET_IDS_PER_MODULE_PLAYER) return Decision.PACKET_LIMIT;
+                    actions = new HashMap<>();
+                    packets.put(packetId, actions);
+                }
+                GuardState state = actions.get(action);
+                if (state == null) {
+                    if (actions.size() >= MAX_ACTION_KEYS_PER_MODULE_PLAYER) return Decision.ACTION_LIMIT;
+                    state = new GuardState();
+                    actions.put(action, state);
+                }
+                return state.admit(timeSupplier.getAsLong(), rule);
+            }
+        }
     }
 
     @Override
     public Map<String, ? extends java.util.Collection<String>> actionKeys(UUID playerId) {
-        Map<String, java.util.Collection<String>> result = new LinkedHashMap<>();
-        if (playerId == null) {
-            return result;
-        }
-        String segment = "|" + playerId + "|";
-        for (Map.Entry<String, java.util.Set<String>> entry : actionKeysByModulePlayer.entrySet()) {
-            String mpKey = entry.getKey();
-            if (!mpKey.contains(segment)) {
-                continue;
-            }
-            // mpKey 格式 module|playerId|packetId → 展示为 module|packetId
-            String bucket = mpKey.replace(segment, "|");
-            result.put(bucket, java.util.List.copyOf(entry.getValue()));
+        if (playerId == null) return Map.of();
+        PlayerState player = players.get(playerId);
+        if (player == null) return Map.of();
+        Map<String, List<String>> result = new LinkedHashMap<>();
+        synchronized (player) {
+            if (!player.retired) player.modules.forEach((module, packets) ->
+                packets.forEach((id, actions) -> result.put(module + "|" + id, List.copyOf(actions.keySet()))));
         }
         return result;
     }
 
     @Override
     public void clearPlayer(UUID playerId) {
-        if (playerId == null) {
-            return;
-        }
-        states.keySet().removeIf(key -> playerId.equals(key.playerId()));
-        actionKeysByModulePlayer.keySet().removeIf(key -> key.contains("|" + playerId + "|"));
-        packetIdsByModulePlayer.keySet().removeIf(key -> key.endsWith("|" + playerId));
+        if (playerId == null) return;
+        PlayerState player = players.get(playerId);
+        if (player != null) retire(playerId, player);
     }
 
-    private void cleanup() {
-        long now = timeSupplier.getAsLong();
-        ClientPacketGuardConfiguration config = this.configuration;
-        for (Map.Entry<RouteKey, GuardState> entry : states.entrySet()) {
-            ClientPacketGuardRule rule = config.resolve(entry.getKey().module(), entry.getKey().action());
-            GuardState state = entry.getValue();
-            boolean remove;
-            synchronized (state) {
-                state.prune(now, rule.windowMs());
-                long retentionMs = Math.max(Math.max(rule.windowMs(), rule.notifyCooldownMs()), rule.punishCooldownMs());
-                remove = state.hitTimestamps.isEmpty()
-                    && now - Math.max(Math.max(state.lastTouchedAt, state.lastNotifyAt), state.lastPunishAt) > retentionMs;
-            }
-            if (remove) {
-                states.remove(entry.getKey(), state);
-                RouteKey key = entry.getKey();
-                String modulePlayerKey = key.module() + "|" + key.playerId();
-                String mpKey = modulePlayerKey + "|" + key.packetId();
-                java.util.Set<String> actionKeys = actionKeysByModulePlayer.get(mpKey);
-                if (actionKeys != null) {
-                    actionKeys.remove(key.action());
-                    if (actionKeys.isEmpty()) {
-                        actionKeysByModulePlayer.remove(mpKey, actionKeys);
-                        // 桶空了 → 该 packetId 也从已见集合中释放，腾出 packetId 额度
-                        java.util.Set<String> packetIds = packetIdsByModulePlayer.get(modulePlayerKey);
-                        if (packetIds != null) {
-                            packetIds.remove(key.packetId());
-                            if (packetIds.isEmpty()) {
-                                packetIdsByModulePlayer.remove(modulePlayerKey, packetIds);
-                            }
-                        }
-                    }
-                }
-            }
+    private void retire(UUID playerId, PlayerState player) {
+        synchronized (player) {
+            player.retired = true;
+            players.remove(playerId, player);
         }
+    }
+
+    void cleanup() {
+        ClientPacketGuardConfiguration config = configuration;
+        long now = timeSupplier.getAsLong();
+        players.forEach((id, player) -> {
+            synchronized (player) {
+                if (player.retired) return;
+                if (player.ingress != null && now - player.ingress.startedAt >= 2000L) player.ingress = null;
+                player.modules.entrySet().removeIf(module -> {
+                    module.getValue().values().removeIf(actions -> {
+                        actions.entrySet().removeIf(action -> action.getValue().expired(now,
+                            config.resolveNormalized(module.getKey(), action.getKey())));
+                        return actions.isEmpty();
+                    });
+                    return module.getValue().isEmpty();
+                });
+                if (player.ingress == null && player.modules.isEmpty()) retire(id, player);
+            }
+        });
     }
 
     private static String normalizeKey(String value) {
         return value == null ? "" : value.trim().toLowerCase(java.util.Locale.ROOT);
+    }
+
+    private static final class IngressWindow {
+        private long startedAt;
+        private int packets;
+        private int bytes;
+
+        private IngressWindow(long startedAt) {
+            this.startedAt = startedAt;
+        }
     }
 
     /**
@@ -362,18 +321,66 @@ public final class ClientPacketGuard implements PacketGuardAPI {
         void punish(String command);
     }
 
-    private record RouteKey(String module, String packetId, String action, UUID playerId) {
+    private enum Decision { ALLOW, LIMIT, PACKET_LIMIT, ACTION_LIMIT, NOTIFY, PUNISH }
+
+    private static final class PlayerState {
+        /** Module → packet ID → action. This container is locked as a whole for quota changes. */
+        private final Map<String, Map<String, Map<String, GuardState>>> modules = new HashMap<>();
+        private IngressWindow ingress;
+        private boolean retired;
     }
 
     private static final class GuardState {
-        private final ArrayDeque<Long> hitTimestamps = new ArrayDeque<>();
-        private long lastNotifyAt;
-        private long lastPunishAt;
+        private long[] hitTimestamps = new long[4];
+        private int firstHit;
+        private int hits;
+        private long lastNotifyAt = Long.MIN_VALUE;
+        private long lastPunishAt = Long.MIN_VALUE;
         private long lastTouchedAt;
 
+        private Decision admit(long now, ClientPacketGuardRule rule) {
+            prune(now, rule.windowMs());
+            lastTouchedAt = now;
+            if (hits < rule.maxHits()) {
+                add(now);
+                return Decision.ALLOW;
+            }
+            if (rule.mode() == ClientPacketGuardMode.NOTIFY
+                && (lastNotifyAt == Long.MIN_VALUE || now - lastNotifyAt >= rule.notifyCooldownMs())) {
+                lastNotifyAt = now;
+                return Decision.NOTIFY;
+            }
+            if (rule.mode() == ClientPacketGuardMode.PUNISH
+                && (lastPunishAt == Long.MIN_VALUE || now - lastPunishAt >= rule.punishCooldownMs())) {
+                lastPunishAt = now;
+                return Decision.PUNISH;
+            }
+            return Decision.LIMIT;
+        }
+
+        private boolean expired(long now, ClientPacketGuardRule rule) {
+            prune(now, rule.windowMs());
+            long retention = Math.max(Math.max(rule.windowMs(), rule.notifyCooldownMs()), rule.punishCooldownMs());
+            return hits == 0 && now - Math.max(Math.max(lastTouchedAt, lastNotifyAt), lastPunishAt) > retention;
+        }
+
+        private void add(long now) {
+            if (hits == hitTimestamps.length) {
+                long[] grown = new long[hits * 2];
+                int firstSegment = hits - firstHit;
+                System.arraycopy(hitTimestamps, firstHit, grown, 0, firstSegment);
+                System.arraycopy(hitTimestamps, 0, grown, firstSegment, firstHit);
+                hitTimestamps = grown;
+                firstHit = 0;
+            }
+            hitTimestamps[(firstHit + hits) % hitTimestamps.length] = now;
+            hits++;
+        }
+
         private void prune(long now, long windowMs) {
-            while (!hitTimestamps.isEmpty() && now - hitTimestamps.peekFirst() >= windowMs) {
-                hitTimestamps.removeFirst();
+            while (hits > 0 && now - hitTimestamps[firstHit] >= windowMs) {
+                firstHit = (firstHit + 1) % hitTimestamps.length;
+                hits--;
             }
         }
     }

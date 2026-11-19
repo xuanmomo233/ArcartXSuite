@@ -88,6 +88,11 @@ public final class OneBotEvent {
         return getLong("user_id", 0L);
     }
 
+    public boolean isOwnMessage() {
+        long self = getLong("self_id", 0L);
+        return self > 0L && userId() == self;
+    }
+
     public int messageId() {
         return getInt("message_id", 0);
     }

@@ -18,8 +18,13 @@ import org.bukkit.event.entity.EntityRegainHealthEvent;
 import org.bukkit.plugin.EventExecutor;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
-import priv.seventeen.artist.symphony.api.event.SymphonyDamageEvent;
+import org.bukkit.scheduler.BukkitTask;
+import priv.seventeen.artist.symphony.api.damage.DamageResultState;
+import priv.seventeen.artist.symphony.api.event.SymphonyDamageConfirmedEvent;
+import priv.seventeen.artist.symphony.api.event.SymphonyDamagePrepareEvent;
 import priv.seventeen.artist.symphony.api.event.SymphonyHitCheckEvent;
+import xuanmo.arcartxsuite.api.combat.CombatEventSupport;
+import xuanmo.arcartxsuite.api.event.CombatDamageEvent;
 import xuanmo.arcartxsuite.api.attribute.AttributeDamageEvent;
 import xuanmo.arcartxsuite.api.attribute.AttributeDamageListener;
 import xuanmo.arcartxsuite.api.attribute.AttributeDamageEvent.Source;
@@ -40,6 +45,12 @@ final class AttributeDamageDispatcher {
     private final List<AttributeDamageListener> listeners = new CopyOnWriteArrayList<>();
     private final List<AttributeHealListener> healListeners = new CopyOnWriteArrayList<>();
     private final List<Listener> registeredListeners = new CopyOnWriteArrayList<>();
+    private final CombatDamageRouter combat = new CombatDamageRouter(event -> Bukkit.getPluginManager().callEvent(event));
+    private BukkitTask combatClock;
+    private Plugin symphony;
+
+    CombatDamageRouter combatRouter() { return combat; }
+    boolean symphonyDamageAvailable() { return symphony != null && symphony.isEnabled(); }
 
     // CraneAttribute handler 方法缓存（首次事件触发时初始化，避免每次事件都做 getMethod 查找）
     private volatile Method craneHandlerGetEntity;
@@ -86,7 +97,7 @@ final class AttributeDamageDispatcher {
 
     /** 初始化所有可用属性插件的伤害事件监听 */
     void initialize(boolean attributePlusEnabled, boolean craneAttributeEnabled, boolean mythicLibEnabled, boolean symphonyEnabled) {
-        shutdown();
+        unregisterProviders();
         if (attributePlusEnabled) registerAttributePlus();
         if (craneAttributeEnabled) {
             registerCraneAttribute();
@@ -96,14 +107,28 @@ final class AttributeDamageDispatcher {
         if (symphonyEnabled) {
             registerSymphony();
         }
-        registerBukkitFallback();
+        if (combatClock == null) {
+            Bukkit.getPluginManager().registerEvents(combat, plugin);
+            combatClock = Bukkit.getScheduler().runTaskTimer(plugin, combat::nextTick, 1L, 1L);
+        }
     }
 
     /** 清理所有 Bukkit 监听器 */
     void shutdown() {
-        xuanmo.arcartxsuite.util.ListenerUnregister.safeUnregisterAll(registeredListeners, "AttributeDamageDispatcher");
+        unregisterProviders();
+        xuanmo.arcartxsuite.util.ListenerUnregister.safeUnregisterAll(combat, "CombatDamageRouter");
+        if (combatClock != null) {
+            combatClock.cancel();
+            combatClock = null;
+        }
+        combat.clear();
         healListeners.clear();
         listeners.clear();
+    }
+
+    private void unregisterProviders() {
+        xuanmo.arcartxsuite.util.ListenerUnregister.safeUnregisterAll(registeredListeners, "AttributeDamageDispatcher");
+        symphony = null;
     }
 
     // ─── AttributePlus ─────────────────────────────────────────
@@ -404,15 +429,25 @@ final class AttributeDamageDispatcher {
             try {
                 Entity target = event.getEntity();
                 if (target == null) return;
+                var original = event.toBukkit();
+                if (original != null && original.isCancelled()) return;
+
+                Player attacker = original instanceof EntityDamageByEntityEvent attack
+                    ? CombatEventSupport.resolvePlayerAttacker(attack) : null;
+                var metadata = event.getAttack();
+                if (attacker == null && metadata != null && metadata.isPlayer()) {
+                    attacker = metadata.getPlayer();
+                }
+                if (attacker == null) return;
+
                 double damage;
-                if (event.toBukkit() != null) {
-                    damage = event.toBukkit().getFinalDamage();
+                if (original != null) {
+                    damage = original.getFinalDamage();
                 } else {
                     DamageMetadata meta = event.getDamage();
                     damage = meta != null ? meta.getDamage() : 0.0D;
                 }
                 if (damage <= 0.0D) return;
-                Player attacker = target instanceof LivingEntity le ? resolveMythicLibAttacker(le) : null;
                 dispatch(new AttributeDamageEvent(attacker, target, damage, Source.MYTHIC_LIB));
             } catch (RuntimeException e) {
                 xuanmo.arcartxsuite.module.AxsLog.logger().warning("[AttributeDamageDispatcher] MythicLib dispatch failed: " + e.getMessage());
@@ -420,85 +455,67 @@ final class AttributeDamageDispatcher {
         }
     }
 
-    private Player resolveMythicLibAttacker(LivingEntity target) {
-        if (target.getLastDamageCause() instanceof EntityDamageByEntityEvent de) {
-            Entity damager = de.getDamager();
-            if (damager instanceof Player p) return p;
-            if (damager instanceof org.bukkit.entity.Projectile proj && proj.getShooter() instanceof Player p) return p;
-        }
-        return null;
-    }
-
     // ─── Symphony ──────────────────────────────────────────────
 
     private void registerSymphony() {
-        Plugin symphony = Bukkit.getPluginManager().getPlugin("Symphony");
-        if (symphony == null || !symphony.isEnabled()) return;
-        Listener damageListener = new SymphonyDamageListener();
-        Listener hitCheckListener = new SymphonyHitCheckListener();
-        Bukkit.getPluginManager().registerEvents(damageListener, plugin);
-        Bukkit.getPluginManager().registerEvents(hitCheckListener, plugin);
-        registeredListeners.add(damageListener);
-        registeredListeners.add(hitCheckListener);
+        Plugin provider = Bukkit.getPluginManager().getPlugin("Symphony");
+        if (provider == null || !provider.isEnabled()) return;
+        Listener listener = null;
+        try {
+            SymphonyDamageConfirmedEvent.getHandlerList();
+            SymphonyDamagePrepareEvent.getHandlerList();
+            SymphonyHitCheckEvent.getHandlerList();
+            listener = new SymphonyDamageListener();
+            Bukkit.getPluginManager().registerEvents(listener, plugin);
+            registeredListeners.add(listener);
+            symphony = provider;
+        } catch (RuntimeException | LinkageError e) {
+            xuanmo.arcartxsuite.util.ListenerUnregister.safeUnregisterAll(listener, "SymphonyDamage");
+            xuanmo.arcartxsuite.module.AxsLog.logger().warning("[SymphonyDamage] 确认伤害桥接不可用: " + e);
+        }
     }
 
     private final class SymphonyDamageListener implements Listener {
-        @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
-        public void onSymphonyDamage(SymphonyDamageEvent event) {
-            try {
-                LivingEntity target = event.getRequest().getVictim();
-                if (target == null) return;
-                Player attacker = event.getRequest().getAttacker() instanceof Player p ? p : null;
-                double damage = event.getFinalDamage();
-                if (damage <= 0.0D) return;
-                boolean critical = event.getCritical();
-                AttributeDamageEvent.DamageRelation relation = resolveRelation(event);
-                dispatch(new AttributeDamageEvent(attacker, target, damage, Source.SYMPHONY, critical, false, relation));
-            } catch (RuntimeException e) {
-                xuanmo.arcartxsuite.module.AxsLog.logger().warning("[AttributeDamageDispatcher] Symphony damage dispatch failed: " + e.getMessage());
-            }
+        @EventHandler(priority = EventPriority.LOWEST)
+        public void onSymphonyPrepare(SymphonyDamagePrepareEvent event) {
+            var request = event.getRequest();
+            Player attacker = request.getAttacker() instanceof Player player ? player : null;
+            combat.beginSymphony(event.getTransactionId(), attacker, request.getVictim());
         }
-    }
 
-    /** 监听命中判定事件，闪避时分发 dodged=true 的 DamageEvent（damage=0） */
-    private final class SymphonyHitCheckListener implements Listener {
-        @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+        @EventHandler(priority = EventPriority.MONITOR)
+        public void onSymphonyConfirmed(SymphonyDamageConfirmedEvent event) {
+            var result = event.getResult();
+            var hit = combat.consumeSymphony(result.getTransactionId());
+            double damage = result.getFinalDamage();
+            if (hit == null || result.getState() != DamageResultState.CONFIRMED
+                    || !result.getHit() || !CombatDamageRouter.positive(damage)) return;
+            var breakdown = result.getBreakdown();
+            var relation = resolveRelation(breakdown.getAdvantagedDamage(), breakdown.getNeutralDamage(),
+                breakdown.getDisadvantagedDamage());
+            dispatch(new AttributeDamageEvent(hit.attacker(), hit.target(), damage, Source.SYMPHONY,
+                result.getCritical(), false, relation));
+            combat.publish(hit, damage, CombatDamageEvent.Source.SYMPHONY, result.getTransactionId());
+        }
+
+        @EventHandler(priority = EventPriority.MONITOR)
         public void onSymphonyHitCheck(SymphonyHitCheckEvent event) {
-            try {
-                if (event.getHit()) return; // 命中成功，由 SymphonyDamageEvent 处理
-                LivingEntity target = event.getRequest().getVictim();
-                if (target == null) return;
-                Player attacker = event.getRequest().getAttacker() instanceof Player p ? p : null;
-                dispatch(new AttributeDamageEvent(attacker, target, 0.0D, Source.SYMPHONY, false, true, null));
-            } catch (RuntimeException e) {
-                xuanmo.arcartxsuite.module.AxsLog.logger().warning("[AttributeDamageDispatcher] Symphony hit-check dispatch failed: " + e.getMessage());
+            if (event.getHit()) return;
+            var hit = combat.consumeSymphony(event.getTransactionId());
+            if (hit != null) {
+                dispatch(new AttributeDamageEvent(hit.attacker(), hit.target(), 0.0, Source.SYMPHONY, false, true, null));
             }
         }
     }
 
-    /** 根据伤害明细中优势/中性/劣势伤害的占比判定克制关系 */
-    private static AttributeDamageEvent.DamageRelation resolveRelation(SymphonyDamageEvent event) {
-        try {
-            double advantaged = event.getAdvantagedDamage();
-            double neutral = event.getNeutralDamage();
-            double disadvantaged = event.getDisadvantagedDamage();
-            if (advantaged > neutral && advantaged > disadvantaged && advantaged > 0.0D) {
-                return AttributeDamageEvent.DamageRelation.ADVANTAGED;
-            }
-            if (disadvantaged > neutral && disadvantaged > advantaged && disadvantaged > 0.0D) {
-                return AttributeDamageEvent.DamageRelation.DISADVANTAGED;
-            }
-            return AttributeDamageEvent.DamageRelation.NEUTRAL;
-        } catch (Exception | LinkageError e) {
-            return null;
+    private static AttributeDamageEvent.DamageRelation resolveRelation(double advantaged, double neutral, double disadvantaged) {
+        if (advantaged > neutral && advantaged > disadvantaged) {
+            return AttributeDamageEvent.DamageRelation.ADVANTAGED;
         }
-    }
-
-    // ─── Bukkit Fallback ───────────────────────────────────────
-
-    private void registerBukkitFallback() {
-        // Bukkit EntityDamageByEntityEvent 已由模块自行决定是否监听，
-        // 此处不重复注册，避免与模块自身的 Bukkit 监听冲突。
+        if (disadvantaged > neutral && disadvantaged > advantaged) {
+            return AttributeDamageEvent.DamageRelation.DISADVANTAGED;
+        }
+        return AttributeDamageEvent.DamageRelation.NEUTRAL;
     }
 
     // ─── Dispatch ──────────────────────────────────────────────

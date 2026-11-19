@@ -25,7 +25,15 @@ public final class GunListService {
     /** 模式推送通道（plugin message，载荷 = "ax" / "mod" 原文）。 */
     public static final String MODE_CHANNEL = "axstooltip:gunui";
 
-    public enum UiMode { AX, MOD }
+    public enum UiMode {
+        AX("ax"), MOD("mod");
+
+        private final byte[] payload;
+
+        UiMode(String wireName) {
+            payload = wireName.getBytes(StandardCharsets.UTF_8);
+        }
+    }
 
     private final Plugin plugin;
     private final PacketBridgeAPI packetBridge;
@@ -63,8 +71,7 @@ public final class GunListService {
 
     /** 客户端初始化完成：把当前模式推送给该玩家的 mod。 */
     public void pushMode(@NotNull Player player) {
-        player.sendPluginMessage(plugin, MODE_CHANNEL,
-            mode.name().toLowerCase().getBytes(StandardCharsets.UTF_8));
+        player.sendPluginMessage(plugin, MODE_CHANNEL, mode.payload);
     }
 
     /**
@@ -81,10 +88,9 @@ public final class GunListService {
 
     /** 处理客户端 AXS_GUN_LIST["open"] 请求（ax 模式下才会到达）。 */
     public void requestOpen(@NotNull Player player) {
-        if (!packetBridge.isAvailable() || gunListUiId == null) return;
-        if (!packetBridge.openUi(player, gunListUiId)) {
-            packetBridge.openUiUnsafe(player, gunListUiId);
-        }
+        String uiId = gunListUiId;
+        if (mode != UiMode.AX || !player.isOnline() || !packetBridge.isAvailable() || uiId == null) return;
+        packetBridge.openUi(player, uiId);
     }
 }
 

@@ -50,6 +50,21 @@ public final class BossSession {
         this.lastKnownDisplayName = displayName;
     }
 
+    BossSession(BossSession previous, BossDefinition definition) {
+        this.entityUuid = previous.entityUuid;
+        this.definition = definition;
+        this.mythicMobId = previous.mythicMobId;
+        this.spawnedAt = previous.spawnedAt;
+        this.spawnOrder = previous.spawnOrder;
+        this.damageRankingTracker = new BossDamageRankingTracker(definition.damageRanking(), previous.damageRankingTracker);
+        this.settled = previous.settled;
+        this.lastKnownDisplayName = previous.lastKnownDisplayName;
+    }
+
+    boolean matchesMob(String mobId) {
+        return mythicMobId.equalsIgnoreCase(mobId);
+    }
+
     public UUID getEntityUuid() {
         return entityUuid;
     }
@@ -202,6 +217,7 @@ public final class BossSession {
         String displayName = resolveDisplayName(entity);
         BossPlaceholderContext context = createPlaceholderContext(
             viewer,
+            viewer.getLocation(),
             location,
             displayName,
             health,
@@ -238,8 +254,13 @@ public final class BossSession {
     }
 
     public BossViewSlot toViewSlot(Player viewer, BossRenderState renderState) {
+        return toViewSlot(viewer, viewer.getLocation(), renderState);
+    }
+
+    BossViewSlot toViewSlot(Player viewer, Location viewerLocation, BossRenderState renderState) {
         BossPlaceholderContext context = createPlaceholderContext(
             viewer,
+            viewerLocation,
             renderState.location(),
             renderState.displayName(),
             renderState.health(),
@@ -341,6 +362,7 @@ public final class BossSession {
 
     private BossPlaceholderContext createPlaceholderContext(
         Player viewer,
+        Location viewerLocation,
         Location location,
         String displayName,
         double health,
@@ -348,8 +370,8 @@ public final class BossSession {
         BossTargetSnapshot target
     ) {
         int distance = 0;
-        if (location.getWorld() != null && viewer.getWorld().equals(location.getWorld())) {
-            distance = (int) Math.round(Math.sqrt(viewer.getLocation().distanceSquared(location)));
+        if (location.getWorld() != null && location.getWorld().equals(viewerLocation.getWorld())) {
+            distance = (int) Math.round(Math.sqrt(viewerLocation.distanceSquared(location)));
         }
         long aliveSeconds = Math.max(0L, (System.currentTimeMillis() - spawnedAt) / 1000L);
         String worldName = location.getWorld() == null ? "unknown" : location.getWorld().getName();

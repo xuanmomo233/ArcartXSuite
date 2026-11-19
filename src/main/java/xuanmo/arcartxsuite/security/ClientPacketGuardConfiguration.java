@@ -68,21 +68,18 @@ public record ClientPacketGuardConfiguration(
     }
 
     public ClientPacketGuardRule resolve(String module, String action) {
-        String normalizedModule = normalizeKey(module);
-        String normalizedAction = normalizeKey(action);
-        Map<String, ClientPacketGuardRule> perActionRules = rulesForModule(actionRules, normalizedModule);
+        return resolveNormalized(normalizeKey(module), normalizeKey(action));
+    }
+
+    ClientPacketGuardRule resolveNormalized(String normalizedModule, String normalizedAction) {
+        Map<String, ClientPacketGuardRule> perActionRules = actionRules.get(normalizedModule);
         if (perActionRules != null) {
             ClientPacketGuardRule actionRule = perActionRules.get(normalizedAction);
             if (actionRule != null) {
                 return actionRule;
             }
         }
-        ClientPacketGuardRule moduleRule = rulesForModule(moduleRules, normalizedModule);
-        return moduleRule == null ? defaults : moduleRule;
-    }
-
-    private static <T> T rulesForModule(Map<String, T> rules, String module) {
-        return rules.get(module);
+        return moduleRules.getOrDefault(normalizedModule, defaults);
     }
 
     private static LinkedHashMap<String, ClientPacketGuardRule> buildModuleRules(
@@ -217,6 +214,7 @@ public record ClientPacketGuardConfiguration(
             actionRule("delete_waypoint", 2000L, 1, ClientPacketGuardMode.SILENT)
         ));
         rules.put("announcer", actionRules(actionRule("click", 3000L, 2, ClientPacketGuardMode.NOTIFY)));
+        rules.put("tooltip", actionRules(actionRule("inspect", 1000L, 96, ClientPacketGuardMode.SILENT)));
         rules.put("eventpacket", actionRules(actionRule("client-packet", 3000L, 2, ClientPacketGuardMode.NOTIFY)));
         rules.put("loginview", actionRules(
             actionRule("login", 3000L, 3, ClientPacketGuardMode.NOTIFY),

@@ -1,9 +1,7 @@
 package xuanmo.arcartxsuite.regions.service;
 
-import java.util.HashMap;
-import java.util.HashSet;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -36,9 +34,10 @@ public final class SelectionParticleTask {
 
     /** 选区边框单次最大粒子数（沿 12 条棱均匀采样） */
     private static final int MAX_SELECTION_EDGE_PARTICLES = 600;
-    /** 区域边框单次最大粒子数 */
+    /** 每位玩家和全服每轮区域边框预览的粒子预算。 */
     private static final int MAX_REGION_EDGE_PARTICLES = 400;
-    /** 区域边框显示的视距（方块半径，X/Z 平面） */
+    private static final int MAX_REGION_PREVIEW_PARTICLES = 1600;
+    /** 预览附近的区域棱边。 */
     private static final int REGION_VIEW_RADIUS = 48;
     /** 选区粒子任务周期（tick） */
     private static final long SELECTION_PERIOD = 8L;
@@ -51,6 +50,7 @@ public final class SelectionParticleTask {
 
     private BukkitTask selectionTask;
     private BukkitTask regionTask;
+    private int nextViewer;
 
     /** 显式开启区域边框可视化的玩家（/rg show 切换） */
     private final Set<UUID> regionBorderToggled = ConcurrentHashMap.newKeySet();
@@ -115,7 +115,7 @@ public final class SelectionParticleTask {
             if (sel.isComplete()) {
                 spawnBoxEdges(player, world,
                     sel.x1(), sel.y1(), sel.z1(), sel.x2(), sel.y2(), sel.z2(),
-                    Color.AQUA, MAX_SELECTION_EDGE_PARTICLES);
+                    Color.AQUA, MAX_SELECTION_EDGE_PARTICLES, null);
             }
         }
     }
@@ -135,82 +135,87 @@ public final class SelectionParticleTask {
     /**
      * 沿立方体 12 条棱均匀采样粒子，限制总数避免卡服。
      */
-    private void spawnBoxEdges(Player player, World world,
-                                int x1, int y1, int z1, int x2, int y2, int z2,
-                                Color color, int maxParticles) {
-        int minX = Math.min(x1, x2), maxX = Math.max(x1, x2);
-        int minY = Math.min(y1, y2), maxY = Math.max(y1, y2);
-        int minZ = Math.min(z1, z2), maxZ = Math.max(z1, z2);
-        int dx = maxX - minX + 1, dy = maxY - minY + 1, dz = maxZ - minZ + 1;
-        // 12 条棱总长
-        long totalLen = 4L * dx + 4L * dy + 4L * dz;
-        if (totalLen <= 0) return;
-        // 采样步长：保证总粒子数 <= maxParticles
-        double step = Math.max(1.0, (double) totalLen / maxParticles);
+    private int spawnBoxEdges(Player player, World world,
+                              int x1, int y1, int z1, int x2, int y2, int z2,
+                              Color color, int maxParticles, Location viewer) {
+        int[] minimum = {Math.min(x1, x2), Math.min(y1, y2), Math.min(z1, z2)};
+        int[] maximum = {Math.max(x1, x2), Math.max(y1, y2), Math.max(z1, z2)};
+        int[] center = viewer == null ? null : new int[]{viewer.getBlockX(), viewer.getBlockY(), viewer.getBlockZ()};
+        var edges = new ArrayList<Edge>(12);
+        long total = 0;
+        for (int axis = 0; axis < 3; axis++) {
+            int first = (axis + 1) % 3;
+            int second = (axis + 2) % 3;
+            int start = center == null ? minimum[axis] : Math.max(minimum[axis], center[axis] - REGION_VIEW_RADIUS);
+            int end = center == null ? maximum[axis] : Math.min(maximum[axis], center[axis] + REGION_VIEW_RADIUS);
+            if (start > end) continue;
+            for (int a : new int[]{minimum[first], maximum[first]}) {
+                for (int b : new int[]{minimum[second], maximum[second]}) {
+                    if (center != null && (Math.abs((long) a - center[first]) > REGION_VIEW_RADIUS
+                        || Math.abs((long) b - center[second]) > REGION_VIEW_RADIUS)) continue;
+                    int[] point = new int[3];
+                    point[axis] = start;
+                    point[first] = a;
+                    point[second] = b;
+                    long length = (long) end - start + 1;
+                    edges.add(new Edge(point[0], point[1], point[2], axis, length));
+                    total += length;
+                }
+            }
+        }
+
+        int count = (int) Math.min(maxParticles, total);
+        if (count == 0) return 0;
         Particle.DustOptions dust = new Particle.DustOptions(color, 1.0f);
-
-        // 4 条 X 方向棱（y/z 取 min/max 组合）
-        for (int y : new int[]{minY, maxY}) {
-            for (int z : new int[]{minZ, maxZ}) {
-                for (double x = minX; x <= maxX + 0.001; x += step) {
-                    player.spawnParticle(Particle.REDSTONE, new Location(world, x + 0.5, y + 0.5, z + 0.5), 1, 0, 0, 0, 0, dust);
-                }
+        int edgeIndex = 0;
+        long edgeOffset = 0;
+        for (int i = 0; i < count; i++) {
+            long offset = i * total / count;
+            Edge edge = edges.get(edgeIndex);
+            while (offset >= edgeOffset + edge.length()) {
+                edgeOffset += edge.length();
+                edge = edges.get(++edgeIndex);
             }
+            long step = offset - edgeOffset;
+            player.spawnParticle(Particle.REDSTONE, new Location(world,
+                edge.x() + 0.5 + (edge.axis() == 0 ? step : 0),
+                edge.y() + 0.5 + (edge.axis() == 1 ? step : 0),
+                edge.z() + 0.5 + (edge.axis() == 2 ? step : 0)), 1, 0, 0, 0, 0, dust);
         }
-        // 4 条 Y 方向棱（x/z 取 min/max 组合）
-        for (int x : new int[]{minX, maxX}) {
-            for (int z : new int[]{minZ, maxZ}) {
-                for (double y = minY; y <= maxY + 0.001; y += step) {
-                    player.spawnParticle(Particle.REDSTONE, new Location(world, x + 0.5, y + 0.5, z + 0.5), 1, 0, 0, 0, 0, dust);
-                }
-            }
-        }
-        // 4 条 Z 方向棱（x/y 取 min/max 组合）
-        for (int x : new int[]{minX, maxX}) {
-            for (int y : new int[]{minY, maxY}) {
-                for (double z = minZ; z <= maxZ + 0.001; z += step) {
-                    player.spawnParticle(Particle.REDSTONE, new Location(world, x + 0.5, y + 0.5, z + 0.5), 1, 0, 0, 0, 0, dust);
-                }
-            }
-        }
+        return count;
     }
-
-    // ─── 区域边框常驻粒子 ───
 
     private void tickRegionBorders() {
-        for (Player player : Bukkit.getOnlinePlayers()) {
-            // 仅对显式开启的玩家显示（避免默认全员刷粒子）
-            if (!regionBorderToggled.contains(player.getUniqueId())) continue;
-            // admin 自动看到所有区域；普通玩家只看自己拥有/参与的
-            boolean isAdmin = player.hasPermission("axs.regions.admin");
-            World world = player.getWorld();
-            int pcx = player.getLocation().getBlockX();
-            int pcz = player.getLocation().getBlockZ();
-
-            for (Region region : regionManager.getAllRegions()) {
-                if (!region.world().equals(world.getName())) continue;
-                // 视距裁剪：区域 AABB 与玩家视距圆是否相交
-                if (!withinView(region, pcx, pcz, REGION_VIEW_RADIUS)) continue;
-                // 权限：admin 看所有，普通玩家看自己拥有/参与的
-                if (!isAdmin && !region.isMember(player.getUniqueId())) continue;
-                // 颜色：自己拥有=黄，admin 看所有=紫
-                Color color = isAdmin ? Color.FUCHSIA : Color.YELLOW;
-                spawnBoxEdges(player, world,
-                    region.minX(), region.minY(), region.minZ(),
-                    region.maxX(), region.maxY(), region.maxZ(),
-                    color, MAX_REGION_EDGE_PARTICLES);
-            }
+        var viewers = List.copyOf(regionBorderToggled);
+        if (viewers.isEmpty()) return;
+        int start = Math.floorMod(nextViewer, viewers.size());
+        int remaining = MAX_REGION_PREVIEW_PARTICLES;
+        int visited = 0;
+        for (; visited < viewers.size() && remaining > 0; visited++) {
+            Player player = Bukkit.getPlayer(viewers.get((start + visited) % viewers.size()));
+            if (player == null) continue;
+            remaining -= showNearbyBorders(player, Math.min(remaining, MAX_REGION_EDGE_PARTICLES));
         }
+        nextViewer = (start + visited) % viewers.size();
     }
 
-    /**
-     * 区域 AABB（仅 X/Z 平面）是否落在玩家视距圆内。
-     */
-    private boolean withinView(Region region, int pcx, int pcz, int radius) {
-        // 找区域 AABB 上离玩家最近的点
-        int nearestX = Math.max(region.minX(), Math.min(pcx, region.maxX()));
-        int nearestZ = Math.max(region.minZ(), Math.min(pcz, region.maxZ()));
-        int dx = nearestX - pcx, dz = nearestZ - pcz;
-        return dx * dx + dz * dz <= radius * radius;
+    private int showNearbyBorders(Player player, int budget) {
+        Location viewer = player.getLocation();
+        boolean admin = player.hasPermission("axs.regions.admin");
+        var regions = regionManager.nearbyRegions(viewer, REGION_VIEW_RADIUS).stream()
+            .filter(region -> admin || regionManager.hasAccess(region, player))
+            .toList();
+        Color color = admin ? Color.FUCHSIA : Color.YELLOW;
+        int remaining = budget;
+        for (int i = 0; i < regions.size() && remaining > 0; i++) {
+            Region region = regions.get(i);
+            int share = Math.max(1, remaining / (regions.size() - i));
+            remaining -= spawnBoxEdges(player, viewer.getWorld(), region.minX(), region.minY(), region.minZ(),
+                region.maxX(), region.maxY(), region.maxZ(), color, share, viewer);
+        }
+        return budget - remaining;
     }
+
+    private record Edge(int x, int y, int z, int axis, long length) {}
+
 }

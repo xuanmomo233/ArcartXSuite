@@ -96,6 +96,7 @@ abstract class StringEncryptTask : DefaultTask() {
         if (entryName.startsWith("xuanmo/arcartxsuite/api/")) return false
         // 跳过 NativeBridge（JNI 桥接层）
         if (entryName.contains("NativeBridge")) return false
+        if (entryName.startsWith("xuanmo/arcartxsuite/bootstrap/RuntimeBootstrap")) return false
         // 共享网关独立于插件保护层运行，整个协议依赖闭包必须不依赖 NativeBridge。
         if (entryName.startsWith("xuanmo/arcartxsuite/auth/minecraft/")) return false
         return true

@@ -1,985 +1,2569 @@
-# AXS 资源说明
-# 用途: Regions 管理员区域管理面板，支持区域列表/区域编辑/成员管理。
-# 前置依赖: ArcartX；Regions 模块启用后自动注册。
-# 打开方式: /axs regions admin
-# 数据交互: packetHandler 接收 init 推送；客户端通过 Packet.send('AXS_REGIONS_ADMIN', ...) 发送管理指令。
-
 ui:
-  background: true
+  isHud: false
+  defaultOpen: false
+  show: true
+  background: false
+  through: false
   escClose: true
   closeDied: true
-  show: true
-  through: false
   screenScale: true
+  level: 7
+  hide:
+    - "hotbar"
+    - "experience_bar"
+    - "crosshair"
+    - "item_name"
+    - "jump_bar"
+    - "mount_health"
+    - "player_state"
+    - "player_health"
+    - "armor_level"
+    - "food_level"
+    - "air_level"
   packetHandler:
-    # packetHandler: init
-    # 包字段:
-    #   - page: 当前页面 (regions/edit)
-    #   - packetId: 服务端回包 ID，用于客户端 Packet.send 回传
-    #   - regions: 所有区域数据列表
-    #   - regionCount: 区域总数
-    #   - selId: 当前选中区域 ID
-    #   - selWorld: 选中区域所在世界
-    #   - selPriority: 选中区域优先级
-    #   - selParent: 选中区域父区域
-    #   - selMin: 选中区域最小坐标
-    #   - selMax: 选中区域最大坐标
-    #   - selVolume: 选中区域体积 (方块数)
-    #   - selFlags: 选中区域标志列表
-    #   - selMembers: 选中区域成员列表
-    #   - worlds: 世界规则页的世界列表
-    #   - worldCount: 世界数量
-    init: |-
-      var.newRegionName = ''
-      var.renameValue = ''
-      var.page = packet['page']
-      var.packetId = packet['packetId']
-      var.actionToken = packet['action_token']
-      var.regions = packet['regions']
-      var.regionCount = packet['regionCount']
-      var.selId = packet['selId']
-      var.selWorld = packet['selWorld']
-      var.selPriority = packet['selPriority']
-      var.selParent = packet['selParent']
-      var.selMin = packet['selMin']
-      var.selMax = packet['selMax']
-      var.selVolume = packet['selVolume']
-      var.selFlags = packet['selFlags']
-      var.selMembers = packet['selMembers']
-      var.worlds = packet['worlds']
-      var.worldCount = packet['worldCount']
-      // 将 Map 转为 List，供 VStack 行按 entryKey 整数索引访问
-      var.regionList = []
-      if(var.regions != null){
-        for(key in var.regions.keys()){
-          var.regionList.add(var.regions[key])
-        }
+    credentials: "var.token = packet['token']"
+    list: |-
+      var.scope = packet['scope']
+      var.listRows = packet['rows']
+      var.listPage = packet['page']
+      var.listPages = packet['pages']
+    detail: |-
+      if(var.selected != packet['id']){
+        var.pane = ''
+        var.deleteArmed = false
+        var.messageTarget = ''
       }
-      var.memberList = []
-      if(var.selMembers != null){
-        for(key in var.selMembers.keys()){
-          var.memberList.add(var.selMembers[key])
-        }
-      }
-      var.flagList = []
-      if(var.selFlags != null){
-        for(key in var.selFlags.keys()){
-          var.flagList.add(var.selFlags[key])
-        }
-      }
-      var.worldList = []
-      if(var.worlds != null){
-        for(key in var.worlds.keys()){
-          var.worldList.add(var.worlds[key])
-        }
-      }
-
+      var.selected = packet['id']
+      var.isWorld = packet['world']
+      var.title = packet['title']
+      var.subtitle = packet['subtitle']
+      var.priority = packet['priority']
+      var.parent = packet['parent']
+    rules: |-
+      var.pane = 'rules'
+      var.category = packet['category']
+      var.messageTarget = ''
+      var.ruleRows = packet['rows']
+      var.rulePage = packet['page']
+      var.rulePages = packet['pages']
+    members: |-
+      var.pane = 'members'
+      var.memberRows = packet['rows']
+      var.memberPage = packet['page']
+      var.memberPages = packet['pages']
+    materials: |-
+      var.pane = 'materials'
+      var.materialRows = packet['rows']
+      var.materialPage = packet['page']
+      var.materialPages = packet['pages']
+    settings: |-
+      var.pane = 'settings'
+      var.deleteArmed = false
+    notice: |-
+      var.notice = packet['text']
+      if(var.notice == '已保存'){ var.creating = false }
+  action:
+    load: |-
+      var.packetId = 'AXS_REGIONS_ADMIN'
+      var.token = ''
+      var.scope = 'regions'
+      var.selected = ''
+      var.isWorld = false
+      var.title = ''
+      var.subtitle = ''
+      var.priority = ''
+      var.parent = ''
+      var.pane = ''
+      var.category = 'block'
+      var.notice = ''
+      var.deleteArmed = false
+      var.creating = false
+      var.messageTarget = ''
+      var.messageTitle = ''
+      var.listRows = []
+      var.listPage = 0
+      var.listPages = 1
+      var.ruleRows = []
+      var.rulePage = 0
+      var.rulePages = 1
+      var.memberRows = []
+      var.memberPage = 0
+      var.memberPages = 1
+      var.materialRows = []
+      var.materialPage = 0
+      var.materialPages = 1
 controls:
-  自适应全局布局:
-    type: Adaptive
+  屏幕遮罩:
+    type: "Texture"
     attribute:
-      point: ~middle_center
-      width: 1920
-      height: 1080
+      point: "~stretch_all"
+      normal: "~27,23,20,168"
+      through: true
+  居中画布:
+    type: "Adaptive"
+    attribute:
+      point: "~middle_center"
+      width: 1440
+      height: 900
     children:
-      主面板:
-        type: Texture
+      外框:
+        type: "Texture"
         attribute:
-          point: ~middle_center
-          width: 1040
-          height: 680
-          normal: ~25,25,30,240
-          shape: ~round_rect
-          radius: 14
+          x: 22
+          y: 25
+          width: 1396
+          height: 850
+          normal: "~245,239,229,255"
+          through: true
+          shape: "~round_rect"
+          radius: 20
         effect:
           stroke:
-            width: 2
-            color: ~220,160,60,180
-          shadow:
-            xOffset: 0
-            yOffset: 4
-            blur: 12
-            color: ~0,0,0,100
+            width: 3
+            color: "~157,137,117,255"
+      栏标:
+        type: "Texture"
+        attribute:
+          x: 51
+          y: 53
+          width: 6
+          height: 42
+          normal: "~148,74,49,255"
+          through: true
+          shape: "~round_rect"
+          radius: 3
+      标题:
+        type: "Text"
+        attribute:
+          x: 72
+          y: 48
+          texts: "~&0区域管理"
+          fontSize: 62
+          through: true
+      关闭:
+        type: "Canvas"
+        attribute:
+          x: 1309
+          y: 53
+          width: 79
+          height: 44
+        action:
+          clickLeft: "Screen.close()"
         children:
-          # ═══ 标题栏 ═══
-          标题栏:
-            type: Texture
+          底色:
+            type: "Texture"
             attribute:
               x: 0
               y: 0
-              width: 1040
-              height: 58
-              normal: ~40,35,25,255
-              shape: ~round_rect
-              radius: 14
-            children:
-              标题文字:
-                type: Text
-                attribute:
-                  x: 24
-                  y: 8
-                  fontSize: 38
-                  texts: "~&6区域管理"
-              区域数量:
-                type: Text
-                attribute:
-                  x: 860
-                  y: 14
-                  fontSize: 28
-                  texts: "~&7区域数: &f{var.regionCount}"
-
-          # ═══ 左侧导航 ═══
-          导航栏:
-            type: Texture
+              width: 79
+              height: 44
+              normal: "self.parent.isHovered() ? '231,218,199,255' : '237,228,214,255'"
+              through: true
+          文字:
+            type: "Text"
             attribute:
               x: 0
-              y: 58
-              width: 160
-              height: 622
-              normal: ~30,30,38,255
-            children:
-              导航区域入口:
-                type: Canvas
-                attribute:
-                  x: 10
-                  y: 16
-                  width: 140
-                  height: 40
-                action:
-                  click: |-
-                    Packet.send(var.packetId, 'navigate', 'regions')
-                children:
-                  导航区域背景:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: "var.page == 'regions' ? '180,130,40,200' : (self.isHovered() ? '65,65,80,210' : '45,45,55,180')"
-                      shape: ~round_rect
-                      radius: 8
-                  导航区域文字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      width: 140
-                      through: true
-                      fontSize: 28
-                      texts: "~&f区域列表"
-
-              导航编辑入口:
-                type: Canvas
-                attribute:
-                  x: 10
-                  y: 66
-                  width: 140
-                  height: 40
-                action:
-                  click: |-
-                    Packet.send(var.packetId, 'navigate', 'edit')
-                children:
-                  导航编辑背景:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: "var.page == 'edit' ? '180,130,40,200' : (self.isHovered() ? '65,65,80,210' : '45,45,55,180')"
-                      shape: ~round_rect
-                      radius: 8
-                  导航编辑文字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      width: 140
-                      through: true
-                      fontSize: 28
-                      texts: "~&f编辑"
-
-              导航世界规则入口:
-                type: Canvas
-                attribute:
-                  x: 10
-                  y: 116
-                  width: 140
-                  height: 40
-                action:
-                  click: |-
-                    Packet.send(var.packetId, 'select_world_rule')
-                children:
-                  导航世界规则背景:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: "var.page == 'world_rules' ? '180,130,40,200' : (self.isHovered() ? '65,65,80,210' : '45,45,55,180')"
-                      shape: ~round_rect
-                      radius: 8
-                  导航世界规则文字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      width: 140
-                      through: true
-                      fontSize: 28
-                      texts: "~&f世界规则"
-
-          # ═══ 内容区 ═══
-          内容区:
-            type: Texture
+              y: 0
+              texts: "~&0关闭"
+              fontSize: 32
+              through: true
+              point: "~middle_center"
+      横线:
+        type: "Texture"
+        attribute:
+          x: 50
+          y: 111
+          width: 1340
+          height: 2
+          normal: "~209,195,175,255"
+          through: true
+      左侧目录:
+        type: "Canvas"
+        attribute:
+          x: 50
+          y: 132
+          width: 344
+          height: 685
+        children:
+          底:
+            type: "Texture"
             attribute:
-              x: 160
-              y: 58
-              width: 880
-              height: 622
-              normal: ~20,20,25,100
+              x: 0
+              y: 0
+              width: 344
+              height: 685
+              normal: "~237,228,214,255"
+              through: true
+          区域:
+            type: "Canvas"
+            attribute:
+              x: 18
+              y: 18
+              width: 140
+              height: 42
+            action:
+              clickLeft: "Packet.send(var.packetId, 'list', 'regions', '0')"
             children:
-              # ─── 区域列表 ───
-              区域列表布局:
-                type: Canvas
+              底色:
+                type: "Texture"
                 attribute:
-                  x: 20
-                  y: 16
-                  width: 840
-                  height: 590
-                  visible: "var.page == 'regions'"
+                  x: 0
+                  y: 0
+                  width: 140
+                  height: 42
+                  normal: "(var.scope == 'regions') ? '54,47,40,255' : (self.parent.isHovered() ? '220,201,177,255' : '237,228,214,255')"
+                  through: true
+              文字:
+                type: "Text"
+                attribute:
+                  x: 0
+                  y: 0
+                  texts: "(var.scope == 'regions') ? '&f区域' : '&0区域'"
+                  fontSize: 36
+                  through: true
+                  point: "~middle_center"
+          世界:
+            type: "Canvas"
+            attribute:
+              x: 166
+              y: 18
+              width: 140
+              height: 42
+            action:
+              clickLeft: "Packet.send(var.packetId, 'list', 'worlds', '0')"
+            children:
+              底色:
+                type: "Texture"
+                attribute:
+                  x: 0
+                  y: 0
+                  width: 140
+                  height: 42
+                  normal: "(var.scope == 'worlds') ? '54,47,40,255' : (self.parent.isHovered() ? '220,201,177,255' : '237,228,214,255')"
+                  through: true
+              文字:
+                type: "Text"
+                attribute:
+                  x: 0
+                  y: 0
+                  texts: "(var.scope == 'worlds') ? '&f世界' : '&0世界'"
+                  fontSize: 36
+                  through: true
+                  point: "~middle_center"
+          空白:
+            type: "Text"
+            attribute:
+              x: 24
+              y: 94
+              texts: "~&8暂无记录"
+              fontSize: 35
+              through: true
+              visible: "var.listRows.size() == 0"
+          列表:
+            type: "Scroll"
+            attribute:
+              x: 18
+              y: 76
+              width: 308
+              height: 480
+              moveY: 0
+            children:
+              列表:
+                type: "RepeatGrid"
+                attribute:
+                  items: "var.listRows"
+                  flow: "~row"
+                  column: 1
+                  spaceBetweenY: 6
+                  maxSize: 8
+                  width: 308
                 children:
-                  区域列表标题:
-                    type: Text
+                  条目:
+                    type: "Canvas"
                     attribute:
-                      x: 0
-                      y: 0
-                      fontSize: 36
-                      texts: "~&6所有区域"
-                  新建区域输入框:
-                    type: TextBox
-                    attribute:
-                      x: 320
-                      y: 4
-                      width: 280
-                      height: 36
-                      length: 32
-                      emptyText: "~&8输入新区域名称..."
-                      background: "~45,45,55,200"
+                      width: 308
+                      height: 54
+                      entry: "self.item"
+                      visible: "self.entry != none"
                     action:
-                      textChange: |-
-                        var.newRegionName = self.text
-                  创建区域按钮:
-                    type: Canvas
-                    attribute:
-                      x: 620
-                      y: 0
-                      width: 100
-                      height: 40
-                    action:
-                      click: |-
-                        if(var.newRegionName != null && var.newRegionName != ''){
-                          Packet.send(var.packetId, 'create_region', var.actionToken, var.newRegionName)
-                        }
+                      clickLeft: "Packet.send(var.packetId, 'select', self.entry['id'])"
                     children:
-                      创建按钮背景:
-                        type: Texture
-                        attribute:
-                          point: ~stretch_all
-                          through: true
-                          normal: "self.isHovered() ? '60,160,80,230' : '40,140,60,200'"
-                          shape: ~round_rect
-                          radius: 8
-                      创建按钮文字:
-                        type: Text
-                        attribute:
-                          point: ~middle_center
-                          width: 100
-                          through: true
-                          fontSize: 28
-                          texts: "~&f+ 创建"
-                  区域列表滑块:
-                    type: Texture
-                    val: 区域列表滑块
-                    attribute:
-                      x: 834
-                      y: 50
-                      width: 6
-                      height: 50
-                      normal: ~120,120,120,200
-                      maxDragY: 480
-                  区域滚动栏:
-                    type: Scroll
-                    attribute:
-                      x: 0
-                      y: 50
-                      width: 840
-                      height: 530
-                      moveY: "self.parent['区域列表滑块'].getDragYRatio()"
-                    action:
-                      wheel: |-
-                        if(self.moveY >= 0 && self.wheelValue > 0){
-                          self.parent['区域列表滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                        }
-                        if(self.moveY <= 1 && self.wheelValue < 0){
-                          self.parent['区域列表滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                        }
-                    children:
-                      regions_list:
-                        val: region_data
-                        type: VStack
+                      背景:
+                        type: "Texture"
                         attribute:
                           x: 0
                           y: 0
-                          width: 840
-                          spaceBetween: 6
-                        action:
-                          create: |-
-                            for(i in range(1, 50)){
-                              row = self['区域行'].copy('区域行' + i.round)
-                              row.entryKey = i.round()
-                            }
+                          width: 308
+                          height: 54
+                          normal: "self.parent.entry['id'] == var.selected ? '220,201,177,255' : (self.parent.isHovered() ? '231,218,199,255' : '237,228,214,255')"
+                          through: true
+                      选中标记:
+                        type: "Texture"
+                        attribute:
+                          x: 0
+                          y: 7
+                          width: 4
+                          height: 40
+                          through: true
+                          normal: "~148,74,49,255"
+                          shape: "~round_rect"
+                          radius: 2
+                          visible: "self.parent.entry['id'] == var.selected"
+                      名称:
+                        type: "Text"
+                        attribute:
+                          x: 14
+                          y: 4
+                          texts: "'&0' + self.parent.entry['title']"
+                          fontSize: 38
+                          through: true
+                          limit: 23
+                      说明:
+                        type: "Text"
+                        attribute:
+                          x: 14
+                          y: 29
+                          texts: "'&8' + self.parent.entry['subtitle']"
+                          fontSize: 32
+                          through: true
+                          limit: 26
+                      行分隔:
+                        type: "Texture"
+                        attribute:
+                          x: 12
+                          y: 52
+                          width: 284
+                          height: 2
+                          through: true
+                          normal: "~209,195,175,255"
+          list上页:
+            type: "Canvas"
+            attribute:
+              x: 32
+              y: 568
+              width: 82
+              height: 40
+              visible: "var.listPage > 0"
+            action:
+              clickLeft: "Packet.send(var.packetId, 'list', var.scope, (var.listPage - 1).round())"
+            children:
+              底色:
+                type: "Texture"
+                attribute:
+                  x: 0
+                  y: 0
+                  width: 82
+                  height: 40
+                  normal: "self.parent.isHovered() ? '231,218,199,255' : '237,228,214,255'"
+                  through: true
+              文字:
+                type: "Text"
+                attribute:
+                  x: 0
+                  y: 0
+                  texts: "~&0上一页"
+                  fontSize: 32
+                  through: true
+                  point: "~middle_center"
+          list页码:
+            type: "Canvas"
+            attribute:
+              x: 122
+              y: 568
+              width: 100
+              height: 40
+            children:
+              底:
+                type: "Texture"
+                attribute:
+                  x: 0
+                  y: 0
+                  width: 100
+                  height: 40
+                  normal: "~237,228,214,255"
+                  through: true
+              文字:
+                type: "Text"
+                attribute:
+                  x: 0
+                  y: 0
+                  texts: "'&8第 ' + (var.listPage + 1).round() + ' / ' + var.listPages.round() + ' 页'"
+                  fontSize: 32
+                  through: true
+                  point: "~middle_center"
+          list下页:
+            type: "Canvas"
+            attribute:
+              x: 230
+              y: 568
+              width: 82
+              height: 40
+              visible: "var.listPage + 1 < var.listPages"
+            action:
+              clickLeft: "Packet.send(var.packetId, 'list', var.scope, (var.listPage + 1).round())"
+            children:
+              底色:
+                type: "Texture"
+                attribute:
+                  x: 0
+                  y: 0
+                  width: 82
+                  height: 40
+                  normal: "self.parent.isHovered() ? '231,218,199,255' : '237,228,214,255'"
+                  through: true
+              文字:
+                type: "Text"
+                attribute:
+                  x: 0
+                  y: 0
+                  texts: "~&0下一页"
+                  fontSize: 32
+                  through: true
+                  point: "~middle_center"
+          新建:
+            type: "Canvas"
+            attribute:
+              x: 18
+              y: 622
+              width: 164
+              height: 43
+              visible: "var.scope == 'regions'"
+            action:
+              clickLeft: |-
+                var.creating = true
+                var.notice = ''
+            children:
+              底色:
+                type: "Texture"
+                attribute:
+                  x: 0
+                  y: 0
+                  width: 164
+                  height: 43
+                  normal: "self.parent.isHovered() ? '171,91,60,255' : '148,74,49,255'"
+                  through: true
+                  shape: "~round_rect"
+                  radius: 8
+              文字:
+                type: "Text"
+                attribute:
+                  x: 0
+                  y: 0
+                  texts: "~&f新建区域"
+                  fontSize: 36
+                  through: true
+                  point: "~middle_center"
+      等待选择:
+        type: "Canvas"
+        attribute:
+          x: 411
+          y: 132
+          width: 979
+          height: 685
+          visible: "var.selected == ''"
+        children:
+          底:
+            type: "Texture"
+            attribute:
+              x: 0
+              y: 0
+              width: 979
+              height: 685
+              normal: "~255,252,245,255"
+              through: true
+          提示:
+            type: "Text"
+            attribute:
+              x: 0
+              y: 0
+              texts: "'&0' + (var.scope == 'worlds' ? '请选择一个世界' : '请选择一个区域')"
+              fontSize: 48
+              through: true
+              point: "~middle_center"
+      内容:
+        type: "Canvas"
+        attribute:
+          x: 411
+          y: 132
+          width: 979
+          height: 685
+          visible: "var.selected != ''"
+        children:
+          底:
+            type: "Texture"
+            attribute:
+              x: 0
+              y: 0
+              width: 979
+              height: 685
+              normal: "~255,252,245,255"
+              through: true
+          名称:
+            type: "Text"
+            attribute:
+              x: 21
+              y: 12
+              texts: "'&0' + var.title"
+              fontSize: 58
+              through: true
+              limit: 36
+          简介:
+            type: "Text"
+            attribute:
+              x: 21
+              y: 62
+              texts: "'&8' + var.subtitle"
+              fontSize: 34
+              through: true
+              limit: 90
+          规则:
+            type: "Canvas"
+            attribute:
+              x: 21
+              y: 97
+              width: 124
+              height: 40
+            action:
+              clickLeft: "Packet.send(var.packetId, 'rules', var.category, '0')"
+            children:
+              底色:
+                type: "Texture"
+                attribute:
+                  x: 0
+                  y: 0
+                  width: 124
+                  height: 40
+                  normal: "(var.pane == 'rules') ? '231,220,203,255' : (self.parent.isHovered() ? '231,218,199,255' : '255,252,245,255')"
+                  through: true
+              文字:
+                type: "Text"
+                attribute:
+                  x: 0
+                  y: 0
+                  texts: "~&0规则开关"
+                  fontSize: 36
+                  through: true
+                  point: "~middle_center"
+              选中标记:
+                type: "Texture"
+                attribute:
+                  x: 8
+                  y: 37
+                  width: 108
+                  height: 3
+                  through: true
+                  normal: "~148,74,49,255"
+                  visible: "(var.pane == 'rules')"
+          成员:
+            type: "Canvas"
+            attribute:
+              x: 151
+              y: 97
+              width: 124
+              height: 40
+              visible: "!var.isWorld"
+            action:
+              clickLeft: "Packet.send(var.packetId, 'members', '0')"
+            children:
+              底色:
+                type: "Texture"
+                attribute:
+                  x: 0
+                  y: 0
+                  width: 124
+                  height: 40
+                  normal: "(var.pane == 'members') ? '231,220,203,255' : (self.parent.isHovered() ? '231,218,199,255' : '255,252,245,255')"
+                  through: true
+              文字:
+                type: "Text"
+                attribute:
+                  x: 0
+                  y: 0
+                  texts: "~&0成员管理"
+                  fontSize: 36
+                  through: true
+                  point: "~middle_center"
+              选中标记:
+                type: "Texture"
+                attribute:
+                  x: 8
+                  y: 37
+                  width: 108
+                  height: 3
+                  through: true
+                  normal: "~148,74,49,255"
+                  visible: "(var.pane == 'members')"
+          设置:
+            type: "Canvas"
+            attribute:
+              x: 281
+              y: 97
+              width: 124
+              height: 40
+              visible: "!var.isWorld"
+            action:
+              clickLeft: "Packet.send(var.packetId, 'settings')"
+            children:
+              底色:
+                type: "Texture"
+                attribute:
+                  x: 0
+                  y: 0
+                  width: 124
+                  height: 40
+                  normal: "(var.pane == 'settings') ? '231,220,203,255' : (self.parent.isHovered() ? '231,218,199,255' : '255,252,245,255')"
+                  through: true
+              文字:
+                type: "Text"
+                attribute:
+                  x: 0
+                  y: 0
+                  texts: "~&0区域设置"
+                  fontSize: 36
+                  through: true
+                  point: "~middle_center"
+              选中标记:
+                type: "Texture"
+                attribute:
+                  x: 8
+                  y: 37
+                  width: 108
+                  height: 3
+                  through: true
+                  normal: "~148,74,49,255"
+                  visible: "(var.pane == 'settings')"
+          材质:
+            type: "Canvas"
+            attribute:
+              x: 151
+              y: 97
+              width: 124
+              height: 40
+              visible: "var.isWorld"
+            action:
+              clickLeft: "Packet.send(var.packetId, 'materials', '0')"
+            children:
+              底色:
+                type: "Texture"
+                attribute:
+                  x: 0
+                  y: 0
+                  width: 124
+                  height: 40
+                  normal: "(var.pane == 'materials') ? '231,220,203,255' : (self.parent.isHovered() ? '231,218,199,255' : '255,252,245,255')"
+                  through: true
+              文字:
+                type: "Text"
+                attribute:
+                  x: 0
+                  y: 0
+                  texts: "~&0交互限制"
+                  fontSize: 36
+                  through: true
+                  point: "~middle_center"
+              选中标记:
+                type: "Texture"
+                attribute:
+                  x: 8
+                  y: 37
+                  width: 108
+                  height: 3
+                  through: true
+                  normal: "~148,74,49,255"
+                  visible: "(var.pane == 'materials')"
+          分隔线:
+            type: "Texture"
+            attribute:
+              x: 21
+              y: 142
+              width: 918
+              height: 1
+              normal: "~209,195,175,255"
+              through: true
+          规则页:
+            type: "Canvas"
+            attribute:
+              x: 21
+              y: 147
+              width: 918
+              height: 526
+              visible: "var.pane == 'rules'"
+            children:
+              战斗:
+                type: "Canvas"
+                attribute:
+                  x: 0
+                  y: 0
+                  width: 98
+                  height: 42
+                action:
+                  clickLeft: "Packet.send(var.packetId, 'rules', 'combat', '0')"
+                children:
+                  底色:
+                    type: "Texture"
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 98
+                      height: 42
+                      normal: "(var.category == 'combat') ? '231,220,203,255' : (self.parent.isHovered() ? '231,218,199,255' : '255,252,245,255')"
+                      through: true
+                  文字:
+                    type: "Text"
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: "~&0战斗"
+                      fontSize: 36
+                      through: true
+                      point: "~middle_center"
+                  选中标记:
+                    type: "Texture"
+                    attribute:
+                      x: 8
+                      y: 39
+                      width: 82
+                      height: 3
+                      through: true
+                      normal: "~148,74,49,255"
+                      visible: "(var.category == 'combat')"
+              方块:
+                type: "Canvas"
+                attribute:
+                  x: 107
+                  y: 0
+                  width: 98
+                  height: 42
+                action:
+                  clickLeft: "Packet.send(var.packetId, 'rules', 'block', '0')"
+                children:
+                  底色:
+                    type: "Texture"
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 98
+                      height: 42
+                      normal: "(var.category == 'block') ? '231,220,203,255' : (self.parent.isHovered() ? '231,218,199,255' : '255,252,245,255')"
+                      through: true
+                  文字:
+                    type: "Text"
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: "~&0方块"
+                      fontSize: 36
+                      through: true
+                      point: "~middle_center"
+                  选中标记:
+                    type: "Texture"
+                    attribute:
+                      x: 8
+                      y: 39
+                      width: 82
+                      height: 3
+                      through: true
+                      normal: "~148,74,49,255"
+                      visible: "(var.category == 'block')"
+              环境:
+                type: "Canvas"
+                attribute:
+                  x: 214
+                  y: 0
+                  width: 98
+                  height: 42
+                action:
+                  clickLeft: "Packet.send(var.packetId, 'rules', 'environment', '0')"
+                children:
+                  底色:
+                    type: "Texture"
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 98
+                      height: 42
+                      normal: "(var.category == 'environment') ? '231,220,203,255' : (self.parent.isHovered() ? '231,218,199,255' : '255,252,245,255')"
+                      through: true
+                  文字:
+                    type: "Text"
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: "~&0环境"
+                      fontSize: 36
+                      through: true
+                      point: "~middle_center"
+                  选中标记:
+                    type: "Texture"
+                    attribute:
+                      x: 8
+                      y: 39
+                      width: 82
+                      height: 3
+                      through: true
+                      normal: "~148,74,49,255"
+                      visible: "(var.category == 'environment')"
+              生物:
+                type: "Canvas"
+                attribute:
+                  x: 321
+                  y: 0
+                  width: 98
+                  height: 42
+                action:
+                  clickLeft: "Packet.send(var.packetId, 'rules', 'mob', '0')"
+                children:
+                  底色:
+                    type: "Texture"
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 98
+                      height: 42
+                      normal: "(var.category == 'mob') ? '231,220,203,255' : (self.parent.isHovered() ? '231,218,199,255' : '255,252,245,255')"
+                      through: true
+                  文字:
+                    type: "Text"
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: "~&0生物"
+                      fontSize: 36
+                      through: true
+                      point: "~middle_center"
+                  选中标记:
+                    type: "Texture"
+                    attribute:
+                      x: 8
+                      y: 39
+                      width: 82
+                      height: 3
+                      through: true
+                      normal: "~148,74,49,255"
+                      visible: "(var.category == 'mob')"
+              玩家:
+                type: "Canvas"
+                attribute:
+                  x: 428
+                  y: 0
+                  width: 98
+                  height: 42
+                action:
+                  clickLeft: "Packet.send(var.packetId, 'rules', 'player', '0')"
+                children:
+                  底色:
+                    type: "Texture"
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 98
+                      height: 42
+                      normal: "(var.category == 'player') ? '231,220,203,255' : (self.parent.isHovered() ? '231,218,199,255' : '255,252,245,255')"
+                      through: true
+                  文字:
+                    type: "Text"
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: "~&0玩家"
+                      fontSize: 36
+                      through: true
+                      point: "~middle_center"
+                  选中标记:
+                    type: "Texture"
+                    attribute:
+                      x: 8
+                      y: 39
+                      width: 82
+                      height: 3
+                      through: true
+                      normal: "~148,74,49,255"
+                      visible: "(var.category == 'player')"
+              消息:
+                type: "Canvas"
+                attribute:
+                  x: 535
+                  y: 0
+                  width: 98
+                  height: 42
+                action:
+                  clickLeft: "Packet.send(var.packetId, 'rules', 'misc', '0')"
+                children:
+                  底色:
+                    type: "Texture"
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 98
+                      height: 42
+                      normal: "(var.category == 'misc') ? '231,220,203,255' : (self.parent.isHovered() ? '231,218,199,255' : '255,252,245,255')"
+                      through: true
+                  文字:
+                    type: "Text"
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: "~&0消息"
+                      fontSize: 36
+                      through: true
+                      point: "~middle_center"
+                  选中标记:
+                    type: "Texture"
+                    attribute:
+                      x: 8
+                      y: 39
+                      width: 82
+                      height: 3
+                      through: true
+                      normal: "~148,74,49,255"
+                      visible: "(var.category == 'misc')"
+              规则列表:
+                type: "Scroll"
+                attribute:
+                  x: 0
+                  y: 54
+                  width: 918
+                  height: 418
+                  moveY: 0
+                children:
+                  列表:
+                    type: "RepeatGrid"
+                    attribute:
+                      items: "var.ruleRows"
+                      flow: "~row"
+                      column: 1
+                      spaceBetweenY: 6
+                      maxSize: 8
+                      width: 918
+                    children:
+                      条目:
+                        type: "Canvas"
+                        attribute:
+                          width: 918
+                          height: 46
+                          entry: "self.item"
+                          visible: "self.entry != none"
                         children:
-                          区域行:
-                            type: Texture
+                          名称:
+                            type: "Text"
                             attribute:
-                              entryKey: 0.round()
-                              entry: "var.regionList != null ? var.regionList[self.entryKey] : none"
-                              visible: self.entry != none
-                              width: 820
-                              height: 50
-                              normal: ~40,40,50,180
-                              shape: ~round_rect
-                              radius: 6
+                              x: 16
+                              y: 7
+                              texts: "'&0' + self.parent.entry['title']"
+                              fontSize: 37
+                              through: true
+                              limit: 30
+                          状态:
+                            type: "Text"
+                            attribute:
+                              x: 389
+                              y: 9
+                              texts: "'&8' + self.parent.entry['hint']"
+                              fontSize: 32
+                              through: true
+                          编辑文字:
+                            type: "Canvas"
+                            attribute:
+                              x: 594
+                              y: 5
+                              width: 58
+                              height: 36
+                              visible: "self.parent.entry['custom']"
+                            action:
+                              clickLeft: |-
+                                var.messageTarget = self.parent.entry['id']
+                                var.messageTitle = self.parent.entry['title']
+                                val.messageInput.setContent(self.parent.entry['message'])
                             children:
-                              区域编号文字:
-                                type: Text
+                              底色:
+                                type: "Texture"
                                 attribute:
-                                  x: 16
-                                  y: 12
+                                  x: 0
+                                  y: 0
+                                  width: 58
+                                  height: 36
+                                  normal: "self.parent.isHovered() ? '231,218,199,255' : '237,228,214,255'"
                                   through: true
-                                  fontSize: 28
-                                  texts: "~&f{self.parent.entry['id']}"
-                              区域世界文字:
-                                type: Text
+                              文字:
+                                type: "Text"
                                 attribute:
-                                  x: 260
-                                  y: 14
+                                  x: 0
+                                  y: 0
+                                  texts: "~&0文字"
+                                  fontSize: 32
                                   through: true
-                                  fontSize: 26
-                                  texts: "~&7{self.parent.entry['world']}"
-                              区域优先级文字:
-                                type: Text
+                                  point: "~middle_center"
+                          开关:
+                            type: "Canvas"
+                            attribute:
+                              x: 677
+                              y: 3
+                              width: 144
+                              height: 40
+                            children:
+                              底环:
+                                type: "Texture"
                                 attribute:
-                                  x: 440
-                                  y: 14
+                                  x: 0
+                                  y: 0
+                                  width: 144
+                                  height: 40
+                                  normal: "~237,228,214,255"
                                   through: true
-                                  fontSize: 26
-                                  texts: "~&7P:{self.parent.entry['priority']}"
-                              区域体积文字:
-                                type: Text
+                                  shape: "~round_rect"
+                                  radius: 20
+                                effect:
+                                  stroke:
+                                    width: 3
+                                    color: "~157,137,117,255"
+                              允许:
+                                type: "Canvas"
                                 attribute:
-                                  x: 530
-                                  y: 14
-                                  through: true
-                                  fontSize: 26
-                                  texts: "~&7{self.parent.entry['volume']}格"
-                              编辑按钮:
-                                type: Canvas
-                                attribute:
-                                  x: 650
-                                  y: 8
-                                  width: 70
-                                  height: 34
+                                  x: 4
+                                  y: 4
+                                  width: 66
+                                  height: 32
                                 action:
-                                  click: |-
-                                    Packet.send(var.packetId, 'select_region', self.parent.entry['id'])
+                                  clickLeft: |-
+                                    if(var.token != ''){
+                                      var.notice = '正在保存…'
+                                      Packet.send(var.packetId, 'flag', var.token, var.selected, self.parent.parent.entry['id'], 'allow')
+                                    }
                                 children:
-                                  编辑按钮背景:
-                                    type: Texture
+                                  底色:
+                                    type: "Texture"
                                     attribute:
-                                      point: ~stretch_all
+                                      x: 0
+                                      y: 0
+                                      width: 66
+                                      height: 32
+                                      normal: "self.parent.parent.parent.entry['state'] == 'allow' ? '77,92,61,255' : (self.parent.isHovered() ? '220,201,177,255' : '237,228,214,255')"
                                       through: true
-                                      normal: "self.isHovered() ? '80,160,240,230' : '60,140,220,200'"
-                                      shape: ~round_rect
-                                      radius: 6
-                                  编辑按钮文字:
-                                    type: Text
+                                      shape: "~round_rect"
+                                      radius: 16
+                                      visible: "self.parent.parent.parent.entry['state'] == 'allow' || self.parent.isHovered()"
+                                  文字:
+                                    type: "Text"
                                     attribute:
-                                      point: ~middle_center
-                                      width: 70
+                                      x: 0
+                                      y: 0
+                                      texts: "self.parent.parent.parent.entry['state'] == 'allow' ? '&f允许' : '&8允许'"
+                                      fontSize: 32
                                       through: true
-                                      fontSize: 26
-                                      texts: "~&f编辑"
-                              删除按钮:
-                                type: Canvas
+                                      point: "~middle_center"
+                              禁止:
+                                type: "Canvas"
                                 attribute:
-                                  x: 730
-                                  y: 8
-                                  width: 70
-                                  height: 34
+                                  x: 74
+                                  y: 4
+                                  width: 66
+                                  height: 32
                                 action:
-                                  click: |-
-                                    Packet.send(var.packetId, 'delete_region', var.actionToken, self.parent.entry['id'])
+                                  clickLeft: |-
+                                    if(var.token != ''){
+                                      var.notice = '正在保存…'
+                                      Packet.send(var.packetId, 'flag', var.token, var.selected, self.parent.parent.entry['id'], 'deny')
+                                    }
                                 children:
-                                  删除按钮背景:
-                                    type: Texture
+                                  底色:
+                                    type: "Texture"
                                     attribute:
-                                      point: ~stretch_all
+                                      x: 0
+                                      y: 0
+                                      width: 66
+                                      height: 32
+                                      normal: "self.parent.parent.parent.entry['state'] == 'deny' ? '148,70,56,255' : (self.parent.isHovered() ? '220,201,177,255' : '237,228,214,255')"
                                       through: true
-                                      normal: "self.isHovered() ? '220,80,80,230' : '200,60,60,200'"
-                                      shape: ~round_rect
-                                      radius: 6
-                                  删除按钮文字:
-                                    type: Text
+                                      shape: "~round_rect"
+                                      radius: 16
+                                      visible: "self.parent.parent.parent.entry['state'] == 'deny' || self.parent.isHovered()"
+                                  文字:
+                                    type: "Text"
                                     attribute:
-                                      point: ~middle_center
-                                      width: 70
+                                      x: 0
+                                      y: 0
+                                      texts: "self.parent.parent.parent.entry['state'] == 'deny' ? '&f禁止' : '&8禁止'"
+                                      fontSize: 32
                                       through: true
-                                      fontSize: 26
-                                      texts: "~&f删除"
-
-              # ─── 区域编辑视图 ───
-              编辑布局:
-                type: Canvas
+                                      point: "~middle_center"
+                          继承:
+                            type: "Canvas"
+                            attribute:
+                              x: 837
+                              y: 5
+                              width: 65
+                              height: 36
+                            action:
+                              clickLeft: |-
+                                if(var.token != ''){
+                                  var.notice = '正在保存…'
+                                  Packet.send(var.packetId, 'flag', var.token, var.selected, self.parent.entry['id'], 'none')
+                                }
+                            children:
+                              底色:
+                                type: "Texture"
+                                attribute:
+                                  x: 0
+                                  y: 0
+                                  width: 65
+                                  height: 36
+                                  normal: "self.parent.isHovered() ? '231,218,199,255' : '237,228,214,255'"
+                                  through: true
+                              文字:
+                                type: "Text"
+                                attribute:
+                                  x: 0
+                                  y: 0
+                                  texts: "~&0继承"
+                                  fontSize: 32
+                                  through: true
+                                  point: "~middle_center"
+                          行分隔:
+                            type: "Texture"
+                            attribute:
+                              x: 0
+                              y: 44
+                              width: 918
+                              height: 2
+                              through: true
+                              normal: "~209,195,175,255"
+              rule上页:
+                type: "Canvas"
                 attribute:
-                  x: 20
-                  y: 16
-                  width: 840
-                  height: 590
-                  visible: "var.page == 'edit'"
+                  x: 319
+                  y: 480
+                  width: 82
+                  height: 40
+                  visible: "var.rulePage > 0"
+                action:
+                  clickLeft: "Packet.send(var.packetId, 'rules', var.category, (var.rulePage - 1).round())"
                 children:
-                  编辑标题:
-                    type: Text
+                  底色:
+                    type: "Texture"
                     attribute:
                       x: 0
                       y: 0
-                      fontSize: 36
-                      texts: "~&6编辑: &f{var.selId}"
-                  重定义按钮:
-                    type: Canvas
+                      width: 82
+                      height: 40
+                      normal: "self.parent.isHovered() ? '231,218,199,255' : '237,228,214,255'"
+                      through: true
+                  文字:
+                    type: "Text"
                     attribute:
-                      x: 620
+                      x: 0
+                      y: 0
+                      texts: "~&0上一页"
+                      fontSize: 32
+                      through: true
+                      point: "~middle_center"
+              rule页码:
+                type: "Canvas"
+                attribute:
+                  x: 409
+                  y: 480
+                  width: 100
+                  height: 40
+                children:
+                  底:
+                    type: "Texture"
+                    attribute:
+                      x: 0
                       y: 0
                       width: 100
                       height: 40
-                    action:
-                      click: |-
-                        Packet.send(var.packetId, 'redefine_region', var.actionToken, var.selId)
+                      normal: "~237,228,214,255"
+                      through: true
+                  文字:
+                    type: "Text"
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: "'&8第 ' + (var.rulePage + 1).round() + ' / ' + var.rulePages.round() + ' 页'"
+                      fontSize: 32
+                      through: true
+                      point: "~middle_center"
+              rule下页:
+                type: "Canvas"
+                attribute:
+                  x: 517
+                  y: 480
+                  width: 82
+                  height: 40
+                  visible: "var.rulePage + 1 < var.rulePages"
+                action:
+                  clickLeft: "Packet.send(var.packetId, 'rules', var.category, (var.rulePage + 1).round())"
+                children:
+                  底色:
+                    type: "Texture"
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 82
+                      height: 40
+                      normal: "self.parent.isHovered() ? '231,218,199,255' : '237,228,214,255'"
+                      through: true
+                  文字:
+                    type: "Text"
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: "~&0下一页"
+                      fontSize: 32
+                      through: true
+                      point: "~middle_center"
+          成员页:
+            type: "Canvas"
+            attribute:
+              x: 21
+              y: 147
+              width: 918
+              height: 526
+              visible: "var.pane == 'members'"
+            children:
+              说明:
+                type: "Text"
+                attribute:
+                  x: 0
+                  y: 0
+                  texts: "~&0添加玩家或权限组"
+                  fontSize: 39
+                  through: true
+              输入:
+                type: "Canvas"
+                attribute:
+                  x: 0
+                  y: 38
+                  width: 500
+                  height: 43
+                children:
+                  底色:
+                    type: "Texture"
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 500
+                      height: 43
+                      normal: "~63,55,47,255"
+                      through: true
+                      shape: "~round_rect"
+                      radius: 8
+                    effect:
+                      stroke:
+                        width: 3
+                        color: "~157,137,117,255"
+                  输入:
+                    val: "memberInput"
+                    type: "TextBox"
+                    attribute:
+                      x: 12
+                      y: 7
+                      width: 476
+                      height: 29
+                      fontSize: 32
+                      length: 66
+                      emptyText: "~&7玩家名、UUID 或 g:权限组"
+                      cursorColor: "~231,178,133,255"
+              成员:
+                type: "Canvas"
+                attribute:
+                  x: 562
+                  y: 38
+                  width: 142
+                  height: 43
+                action:
+                  clickLeft: |-
+                    if(var.token != ''){
+                      var.notice = '正在保存…'
+                      Packet.send(var.packetId, 'add_member', var.token, var.selected, val.memberInput.getContent(), 'member')
+                    }
+                children:
+                  底色:
+                    type: "Texture"
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 142
+                      height: 43
+                      normal: "self.parent.isHovered() ? '171,91,60,255' : '148,74,49,255'"
+                      through: true
+                      shape: "~round_rect"
+                      radius: 8
+                  文字:
+                    type: "Text"
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: "~&f添加为成员"
+                      fontSize: 36
+                      through: true
+                      point: "~middle_center"
+              所有者:
+                type: "Canvas"
+                attribute:
+                  x: 716
+                  y: 38
+                  width: 160
+                  height: 43
+                action:
+                  clickLeft: |-
+                    if(var.token != ''){
+                      var.notice = '正在保存…'
+                      Packet.send(var.packetId, 'add_member', var.token, var.selected, val.memberInput.getContent(), 'owner')
+                    }
+                children:
+                  底色:
+                    type: "Texture"
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 160
+                      height: 43
+                      normal: "self.parent.isHovered() ? '231,218,199,255' : '237,228,214,255'"
+                      through: true
+                  文字:
+                    type: "Text"
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: "~&0添加为所有者"
+                      fontSize: 32
+                      through: true
+                      point: "~middle_center"
+              空白:
+                type: "Text"
+                attribute:
+                  x: 15
+                  y: 112
+                  texts: "~&8此区域暂无成员"
+                  fontSize: 35
+                  through: true
+                  visible: "var.memberRows.size() == 0"
+              成员列表:
+                type: "Scroll"
+                attribute:
+                  x: 0
+                  y: 102
+                  width: 918
+                  height: 352
+                  moveY: 0
+                children:
+                  列表:
+                    type: "RepeatGrid"
+                    attribute:
+                      items: "var.memberRows"
+                      flow: "~row"
+                      column: 1
+                      spaceBetweenY: 4
+                      maxSize: 8
+                      width: 918
                     children:
-                      重定义按钮背景:
-                        type: Texture
+                      条目:
+                        type: "Canvas"
                         attribute:
-                          point: ~stretch_all
-                          through: true
-                          normal: "self.isHovered() ? '80,140,220,230' : '60,120,200,200'"
-                          shape: ~round_rect
-                          radius: 8
-                      重定义按钮文字:
-                        type: Text
-                        attribute:
-                          point: ~middle_center
-                          width: 100
-                          through: true
-                          fontSize: 26
-                          texts: "~&f重定义"
-                  编辑信息文字:
-                    type: Text
-                    attribute:
-                      x: 0
-                      y: 46
-                      fontSize: 26
-                      texts: "~&7世界: &f{var.selWorld}  &7优先级: &f{var.selPriority}  &7父: &f{var.selParent != none ? var.selParent : '无'}"
-                  重命名输入框:
-                    type: TextBox
-                    attribute:
-                      x: 500
-                      y: 46
-                      width: 200
-                      height: 32
-                      length: 32
-                      emptyText: "~&8新名称..."
-                      background: "~45,45,55,200"
-                    action:
-                      textChange: |-
-                        var.renameValue = self.text
-                  重命名按钮:
-                    type: Canvas
-                    attribute:
-                      x: 720
-                      y: 44
-                      width: 80
-                      height: 36
-                    action:
-                      click: |-
-                        if(var.renameValue != null && var.renameValue != ''){
-                          Packet.send(var.packetId, 'rename_region', var.actionToken, var.selId, var.renameValue)
-                        }
-                    children:
-                      重命名按钮背景:
-                        type: Texture
-                        attribute:
-                          point: ~stretch_all
-                          through: true
-                          normal: "self.isHovered() ? '180,140,60,230' : '160,120,40,200'"
-                          shape: ~round_rect
-                          radius: 6
-                      重命名按钮文字:
-                        type: Text
-                        attribute:
-                          point: ~middle_center
-                          width: 80
-                          through: true
-                          fontSize: 26
-                          texts: "~&f重命名"
-                  编辑边界文字:
-                    type: Text
-                    attribute:
-                      x: 0
-                      y: 78
-                      fontSize: 26
-                      texts: "~&7范围: &f{var.selMin} ~ {var.selMax}  &7体积: &f{var.selVolume}"
-
-                  # 成员列表
-                  成员文字:
-                    type: Text
-                    attribute:
-                      x: 0
-                      y: 118
-                      fontSize: 28
-                      texts: "~&b成员:"
-                  编辑成员滑块:
-                    type: Texture
-                    val: 编辑成员滑块
-                    attribute:
-                      x: 394
-                      y: 150
-                      width: 6
-                      height: 20
-                      normal: ~120,120,120,200
-                      maxDragY: 120
-                  成员滚动栏:
-                    type: Scroll
-                    attribute:
-                      x: 0
-                      y: 150
-                      width: 400
-                      height: 140
-                      moveY: "self.parent['编辑成员滑块'].getDragYRatio()"
-                    action:
-                      wheel: |-
-                        if(self.moveY >= 0 && self.wheelValue > 0){
-                          self.parent['编辑成员滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                        }
-                        if(self.moveY <= 1 && self.wheelValue < 0){
-                          self.parent['编辑成员滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                        }
-                    children:
-                      members_list:
-                        val: member_data
-                        type: VStack
-                        attribute:
-                          x: 0
-                          y: 0
-                          width: 400
-                          spaceBetween: 4
-                        action:
-                          create: |-
-                            for(i in range(1, 30)){
-                              row = self['成员行'].copy('成员行' + i.round)
-                              row.entryKey = i.round()
-                            }
+                          width: 918
+                          height: 40
+                          entry: "self.item"
+                          visible: "self.entry != none"
+                          tip: "'标识 ' + self.entry['id']"
                         children:
-                          成员行:
-                            type: Texture
+                          人名:
+                            type: "Text"
                             attribute:
-                              entryKey: 0.round()
-                              entry: "var.memberList != null ? var.memberList[self.entryKey] : none"
-                              visible: self.entry != none
-                              width: 380
+                              x: 15
+                              y: 7
+                              texts: "'&0' + self.parent.entry['title']"
+                              fontSize: 32
+                              through: true
+                          角色:
+                            type: "Canvas"
+                            attribute:
+                              x: 637
+                              y: 4
+                              width: 151
+                              height: 32
+                            children:
+                              底:
+                                type: "Texture"
+                                attribute:
+                                  x: 0
+                                  y: 0
+                                  width: 151
+                                  height: 32
+                                  normal: "~237,228,214,255"
+                                  through: true
+                              文字:
+                                type: "Text"
+                                attribute:
+                                  x: 0
+                                  y: 0
+                                  texts: "'&8' + self.parent.parent.entry['subtitle']"
+                                  fontSize: 32
+                                  through: true
+                                  point: "~middle_center"
+                          移除:
+                            type: "Canvas"
+                            attribute:
+                              x: 828
+                              y: 3
+                              width: 76
                               height: 34
-                              normal: ~38,38,48,160
-                              shape: ~round_rect
-                              radius: 4
+                            action:
+                              clickLeft: |-
+                                if(var.token != ''){
+                                  var.notice = '正在保存…'
+                                  Packet.send(var.packetId, 'remove_member', var.token, var.selected, self.parent.entry['id'], self.parent.entry['role'])
+                                }
                             children:
-                              成员名称文字:
-                                type: Text
+                              底色:
+                                type: "Texture"
                                 attribute:
-                                  x: 12
-                                  y: 5
+                                  x: 0
+                                  y: 0
+                                  width: 76
+                                  height: 34
+                                  normal: "self.parent.isHovered() ? '239,218,206,255' : '237,228,214,255'"
                                   through: true
-                                  fontSize: 26
-                                  texts: "~&f{self.parent.entry['name']}"
-                              成员身份文字:
-                                type: Text
+                              文字:
+                                type: "Text"
                                 attribute:
-                                  x: 180
-                                  y: 6
+                                  x: 0
+                                  y: 0
+                                  texts: "~&4移除"
+                                  fontSize: 36
                                   through: true
-                                  fontSize: 26
-                                  texts: "~{self.parent.entry['role'] == 'owner' ? '&6所有者' : '&b成员'}"
-                              移除成员按钮:
-                                type: Canvas
-                                attribute:
-                                  x: 310
-                                  y: 3
-                                  width: 60
-                                  height: 28
-                                action:
-                                  click: |-
-                                    Packet.send(var.packetId, 'remove_member', var.actionToken, var.selId, self.parent.entry['uuid'])
-                                children:
-                                  移除成员背景:
-                                    type: Texture
-                                    attribute:
-                                      point: ~stretch_all
-                                      through: true
-                                      normal: "self.isHovered() ? '200,70,70,210' : '180,50,50,180'"
-                                      shape: ~round_rect
-                                      radius: 4
-                                  移除成员文字:
-                                    type: Text
-                                    attribute:
-                                      point: ~middle_center
-                                      width: 60
-                                      through: true
-                                      fontSize: 26
-                                      texts: "~&f移除"
-
-                  # 标志列表
-                  标志文字:
-                    type: Text
-                    attribute:
-                      x: 0
-                      y: 300
-                      fontSize: 28
-                      texts: "~&e标志设置:"
-                  编辑标志滑块:
-                    type: Texture
-                    val: 编辑标志滑块
-                    attribute:
-                      x: 834
-                      y: 332
-                      width: 6
-                      height: 30
-                      normal: ~120,120,120,200
-                      maxDragY: 220
-                  标志滚动栏:
-                    type: Scroll
-                    attribute:
-                      x: 0
-                      y: 332
-                      width: 840
-                      height: 250
-                      moveY: "self.parent['编辑标志滑块'].getDragYRatio()"
-                    action:
-                      wheel: |-
-                        if(self.moveY >= 0 && self.wheelValue > 0){
-                          self.parent['编辑标志滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                        }
-                        if(self.moveY <= 1 && self.wheelValue < 0){
-                          self.parent['编辑标志滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                        }
-                    children:
-                      flags_list:
-                        val: flag_data
-                        type: VStack
-                        attribute:
-                          x: 0
-                          y: 0
-                          width: 840
-                          spaceBetween: 4
-                        action:
-                          create: |-
-                            for(i in range(1, 40)){
-                              row = self['标志行'].copy('标志行' + i.round)
-                              row.entryKey = i.round()
-                            }
-                        children:
-                          标志行:
-                            type: Texture
+                                  point: "~middle_center"
+                          行分隔:
+                            type: "Texture"
                             attribute:
-                              entryKey: 0.round()
-                              entry: "var.flagList != null ? var.flagList[self.entryKey] : none"
-                              visible: self.entry != none
-                              width: 820
-                              height: 38
-                              normal: ~38,38,48,160
-                              shape: ~round_rect
-                              radius: 4
-                            children:
-                              标志名称文字:
-                                type: Text
-                                attribute:
-                                  x: 12
-                                  y: 7
-                                  through: true
-                                  fontSize: 26
-                                  texts: "~&b{self.parent.entry['key']}"
-                              标志描述文字:
-                                type: Text
-                                attribute:
-                                  x: 200
-                                  y: 8
-                                  through: true
-                                  fontSize: 26
-                                  texts: "~&7{self.parent.entry['desc']}"
-                              标志状态文字:
-                                type: Text
-                                attribute:
-                                  x: 520
-                                  y: 8
-                                  through: true
-                                  fontSize: 26
-                                  texts: "~{self.parent.entry['state'] == 'allow' ? '&a允许' : self.parent.entry['state'] == 'deny' ? '&c拒绝' : '&8未设置'}"
-                              允许按钮:
-                                type: Canvas
-                                attribute:
-                                  x: 620
-                                  y: 4
-                                  width: 56
-                                  height: 30
-                                action:
-                                  click: |-
-                                    Packet.send(var.packetId, 'set_flag', var.actionToken, var.selId, self.parent.entry['key'], 'allow')
-                                children:
-                                  允许按钮背景:
-                                    type: Texture
-                                    attribute:
-                                      point: ~stretch_all
-                                      through: true
-                                      normal: "self.isHovered() ? '60,160,80,220' : '40,140,60,180'"
-                                      shape: ~round_rect
-                                      radius: 4
-                                  允许按钮文字:
-                                    type: Text
-                                    attribute:
-                                      point: ~middle_center
-                                      width: 56
-                                      through: true
-                                      fontSize: 26
-                                      texts: "~&f允许"
-                              拒绝按钮:
-                                type: Canvas
-                                attribute:
-                                  x: 684
-                                  y: 4
-                                  width: 56
-                                  height: 30
-                                action:
-                                  click: |-
-                                    Packet.send(var.packetId, 'set_flag', var.actionToken, var.selId, self.parent.entry['key'], 'deny')
-                                children:
-                                  拒绝按钮背景:
-                                    type: Texture
-                                    attribute:
-                                      point: ~stretch_all
-                                      through: true
-                                      normal: "self.isHovered() ? '200,70,70,220' : '180,50,50,180'"
-                                      shape: ~round_rect
-                                      radius: 4
-                                  拒绝按钮文字:
-                                    type: Text
-                                    attribute:
-                                      point: ~middle_center
-                                      width: 56
-                                      through: true
-                                      fontSize: 26
-                                      texts: "~&f拒绝"
-                              清除标志按钮:
-                                type: Canvas
-                                attribute:
-                                  x: 748
-                                  y: 4
-                                  width: 56
-                                  height: 30
-                                action:
-                                  click: |-
-                                    Packet.send(var.packetId, 'remove_flag', var.actionToken, var.selId, self.parent.entry['key'])
-                                children:
-                                  清除按钮背景:
-                                    type: Texture
-                                    attribute:
-                                      point: ~stretch_all
-                                      through: true
-                                      normal: "self.isHovered() ? '80,80,95,210' : '60,60,70,180'"
-                                      shape: ~round_rect
-                                      radius: 4
-                                  清除按钮文字:
-                                    type: Text
-                                    attribute:
-                                      point: ~middle_center
-                                      width: 56
-                                      through: true
-                                      fontSize: 26
-                                      texts: "~&7清除"
-
-                  返回按钮:
-                    type: Canvas
+                              x: 0
+                              y: 38
+                              width: 918
+                              height: 2
+                              through: true
+                              normal: "~209,195,175,255"
+              member上页:
+                type: "Canvas"
+                attribute:
+                  x: 319
+                  y: 480
+                  width: 82
+                  height: 40
+                  visible: "var.memberPage > 0"
+                action:
+                  clickLeft: "Packet.send(var.packetId, 'members', (var.memberPage - 1).round())"
+                children:
+                  底色:
+                    type: "Texture"
                     attribute:
-                      x: 720
+                      x: 0
+                      y: 0
+                      width: 82
+                      height: 40
+                      normal: "self.parent.isHovered() ? '231,218,199,255' : '237,228,214,255'"
+                      through: true
+                  文字:
+                    type: "Text"
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: "~&0上一页"
+                      fontSize: 32
+                      through: true
+                      point: "~middle_center"
+              member页码:
+                type: "Canvas"
+                attribute:
+                  x: 409
+                  y: 480
+                  width: 100
+                  height: 40
+                children:
+                  底:
+                    type: "Texture"
+                    attribute:
+                      x: 0
                       y: 0
                       width: 100
-                      height: 36
-                    action:
-                      click: |-
-                        Packet.send(var.packetId, 'navigate', 'regions')
-                    children:
-                      返回按钮背景:
-                        type: Texture
-                        attribute:
-                          point: ~stretch_all
-                          through: true
-                          normal: "self.isHovered() ? '80,80,95,230' : '60,60,70,200'"
-                          shape: ~round_rect
-                          radius: 8
-                      返回按钮文字:
-                        type: Text
-                        attribute:
-                          point: ~middle_center
-                          width: 100
-                          through: true
-                          fontSize: 26
-                          texts: "~&f← 返回"
-
-              # ─── 世界规则视图 ───
-              世界规则布局:
-                type: Canvas
-                attribute:
-                  x: 20
-                  y: 16
-                  width: 840
-                  height: 590
-                  visible: "var.page == 'world_rules'"
-                children:
-                  世界规则标题:
-                    type: Text
+                      height: 40
+                      normal: "~237,228,214,255"
+                      through: true
+                  文字:
+                    type: "Text"
                     attribute:
                       x: 0
                       y: 0
+                      texts: "'&8第 ' + (var.memberPage + 1).round() + ' / ' + var.memberPages.round() + ' 页'"
+                      fontSize: 32
+                      through: true
+                      point: "~middle_center"
+              member下页:
+                type: "Canvas"
+                attribute:
+                  x: 517
+                  y: 480
+                  width: 82
+                  height: 40
+                  visible: "var.memberPage + 1 < var.memberPages"
+                action:
+                  clickLeft: "Packet.send(var.packetId, 'members', (var.memberPage + 1).round())"
+                children:
+                  底色:
+                    type: "Texture"
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 82
+                      height: 40
+                      normal: "self.parent.isHovered() ? '231,218,199,255' : '237,228,214,255'"
+                      through: true
+                  文字:
+                    type: "Text"
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: "~&0下一页"
+                      fontSize: 32
+                      through: true
+                      point: "~middle_center"
+          设置页:
+            type: "Canvas"
+            attribute:
+              x: 21
+              y: 147
+              width: 918
+              height: 526
+              visible: "var.pane == 'settings'"
+            children:
+              重命名标题:
+                type: "Text"
+                attribute:
+                  x: 0
+                  y: 0
+                  texts: "~&0区域名称"
+                  fontSize: 34
+                  through: true
+              重命名框:
+                type: "Canvas"
+                attribute:
+                  x: 0
+                  y: 37
+                  width: 620
+                  height: 44
+                children:
+                  底色:
+                    type: "Texture"
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 620
+                      height: 44
+                      normal: "~63,55,47,255"
+                      through: true
+                      shape: "~round_rect"
+                      radius: 8
+                    effect:
+                      stroke:
+                        width: 3
+                        color: "~157,137,117,255"
+                  输入:
+                    val: "renameInput"
+                    type: "TextBox"
+                    attribute:
+                      x: 12
+                      y: 7
+                      width: 596
+                      height: 30
+                      fontSize: 32
+                      length: 64
+                      emptyText: "~&7新的区域名称"
+                      cursorColor: "~231,178,133,255"
+              重命名:
+                type: "Canvas"
+                attribute:
+                  x: 635
+                  y: 37
+                  width: 123
+                  height: 44
+                action:
+                  clickLeft: |-
+                    if(var.token != ''){
+                      var.notice = '正在保存…'
+                      Packet.send(var.packetId, 'rename', var.token, var.selected, val.renameInput.getContent())
+                    }
+                children:
+                  底色:
+                    type: "Texture"
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 123
+                      height: 44
+                      normal: "self.parent.isHovered() ? '231,218,199,255' : '237,228,214,255'"
+                      through: true
+                  文字:
+                    type: "Text"
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: "~&0保存名称"
+                      fontSize: 32
+                      through: true
+                      point: "~middle_center"
+              优先级标题:
+                type: "Text"
+                attribute:
+                  x: 0
+                  y: 107
+                  texts: "'&0优先级 · ' + var.priority"
+                  fontSize: 34
+                  through: true
+              优先级框:
+                type: "Canvas"
+                attribute:
+                  x: 0
+                  y: 144
+                  width: 620
+                  height: 44
+                children:
+                  底色:
+                    type: "Texture"
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 620
+                      height: 44
+                      normal: "~63,55,47,255"
+                      through: true
+                      shape: "~round_rect"
+                      radius: 8
+                    effect:
+                      stroke:
+                        width: 3
+                        color: "~157,137,117,255"
+                  输入:
+                    val: "priorityInput"
+                    type: "TextBox"
+                    attribute:
+                      x: 12
+                      y: 7
+                      width: 596
+                      height: 30
+                      fontSize: 32
+                      length: 11
+                      emptyText: "~&7整数，数值越高越优先"
+                      cursorColor: "~231,178,133,255"
+              优先级:
+                type: "Canvas"
+                attribute:
+                  x: 635
+                  y: 144
+                  width: 123
+                  height: 44
+                action:
+                  clickLeft: |-
+                    if(var.token != ''){
+                      var.notice = '正在保存…'
+                      Packet.send(var.packetId, 'priority', var.token, var.selected, val.priorityInput.getContent())
+                    }
+                children:
+                  底色:
+                    type: "Texture"
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 123
+                      height: 44
+                      normal: "self.parent.isHovered() ? '231,218,199,255' : '237,228,214,255'"
+                      through: true
+                  文字:
+                    type: "Text"
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: "~&0保存优先级"
+                      fontSize: 32
+                      through: true
+                      point: "~middle_center"
+              父区标题:
+                type: "Text"
+                attribute:
+                  x: 0
+                  y: 214
+                  texts: "'&0父区域 · ' + (var.parent == '' ? '无' : var.parent)"
+                  fontSize: 34
+                  through: true
+              父区框:
+                type: "Canvas"
+                attribute:
+                  x: 0
+                  y: 251
+                  width: 620
+                  height: 44
+                children:
+                  底色:
+                    type: "Texture"
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 620
+                      height: 44
+                      normal: "~63,55,47,255"
+                      through: true
+                      shape: "~round_rect"
+                      radius: 8
+                    effect:
+                      stroke:
+                        width: 3
+                        color: "~157,137,117,255"
+                  输入:
+                    val: "parentInput"
+                    type: "TextBox"
+                    attribute:
+                      x: 12
+                      y: 7
+                      width: 596
+                      height: 30
+                      fontSize: 32
+                      length: 128
+                      emptyText: "~&7同一世界的区域名称，留空清除"
+                      cursorColor: "~231,178,133,255"
+              父区:
+                type: "Canvas"
+                attribute:
+                  x: 635
+                  y: 251
+                  width: 123
+                  height: 44
+                action:
+                  clickLeft: |-
+                    if(var.token != ''){
+                      var.notice = '正在保存…'
+                      Packet.send(var.packetId, 'parent', var.token, var.selected, val.parentInput.getContent())
+                    }
+                children:
+                  底色:
+                    type: "Texture"
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 123
+                      height: 44
+                      normal: "self.parent.isHovered() ? '231,218,199,255' : '237,228,214,255'"
+                      through: true
+                  文字:
+                    type: "Text"
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: "~&0保存父区域"
+                      fontSize: 32
+                      through: true
+                      point: "~middle_center"
+              边界标题:
+                type: "Text"
+                attribute:
+                  x: 0
+                  y: 320
+                  texts: "~&0选区范围"
+                  fontSize: 34
+                  through: true
+              边界说明:
+                type: "Text"
+                attribute:
+                  x: 0
+                  y: 357
+                  texts: "~&8请先在同一世界设置两个选区点。"
+                  fontSize: 32
+                  through: true
+              预览:
+                type: "Canvas"
+                attribute:
+                  x: 0
+                  y: 400
+                  width: 123
+                  height: 43
+                action:
+                  clickLeft: "Packet.send(var.packetId, 'preview')"
+                children:
+                  底色:
+                    type: "Texture"
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 123
+                      height: 43
+                      normal: "self.parent.isHovered() ? '231,218,199,255' : '237,228,214,255'"
+                      through: true
+                  文字:
+                    type: "Text"
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: "~&0检查选区"
+                      fontSize: 32
+                      through: true
+                      point: "~middle_center"
+              更新:
+                type: "Canvas"
+                attribute:
+                  x: 137
+                  y: 400
+                  width: 153
+                  height: 43
+                action:
+                  clickLeft: |-
+                    if(var.token != ''){
+                      var.notice = '正在保存…'
+                      Packet.send(var.packetId, 'redefine', var.token, var.selected)
+                    }
+                children:
+                  底色:
+                    type: "Texture"
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 153
+                      height: 43
+                      normal: "self.parent.isHovered() ? '171,91,60,255' : '148,74,49,255'"
+                      through: true
+                      shape: "~round_rect"
+                      radius: 8
+                  文字:
+                    type: "Text"
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: "~&f采用当前选区"
                       fontSize: 36
-                      texts: "~&6世界规则管理"
-                  世界规则说明:
-                    type: Text
+                      through: true
+                      point: "~middle_center"
+              删除:
+                type: "Canvas"
+                attribute:
+                  x: 750
+                  y: 400
+                  width: 144
+                  height: 43
+                  visible: "!var.deleteArmed"
+                action:
+                  clickLeft: "var.deleteArmed = true"
+                children:
+                  底色:
+                    type: "Texture"
                     attribute:
                       x: 0
-                      y: 46
-                      fontSize: 26
-                      texts: "~&7点击开关切换禁飞/禁活塞状态"
-                  世界规则滑块:
-                    type: Texture
-                    val: 世界规则滑块
-                    attribute:
-                      x: 834
-                      y: 90
-                      width: 6
-                      height: 50
-                      normal: ~120,120,120,200
-                      maxDragY: 480
-                  世界规则滚动栏:
-                    type: Scroll
+                      y: 0
+                      width: 144
+                      height: 43
+                      normal: "self.parent.isHovered() ? '165,85,68,255' : '148,70,56,255'"
+                      through: true
+                      shape: "~round_rect"
+                      radius: 8
+                  文字:
+                    type: "Text"
                     attribute:
                       x: 0
-                      y: 90
-                      width: 840
-                      height: 490
-                      moveY: "self.parent['世界规则滑块'].getDragYRatio()"
-                    action:
-                      wheel: |-
-                        if(self.moveY >= 0 && self.wheelValue > 0){
-                          self.parent['世界规则滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                        }
-                        if(self.moveY <= 1 && self.wheelValue < 0){
-                          self.parent['世界规则滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                        }
+                      y: 0
+                      texts: "~&f删除区域"
+                      fontSize: 36
+                      through: true
+                      point: "~middle_center"
+              确认删除:
+                type: "Canvas"
+                attribute:
+                  x: 750
+                  y: 400
+                  width: 144
+                  height: 43
+                  visible: "var.deleteArmed"
+                action:
+                  clickLeft: |-
+                    var.deleteArmed = false
+                    if(var.token != ''){
+                      var.notice = '正在保存…'
+                      Packet.send(var.packetId, 'delete', var.token, var.selected)
+                    }
+                children:
+                  底色:
+                    type: "Texture"
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 144
+                      height: 43
+                      normal: "self.parent.isHovered() ? '165,85,68,255' : '148,70,56,255'"
+                      through: true
+                      shape: "~round_rect"
+                      radius: 8
+                  文字:
+                    type: "Text"
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: "~&f确认删除"
+                      fontSize: 36
+                      through: true
+                      point: "~middle_center"
+              取消删除:
+                type: "Canvas"
+                attribute:
+                  x: 646
+                  y: 400
+                  width: 92
+                  height: 43
+                  visible: "var.deleteArmed"
+                action:
+                  clickLeft: "var.deleteArmed = false"
+                children:
+                  底色:
+                    type: "Texture"
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 92
+                      height: 43
+                      normal: "self.parent.isHovered() ? '231,218,199,255' : '237,228,214,255'"
+                      through: true
+                  文字:
+                    type: "Text"
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: "~&0取消"
+                      fontSize: 32
+                      through: true
+                      point: "~middle_center"
+              分隔:
+                type: "Texture"
+                attribute:
+                  x: 0
+                  y: 309
+                  width: 918
+                  height: 2
+                  through: true
+                  normal: "~209,195,175,255"
+          材质页:
+            type: "Canvas"
+            attribute:
+              x: 21
+              y: 147
+              width: 918
+              height: 526
+              visible: "var.pane == 'materials'"
+            children:
+              说明:
+                type: "Text"
+                attribute:
+                  x: 0
+                  y: 0
+                  texts: "~&0禁止对下列方块交互"
+                  fontSize: 39
+                  through: true
+              输入:
+                type: "Canvas"
+                attribute:
+                  x: 0
+                  y: 38
+                  width: 700
+                  height: 43
+                children:
+                  底色:
+                    type: "Texture"
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 700
+                      height: 43
+                      normal: "~63,55,47,255"
+                      through: true
+                      shape: "~round_rect"
+                      radius: 8
+                    effect:
+                      stroke:
+                        width: 3
+                        color: "~157,137,117,255"
+                  输入:
+                    val: "materialInput"
+                    type: "TextBox"
+                    attribute:
+                      x: 12
+                      y: 7
+                      width: 676
+                      height: 29
+                      fontSize: 32
+                      length: 128
+                      emptyText: "~&7输入 方块材质名称"
+                      cursorColor: "~231,178,133,255"
+              添加:
+                type: "Canvas"
+                attribute:
+                  x: 743
+                  y: 38
+                  width: 147
+                  height: 43
+                action:
+                  clickLeft: |-
+                    if(var.token != ''){
+                      var.notice = '正在保存…'
+                      Packet.send(var.packetId, 'blocked_material', var.token, var.selected, val.materialInput.getContent(), 'deny')
+                    }
+                children:
+                  底色:
+                    type: "Texture"
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 147
+                      height: 43
+                      normal: "self.parent.isHovered() ? '171,91,60,255' : '148,74,49,255'"
+                      through: true
+                      shape: "~round_rect"
+                      radius: 8
+                  文字:
+                    type: "Text"
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: "~&f加入禁用列表"
+                      fontSize: 36
+                      through: true
+                      point: "~middle_center"
+              空白:
+                type: "Text"
+                attribute:
+                  x: 15
+                  y: 112
+                  texts: "~&8此世界暂无禁用材质"
+                  fontSize: 35
+                  through: true
+                  visible: "var.materialRows.size() == 0"
+              方块列表:
+                type: "Scroll"
+                attribute:
+                  x: 0
+                  y: 102
+                  width: 918
+                  height: 352
+                  moveY: 0
+                children:
+                  列表:
+                    type: "RepeatGrid"
+                    attribute:
+                      items: "var.materialRows"
+                      flow: "~row"
+                      column: 1
+                      spaceBetweenY: 4
+                      maxSize: 8
+                      width: 918
                     children:
-                      world_rules_list:
-                        val: world_rule_data
-                        type: VStack
+                      条目:
+                        type: "Canvas"
                         attribute:
-                          x: 0
-                          y: 0
-                          width: 840
-                          spaceBetween: 6
-                        action:
-                          create: |-
-                            for(i in range(1, 30)){
-                              row = self['世界规则行'].copy('世界规则行' + i.round)
-                              row.entryKey = i.round()
-                            }
+                          width: 918
+                          height: 40
+                          entry: "self.item"
+                          visible: "self.entry != none"
                         children:
-                          世界规则行:
-                            type: Texture
+                          材质:
+                            type: "Text"
                             attribute:
-                              entryKey: 0.round()
-                              entry: "var.worldList != null ? var.worldList[self.entryKey] : none"
-                              visible: self.entry != none
-                              width: 820
-                              height: 60
-                              normal: ~40,40,50,180
-                              shape: ~round_rect
-                              radius: 6
+                              x: 15
+                              y: 7
+                              texts: "'&0' + self.parent.entry['title']"
+                              fontSize: 32
+                              through: true
+                          移除:
+                            type: "Canvas"
+                            attribute:
+                              x: 828
+                              y: 3
+                              width: 76
+                              height: 34
+                            action:
+                              clickLeft: |-
+                                if(var.token != ''){
+                                  var.notice = '正在保存…'
+                                  Packet.send(var.packetId, 'blocked_material', var.token, var.selected, self.parent.entry['id'], 'allow')
+                                }
                             children:
-                              世界名称文字:
-                                type: Text
+                              底色:
+                                type: "Texture"
                                 attribute:
-                                  x: 16
-                                  y: 18
-                                  through: true
-                                  fontSize: 28
-                                  texts: "~&f{self.parent.entry['name']}"
-                              禁飞按钮:
-                                type: Canvas
-                                attribute:
-                                  x: 260
-                                  y: 14
-                                  width: 100
+                                  x: 0
+                                  y: 0
+                                  width: 76
                                   height: 34
-                                action:
-                                  click: |-
-                                    Packet.send(var.packetId, 'toggle_no_fly', var.actionToken, self.parent.entry['name'])
-                                children:
-                                  禁飞按钮背景:
-                                    type: Texture
-                                    attribute:
-                                      point: ~stretch_all
-                                      through: true
-                                      normal: "self.parent.entry['noFly'] == 'true' ? '200,60,60,220' : (self.isHovered() ? '70,70,85,210' : '50,50,60,180')"
-                                      shape: ~round_rect
-                                      radius: 6
-                                  禁飞按钮文字:
-                                    type: Text
-                                    attribute:
-                                      point: ~middle_center
-                                      width: 100
-                                      through: true
-                                      fontSize: 26
-                                      texts: "~{self.parent.entry['noFly'] == 'true' ? '&f禁飞' : '&7飞行'}"
-                              禁活塞按钮:
-                                type: Canvas
-                                attribute:
-                                  x: 380
-                                  y: 14
-                                  width: 110
-                                  height: 34
-                                action:
-                                  click: |-
-                                    Packet.send(var.packetId, 'toggle_no_piston', var.actionToken, self.parent.entry['name'])
-                                children:
-                                  禁活塞按钮背景:
-                                    type: Texture
-                                    attribute:
-                                      point: ~stretch_all
-                                      through: true
-                                      normal: "self.parent.entry['noPiston'] == 'true' ? '200,60,60,220' : (self.isHovered() ? '70,70,85,210' : '50,50,60,180')"
-                                      shape: ~round_rect
-                                      radius: 6
-                                  禁活塞按钮文字:
-                                    type: Text
-                                    attribute:
-                                      point: ~middle_center
-                                      width: 110
-                                      through: true
-                                      fontSize: 26
-                                      texts: "~{self.parent.entry['noPiston'] == 'true' ? '&f禁活塞' : '&7活塞'}"
-                              禁交互文字:
-                                type: Text
-                                attribute:
-                                  x: 510
-                                  y: 18
+                                  normal: "self.parent.isHovered() ? '231,218,199,255' : '237,228,214,255'"
                                   through: true
-                                  fontSize: 26
-                                  texts: "~&7交互: &f{self.parent.entry['interactions'] != none && self.parent.entry['interactions'] != '' ? self.parent.entry['interactions'] : '&8无'}"
+                              文字:
+                                type: "Text"
+                                attribute:
+                                  x: 0
+                                  y: 0
+                                  texts: "~&0解除"
+                                  fontSize: 32
+                                  through: true
+                                  point: "~middle_center"
+                          行分隔:
+                            type: "Texture"
+                            attribute:
+                              x: 0
+                              y: 38
+                              width: 918
+                              height: 2
+                              through: true
+                              normal: "~209,195,175,255"
+              material上页:
+                type: "Canvas"
+                attribute:
+                  x: 319
+                  y: 480
+                  width: 82
+                  height: 40
+                  visible: "var.materialPage > 0"
+                action:
+                  clickLeft: "Packet.send(var.packetId, 'materials', (var.materialPage - 1).round())"
+                children:
+                  底色:
+                    type: "Texture"
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 82
+                      height: 40
+                      normal: "self.parent.isHovered() ? '231,218,199,255' : '237,228,214,255'"
+                      through: true
+                  文字:
+                    type: "Text"
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: "~&0上一页"
+                      fontSize: 32
+                      through: true
+                      point: "~middle_center"
+              material页码:
+                type: "Canvas"
+                attribute:
+                  x: 409
+                  y: 480
+                  width: 100
+                  height: 40
+                children:
+                  底:
+                    type: "Texture"
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 100
+                      height: 40
+                      normal: "~237,228,214,255"
+                      through: true
+                  文字:
+                    type: "Text"
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: "'&8第 ' + (var.materialPage + 1).round() + ' / ' + var.materialPages.round() + ' 页'"
+                      fontSize: 32
+                      through: true
+                      point: "~middle_center"
+              material下页:
+                type: "Canvas"
+                attribute:
+                  x: 517
+                  y: 480
+                  width: 82
+                  height: 40
+                  visible: "var.materialPage + 1 < var.materialPages"
+                action:
+                  clickLeft: "Packet.send(var.packetId, 'materials', (var.materialPage + 1).round())"
+                children:
+                  底色:
+                    type: "Texture"
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 82
+                      height: 40
+                      normal: "self.parent.isHovered() ? '231,218,199,255' : '237,228,214,255'"
+                      through: true
+                  文字:
+                    type: "Text"
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: "~&0下一页"
+                      fontSize: 32
+                      through: true
+                      point: "~middle_center"
+      状态栏底:
+        type: "Texture"
+        attribute:
+          x: 50
+          y: 826
+          width: 1340
+          height: 39
+          through: true
+          normal: "~237,228,214,255"
+          visible: "var.notice != ''"
+      提示:
+        type: "Text"
+        attribute:
+          x: 65
+          y: 837
+          texts: "'&8' + var.notice"
+          fontSize: 34
+          through: true
+          limit: 92
+          visible: "var.notice != ''"
+      新建遮罩:
+        type: "Canvas"
+        attribute:
+          x: 23
+          y: 26
+          width: 1394
+          height: 848
+          visible: "var.creating"
+        children:
+          底:
+            type: "Texture"
+            attribute:
+              x: 0
+              y: 0
+              width: 1394
+              height: 848
+              normal: "~42,35,29,173"
+              through: true
+              shape: "~round_rect"
+              radius: 24
+          对话框:
+            type: "Canvas"
+            attribute:
+              x: 397
+              y: 252
+              width: 600
+              height: 292
+            children:
+              底:
+                type: "Texture"
+                attribute:
+                  x: 0
+                  y: 0
+                  width: 600
+                  height: 292
+                  normal: "~255,252,245,255"
+                  through: true
+                  shape: "~round_rect"
+                  radius: 15
+                effect:
+                  stroke:
+                    width: 3
+                    color: "~157,137,117,255"
+              标题:
+                type: "Text"
+                attribute:
+                  x: 28
+                  y: 19
+                  texts: "~&0新建区域"
+                  fontSize: 50
+                  through: true
+              提示:
+                type: "Text"
+                attribute:
+                  x: 28
+                  y: 75
+                  texts: "~&8区域覆盖当前选区的两个角点。"
+                  fontSize: 32
+                  through: true
+              输入:
+                type: "Canvas"
+                attribute:
+                  x: 28
+                  y: 122
+                  width: 544
+                  height: 50
+                children:
+                  底色:
+                    type: "Texture"
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 544
+                      height: 50
+                      normal: "~63,55,47,255"
+                      through: true
+                      shape: "~round_rect"
+                      radius: 8
+                    effect:
+                      stroke:
+                        width: 3
+                        color: "~157,137,117,255"
+                  输入:
+                    val: "createInput"
+                    type: "TextBox"
+                    attribute:
+                      x: 12
+                      y: 7
+                      width: 520
+                      height: 36
+                      fontSize: 32
+                      length: 64
+                      emptyText: "~&7区域名称"
+                      cursorColor: "~231,178,133,255"
+              预览:
+                type: "Canvas"
+                attribute:
+                  x: 28
+                  y: 202
+                  width: 123
+                  height: 44
+                action:
+                  clickLeft: "Packet.send(var.packetId, 'preview', 'new')"
+                children:
+                  底色:
+                    type: "Texture"
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 123
+                      height: 44
+                      normal: "self.parent.isHovered() ? '231,218,199,255' : '237,228,214,255'"
+                      through: true
+                  文字:
+                    type: "Text"
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: "~&0检查选区"
+                      fontSize: 32
+                      through: true
+                      point: "~middle_center"
+              取消:
+                type: "Canvas"
+                attribute:
+                  x: 342
+                  y: 202
+                  width: 94
+                  height: 44
+                action:
+                  clickLeft: "var.creating = false"
+                children:
+                  底色:
+                    type: "Texture"
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 94
+                      height: 44
+                      normal: "self.parent.isHovered() ? '231,218,199,255' : '237,228,214,255'"
+                      through: true
+                  文字:
+                    type: "Text"
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: "~&0取消"
+                      fontSize: 32
+                      through: true
+                      point: "~middle_center"
+              创建:
+                type: "Canvas"
+                attribute:
+                  x: 449
+                  y: 202
+                  width: 123
+                  height: 44
+                action:
+                  clickLeft: |-
+                    if(var.token != ''){
+                      var.notice = '正在保存…'
+                      Packet.send(var.packetId, 'create', var.token, val.createInput.getContent())
+                    }
+                children:
+                  底色:
+                    type: "Texture"
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 123
+                      height: 44
+                      normal: "self.parent.isHovered() ? '171,91,60,255' : '148,74,49,255'"
+                      through: true
+                      shape: "~round_rect"
+                      radius: 8
+                  文字:
+                    type: "Text"
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: "~&f创建区域"
+                      fontSize: 36
+                      through: true
+                      point: "~middle_center"
+              状态:
+                type: "Text"
+                attribute:
+                  x: 28
+                  y: 255
+                  texts: "'&8' + var.notice"
+                  fontSize: 32
+                  through: true
+                  limit: 42
+      消息遮罩:
+        type: "Canvas"
+        attribute:
+          x: 23
+          y: 26
+          width: 1394
+          height: 848
+          visible: "var.messageTarget != ''"
+        children:
+          底:
+            type: "Texture"
+            attribute:
+              x: 0
+              y: 0
+              width: 1394
+              height: 848
+              normal: "~42,35,29,173"
+              through: true
+              shape: "~round_rect"
+              radius: 24
+          对话框:
+            type: "Canvas"
+            attribute:
+              x: 307
+              y: 261
+              width: 780
+              height: 258
+            children:
+              底:
+                type: "Texture"
+                attribute:
+                  x: 0
+                  y: 0
+                  width: 780
+                  height: 258
+                  normal: "~255,252,245,255"
+                  through: true
+                  shape: "~round_rect"
+                  radius: 15
+                effect:
+                  stroke:
+                    width: 3
+                    color: "~157,137,117,255"
+              标题:
+                type: "Text"
+                attribute:
+                  x: 28
+                  y: 19
+                  texts: "'&0' + var.messageTitle"
+                  fontSize: 50
+                  through: true
+              输入:
+                type: "Canvas"
+                attribute:
+                  x: 28
+                  y: 85
+                  width: 724
+                  height: 50
+                children:
+                  底色:
+                    type: "Texture"
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 724
+                      height: 50
+                      normal: "~63,55,47,255"
+                      through: true
+                      shape: "~round_rect"
+                      radius: 8
+                    effect:
+                      stroke:
+                        width: 3
+                        color: "~157,137,117,255"
+                  输入:
+                    val: "messageInput"
+                    type: "TextBox"
+                    attribute:
+                      x: 12
+                      y: 7
+                      width: 700
+                      height: 36
+                      fontSize: 32
+                      length: 1024
+                      emptyText: "~&7输入进入或离开区域时显示的文字"
+                      cursorColor: "~231,178,133,255"
+              取消:
+                type: "Canvas"
+                attribute:
+                  x: 522
+                  y: 166
+                  width: 94
+                  height: 44
+                action:
+                  clickLeft: "var.messageTarget = ''"
+                children:
+                  底色:
+                    type: "Texture"
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 94
+                      height: 44
+                      normal: "self.parent.isHovered() ? '231,218,199,255' : '237,228,214,255'"
+                      through: true
+                  文字:
+                    type: "Text"
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: "~&0取消"
+                      fontSize: 32
+                      through: true
+                      point: "~middle_center"
+              保存:
+                type: "Canvas"
+                attribute:
+                  x: 629
+                  y: 166
+                  width: 123
+                  height: 44
+                action:
+                  clickLeft: |-
+                    if(var.token != ''){
+                      var.notice = '正在保存…'
+                      Packet.send(var.packetId, 'message', var.token, var.selected, var.messageTarget, val.messageInput.getContent())
+                    }
+                children:
+                  底色:
+                    type: "Texture"
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 123
+                      height: 44
+                      normal: "self.parent.isHovered() ? '171,91,60,255' : '148,74,49,255'"
+                      through: true
+                      shape: "~round_rect"
+                      radius: 8
+                  文字:
+                    type: "Text"
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: "~&f保存文字"
+                      fontSize: 36
+                      through: true
+                      point: "~middle_center"
+              状态:
+                type: "Text"
+                attribute:
+                  x: 28
+                  y: 220
+                  texts: "'&8' + var.notice"
+                  fontSize: 32
+                  through: true
+                  limit: 42

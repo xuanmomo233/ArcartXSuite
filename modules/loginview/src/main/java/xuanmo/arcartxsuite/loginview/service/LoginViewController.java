@@ -1,9 +1,19 @@
 package xuanmo.arcartxsuite.loginview.service;
 
-import java.util.*;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.UUID;
 import java.util.concurrent.CompletionStage;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
+import org.bukkit.event.HandlerList;
+import org.bukkit.event.Listener;
+import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
 import xuanmo.arcartxsuite.api.auth.AuthSnapshot;
@@ -11,40 +21,96 @@ import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.capability.AuthRuntimeCapability;
 
 /** All replies are bound to a captured connection. This controller never owns admission state. */
-public final class LoginViewController implements AutoCloseable {
+public final class LoginViewController implements Listener, AutoCloseable {
     private final JavaPlugin plugin;
     private final PacketBridgeAPI packets;
     private final AuthRuntimeCapability runtime;
     private final String ui;
-    private final long delay;
-    private record View(AuthSnapshot snapshot,AuthRuntimeCapability.ExternalPrompt prompt) {}
-    private final Map<UUID, View> shown=new HashMap<>();
-    private final Set<UUID> visible=new HashSet<>(), forced=new HashSet<>();
-    private final Map<UUID, Long> joined=new HashMap<>();
+    private final long delayNanos;
+    private final Map<UUID, ViewSession> views = new HashMap<>();
     private BukkitTask task;
-    private boolean active;
+    private volatile boolean active;
+
+    private static final class ViewSession {
+        final Player player;
+        final long joinedAt = System.nanoTime();
+        boolean forced;
+        UUID pendingRefresh;
+        AuthSnapshot shownState;
+        AuthRuntimeCapability.ExternalPrompt shownPrompt;
+
+        ViewSession(Player player) { this.player = player; }
+
+        void invalidate() {
+            shownState = null;
+            shownPrompt = null;
+        }
+    }
+
     public LoginViewController(JavaPlugin plugin,PacketBridgeAPI packets,AuthRuntimeCapability runtime,String ui,long delay) {
-        this.plugin=plugin; this.packets=packets; this.runtime=runtime; this.ui=ui; this.delay=delay;
+        this.plugin = plugin;
+        this.packets = packets;
+        this.runtime = runtime;
+        this.ui = ui;
+        this.delayNanos = delay * 50_000_000L;
     }
     public void start() {
-        active=true;
-        task=Bukkit.getScheduler().runTaskTimer(plugin,()->{
-            Set<UUID> online=new HashSet<>();
-            for(Player p:Bukkit.getOnlinePlayers()) {
-                UUID id=p.getUniqueId(); online.add(id);
-                long first=joined.computeIfAbsent(id, ignored->System.nanoTime());
-                if(System.nanoTime()-first>=delay*50_000_000L) open(p,false);
-            }
-            shown.keySet().retainAll(online); joined.keySet().retainAll(online);
-            visible.retainAll(online); forced.retainAll(online);
-        },1,10);
+        if (active) return;
+        active = true;
+        Bukkit.getPluginManager().registerEvents(this, plugin);
+        for (Player player : Bukkit.getOnlinePlayers()) track(player);
+        task = Bukkit.getScheduler().runTaskTimer(plugin, this::pulse, 1L, 10L);
     }
-    public void open(Player player,boolean force) {
-        if(!active || !player.isOnline()) return;
-        UUID id=player.getUniqueId(); AuthSnapshot state=runtime.snapshot(id);
-        var prompt=runtime.externalPrompt(id);
-        var view=new View(state,prompt);
-        if(state.connectionId()==null) return;
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onJoin(PlayerJoinEvent event) {
+        track(event.getPlayer());
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onQuit(PlayerQuitEvent event) {
+        Player player = event.getPlayer();
+        UUID id = player.getUniqueId();
+        var view = views.get(id);
+        if (view != null && view.player == player) views.remove(id);
+    }
+
+    private void track(Player player) {
+        views.put(player.getUniqueId(), new ViewSession(player));
+    }
+
+    private void pulse() {
+        if (!active) return;
+        long now = System.nanoTime();
+        for (var entry : views.entrySet()) {
+            var view = entry.getValue();
+            if (view.player.isOnline() && now - view.joinedAt >= delayNanos) {
+                AuthSnapshot state = runtime.snapshot(entry.getKey());
+                reconcile(view, state, runtime.externalPrompt(entry.getKey()), false);
+            }
+        }
+    }
+
+    public void open(Player player, boolean force) {
+        var view = currentView(player);
+        if (view == null) return;
+        UUID id = player.getUniqueId();
+        reconcile(view, runtime.snapshot(id), runtime.externalPrompt(id), force);
+    }
+
+    private ViewSession currentView(Player player) {
+        if (!active || !player.isOnline()) return null;
+        UUID id = player.getUniqueId();
+        var view = views.get(id);
+        if (view != null && view.player == player) return view;
+        if (Bukkit.getPlayer(id) != player) return null;
+        track(player);
+        return views.get(id);
+    }
+
+    private void reconcile(ViewSession view, AuthSnapshot state, AuthRuntimeCapability.ExternalPrompt prompt, boolean force) {
+        if (state.connectionId() == null) return;
+        Player player = view.player;
         if(force && state.admitted() && !state.provider().equals("local-password")) {
             if("server".equals(state.provider())) {
                 player.sendMessage("Suite 认证未启用，玩家已正常准入。");
@@ -52,20 +118,25 @@ public final class LoginViewController implements AutoCloseable {
             }
             player.sendMessage("外部身份的密码请到对应身份提供方修改。"); return;
         }
-        if(force) forced.add(id);
-        if(state.admitted() && !forced.contains(id) && prompt==null) {
-            if(visible.remove(id)) packets.closeUiUnsafe(player,ui);
-            shown.put(id,view); return;
+        if (force) view.forced = true;
+        boolean open = packets.isUiOpen(player, ui);
+        if (state.admitted() && !view.forced && prompt == null) {
+            if (open) packets.closeUiUnsafe(player, ui);
+            view.invalidate();
+            return;
         }
-        if(visible.add(id)) packets.openUiUnsafe(player,ui);
-        if(!force && view.equals(shown.get(id))) return;
-        shown.put(id,view);
+        if (!open) {
+            if (!packets.openUiUnsafe(player, ui)) return;
+            view.invalidate();
+        }
+        if (!force && state.equals(view.shownState) && Objects.equals(prompt, view.shownPrompt)) return;
         String mode=state.admitted()?"change":state.identityVerified()?"requirements":!runtime.passwordAuthenticationAllowed()?"verify"
             :state.registration()==AuthSnapshot.Registration.UNREGISTERED && runtime.passwordRegistrationAllowed()?"register":"login";
+        var terms = runtime.terms();
         var payload=new HashMap<String,Object>(Map.of("connection",state.connectionId().toString(),"mode",mode,
             "stage",state.stage().name(),"player",player.getName(),"ready",state.stage()!=AuthSnapshot.Stage.LOADING,
             "requirements",state.requirements().stream().map(Enum::name).toList(),
-            "terms",runtime.terms().lines(),"termsVersion",runtime.terms().version(),"termsEnabled",runtime.terms().enabled()));
+            "terms",terms.lines(),"termsVersion",terms.version(),"termsEnabled",terms.enabled()));
         payload.put("needTerms",state.requirements().contains(AuthSnapshot.Requirement.TERMS));
         payload.put("needBinding",state.requirements().contains(AuthSnapshot.Requirement.QQ_BINDING));
         payload.put("externalId",prompt==null?"":prompt.requestId().toString());
@@ -74,24 +145,37 @@ public final class LoginViewController implements AutoCloseable {
         payload.put("externalConfirmation",prompt==null?"":prompt.confirmation());
         payload.put("canLink",state.admitted() && "local-password".equals(state.provider()) && runtime.externalLinkAvailable());
         payload.put("message",text(state.reason()));
-        packets.sendPacket(player,ui,"state",payload);
+        if (packets.sendPacket(player, ui, "state", payload)) {
+            view.shownState = state;
+            view.shownPrompt = prompt;
+        }
     }
     public void clientReady(Player player) {
-        UUID id=player.getUniqueId();
-        if(visible.remove(id)) packets.closeUiUnsafe(player,ui);
-        shown.remove(id);
-        open(player,false);
+        var view = currentView(player);
+        if (view == null) return;
+        if (packets.isUiOpen(player, ui)) packets.closeUiUnsafe(player, ui);
+        view.invalidate();
+        UUID id = player.getUniqueId();
+        reconcile(view, runtime.snapshot(id), runtime.externalPrompt(id), false);
     }
     public boolean handle(Player player,String channel,List<String> data) {
         if(!"AXS_auth_v1".equals(channel)) return false;
         if(!active || data==null || data.size()<2 || data.size()>7 || data.stream().anyMatch(v->v==null || v.length()>1024)) return true;
         UUID connection;
         try { connection=UUID.fromString(data.get(1)); } catch(IllegalArgumentException e) { return true; }
-        if(!connection.equals(runtime.snapshot(player.getUniqueId()).connectionId())) return true;
+        UUID id = player.getUniqueId();
+        if(!connection.equals(runtime.snapshot(id).connectionId())) return true;
+        var view = currentView(player);
+        if (view == null) return true;
+        boolean refresh = "refresh".equals(data.get(0));
         CompletionStage<AuthRuntimeCapability.Result> job;
         switch(data.get(0)) {
             case "exit" -> { if(data.size()==2) player.kickPlayer("已退出登录流程。"); return true; }
-            case "refresh" -> job=runtime.refresh(player.getUniqueId(),connection);
+            case "refresh" -> {
+                if (data.size() != 2 || connection.equals(view.pendingRefresh)) return true;
+                job = runtime.refresh(id, connection);
+                view.pendingRefresh = connection;
+            }
             case "external_link" -> {
                 if(data.size()!=2) return true;
                 job=runtime.beginExternalLink(player.getUniqueId(),connection);
@@ -122,9 +206,14 @@ public final class LoginViewController implements AutoCloseable {
         job.whenComplete((result,error)->{
             if(!active) return;
             Bukkit.getScheduler().runTask(plugin,()->{
-                if(!active || !player.isOnline() || !connection.equals(runtime.snapshot(player.getUniqueId()).connectionId())) return;
-                if(error==null && result.success() && runtime.externalPrompt(player.getUniqueId())==null) forced.remove(player.getUniqueId());
-                shown.remove(player.getUniqueId()); open(player,false);
+                if (!active || views.get(id) != view || !player.isOnline()) return;
+                if (refresh && connection.equals(view.pendingRefresh)) view.pendingRefresh = null;
+                AuthSnapshot state = runtime.snapshot(id);
+                if (!connection.equals(state.connectionId())) return;
+                var prompt = runtime.externalPrompt(id);
+                if (error == null && result.success() && prompt == null) view.forced = false;
+                view.invalidate();
+                reconcile(view, state, prompt, false);
                 if(error!=null) message(player,"认证服务暂时不可用。",false);
                 else message(player,text(result.code()),result.success());
             });
@@ -170,8 +259,15 @@ public final class LoginViewController implements AutoCloseable {
         packets.sendPacket(player,ui,"result",Map.of("success",success,"message",text));
     }
     @Override public void close() {
-        active=false; if(task!=null) task.cancel();
-        for(Player p:Bukkit.getOnlinePlayers()) if(visible.contains(p.getUniqueId())) packets.closeUiUnsafe(p,ui);
-        shown.clear(); visible.clear(); forced.clear(); joined.clear();
+        active = false;
+        if (task != null) {
+            task.cancel();
+            task = null;
+        }
+        HandlerList.unregisterAll(this);
+        for (var view : views.values()) {
+            if (view.player.isOnline() && packets.isUiOpen(view.player, ui)) packets.closeUiUnsafe(view.player, ui);
+        }
+        views.clear();
     }
 }

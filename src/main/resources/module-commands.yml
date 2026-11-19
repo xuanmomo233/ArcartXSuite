@@ -138,7 +138,7 @@ commands:
     permission: axs.essentials.seen
   inv:
     description: 查看玩家背包
-    usage: /<command> <player>
+    usage: /<command> <player> [edit]
     permission: axs.essentials.inv
   sit:
     description: 坐下
@@ -148,10 +148,6 @@ commands:
     description: 躺下
     usage: /<command>
     permission: axs.essentials.lay
-  sort:
-    description: 整理背包
-    usage: /<command>
-    permission: axs.essentials.sort
   speed:
     description: 设置速度
     usage: /<command> <fly|walk> <1-10>
@@ -260,11 +256,6 @@ commands:
     usage: /<command> open|cleartrack|hud [on|off|toggle]
     aliases: [axsquestgps]
     permission: arcartxsuite.questgps.use
-  tab:
-    description: Tab 列表玩家命令（管理命令见 /axs tab）
-    usage: /<command> view [name]|page <id> <next|prev|N>|refresh
-    aliases: [axstab]
-    permission: arcartxsuite.tab.use
   map:
     description: 玩家地图命令
     usage: /<command> open [world]|hud [on|off|toggle]|cleartrack

@@ -2,6 +2,7 @@ package xuanmo.arcartxsuite.menu.service;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Logger;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
@@ -10,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import xuanmo.arcartxsuite.api.condition.ScriptCondition;
 import xuanmo.arcartxsuite.api.condition.ScriptConditionEvaluator;
 import xuanmo.arcartxsuite.api.condition.ScriptConditionServices;
+import xuanmo.arcartxsuite.api.icon.IconDefinition;
 import xuanmo.arcartxsuite.menu.config.MenuButtonDefinition;
 import xuanmo.arcartxsuite.menu.config.MenuDefinition;
 import xuanmo.arcartxsuite.menu.config.MenuLayoutType;
@@ -186,6 +188,93 @@ class MenuPresentationTest {
         assertEquals(Map.of(), row.get("detailRows"));
     }
 
+    @Test
+    void stopsCheckingVisibilityOnceTheOrderedPageIsFull() throws Exception {
+        YamlConfiguration yaml = new YamlConfiguration();
+        yaml.loadFromString("""
+            id: test
+            buttons-per-page: 1
+            pages:
+              main:
+                buttons:
+                  later:
+                    order: 20
+                    permission: hidden.permission
+                  first:
+                    order: 10
+                    text: First
+            """);
+        Player player = org.mockito.Mockito.mock(Player.class);
+        org.mockito.Mockito.when(player.getName()).thenReturn("tester");
+        org.mockito.Mockito.when(player.getDisplayName()).thenReturn("tester");
+        MenuDefinition definition = MenuDefinition.load(yaml, "test", MenuLayoutType.PANEL, 2, 12,
+            Logger.getAnonymousLogger());
+        Map<String, Object> result = MenuPacketFactory.buildPayload("AXS_MENU", player, definition,
+            new MenuSession("test", MenuLayoutType.PANEL, "menu_panel", 0), null);
+        assertEquals("first", firstRow(result).get("id"));
+        org.mockito.Mockito.verify(player, org.mockito.Mockito.never()).hasPermission("hidden.permission");
+    }
+
+    @Test
+    void staticDetailRowsAreSharedWhileDynamicLinesUseTheCurrentPlayer() throws Exception {
+        installEvaluator(true);
+        var alex = org.mockito.Mockito.mock(Player.class);
+        var steve = org.mockito.Mockito.mock(Player.class);
+        org.mockito.Mockito.when(alex.getName()).thenReturn("Alex");
+        org.mockito.Mockito.when(steve.getName()).thenReturn("Steve");
+        YamlConfiguration yaml = new YamlConfiguration();
+        yaml.loadFromString("""
+            id: test
+            pages:
+              main:
+                buttons:
+                  visible:
+                    details:
+                      description: ['静态说明', '你好，{player}']
+            """);
+        var definition = MenuDefinition.load(yaml, "test", MenuLayoutType.PANEL, 2, 12, Logger.getAnonymousLogger());
+        var ordered = MenuPacketFactory.orderedButtons(definition.pageAt(0).buttons().values());
+        var presentation = new MenuPresentation((player, icon) -> "");
+        var session = new MenuSession("test", MenuLayoutType.PANEL, "menu_panel", 0);
+        var first = firstRow(MenuPacketFactory.buildPayload("AXS_MENU", alex, definition, session, presentation, ordered, List.of()));
+        var second = firstRow(MenuPacketFactory.buildPayload("AXS_MENU", steve, definition, session, presentation, ordered, List.of()));
+        var firstDetails = (Map<?, ?>) first.get("detailRows");
+        var secondDetails = (Map<?, ?>) second.get("detailRows");
+        assertSame(firstDetails.get("0"), secondDetails.get("0"));
+        assertTrue(firstDetails.get("1").toString().contains("Alex"));
+        assertTrue(secondDetails.get("1").toString().contains("Steve"));
+    }
+
+    @Test
+    void sharesOnlySuccessfulStaticIconsAndClearsThemOnReload() {
+        var renders = new AtomicInteger();
+        var presentation = new MenuPresentation((player, icon) -> "preview-" + renders.incrementAndGet());
+        assertEquals("preview-1", presentation.icon(null, IconDefinition.load("DIAMOND")));
+        assertEquals("preview-1", presentation.icon(null, IconDefinition.load("DIAMOND")));
+
+        var viewerIcon = new YamlConfiguration();
+        viewerIcon.set("material", "DIAMOND");
+        viewerIcon.set("name", "{player}");
+        var dynamic = IconDefinition.load(viewerIcon);
+        assertEquals("preview-2", presentation.icon(null, dynamic));
+        assertEquals("preview-3", presentation.icon(null, dynamic));
+        var external = new YamlConfiguration();
+        external.set("source", "overture");
+        external.set("id", "quest-icon");
+        assertEquals("preview-4", presentation.icon(null, IconDefinition.load(external)));
+        assertEquals("preview-5", presentation.icon(null, IconDefinition.load(external)));
+
+        presentation.clear();
+        assertEquals("preview-6", presentation.icon(null, IconDefinition.load("DIAMOND")));
+
+        var attempts = new AtomicInteger();
+        var recovering = new MenuPresentation((player, icon) -> attempts.incrementAndGet() == 1 ? "" : "ready");
+        assertEquals("", recovering.icon(null, IconDefinition.load("STONE")));
+        assertEquals("ready", recovering.icon(null, IconDefinition.load("STONE")));
+        assertEquals("ready", recovering.icon(null, IconDefinition.load("STONE")));
+        assertEquals(2, attempts.get());
+    }
+
     private Map<String, Object> payload(String buttonYaml) throws Exception {
         YamlConfiguration yaml = new YamlConfiguration();
         yaml.loadFromString("id: test\npages:\n  main:\n    title: 功能\n    buttons:\n      entry:\n"
@@ -214,7 +303,7 @@ class MenuPresentationTest {
 
             @Override
             public String applyPlaceholders(Player player, String input) {
-                return input.replace("{player}", "Alex");
+                return input.replace("{player}", player == null ? "Alex" : player.getName());
             }
         });
     }

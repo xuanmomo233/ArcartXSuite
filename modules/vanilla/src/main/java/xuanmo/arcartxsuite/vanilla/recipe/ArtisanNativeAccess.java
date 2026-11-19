@@ -8,7 +8,21 @@ import org.bukkit.entity.Player;
 /** The native loom owns its available patterns, selection events and result. */
 public final class ArtisanNativeAccess {
     public record Choice(int index,PatternType pattern,String code) { }
-    public record Loom(List<Choice> choices,int selected) { }
+
+    public static final class Loom {
+        private final List<?> nativePatterns;
+        private final List<Choice> choices;
+        private final int selected;
+
+        private Loom(List<?> nativePatterns, List<Choice> choices, int selected) {
+            this.nativePatterns = nativePatterns;
+            this.choices = choices;
+            this.selected = selected;
+        }
+
+        public List<Choice> choices() { return choices; }
+        public int selected() { return selected; }
+    }
     private record Access(Method handle,Method patterns,Method selected,Method button,Method holderValue,Method hash) { }
     private final Map<Class<?>,Access> cache=new HashMap<>();
     private Access access(Player player)throws ReflectiveOperationException{
@@ -27,12 +41,33 @@ public final class ArtisanNativeAccess {
         for(String name:names)try{Method m=type.getMethod(name);if(m.getReturnType()==result||result.isAssignableFrom(m.getReturnType()))return m;}catch(NoSuchMethodException ignored){ }
         throw new NoSuchMethodException(type.getName()+Arrays.toString(names));
     }
-    public Loom loom(Player player){
-        try{
-            Access a=access(player);Object menu=a.handle.invoke(player.getOpenInventory());List<?> list=(List<?>)a.patterns.invoke(menu);List<Choice> choices=new ArrayList<>();
-            for(int i=0;i<list.size();i++){Object pattern=a.holderValue.invoke(list.get(i));String code=(String)a.hash.invoke(pattern);choices.add(new Choice(i,PatternType.getByIdentifier(code),code));}
-            return new Loom(List.copyOf(choices),(int)a.selected.invoke(menu));
-        }catch(ReflectiveOperationException|RuntimeException e){return null;}
+    public Loom loom(Player player, Loom previous) {
+        try {
+            Access access = access(player);
+            Object menu = access.handle().invoke(player.getOpenInventory());
+            List<?> patterns = (List<?>) access.patterns().invoke(menu);
+            int selected = (int) access.selected().invoke(menu);
+            return snapshotLoom(patterns, selected, previous, access.holderValue(), access.hash());
+        } catch (ReflectiveOperationException | RuntimeException failure) {
+            return null;
+        }
+    }
+
+    static Loom snapshotLoom(List<?> patterns, int selected, Loom previous, Method holderValue, Method patternCode)
+            throws ReflectiveOperationException {
+        if (previous != null && previous.nativePatterns.equals(patterns)) {
+            if (previous.selected == selected) return previous;
+            return new Loom(previous.nativePatterns, previous.choices, selected);
+        }
+
+        List<Choice> choices = new ArrayList<>(patterns.size());
+        int index = 0;
+        for (Object holder : patterns) {
+            Object pattern = holderValue.invoke(holder);
+            String code = (String) patternCode.invoke(pattern);
+            choices.add(new Choice(index++, PatternType.getByIdentifier(code), code));
+        }
+        return new Loom(List.copyOf(patterns), List.copyOf(choices), selected);
     }
     public boolean select(Player player,int index){
         try{Access a=access(player);Object menu=a.handle.invoke(player.getOpenInventory()),actor=player.getClass().getMethod("getHandle").invoke(player);return (boolean)a.button.invoke(menu,actor,index);}

@@ -90,7 +90,7 @@ public final class ConversationModule extends AbstractAXSModule implements Modul
     protected @NotNull PacketHandlerSpec createPacketHandlerSpec() {
         return PacketHandlerSpec.of(
             (player, packetId, data) ->
-                    service != null && service.handleClientPacket(player, packetId, data), 0, null, null);
+                    service != null && service.handleClientPacket(player, packetId, data), 0, configuration.clientPacketId(), "conversation");
     }
 
     @Override

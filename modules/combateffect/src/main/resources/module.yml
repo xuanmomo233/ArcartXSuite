@@ -2,7 +2,7 @@ id: combateffect
 name: CombatEffect
 version: 2.0.0
 main: xuanmo.arcartxsuite.combateffect.CombatEffectModule
-api-version: 3.0
+api-version: 3.9
 
 depends: []
 softdepends: []
@@ -10,5 +10,5 @@ external-depends:
   - ArcartX
 
 external-softdepends:
-  - ArcartX_Chronos_Plugin
+  - Chronos
 

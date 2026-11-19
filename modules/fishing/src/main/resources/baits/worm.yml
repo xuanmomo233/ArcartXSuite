@@ -30,4 +30,6 @@ fish-attract-modifiers:        # 鱼类吸引倍率（对该鱼种的捕获概�
   catfish: 2.0                 # 鲶鱼吸引倍率2.0倍
   sea_bass: 1.5                # 海鲈鱼吸引倍率1.5倍
 treasure-chance-boost: 0.02    # 宝藏概率额外加成（+2%）
+fight-effects:
+  - { fish: catfish, action: sinker, recovery-extra-ticks: 8 }
 max-durability-bonus: 0        # 鱼竿最大耐久度加成

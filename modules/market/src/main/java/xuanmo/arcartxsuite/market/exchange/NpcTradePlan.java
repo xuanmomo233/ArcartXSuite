@@ -47,12 +47,13 @@ public record NpcTradePlan(ItemStack[] before,ItemStack[] after,List<WarehouseMa
         return new NpcTradePlan(before,after,warehouse.entrySet().stream().map(e->new WarehouseMaterialAccess.Request(e.getKey(),e.getValue())).toList(),Map.copyOf(debits),Map.copyOf(credits),List.copyOf(outputs));
     }
     public boolean unchanged(Player player){return Arrays.equals(before,player.getInventory().getStorageContents());}
-    public void apply(Player player){
+    public boolean apply(Player player){
         if(!unchanged(player))throw new IllegalStateException("背包已变化");
         List<Integer> changed=new ArrayList<>();for(int i=0;i<before.length;i++)if(!Objects.equals(before[i],after[i]))changed.add(i);
         for(int i:changed)player.getInventory().setItem(i,null);
         for(int i:changed)player.getInventory().setItem(i,InventoryItems.copy(after[i]));
-        player.updateInventory();
+        if (!changed.isEmpty()) player.updateInventory();
+        return !changed.isEmpty();
     }
     public Map<String,Object> evidence(){
         Map<String,Object> value=new LinkedHashMap<>();Map<String,Object> changed=new LinkedHashMap<>();

@@ -52,6 +52,7 @@ public final class QuestGpsModule extends AbstractAXSModule implements ModuleCom
     private QuestGpsService service;
     /** 地图导航互斥事件订阅 ID（axs.map.nav_started），stopService 时退订。 */
     private String mapNavSubscriptionId;
+    private String mapReadySubscriptionId;
 
     /** @return 模块描述符，包含 id、名称与版本 */
     @Override
@@ -99,7 +100,7 @@ public final class QuestGpsModule extends AbstractAXSModule implements ModuleCom
     protected @NotNull PacketHandlerSpec createPacketHandlerSpec() {
         return PacketHandlerSpec.of(
             (player, packetId, data) ->
-                    service != null && service.handleClientPacket(player, packetId, data), 0, null, null);
+                    service != null && service.handleClientPacket(player, packetId, data), 0, configuration.ui().packetId(), "questgps");
     }
 
     /**
@@ -184,23 +185,6 @@ public final class QuestGpsModule extends AbstractAXSModule implements ModuleCom
         service.setEventBusProvider(() -> getCapability(EventBusCapability.class));
         service.start();
 
-        // 向地图注册"questgps"来源的导航回调：面板"导航/取消"按钮转发给本模块执行
-        MapNavigable mapNavigable = getCapability(MapNavigable.class);
-        if (mapNavigable != null) {
-            mapNavigable.registerNavigationSource(plugin, service.mapSource(),
-                new xuanmo.arcartxsuite.api.capability.MapNavigationHandler() {
-                    @Override
-                    public boolean onNavigateRequest(@NotNull org.bukkit.entity.Player p, @NotNull String targetId) {
-                        return service.handleMapNavigateRequest(p, targetId);
-                    }
-
-                    @Override
-                    public void onCancelRequest(@NotNull org.bukkit.entity.Player p, @NotNull String targetId) {
-                        service.handleMapCancelRequest(p, targetId);
-                    }
-                });
-        }
-
         // 互斥：地图自身导航开始时停止本模块的任务导航（任务标记仍保留在地图上）
         EventBusCapability eventBus = getCapability(EventBusCapability.class);
         if (eventBus != null) {
@@ -208,6 +192,9 @@ public final class QuestGpsModule extends AbstractAXSModule implements ModuleCom
                 if (event.player() != null && service != null) {
                     service.onMapNavigationStarted(event.player());
                 }
+            });
+            mapReadySubscriptionId = eventBus.subscribe("axs.map.ready", event -> {
+                if (event.player() != null && service != null) service.onMapReady(event.player());
             });
         }
 
@@ -266,18 +253,14 @@ public final class QuestGpsModule extends AbstractAXSModule implements ModuleCom
     /** 停止模块服务，释放 {@link QuestGpsService} 与配置资源。 */
     @Override
     protected void stopService() {
-        // 注销地图导航回调与互斥事件订阅（source 与注册时一致，用 service.mapSource()）
-        MapNavigable mapNavigable = getCapability(MapNavigable.class);
-        if (mapNavigable != null && service != null) {
-            mapNavigable.unregisterNavigationSource(service.mapSource());
+        // 地图导航回调由服务在发布外部目标时注册，并随服务关闭注销。
+        EventBusCapability eventBus = getCapability(EventBusCapability.class);
+        if (eventBus != null) {
+            if (mapNavSubscriptionId != null) eventBus.unsubscribe(mapNavSubscriptionId);
+            if (mapReadySubscriptionId != null) eventBus.unsubscribe(mapReadySubscriptionId);
         }
-        if (mapNavSubscriptionId != null) {
-            EventBusCapability eventBus = getCapability(EventBusCapability.class);
-            if (eventBus != null) {
-                eventBus.unsubscribe(mapNavSubscriptionId);
-            }
-            mapNavSubscriptionId = null;
-        }
+        mapNavSubscriptionId = null;
+        mapReadySubscriptionId = null;
         if (service != null) {
             service.shutdown();
             service = null;

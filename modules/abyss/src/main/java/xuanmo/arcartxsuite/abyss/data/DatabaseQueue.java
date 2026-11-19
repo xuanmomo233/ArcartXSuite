@@ -4,11 +4,11 @@ import java.util.ArrayDeque;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.CompletionStage;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import xuanmo.arcartxsuite.api.scheduler.ModuleExecutor;
 
 /** Serial writes with bounded admission, weighted maintenance, and an independent bounded read lane. */
 final class DatabaseQueue implements AutoCloseable {
@@ -21,9 +21,12 @@ final class DatabaseQueue implements AutoCloseable {
     private final ArrayDeque<Job<?>> writes = new ArrayDeque<>();
     private final ArrayDeque<Job<?>> maintenance = new ArrayDeque<>();
     private final int writeCapacity, maintenanceCapacity;
-    private final ExecutorService writer = Executors.newSingleThreadExecutor(task -> thread(task, "Abyss-DB"));
-    private final ThreadPoolExecutor reader;
-    private boolean draining, closed;
+    // At most one drain is queued, even when the current drain is handing over to its successor.
+    private final ModuleExecutor writer = new ModuleExecutor(1, 1, 0, TimeUnit.MILLISECONDS,
+        new LinkedBlockingQueue<>(), task -> thread(task, "Abyss-DB"));
+    private final ModuleExecutor reader;
+    private boolean draining;
+    private volatile boolean closed;
     private int consecutiveWrites;
 
     DatabaseQueue() { this(4096, 32, 128); }
@@ -31,9 +34,8 @@ final class DatabaseQueue implements AutoCloseable {
     DatabaseQueue(int writeCapacity, int maintenanceCapacity, int readCapacity) {
         this.writeCapacity = writeCapacity;
         this.maintenanceCapacity = maintenanceCapacity;
-        reader = new ThreadPoolExecutor(1, 1, 0, TimeUnit.MILLISECONDS,
-            new ArrayBlockingQueue<>(readCapacity), task -> thread(task, "Abyss-DB-Read"),
-            new ThreadPoolExecutor.AbortPolicy());
+        reader = new ModuleExecutor(1, 1, 0, TimeUnit.MILLISECONDS,
+            new ArrayBlockingQueue<>(readCapacity), task -> thread(task, "Abyss-DB-Read"));
     }
 
     <T> CompletableFuture<T> write(Callable<T> task) { return enqueue(task, false); }
@@ -43,7 +45,10 @@ final class DatabaseQueue implements AutoCloseable {
         var future = new CompletableFuture<T>();
         synchronized (this) {
             if (closed) return CompletableFuture.failedFuture(new RejectedExecutionException("Abyss database stopped"));
-            try { reader.execute(() -> new Job<>(task, future).run()); }
+            try { reader.execute(() -> {
+                if (closed) future.completeExceptionally(new RejectedExecutionException("Abyss database stopped"));
+                else new Job<>(task, future).run();
+            }); }
             catch (RejectedExecutionException failure) { future.completeExceptionally(failure); }
         }
         return future;
@@ -82,18 +87,15 @@ final class DatabaseQueue implements AutoCloseable {
         }
     }
 
-    @Override public void close() {
-        synchronized (this) {
-            closed = true;
-            writer.shutdown();
-            reader.shutdown();
-        }
-        try {
-            writer.awaitTermination(5, TimeUnit.SECONDS);
-            reader.awaitTermination(5, TimeUnit.SECONDS);
-        } catch (InterruptedException failure) {
-            Thread.currentThread().interrupt();
-        }
+    @Override public synchronized void close() {
+        if (closed) return;
+        closed = true;
+        writer.shutdown();
+        reader.shutdown();
+    }
+
+    CompletionStage<Void> stopped() {
+        return CompletableFuture.allOf(writer.stopped().toCompletableFuture(), reader.stopped().toCompletableFuture());
     }
 
     private static Thread thread(Runnable task, String name) {

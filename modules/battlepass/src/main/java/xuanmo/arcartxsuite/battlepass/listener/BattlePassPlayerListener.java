@@ -33,7 +33,8 @@ public final class BattlePassPlayerListener implements Listener {
         BattlePassService service = serviceSupplier.get();
         if (service == null) return;
         Player player = event.getPlayer();
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+        service.playerJoined(player.getUniqueId());
+        service.async( () -> {
             if (player.isOnline()) {
                 service.preload(player);
             }
@@ -49,6 +50,6 @@ public final class BattlePassPlayerListener implements Listener {
         }
         BattlePassService service = serviceSupplier.get();
         if (service == null) return;
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> service.handleQuit(uuid));
+        service.handleQuit(uuid);
     }
 }

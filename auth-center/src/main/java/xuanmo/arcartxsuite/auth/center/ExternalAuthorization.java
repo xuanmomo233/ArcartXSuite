@@ -120,17 +120,35 @@ final class ExternalAuthorization {
     }
 
     BrowserConsent callback(String state, String cookie, String code) throws Exception {
-        BrowserRequest request;
-        synchronized(this) {
-            request = peek(browsers,state);
-            verifyCookie(request,cookie);
-            browsers.remove(GameExternalStore.hash(state));
-        }
+        BrowserRequest request = takeBrowser(state,cookie);
         if (code == null || code.isBlank() || code.length() > 2048) throw new SecurityException("Authorization rejected");
         var identity = exchange(config.providers().get(request.realm()),config.url("/callback"),code,request.nonce(),request.verifier());
         var consent = new BrowserConsent(request,identity);
         synchronized(this) { put(confirmations,state,consent,90_000); }
         return consent;
+    }
+
+    ConsentResult denyBrowser(String state, String cookie) throws Exception {
+        BrowserRequest request = takeBrowser(state,cookie);
+        if (request.device()!=null) {
+            synchronized(this) {
+                var device=request.device();
+                if(device.closed || device.expires<=System.currentTimeMillis()) throw new SecurityException("Device authorization expired");
+                device.closed=true;
+            }
+        } else if (request.launcher()!=null) {
+            return launcherResult(request.launcher(),"error=access_denied",false);
+        } else if (!center.decidePairing(request.pairing(),null,false)) {
+            throw new SecurityException("Game request expired");
+        }
+        return new ConsentResult(null,false,"");
+    }
+
+    private synchronized BrowserRequest takeBrowser(String state, String cookie) {
+        BrowserRequest request = peek(browsers,state);
+        verifyCookie(request,cookie);
+        browsers.remove(GameExternalStore.hash(state));
+        return request;
     }
 
     ConsentResult confirm(String state, String cookie, boolean approved) throws Exception {
@@ -162,6 +180,10 @@ final class ExternalAuthorization {
             synchronized(this) { put(codes,code,new ExchangeCode(launcher,new Grant(launcher.app(),consent.identity(),ownership)),60_000); }
             result = "code=" + code;
         }
+        return launcherResult(launcher,result,approved);
+    }
+
+    private static ConsentResult launcherResult(LauncherRequest launcher,String result,boolean approved) {
         return new ConsentResult(URI.create(launcher.app().redirect()+"?"+result+"&state="+launcher.clientState()),approved,"");
     }
 

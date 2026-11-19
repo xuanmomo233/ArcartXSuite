@@ -48,3 +48,38 @@ bait-multipliers:
 
 # 进入此水域钓鱼所需权限（留空 = 无限制）
 require-permission: ""
+
+# 浮漂落在芦苇区时，本局轨道靠底部的 6%～24% 为危险带。
+# 示例坐标请对准实际水面。鱼连续进入危险带 4 个判定步后开始擦线。
+obstacle-zones:
+  reeds:
+    display-name: "芦苇区"
+    pos: ["145,195", "158,195", "158,205", "145,205"]
+    track-min: 0.06
+    track-max: 0.24
+    warning-ticks: 4
+    tension-per-tick: 4.0
+
+# 急流经过低水层，鱼冲刺后回稳时会向下多滑一段。示例坐标请对准水面。
+current-zones:
+  rapids:
+    display-name: "湖口急流"
+    pos: ["150,190", "172,190", "172,212", "150,212"]
+    track-min: 0.04
+    track-max: 0.42
+    drift-per-tick: -0.016
+    carry-ticks: 8
+
+# 示例坐标应对准实际水面及岸边落脚点。
+fish-schools:
+  rain-carp:
+    x: 150.5
+    y: 63.0
+    z: 200.5
+    radius: 8
+    active-ticks: 2400
+    interval-ticks: 6000
+    rain-only: true
+    shore: { x: 140.5, y: 64.0, z: 200.5 }
+    weights:
+      legendary_carp: 2.0

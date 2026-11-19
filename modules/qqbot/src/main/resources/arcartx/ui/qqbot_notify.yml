@@ -24,10 +24,6 @@ ui:
   packetHandler:
     notify: |-
       if(!var.noticeReady){
-        for(i in range(1, 3)){
-          row = val.noticeList['通知行'].copy('通知行' + i.round())
-          row.entryKey = 'row' + i.round()
-        }
         var.noticeReady = true
       }
       var.notices['row3'] = var.notices['row2']
@@ -44,19 +40,23 @@ controls:
     children:
       通知列表:
         val: noticeList
-        type: VStack
+        type: RepeatGrid
         attribute:
+          items: "['row0', 'row1', 'row2', 'row3']"
+          flow: ~row
+          column: 1
+          spaceBetweenY: 8
+          maxSize: 4
           point: ~top_right
           x: -24
           y: 70
           width: 520
-          spaceBetween: 8
           through: true
         children:
           通知行:
             type: Texture
             attribute:
-              entryKey: ~row0
+              entryKey: self.item
               entry: var.notices[self.entryKey]
               visible: self.entry != none
               width: 520

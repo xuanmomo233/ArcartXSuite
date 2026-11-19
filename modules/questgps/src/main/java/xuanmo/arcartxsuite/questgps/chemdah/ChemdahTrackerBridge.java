@@ -1,126 +1,111 @@
 package xuanmo.arcartxsuite.questgps.chemdah;
 
-import ink.ptms.chemdah.api.ChemdahTrackAPI;
-import ink.ptms.chemdah.api.ChemdahTrackAPI.TrackingSession;
-import ink.ptms.chemdah.api.ChemdahTrackAPI.TrackingTarget;
+import ink.ptms.chemdah.api.ChemdahAPI;
+import ink.ptms.chemdah.core.PlayerProfile;
+import ink.ptms.chemdah.core.quest.QuestContainer;
+import ink.ptms.chemdah.core.quest.Task;
+import ink.ptms.chemdah.core.quest.Template;
+import ink.ptms.chemdah.core.quest.addon.AddonDepend;
+import ink.ptms.chemdah.core.quest.addon.AddonTrack;
 import ink.ptms.chemdah.core.quest.addon.data.TrackCenter;
-import ink.ptms.chemdah.core.quest.addon.tracker.QuestTrackHandler;
-import ink.ptms.chemdah.core.quest.addon.tracker.QuestTrackingSession;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Function;
 import java.util.logging.Logger;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 
-/**
- * 桥接 Chemdah 原生任务追踪 API，供 ArcartX 导航层消费坐标。
- */
+/** Reads Chemdah's native destinations while Suite owns its navigation rendering. */
 public final class ChemdahTrackerBridge {
+    private final Logger logger;
+    private final boolean available;
 
-  private final Logger logger;
-  private final boolean available;
+    public ChemdahTrackerBridge(Logger logger) {
+        this.logger = logger;
+        this.available = ChemdahAPI.INSTANCE != null;
+    }
 
-  public ChemdahTrackerBridge(Logger logger) {
-    this.logger = logger;
-    this.available = probeAvailability();
-    if (available) {
-      logger.info("QuestGPS: Chemdah Tracker API 已就绪");
-    } else {
-      logger.warning("QuestGPS: Chemdah Tracker API 不可用，将使用展示组件中的有效目的地");
-    }
-  }
+    public boolean available() { return available; }
 
-  public boolean available() {
-    return available;
-  }
-
-  public boolean startQuestTracking(Player player) {
-    if (!available || player == null) {
-      return false;
-    }
-    try {
-      QuestTrackHandler.INSTANCE.registerQuestSession(player);
-      TrackingSession session = new QuestTrackingSession();
-      ChemdahTrackAPI.INSTANCE.startTracking(player, session);
-      return true;
-    } catch (Exception ex) {
-      logger.warning("QuestGPS: 启动 Chemdah 追踪失败: " + ex.getMessage());
-      return false;
-    }
-  }
-
-  public void stopQuestTracking(Player player, String questId) {
-    if (!available || player == null) {
-      return;
-    }
-    try {
-      ChemdahTrackAPI.INSTANCE.stopTracking(player, questId);
-      QuestTrackHandler.INSTANCE.unregisterQuestSession(player);
-    } catch (Exception ex) {
-      logger.fine("QuestGPS: 停止 Chemdah 追踪: " + ex.getMessage());
-    }
-  }
-
-  public void stopAll(Player player) {
-    if (!available || player == null) {
-      return;
-    }
-    try {
-      ChemdahTrackAPI.INSTANCE.stopTracking(player, QuestTrackingSession.SOURCE);
-      QuestTrackHandler.INSTANCE.unregisterQuestSession(player);
-    } catch (Exception ex) {
-      logger.fine("QuestGPS: 清除 Chemdah 追踪: " + ex.getMessage());
-    }
-  }
-
-  public boolean isTracking(Player player, String questId) {
-    if (!available || player == null) {
-      return false;
-    }
-    try {
-      return ChemdahTrackAPI.INSTANCE.isTracking(player, questId);
-    } catch (Exception ex) {
-      return false;
-    }
-  }
-
-  public Optional<Location> resolveTrackingLocation(Player player, String questId) {
-    if (!available || player == null) {
-      return Optional.empty();
-    }
-    try {
-      TrackingSession session = ChemdahTrackAPI.INSTANCE.getSession(player, questId);
-      if (session == null) {
-        session = ChemdahTrackAPI.INSTANCE.getSession(player, QuestTrackingSession.SOURCE);
-      }
-      if (session == null) {
-        return Optional.empty();
-      }
-      List<TrackingTarget> targets = session.getTargets();
-      if (targets == null || targets.isEmpty()) {
-        return Optional.empty();
-      }
-      for (TrackingTarget target : targets) {
-        TrackCenter center = target.getCenter();
-        if (center == null) {
-          continue;
+    public boolean hasQuestCenter(String questId, List<String> prioritizedTaskIds) {
+        Template template = template(questId);
+        if (template == null) return false;
+        if (center(template) != null) return true;
+        for (String id : taskIds(template, prioritizedTaskIds)) {
+            if (center(template.getTaskMap().get(id)) != null) return true;
         }
+        return false;
+    }
+
+    public boolean hasTaskCenter(String questId, String taskId) {
+        Template template = template(questId);
+        return template != null && center(template.getTaskMap().get(taskId)) != null;
+    }
+
+    public Optional<Location> resolveQuestLocation(Player player, String questId, List<String> prioritizedTaskIds) {
+        try {
+            var api = ChemdahAPI.INSTANCE;
+            if (!api.isChemdahProfileLoaded(player)) return Optional.empty();
+            Template template = template(questId);
+            if (template == null) return Optional.empty();
+            if (!AddonDepend.Companion.isQuestDependCompleted(template, player)) return Optional.empty();
+            Location location = resolveCenter(player, center(template));
+            if (location != null) return Optional.of(location);
+            PlayerProfile profile = api.getChemdahProfile(player);
+            return firstResolved(player, taskIds(template, prioritizedTaskIds), id -> {
+                Task task = template.getTaskMap().get(id);
+                return task != null && !task.isCompleted(profile) ? eligibleCenter(player, task) : null;
+            });
+        } catch (RuntimeException failure) {
+            logger.fine("QuestGPS: 解析 Chemdah 任务坐标失败: " + failure.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    public Optional<Location> resolveTaskLocation(Player player, String questId, String taskId) {
+        try {
+            if (!ChemdahAPI.INSTANCE.isChemdahProfileLoaded(player)) return Optional.empty();
+            Template template = template(questId);
+            if (template == null) return Optional.empty();
+            if (!AddonDepend.Companion.isQuestDependCompleted(template, player)) return Optional.empty();
+            return Optional.ofNullable(resolveCenter(player, eligibleCenter(player, template.getTaskMap().get(taskId))));
+        } catch (RuntimeException failure) {
+            logger.fine("QuestGPS: 解析 Chemdah 目标坐标失败: " + failure.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    private Template template(String questId) {
+        return available ? ChemdahAPI.INSTANCE.getQuestTemplate(questId) : null;
+    }
+
+    private static Iterable<String> taskIds(Template template, List<String> prioritizedTaskIds) {
+        return prioritizedTaskIds == null || prioritizedTaskIds.isEmpty()
+            ? template.getTaskMap().keySet() : prioritizedTaskIds;
+    }
+
+    private static TrackCenter center(QuestContainer container) {
+        return container != null && container.addon("track") instanceof AddonTrack track ? track.getCenter() : null;
+    }
+
+    private static TrackCenter eligibleCenter(Player player, QuestContainer container) {
+        TrackCenter configured = center(container);
+        return configured != null && AddonDepend.Companion.isQuestDependCompleted(container, player) ? configured : null;
+    }
+
+    static Optional<Location> firstResolved(Player player, Iterable<String> ids, Function<String, TrackCenter> centers) {
+        for (String id : ids) {
+            Location location = resolveCenter(player, centers.apply(id));
+            if (location != null) return Optional.of(location);
+        }
+        return Optional.empty();
+    }
+
+    static Location resolveCenter(Player player, TrackCenter center) {
+        if (center == null) return null;
         Location location = center.getLocation(player);
-        if (location != null && location.getWorld() != null) {
-          return Optional.of(location);
-        }
-      }
-    } catch (Exception ex) {
-      logger.fine("QuestGPS: 解析 Chemdah 追踪坐标失败: " + ex.getMessage());
+        return location != null && location.getWorld() != null
+            && Double.isFinite(location.getX()) && Double.isFinite(location.getY()) && Double.isFinite(location.getZ())
+            ? location : null;
     }
-    return Optional.empty();
-  }
-
-  private boolean probeAvailability() {
-    try {
-      return ChemdahTrackAPI.INSTANCE != null;
-    } catch (Throwable ignored) {
-      return false;
-    }
-  }
 }

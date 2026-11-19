@@ -33,11 +33,6 @@ ui:
       var.result = packet['message']
       var.resultType = packet['type']
       var.confirmUnbind = false
-      while(val.messageList.childrenCount() > 1){ val.messageList.get(1).remove() }
-      for(i in range(1, 9)){
-        row = val.messageList['消息行'].copy('消息行' + i.round())
-        row.entryKey = 'row' + i.round()
-      }
     update: |-
       var.busy = packet['busy']
       var.actionToken = packet['action_token']
@@ -518,15 +513,19 @@ controls:
                     children:
                       消息列表:
                         val: messageList
-                        type: VStack
+                        type: RepeatGrid
                         attribute:
+                          items: "['row0', 'row1', 'row2', 'row3', 'row4', 'row5', 'row6', 'row7', 'row8', 'row9']"
+                          flow: ~row
+                          column: 1
+                          spaceBetweenY: 8
+                          maxSize: 10
                           width: 910
-                          spaceBetween: 8
                         children:
                           消息行:
                             type: Texture
                             attribute:
-                              entryKey: ~row0
+                              entryKey: self.item
                               entry: var.messages[self.entryKey]
                               visible: self.entry != none
                               width: 900

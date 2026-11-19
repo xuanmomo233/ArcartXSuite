@@ -24,6 +24,9 @@ public final class OnlineRewardsPlayerState {
     private int makeupCards;
     private double timeBonusRemainder;
     private int offlineSavingsMinutes;
+    private String offlineSavingsDay = "";
+    private int offlineSavingsEarnedMinutes;
+    private int offlineSavingsCreditedMinutes;
     private java.util.Set<String> claimedWeeklyRewardIds;
     private java.util.Set<String> claimedMonthlyRewardIds;
 
@@ -153,6 +156,21 @@ public final class OnlineRewardsPlayerState {
         return offlineSavingsMinutes;
     }
 
+    /** 两个离线储蓄计数所属的业务日。 */
+    public String offlineSavingsDay() {
+        return offlineSavingsDay;
+    }
+
+    /** 当日实际获得且可计入离线储蓄的在线分钟数。 */
+    public int offlineSavingsEarnedMinutes() {
+        return offlineSavingsEarnedMinutes;
+    }
+
+    /** 当日已核算的储蓄分钟数，包含达到余额上限后未入账的部分。 */
+    public int offlineSavingsCreditedMinutes() {
+        return offlineSavingsCreditedMinutes;
+    }
+
     public java.util.Set<String> claimedWeeklyRewardIds() {
         return claimedWeeklyRewardIds;
     }
@@ -221,6 +239,18 @@ public final class OnlineRewardsPlayerState {
         this.offlineSavingsMinutes = Math.max(0, offlineSavingsMinutes);
     }
 
+    public void setOfflineSavingsDay(String offlineSavingsDay) {
+        this.offlineSavingsDay = offlineSavingsDay == null ? "" : offlineSavingsDay;
+    }
+
+    public void setOfflineSavingsEarnedMinutes(int offlineSavingsEarnedMinutes) {
+        this.offlineSavingsEarnedMinutes = Math.max(0, offlineSavingsEarnedMinutes);
+    }
+
+    public void setOfflineSavingsCreditedMinutes(int offlineSavingsCreditedMinutes) {
+        this.offlineSavingsCreditedMinutes = Math.max(0, offlineSavingsCreditedMinutes);
+    }
+
     public void setClaimedWeeklyRewardIds(java.util.Set<String> claimedWeeklyRewardIds) {
         this.claimedWeeklyRewardIds = claimedWeeklyRewardIds == null ? java.util.Set.of() : java.util.Set.copyOf(claimedWeeklyRewardIds);
     }
@@ -235,7 +265,7 @@ public final class OnlineRewardsPlayerState {
      * @return 与当前状态字段一致的新实例
      */
     public OnlineRewardsPlayerState copy() {
-        return new OnlineRewardsPlayerState(
+        OnlineRewardsPlayerState copy = new OnlineRewardsPlayerState(
             playerName,
             rewardDate,
             onlineMinutes,
@@ -254,5 +284,9 @@ public final class OnlineRewardsPlayerState {
             claimedWeeklyRewardIds,
             claimedMonthlyRewardIds
         );
+        copy.offlineSavingsDay = offlineSavingsDay;
+        copy.offlineSavingsEarnedMinutes = offlineSavingsEarnedMinutes;
+        copy.offlineSavingsCreditedMinutes = offlineSavingsCreditedMinutes;
+        return copy;
     }
 }

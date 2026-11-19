@@ -2,9 +2,11 @@ package xuanmo.arcartxsuite.security.protection;
 
 import xuanmo.arcartxsuite.security.NativeBridge;
 import xuanmo.arcartxsuite.util.HashUtils;
+import xuanmo.arcartxsuite.bootstrap.RuntimeBootstrap;
 
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
+import java.nio.file.Files;
 import java.security.MessageDigest;
 import java.util.Map;
 import java.util.Properties;
@@ -45,7 +47,7 @@ public final class ProtectionInit {
      * @return true = 初始化成功（或为兼容模式的明文 JAR）
      */
     public static synchronized boolean initialize(Class<?> pluginMainClass) {
-        if (initialized) return true;
+        if (initialized) return active;
         initialized = true; // 防重入：即使后续失败也不再重试，避免半安装状态
 
         ClassLoader pluginCL = pluginMainClass.getClassLoader();
@@ -55,52 +57,61 @@ public final class ProtectionInit {
             try { pluginJarUrl = jarFile.toURI().toURL(); } catch (Throwable ignored) {}
         }
         String jarPath = jarFile != null ? jarFile.getAbsolutePath() : null;
-        boolean nativeOk = NativeBridge.isAvailable();
-
-        boolean encrypted = false;
-        try {
-            encrypted = jarPath != null && jarHasEncryptedClasses(jarPath);
-        } catch (Exception ignored) {}
-
-        // 兼容模式：明文 JAR（开发/未加密构建）——不安装 classloader hook
-        if (!encrypted) {
-            if (nativeOk) {
-                try { NativeBridge.n5(); } catch (Throwable ignored) {}
-                finally { NativeBridge.cleanupExtractedLib(); }
-                ProtectionEnvironment.ensureCleanEnvironment();
-                JvmAntiDebug.startMonitoring(ProtectionInit::onThreatDetected, CHECK_INTERVAL_SECONDS);
+        boolean encrypted;
+        boolean hasRuntimeCatalog;
+        try (JarFile jar = jarFile == null ? null : new JarFile(jarFile)) {
+            encrypted = jar != null && requiresReleaseVerification(jar);
+            hasRuntimeCatalog = jar != null && jar.getJarEntry(RuntimeBootstrap.CATALOG) != null;
+            if (encrypted) {
+                var nativeOrigin = fileFromCodeSource(NativeBridge.class.getProtectionDomain());
+                if (nativeOrigin == null || !Files.isSameFile(nativeOrigin.toPath(), jarFile.toPath())) {
+                    LOGGER.severe("[Protection] Native 验签目标与宿主加载来源不一致。");
+                    return false;
+                }
             }
-            active = true;
-            LOGGER.info("[Protection] 未检测到加密类，保护层以兼容模式运行（明文 JAR）。");
-            return true;
+        } catch (Exception e) {
+            LOGGER.severe("[Protection] 无法读取宿主 JAR: " + e);
+            return false;
         }
 
-        // 加密 JAR：native 必须可用，否则无法解密任何类
-        if (!nativeOk) {
+        boolean nativeOk = NativeBridge.isAvailable();
+        if (encrypted && !nativeOk) {
             LOGGER.severe("[Protection] 加密 JAR 但 native 库不可用，无法解密: " + NativeBridge.getLoadError());
             return false;
         }
-
-        int initResult;
-        try { initResult = NativeBridge.n5(); }
-        catch (Throwable t) { LOGGER.severe("[Protection] native n5 异常: " + t); return false; }
-        // n5 自检需要按路径读取明文库文件，故清理只能在自检返回后进行
-        finally { NativeBridge.cleanupExtractedLib(); }
-        if (initResult != 0) {
-            LOGGER.severe("[Protection] native 初始化失败 code=" + initResult);
-            return false;
-        }
-
-        ProtectionEnvironment.ensureCleanEnvironment();
-        try {
-            if (!verifyJarIntegrity(jarPath)) {
-                LOGGER.severe("[Protection] JAR 完整性校验失败");
-                triggerTamperResponse();
+        if (nativeOk) {
+            int initResult;
+            try { initResult = NativeBridge.n5(); }
+            catch (Throwable t) { LOGGER.severe("[Protection] native n5 异常: " + t); return false; }
+            // n5 自检需要按路径读取明文库文件，故清理只能在自检返回后进行。
+            finally { NativeBridge.cleanupExtractedLib(); }
+            if (initResult != 0) {
+                LOGGER.severe(initResult == -3
+                    ? "[Protection] 宿主签名清单缺失、不可读或与发行包不符。"
+                    : "[Protection] native 初始化失败 code=" + initResult);
                 return false;
             }
-        } catch (Exception e) {
-            LOGGER.severe("[Protection] 完整性校验异常: " + e);
-            return false;
+            ProtectionEnvironment.ensureCleanEnvironment();
+        }
+
+        // 明文开发包也可使用分包加载器；传统 fat JAR / classes 目录保持原路径。
+        if (!encrypted && !hasRuntimeCatalog) {
+            if (nativeOk) JvmAntiDebug.startMonitoring(ProtectionInit::onThreatDetected, CHECK_INTERVAL_SECONDS);
+            active = true;
+            LOGGER.info("[Protection] 明文开发包已就绪。");
+            return true;
+        }
+        if (encrypted) {
+            try {
+                if (!verifyJarIntegrity(jarPath)) {
+                    LOGGER.severe("[Protection] JAR 完整性校验失败");
+                    triggerTamperResponse();
+                    return false;
+                }
+            } catch (Exception e) {
+                LOGGER.severe("[Protection] 完整性校验异常: " + e);
+                return false;
+            }
         }
 
         // 安装 ProtectedClassLoader 为 PluginClassLoader 的 parent（方案 ②）。
@@ -119,14 +130,23 @@ public final class ProtectionInit {
             java.security.ProtectionDomain pd = null;
             try { pd = pluginMainClass.getProtectionDomain(); } catch (Throwable ignored) {}
             ProtectedClassLoader pcl = new ProtectedClassLoader(originalParent, jar, captured, pluginCL, pd);
+            try { pcl.attachRuntime(RuntimeBootstrap.open(jar, pcl, encrypted)); }
+            catch (Throwable failure) { jar.close(); throw failure; }
 
             if (!installAsParent(pluginCL, pcl)) {
                 LOGGER.severe("[Protection] 无法将 ProtectedClassLoader 注入 PluginClassLoader（parent 替换失败），"
                         + "加密类将无法加载。PluginClassLoader=" + pluginCL.getClass().getName());
+                pcl.closeRuntime();
                 jar.close();
                 return false;
             }
             protectedLoader = pcl;
+            // Paper closes PluginClassLoader's JAR before asynchronous module retirement finishes.
+            // Define API types now without running static initializers, so accepted workers can still link them.
+            long apiStart = System.nanoTime();
+            int apiTypes = prepareSharedApiTypes(pluginCL, jar);
+            LOGGER.info("[Protection] 已准备共享 API: " + apiTypes + " 类, "
+                + ((System.nanoTime() - apiStart) / 1_000_000) + " ms");
             LOGGER.info("[Protection] ProtectedClassLoader 已注入 (引导类=" + captured.size()
                     + ", 原parent=" + (originalParent == null ? "null" : originalParent.getClass().getName()) + ")");
         } catch (Throwable t) {
@@ -139,6 +159,19 @@ public final class ProtectionInit {
 
         active = true;
         return true;
+    }
+
+    static int prepareSharedApiTypes(ClassLoader pluginLoader, JarFile jar) throws ClassNotFoundException {
+        int count = 0;
+        var entries = jar.entries();
+        while (entries.hasMoreElements()) {
+            String name = entries.nextElement().getName();
+            if (name.startsWith("xuanmo/arcartxsuite/api/") && name.endsWith(".class")) {
+                Class.forName(name.substring(0, name.length() - 6).replace('/', '.'), false, pluginLoader);
+                count++;
+            }
+        }
+        return count;
     }
 
     /**
@@ -258,13 +291,18 @@ public final class ProtectionInit {
         return pluginJarUrl;
     }
 
-    private static boolean jarHasEncryptedClasses(String jarPath) throws Exception {
-        try (JarFile jar = new JarFile(jarPath)) {
-            java.util.Enumeration<java.util.jar.JarEntry> e = jar.entries();
-            while (e.hasMoreElements()) {
-                String n = e.nextElement().getName();
-                if (n.startsWith("ENCRYPTED/") && n.endsWith(".enc")) return true;
-            }
+    static boolean requiresReleaseVerification(JarFile jar) {
+        if (jar.getJarEntry("META-INF/PROTECTION.MF") != null
+            || jar.getJarEntry("META-INF/BOOTSTRAP.MF") != null
+            || jar.getJarEntry("META-INF/BOOTSTRAP.SIG") != null
+            || jar.getJarEntry("native/axs-native.enc") != null
+            || jar.getJarEntry("native/libaxs-native.enc") != null) {
+            return true;
+        }
+        var entries = jar.entries();
+        while (entries.hasMoreElements()) {
+            String name = entries.nextElement().getName();
+            if (name.startsWith("ENCRYPTED/") && name.endsWith(".enc")) return true;
         }
         return false;
     }
@@ -278,6 +316,9 @@ public final class ProtectionInit {
         // 注意：不含 JvmAntiDebug —— 它在 hook 安装后才首次加载，交由 ProtectedClassLoader 统一加载即可。
         Class<?>[] boot = {
             mainClass,
+            xuanmo.arcartxsuite.bootstrap.SuiteCore.class,
+            xuanmo.arcartxsuite.bootstrap.HostShutdown.class,
+            RuntimeBootstrap.class,
             NativeBridge.class,
             ProtectionInit.class,
             ProtectedClassLoader.class,
@@ -424,10 +465,18 @@ public final class ProtectionInit {
     public static void shutdown() {
         JvmAntiDebug.stopMonitoring();
         if (protectedLoader != null) {
+            protectedLoader.closeRuntime();
             protectedLoader.deactivate();
         }
         ProtectionEnvironment.reset();
         active = false;
+    }
+
+    /** Paper may close the outer plugin JAR before asynchronous retirement finishes. */
+    public static void prepareShutdown() throws ClassNotFoundException {
+        ClassLoader loader = ProtectionInit.class.getClassLoader();
+        Class.forName("xuanmo.arcartxsuite.security.protection.JvmAntiDebug", true, loader);
+        Class.forName("xuanmo.arcartxsuite.security.protection.ProtectionEnvironment", true, loader);
     }
 
     // ─── 完整性校验 ─────────────────────────────────────────────
@@ -436,10 +485,7 @@ public final class ProtectionInit {
         try (JarFile jar = new JarFile(jarPath)) {
             // 读取 PROTECTION.MF
             var pmfEntry = jar.getJarEntry("META-INF/PROTECTION.MF");
-            if (pmfEntry == null) {
-                // 没有保护元数据 = 未加密 JAR，跳过校验
-                return true;
-            }
+            if (pmfEntry == null) return false;
 
             Properties pmf = new Properties();
             try (InputStream is = jar.getInputStream(pmfEntry)) {

@@ -78,6 +78,16 @@ class OneBotClientTest {
         assertFalse(client.sendGroupMessage(123, "after shutdown").get(1, TimeUnit.SECONDS).success());
         assertEquals(0, client.pendingRequests());
     }
+    @Test void closingKeepsAnActiveBusinessCallbackTrackedUntilItReallyReturns() throws Exception {
+        server.broadcast("{\"post_type\":\"message\",\"message_type\":\"group\",\"user_id\":456,\"group_id\":123,\"message\":\"hello\"}");
+        assertTrue(eventStarted.await(3, TimeUnit.SECONDS));
+        try {
+            client.shutdown();
+            assertFalse(client.isConnected());
+            assertFalse(client.stopped().toCompletableFuture().isDone());
+        } finally { releaseEvent.countDown(); }
+        client.stopped().toCompletableFuture().get(3, TimeUnit.SECONDS);
+    }
     @Test void malformedReplyCannotLoseItsPendingFuture() throws Exception {
         server.malformedFirst.set(true);
         assertTrue(client.sendGroupMessage(123, "hello").get(3, TimeUnit.SECONDS).success());

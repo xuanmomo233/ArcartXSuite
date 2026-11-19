@@ -5,22 +5,25 @@ import java.io.IOException;
 import java.sql.SQLException;
 import java.time.Clock;
 import java.time.Instant;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
+import java.util.function.BiConsumer;
 import java.util.logging.Logger;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
@@ -31,14 +34,18 @@ import org.bukkit.scheduler.BukkitTask;
 import java.util.function.Supplier;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.permissions.Permissible;
+import xuanmo.arcartxsuite.api.auth.AuthAccess;
+import xuanmo.arcartxsuite.api.auth.AuthSnapshot;
 import xuanmo.arcartxsuite.api.capability.TabRefreshable;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.security.ActionTokenGuard;
 import xuanmo.arcartxsuite.api.bridge.WorldTextureBridgeAPI;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
 import xuanmo.arcartxsuite.api.message.MessageProvider;
+import xuanmo.arcartxsuite.api.scheduler.ModuleExecutor;
 import xuanmo.arcartxsuite.title.TitleDurationParser.TitleDurationSpec;
 import xuanmo.arcartxsuite.title.config.TitleDefinition;
+import xuanmo.arcartxsuite.title.config.TitleGroupDefinition;
 import xuanmo.arcartxsuite.title.config.TitleModuleConfiguration;
 import xuanmo.arcartxsuite.title.listener.PlayerTitleListener;
 import xuanmo.arcartxsuite.title.model.PlayerOwnedTitle;
@@ -51,6 +58,7 @@ public class TitleService {
     public static final String CLIENT_PACKET_ID = "AXS_TITLE_MENU";
     private static final String TITLE_MENU_RESOURCE_PATH = "arcartx/ui/title_menu.yml";
     private static final String TITLE_MENU_FILE_PATH = "ui/title_menu.yml";
+    private static final int MAX_PENDING_DATABASE_TASKS = 256;
 
     /**
      * UI 资源导出函数。输入：(resourcePath, relativeUiPath, overwrite) -> File
@@ -62,6 +70,8 @@ public class TitleService {
 
     private final JavaPlugin plugin;
     private final TitleModuleConfiguration configuration;
+    private final Set<String> publicGroups;
+    private final List<TitleGroupDefinition> restrictedGroups;
     private final TitleRepository repository;
     private final PacketBridgeAPI bridge;
     private final ActionTokenGuard tokenGuard = new ActionTokenGuard();
@@ -78,16 +88,60 @@ public class TitleService {
     private final TitleModAttributeService modAttributeService;
     private final TitleOverheadService overheadService;
     private final MessageProvider messages;
-    private final ExecutorService databaseExecutor = Executors.newSingleThreadExecutor(new TitleThreadFactory());
+    private final CompletableFuture<Void> databaseInitialization = new CompletableFuture<>();
+    private final ModuleExecutor databaseExecutor = new ModuleExecutor(1, 1, 0, TimeUnit.MILLISECONDS,
+        new ArrayBlockingQueue<>(MAX_PENDING_DATABASE_TASKS), new TitleThreadFactory());
+    private final Semaphore writeSlots = new Semaphore(MAX_PENDING_DATABASE_TASKS);
+    private final Object databaseAdmission = new Object();
     private volatile boolean databaseWritesEnabled = true;
+    private final Set<PendingTitleWrite> writeReceipts = ConcurrentHashMap.newKeySet();
+    private final CompletableFuture<Void> databaseStopped = databaseExecutor.stopped()
+        .thenRun(this::finishRetiringWriteReceipts).toCompletableFuture();
+    private final ConcurrentMap<UUID, PlayerWriteBarrier> playerWrites = new ConcurrentHashMap<>();
     private final ConcurrentMap<UUID, PlayerTitleState> states = new ConcurrentHashMap<>();
+    private final ConcurrentMap<UUID, TitleStateView> stateViews = new ConcurrentHashMap<>();
     private final ConcurrentMap<UUID, CompletableFuture<PlayerTitleState>> loadingStates = new ConcurrentHashMap<>();
     private final ConcurrentMap<UUID, String> selectedTitleIds = new ConcurrentHashMap<>();
+    private final ConcurrentMap<UUID, Object> pendingPlayerRefresh = new ConcurrentHashMap<>();
+    private final AtomicBoolean maintenanceQueued = new AtomicBoolean();
 
     private Listener playerListener;
     private BukkitTask expirationTask;
     private String runtimeUiId;
     private String registeredUiId;
+
+    private static final class PlayerWriteBarrier {
+        int pending;
+        final CompletableFuture<Void> drained = new CompletableFuture<>();
+    }
+
+    private final class PendingTitleWrite {
+        final UUID playerUuid;
+        final CompletableFuture<TitleOperationResult> future = new CompletableFuture<>();
+        PlayerWriteBarrier barrier;
+        volatile TitleOperationResult committed;
+        boolean completed;
+
+        PendingTitleWrite(UUID playerUuid) {
+            this.playerUuid = playerUuid;
+        }
+
+        void complete(TitleOperationResult result) {
+            CompletableFuture<Void> drained = null;
+            synchronized (databaseAdmission) {
+                if (completed) return;
+                completed = true;
+                writeReceipts.remove(this);
+                writeSlots.release();
+                if (barrier != null && --barrier.pending == 0) {
+                    playerWrites.remove(playerUuid, barrier);
+                    drained = barrier.drained;
+                }
+            }
+            if (drained != null) drained.complete(null);
+            future.complete(result);
+        }
+    }
 
     public TitleService(
         JavaPlugin plugin,
@@ -138,6 +192,13 @@ public class TitleService {
     ) {
         this.plugin = plugin;
         this.configuration = configuration;
+        var openGroups = new HashSet<String>();
+        for (var group : configuration.groups().values()) {
+            if (group.permission().isBlank()) openGroups.add(group.id());
+        }
+        this.publicGroups = Set.copyOf(openGroups);
+        this.restrictedGroups = configuration.groups().values().stream()
+            .filter(group -> !group.permission().isBlank()).toList();
         this.repository = repository;
         this.bridge = bridge;
         this.packetGuard = packetGuard;
@@ -162,7 +223,7 @@ public class TitleService {
      * 并启动过期称号清理定时任务。
      */
     public void start() throws SQLException, IOException {
-        repository.initialize();
+        queueMaintenance("initialize", () -> {});
         mythicLibService.start();
         runtimeUiId = configuration.ui().uiId();
         registeredUiId = null;
@@ -198,7 +259,11 @@ public class TitleService {
      * 并优雅关闭数据库线程池与连接。
      */
     public void shutdown() {
-        databaseWritesEnabled = false;
+        synchronized (databaseAdmission) {
+            if (!databaseWritesEnabled) return;
+            databaseWritesEnabled = false;
+        }
+        databaseExecutor.shutdown();
         if (expirationTask != null) {
             expirationTask.cancel();
             expirationTask = null;
@@ -225,43 +290,64 @@ public class TitleService {
         modAttributeService.shutdown();
         overheadService.shutdown();
 
-        databaseExecutor.shutdown();
-        try {
-            if (!databaseExecutor.awaitTermination(10, TimeUnit.SECONDS)) {
-                databaseExecutor.shutdownNow();
-            }
-        } catch (InterruptedException exception) {
-            Thread.currentThread().interrupt();
-            databaseExecutor.shutdownNow();
-        } finally {
-            repository.shutdown();
+        for (var loading : loadingStates.values()) {
+            loading.completeExceptionally(new IllegalStateException(message("common.service-down")));
         }
 
         states.clear();
+        stateViews.clear();
         loadingStates.clear();
         selectedTitleIds.clear();
+        pendingPlayerRefresh.clear();
+        tokenGuard.clearAll();
+    }
+
+    public CompletionStage<Void> databaseStopped() {
+        return databaseStopped.copy();
+    }
+
+    private void finishRetiringWriteReceipts() {
+        // Workers have exited. A committed write may still have a UI callback queued for the retired instance.
+        var unconfirmed = TitleOperationResult.failure(message("common.service-down"));
+        for (var pending : writeReceipts) {
+            pending.complete(pending.committed == null ? unconfirmed : pending.committed);
+        }
+    }
+
+    private void ensureDatabaseInitialized() throws SQLException {
+        if (!databaseInitialization.isDone()) {
+            try {
+                repository.initialize();
+                databaseInitialization.complete(null);
+            } catch (SQLException | RuntimeException failure) {
+                databaseInitialization.completeExceptionally(failure);
+                throw failure;
+            }
+        }
+        try {
+            databaseInitialization.join();
+        } catch (CompletionException failure) {
+            throw new SQLException("称号数据库初始化未完成", failure.getCause());
+        }
     }
 
     public void preloadPlayer(Player player) {
-        if (player == null) {
+        if (!databaseWritesEnabled || player == null) {
             return;
         }
-        ensureLoadedAsync(player.getUniqueId()).whenComplete((state, throwable) -> Bukkit.getScheduler().runTask(plugin, () -> {
-            if (throwable != null || !player.isOnline()) {
-                return;
-            }
-            syncExternalAttributes(player, state);
+        withLoadedState(player, state -> {
+            syncExternalAttributes(player);
             Bukkit.getScheduler().runTaskLater(
                 plugin,
                 () -> {
-                    if (!player.isOnline()) {
+                    if (!isCurrentPlayer(player)) {
                         return;
                     }
-                    syncExternalAttributes(player, getCachedState(player.getUniqueId()));
+                    syncExternalAttributes(player);
                 },
                 20L
             );
-        }));
+        }, ignored -> {});
     }
 
     public void clearPlayer(Player player) {
@@ -274,10 +360,13 @@ public class TitleService {
         symphonyService.clear(player);
         potionEffectService.clear(player);
         modAttributeService.clear(player);
+        overheadService.clear(player);
         UUID playerUuid = player.getUniqueId();
-        states.remove(playerUuid);
         loadingStates.remove(playerUuid);
+        states.remove(playerUuid);
+        stateViews.remove(playerUuid);
         selectedTitleIds.remove(playerUuid);
+        pendingPlayerRefresh.remove(playerUuid);
         tokenGuard.clear(playerUuid);
     }
 
@@ -289,17 +378,27 @@ public class TitleService {
      * @param player 目标玩家
      */
     public void openMenu(Player player) {
+        openMenu(player, true);
+    }
+
+    /** Opens the menu when explicitly requested by a title administrator. */
+    public void openMenuForAdmin(Player player) {
+        openMenu(player, false);
+    }
+
+    private void openMenu(Player player, boolean requireUsePermission) {
         if (player == null || !player.isOnline()) {
             return;
         }
-        withLoadedState(
+        withAuthorizedState(
             player,
-            state -> {
+            (state, admission) -> {
                 selectedTitleIds.put(player.getUniqueId(), ensureSelectedTitle(player.getUniqueId(), state));
                 bridge.openUi(player, runtimeUiId);
                 sendMenuPacket(player, "init");
             },
-            exception -> player.sendMessage(prefix() + message("player.data-load-failed"))
+            exception -> player.sendMessage(prefix() + message("player.data-load-failed")),
+            requireUsePermission
         );
     }
 
@@ -317,6 +416,7 @@ public class TitleService {
         if (player == null || !player.isOnline() || packetId == null || !CLIENT_PACKET_ID.equalsIgnoreCase(packetId)) {
             return false;
         }
+        if (!player.hasPermission("arcartxsuite.title.use")) return true;
 
         String action = data == null || data.isEmpty() ? "refresh" : data.get(0).trim().toLowerCase(Locale.ROOT);
         // PacketGuard 已由 ClientPacketRouter 在路由层统一调用，此处不再重复检查，避免双重计数导致限流阈值减半。
@@ -354,8 +454,11 @@ public class TitleService {
      */
     private boolean beginActionToken(Player player, List<String> data) {
         String supplied = data != null && data.size() > 1 && data.get(1) != null ? data.get(1).trim() : "";
-        return runtimeUiId != null && bridge != null && bridge.isUiOpen(player, runtimeUiId)
-            && tokenGuard.begin(player.getUniqueId(), runtimeUiId, supplied);
+        UUID playerUuid = player.getUniqueId();
+        if (runtimeUiId == null || bridge == null || !bridge.isUiOpen(player, runtimeUiId)
+            || playerWrites.containsKey(playerUuid) || !tokenGuard.begin(playerUuid, runtimeUiId, supplied)) return false;
+        tokenGuard.issue(playerUuid, runtimeUiId);
+        return true;
     }
 
     /**
@@ -371,9 +474,9 @@ public class TitleService {
             return;
         }
         String normalizedTitleId = normalizeTitleId(titleId);
-        withLoadedState(
+        withAuthorizedState(
             player,
-            state -> {
+            (state, admission) -> {
                 TitleDefinition definition = requireTitle(normalizedTitleId);
                 if (definition == null) {
                     player.sendMessage(prefix() + message("player.title-not-found", titleId));
@@ -390,22 +493,17 @@ public class TitleService {
                     ));
                     return;
                 }
-                Instant now = clock.instant();
-                PlayerTitleState updatedState = state.equip(definition.groupId(), normalizedTitleId, now).sanitize(now);
-                storeState(player.getUniqueId(), updatedState);
-                selectedTitleIds.put(player.getUniqueId(), normalizedTitleId);
-                queueWrite(
-                    "save-equipped:equip",
-                    () -> repository.saveEquippedTitle(player.getUniqueId(), definition.groupId(), normalizedTitleId, updatedState.updatedAt())
-                );
-                syncExternalAttributes(player, updatedState);
-                refreshMenu(player);
-                requestGlobalTabRefresh("title-equip");
-                player.sendMessage(prefix() + message(
-                    "player.equipped",
-                    definition.groupId(),
-                    ChatColor.translateAlternateColorCodes('&', definition.displayName())
-                ));
+                submitPlayerStateChange(player, admission, "title-equip",
+                    now -> repository.setEquippedTitle(player.getUniqueId(), definition.groupId(), normalizedTitleId, now),
+                    saved -> {
+                        String display = ChatColor.translateAlternateColorCodes('&', definition.displayName());
+                        if (!normalizedTitleId.equals(saved.equippedTitleIdsByGroup().get(definition.groupId()))) {
+                            player.sendMessage(prefix() + message("player.not-owned", display));
+                            return;
+                        }
+                        selectedTitleIds.put(player.getUniqueId(), normalizedTitleId);
+                        player.sendMessage(prefix() + message("player.equipped", definition.groupId(), display));
+                    }, true);
             },
             exception -> player.sendMessage(prefix() + message("player.data-load-failed"))
         );
@@ -424,20 +522,12 @@ public class TitleService {
             return;
         }
         String normalizedGroupId = normalizeTitleId(groupId);
-        withLoadedState(
+        withAuthorizedState(
             player,
-            state -> {
-                Instant now = clock.instant();
-                PlayerTitleState updatedState = state.unequipGroup(normalizedGroupId, now).sanitize(now);
-                storeState(player.getUniqueId(), updatedState);
-                queueWrite("delete-equipped:group", () -> repository.deleteEquippedGroup(player.getUniqueId(), normalizedGroupId));
-                if (!state.displayTitleId().equals(updatedState.displayTitleId()) && updatedState.displayTitleId().isBlank()) {
-                    queueWrite("delete-display-title:unequip-group", () -> repository.deleteDisplayTitle(player.getUniqueId()));
-                }
-                syncExternalAttributes(player, updatedState);
-                refreshMenu(player);
-                requestGlobalTabRefresh("title-unequip");
-                player.sendMessage(prefix() + message("player.unequipped-group", normalizedGroupId));
+            (state, admission) -> {
+                submitPlayerStateChange(player, admission, "title-unequip",
+                    now -> repository.setEquippedTitle(player.getUniqueId(), normalizedGroupId, "", now),
+                    saved -> player.sendMessage(prefix() + message("player.unequipped-group", normalizedGroupId)), true);
             },
             exception -> player.sendMessage(prefix() + message("player.data-load-failed"))
         );
@@ -454,20 +544,12 @@ public class TitleService {
         if (player == null || !player.isOnline()) {
             return;
         }
-        withLoadedState(
+        withAuthorizedState(
             player,
-            state -> {
-                Instant now = clock.instant();
-                PlayerTitleState updatedState = state.unequipAll(now).sanitize(now);
-                storeState(player.getUniqueId(), updatedState);
-                queueWrite("delete-equipped:all", () -> repository.deleteAllEquippedGroups(player.getUniqueId()));
-                if (!state.displayTitleId().isBlank()) {
-                    queueWrite("delete-display-title:unequip-all", () -> repository.deleteDisplayTitle(player.getUniqueId()));
-                }
-                syncExternalAttributes(player, updatedState);
-                refreshMenu(player);
-                requestGlobalTabRefresh("title-unequip-all");
-                player.sendMessage(prefix() + message("player.unequipped-all"));
+            (state, admission) -> {
+                submitPlayerStateChange(player, admission, "title-unequip-all",
+                    now -> repository.clearEquippedTitles(player.getUniqueId()),
+                    saved -> player.sendMessage(prefix() + message("player.unequipped-all")), true);
             },
             exception -> player.sendMessage(prefix() + message("player.data-load-failed"))
         );
@@ -491,16 +573,33 @@ public class TitleService {
      * @param titleId     称号 ID
      * @param durationSpec 有效期描述（null 视为永久）
      * @param grantedBy   来源标识（如 "EventPacket"、管理员名）
-     * @return 操作结果，{@link TitleOperationResult#success()} 为 true 表示成功
+     * @return 操作结果，{@link TitleOperationResult#success()} 为 true 表示请求已受理
      */
     public TitleOperationResult giveTitle(UUID playerUuid, String titleId, TitleDurationSpec durationSpec, String grantedBy) {
+        return giveTitleAsync(playerUuid, titleId, durationSpec, grantedBy)
+            .getNow(TitleOperationResult.success(message("give.queued")));
+    }
+
+    public CompletableFuture<TitleOperationResult> giveTitleAsync(UUID playerUuid, String titleId, TitleDurationSpec durationSpec, String grantedBy) {
+        return giveTitleAsync(playerUuid, titleId, durationSpec, grantedBy, false);
+    }
+
+    public CompletableFuture<Boolean> grantPermanent(UUID playerUuid, String titleId, String grantedBy) {
+        return giveTitleAsync(playerUuid, titleId, null, grantedBy, true).thenApply(TitleOperationResult::success);
+    }
+
+    private CompletableFuture<TitleOperationResult> giveTitleAsync(UUID playerUuid, String titleId, TitleDurationSpec durationSpec,
+                                                                   String grantedBy, boolean keepPermanent) {
+        if (!databaseWritesEnabled) {
+            return CompletableFuture.completedFuture(TitleOperationResult.failure(message("common.service-down")));
+        }
         TitleDefinition definition = requireTitle(titleId);
         if (definition == null) {
-            return TitleOperationResult.failure(message("give.title-not-found", titleId));
+            return CompletableFuture.completedFuture(TitleOperationResult.failure(message("give.title-not-found", titleId)));
         }
         Player target = Bukkit.getPlayer(playerUuid);
         if (target != null && target.isOnline() && !hasGroupAccess(target, definition.groupId())) {
-            return TitleOperationResult.failure(message("give.group-no-permission"));
+            return CompletableFuture.completedFuture(TitleOperationResult.failure(message("give.group-no-permission")));
         }
 
         Instant now = clock.instant();
@@ -516,24 +615,20 @@ public class TitleService {
             activatesAt = null;
             expiresAt = now.plus(durationSpec.duration());
         }
-        states.compute(
-            playerUuid,
-            (ignored, currentState) -> {
-                PlayerTitleState baseState = currentState == null ? PlayerTitleState.empty(playerUuid) : sanitizeCachedState(playerUuid, currentState);
-                return baseState.grant(definition.id(), now, activatesAt, expiresAt, now, nullToEmpty(grantedBy)).sanitize(now);
-            }
-        );
-        queueWrite(
-            "save-owned:grant",
-            () -> repository.saveOwnedTitle(playerUuid, new PlayerOwnedTitle(definition.id(), false, now, activatesAt, expiresAt, now, nullToEmpty(grantedBy)))
-        );
-        syncExternalAttributesForOnlinePlayer(playerUuid);
-        refreshMenuForOnlinePlayer(playerUuid);
-        requestGlobalTabRefresh("title-grant");
-        return TitleOperationResult.success(message(
+        TitleOperationResult success = TitleOperationResult.success(message(
             "give.success",
             ChatColor.translateAlternateColorCodes('&', definition.displayName())
         ));
+        PlayerOwnedTitle proposal = new PlayerOwnedTitle(definition.id(), false, now, activatesAt, expiresAt, now,
+            nullToEmpty(grantedBy));
+        return submitTitleWrite(playerUuid, "title-grant", "give.storage-failed", success, () -> {
+            var grant = repository.grantOwnedTitle(playerUuid, proposal, keepPermanent);
+            return () -> states.computeIfPresent(playerUuid, (ignored, current) -> {
+                Instant appliedAt = clock.instant();
+                var previous = grant.clearedPresentation() ? current.revoke(grant.title().titleId(), appliedAt) : current;
+                return previous.withOwnedTitle(grant.title(), appliedAt);
+            });
+        });
     }
 
     /**
@@ -545,36 +640,123 @@ public class TitleService {
      * @param titleId    称号 ID
      * @return 操作结果，{@link TitleOperationResult#success()} 为 true 表示成功
      */
-    public TitleOperationResult revokeTitle(UUID playerUuid, String titleId) {
+    public CompletableFuture<TitleOperationResult> revokeTitle(UUID playerUuid, String titleId) {
         TitleDefinition definition = requireTitle(titleId);
         if (definition == null) {
-            return TitleOperationResult.failure(message("revoke.title-not-found", titleId));
+            return CompletableFuture.completedFuture(TitleOperationResult.failure(message("revoke.title-not-found", titleId)));
         }
-
-        Instant now = clock.instant();
-        PlayerTitleState updatedState = states.computeIfPresent(playerUuid, (ignored, currentState) -> currentState.revoke(definition.id(), now).sanitize(now));
-        if (updatedState != null) {
-            selectedTitleIds.put(playerUuid, defaultSelectedTitle(updatedState));
-            persistEquippedState(playerUuid, updatedState, "revoke");
-        }
-        queueWrite("delete-equipped:revoke", () -> repository.deleteEquippedTitle(playerUuid, definition.id()));
-        queueWrite("delete-owned:revoke", () -> repository.deleteOwnedTitle(playerUuid, definition.id()));
-        syncExternalAttributesForOnlinePlayer(playerUuid);
-        refreshMenuForOnlinePlayer(playerUuid);
-        requestGlobalTabRefresh("title-revoke");
-        return TitleOperationResult.success(message(
+        TitleOperationResult success = TitleOperationResult.success(message(
             "revoke.success",
             ChatColor.translateAlternateColorCodes('&', definition.displayName())
         ));
+        return submitTitleWrite(playerUuid, "title-revoke", "revoke.storage-failed", success, () -> {
+            repository.deleteOwnedTitle(playerUuid, definition.id());
+            return () -> {
+                Instant now = clock.instant();
+                states.computeIfPresent(playerUuid, (ignored, current) -> current.revoke(definition.id(), now).sanitizeStored(now));
+                selectedTitleIds.remove(playerUuid);
+            };
+        });
+    }
+
+    private CompletableFuture<TitleOperationResult> submitTitleWrite(UUID playerUuid, String action, String errorKey,
+                                                                     TitleOperationResult success, ConfirmedWrite write) {
+        return submitTitleWrite(playerUuid, null, action, errorKey, success, write);
+    }
+
+    private CompletableFuture<TitleOperationResult> submitTitleWrite(UUID playerUuid, AuthSnapshot admission, String action,
+                                                                     String errorKey, TitleOperationResult success, ConfirmedWrite write) {
+        synchronized (databaseAdmission) {
+            return enqueueTitleWrite(playerUuid, admission, action, errorKey, success, write);
+        }
+    }
+
+    private CompletableFuture<TitleOperationResult> enqueueTitleWrite(UUID playerUuid, AuthSnapshot admission, String action, String errorKey,
+                                                                     TitleOperationResult success, ConfirmedWrite write) {
+        if (!databaseWritesEnabled) {
+            return CompletableFuture.completedFuture(TitleOperationResult.failure(message("common.service-down")));
+        }
+        if (!writeSlots.tryAcquire()) {
+            return CompletableFuture.completedFuture(TitleOperationResult.failure(message("common.storage-busy")));
+        }
+        PendingTitleWrite pendingWrite = new PendingTitleWrite(playerUuid);
+        CompletableFuture<TitleOperationResult> receipt = pendingWrite.future;
+        try {
+            databaseExecutor.execute(() -> {
+                Runnable publish;
+                try {
+                    ensureDatabaseInitialized();
+                    if (admission != null && !sameAdmission(admission)) {
+                        pendingWrite.complete(TitleOperationResult.failure(message(errorKey)));
+                        return;
+                    }
+                    publish = write.save();
+                } catch (SQLException | RuntimeException exception) {
+                    logger.log(java.util.logging.Level.WARNING,
+                        "称号写入未获确认: " + action + " / " + playerUuid, exception);
+                    pendingWrite.complete(TitleOperationResult.failure(message(errorKey)));
+                    return;
+                }
+                pendingWrite.committed = success;
+                if (!runWhenActive(() -> {
+                    try {
+                        publish.run();
+                        refreshPlayerAfterWrite(playerUuid);
+                        requestGlobalTabRefresh(action);
+                    } finally {
+                        pendingWrite.complete(success);
+                    }
+                })) pendingWrite.complete(success);
+            });
+        } catch (java.util.concurrent.RejectedExecutionException retired) {
+            pendingWrite.complete(TitleOperationResult.failure(message(databaseWritesEnabled
+                ? "common.storage-busy" : "common.service-down")));
+            return receipt.copy();
+        }
+        if (!pendingWrite.completed) {
+            PlayerWriteBarrier barrier = playerWrites.computeIfAbsent(playerUuid, ignored -> new PlayerWriteBarrier());
+            barrier.pending++;
+            pendingWrite.barrier = barrier;
+            writeReceipts.add(pendingWrite);
+        }
+        return receipt.copy();
+    }
+
+    @FunctionalInterface
+    private interface ConfirmedWrite {
+        Runnable save() throws SQLException;
+    }
+
+    @FunctionalInterface
+    private interface PlayerStateWrite {
+        PlayerTitleState save(Instant now) throws SQLException;
+    }
+
+    private void submitPlayerStateChange(Player player, AuthSnapshot admission, String action, PlayerStateWrite write,
+                                          Consumer<PlayerTitleState> confirmed, boolean notifyFailure) {
+        UUID playerUuid = player.getUniqueId();
+        submitTitleWrite(playerUuid, admission, action, "player.data-save-failed", TitleOperationResult.success(""), () -> {
+            PlayerTitleState saved = write.save(clock.instant());
+            return () -> {
+                Instant now = clock.instant();
+                PlayerTitleState current = saved.sanitizeStored(now);
+                states.computeIfPresent(playerUuid, (ignored, previous) -> current);
+                if (isCurrentPlayer(player) && sameAdmission(admission) && player.hasPermission("arcartxsuite.title.use")) {
+                    confirmed.accept(current.sanitize(now));
+                }
+            };
+        }).thenAccept(result -> {
+            if (!result.success()) runWhenActive(() -> {
+                if (!isCurrentPlayer(player) || !sameAdmission(admission) || !player.hasPermission("arcartxsuite.title.use")) return;
+                if (notifyFailure) player.sendMessage(prefix() + result.message());
+                refreshMenu(player);
+            });
+        });
     }
 
     public ResolvedTitleState resolveState(UUID playerUuid) {
-        return TitleStateResolver.resolve(
-            getCachedState(playerUuid),
-            configuration,
-            clock.instant(),
-            accessibleGroupIds(playerUuid)
-        );
+        var view = stateView(playerUuid, clock.instant());
+        return view == null ? TitleStateResolver.EMPTY : view.resolve(configuration, accessibleGroupIds(playerUuid));
     }
 
     public boolean hasGroupAccess(Permissible player, String groupId) {
@@ -586,16 +768,20 @@ public class TitleService {
     }
 
     public Set<String> accessibleGroupIds(UUID playerUuid) {
-        Player player = playerUuid == null ? null : Bukkit.getPlayer(playerUuid);
-        Set<String> accessible = new HashSet<>();
-        for (var group : configuration.groups().values()) {
-            if (player != null && player.isOnline()
-                ? hasGroupAccess(player, group.id())
-                : group.permission().isBlank()) {
+        if (restrictedGroups.isEmpty() || playerUuid == null) return publicGroups;
+        return accessibleGroups(Bukkit.getPlayer(playerUuid));
+    }
+
+    private Set<String> accessibleGroups(Player player) {
+        if (restrictedGroups.isEmpty() || player == null || !player.isOnline()) return publicGroups;
+        Set<String> accessible = null;
+        for (var group : restrictedGroups) {
+            if (player.hasPermission(group.permission())) {
+                if (accessible == null) accessible = new HashSet<>(publicGroups);
                 accessible.add(group.id());
             }
         }
-        return Collections.unmodifiableSet(accessible);
+        return accessible == null ? publicGroups : Set.copyOf(accessible);
     }
 
     public boolean attributePlusHooked() {
@@ -615,8 +801,8 @@ public class TitleService {
     }
 
     public PlayerTitleState getCachedState(UUID playerUuid) {
-        PlayerTitleState state = states.get(playerUuid);
-        return state == null ? null : sanitizeCachedState(playerUuid, state);
+        var view = stateView(playerUuid, clock.instant());
+        return view == null ? null : view.effective;
     }
 
     public PlayerOwnedTitle getOwnedTitle(UUID playerUuid, String titleId) {
@@ -628,7 +814,8 @@ public class TitleService {
     }
 
     public boolean isReady() {
-        return runtimeUiId != null && !runtimeUiId.isBlank();
+        return databaseWritesEnabled && runtimeUiId != null && !runtimeUiId.isBlank()
+            && databaseInitialization.isDone() && !databaseInitialization.isCompletedExceptionally();
     }
 
     public int cachedPlayerCount() {
@@ -657,9 +844,9 @@ public class TitleService {
             return;
         }
         String normalizedTitleId = normalizeTitleId(titleId);
-        withLoadedState(
+        withAuthorizedState(
             player,
-            state -> {
+            (state, admission) -> {
                 TitleDefinition definition = requireTitle(normalizedTitleId);
                 if (definition == null) {
                     if (notify) {
@@ -676,24 +863,16 @@ public class TitleService {
                     }
                     return;
                 }
-                Instant now = clock.instant();
-                PlayerTitleState updatedState = state.setHidden(normalizedTitleId, hidden, now).sanitize(now);
-                storeState(player.getUniqueId(), updatedState);
-                PlayerOwnedTitle ownedTitle = updatedState.ownedTitles().get(normalizedTitleId);
-                if (ownedTitle != null) {
-                    queueWrite("save-owned:hidden", () -> repository.saveOwnedTitle(player.getUniqueId(), ownedTitle));
-                }
-                refreshMenu(player);
-                requestGlobalTabRefresh(hidden ? "title-hide" : "title-unhide");
-                if (notify) {
-                    player.sendMessage(
-                        prefix()
-                            + message(
-                                hidden ? "player.hidden" : "player.unhidden",
-                                ChatColor.translateAlternateColorCodes('&', definition.displayName())
-                            )
-                    );
-                }
+                submitPlayerStateChange(player, admission, hidden ? "title-hide" : "title-unhide",
+                    now -> repository.setOwnedTitleHidden(player.getUniqueId(), normalizedTitleId, hidden, now),
+                    saved -> {
+                        if (notify) {
+                            String display = ChatColor.translateAlternateColorCodes('&', definition.displayName());
+                            String key = hidden ? "player.hidden" : "player.unhidden";
+                            if (!saved.hasOwnedTitle(normalizedTitleId)) key = "player.not-owned";
+                            player.sendMessage(prefix() + message(key, display));
+                        }
+                    }, notify);
             },
             exception -> {
                 if (notify) {
@@ -708,9 +887,9 @@ public class TitleService {
             return;
         }
         String normalizedTitleId = normalizeTitleId(titleId);
-        withLoadedState(
+        withAuthorizedState(
             player,
-            state -> {
+            (state, admission) -> {
                 TitleDefinition definition = requireTitle(normalizedTitleId);
                 if (definition == null) {
                     return;
@@ -727,9 +906,9 @@ public class TitleService {
             return;
         }
         String normalizedTitleId = normalizeTitleId(titleId);
-        withLoadedState(
+        withAuthorizedState(
             player,
-            state -> {
+            (state, admission) -> {
                 TitleDefinition definition = requireTitle(normalizedTitleId);
                 if (definition == null) {
                     return;
@@ -742,45 +921,33 @@ public class TitleService {
                     player.sendMessage(prefix() + message("player.only-equipped"));
                     return;
                 }
-                Instant now = clock.instant();
-                PlayerTitleState updatedState = state.withDisplayTitle(normalizedTitleId, now).sanitize(now);
-                storeState(player.getUniqueId(), updatedState);
-                queueWrite(
-                    "save-display-title",
-                    () -> repository.saveDisplayTitle(player.getUniqueId(), normalizedTitleId, updatedState.updatedAt())
-                );
-                refreshMenu(player);
-                requestGlobalTabRefresh("title-display-change");
-                player.sendMessage(prefix() + message(
-                    "player.display-set",
-                    ChatColor.translateAlternateColorCodes('&', definition.displayName())
-                ));
+                submitPlayerStateChange(player, admission, "title-display-change",
+                    now -> repository.setDisplayTitle(player.getUniqueId(), normalizedTitleId, now),
+                    saved -> player.sendMessage(prefix() + (normalizedTitleId.equals(saved.displayTitleId())
+                        ? message("player.display-set", ChatColor.translateAlternateColorCodes('&', definition.displayName()))
+                        : message("player.only-equipped"))), true);
             },
             exception -> { }
         );
     }
 
     private void refreshMenu(Player player) {
-        if (player == null || !player.isOnline() || runtimeUiId == null || runtimeUiId.isBlank()) {
+        if (player == null || !player.isOnline() || runtimeUiId == null || runtimeUiId.isBlank()
+            || !player.hasPermission("arcartxsuite.title.use") || !bridge.isUiOpen(player, runtimeUiId)
+            || playerWrites.containsKey(player.getUniqueId())) {
             return;
         }
         sendMenuPacket(player, "update");
     }
 
     private void sendMenuPacket(Player player, String handlerName) {
-        PlayerTitleState state = getCachedState(player.getUniqueId());
-        if (state == null) {
-            return;
-        }
+        if (!AuthAccess.admitted(player.getUniqueId())) return;
         Instant now = clock.instant();
-        PlayerTitleState sanitizedState = state.sanitize(now);
-        Set<String> accessibleGroupIds = accessibleGroupIds(player.getUniqueId());
-        ResolvedTitleState resolvedState = TitleStateResolver.resolve(
-            sanitizedState,
-            configuration,
-            now,
-            accessibleGroupIds
-        );
+        var view = stateView(player.getUniqueId(), now);
+        if (view == null) return;
+        PlayerTitleState sanitizedState = view.effective;
+        Set<String> accessibleGroupIds = accessibleGroups(player);
+        ResolvedTitleState resolvedState = view.resolve(configuration, accessibleGroupIds);
         String selectedTitleId = ensureSelectedTitle(player.getUniqueId(), sanitizedState);
         Map<String, Object> payload = TitleMenuPacketFactory.build(
             configuration,
@@ -794,122 +961,164 @@ public class TitleService {
         bridge.sendPacket(player, runtimeUiId, handlerName, payload);
     }
 
+    private void withAuthorizedState(Player player, BiConsumer<PlayerTitleState, AuthSnapshot> consumer,
+                                     Consumer<Throwable> errorConsumer) {
+        withAuthorizedState(player, consumer, errorConsumer, true);
+    }
+
+    private void withAuthorizedState(Player player, BiConsumer<PlayerTitleState, AuthSnapshot> consumer,
+                                     Consumer<Throwable> errorConsumer, boolean requireUsePermission) {
+        AuthSnapshot admission = AuthAccess.snapshot(player.getUniqueId());
+        if (!admission.admitted() || (requireUsePermission && !player.hasPermission("arcartxsuite.title.use"))) return;
+        withLoadedState(player, admission, state -> {
+            if (!requireUsePermission || player.hasPermission("arcartxsuite.title.use")) consumer.accept(state, admission);
+        }, error -> {
+            if (!requireUsePermission || player.hasPermission("arcartxsuite.title.use")) errorConsumer.accept(error);
+        });
+    }
+
     private void withLoadedState(Player player, Consumer<PlayerTitleState> consumer, Consumer<Throwable> errorConsumer) {
-        ensureLoadedAsync(player.getUniqueId()).whenComplete((state, throwable) -> Bukkit.getScheduler().runTask(plugin, () -> {
+        withLoadedState(player, null, consumer, errorConsumer);
+    }
+
+    private void withLoadedState(Player player, AuthSnapshot admission, Consumer<PlayerTitleState> consumer,
+                                 Consumer<Throwable> errorConsumer) {
+        if (!databaseWritesEnabled) return;
+        ensureLoadedAsync(player.getUniqueId()).whenComplete((state, throwable) -> runWhenActive(() -> {
+            if (!isCurrentPlayer(player) || (admission != null && !sameAdmission(admission))) return;
+            var pending = playerWrites.get(player.getUniqueId());
+            if (pending != null && !pending.drained.isDone()) {
+                pending.drained.whenComplete((ignored, failure) -> withLoadedState(player, admission, consumer, errorConsumer));
+                return;
+            }
             if (throwable != null) {
                 errorConsumer.accept(throwable);
                 return;
             }
-            consumer.accept(sanitizeCachedState(player.getUniqueId(), state));
+            Instant now = clock.instant();
+            var view = stateView(player.getUniqueId(), now);
+            consumer.accept(view == null ? state.sanitize(now) : view.effective);
         }));
     }
 
     private CompletableFuture<PlayerTitleState> ensureLoadedAsync(UUID playerUuid) {
         PlayerTitleState cachedState = states.get(playerUuid);
         if (cachedState != null) {
-            return CompletableFuture.completedFuture(sanitizeCachedState(playerUuid, cachedState));
+            return CompletableFuture.completedFuture(cachedState);
         }
 
-        return loadingStates.computeIfAbsent(playerUuid, ignored -> CompletableFuture.supplyAsync(() -> {
-            try {
-                return repository.loadState(playerUuid).sanitize(clock.instant());
-            } catch (SQLException exception) {
-                throw new CompletionException(exception);
-            }
-        }, databaseExecutor).whenComplete((loadedState, throwable) -> {
-            loadingStates.remove(playerUuid);
-            if (throwable == null && loadedState != null) {
-                states.merge(
-                    playerUuid,
-                    loadedState,
-                    (currentState, freshState) -> currentState.updatedAt().isAfter(freshState.updatedAt()) ? currentState : freshState
-                );
-            }
-        }));
-    }
-
-    private PlayerTitleState sanitizeCachedState(UUID playerUuid, PlayerTitleState state) {
-        Instant now = clock.instant();
-        PlayerTitleState sanitizedState = state.sanitize(now);
-        if (sanitizedState == state) {
-            return state;
-        }
-        storeState(playerUuid, sanitizedState);
-        if (!state.equippedTitleIdsByGroup().equals(sanitizedState.equippedTitleIdsByGroup())) {
-            persistEquippedState(playerUuid, sanitizedState, "sanitize");
-        }
-        if (!state.displayTitleId().equals(sanitizedState.displayTitleId())) {
-            if (sanitizedState.displayTitleId().isBlank()) {
-                queueWrite("delete-display-title:sanitize", () -> repository.deleteDisplayTitle(playerUuid));
-            } else {
-                queueWrite(
-                    "save-display-title:sanitize",
-                    () -> repository.saveDisplayTitle(playerUuid, sanitizedState.displayTitleId(), sanitizedState.updatedAt())
-                );
-            }
-        }
-        return sanitizedState;
-    }
-
-    private void storeState(UUID playerUuid, PlayerTitleState updatedState) {
-        states.put(playerUuid, updatedState);
-    }
-
-    private void queueWrite(String description, RepositoryAction repositoryAction) {
-        if (!databaseWritesEnabled) {
-            return;
-        }
-        databaseExecutor.submit(() -> {
-            try {
-                repositoryAction.run();
-                if (configuration.debug()) {
-                    logger.info("TitleDB -> " + description);
+        var promise = new CompletableFuture<PlayerTitleState>();
+        var running = loadingStates.putIfAbsent(playerUuid, promise);
+        if (running != null) return running;
+        try {
+            databaseExecutor.execute(() -> {
+                if (!databaseWritesEnabled) {
+                    loadingStates.remove(playerUuid, promise);
+                    promise.completeExceptionally(new IllegalStateException(message("common.service-down")));
+                    return;
                 }
-            } catch (SQLException exception) {
-                logger.warning("TitleDB 操作失败(" + description + "): " + exception.getMessage());
-            }
+                try {
+                    ensureDatabaseInitialized();
+                    PlayerTitleState loaded = repository.loadState(playerUuid).sanitizeStored(clock.instant());
+                    loadingStates.computeIfPresent(playerUuid, (ignored, current) -> {
+                        if (current != promise) return current;
+                        if (databaseWritesEnabled) states.putIfAbsent(playerUuid, loaded);
+                        return null;
+                    });
+                    promise.complete(loaded);
+                } catch (SQLException | RuntimeException exception) {
+                    loadingStates.remove(playerUuid, promise);
+                    promise.completeExceptionally(exception);
+                }
+            });
+        } catch (java.util.concurrent.RejectedExecutionException retired) {
+            loadingStates.remove(playerUuid, promise);
+            promise.completeExceptionally(retired);
+        }
+        return promise;
+    }
+
+    private TitleStateView stateView(UUID playerUuid, Instant now) {
+        PlayerTitleState state = states.get(playerUuid);
+        if (state == null || !databaseWritesEnabled) return null;
+        var cached = stateViews.get(playerUuid);
+        if (cached != null && cached.matches(state, now)) return cached;
+        var next = new TitleStateView(state, now);
+        var published = stateViews.compute(playerUuid, (ignored, current) -> {
+            if (!databaseWritesEnabled || states.get(playerUuid) != state) return current;
+            return current != null && current.matches(state, now) ? current : next;
         });
+        return published != null && published.matches(state, now) ? published : next;
+    }
+
+    private void queueMaintenance(String description, RepositoryAction repositoryAction) {
+        if (!databaseWritesEnabled || !maintenanceQueued.compareAndSet(false, true)) return;
+        try {
+            databaseExecutor.execute(() -> {
+                try {
+                    if (!databaseWritesEnabled) return;
+                    ensureDatabaseInitialized();
+                    repositoryAction.run();
+                    if (configuration.debug()) logger.info("TitleDB -> " + description);
+                } catch (SQLException | RuntimeException exception) {
+                    logger.log(databaseWritesEnabled ? java.util.logging.Level.WARNING : java.util.logging.Level.FINE,
+                        "TitleDB 操作失败(" + description + "): " + exception.getMessage());
+                } finally {
+                    maintenanceQueued.set(false);
+                }
+            });
+        } catch (java.util.concurrent.RejectedExecutionException busy) {
+            maintenanceQueued.set(false);
+            logger.fine("TitleDB 尚未排队: " + description);
+        }
     }
 
     private void tickExpirationCleanup() {
         Instant now = clock.instant();
         for (UUID playerUuid : states.keySet()) {
-            PlayerTitleState state = states.get(playerUuid);
-            if (state == null) {
-                continue;
+            if (playerWrites.containsKey(playerUuid)) continue;
+            var view = stateView(playerUuid, now);
+            if (view == null) continue;
+            if (view.stored != view.source) {
+                if (!states.replace(playerUuid, view.source, view.stored)) continue;
+                view = stateView(playerUuid, now);
+                if (view == null) continue;
             }
-            PlayerTitleState sanitizedState = state.sanitize(now);
-            if (sanitizedState == state) {
-                continue;
+            if (view.appliedGroups != null && restrictedGroups.isEmpty()) continue;
+            Player player = Bukkit.getPlayer(playerUuid);
+            if (player == null || !player.isOnline() || !xuanmo.arcartxsuite.api.auth.AuthAccess.admitted(playerUuid)) continue;
+            if (!accessibleGroups(player).equals(view.appliedGroups)) {
+                runWhenActive(() -> {
+                    if (!isCurrentPlayer(player)) return;
+                    syncExternalAttributes(player);
+                    refreshMenu(player);
+                });
             }
-            states.put(playerUuid, sanitizedState);
-            persistEquippedState(playerUuid, sanitizedState, "cleanup");
-            syncExternalAttributesForOnlinePlayer(playerUuid);
-            refreshMenuForOnlinePlayer(playerUuid);
         }
-        queueWrite("delete-expired", () -> repository.deleteExpiredTitles(now));
+        queueMaintenance("delete-expired", () -> repository.deleteExpiredTitles(clock.instant()));
     }
 
-    private void refreshMenuForOnlinePlayer(UUID playerUuid) {
+    private void refreshPlayerAfterWrite(UUID playerUuid) {
         Player player = Bukkit.getPlayer(playerUuid);
+        if (player == null || !player.isOnline()) return;
+        Object refresh = new Object();
+        if (pendingPlayerRefresh.putIfAbsent(playerUuid, refresh) != null) return;
+        withLoadedState(player, state -> {
+            if (!pendingPlayerRefresh.remove(playerUuid, refresh)) return;
+            syncExternalAttributes(player);
+            refreshMenu(player);
+        }, failure -> pendingPlayerRefresh.remove(playerUuid, refresh));
+    }
+
+    private void syncExternalAttributes(Player player) {
         if (player == null || !player.isOnline()) {
             return;
         }
-        Bukkit.getScheduler().runTask(plugin, () -> refreshMenu(player));
-    }
-
-    private void syncExternalAttributes(Player player, PlayerTitleState state) {
-        if (player == null || !player.isOnline() || state == null) {
-            return;
-        }
         if (!xuanmo.arcartxsuite.api.auth.AuthAccess.admitted(player.getUniqueId())) return;
-        PlayerTitleState sanitizedState = sanitizeCachedState(player.getUniqueId(), state);
-        ResolvedTitleState resolvedState = TitleStateResolver.resolve(
-            sanitizedState,
-            configuration,
-            clock.instant(),
-            accessibleGroupIds(player.getUniqueId())
-        );
+        var view = stateView(player.getUniqueId(), clock.instant());
+        if (view == null) return;
+        var groups = accessibleGroups(player);
+        var resolvedState = view.resolve(configuration, groups);
         attributePlusService.sync(player, resolvedState);
         mythicLibService.sync(player, resolvedState);
         craneAttributeService.sync(player, resolvedState);
@@ -917,17 +1126,29 @@ public class TitleService {
         potionEffectService.sync(player, resolvedState);
         modAttributeService.sync(player, resolvedState);
         overheadService.sync(player, resolvedState);
+        view.appliedGroups = groups;
     }
 
-    private void syncExternalAttributesForOnlinePlayer(UUID playerUuid) {
-        Player player = Bukkit.getPlayer(playerUuid);
-        if (player == null || !player.isOnline()) {
-            return;
+    private boolean isCurrentPlayer(Player player) {
+        return databaseWritesEnabled && player.isOnline() && Bukkit.getPlayer(player.getUniqueId()) == player;
+    }
+
+    private static boolean sameAdmission(AuthSnapshot admission) {
+        AuthSnapshot current = AuthAccess.snapshot(admission.playerId());
+        return current.admitted() && admission.generation() == current.generation()
+            && Objects.equals(admission.connectionId(), current.connectionId());
+    }
+
+    private boolean runWhenActive(Runnable action) {
+        if (!databaseWritesEnabled) return false;
+        try {
+            plugin.getServer().getScheduler().runTask(plugin, () -> {
+                if (databaseWritesEnabled) action.run();
+            });
+            return true;
+        } catch (org.bukkit.plugin.IllegalPluginAccessException retired) {
+            return false;
         }
-        Bukkit.getScheduler().runTask(
-            plugin,
-            () -> withLoadedState(player, state -> syncExternalAttributes(player, state), exception -> { })
-        );
     }
 
     private TitleDefinition requireTitle(String titleId) {
@@ -963,23 +1184,6 @@ public class TitleService {
         String selectedTitleId = selectedTitleIds.getOrDefault(player.getUniqueId(), "");
         TitleDefinition definition = requireTitle(selectedTitleId);
         return definition == null ? "" : definition.groupId();
-    }
-
-    private void persistEquippedState(UUID playerUuid, PlayerTitleState state, String reason) {
-        queueWrite(
-            "save-equipped:" + reason,
-            () -> {
-                repository.deleteAllEquippedGroups(playerUuid);
-                for (var entry : state.equippedTitleIdsByGroup().entrySet()) {
-                    repository.saveEquippedTitle(playerUuid, entry.getKey(), entry.getValue(), state.updatedAt());
-                }
-                if (state.displayTitleId().isBlank()) {
-                    repository.deleteDisplayTitle(playerUuid);
-                } else {
-                    repository.saveDisplayTitle(playerUuid, state.displayTitleId(), state.updatedAt());
-                }
-            }
-        );
     }
 
     private File exportUiFile() throws IOException {

@@ -11,7 +11,6 @@ import org.jetbrains.annotations.Nullable;
 import java.util.function.Supplier;
 import org.bukkit.plugin.java.JavaPlugin;
 import xuanmo.arcartxsuite.title.config.TitleDefinition;
-import xuanmo.arcartxsuite.title.config.TitleDisplayConfiguration;
 import xuanmo.arcartxsuite.title.config.TitleGroupDefinition;
 import xuanmo.arcartxsuite.title.config.TitleModuleConfiguration;
 import xuanmo.arcartxsuite.title.config.TitleQualityDefinition;
@@ -78,9 +77,11 @@ public final class TitlePlaceholderExpansion extends PlaceholderExpansion {
      */
     @Override
     public @Nullable String onRequest(OfflinePlayer offlinePlayer, @NotNull String params) {
-        if (offlinePlayer == null || offlinePlayer.getUniqueId() == null) {
+        if (offlinePlayer == null) {
             return "";
         }
+        var playerId = offlinePlayer.getUniqueId();
+        if (playerId == null) return "";
 
         var service = serviceProvider.get();
         TitleModuleConfiguration configuration = configurationProvider.get();
@@ -89,39 +90,19 @@ public final class TitlePlaceholderExpansion extends PlaceholderExpansion {
         }
 
         String normalized = params.trim().toLowerCase(Locale.ROOT);
-        ResolvedTitleState resolvedState = service.resolveState(offlinePlayer.getUniqueId());
-        PlayerTitleState state = service.getCachedState(offlinePlayer.getUniqueId());
-        switch (normalized) {
-            case "owned_count":
-                return Integer.toString(resolvedState.ownedCount());
-            case "hidden_count":
-                return Integer.toString(resolvedState.hiddenCount());
-            default:
-                break;
-        }
-
-        String displayValue = displayPlaceholderValue(configuration, resolvedState, normalized);
-        if (displayValue != null) {
-            return displayValue;
-        }
-
-        String groupPlaceholderValue = groupPlaceholderValue(configuration, resolvedState, normalized);
-        if (groupPlaceholderValue != null) {
-            return groupPlaceholderValue;
-        }
-
-        if (normalized.startsWith("owned_")) {
+        if (normalized.startsWith("owned_") && !normalized.equals("owned_count")) {
             String titleId = normalized.substring("owned_".length());
+            PlayerTitleState state = service.getCachedState(playerId);
             return Boolean.toString(state != null && state.hasOwnedTitle(titleId));
         }
-        if (normalized.startsWith("hidden_")) {
+        if (normalized.startsWith("hidden_") && !normalized.equals("hidden_count")) {
             String titleId = normalized.substring("hidden_".length());
-            PlayerOwnedTitle ownedTitle = service.getOwnedTitle(offlinePlayer.getUniqueId(), titleId);
+            PlayerOwnedTitle ownedTitle = service.getOwnedTitle(playerId, titleId);
             return Boolean.toString(ownedTitle != null && ownedTitle.hidden());
         }
         if (normalized.startsWith("remaining_")) {
             String titleId = normalized.substring("remaining_".length());
-            PlayerOwnedTitle ownedTitle = service.getOwnedTitle(offlinePlayer.getUniqueId(), titleId);
+            PlayerOwnedTitle ownedTitle = service.getOwnedTitle(playerId, titleId);
             if (ownedTitle == null) {
                 return "";
             }
@@ -132,7 +113,7 @@ public final class TitlePlaceholderExpansion extends PlaceholderExpansion {
         }
         if (normalized.startsWith("activates_")) {
             String titleId = normalized.substring("activates_".length());
-            PlayerOwnedTitle ownedTitle = service.getOwnedTitle(offlinePlayer.getUniqueId(), titleId);
+            PlayerOwnedTitle ownedTitle = service.getOwnedTitle(playerId, titleId);
             if (ownedTitle == null) {
                 return "";
             }
@@ -143,9 +124,29 @@ public final class TitlePlaceholderExpansion extends PlaceholderExpansion {
         }
         if (normalized.startsWith("effective_")) {
             String titleId = normalized.substring("effective_".length());
-            PlayerOwnedTitle ownedTitle = service.getOwnedTitle(offlinePlayer.getUniqueId(), titleId);
+            PlayerOwnedTitle ownedTitle = service.getOwnedTitle(playerId, titleId);
             return Boolean.toString(ownedTitle != null && ownedTitle.isEffective(Instant.now()));
         }
+        if (normalized.startsWith("set_") && normalized.endsWith("_total")
+            && !normalized.startsWith("set_bonus_attr_")) {
+            var set = configuration.set(setId(normalized, "_total"));
+            return set == null ? "0" : Integer.toString(set.requiredTitleIds().size());
+        }
+
+        ResolvedTitleState resolvedState = service.resolveState(playerId);
+        switch (normalized) {
+            case "owned_count":
+                return Integer.toString(resolvedState.ownedCount());
+            case "hidden_count":
+                return Integer.toString(resolvedState.hiddenCount());
+            default:
+                break;
+        }
+        String displayValue = displayPlaceholderValue(configuration, resolvedState, normalized);
+        if (displayValue != null) return displayValue;
+        String groupValue = groupPlaceholderValue(configuration, resolvedState, normalized);
+        if (groupValue != null) return groupValue;
+
         if (normalized.startsWith("display_attr_")) {
             return attributeValue(resolvedState.displayAttributes(), normalized.substring("display_attr_".length()));
         }
@@ -158,11 +159,7 @@ public final class TitlePlaceholderExpansion extends PlaceholderExpansion {
         if (normalized.startsWith("set_bonus_attr_")) {
             return attributeValue(resolvedState.setBonusAttributes(), normalized.substring("set_bonus_attr_".length()));
         }
-        String setPlaceholder = setPlaceholderValue(resolvedState, normalized);
-        if (setPlaceholder != null) {
-            return setPlaceholder;
-        }
-        return null;
+        return setPlaceholderValue(resolvedState, normalized);
     }
 
     static String groupPlaceholderValue(
@@ -242,20 +239,21 @@ public final class TitlePlaceholderExpansion extends PlaceholderExpansion {
 
     private static String setPlaceholderValue(ResolvedTitleState resolvedState, String normalized) {
         if (normalized.startsWith("set_") && normalized.endsWith("_completion")) {
-            String setId = normalized.substring("set_".length(), normalized.length() - "_completion".length());
+            String setId = setId(normalized, "_completion");
             Integer count = resolvedState.setCompletionCounts().get(setId);
             return count == null ? "0" : Integer.toString(count);
         }
-        if (normalized.startsWith("set_") && normalized.endsWith("_total")) {
-            String setId = normalized.substring("set_".length(), normalized.length() - "_total".length());
-            return resolvedState.setCompletionCounts().containsKey(setId) ? Integer.toString(resolvedState.setCompletionCounts().size()) : "0";
-        }
         if (normalized.startsWith("set_") && normalized.endsWith("_active")) {
-            String setId = normalized.substring("set_".length(), normalized.length() - "_active".length());
+            String setId = setId(normalized, "_active");
             Boolean active = resolvedState.setActiveMap().get(setId);
             return Boolean.toString(active != null && active);
         }
         return null;
+    }
+
+    private static String setId(String parameter, String suffix) {
+        int end = parameter.length() - suffix.length();
+        return end <= "set_".length() ? "" : parameter.substring("set_".length(), end);
     }
 
     static String displayPlaceholderValue(

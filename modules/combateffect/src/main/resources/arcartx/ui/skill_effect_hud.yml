@@ -1,0 +1,47 @@
+ui:
+  isHud: true
+  defaultOpen: false
+  escClose: false
+  through: true
+  background: false
+  closeDied: true
+  packetHandler:
+    show: |-
+      var.skill_text = packet['text']
+  action:
+    load: |-
+      var.skill_text = none
+
+controls:
+  技能动作:
+    type: Adaptive
+    attribute:
+      width: 1920
+      height: 1080
+      point: ~stretch_all
+    children:
+      技能提示:
+        type: Canvas
+        attribute:
+          width: 380
+          height: 56
+          point: ~middle_center
+          y: 260
+          visible: "var.skill_text != none"
+        children:
+          背景:
+            type: Texture
+            attribute:
+              normal: ~17,23,35,180
+              shape: ~round_rect
+              radius: ~6
+              width: 380
+              height: 56
+          提示:
+            type: Text
+            attribute:
+              texts: "~&f{var.skill_text}"
+              center: true
+              fontSize: 24
+              x: 190
+              y: 15

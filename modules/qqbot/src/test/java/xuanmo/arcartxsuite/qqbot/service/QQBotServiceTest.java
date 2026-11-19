@@ -100,7 +100,7 @@ class QQBotServiceTest {
     }
     private void group(String mode) {
         when(config.groups()).thenReturn(List.of(new QQBotGroupConfig(100L, mode,
-            "[MC] {player}: {message}", "[QQ] {nick}: {message}", false, "", "")));
+            "[MC] {player}: {message}", "[QQ] {nick}: {message}", false, "", "", "normal")));
     }
     private static OneBotEvent message(int id, String text) {
         JsonObject json = new JsonObject();
@@ -175,10 +175,10 @@ class QQBotServiceTest {
 
     @Test void acceptedPublicChatUsesGatewayAndClosedServiceCannotRelayIt() {
         service.onPublicChat(new PublicChatMessageEvent(player, "global", "accepted"));
-        verify(gateway).sendPlayer(player, "accepted", null);
+        verify(gateway).sendPlayer(player, "accepted", null, "global");
         service.shutdown();
         service.onPublicChat(new PublicChatMessageEvent(player, "global", "late"));
-        verify(gateway, never()).sendPlayer(player, "late", null);
+        verify(gateway, never()).sendPlayer(player, "late", null, "global");
     }
 
     @Test void bukkitCancelledRawChatDoesNotRelayAndFallbackRequiresOptIn() throws Exception {

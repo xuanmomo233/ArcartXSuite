@@ -1,6 +1,7 @@
 """Fault checks using SQL extracted from current Java sources and disposable SQLite only.
 
 Does not compile/run Java, contact a server, or open application databases.
+EventPacket's journal is exercised by :modules:eventpacket:test.
 """
 from pathlib import Path
 import json
@@ -33,12 +34,13 @@ def schema(connection, values):
     for value in values:
         match = re.match(r"CREATE TABLE IF NOT EXISTS\s+(\w+)", value)
         if match and match.group(1) not in tables:
+            if match.group(1) == "bp_reward_requests":
+                value = value.replace("payload %s NOT NULL", "payload TEXT NOT NULL")
             connection.execute(value)
             tables.add(match.group(1))
 
 
 bp = sql_strings("modules/battlepass/src/main/java/xuanmo/arcartxsuite/battlepass/storage/JdbcBattlePassRepository.java")
-inbox = sql_strings("modules/eventpacket/src/main/java/xuanmo/arcartxsuite/eventpacket/storage/JdbcEventPacketRepository.java")
 engine = sql_strings("auth-engine/src/main/java/xuanmo/arcartxsuite/auth/engine/JdbcAuthStore.java")
 
 with sqlite3.connect(":memory:", isolation_level=None) as database:
@@ -91,24 +93,4 @@ with sqlite3.connect(":memory:", isolation_level=None) as database:
     assert database.execute("SELECT current_xp FROM bp_player_progress").fetchone()[0] == 10
     assert database.execute("SELECT current_progress FROM bp_player_tasks").fetchone()[0] == 1
 
-with sqlite3.connect(":memory:", isolation_level=None) as database:
-    schema(database, inbox)
-    enqueue = statement(inbox, "INSERT INTO eventpacket_auth_inbox")
-    claim = statement(inbox, "UPDATE eventpacket_auth_inbox SET state='RUNNING'")
-    recover = statement(inbox, "UPDATE eventpacket_auth_inbox SET state='REVIEW'")
-    resolve = statement(inbox, "UPDATE eventpacket_auth_inbox SET state='PENDING',step=step+?")
-    finish = statement(inbox, "UPDATE eventpacket_auth_inbox SET state=?,step=?")
-    database.execute(enqueue, ("fact", "player", "original plan"))
-    database.execute(enqueue, ("fact", "player", "replacement plan"))
-    assert database.execute("SELECT plan FROM eventpacket_auth_inbox").fetchone()[0] == "original plan"
-    assert database.execute(claim, ("node-a", "fact", 0)).rowcount == 1
-    assert database.execute(recover, ("node-b",)).rowcount == 0, "Another node may still be running the action"
-    assert database.execute(finish, ("DONE", 0, "fact", 0, "node-b")).rowcount == 0
-    assert database.execute(recover, ("node-a",)).rowcount == 1
-    assert database.execute(claim, ("node-b", "fact", 0)).rowcount == 0, "Interrupted side effects must not replay automatically"
-    assert database.execute(resolve, (0, "fact")).rowcount == 1
-    assert database.execute(claim, ("node-b", "fact", 0)).rowcount == 1
-    assert database.execute(finish, ("DONE", 0, "fact", 0, "node-b")).rowcount == 1
-    assert database.execute(claim, ("node-b", "fact", 0)).rowcount == 0
-
-print("PASS SQL fault checks: transactional progress/XP/receipt, duplicate facts, backlog ordering, durable inbox and crash review; no Java execution")
+print("PASS SQL fault checks: transactional progress/XP/receipt, duplicate facts, backlog ordering; no Java execution")

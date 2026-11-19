@@ -45,7 +45,24 @@ public final class ModuleClassLoader extends URLClassLoader {
                 // 回退到正常委托链
             }
         }
-        return super.loadClass(name, resolve);
+        try { return super.loadClass(name, resolve); }
+        catch (IllegalStateException closedParent) {
+            // Paper closes its plugin JAR before deferred module work has returned.
+            // Module private classes may be in their namespace or ProGuard's default package.
+            if (!"zip file closed".equals(closedParent.getMessage())
+                    || !(name.startsWith("xuanmo.arcartxsuite." + moduleId + ".") || name.indexOf('.') < 0)
+                    || name.startsWith("xuanmo.arcartxsuite.api.")
+                    || name.startsWith("xuanmo.arcartxsuite.bootstrap.")) throw closedParent;
+            synchronized (getClassLoadingLock(name)) {
+                Class<?> loaded = findLoadedClass(name);
+                if (loaded == null) {
+                    try { loaded = findClass(name); }
+                    catch (ClassNotFoundException missing) { missing.addSuppressed(closedParent); throw missing; }
+                }
+                if (resolve) resolveClass(loaded);
+                return loaded;
+            }
+        }
     }
 
     private static boolean shouldPreferServerLoader(String name) {

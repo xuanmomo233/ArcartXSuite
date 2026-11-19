@@ -19,7 +19,7 @@ import xuanmo.arcartxsuite.warehouse.service.WarehouseService;
  * <p>
  * 实现 {@link org.bukkit.command.TabExecutor}，绑定到玩家可执行的仓库命令，
  * 支持 open（打开仓库）、showcase（展示柜）、preview（管理员预览他人仓库）、
- * spreview（静默预览）、transfer（确认/拒绝共享仓库转让）等子命令。
+ * spreview（公开仓库预览）、transfer（确认/拒绝共享仓库转让）等子命令。
  * 玩家需持有 {@code arcartxsuite.warehouse.use} 权限；preview 额外要求 admin 权限。
  * 关联模块：warehouse。
  */

@@ -8,6 +8,7 @@ import org.bukkit.event.player.PlayerQuitEvent
 import priv.seventeen.artist.arcartx.event.client.ClientChannelEvent
 import priv.seventeen.artist.arcartx.event.client.ClientCustomPacketEvent
 import priv.seventeen.artist.arcartx.event.client.ClientInitializedEvent
+import xuanmo.arcartxsuite.api.auth.AuthAccess
 
 /**
  * 包链路信号监听器（MONITOR 只读），把各层事件喂给 [RawChannelDiag] 计数：
@@ -20,12 +21,20 @@ import priv.seventeen.artist.arcartx.event.client.ClientInitializedEvent
  */
 class RawPacketEventListener(
     private val diag: RawChannelDiag,
+    private val capture: PacketCaptureManager?,
+    private val logPayload: Boolean,
 ) : Listener {
 
     @EventHandler(priority = EventPriority.MONITOR)
     fun onCustomPacket(event: ClientCustomPacketEvent) {
         try {
-            diag.recordEvent(event.player, event.id, event.data ?: emptyList())
+            val data = event.data ?: emptyList()
+            val sensitive = event.id.equals("AXS_auth_v1", ignoreCase = true)
+                || data.firstOrNull()?.contains("password", ignoreCase = true) == true
+            val safe = !sensitive && AuthAccess.admitted(event.player.uniqueId)
+            val payload = if (safe && logPayload) data else null
+            diag.recordEvent(event.player, event.id, data.size, payload)
+            if (safe) capture?.record(event.player, event.id, payload ?: emptyList())
         } catch (_: Throwable) {
             // 诊断旁路绝不能影响业务链路
         }

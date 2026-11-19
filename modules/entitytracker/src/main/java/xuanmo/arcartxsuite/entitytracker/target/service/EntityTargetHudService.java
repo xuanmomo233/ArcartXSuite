@@ -36,8 +36,11 @@ public final class EntityTargetHudService implements Listener {
     private final PacketBridgeAPI bridge;
     private final List<String> uiIds;
     private final Map<UUID, TrackedTarget> trackedTargets = new ConcurrentHashMap<>();
-    private final Map<UUID, Boolean> openViewers = new ConcurrentHashMap<>();
+    private final Map<UUID, ViewerSnapshot> viewerSnapshots = new ConcurrentHashMap<>();
     private BukkitTask refreshTask;
+    private volatile boolean closed;
+    private final xuanmo.arcartxsuite.api.scheduler.ModuleCallback refresh =
+        new xuanmo.arcartxsuite.api.scheduler.ModuleCallback(this::refreshAll);
 
     private final java.util.function.Supplier<xuanmo.arcartxsuite.entitytracker.boss.config.PluginConfiguration> bossConfigurationProvider;
     private final Predicate<UUID> trackedBossLookup;
@@ -64,22 +67,24 @@ public final class EntityTargetHudService implements Listener {
         Bukkit.getPluginManager().registerEvents(this, plugin);
         refreshTask = Bukkit.getScheduler().runTaskTimer(
             plugin,
-            this::refreshAll,
+            refresh,
             configuration.refreshIntervalTicks(),
             configuration.refreshIntervalTicks()
         );
     }
 
     public void shutdown() {
+        closed = true;
+        refresh.close();
         if (refreshTask != null) {
             refreshTask.cancel();
             refreshTask = null;
         }
-        for (UUID viewerId : new ArrayList<>(openViewers.keySet())) {
+        for (UUID viewerId : new ArrayList<>(viewerSnapshots.keySet())) {
             closeViewer(viewerId, Bukkit.getPlayer(viewerId));
         }
         trackedTargets.clear();
-        openViewers.clear();
+        viewerSnapshots.clear();
         HandlerList.unregisterAll(this);
     }
 
@@ -87,49 +92,32 @@ public final class EntityTargetHudService implements Listener {
         return trackedTargets.size();
     }
 
+    public java.util.concurrent.CompletionStage<Void> databaseStopped() { return refresh.stopped(); }
+
     public int activeViewerCount() {
-        return openViewers.size();
+        return (int) viewerSnapshots.values().stream().filter(ViewerSnapshot::open).count();
     }
 
     /**
-     * 只读地解析某个玩家当前正在追踪的目标快照，供 PlaceholderAPI 使用。
-     * 不会修改追踪状态或发送数据包，目标不可用时返回空。
+     * 读取主线程发布的不可变快照，允许 PlaceholderAPI 从后台线程读取。
      */
     public Optional<EntityTargetSnapshot> resolveViewerTargetSnapshot(Player viewer) {
-        if (viewer == null) {
+        return resolveViewerTargetSnapshotById(viewer == null ? null : viewer.getUniqueId());
+    }
+
+    public Optional<EntityTargetSnapshot> resolveViewerTargetSnapshotById(UUID viewerId) {
+        ViewerSnapshot snapshot = viewerId == null ? null : viewerSnapshots.get(viewerId);
+        TrackedTarget tracked = viewerId == null ? null : trackedTargets.get(viewerId);
+        if (snapshot == null || tracked == null || !tracked.targetUuid().equals(snapshot.targetUuid())
+            || System.currentTimeMillis() - tracked.lastHitAtMillis() > configuration.targetTimeoutMs()) {
             return Optional.empty();
         }
-        TrackedTarget trackedTarget = trackedTargets.get(viewer.getUniqueId());
-        if (trackedTarget == null || !viewer.isOnline() || viewer.isDead()) {
-            return Optional.empty();
-        }
-        Entity entity = plugin.getServer().getEntity(trackedTarget.targetUuid());
-        if (!(entity instanceof LivingEntity target)) {
-            return Optional.empty();
-        }
-        String mythicMobId = EntityCombatMetadata.resolveMythicMobId(target);
-        String entityType = EntityCombatMetadata.resolveEntityType(target);
-        if (shouldIgnoreTarget(
-            configuration,
-            bossConfigurationProvider.get(),
-            target.getUniqueId(),
-            trackedBossLookup,
-            mythicMobId,
-            entityType
-        )) {
-            return Optional.empty();
-        }
-        return EntityTargetStateResolver.resolve(
-            viewer,
-            target,
-            configuration,
-            trackedTarget.lastHitAtMillis(),
-            System.currentTimeMillis()
-        );
+        return Optional.of(snapshot.snapshot());
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onEntityDamage(EntityDamageByEntityEvent event) {
+        if (closed) return;
         if (!(event.getEntity() instanceof LivingEntity target)) {
             return;
         }
@@ -139,22 +127,18 @@ public final class EntityTargetHudService implements Listener {
             return;
         }
 
-        String mythicMobId = EntityCombatMetadata.resolveMythicMobId(target);
-        String entityType = EntityCombatMetadata.resolveEntityType(target);
-        if (shouldIgnoreTarget(
-            configuration,
-            bossConfigurationProvider.get(),
-            target.getUniqueId(),
-            trackedBossLookup,
-            mythicMobId,
-            entityType
-        )) {
-            clearViewer(attacker);
+        UUID viewerId = attacker.getUniqueId();
+        long now = System.currentTimeMillis();
+        var current = new TrackedTarget(target.getUniqueId(), now);
+        var previous = trackedTargets.put(viewerId, current);
+        var snapshot = viewerSnapshots.get(viewerId);
+        // Keep the timeout current on every hit. An already visible target can use the periodic refresh.
+        if (previous != null && previous.targetUuid().equals(current.targetUuid())
+            && now - previous.lastHitAtMillis() <= configuration.targetTimeoutMs()
+            && snapshot != null && (snapshot.open() || uiIds.isEmpty())) {
             return;
         }
-
-        trackedTargets.put(attacker.getUniqueId(), new TrackedTarget(target.getUniqueId(), System.currentTimeMillis()));
-        refreshViewer(attacker.getUniqueId());
+        refreshViewer(attacker, target, current, now);
     }
 
     @EventHandler
@@ -194,55 +178,66 @@ public final class EntityTargetHudService implements Listener {
             return;
         }
 
-        String mythicMobId = EntityCombatMetadata.resolveMythicMobId(target);
-        String entityType = EntityCombatMetadata.resolveEntityType(target);
-        if (shouldIgnoreTarget(
-            configuration,
-            bossConfigurationProvider.get(),
-            target.getUniqueId(),
-            trackedBossLookup,
-            mythicMobId,
-            entityType
-        )) {
-            trackedTargets.remove(viewerId);
-            closeViewer(viewerId, attacker);
-            return;
-        }
+        refreshViewer(attacker, target, trackedTarget, System.currentTimeMillis());
+    }
 
-        Optional<EntityTargetSnapshot> snapshot = EntityTargetStateResolver.resolve(
-            attacker,
-            target,
-            configuration,
-            trackedTarget.lastHitAtMillis(),
-            System.currentTimeMillis()
-        );
+    private void refreshViewer(Player attacker, LivingEntity target, TrackedTarget trackedTarget, long now) {
+        UUID viewerId = attacker.getUniqueId();
+        var snapshot = resolveSnapshot(attacker, target, trackedTarget, now);
         if (snapshot.isEmpty()) {
             trackedTargets.remove(viewerId);
             closeViewer(viewerId, attacker);
             return;
         }
 
-        Map<String, Object> payload = snapshot.get().toPacket();
-        if (!openViewers.containsKey(viewerId)) {
-            if (!bridge.openUiAll(attacker, uiIds)) {
-                return;
-            }
-            boolean success = bridge.sendPacketToAll(attacker, uiIds, "init", payload);
-            if (success) {
-                openViewers.put(viewerId, Boolean.TRUE);
-            } else {
-                bridge.closeUiAll(attacker, uiIds);
-            }
-            logPacket("init", attacker, success, payload);
+        EntityTargetSnapshot current = snapshot.get();
+        if (uiIds.isEmpty()) {
+            viewerSnapshots.put(viewerId, new ViewerSnapshot(trackedTarget, current, false, null));
             return;
         }
 
-        boolean success = bridge.sendPacketToAll(attacker, uiIds, "update", payload);
-        if (!success) {
-            openViewers.remove(viewerId);
+        ViewerSnapshot previous = viewerSnapshots.get(viewerId);
+        boolean open = previous != null && previous.open();
+        Map<String, Object> compact = compactPacket(current);
+        if (open && trackedTarget.equals(previous.tracked()) && compact.equals(previous.compactPacket())) {
+            viewerSnapshots.put(viewerId, new ViewerSnapshot(trackedTarget, current, true, previous.compactPacket()));
+            return;
+        }
+        if (!open && !bridge.openUiAll(attacker, uiIds)) {
+            viewerSnapshots.put(viewerId, new ViewerSnapshot(trackedTarget, current, false, null));
+            return;
+        }
+        String handler = open ? "update" : "init";
+        Map<String, Object> payload = new java.util.LinkedHashMap<>(compact);
+        payload.put("lastHitAgoMs", current.lastHitAgoMs());
+        boolean sent = bridge.sendPacketToAll(attacker, uiIds, handler, payload);
+        if (!sent) {
             bridge.closeUiAll(attacker, uiIds);
         }
-        logPacket("update", attacker, success, payload);
+        viewerSnapshots.put(viewerId, new ViewerSnapshot(trackedTarget, current, sent, sent ? compact : null));
+        logPacket(handler, attacker, sent, payload);
+    }
+
+    private static Map<String, Object> compactPacket(EntityTargetSnapshot snapshot) {
+        return Map.of("title", snapshot.title(), "healthText", snapshot.healthText(),
+            "maxHealthText", snapshot.maxHealthText(), "healthPercentText", snapshot.healthPercentText(),
+            "progress", snapshot.progress(), "distanceText", snapshot.distanceText(),
+            "timeoutMs", snapshot.timeoutMs());
+    }
+
+    private Optional<EntityTargetSnapshot> resolveSnapshot(Player attacker, LivingEntity target, TrackedTarget trackedTarget, long now) {
+        if (now - trackedTarget.lastHitAtMillis() > configuration.targetTimeoutMs()) {
+            return Optional.empty();
+        }
+        var activeMob = EntityCombatMetadata.resolveActiveMob(target);
+        String mythicMobId = EntityCombatMetadata.resolveMythicMobIdFrom(activeMob);
+        String entityType = EntityCombatMetadata.resolveEntityType(target);
+        if (shouldIgnoreTarget(configuration, bossConfigurationProvider.get(), trackedTarget.targetUuid(), trackedBossLookup,
+            mythicMobId, entityType)) {
+            return Optional.empty();
+        }
+        return EntityTargetStateResolver.resolve(attacker, target, configuration, trackedTarget.lastHitAtMillis(), now,
+            activeMob, mythicMobId, entityType);
     }
 
     private void clearViewer(Player player) {
@@ -254,7 +249,8 @@ public final class EntityTargetHudService implements Listener {
     }
 
     private void closeViewer(UUID viewerId, Player player) {
-        if (openViewers.remove(viewerId) == null) {
+        var snapshot = viewerSnapshots.remove(viewerId);
+        if (snapshot == null || !snapshot.open()) {
             return;
         }
         if (player == null || !player.isOnline()) {
@@ -313,6 +309,12 @@ public final class EntityTargetHudService implements Listener {
     }
 
     private record TrackedTarget(UUID targetUuid, long lastHitAtMillis) {
+    }
+
+    private record ViewerSnapshot(TrackedTarget tracked, EntityTargetSnapshot snapshot, boolean open, Map<String, Object> compactPacket) {
+        UUID targetUuid() {
+            return tracked.targetUuid();
+        }
     }
 }
 

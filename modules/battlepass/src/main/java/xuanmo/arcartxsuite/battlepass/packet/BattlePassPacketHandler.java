@@ -6,18 +6,22 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.Set;
+import java.util.Comparator;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.ClientPacketHandler;
+import xuanmo.arcartxsuite.api.auth.AuthAccess;
+import xuanmo.arcartxsuite.api.auth.AuthSnapshot;
 import xuanmo.arcartxsuite.api.bridge.ItemBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.icon.IconResolver;
+import xuanmo.arcartxsuite.api.icon.IconDefinition;
 import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
 import xuanmo.arcartxsuite.battlepass.model.BattlePassPlayerProgress;
@@ -48,13 +52,23 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
     private final String rewardsUiId;
     private final String settlementUiId;
     private final IconResolver iconResolver;
+    private final RewardLayout rewardLayout;
+    private final List<SeasonSettlementReward> orderedSettlements;
+    private final Map<IconDefinition, String> staticIcons = new ConcurrentHashMap<>();
     private final java.util.function.BiFunction<String, Object[], String> messageResolver;
     private final Map<UUID, String> actionTokens = new ConcurrentHashMap<>();
-    private final Set<UUID> actionTokensInFlight = ConcurrentHashMap.newKeySet();
+    private java.util.function.Supplier<xuanmo.arcartxsuite.api.capability.MapNavigable> map = () -> null;
+    private java.util.function.Supplier<xuanmo.arcartxsuite.api.capability.QuestGpsNavigable> quests = () -> null;
 
-    private final Set<UUID> pendingTaskRefresh = ConcurrentHashMap.newKeySet();
-    private final Set<UUID> pendingTaskStructureRefresh = ConcurrentHashMap.newKeySet();
-    private final Set<UUID> pendingMainRefresh = ConcurrentHashMap.newKeySet();
+    public void setNavigationProviders(
+            java.util.function.Supplier<xuanmo.arcartxsuite.api.capability.MapNavigable> map,
+            java.util.function.Supplier<xuanmo.arcartxsuite.api.capability.QuestGpsNavigable> quests) {
+        this.map = map;
+        this.quests = quests;
+    }
+    private final Map<UUID, ClaimAttempt> actionTokensInFlight = new ConcurrentHashMap<>();
+
+    private final ConcurrentHashMap<RefreshKey, Refresh> pendingRefreshes = new ConcurrentHashMap<>();
 
 
     /**
@@ -88,6 +102,9 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
         this.rewardsUiId = rewardsUiId;
         this.settlementUiId = settlementUiId;
         this.iconResolver = new IconResolver(itemStackBridge, itemSourceRegistry);
+        this.rewardLayout = RewardLayout.compile(service.configuration().rewards());
+        this.orderedSettlements = service.configuration().seasonRewards().stream()
+            .sorted(Comparator.comparingInt(SeasonSettlementReward::minLevel)).toList();
         this.messageResolver = messageResolver;
     }
 
@@ -102,21 +119,22 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
     @Override
     public boolean handleClientPacket(@NotNull Player player, @NotNull String packetId, @NotNull List<String> data) {
         if (!PACKET_ID.equalsIgnoreCase(packetId)) return false;
+        if (!canUse(player)) return true;
         String action = data.isEmpty() ? "refresh" : safe(data.get(0)).toLowerCase(Locale.ROOT);
         // PacketGuard 已由 ClientPacketRouter 在路由层统一调用，此处不再重复检查。
 
         switch (action) {
             case "open_main" -> openMain(player);
             case "open_tasks" -> openTasks(player);
+            case "navigate_task" -> navigateTask(player, data);
             case "open_rewards" -> openRewards(player);
             case "open_settlement" -> openSettlement(player);
             case "claim" -> handleClaim(player, data);
             case "claim_all" -> handleClaimAll(player, data);
-            case "refresh" -> Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> { if (player.isOnline()) pushMainData(player); });
-            case "refresh_tasks" -> Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> { if (player.isOnline()) pushTasksData(player); });
-            case "refresh_rewards" -> Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> { if (player.isOnline()) pushRewardsData(player); });
-            case "refresh_settlement" -> Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> { if (player.isOnline()) pushSettlementData(player); });
-            default -> Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> { if (player.isOnline()) pushMainData(player); });
+            case "refresh_tasks" -> requestRefresh(player, View.TASKS, Format.INIT, 0L);
+            case "refresh_rewards" -> requestRefresh(player, View.REWARDS, Format.INIT, 0L);
+            case "refresh_settlement" -> requestRefresh(player, View.SETTLEMENT, Format.INIT, 0L);
+            default -> requestRefresh(player, View.MAIN, Format.INIT, 0L);
         }
         return true;
     }
@@ -124,79 +142,143 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
     private void handleClaim(Player player, List<String> data) {
         UUID uuid = player.getUniqueId();
         String supplied = data.size() > 2 ? safe(data.get(data.size() - 1)) : "";
-        String expected = actionTokens.get(uuid);
         // claim 可在主界面或奖励界面发起，两者都允许
-        if (expected == null || supplied.isBlank() || !expected.equals(supplied)
-            || !actionTokensInFlight.add(uuid)
-            || packetBridge == null
+        if (packetBridge == null
             || (!packetBridge.isUiOpen(player, mainUiId) && !packetBridge.isUiOpen(player, rewardsUiId))) {
-            actionTokensInFlight.remove(uuid);
             return;
         }
         int level;
         try {
             level = Integer.parseInt(safe(data.size() > 1 ? data.get(1) : ""));
         } catch (NumberFormatException e) {
-            actionTokensInFlight.remove(uuid);
             return;
         }
-        // DB 操作异步执行，避免阻塞主线程
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            BattlePassService.ClaimResult result;
-            try {
-                result = service.claimRewards(player, level);
-            } finally {
-                actionTokensInFlight.remove(uuid);
-            }
-            String key = switch (result) {
-                case SUCCESS -> "claim.success";
-                case LEVEL_NOT_REACHED -> "claim.level-not-reached";
-                case ALREADY_CLAIMED -> "claim.already-claimed";
-                case NOT_FOUND -> "claim.none";
-            };
-            if (messageResolver != null) {
-                player.sendMessage(messageResolver.apply(key, new Object[]{String.valueOf(level)}));
-            }
-            if (result == BattlePassService.ClaimResult.SUCCESS) {
-                actionTokens.put(uuid, UUID.randomUUID().toString());
-            }
-            // 刷新奖励数据（如果奖励界面打开着）
-            if (packetBridge.isUiOpen(player, rewardsUiId)) {
-                pushRewardsData(player);
-            }
+        var attempt = beginClaim(uuid, supplied);
+        if (attempt == null) return;
+        try {
+            service.claimLevelAsync(player, level, () -> validClaim(player, attempt, false)).whenComplete((result, error) -> {
+                var outcome = error == null ? result : BattlePassService.ClaimResult.RETRY;
+                finishClaim(player, attempt, outcome == BattlePassService.ClaimResult.SUCCESS
+                    || outcome == BattlePassService.ClaimResult.PARTIAL, outcome.messageKey(), level);
+            });
+        } catch (RuntimeException failure) {
+            finishClaim(player, attempt, false, "claim.retry", level);
+        }
+    }
+
+    private void navigateTask(Player player, List<String> data) {
+        if (data.size() != 2 || packetBridge == null || !packetBridge.isUiOpen(player, tasksUiId)) return;
+        navigateTask(player, data.get(1), true);
+    }
+
+    public void navigateTask(Player player, String requestedId, boolean fromTaskUi) {
+        if (!service.isSeasonActive() || requestedId == null || requestedId.isBlank()) return;
+        if (!canUse(player)) return;
+        service.async( () -> {
+            var navigation = service.getActiveTaskInstances(player).stream()
+                .filter(instance -> requestedId.equals(fromTaskUi ? instance.instanceId() : instance.templateId()))
+                .map(instance -> service.findTask(instance.templateId()))
+                .filter(java.util.Objects::nonNull)
+                .map(BattlePassTask::navigation)
+                .filter(java.util.Objects::nonNull)
+                .findFirst().orElse(null);
+            service.onMain( () -> {
+                if (!player.isOnline() || (fromTaskUi && !packetBridge.isUiOpen(player, tasksUiId))) return;
+                if (!canUse(player)) return;
+                if (navigation == null) {
+                    sendClaimMessage(player, "tasks.navigation-unavailable");
+                    return;
+                }
+                if (navigation.type().equals("map")) {
+                    var provider = map.get();
+                    if (provider != null && provider.navigateExternalTarget(player, navigation.target())) {
+                        provider.openMenuFor(player, navigation.target());
+                        return;
+                    }
+                } else {
+                    var provider = quests.get();
+                    if (provider != null) {
+                        var state = provider.questState(player, navigation.target());
+                        if (state == xuanmo.arcartxsuite.api.capability.QuestGpsNavigable.QuestState.ACTIVE) {
+                            provider.trackQuest(player, navigation.target());
+                        } else {
+                            provider.offerQuest(player, navigation.target(), true);
+                        }
+                        return;
+                    }
+                }
+                sendClaimMessage(player, "tasks.navigation-unavailable");
+            });
         });
     }
 
     private void handleClaimAll(Player player, List<String> data) {
         UUID uuid = player.getUniqueId();
         String supplied = data.size() > 1 ? safe(data.get(data.size() - 1)) : "";
-        String expected = actionTokens.get(uuid);
-        if (expected == null || supplied.isBlank() || !expected.equals(supplied)
-            || !actionTokensInFlight.add(uuid)
-            || packetBridge == null
-            || !packetBridge.isUiOpen(player, rewardsUiId)) {
-            actionTokensInFlight.remove(uuid);
-            return;
+        if (packetBridge == null || !packetBridge.isUiOpen(player, rewardsUiId)) return;
+        var attempt = beginClaim(uuid, supplied);
+        if (attempt == null) return;
+        try {
+            service.claimBatchAsync(player, () -> validClaim(player, attempt, true)).whenComplete((batch, error) -> {
+                if (error != null) {
+                    finishClaim(player, attempt, false, "claim.retry");
+                } else if (batch.accepted() > 0) {
+                    finishClaim(player, attempt, true, batch.retry() ? "claim_all.partial" : "claim_all.success", batch.accepted());
+                } else {
+                    finishClaim(player, attempt, false, batch.retry() ? "claim.retry" : "claim_all.none");
+                }
+            });
+        } catch (RuntimeException failure) {
+            finishClaim(player, attempt, false, "claim.retry");
         }
-        // DB 操作异步执行，避免阻塞主线程
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            int claimedCount;
-            try {
-                claimedCount = service.claimAllRewards(player);
-            } finally {
-                actionTokensInFlight.remove(uuid);
-            }
+    }
+
+    private record ClaimAttempt(String token, AuthSnapshot session) {}
+
+    private ClaimAttempt beginClaim(UUID id, String token) {
+        if (token.isBlank() || !token.equals(actionTokens.get(id))) return null;
+        AuthSnapshot session = AuthAccess.snapshot(id);
+        if (!session.admitted()) return null;
+        var attempt = new ClaimAttempt(token, session);
+        return actionTokensInFlight.putIfAbsent(id, attempt) == null ? attempt : null;
+    }
+
+    private boolean validClaim(Player player, ClaimAttempt attempt, boolean rewardsOnly) {
+        UUID id = attempt.session().playerId();
+        return actionTokensInFlight.get(id) == attempt && attempt.token().equals(actionTokens.get(id))
+            && currentClaimSession(player, attempt)
+            && (packetBridge.isUiOpen(player, rewardsUiId) || (!rewardsOnly && packetBridge.isUiOpen(player, mainUiId)));
+    }
+
+    private boolean currentClaimSession(Player player, ClaimAttempt attempt) {
+        return canUse(player) && sameSession(attempt.session(), AuthAccess.snapshot(attempt.session().playerId()));
+    }
+
+    private void finishClaim(Player player, ClaimAttempt attempt, boolean changed, String key, Object... args) {
+        UUID id = attempt.session().playerId();
+        try {
+            if (actionTokensInFlight.get(id) != attempt || !currentClaimSession(player, attempt)) return;
+            if (changed) actionTokens.replace(id, attempt.token(), UUID.randomUUID().toString());
             if (messageResolver != null) {
-                String key = claimedCount > 0 ? "claim_all.success" : "claim_all.none";
-                player.sendMessage(messageResolver.apply(key, new Object[]{String.valueOf(claimedCount)}));
+                service.onMain(() -> {
+                    if (currentClaimSession(player, attempt)) player.sendMessage(messageResolver.apply(key, args));
+                });
             }
-            if (claimedCount > 0) {
-                actionTokens.put(uuid, UUID.randomUUID().toString());
-            }
-            // 刷新奖励数据
-            if (packetBridge.isUiOpen(player, rewardsUiId)) {
-                pushRewardsData(player);
-            }
+            requestRefresh(player, View.REWARDS, Format.INIT, 0L);
+        } finally {
+            actionTokensInFlight.remove(id, attempt);
+        }
+    }
+
+    private boolean canUse(Player player) {
+        return service.isActive() && player.isOnline() && player.hasPermission("arcartxsuite.battlepass.use")
+            && AuthAccess.admitted(player.getUniqueId());
+    }
+
+    private void sendClaimMessage(Player player, String key, Object... args) {
+        if (messageResolver == null) return;
+        service.onMain( () -> {
+            if (player.isOnline()) player.sendMessage(messageResolver.apply(key, args));
         });
     }
 
@@ -206,14 +288,10 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
      * @param player 目标玩家
      */
     public void openMain(Player player) {
-        if (packetBridge == null) return;
+        if (packetBridge == null || !canUse(player)) return;
         packetBridge.openUi(player, mainUiId);
         actionTokens.put(player.getUniqueId(), UUID.randomUUID().toString());
-        Bukkit.getScheduler().runTaskLaterAsynchronously(plugin, () -> {
-            if (player.isOnline()) {
-                pushMainData(player);
-            }
-        }, 2L);
+        requestRefresh(player, View.MAIN, Format.INIT, 2L);
     }
 
     /**
@@ -222,13 +300,9 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
      * @param player 目标玩家
      */
     public void openTasks(Player player) {
-        if (packetBridge == null) return;
+        if (packetBridge == null || !canUse(player)) return;
         packetBridge.openUi(player, tasksUiId);
-        Bukkit.getScheduler().runTaskLaterAsynchronously(plugin, () -> {
-            if (player.isOnline()) {
-                pushTasksData(player);
-            }
-        }, 2L);
+        requestRefresh(player, View.TASKS, Format.INIT, 2L);
     }
 
     /**
@@ -237,14 +311,10 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
      * @param player 目标玩家
      */
     public void openRewards(Player player) {
-        if (packetBridge == null) return;
+        if (packetBridge == null || !canUse(player)) return;
         packetBridge.openUi(player, rewardsUiId);
         actionTokens.put(player.getUniqueId(), UUID.randomUUID().toString());
-        Bukkit.getScheduler().runTaskLaterAsynchronously(plugin, () -> {
-            if (player.isOnline()) {
-                pushRewardsData(player);
-            }
-        }, 2L);
+        requestRefresh(player, View.REWARDS, Format.INIT, 2L);
     }
 
     /**
@@ -253,60 +323,23 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
      * @param player 目标玩家
      */
     public void openSettlement(Player player) {
-        if (packetBridge == null) return;
+        if (packetBridge == null || !canUse(player)) return;
         packetBridge.openUi(player, settlementUiId);
-        Bukkit.getScheduler().runTaskLaterAsynchronously(plugin, () -> {
-            if (player.isOnline()) {
-                pushSettlementData(player);
-            }
-        }, 2L);
+        requestRefresh(player, View.SETTLEMENT, Format.INIT, 2L);
     }
 
-    private void pushRewardsData(Player player) {
-        pushRewardsData(player, 0);
-    }
-
-    private void pushRewardsData(Player player, int retryCount) {
-        if (packetBridge == null) return;
-        if (service.isLoadFailed(player.getUniqueId())) {
-            scheduleRetryPush(player, "rewards", retryCount);
-            return;
-        }
-        BattlePassPlayerProgress progress = service.getProgress(player);
-
-        List<BattlePassReward> sorted = new ArrayList<>(service.configuration().rewards());
-        sorted.sort(java.util.Comparator.comparingInt(BattlePassReward::level)
-            .thenComparingInt(r -> r.tier().ordinal()));
-
-        // 按等级分组：每个等级包含 free/premium/deluxe 三个档位
-        // levelsMap 的 key 使用从1开始的连续索引（与 UI 端 range(1, levelCount) 遍历对应）
+    private Map<String, Object> buildRewardsData(Player player, BattlePassPlayerProgress progress) {
         Map<String, Map<String, String>> levelsMap = new LinkedHashMap<>();
         Map<String, Map<String, String>> rewardsMap = new LinkedHashMap<>();
         Map<String, Object> payload = new LinkedHashMap<>();
 
-        int idx = 0;
-        int levelIdx = 0;
-        for (BattlePassReward reward : sorted) {
-            String actualLevel = String.valueOf(reward.level());
-            if (!levelsMap.values().stream().anyMatch(e -> actualLevel.equals(e.get("level")))) {
-                levelIdx++;
-                String levelKey = String.valueOf(levelIdx);
-                Map<String, String> levelEntry = new LinkedHashMap<>();
-                levelEntry.put("level", actualLevel);
-                levelEntry.put("reached", String.valueOf(progress.currentLevel() >= reward.level()));
-                levelsMap.put(levelKey, levelEntry);
-            }
-            // 找到当前等级对应的 levelKey
-            String levelKey = null;
-            for (Map.Entry<String, Map<String, String>> entry : levelsMap.entrySet()) {
-                if (actualLevel.equals(entry.getValue().get("level"))) {
-                    levelKey = entry.getKey();
-                    break;
-                }
-            }
-
-            String tierKey = reward.tier().name().toLowerCase();
-            String entryKey = String.valueOf(idx);
+        for (RewardLevel level : rewardLayout.levels()) {
+            var entry = new LinkedHashMap<>(level.fields());
+            entry.put("reached", String.valueOf(progress.currentLevel() >= level.level()));
+            levelsMap.put(level.key(), entry);
+        }
+        for (RewardSlot slot : rewardLayout.slots()) {
+            BattlePassReward reward = slot.reward();
             boolean tierUnlocked = switch (reward.tier()) {
                 case FREE -> true;
                 case PREMIUM -> progress.unlockedPremium();
@@ -315,36 +348,68 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
             boolean levelReached = progress.currentLevel() >= reward.level();
             boolean claimed = progress.claimedRewards().contains(reward.rewardId());
 
-            Map<String, String> entry = new LinkedHashMap<>();
-            entry.put("level", String.valueOf(reward.level()));
-            entry.put("tier", reward.tier().name());
-            entry.put("tierDisplay", rewardTierDisplay(reward.tier()));
-            entry.put("tierKey", tierKey);
+            Map<String, String> entry = new LinkedHashMap<>(slot.fields());
             entry.put("claimed", String.valueOf(claimed));
             entry.put("claimable", String.valueOf(!claimed && levelReached && tierUnlocked));
             entry.put("locked", String.valueOf(!tierUnlocked));
             entry.put("levelReached", String.valueOf(levelReached));
-            entry.put("type", reward.type());
-            entry.put("itemAmount", Integer.toString(previewAmount(reward)));
-            rewardsMap.put(entryKey, entry);
-
-            // 推送图标 itemJson（flat 字段）
-            String iconJson = iconResolver.resolveItemJson(player, reward.icon());
-            payload.put("iconJson" + idx, iconJson);
-
-            levelsMap.get(levelKey).put(tierKey + "EntryKey", entryKey);
-            idx++;
+            rewardsMap.put(slot.key(), entry);
+            payload.put(slot.iconKey(), previewIcon(player, reward.icon()));
         }
 
         payload.put("packetId", PACKET_ID);
         payload.put("levels", levelsMap);
         payload.put("rewards", rewardsMap);
         payload.put("levelCount", String.valueOf(levelsMap.size()));
-        payload.put("rewardCount", String.valueOf(idx));
+        payload.put("rewardCount", String.valueOf(rewardLayout.slots().size()));
         payload.put("currentLevel", String.valueOf(progress.currentLevel()));
         payload.put("action_token", actionTokens.getOrDefault(player.getUniqueId(), ""));
 
-        packetBridge.sendPacket(player, rewardsUiId, "rewards", payload);
+        return payload;
+    }
+
+    private record RewardLevel(String key, int level, Map<String, String> fields) {}
+    private record RewardSlot(String key, String iconKey, BattlePassReward reward, Map<String, String> fields) {}
+
+    private record RewardLayout(List<RewardLevel> levels, List<RewardSlot> slots) {
+        static RewardLayout compile(List<BattlePassReward> rewards) {
+            var ordered = rewards.stream().sorted(Comparator.comparingInt(BattlePassReward::level)
+                .thenComparingInt(reward -> reward.tier().ordinal())).toList();
+            var levels = new LinkedHashMap<Integer, Map<String, String>>();
+            var slots = new ArrayList<RewardSlot>(ordered.size());
+            for (BattlePassReward reward : ordered) {
+                String key = Integer.toString(slots.size());
+                String tier = reward.tier().name();
+                String tierKey = tier.toLowerCase(Locale.ROOT);
+                String actualLevel = Integer.toString(reward.level());
+                var level = levels.computeIfAbsent(reward.level(), ignored -> new LinkedHashMap<>());
+                level.put("level", actualLevel);
+                level.put(tierKey + "EntryKey", key);
+                slots.add(new RewardSlot(key, "iconJson" + key, reward, Map.of(
+                    "level", actualLevel, "tier", tier, "tierDisplay", rewardTierDisplay(reward.tier()),
+                    "tierKey", tierKey, "type", reward.type(), "itemAmount", Integer.toString(previewAmount(reward)))));
+            }
+            var result = new ArrayList<RewardLevel>(levels.size());
+            levels.forEach((level, fields) -> result.add(new RewardLevel(
+                Integer.toString(result.size() + 1), level, Map.copyOf(fields))));
+            return new RewardLayout(List.copyOf(result), List.copyOf(slots));
+        }
+    }
+
+    private String previewIcon(Player player, IconDefinition icon) {
+        if (icon == null) return "";
+        if (!blank(icon.source()) || !blank(icon.mmoType()) || !blank(icon.mmoId()) || !blank(icon.skullTexture())) {
+            return iconResolver.resolveItemJson(player, icon);
+        }
+        String preview = staticIcons.computeIfAbsent(icon, definition -> {
+            String resolved = iconResolver.resolveItemJson(null, definition);
+            return resolved.isBlank() ? null : resolved;
+        });
+        return preview == null ? "" : preview;
+    }
+
+    private static boolean blank(String value) {
+        return value == null || value.isBlank();
     }
 
     /**
@@ -362,21 +427,15 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
      * iconJson0..iconJsonN: 各奖励的图标 JSON
      * </pre>
      */
-    private void pushSettlementData(Player player) {
-        if (packetBridge == null) return;
-        BattlePassPlayerProgress progress = service.getProgress(player);
+    private Map<String, Object> buildSettlementData(Player player, BattlePassPlayerProgress progress) {
         var season = service.configuration().season();
 
-        List<SeasonSettlementReward> rewards = service.configuration().seasonRewards();
-        // 按 minLevel 升序排列
-        List<SeasonSettlementReward> sorted = new ArrayList<>(rewards);
-        sorted.sort(java.util.Comparator.comparingInt(SeasonSettlementReward::minLevel));
 
         Map<String, Map<String, Object>> settlementsMap = new LinkedHashMap<>();
         Map<String, Object> payload = new LinkedHashMap<>();
 
         int idx = 0;
-        for (SeasonSettlementReward settlement : sorted) {
+        for (SeasonSettlementReward settlement : orderedSettlements) {
             boolean reached = progress.currentLevel() >= settlement.minLevel();
             Map<String, Object> entry = new LinkedHashMap<>();
             entry.put("id", settlement.settlementId());
@@ -405,7 +464,7 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
                     int amount = previewAmount(reward);
                     tierEntry.put("name", displayName + (amount > 1 ? " x" + amount : ""));
                     // 推送图标
-                    String iconJson = iconResolver.resolveItemJson(player, reward.icon());
+                    String iconJson = previewIcon(player, reward.icon());
                     payload.put("iconJson" + idx + "_" + iconIdx, iconJson);
                 } else {
                     tierEntry.put("present", "false");
@@ -427,7 +486,7 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
         payload.put("settlements", settlementsMap);
         payload.put("settlementCount", String.valueOf(idx));
 
-        packetBridge.sendPacket(player, settlementUiId, "init", payload);
+        return payload;
     }
 
     private static String rewardTierDisplay(BattlePassReward.RewardTier tier) {
@@ -438,20 +497,10 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
         };
     }
 
-    private void pushMainData(Player player) {
-        pushMainData(player, 0);
-    }
-
-    private void pushMainData(Player player, int retryCount) {
-        if (packetBridge == null) return;
-        if (service.isLoadFailed(player.getUniqueId())) {
-            scheduleRetryPush(player, "main", retryCount);
-            return;
-        }
-        BattlePassPlayerProgress progress = service.getProgress(player);
+    private Map<String, Object> buildMainData(BattlePassPlayerProgress progress) {
         var season = service.configuration().season();
         // 按玩家当前等级动态计算该级所需经验（成长曲线）
-        int xpPerLevel = season.xpCurve().xpRequiredForLevelOr(progress.currentLevel() + 1, 0);
+        int xpPerLevel = service.xpRequiredForLevelOr(progress.currentLevel() + 1, 0);
         int xpNeeded = Math.max(0, xpPerLevel - progress.currentXp());
         float ratio = xpPerLevel > 0 ? (float) progress.currentXp() / xpPerLevel : 0f;
 
@@ -469,25 +518,10 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
         payload.put("tier", progress.passTier().name());
         payload.put("tierDisplay", tierDisplay(progress.passTier()));
 
-        packetBridge.sendPacket(player, mainUiId, "init", payload);
+        return payload;
     }
 
-    private void pushTasksData(Player player) {
-        pushTasksData(player, 0, "init");
-    }
-
-    private void pushTasksData(Player player, int retryCount) {
-        pushTasksData(player, retryCount, "init");
-    }
-
-    private void pushTasksData(Player player, int retryCount, String packetType) {
-        if (packetBridge == null) return;
-        if (service.isLoadFailed(player.getUniqueId())) {
-            scheduleRetryPush(player, "tasks", retryCount);
-            return;
-        }
-        List<PlayerTaskInstance> instances = service.getTaskInstances(player);
-
+    private Map<String, Object> buildTasksData(List<PlayerTaskInstance> instances) {
         Map<String, Map<String, String>> dailyMap = new LinkedHashMap<>();
         Map<String, Map<String, String>> weeklyMap = new LinkedHashMap<>();
         Map<String, Map<String, String>> seasonMap = new LinkedHashMap<>();
@@ -497,6 +531,8 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
             BattlePassTask task = service.findTask(inst.templateId());
             Map<String, String> entry = new LinkedHashMap<>();
             entry.put("name", task != null ? task.displayName() : inst.templateId());
+            entry.put("instanceId", inst.instanceId());
+            entry.put("navigable", String.valueOf(task != null && task.navigation() != null && !inst.completed()));
             entry.put("description", task != null ? task.description() : "");
             entry.put("progress", String.valueOf(inst.currentProgress()));
             entry.put("required", String.valueOf(inst.targetCount()));
@@ -534,7 +570,7 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
         payload.put("maxWeeklyCount", String.valueOf(weeklyMap.size()));
         payload.put("maxSeasonCount", String.valueOf(seasonMap.size()));
 
-        packetBridge.sendPacket(player, tasksUiId, packetType, payload);
+        return payload;
     }
 
 
@@ -546,29 +582,9 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
      */
     public void onServiceRefresh(UUID playerUuid, boolean structureChanged) {
         Player player = Bukkit.getPlayer(playerUuid);
-        if (player == null || !player.isOnline() || packetBridge == null) return;
-
-        if (structureChanged) pendingTaskStructureRefresh.add(playerUuid);
-        if (packetBridge.isUiOpen(player, tasksUiId) && pendingTaskRefresh.add(playerUuid)) {
-            Bukkit.getScheduler().runTaskLaterAsynchronously(plugin, () -> {
-                pendingTaskRefresh.remove(playerUuid);
-                boolean full = pendingTaskStructureRefresh.remove(playerUuid);
-                Player current = Bukkit.getPlayer(playerUuid);
-                if (current != null && current.isOnline() && packetBridge.isUiOpen(current, tasksUiId)) {
-                    pushTasksData(current, 0, full ? "update" : "progress");
-                }
-            }, 10L);
-        }
-
-        if (packetBridge.isUiOpen(player, mainUiId) && pendingMainRefresh.add(playerUuid)) {
-            Bukkit.getScheduler().runTaskLaterAsynchronously(plugin, () -> {
-                pendingMainRefresh.remove(playerUuid);
-                Player current = Bukkit.getPlayer(playerUuid);
-                if (current != null && current.isOnline() && packetBridge.isUiOpen(current, mainUiId)) {
-                    pushMainData(current);
-                }
-            }, 10L);
-        }
+        if (player == null) return;
+        requestRefresh(player, View.TASKS, structureChanged ? Format.UPDATE : Format.PROGRESS, 10L);
+        requestRefresh(player, View.MAIN, Format.INIT, 10L);
     }
 
     /**
@@ -577,9 +593,9 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
      * @param playerUuid 玩家 UUID
      */
     public void clearPendingRefresh(UUID playerUuid) {
-        pendingTaskRefresh.remove(playerUuid);
-        pendingTaskStructureRefresh.remove(playerUuid);
-        pendingMainRefresh.remove(playerUuid);
+        for (View view : View.values()) pendingRefreshes.remove(new RefreshKey(playerUuid, view));
+        actionTokens.remove(playerUuid);
+        actionTokensInFlight.remove(playerUuid);
     }
 
     private static String tierDisplay(BattlePassPlayerProgress.PassTier tier) {
@@ -607,41 +623,135 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
         return reward.item() == null ? 0 : Math.max(1, reward.item().amount());
     }
 
-    /**
-     * DB 加载失败时异步重试推送 UI 数据。
-     * <p>
-     * 延迟 1 秒后在主线程重试，先调用 getProgress 触发 DB 重新加载，
-     * 若加载成功则推送真实数据；若仍失败且未超过最大重试次数则继续重试。
-     *
-     * @param player    目标玩家
-     * @param type      推送类型（"main" / "tasks" / "rewards"）
-     * @param retryCount 当前已重试次数
-     */
-    private void scheduleRetryPush(Player player, String type, int retryCount) {
-        if (retryCount >= MAX_PUSH_RETRY) {
+    private enum View { MAIN, TASKS, REWARDS, SETTLEMENT }
+    private enum Format { PROGRESS, UPDATE, INIT }
+    private record RefreshKey(UUID player, View view) {}
+
+    private static final class Refresh {
+        final Player player;
+        final AuthSnapshot session;
+        Format pending;
+        Format sending;
+        int retries;
+
+        Refresh(Player player, AuthSnapshot session, Format format) {
+            this.player = player;
+            this.session = session;
+            this.pending = format;
+        }
+    }
+
+    private void requestRefresh(Player player, View view, Format format, long delay) {
+        if (packetBridge == null || !canUse(player) || !packetBridge.isUiOpen(player, uiId(view))) return;
+        UUID id = player.getUniqueId();
+        var session = AuthAccess.snapshot(id);
+        if (!session.admitted()) return;
+        var key = new RefreshKey(id, view);
+        var candidate = new Refresh(player, session, format);
+        var selected = pendingRefreshes.compute(key, (ignored, current) -> {
+            if (current == null || current.player != player || !sameSession(current.session, session)) return candidate;
+            current.pending = strongest(current.pending, format);
+            return current;
+        });
+        if (selected == candidate) scheduleRefresh(key, candidate, delay);
+    }
+
+    private void scheduleRefresh(RefreshKey key, Refresh request, long delay) {
+        try {
+            Runnable action = () -> runRefresh(key, request);
+            if (delay > 0) service.laterAsync(action, delay);
+            else service.async(action);
+        } catch (RuntimeException | LinkageError failure) {
+            pendingRefreshes.remove(key, request);
+        }
+    }
+
+    private void runRefresh(RefreshKey key, Refresh request) {
+        if (!currentRefresh(key, request)) {
+            pendingRefreshes.remove(key, request);
             return;
         }
-        Bukkit.getScheduler().runTaskLaterAsynchronously(plugin, () -> {
-            if (!player.isOnline()) return;
-            String uiId = switch (type) {
-                case "rewards" -> rewardsUiId;
-                case "tasks" -> tasksUiId;
-                default -> mainUiId;
-            };
-            if (packetBridge == null || !packetBridge.isUiOpen(player, uiId)) return;
-            // 触发 DB 重新加载（getProgress 内部会重试一次，成功后清除 failedLoads）
-            service.getProgress(player);
-            if (!service.isLoadFailed(player.getUniqueId())) {
-                // 加载成功，推送真实数据
-                switch (type) {
-                    case "rewards" -> pushRewardsData(player, retryCount + 1);
-                    case "tasks" -> pushTasksData(player, retryCount + 1);
-                    default -> pushMainData(player, retryCount + 1);
-                }
-            } else {
-                // 仍然失败，继续重试
-                scheduleRetryPush(player, type, retryCount + 1);
+        var selected = pendingRefreshes.computeIfPresent(key, (ignored, current) -> {
+            if (current == request) {
+                request.sending = request.pending;
+                request.pending = null;
             }
-        }, RETRY_INTERVAL_TICKS);
+            return current;
+        });
+        if (selected != request) return;
+        boolean retry = false;
+        try {
+            Map<String, Object> payload = loadRefreshData(key.view(), request.player);
+            if (!currentRefresh(key, request)) {
+                pendingRefreshes.remove(key, request);
+                return;
+            }
+            retry = payload == null;
+            if (!retry) {
+                String handler = key.view() == View.REWARDS ? "rewards" : request.sending.name().toLowerCase(Locale.ROOT);
+                packetBridge.sendPacket(request.player, uiId(key.view()), handler, payload);
+            }
+        } finally {
+            finishRefresh(key, request, retry);
+        }
+    }
+
+    private Map<String, Object> loadRefreshData(View view, Player player) {
+        UUID id = player.getUniqueId();
+        if (view == View.TASKS) {
+            if (service.isLoadFailed(id)) service.getProgress(player);
+            if (service.isLoadFailed(id)) return null;
+            var tasks = service.getTaskInstances(player);
+            return service.isLoadFailed(id) ? null : buildTasksData(tasks);
+        }
+        var progress = service.getProgress(player);
+        if (service.isLoadFailed(id)) return null;
+        return switch (view) {
+            case MAIN -> buildMainData(progress);
+            case REWARDS -> buildRewardsData(player, progress);
+            case SETTLEMENT -> buildSettlementData(player, progress);
+            case TASKS -> throw new IllegalStateException("Tasks load their own data");
+        };
+    }
+
+    private void finishRefresh(RefreshKey key, Refresh request, boolean retry) {
+        var next = pendingRefreshes.computeIfPresent(key, (ignored, current) -> {
+            if (current != request) return current;
+            if (retry) {
+                if (request.retries >= MAX_PUSH_RETRY) return null;
+                request.retries++;
+                request.pending = strongest(request.pending, request.sending);
+            } else {
+                request.retries = 0;
+            }
+            request.sending = null;
+            return request.pending == null ? null : request;
+        });
+        if (next == request) scheduleRefresh(key, request, retry ? RETRY_INTERVAL_TICKS : 1L);
+    }
+
+    private boolean currentRefresh(RefreshKey key, Refresh request) {
+        return pendingRefreshes.get(key) == request && canUse(request.player)
+            && Bukkit.getPlayer(key.player()) == request.player
+            && sameSession(request.session, AuthAccess.snapshot(key.player()))
+            && packetBridge.isUiOpen(request.player, uiId(key.view()));
+    }
+
+    private static boolean sameSession(AuthSnapshot first, AuthSnapshot second) {
+        return second.admitted() && first.generation() == second.generation()
+            && Objects.equals(first.connectionId(), second.connectionId());
+    }
+
+    private static Format strongest(Format first, Format second) {
+        return first == null || second.ordinal() > first.ordinal() ? second : first;
+    }
+
+    private String uiId(View view) {
+        return switch (view) {
+            case MAIN -> mainUiId;
+            case TASKS -> tasksUiId;
+            case REWARDS -> rewardsUiId;
+            case SETTLEMENT -> settlementUiId;
+        };
     }
 }

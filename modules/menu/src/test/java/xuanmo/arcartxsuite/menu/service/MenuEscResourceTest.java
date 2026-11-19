@@ -10,6 +10,7 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static xuanmo.arcartxsuite.menu.service.MenuRepeatGridAssertions.*;
 
 class MenuEscResourceTest {
 
@@ -41,6 +42,11 @@ class MenuEscResourceTest {
         assertEquals("var.viewH", yaml.getString(PANEL + ".attribute.height"));
         assertEquals(820, yaml.getInt(PANEL + ".attribute.width"));
         assertTrue(yaml.getString(PANEL + ".attribute.x").contains("var.anim.get()"));
+        assertTrue(yaml.getString("ui.action.load").contains("var.displayTitle = '菜单'"));
+        for (String child : Set.of("分区饰线", "分区饰点")) {
+            assertTrue(yaml.getString(PANEL + ".children." + child + ".attribute.visible")
+                .startsWith("var.displayTitle != none"));
+        }
     }
 
     @Test
@@ -72,9 +78,10 @@ class MenuEscResourceTest {
         Map<String, ConfigurationSection> refs = new HashMap<>();
         visit(yaml.getConfigurationSection("controls"), "UI", refs);
         assertTrue(refs.keySet().containsAll(Set.of("button_rows", "footer_rows", "grid_slider")));
-        assertEquals("HGrid", refs.get("button_rows").getString("type"));
+        assertGrid(refs, "button_rows", "row", "buttonRows");
         assertEquals(4, refs.get("button_rows").getInt("attribute.column"));
-        assertEquals("VStack", refs.get("footer_rows").getString("type"));
+        assertGrid(refs, "footer_rows", "row", "footerRows");
+        assertEquals(1, refs.get("footer_rows").getInt("attribute.column"));
     }
 
     @Test
@@ -87,23 +94,15 @@ class MenuEscResourceTest {
     void writeActionsKeepTokensAndClientActionsStayLocal() throws Exception {
         Map<String, ConfigurationSection> refs = new HashMap<>();
         visit(load().getConfigurationSection("controls"), "UI", refs);
-        for (String name : Set.of("button_rows", "footer_rows")) {
-            ConfigurationSection children = refs.get(name).getConfigurationSection("children");
-            ConfigurationSection button = children.getConfigurationSection(children.getKeys(false).iterator().next());
-            assertEquals("Canvas", button.getString("type"));
-            assertTrue(button.getString("action.clickLeft").contains("var.actionToken, self.entry['id']"));
-            assertTrue(button.getString("action.clickLeft").contains("self.entry['enabled']"));
-            assertEquals("0.round()", button.getString("attribute.entryKey"));
-            assertNull(button.get("attribute.enable"));
-            ConfigurationSection icon = button.getConfigurationSection("children.图标");
-            assertEquals("Slot", icon.getString("type"));
-            assertTrue(icon.getString("attribute.seticon").contains("self.parent.entryKey"));
-            assertNull(button.get("children.字形"), "入口不得退化为名称首字");
-            assertNull(button.get("children.线绘图标"), "ESC 菜单应完全由 icon 驱动");
-            assertTrue(button.getString("action.clickLeft").contains("!var.closing"));
-            assertFalse(button.getString("action.enter").contains("Packet.send"));
-            assertFalse(button.getString("action.leave").contains("Packet.send"));
-            assertTrue(button.getString("action.enter").contains("preview"));
+        var button = assertGrid(refs, "button_rows", "row", "buttonRows");
+        var footer = assertGrid(refs, "footer_rows", "row", "footerRows");
+        assertButton(button, "click", "iconJsons");
+        assertButton(footer, "footer", "footerIconJsons");
+        for (ConfigurationSection template : new ConfigurationSection[] {button, footer}) {
+            assertNull(template.get("children.字形"), "入口不得退化为名称首字");
+            assertNull(template.get("children.线绘图标"), "ESC 菜单应完全由 icon 驱动");
+            assertTrue(template.getString("action.clickLeft").contains("!var.closing"));
+            assertTrue(template.getString("action.enter").contains("preview"));
         }
         String footerClick = refs.get("footer_rows").getString("children.页脚按钮.action.clickLeft");
         assertTrue(footerClick.contains("Game.options()"));
@@ -119,12 +118,10 @@ class MenuEscResourceTest {
             assertTrue(yaml.getString("ui.packetHandler." + handler).contains("self.actions['applyPacket']()"));
         }
         String apply = yaml.getString("ui.action.applyPacket");
-        assertTrue(apply.contains("if(目标按钮数 > 0)"));
-        assertTrue(apply.contains("if(目标页脚数 > 0)"));
-        assertTrue(apply.contains("val.button_rows.get(0)"));
-        assertTrue(apply.contains("var.按钮引用[i.round()] = mb"));
-        assertTrue(apply.contains("var.页脚引用[i.round()] = fb"));
-        assertTrue(apply.contains("mb['图标'].seticon()"));
+        assertIndexedRows(apply, "button_rows", "buttonCount");
+        assertIndexedRows(apply, "footer_rows", "footerCount");
+        assertIconRefresh(yaml, "button_rows", "buttonCount");
+        assertIconRefresh(yaml, "footer_rows", "footerCount");
         assertTrue(apply.contains("var.iconJsons[key] = entry['hasIcon'] ? entry['itemJson'] : var.air"));
         assertTrue(apply.contains("var.footerIconJsons[key] = entry['hasIcon'] ? entry['itemJson'] : var.air"));
         assertFalse(apply.contains("['菜单按钮'].copy"));
@@ -138,8 +135,14 @@ class MenuEscResourceTest {
         assertTrue(yaml.getString("ui.action.open").contains("Packet.send(var.packetId, 'esc_open')"));
         String closeMenu = yaml.getString("ui.action.closeMenu");
         assertTrue(closeMenu.contains("Camera.clearState()"));
-        assertTrue(closeMenu.contains("Camera.setThirdPerson(false)"));
-        assertTrue(closeMenu.contains("Screen.close()"));
+        assertTrue(closeMenu.contains("var.closeAt = Time.currentTime()"));
+        assertFalse(closeMenu.contains("async {"));
+        String tick = yaml.getString("ui.action.tick");
+        assertTrue(tick.contains("Time.currentTime() >= var.closeAt"));
+        assertTrue(tick.contains("Camera.setThirdPerson(false)"));
+        assertTrue(tick.contains("Screen.close()"));
+        assertTrue(yaml.getString("ui.action.open").contains("var.closeAt = none"));
+        assertTrue(yaml.getString("ui.action.close").contains("var.closeAt = none"));
         assertTrue(yaml.getString("ui.action.keyPress").contains("'ESCAPE'"));
         assertTrue(yaml.getString("ui.action.keyPress").contains("self.actions['closeMenu']()"));
         String close = yaml.getString("ui.action.close");
@@ -147,6 +150,36 @@ class MenuEscResourceTest {
         assertTrue(close.contains("Camera.clearState()"));
         assertTrue(yaml.getString(PANEL + ".children.侧栏.children.关闭按钮.action.clickLeft")
             .contains("var.menuUi.actions['closeMenu']()"));
+    }
+
+    @Test
+    void alternatePauseGridSplitsRowsAndRetainsFooterActions() throws Exception {
+        YamlConfiguration yaml = new YamlConfiguration();
+        try (var stream = getClass().getResourceAsStream("/arcartx/ui/menu_esc_grid.yml")) {
+            assertNotNull(stream);
+            yaml.load(new InputStreamReader(stream, StandardCharsets.UTF_8));
+        }
+        Map<String, ConfigurationSection> refs = new HashMap<>();
+        visit(yaml.getConfigurationSection("controls"), "UI", refs);
+        for (String side : Set.of("left", "right")) {
+            String grid = "grid_" + side;
+            String footer = "footer_" + side;
+            String count = side.equals("left") ? "左数" : "右数";
+            String footerCount = side.equals("left") ? "左页脚数" : "右页脚数";
+            assertButton(assertGrid(refs, grid, "row", "buttonRows"), "click", "iconJsons");
+            assertButton(assertGrid(refs, footer, "column", "footerRows"), "footer", "footerIconJsons");
+            assertIconRefresh(yaml, grid, count);
+            assertIconRefresh(yaml, footer, footerCount);
+            assertEquals(2, refs.get(grid).getInt("attribute.column"));
+        }
+        String apply = yaml.getString("ui.action.applyPacket");
+        assertTrue(apply.contains("i % 4 < 2"));
+        assertTrue(apply.contains("i % 2 == 0"));
+        assertTrue(apply.contains("if(var.buttonCount > 0)"));
+        assertTrue(apply.contains("if(var.footerCount > 0)"));
+        assertTrue(apply.contains("val.grid_slider.setDragYRatio(0)"));
+        assertTrue(yaml.getString("ui.action.open").contains("var.closeAt = none"));
+        assertTrue(yaml.getString("ui.action.tick").contains("Screen.close()"));
     }
 
     @Test
@@ -229,7 +262,7 @@ class MenuEscResourceTest {
                 assertNotNull(nested);
                 assertEquals(1, nested.getKeys(false).size());
                 String only = nested.getKeys(false).iterator().next();
-                assertTrue(Set.of("Canvas", "HStack", "VStack", "HGrid").contains(nested.getString(only + ".type")));
+                assertTrue(Set.of("Canvas", "HStack", "VStack", "HGrid", "RepeatGrid").contains(nested.getString(only + ".type")));
             }
             if (nested != null) {
                 if (node.contains("action.clickLeft")) {

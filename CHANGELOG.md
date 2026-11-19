@@ -48,9 +48,9 @@
 
 ### 版本与升级说明
 
-- 宿主、30 个模块目录（含仅本地使用的 Debug）、认证组件、公开 API 和代理组件统一使用发布版本 2.0.0。
-- 模块 API 标识升为 3.0。第三方模块需使用新的公开 API 重新编译并在模块清单声明 3.0。Minecraft API 标识与模块配置版本单独管理。
-- 随身背包的物品和容量沿用 Warehouse 的个人仓库。要保留原分类，将旧配置的 `extra-backpack.categories` 和 `ui` 复制到 Vanilla 的 `backpack.categories` 和 `backpack.ui`，再设置 `backpack.enabled: true`。新入口为 `/axs vanilla backpack`，公开能力为 `VanillaBackpackAccess`。
+- 宿主、28 个正式模块、Debug、认证组件、公开 API 和代理组件统一使用发布版本 2.0.0。
+- 模块清单声明 API 3.9。第三方模块使用对应的公开 API 构建。Minecraft API 标识与模块配置版本单独管理。
+- 随身背包的物品、容量和分类均沿用 Warehouse 的个人仓库。分类规则在 Warehouse 的 `categories` 中配置。通过 `backpack.enabled: true` 启用，玩家可使用 `/axs vanilla backpack` 打开，公开能力为 `VanillaBackpackAccess`。
 - 更新认证中心和游戏节点时，按随包示例补齐容量及续期队列字段。游戏内密码入口要求直连在线模式节点。
 - API、模块与宿主应配套更新；新认证属于架构重写，升级前核对认证部署方式和第三方接口接入。
 - 本条目是待发布版本记录，不代表构建、云端上传或游戏内验收已经完成。

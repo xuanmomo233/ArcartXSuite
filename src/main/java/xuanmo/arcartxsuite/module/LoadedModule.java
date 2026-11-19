@@ -18,6 +18,8 @@ final class LoadedModule {
     private final byte[] moduleSeed;
     private DefaultModuleContext context;
     private boolean enabled;
+    private java.util.concurrent.CompletableFuture<Boolean> enabling;
+    private java.util.concurrent.CompletableFuture<Boolean> reloading;
 
     LoadedModule(ModuleDescriptor descriptor, AXSModule instance, ClassLoader classLoader, File jarFile) {
         this.descriptor = descriptor;
@@ -86,6 +88,11 @@ final class LoadedModule {
     void setEnabled(boolean enabled) {
         this.enabled = enabled;
     }
+
+    java.util.concurrent.CompletableFuture<Boolean> reloading() { return reloading; }
+    void setReloading(java.util.concurrent.CompletableFuture<Boolean> reloading) { this.reloading = reloading; }
+    java.util.concurrent.CompletableFuture<Boolean> enabling() { return enabling; }
+    void setEnabling(java.util.concurrent.CompletableFuture<Boolean> enabling) { this.enabling = enabling; }
     void clearSensitiveMaterial() {
         wipe(jarBytes);
         wipe(moduleSeed);

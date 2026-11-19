@@ -112,33 +112,25 @@ public final class SubtitleService implements Listener {
         SubtitleGroupDefinition group = groups.get(groupId);
         if (group == null) return false;
 
-        // 取消旧播放任务（不发 close 包，新的 play 会直接覆盖客户端状态）
-        ActiveSubtitlePlayback old = activePlayers.remove(player.getUniqueId());
-        if (old != null) {
-            old.cancel();
-        }
-
         // 解析本组使用的 UI ID（组级覆盖全局）
         List<String> resolvedUiIds = resolveUiIds(group);
-
-        // 仅对尚未打开的 UI 调用 openUi（避免重复 openUi 触发 load action 重置动画状态）
-        if (packetBridge.isAvailable()) {
-            Set<String> opened = playerOpenedUiIds.computeIfAbsent(
-                player.getUniqueId(), k -> ConcurrentHashMap.newKeySet());
-            List<String> toOpen = new ArrayList<>();
-            for (String uiId : resolvedUiIds) {
-                if (opened.add(uiId)) {
-                    toOpen.add(uiId);
-                }
-            }
-            if (!toOpen.isEmpty()) {
-                packetBridge.openUiAll(player, toOpen);
+        if (!packetBridge.isAvailable()) return false;
+        Set<String> opened = playerOpenedUiIds.computeIfAbsent(
+            player.getUniqueId(), ignored -> ConcurrentHashMap.newKeySet());
+        List<String> readyUiIds = new ArrayList<>();
+        for (String uiId : resolvedUiIds) {
+            if ((opened.contains(uiId) && packetBridge.isUiOpen(player, uiId)) || packetBridge.openUi(player, uiId)) {
+                opened.add(uiId);
+                readyUiIds.add(uiId);
+            } else {
+                opened.remove(uiId);
             }
         }
+        if (readyUiIds.isEmpty()) return false;
 
-        // 开始新播放
-        ActiveSubtitlePlayback playback = new ActiveSubtitlePlayback(player, group, resolvedUiIds);
-        activePlayers.put(player.getUniqueId(), playback);
+        ActiveSubtitlePlayback playback = new ActiveSubtitlePlayback(player, group, List.copyOf(readyUiIds));
+        ActiveSubtitlePlayback old = activePlayers.put(player.getUniqueId(), playback);
+        if (old != null) old.cancel();
         playback.start();
         return true;
     }

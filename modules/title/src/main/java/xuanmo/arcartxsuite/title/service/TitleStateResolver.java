@@ -22,6 +22,8 @@ import xuanmo.arcartxsuite.title.model.ResolvedTitleState;
  * 属于 title 模块服务层。
  */
 public final class TitleStateResolver {
+    static final ResolvedTitleState EMPTY = new ResolvedTitleState(Map.of(), Map.of(), Map.of(), Map.of(), Map.of(),
+        Map.of(), Map.of(), List.of(), List.of(), List.of(), 0, 0, Map.of(), Map.of(), Map.of(), List.of(), null);
 
     private TitleStateResolver() {
     }
@@ -41,20 +43,21 @@ public final class TitleStateResolver {
         Instant now,
         Set<String> accessibleGroupIds
     ) {
-        PlayerTitleState sanitized = state == null ? null : state.sanitize(now);
-        if (sanitized == null) {
-            return new ResolvedTitleState(Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), List.of(), List.of(), List.of(), 0, 0, Map.of(), Map.of(), Map.of(), List.of(), null);
-        }
-
+        if (state == null) return EMPTY;
+        PlayerTitleState sanitized = state.sanitize(now);
         TitleDefinition totalDisplayTitle = resolveTotalDisplayTitle(sanitized, configuration, accessibleGroupIds);
 
         LinkedHashMap<String, Double> collectionAttributes = new LinkedHashMap<>();
         List<String> collectionAttributeLines = new ArrayList<>();
+        int ownedCount = 0;
+        int hiddenCount = 0;
         for (PlayerOwnedTitle ownedTitle : sanitized.ownedTitles().values()) {
             TitleDefinition definition = configuration.title(ownedTitle.titleId());
             if (definition == null || !isAccessible(configuration, accessibleGroupIds, definition.groupId())) {
                 continue;
             }
+            ownedCount++;
+            if (ownedTitle.hidden()) hiddenCount++;
             mergeAttributes(collectionAttributes, definition.collectionAttributes());
             mergeAttributeLines(collectionAttributeLines, definition.collectionAttributeLines());
         }
@@ -127,8 +130,8 @@ public final class TitleStateResolver {
             TitleTextFormats.toSourceLines(displayAttributes, displayAttributeLines),
             TitleTextFormats.toSourceLines(collectionAttributes, collectionAttributeLines),
             TitleTextFormats.toSourceLines(totalAttributes, totalAttributeLines),
-            accessibleOwnedCount(sanitized, configuration, accessibleGroupIds),
-            accessibleHiddenCount(sanitized, configuration, accessibleGroupIds),
+            ownedCount,
+            hiddenCount,
             setCompletionCounts,
             setActiveMap,
             setBonusAttributes,
@@ -174,39 +177,6 @@ public final class TitleStateResolver {
         return configuration.group(groupId) == null
             || accessibleGroupIds == null
             || accessibleGroupIds.contains(groupId);
-    }
-
-    private static int accessibleOwnedCount(
-        PlayerTitleState state,
-        TitleModuleConfiguration configuration,
-        Set<String> accessibleGroupIds
-    ) {
-        int count = 0;
-        for (PlayerOwnedTitle ownedTitle : state.ownedTitles().values()) {
-            TitleDefinition definition = configuration.title(ownedTitle.titleId());
-            if (definition != null
-                && isAccessible(configuration, accessibleGroupIds, definition.groupId())) {
-                count++;
-            }
-        }
-        return count;
-    }
-
-    private static int accessibleHiddenCount(
-        PlayerTitleState state,
-        TitleModuleConfiguration configuration,
-        Set<String> accessibleGroupIds
-    ) {
-        int count = 0;
-        for (PlayerOwnedTitle ownedTitle : state.ownedTitles().values()) {
-            TitleDefinition definition = configuration.title(ownedTitle.titleId());
-            if (definition != null
-                && ownedTitle.hidden()
-                && isAccessible(configuration, accessibleGroupIds, definition.groupId())) {
-                count++;
-            }
-        }
-        return count;
     }
 
     private static void mergeAttributes(Map<String, Double> target, Map<String, Double> source) {

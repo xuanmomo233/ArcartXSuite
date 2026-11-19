@@ -1,26 +1,30 @@
 package xuanmo.arcartxsuite.combateffect.combo;
 
-import xuanmo.arcartxsuite.combateffect.chronos.ChronosHook;
-import xuanmo.arcartxsuite.combateffect.chronos.ChronosHookFactory;
-
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.WeakHashMap;
+import java.util.concurrent.TimeUnit;
+import java.util.function.LongSupplier;
 import java.util.logging.Logger;
 import org.bukkit.Bukkit;
-import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
-import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
-import xuanmo.arcartxsuite.api.bridge.ClientBridgeAPI;
+import xuanmo.arcartxsuite.api.bridge.ChronosAccess;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
-import xuanmo.arcartxsuite.api.combat.CombatEventSupport;
+import xuanmo.arcartxsuite.api.event.CombatDamageEvent;
+import xuanmo.arcartxsuite.combateffect.chronos.ChronosHook;
 import xuanmo.arcartxsuite.combateffect.combo.ComboTrackerConfiguration.ComboSource;
 import xuanmo.arcartxsuite.combateffect.packet.config.CombatEffectPacketConfiguration;
 import xuanmo.arcartxsuite.combateffect.packet.config.PacketDefinition;
@@ -33,27 +37,32 @@ import xuanmo.arcartxsuite.combateffect.packet.config.PacketTrigger;
  * 支持两种连击来源：
  * <ul>
  *   <li>Chronos: 监听 PlayerEnterStateEvent，当状态组匹配时累加 combo</li>
- *   <li>Bukkit: 监听 EntityDamageByEntityEvent，基于时间窗口累加 combo</li>
+ *   <li>有效伤害: 监听宿主结算的 CombatDamageEvent，基于时间窗口累加 combo</li>
  * </ul>
  * 当 combo 达到 PacketDefinition 中定义的阈值时，触发 COMBO 类型包。
  */
 public final class ComboTrackerService implements Listener {
 
+    public static final String HUD_ID = "AXS:combo_effect";
+    public static final String HUD_SYNC_HANDLER = "combo_sync";
+
     private final JavaPlugin plugin;
     private final ComboTrackerConfiguration config;
-    private final CombatEffectPacketConfiguration packetConfig;
+    private final List<PacketDefinition> comboPackets;
     private final PacketBridgeAPI packetBridge;
-    private final ClientBridgeAPI clientBridge;
     private final Logger logger;
+    private final long timeoutNanos;
+    private final boolean pushHud;
+    private final LongSupplier nanoTime;
 
-    private final ConcurrentHashMap<UUID, ComboState> comboStates = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<UUID, BukkitTask> resetTasks = new ConcurrentHashMap<>();
+    // Combat events and the flush task run on the server thread. A hit puts the player at the end.
+    private final Map<UUID, ComboState> comboStates = new LinkedHashMap<>();
+    private final Map<UUID, Player> pendingVariables = new HashMap<>();
+    private final Set<CombatDamageEvent.GunHit> countedGunHits = Collections.newSetFromMap(new WeakHashMap<>());
+    private BukkitTask updateTask;
 
     private Listener quitCleanupListener;
 
-    // Chronos（通过 ChronosHook 隔离，Chronos 未装时 chronosHook 为 null）
-    private boolean chronosHooked;
-    private ChronosHook chronosHook;
     private Listener chronosListener;
 
     public ComboTrackerService(
@@ -61,34 +70,38 @@ public final class ComboTrackerService implements Listener {
         ComboTrackerConfiguration config,
         CombatEffectPacketConfiguration packetConfig,
         PacketBridgeAPI packetBridge,
-        ClientBridgeAPI clientBridge,
         Logger logger
     ) {
-        this.plugin = plugin;
-        this.config = config;
-        this.packetConfig = packetConfig;
-        this.packetBridge = packetBridge;
-        this.clientBridge = clientBridge;
-        this.logger = logger;
+        this(plugin, config, packetConfig, packetBridge, logger, System::nanoTime);
     }
 
-    public void start() {
+    ComboTrackerService(JavaPlugin plugin, ComboTrackerConfiguration config, CombatEffectPacketConfiguration packetConfig,
+                        PacketBridgeAPI packetBridge, Logger logger, LongSupplier nanoTime) {
+        this.plugin = plugin;
+        this.config = config;
+        this.comboPackets = packetConfig.enabledPackets(PacketTrigger.COMBO);
+        this.packetBridge = packetBridge;
+        this.logger = logger;
+        this.timeoutNanos = TimeUnit.MILLISECONDS.toNanos(config.timeoutMs());
+        this.pushHud = config.syncVariable();
+        this.nanoTime = nanoTime;
+    }
+
+    public void start(ChronosAccess chronos, boolean symphonyDamageAvailable) {
         if (!config.enabled()) {
             return;
         }
 
-        boolean useChronos = config.source() == ComboSource.CHRONOS || config.source() == ComboSource.AUTO;
-        boolean useBukkit = config.source() == ComboSource.BUKKIT || config.source() == ComboSource.AUTO;
+        boolean useChronos = config.source() == ComboSource.CHRONOS
+            || config.source() == ComboSource.AUTO && !symphonyDamageAvailable;
+        boolean useDamage = config.source() != ComboSource.CHRONOS;
 
-        if (useChronos) {
-            chronosHooked = initChronos();
-        }
+        boolean chronosHooked = useChronos && chronos != null && initChronos(chronos);
 
-        // 如果 Chronos 不可用或 source=bukkit，使用 Bukkit 攻击事件
-        if (!chronosHooked && useBukkit) {
+        if (!chronosHooked && useDamage) {
             Bukkit.getPluginManager().registerEvents(this, plugin);
             if (config.debug()) {
-                logger.info("ComboTracker 使用 Bukkit 攻击事件作为 combo 来源");
+                logger.info("ComboTracker 使用有效伤害作为 combo 来源");
             }
         } else if (chronosHooked) {
             quitCleanupListener = new QuitCleanupListener();
@@ -109,31 +122,33 @@ public final class ComboTrackerService implements Listener {
             HandlerList.unregisterAll(chronosListener);
             chronosListener = null;
         }
-        chronosHooked = false;
-        for (BukkitTask task : resetTasks.values()) {
-            task.cancel();
+        if (updateTask != null) {
+            updateTask.cancel();
+            updateTask = null;
         }
-        resetTasks.clear();
+        for (UUID playerId : comboStates.keySet()) {
+            Player player = Bukkit.getPlayer(playerId);
+            if (player != null && player.isOnline()) {
+                syncCount(player, 0);
+            }
+        }
+        pendingVariables.clear();
         comboStates.clear();
+        countedGunHits.clear();
     }
 
-    public int getComboCount(Player player) {
+    int getComboCount(Player player) {
         ComboState state = comboStates.get(player.getUniqueId());
-        return state != null ? state.count : 0;
+        return state != null && nanoTime.getAsLong() - state.lastHitTime < timeoutNanos ? state.count : 0;
     }
 
-    // ========== Bukkit 攻击事件监听 ==========
-
-    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
-    public void onAttack(EntityDamageByEntityEvent event) {
-        if (!(event.getEntity() instanceof LivingEntity target)) {
-            return;
-        }
-        Player attacker = CombatEventSupport.resolvePlayerAttacker(event);
-        if (attacker == null) {
-            return;
-        }
-        incrementCombo(attacker, target.getUniqueId());
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onCombatDamage(CombatDamageEvent event) {
+        Player attacker = event.getAttacker();
+        if (!attacker.isOnline()) return;
+        var gun = event.getGunHit();
+        if (gun != null && !countedGunHits.add(gun)) return;
+        incrementCombo(attacker, config.perTarget() ? event.getTarget().getUniqueId() : null);
     }
 
     @EventHandler
@@ -149,84 +164,115 @@ public final class ComboTrackerService implements Listener {
 
     private void incrementCombo(Player player, UUID targetId) {
         UUID playerId = player.getUniqueId();
-        long now = System.currentTimeMillis();
+        long now = nanoTime.getAsLong();
+        ComboState state = comboStates.remove(playerId);
+        int count = 1;
+        if (state == null) {
+            state = new ComboState();
+        } else if (now - state.lastHitTime < timeoutNanos
+                && (!config.perTarget() || targetId == null || state.targetId == null || targetId.equals(state.targetId))) {
+            count = state.count + 1;
+            if (targetId == null) targetId = state.targetId;
+        }
+        state.lastHitTime = now;
+        state.count = count;
+        state.targetId = targetId;
+        comboStates.put(playerId, state);
 
-        ComboState state = comboStates.compute(playerId, (uuid, existing) -> {
-            if (existing == null || now - existing.lastHitTime > config.timeoutMs()) {
-                return new ComboState(1, now, targetId);
+        if (pushHud) {
+            if (count == 1) {
+                pendingVariables.remove(playerId);
+                syncCount(player, 1);
+            } else {
+                pendingVariables.put(playerId, player);
             }
-            // per-target 模式: 切换目标则重置 combo
-            if (config.perTarget() && targetId != null && existing.targetId != null
-                && !targetId.equals(existing.targetId)) {
-                return new ComboState(1, now, targetId);
-            }
-            return new ComboState(existing.count + 1, now, targetId != null ? targetId : existing.targetId);
-        });
-
-        // 重置超时任务
-        scheduleReset(playerId);
-
-        // 服务器变量同步
-        syncVariable(player, state.count);
+        }
+        if (updateTask == null) {
+            updateTask = Bukkit.getScheduler().runTaskTimer(plugin, this::flushVariables, 1L, 1L);
+        }
 
         // 检查 combo 触发
-        dispatchComboPackets(player, state.count);
+        dispatchComboPackets(player, count);
 
         if (config.debug()) {
-            logger.info("ComboTracker | " + player.getName() + " combo=" + state.count
+            logger.info("ComboTracker | " + player.getName() + " combo=" + count
                 + (config.perTarget() && targetId != null ? " target=" + targetId : ""));
         }
     }
 
-    private void scheduleReset(UUID playerId) {
-        BukkitTask oldTask = resetTasks.remove(playerId);
-        if (oldTask != null) {
-            oldTask.cancel();
+    private void flushVariables() {
+        if (updateTask == null) return;
+        long now = nanoTime.getAsLong();
+        var states = comboStates.entrySet().iterator();
+        List<ExpiredCombo> expired = null;
+        while (states.hasNext()) {
+            var entry = states.next();
+            ComboState state = entry.getValue();
+            if (now - state.lastHitTime < timeoutNanos) break;
+            UUID playerId = entry.getKey();
+            states.remove();
+            pendingVariables.remove(playerId);
+            if (!pushHud && !config.debug()) continue;
+            if (expired == null) expired = new ArrayList<>();
+            expired.add(new ExpiredCombo(playerId, state.count));
         }
-        long timeoutTicks = Math.max(1, config.timeoutMs() / 50);
-        BukkitTask task = Bukkit.getScheduler().runTaskLater(plugin, () -> {
-            ComboState removed = comboStates.remove(playerId);
-            resetTasks.remove(playerId);
-            // 重置时同步变量为 0
-            Player player = Bukkit.getPlayer(playerId);
-            if (player != null && player.isOnline()) {
-                syncVariable(player, 0);
+        if (expired != null) {
+            for (var entry : expired) {
+                Player player = Bukkit.getPlayer(entry.playerId());
+                if (player != null && player.isOnline()) syncCount(player, 0);
+                if (config.debug()) {
+                    String name = player != null ? player.getName() : entry.playerId().toString();
+                    logger.info("ComboTracker | " + name + " combo 超时重置 (was " + entry.count() + ")");
+                }
             }
-            if (config.debug() && removed != null) {
-                String name = player != null ? player.getName() : playerId.toString();
-                logger.info("ComboTracker | " + name + " combo 超时重置 (was " + removed.count + ")");
+        }
+        pendingVariables.forEach((id, player) -> {
+            ComboState state = comboStates.get(id);
+            if (state != null && player.isOnline()) {
+                syncCount(player, state.count);
             }
-        }, timeoutTicks);
-        resetTasks.put(playerId, task);
+        });
+        pendingVariables.clear();
+        if (comboStates.isEmpty()) {
+            updateTask.cancel();
+            updateTask = null;
+        }
     }
 
-    private void syncVariable(Player player, int comboCount) {
-        if (!config.syncVariable() || clientBridge == null || !clientBridge.isAvailable()) {
-            return;
+    private void syncCount(Player player, int comboCount) {
+        if (pushHud && packetBridge != null && packetBridge.isAvailable()) {
+            packetBridge.sendPacket(player, HUD_ID, HUD_SYNC_HANDLER, comboCount);
         }
-        clientBridge.sendServerVariable(player, config.variableName(), comboCount);
     }
 
     private void dispatchComboPackets(Player player, int comboCount) {
-        if (packetBridge == null || !packetBridge.isAvailable()) {
+        if (comboPackets.isEmpty() || packetBridge == null || !packetBridge.isAvailable()) {
             return;
         }
 
-        for (PacketDefinition definition : packetConfig.packetDefinitions()) {
-            if (!definition.enabled() || !definition.matchesCombo(comboCount)) {
+        for (PacketDefinition definition : comboPackets) {
+            if (!definition.matchesCombo(comboCount)) {
                 continue;
             }
+            Object renderedPayload = renderComboPayload(definition.packTemplate(), player, comboCount);
             for (PacketRecipient recipientType : definition.recipients()) {
                 // combo 场景: attacker=player, target=player (自身)
                 Player recipient = recipientType.resolve(player, player);
                 if (recipient == null || !recipient.isOnline()) {
                     continue;
                 }
-                // 构建 combo payload，替换 {combo_count} 变量
-                Map<String, Object> renderedPayload = renderComboPayload(definition.packTemplate(), player, comboCount);
+                boolean carriesHudCount = pushHud && recipient.equals(player)
+                    && HUD_ID.equals(definition.uiId())
+                    && ("combo".equals(definition.packetHandler()) || "combo_milestone".equals(definition.packetHandler()))
+                    && renderedPayload instanceof Map<?, ?> payload
+                    && Integer.toString(comboCount).equals(String.valueOf(payload.get("combo_count")));
+                if (!carriesHudCount && pendingVariables.remove(player.getUniqueId()) != null) {
+                    syncCount(player, comboCount);
+                }
                 boolean success = packetBridge.sendPacket(
                     recipient, definition.uiId(), definition.packetHandler(), renderedPayload
                 );
+                if (success && carriesHudCount) pendingVariables.remove(player.getUniqueId());
                 if (config.debug()) {
                     logger.info("ComboTracker 发包[" + definition.id() + "] -> " + recipient.getName()
                         + " | combo=" + comboCount
@@ -256,26 +302,25 @@ public final class ComboTrackerService implements Listener {
 
     private void cleanupPlayer(UUID playerId) {
         comboStates.remove(playerId);
-        BukkitTask task = resetTasks.remove(playerId);
-        if (task != null) {
-            task.cancel();
-        }
+        pendingVariables.remove(playerId);
     }
 
     // ========== Chronos 集成（通过 ChronosHook 隔离）==========
 
-    private boolean initChronos() {
-        // 通过工厂延迟加载 ChronosHook，Chronos 未装时返回 null（不触发 ChronosAPI 类加载）
-        chronosHook = ChronosHookFactory.tryCreate(plugin, logger, config.debug());
-        if (chronosHook == null) {
+    private boolean initChronos(ChronosAccess chronos) {
+        Listener listener = new Listener() {};
+        try {
+            ChronosHook.listen(plugin, chronos, listener, "PlayerEnterStateEvent", "getStateId", (player, state) -> {
+                String group = chronos.stateGroupId(player);
+                if (group != null && config.chronosGroups().contains(group)) incrementCombo(player);
+            });
+            chronosListener = listener;
+            return true;
+        } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
+            HandlerList.unregisterAll(listener);
+            logger.warning("ComboTracker 无法注册 Chronos 事件: " + e);
             return false;
         }
-        // 注册 combo 监听：状态组匹配时累加 combo
-        chronosListener = chronosHook.registerComboListener(
-            config.chronosGroups(),
-            player -> incrementCombo(player)
-        );
-        return true;
     }
 
     // ========== 内部类 ==========
@@ -287,5 +332,10 @@ public final class ComboTrackerService implements Listener {
         }
     }
 
-    private record ComboState(int count, long lastHitTime, UUID targetId) {}
+    private static final class ComboState {
+        int count;
+        long lastHitTime;
+        UUID targetId;
+    }
+    private record ExpiredCombo(UUID playerId, int count) {}
 }

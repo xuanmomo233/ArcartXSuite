@@ -16,6 +16,8 @@ import java.util.Set;
 import java.util.LinkedHashMap;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.function.Supplier;
 import java.util.logging.Logger;
 import org.bukkit.Bukkit;
@@ -149,6 +151,9 @@ public final class AbyssService {
     private final ScriptConditionEvaluator scriptConditionEvaluator;
     private final PlaceholderResolverAPI placeholderResolver;
     private final StorageManager storageManager;
+    private xuanmo.arcartxsuite.api.storage.ModuleStorage storageScope;
+    private final CompletableFuture<Void> stopped = new CompletableFuture<>();
+    private final List<CompletableFuture<Void>> shutdownReturns = new ArrayList<>();
     private final SchedulerAPI scheduler;
     private ChunkPreloader chunkPreloader;
     private InstanceTicker instanceTicker;
@@ -221,6 +226,7 @@ public final class AbyssService {
     private final Map<UUID,SettlementSession> settlements=new ConcurrentHashMap<>();
     private final Set<UUID> cleanupInProgress=ConcurrentHashMap.newKeySet();
     private final Set<UUID> exitingPlayers=ConcurrentHashMap.newKeySet();
+    private final Map<UUID, Object> spawnExitPending = new ConcurrentHashMap<>();
     private final Set<UUID> transferringInstances=ConcurrentHashMap.newKeySet();
     private static final class SettlementSession {
         final SettlementConfig.Policy policy;final long deadline;final boolean immediate;
@@ -275,18 +281,22 @@ public final class AbyssService {
 
     // ═══ 启动/停止 ═══
 
-    public void start(File dataFolder) throws Exception {
+    public CompletionStage<Void> prepareStorage(File dataFolder) throws Exception {
         this.moduleDataFolder = dataFolder;
-        // 1) 数据层（共享/自建双模式：resolveModuleDataSource 统一解析）
+        // 1) 数据层：连接池作用域随本次模块实例退役。
         AbyssModuleConfiguration.StorageSection storage = config.storage();
         xuanmo.arcartxsuite.api.storage.StorageDescriptor desc = storage.hasOverride()
             ? storage.toDescriptor()
             : storageManager.getDescriptor().withTablePrefix(storage.tablePrefix());
-        javax.sql.DataSource ds = storageManager.resolveModuleDataSource("abyss",
+        storageScope = storageManager.openModuleStorage("abyss",
             storage.sqliteFileName(), dataFolder,
             storage.hasOverride() ? storage.toDescriptor() : null);
-        repository = new JdbcAbyssRepository(ds, desc, dataFolder, logger);
-        repository.initialize();
+        repository = new JdbcAbyssRepository(storageScope.dataSource(), desc, dataFolder, logger);
+        return storageScope.initialize(repository::initialize);
+    }
+
+    public void start() throws Exception {
+        File dataFolder = moduleDataFolder;
         playerData = new PlayerDataManager(repository, logger, config.stamina().max());
         runLedger = new RunLedger(this, repository, playerData);
         runOperations = new RunOperations(this, runLedger);
@@ -494,13 +504,29 @@ public final class AbyssService {
     private ScheduledTask proximityTask;
 
     public void shutdown() {
+        if (stopping) return;
+        stopping = true;
+        try {
+            stopGameplay();
+        } finally {
+            try {
+                if (worldPool != null) worldPool.shutdown();
+            } finally {
+                finishShutdown();
+            }
+        }
+    }
+
+    private void stopGameplay() {
+        if (worldPool != null) worldPool.stopAdmission();
         if (nativeRuns != null) nativeRuns.shutdown();
         if (chunkPreloader != null) chunkPreloader.close();
         runIntegration.shutdown();
         admission.shutdown();
         externalParties.clear();
         entryCosts.clear();
-        stopping=true;
+        spawnExitPending.clear();
+        recoveringPlayers.clear();
         if(uiFacade instanceof AbyssUiService ui)ui.stopQueries();
         for(ScheduledTask task:serviceTasks)task.cancel();
         serviceTasks.clear();partyRefreshQueued.clear();
@@ -540,19 +566,31 @@ public final class AbyssService {
         if (entranceMarkers != null) entranceMarkers.shutdown();
         if (partyManager != null) partyManager.shutdown();
         if (links != null) links.close();
-        if (worldPool != null) {
-            worldPool.releasePreload();
-            worldPool.shutdown();
-        }
-        if (playerData != null) playerData.shutdown();
-        if (repository != null) repository.shutdown();
         if (crossDungeon != null) crossDungeon.stop();
-        try {
-            storageManager.closeModuleDataSource("abyss");
-        } catch (Throwable ignored) { }
+    }
+
+    private void finishShutdown() {
         instances = null;
         started = false;
+        if (playerData != null) playerData.shutdown();
+        CompletionStage<Void> database = playerData == null ? CompletableFuture.completedFuture(null) : playerData.stopped();
+        if (repository != null) database = database.thenRun(repository::shutdown);
+        var scope = storageScope;
+        storageScope = null;
+        if (scope != null) {
+            scope.retireAfter(database);
+            database = CompletableFuture.allOf(database.toCompletableFuture(), scope.retired().toCompletableFuture());
+        }
+        var worlds = worldPool == null ? CompletableFuture.<Void>completedFuture(null) : worldPool.stopped().toCompletableFuture();
+        var returns = CompletableFuture.allOf(shutdownReturns.toArray(CompletableFuture<?>[]::new));
+        shutdownReturns.clear();
+        CompletableFuture.allOf(database.toCompletableFuture(), worlds, returns).whenComplete((ignored, failure) -> {
+            if (failure == null) stopped.complete(null);
+            else stopped.completeExceptionally(failure);
+        });
     }
+
+    public CompletionStage<Void> stopped() { return stopped.copy(); }
 
     /** 启动时把 jar 内示例地牢的缺失文件导出到 data/abyss/abysses/example（逐文件判定，不覆盖已有）。 */
     private void exportExampleDungeon(File dataFolder) {
@@ -1029,9 +1067,9 @@ public final class AbyssService {
         broadcast(instance, msg("dungeon.preparing"));
         // 异步申请世界
         worldPool.acquireWorld(template, instance.getInstanceId())
-            .thenAccept(world -> runOnMain(() -> onWorldReady(instance, world, players)))
+            .thenAccept(world -> runWorldCallback(() -> onWorldReady(instance, world, players)))
             .exceptionally(t -> {
-                runOnMain(() -> {
+                runWorldCallback(() -> {
                     broadcast(instance, msg("error.world-load-failed"));
                     logger.warning("[abyss] 世界加载失败 实例 " + instance.getInstanceId()
                         + ": " + t.getMessage());
@@ -1116,9 +1154,9 @@ public final class AbyssService {
         instances.playerEnterInstance(player, instance);
         player.sendMessage(msg("design.preparing"));
         worldPool.acquireDesignWorld(template, instance.getInstanceId())
-            .thenAccept(world -> runOnMain(() -> onDesignWorldReady(instance, world, player)))
+            .thenAccept(world -> runWorldCallback(() -> onDesignWorldReady(instance, world, player)))
             .exceptionally(t -> {
-                runOnMain(() -> {
+                runWorldCallback(() -> {
                     player.sendMessage(msg("error.world-load-failed"));
                     logger.warning("[abyss] 设计实例世界加载失败: " + t.getMessage());
                     destroyInstance(instance, true);
@@ -1230,6 +1268,10 @@ public final class AbyssService {
     }
 
     public void saveDesign(Player player, boolean withWorld) {
+        if (!player.hasPermission("arcartxsuite.abyss.admin")) {
+            player.sendMessage(msg("error.no-permission"));
+            return;
+        }
         var session = designManager != null ? designManager.session(player) : null;
         if (session == null) { player.sendMessage(msg("design.no-session")); return; }
         if (session.saving()) { player.sendMessage("§e正在保存，请稍候。"); return; }
@@ -1264,7 +1306,7 @@ public final class AbyssService {
                 worldPool.runIo(instance.getInstanceId(), () -> {
                     try { xuanmo.arcartxsuite.abyss.design.DesignWriter.commit(writes,baseline,template.dir().toPath()); }
                     catch (Exception ex) { throw new java.util.concurrent.CompletionException(ex); }
-                }).whenComplete((v, error) -> runOnMain(() -> {
+                }).whenComplete((v, error) -> runWorldCallback(() -> {
                     if (error != null) designSaveFailed(player, session, error);
                     else {
                         session.acknowledgeRegion(capture.bounds());
@@ -1304,7 +1346,7 @@ public final class AbyssService {
             try { xuanmo.arcartxsuite.abyss.world.WorldCopyUtil.publishWorldFolder(source,target,
                 ()->xuanmo.arcartxsuite.abyss.design.DesignWriter.commit(configWrites,configBaseline,template.dir().toPath())); }
             catch (Exception ex) { throw new java.util.concurrent.CompletionException(ex); }
-        }).whenComplete((v, error) -> runOnMain(() -> {
+        }).whenComplete((v, error) -> runWorldCallback(() -> {
             if (instances.getInstance(instance.getInstanceId()) == instance) {
                 try {
                     World resumed = worldPool.resumeAfterSnapshot(instance.getInstanceId(), template);
@@ -1474,7 +1516,7 @@ public final class AbyssService {
 
         // 先异步预载副本包围盒内全部区块，再跑 world-init——否则 fillblocks 逐块
         // setType 会在主线程同步触发未生成区块的 initialize_light（看门狗级卡顿）
-        preloadInstanceChunks(instance, world).whenComplete((v, err) -> runOnMain(() -> {
+        preloadInstanceChunks(instance, world).whenComplete((v, err) -> runWorldCallback(() -> {
             if (err != null) {
                 logger.warning("[abyss] 区块预载未完成，取消入场: " + err.getMessage());
                 abortAdmission(instance, "CHUNK_PREPARATION_FAILED");
@@ -1881,9 +1923,7 @@ public final class AbyssService {
         if (stageManager != null) stageManager.start(instance);
         // 副本 HUD + 引导目标补推
         if (uiFacade instanceof AbyssUiService ui) {
-            for (Player p : instance.getPlayers()) {
-                try { ui.openHud(p, instance); } catch (Throwable ignored) { }
-            }
+            try { ui.openHud(instance, instance.getPlayers()); } catch (RuntimeException | LinkageError ignored) { }
         }
         if (guideService != null) {
             for (Player p : instance.getPlayers()) {
@@ -2038,19 +2078,26 @@ public final class AbyssService {
             instance.getVariables().put("settlement_group_done",progress[1]);
             mobGroups.cleanup(instance);
         }
-        instance.getVariables().put("settlement_dead_players",instance.getPlayers().stream().filter(instance::isPlayerCurrentlyDead)
+        var players = instance.getPlayers();
+        instance.getVariables().put("settlement_dead_players",players.stream().filter(instance::isPlayerCurrentlyDead)
             .map(Player::getUniqueId).collect(java.util.stream.Collectors.toUnmodifiableSet()));
-        for(Player player:instance.getPlayers()) {
+        UiServiceFacade settlementUi = uiFacade;
+        boolean autoShow = settlementUi != null && session.policy.showStats() && stats.autoShow();
+        for(Player player:players) {
             if(session.policy.revivePlayers() && instance.isPlayerCurrentlyDead(player))revivePlayer(instance,player);
             Location safe=player.getLocation();
             if(safe!=null)session.safeLocations.put(player.getUniqueId(),safe.clone());
-            if(uiFacade instanceof AbyssUiService ui) {
-                Runnable show=ui.captureSettlementStats(player,instance);
-                if(session.policy.showStats() && stats.autoShow())session.presentations.put(player.getUniqueId(),show);
-                ui.closeInstanceViews(player);ui.pushHudUpdate(player,instance);
-            } else if(uiFacade!=null && session.policy.showStats() && stats.autoShow())
-                session.presentations.put(player.getUniqueId(),()->uiFacade.openStats(player,instance));
+            if (autoShow && !(settlementUi instanceof AbyssUiService))
+                session.presentations.put(player.getUniqueId(), () -> settlementUi.openStats(player, instance));
             player.sendMessage("§a"+settlementHint(instance));
+        }
+        if (settlementUi instanceof AbyssUiService ui) {
+            try {
+                session.presentations.putAll(ui.prepareSettlementViews(instance, players, autoShow));
+                ui.pushHudUpdate(instance, players);
+            } catch (RuntimeException | LinkageError failure) {
+                logger.warning("[abyss] 结算界面准备失败 " + instance.getInstanceId() + ": " + failure.getMessage());
+            }
         }
         if(!session.immediate)scheduleOnce(instance,()->session.presentations.values().forEach(Runnable::run),3L);
         session.timer=scheduler.scheduleEverySeconds(plugin,()->settlementTick(instance),1,1);
@@ -2063,12 +2110,20 @@ public final class AbyssService {
         if(session==null)return;
         if(instance.getOnlinePlayerCount()==0){finishAndCleanup(instance);return;}
         long now=settlementClock.getAsLong(),remaining=session.policy.remaining(now,session.deadline);
-        for(Player player:instance.getPlayers()) {
+        var players = instance.getPlayers();
+        for(Player player:players) {
             if(session.policy.protectPlayers() && instance.getWorld()!=null && player.getLocation().getY()<instance.getWorld().getMinHeight()+2)
                 rescueSettlementPlayer(instance,player);
-            if(uiFacade instanceof AbyssUiService ui){ui.pushSettlementUpdate(player,instance);ui.pushHudUpdate(player,instance);}
+            if (uiFacade instanceof AbyssUiService ui) {
+                try { ui.pushSettlementUpdate(player, instance); }
+                catch (RuntimeException | LinkageError failure) { logger.fine("结算界面更新失败: " + failure.getMessage()); }
+            }
             if(remaining>0 && remaining!=session.lastAnnounced && (remaining==10 || remaining<=5 || remaining%30==0))
                 player.sendMessage("§e副本将在 "+remaining+" 秒后离开；可先拾取掉落物，或使用 /abyss leave。");
+        }
+        if (uiFacade instanceof AbyssUiService ui) {
+            try { ui.pushHudUpdate(instance, players); }
+            catch (RuntimeException | LinkageError failure) { logger.fine("结算 HUD 更新失败: " + failure.getMessage()); }
         }
         session.lastAnnounced=remaining;
         if(now>=session.deadline && now>=session.nextAttempt && session.attempts<3) {
@@ -2096,7 +2151,7 @@ public final class AbyssService {
         if(seconds==0)return "正在离开副本，结算面板将在传送完成后显示。";
         return "请先拾取掉落物；"+seconds+" 秒后离开，可关闭面板继续拾取。";
     }
-    public boolean isExiting(Player player) {return exitingPlayers.contains(player.getUniqueId());}
+    public boolean isExiting(Player player) {return exitingPlayers.contains(player.getUniqueId()) || spawnExitPending.containsKey(player.getUniqueId());}
     public long settlementRemaining(AbyssInstance instance) {
         SettlementSession session=settlements.get(instance.getInstanceId());
         return session==null?-2:session.policy.remaining(settlementClock.getAsLong(),session.deadline);
@@ -2123,6 +2178,10 @@ public final class AbyssService {
         return playerExit(instance,player,reason,true);
     }
     private boolean playerExit(AbyssInstance instance,Player player,LeaveReason reason,boolean teleport) {
+        return playerExit(instance, player, reason, teleport, null, false);
+    }
+    private boolean playerExit(AbyssInstance instance,Player player,LeaveReason reason,boolean teleport,
+                               @Nullable Location resolvedSpawn, boolean spawnResolved) {
         if (!instance.hasPlayer(player.getUniqueId())) return true;
         if(isExiting(player))return false;
         boolean designing = isDesignInstance(instance);
@@ -2131,7 +2190,20 @@ public final class AbyssService {
         GameMode saved = instance.getSavedGameMode(player.getUniqueId());
         if(teleport && player.isOnline() && instance.getWorld()!=null && player.getWorld()==instance.getWorld()) {
             if(back==null || back.getWorld()==null || back.getWorld()==instance.getWorld()) {
-                back=links!=null?links.essentialsSpawn(player):null;
+                if (links != null && !spawnResolved && !stopping) {
+                    UUID id = player.getUniqueId();
+                    Object token = new Object();
+                    spawnExitPending.put(id, token);
+                    links.essentialsSpawn(player).whenComplete((spawn, failure) -> links.onMain(() -> scheduleDelayedRaw(() -> {
+                        if (!spawnExitPending.remove(id, token) || stopping || !player.isOnline()
+                            || org.bukkit.Bukkit.getPlayer(id) != player || !instance.hasPlayer(id)) return;
+                        boolean left = playerExit(instance, player, reason, teleport, failure == null ? spawn : null, true);
+                        if (left && instance.isFinished() && instance.getOnlinePlayerCount() == 0)
+                            scheduleDelayedRaw(() -> finishAndCleanup(instance), 1L);
+                    }, 1L)));
+                    return false;
+                }
+                back = resolvedSpawn;
                 if(back==null || back.getWorld()==instance.getWorld())back=org.bukkit.Bukkit.getWorlds().stream()
                     .filter(w->w!=instance.getWorld() && !w.getName().startsWith(config.abyss().worldPrefix()))
                     .findFirst().map(World::getSpawnLocation).orElse(null);
@@ -2140,7 +2212,11 @@ public final class AbyssService {
             exitingPlayers.add(player.getUniqueId());
             try {if(back!=null)returned=teleportWithRetry(player,back,3);}
             finally {exitingPlayers.remove(player.getUniqueId());}
-            if(!returned){player.sendMessage("§c暂时无法返回安全位置，副本与物品已保留，请稍后重试退出。");return false;}
+            if (!returned) {
+                if (stopping) rememberShutdownReturn(instance, player.getUniqueId(), back, saved);
+                player.sendMessage("§c暂时无法返回安全位置，副本与物品已保留，请稍后重试退出。");
+                return false;
+            }
         }
         instance.removePlayer(player.getUniqueId());
         if (nativeRuns != null) nativeRuns.closeView(player);
@@ -2205,8 +2281,28 @@ public final class AbyssService {
         return true;
     }
 
+    private void rememberShutdownReturn(AbyssInstance instance, UUID player, Location destination, GameMode saved) {
+        if (playerData == null) return;
+        var operation = admission.operation(instance);
+        boolean pendingAdmission = !instance.admitted() && operation != null && operation.persisted;
+        String owner = pendingAdmission ? operation.intent.owner() : null;
+        UUID request = pendingAdmission ? operation.intent.requestId() : null;
+        String dungeon = instance.getTemplate().id();
+        String gameMode = saved == null ? null : saved.name();
+        RecoveryManager recovery = recoveryManager;
+        var save = playerData.saveShutdownReturn(player, destination, owner, request, () -> {
+            if (recovery != null) recovery.mark(player, dungeon, gameMode);
+        });
+        shutdownReturns.add(save);
+        if (pendingAdmission) operation.outcomes.put(player, "RETURN_PENDING");
+        save.whenComplete((ignored, failure) -> {
+            if (failure != null) logger.log(java.util.logging.Level.WARNING, "[abyss] 停用时未能保存待恢复位置: " + player, failure);
+        });
+    }
+
     /** 玩家断线（监听器调用）：存待恢复位置+从实例移除。 */
     public void handleQuit(Player player) {
+        spawnExitPending.remove(player.getUniqueId());
         if (nativeRuns != null) {
             nativeRuns.interrupt(player.getUniqueId(), "断线中断救援");
             nativeRuns.closeView(player);
@@ -2307,11 +2403,19 @@ public final class AbyssService {
         if(!currentRecovery(player))return;
         var seat = reconnects.eligible(player.getUniqueId());
         if (seat == null) {
-            if(recoveryManager!=null)recoveryManager.runIfMarked(player);
+            if (recoveryManager != null) {
+                recoveryManager.runIfMarked(player, () -> completeJoinRecovery(player));
+                return;
+            }
         } else {
             if (seat.mode() != null && player.getGameMode() != seat.mode()) player.setGameMode(seat.mode());
             player.sendMessage("§e原副本仍可返回，使用 /abyss rejoin。");
         }
+        completeJoinRecovery(player);
+    }
+
+    private void completeJoinRecovery(Player player) {
+        if (!currentRecovery(player)) return;
         recoveringPlayers.remove(player.getUniqueId(),player);
         if (rewardGames != null) rewardGames.remind(player);
         scheduleDelayedRaw(()->{
@@ -2371,8 +2475,10 @@ public final class AbyssService {
     void finishExpiredReconnect(UUID id) {
         if (recoveryManager == null || !running() || recoveringPlayers.containsKey(id)) return;
         var player = org.bukkit.Bukkit.getPlayer(id);
-        if (player != null && player.isOnline() && instances.getInstance(player) == null)
-            recoveryManager.runIfMarked(player);
+        if (player != null && player.isOnline() && instances.getInstance(player) == null) {
+            recoveringPlayers.put(id, player);
+            recoveryManager.runIfMarked(player, () -> recoveringPlayers.remove(id, player));
+        }
     }
 
     // ═══ 死亡处理 ═══
@@ -2728,6 +2834,7 @@ public final class AbyssService {
 
     /** 按世界找实例（怪物死亡事件等反向定位）。 */
     public @Nullable AbyssInstance findInstanceByWorld(World world) {
+        if (instances == null) return null;
         UUID id = worldIndex.get(world.getName());
         return id != null ? instances.getInstance(id) : null;
     }
@@ -2755,6 +2862,7 @@ public final class AbyssService {
                 if (pending != null && pending.phase != Phase.STARTED) {
                     pending.phase = Phase.REVIEW_REQUIRED;
                     pending.reason = "RETURN_PENDING";
+                    admission.changed(pending);
                 }
                 instance.transitionTo(AbyssStatus.PREPARING, AbyssStatus.CANCELLED);
                 return;
@@ -2818,7 +2926,12 @@ public final class AbyssService {
             if (charge != null) {
                 try { charge.rollback(); }
                 catch (RuntimeException failure) {
-                    if (op != null) { op.costUncertain = true; op.phase = Phase.REVIEW_REQUIRED; admission.changed(op); }
+                    if (op != null) {
+                        op.nativeCosts.putAll(charge.memberCosts());
+                        op.costUncertain = true;
+                        op.phase = Phase.REVIEW_REQUIRED;
+                        admission.changed(op);
+                    }
                 }
             }
             return;
@@ -2864,6 +2977,7 @@ public final class AbyssService {
 
     /** 实例级一次性延迟任务（随实例清理）。 */
     public void scheduleOnce(AbyssInstance instance, Runnable r, long delayTicks) {
+        if (stopping) return;
         instance.registerTask(scheduler.scheduleOnce(plugin, r, delayTicks));
     }
 
@@ -2894,6 +3008,12 @@ public final class AbyssService {
         } else {
             scheduler.scheduleOnce(plugin,r,0L);
         }
+    }
+
+    private void runWorldCallback(Runnable task) {
+        if (!stopping) runOnMain(() -> {
+            if (!stopping) task.run();
+        });
     }
     public boolean running() {return started && !stopping;}
 
@@ -3066,16 +3186,14 @@ public final class AbyssService {
                 if (i.isFinished()) return;
                 if (procgenManager != null) procgenManager.tick(i);
                 if (i.isFinished()) return;
-                for (Player p : i.getPlayers()) {
+                var players = i.getPlayers();
+                for (Player p : players) {
                     interacts.onRegionTrigger(i, p,
                         xuanmo.arcartxsuite.abyss.template.InteractConfig.InteractType.STEP_ON);
                     interacts.onRegionTrigger(i, p,
                         xuanmo.arcartxsuite.abyss.template.InteractConfig.InteractType.ENTER_REGION);
-                    // 副本 HUD 周期刷新（1s）
-                    if (uiFacade instanceof AbyssUiService ui) {
-                        ui.pushHudUpdate(p, i);
-                    }
                 }
+                if (!i.isFinished() && uiFacade instanceof AbyssUiService ui) ui.pushHudUpdate(i, players);
             } catch (Throwable ignored) { }
     }
 

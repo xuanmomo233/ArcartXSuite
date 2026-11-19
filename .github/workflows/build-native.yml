@@ -251,7 +251,7 @@ jobs:
 
       - name: Build plaintext JARs (no obfuscation / no encryption)
         run: |
-          # buildDev：本体 shadowJar（明文未混淆）+ 各模块原始 jar（明文）+ proxy shadowJar
+          # buildDev：小型本体与公共运行库（明文未混淆）+ 各模块原始 jar + proxy shadowJar
           gradle clean buildDev --no-build-cache
 
       - name: Fix DLL in plaintext core JAR
@@ -283,6 +283,7 @@ jobs:
           name: axs-plaintext-jars
           path: |
             axs-core/build/libs/ArcartX-Suite-*-unobf.jar
+            axs-core/build/runtime-libraries/*.jar
             axs-api/build/libs/*.jar
             modules/*/build/libs/*.jar
             proxy/*/build/libs/*.jar

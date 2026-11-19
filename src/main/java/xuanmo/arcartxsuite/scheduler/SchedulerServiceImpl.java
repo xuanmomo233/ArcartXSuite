@@ -52,6 +52,12 @@ public final class SchedulerServiceImpl implements SchedulerAPI {
 
     private org.bukkit.scheduler.BukkitTask minuteDaemonTask;
     private org.bukkit.scheduler.BukkitTask leaderHeartbeatTask;
+    private final Object daemonLock = new Object();
+    private boolean started;
+    private final Object leaderTableLock = new Object();
+    private boolean leaderTableInitialized;
+    private final xuanmo.arcartxsuite.api.scheduler.ModuleCallback leaderHeartbeat =
+        new xuanmo.arcartxsuite.api.scheduler.ModuleCallback(this::heartbeatLeaders);
 
     // 选主租约过期时间（毫秒）
     private static final long LEADER_LEASE_TTL_MS = 90_000L;
@@ -78,21 +84,11 @@ public final class SchedulerServiceImpl implements SchedulerAPI {
 
     /** 启动调度服务（由宿主在 onEnable 时调用）。 */
     public void start() {
-        // 初始化选主表（如果有数据源）
-        if (dataSource != null) {
-            try {
-                initLeaderTable();
-            } catch (SQLException e) {
-                logger.log(Level.WARNING, "[Scheduler] 选主表初始化失败，跨服单点调度将降级为本地执行", e);
-            }
+        synchronized (daemonLock) {
+            if (started) return;
+            started = true;
+            reconcileDaemons();
         }
-
-        // 每分钟守护任务：检查所有日历触发任务
-        minuteDaemonTask = Bukkit.getScheduler().runTaskTimer(plugin, this::tickCalendarTasks, 1200L, 1200L);
-
-        // 选主心跳任务：每 30 秒更新心跳
-        leaderHeartbeatTask = Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, this::heartbeatLeaders,
-            LEADER_HEARTBEAT_INTERVAL_MS / 50, LEADER_HEARTBEAT_INTERVAL_MS / 50);
 
         logger.fine("[Scheduler] 调度服务已启动 (nodeId=" + nodeId
             + ", redis=" + (isRedisAvailable() ? "ON" : "OFF")
@@ -100,13 +96,35 @@ public final class SchedulerServiceImpl implements SchedulerAPI {
     }
 
     /** 关闭调度服务（由宿主在 onDisable 时调用）。 */
-    public void shutdown() {
-        if (minuteDaemonTask != null) { minuteDaemonTask.cancel(); minuteDaemonTask = null; }
-        if (leaderHeartbeatTask != null) { leaderHeartbeatTask.cancel(); leaderHeartbeatTask = null; }
+    public java.util.concurrent.CompletionStage<Void> shutdown() {
+        synchronized (daemonLock) {
+            started = false;
+            reconcileDaemons();
+        }
+        leaderHeartbeat.close();
         calendarTasks.values().forEach(CalendarEntry::cancel);
         calendarTasks.clear();
         leaderTasks.values().forEach(LeaderEntry::cancel);
         leaderTasks.clear();
+        return leaderHeartbeat.stopped();
+    }
+
+    /** Own timers only while a registered task needs them. Registration before start remains valid. */
+    private void reconcileDaemons() {
+        synchronized (daemonLock) {
+            if (!started || calendarTasks.isEmpty()) {
+                if (minuteDaemonTask != null) { minuteDaemonTask.cancel(); minuteDaemonTask = null; }
+            } else if (minuteDaemonTask == null || minuteDaemonTask.isCancelled()) {
+                // Check the current minute on first registration; keep the normal minute cadence.
+                minuteDaemonTask = Bukkit.getScheduler().runTaskTimer(plugin, this::tickCalendarTasks, 0L, 1200L);
+            }
+            if (!started || leaderTasks.isEmpty()) {
+                if (leaderHeartbeatTask != null) { leaderHeartbeatTask.cancel(); leaderHeartbeatTask = null; }
+            } else if (leaderHeartbeatTask == null || leaderHeartbeatTask.isCancelled()) {
+                leaderHeartbeatTask = Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, leaderHeartbeat,
+                    0L, LEADER_HEARTBEAT_INTERVAL_MS / 50);
+            }
+        }
     }
 
     // ── 固定间隔调度 ──────────────────────────────────────
@@ -153,6 +171,7 @@ public final class SchedulerServiceImpl implements SchedulerAPI {
         String key = "calendar:" + UUID.randomUUID();
         CalendarEntry entry = new CalendarEntry(key, p, task, spec, false, null);
         calendarTasks.put(key, entry);
+        reconcileDaemons();
         return entry;
     }
 
@@ -165,6 +184,7 @@ public final class SchedulerServiceImpl implements SchedulerAPI {
         String key = "calendar:" + UUID.randomUUID();
         CalendarEntry entry = new CalendarEntry(key, p, task, spec, true, null);
         calendarTasks.put(key, entry);
+        reconcileDaemons();
         return entry;
     }
 
@@ -182,6 +202,7 @@ public final class SchedulerServiceImpl implements SchedulerAPI {
                 () -> executeIfLeader(entry), spec.intervalTicks(), spec.intervalTicks());
             entry.setUnderlyingTask(bt);
             leaderTasks.put(leaderKey, entry);
+            reconcileDaemons();
             return entry;
         }
         // HOURLY/DAILY/WEEKLY 模式：加入日历守护，tick 时检查选主
@@ -189,6 +210,7 @@ public final class SchedulerServiceImpl implements SchedulerAPI {
         LeaderEntry entry = new LeaderEntry(leaderKey, p, task, spec, taskKey);
         calendarTasks.put(leaderKey, entry);
         leaderTasks.put(leaderKey, entry);
+        reconcileDaemons();
         return entry;
     }
 
@@ -198,7 +220,7 @@ public final class SchedulerServiceImpl implements SchedulerAPI {
         ZonedDateTime now = ZonedDateTime.now(ZoneId.systemDefault());
         for (CalendarEntry entry : calendarTasks.values()) {
             if (entry.isCancelled()) {
-                calendarTasks.remove(entry.key);
+                calendarTasks.remove(entry.key, entry);
                 continue;
             }
             if (entry.shouldExecute(now)) {
@@ -216,7 +238,7 @@ public final class SchedulerServiceImpl implements SchedulerAPI {
     private void heartbeatLeaders() {
         for (LeaderEntry entry : leaderTasks.values()) {
             if (entry.isCancelled()) {
-                leaderTasks.remove(entry.leaderKey);
+                leaderTasks.remove(entry.leaderKey, entry);
                 continue;
             }
             try {
@@ -225,6 +247,7 @@ public final class SchedulerServiceImpl implements SchedulerAPI {
                 logger.log(Level.FINE, "[Scheduler] 选主心跳失败: " + entry.leaderKey, e);
             }
         }
+        reconcileDaemons();
     }
 
     private void executeIfLeader(LeaderEntry entry) {
@@ -306,21 +329,32 @@ public final class SchedulerServiceImpl implements SchedulerAPI {
     // DB 选主：租约表
     private boolean isLeaderDb(String leaderKey) {
         if (dataSource == null) return true;
-        long now = System.currentTimeMillis();
-        try (Connection conn = dataSource.getConnection();
+        try {
+            String owner = readLeaderOwner(leaderKey);
+            if (owner == null) {
+                // A just-registered calendar can be due before the first async heartbeat.
+                // Match Redis's first-use acquisition without holding a second pool connection.
+                refreshLeaderDb(leaderKey);
+                owner = readLeaderOwner(leaderKey);
+            }
+            return nodeId.equals(owner);
+        } catch (SQLException e) {
+            logger.log(Level.FINE, "[Scheduler] DB isLeader 失败: " + leaderKey, e);
+            return true; // 保留原有 DB 不可用时的本地降级策略。
+        }
+    }
+
+    private String readLeaderOwner(String leaderKey) throws SQLException {
+        try (Connection conn = openLeaderConnection();
              PreparedStatement ps = conn.prepareStatement(
                  "SELECT node_id FROM " + leaderTable + " WHERE task_key = ?")) {
             ps.setString(1, leaderKey);
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {
-                    String owner = rs.getString("node_id");
-                    return nodeId.equals(owner);
+                    return rs.getString("node_id");
                 }
-                return false;
+                return null;
             }
-        } catch (SQLException e) {
-            logger.log(Level.FINE, "[Scheduler] DB isLeader 失败: " + leaderKey, e);
-            return true; // DB 不可用时降级为本节点执行
         }
     }
 
@@ -328,7 +362,7 @@ public final class SchedulerServiceImpl implements SchedulerAPI {
         if (dataSource == null) return;
         long now = System.currentTimeMillis();
         // 尝试续期自己的租约，或抢占过期租约
-        try (Connection conn = dataSource.getConnection()) {
+        try (Connection conn = openLeaderConnection()) {
             // 先查当前主
             String currentOwner = null;
             long currentHeartbeat = 0;
@@ -371,6 +405,16 @@ public final class SchedulerServiceImpl implements SchedulerAPI {
         } catch (SQLException e) {
             logger.log(Level.FINE, "[Scheduler] DB heartbeat 失败: " + leaderKey, e);
         }
+    }
+
+    private Connection openLeaderConnection() throws SQLException {
+        synchronized (leaderTableLock) {
+            if (!leaderTableInitialized) {
+                initLeaderTable();
+                leaderTableInitialized = true;
+            }
+        }
+        return dataSource.getConnection();
     }
 
     private void initLeaderTable() throws SQLException {
@@ -435,7 +479,11 @@ public final class SchedulerServiceImpl implements SchedulerAPI {
             }
         }
 
-        @Override public void cancel() { cancelled = true; }
+        @Override public void cancel() {
+            cancelled = true;
+            calendarTasks.remove(key, this);
+            reconcileDaemons();
+        }
         @Override public boolean isCancelled() { return cancelled; }
     }
 
@@ -447,7 +495,8 @@ public final class SchedulerServiceImpl implements SchedulerAPI {
 
         LeaderEntry(String leaderKey, Plugin plugin, Runnable task, ScheduleSpec spec,
                     @Nullable String taskKey) {
-            super(leaderKey, plugin, task, spec, false, taskKey);
+            // Calendar execution and heartbeat must refer to the same lease key.
+            super(leaderKey, plugin, task, spec, false, taskKey == null ? null : leaderKey);
             this.leaderKey = leaderKey;
             this.taskKey = taskKey;
         }
@@ -458,7 +507,9 @@ public final class SchedulerServiceImpl implements SchedulerAPI {
 
         @Override public void cancel() {
             super.cancel();
+            leaderTasks.remove(leaderKey, this);
             if (underlyingTask != null) underlyingTask.cancel();
+            reconcileDaemons();
         }
     }
 

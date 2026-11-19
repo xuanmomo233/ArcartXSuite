@@ -91,8 +91,10 @@ final class RecipeFile {
             && library.get("id") instanceof String id) {
             int amount = library.get("amount") instanceof Number number ? number.intValue() : 1;
             if (amount < 1 || amount > 99) throw new IllegalArgumentException("物品库模板数量无效");
-            ItemStack item = items.generateItem(source, id, amount, null, null);
-            ItemStack repeat = items.generateItem(source, id, amount, null, null);
+            String nbt = library.get("nbt") instanceof String text ? text : null;
+            if (items == null) throw new IllegalArgumentException("物品库服务不可用");
+            ItemStack item = items.generateItem(source, id, amount, nbt, null);
+            ItemStack repeat = items.generateItem(source, id, amount, nbt, null);
             if (InventoryItems.empty(item) || !item.equals(repeat) || item.getAmount() != amount) {
                 throw new IllegalArgumentException("物品库必须能生成固定模板 " + source + "/" + id);
             }
@@ -116,6 +118,51 @@ final class RecipeFile {
         result.put("experience", definition.experience());
         result.put("smithing-data", definition.smithingData().name());
         return result;
+    }
+
+    static Map<String, Object> serialize(Definition definition, Map<Integer, Map<String, Object>> references) {
+        Map<String, Object> result = serialize(definition);
+        var ingredients = new ArrayList<>(definition.ingredients().stream().map(ingredient -> {
+            Map<String, Object> cell = new LinkedHashMap<>();
+            if (!ingredient.materials().isEmpty()) cell.put("materials", ingredient.materials().stream().map(Material::name).toList());
+            if (!ingredient.exact().isEmpty()) cell.put("exact", ingredient.exact().stream().map(ItemSnapshots::encode).toList());
+            return cell;
+        }).toList());
+        references.forEach((slot, reference) -> {
+            if (slot == 9) {
+                var output = new LinkedHashMap<>(reference);
+                output.put("amount", definition.result().getAmount());
+                result.put("result", output);
+            } else if (slot >= 0 && slot < ingredients.size()) {
+                var input = new LinkedHashMap<>(reference);
+                input.put("amount", 1);
+                ingredients.set(slot, new LinkedHashMap<>(Map.of("exact", List.of(input))));
+            }
+        });
+        result.put("ingredients", ingredients);
+        return result;
+    }
+
+    static Map<Integer, Map<String, Object>> references(Document document, String id) {
+        Map<Integer, Map<String, Object>> result = new LinkedHashMap<>();
+        List<?> inputs = document.yaml().getList("recipes." + id + ".ingredients", List.of());
+        for (int i = 0; i < inputs.size(); i++) {
+            if (inputs.get(i) instanceof Map<?, ?> cell && cell.get("exact") instanceof List<?> exact && exact.size() == 1) {
+                copyReference(result, i, exact.get(0));
+            }
+        }
+        Object output = document.yaml().get("recipes." + id + ".result");
+        if (output instanceof ConfigurationSection section) output = section.getValues(false);
+        copyReference(result, 9, output);
+        return result;
+    }
+
+    private static void copyReference(Map<Integer, Map<String, Object>> target, int slot, Object value) {
+        if (value instanceof Map<?, ?> map && map.get("source") instanceof String && map.get("id") instanceof String) {
+            Map<String, Object> copy = new LinkedHashMap<>();
+            map.forEach((key, entry) -> copy.put(key.toString(), entry));
+            target.put(slot, copy);
+        }
     }
 
     String write(YamlConfiguration yaml) throws IOException {

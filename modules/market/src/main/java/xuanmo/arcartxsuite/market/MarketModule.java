@@ -72,6 +72,9 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
 
     private MarketModuleConfiguration configuration;
     private MarketService service;
+    private JdbcMarketRepository repository;
+    private NpcTradeRepository exchangeRepository;
+    private xuanmo.arcartxsuite.api.storage.ModuleStorage storageScope;
     private MarketAdminCommand adminCommand;
     private NpcTradingService exchange;
     private boolean exchangeEnabled;
@@ -161,27 +164,22 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
 
     @Override
     protected @NotNull PacketHandlerSpec createPacketHandlerSpec() {
-        return PacketHandlerSpec.of((player, packetId, data) -> {
-            NpcTradingService exchangeService = exchange;
+        MarketService current = service;
+        NpcTradingService exchangeService = exchange;
+        var packetIds = new ArrayList<String>();
+        if (current != null) packetIds.addAll(current.packetIds());
+        if (exchangeService != null) packetIds.addAll(exchangeService.packetIds());
+        return new PacketHandlerSpec((player, packetId, data) -> {
             if (exchangeService != null && exchangeService.ownsPacket(packetId)) {
-                if (Bukkit.isPrimaryThread()) exchangeService.handle(player, packetId, data);
-                else Bukkit.getScheduler().runTask(plugin, () -> exchangeService.handle(player, packetId, data));
+                exchangeService.handle(player, packetId, data);
                 return true;
             }
-            MarketService current = service;
             if (current == null || !current.ownsPacket(packetId)) {
                 return false;
             }
-            // 市场交易涉及背包与经济操作，统一切到主线程串行执行，
-            // 消除并发竞态（重复购买/限购绕过）与异步线程操作 Bukkit API 的风险。
-            if (org.bukkit.Bukkit.isPrimaryThread()) {
-                current.handleClientPacket(player, packetId, data);
-            } else {
-                Bukkit.getScheduler().runTask(plugin,
-                    () -> current.handleClientPacket(player, packetId, data));
-            }
+            current.handleClientPacket(player, packetId, data);
             return true;
-        }, 0, null, null);
+        }, 0, packetIds, "market");
     }
 
     @Override
@@ -204,14 +202,12 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
 
     @Override
     protected List<String> publishedTopics() {
-        return List.of("axs.market.listing_created", "axs.market.auction_purchased", "axs.market.shop_dynamic_triggered");
+        return List.of("axs.market.listing_created", "axs.market.auction_purchased", "axs.market.shop_dynamic_triggered",
+            "axs.market.npc_exchange_completed");
     }
 
-    @Override
-    protected void startService() throws Exception {
-
-        // 构造物品序列化器（智能检测 Overture 物品并使用原生序列化）
-        AuctionItemSerializer itemSerializer = new AuctionItemSerializer() {
+    // Overture 物品优先使用其原生格式。
+    private final AuctionItemSerializer itemSerializer = new AuctionItemSerializer() {
             private static final String OVERTURE_PREFIX = "OVERTURE:";
 
             @Override
@@ -247,13 +243,8 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
             }
         };
 
-        // MailDispatchable supplier（延迟查找）
-        java.util.function.Supplier<MailDispatchable> mailSupplier = () -> getCapability(MailDispatchable.class);
-
-        // 首次启动时自动导出示例商店和回收表
-        ensureExampleShopExported();
-        ensureDefaultRecycleExported();
-
+    @Override
+    protected java.util.concurrent.CompletionStage<Void> prepareService() throws Exception {
         // 统一通过 StorageManager 解析数据源（共享或自建），连接池生命周期由本体管控
         xuanmo.arcartxsuite.api.storage.StorageDescriptor marketDesc;
         javax.sql.DataSource marketDs;
@@ -261,30 +252,53 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
             // 自建模式：模块配置了独立 storage 节
             marketDesc = configuration.storage().toDescriptor()
                 .withTablePrefix(configuration.storage().tablePrefix());
-            marketDs = storageManager.resolveModuleDataSource("market", null, dataFolder, marketDesc);
+            storageScope = storageManager.openModuleStorage("market", null, dataFolder, marketDesc);
+            marketDs = storageScope.dataSource();
         } else {
             // 共享模式：使用本体统一数据源
             marketDesc = storageManager.getDescriptor()
                 .withTablePrefix(configuration.storage().tablePrefix());
-            marketDs = storageManager.resolveModuleDataSource("market",
+            storageScope = storageManager.openModuleStorage("market",
                 configuration.storage().sqliteFileName(), dataFolder, null);
+            marketDs = storageScope.dataSource();
         }
-        JdbcMarketRepository marketRepo = new JdbcMarketRepository(marketDs, marketDesc, dataFolder, logger);
+        var marketRepo = new JdbcMarketRepository(marketDs, marketDesc, dataFolder, logger);
+        repository = marketRepo;
+        var npcRepo = exchangeEnabled ? new NpcTradeRepository(marketDs, marketDesc, dataFolder, logger) : null;
+        exchangeRepository = npcRepo;
 
         service = new MarketService(plugin, configuration, packetBridge,
             currencyManager, itemSourceRegistry, itemSerializer,
-            itemStackBridge, vanillaItemNameBridge, mailSupplier, itemRewardDispatcher, itemMatcher, logger, crossServer, scheduler, messages(), contentModerator, scriptConditionEvaluator);
-        service.setSignalProvider(() -> getCapability(
-            xuanmo.arcartxsuite.api.capability.SignalDispatchable.class));
+            itemStackBridge, vanillaItemNameBridge, () -> getCapability(MailDispatchable.class), itemRewardDispatcher,
+            itemMatcher, logger, crossServer, scheduler, messages(), contentModerator, scriptConditionEvaluator);
+        return service.prepareStorage(storageScope, () -> {
+            marketRepo.initialize();
+            if (npcRepo != null) {
+                npcRepo.initialize();
+                marketRepo.includeExchangeOperations(npcRepo.operationsTable());
+            } else {
+                marketRepo.includeExchangeOperationsIfPresent(marketRepo.tablePrefix() + NpcTradeRepository.OPERATIONS_TABLE_SUFFIX);
+            }
+        });
+    }
+
+    @Override
+    protected void startService() throws Exception {
+        ensureExampleShopExported();
+        ensureDefaultRecycleExported();
+        var marketRepo = repository;
         service.setEventBusProvider(() -> getCapability(
             xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
         service.start(dataFolder, marketRepo);
 
         // 注册待发放队列消费者（玩家上线补发离线期间累积的物品/货币）
+        var playerData = Bukkit.getWorlds().get(0).getWorldFolder().toPath().resolve("playerdata");
+        var itemDelivery = new MarketItemDelivery(service.work(), plugin, service.getRepository(), itemSerializer, logger, playerData);
         PendingDeliveryService deliveries = new PendingDeliveryService(
-            plugin, service.getRepository(), currencyManager, itemSerializer, itemRewardDispatcher, logger, service.getLedger());
+            service.work(), plugin, service.getRepository(), currencyManager, itemDelivery, logger, service.getLedger());
         registerListener(deliveries);
         service.attachDeliveries(deliveries);
+        service.attachListingSaves(playerData, itemDelivery.node());
 
         // 注册 UI 到 ArcartX 桥接层
         bindMarketUi(configuration.ui().shopId(), SHOP_UI_FILE_PATH);
@@ -302,11 +316,18 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
         bindMarketUi(configuration.ui().historyId(), HISTORY_UI_FILE_PATH);
         bindMarketUi(configuration.ui().shopEditId(), SHOP_EDIT_UI_FILE_PATH);
 
+        MarketService registeredService = service;
+        var registeredConfiguration = configuration;
         registerCapability(xuanmo.arcartxsuite.api.capability.DatabaseMigratable.class,
             new xuanmo.arcartxsuite.api.capability.DatabaseMigratable() {
                 @Override public @NotNull String moduleId() { return "market"; }
                 @Override public @NotNull xuanmo.arcartxsuite.api.storage.MigrationResult migrateDatabase(
                         @NotNull xuanmo.arcartxsuite.api.storage.StorageDescriptor target, boolean overwrite) {
+                    if (registeredService.isStopping()) {
+                        var result = new xuanmo.arcartxsuite.api.storage.MigrationResult(false, 0, 0);
+                        result.addError("Market 正在停用");
+                        return result;
+                    }
                     return marketRepo.migrateData(target, overwrite);
                 }
                 @Override public @NotNull xuanmo.arcartxsuite.api.storage.StorageDescriptor currentDescriptor() {
@@ -317,86 +338,93 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
         registerCapability(PlayerDataPurgeable.class, new PlayerDataPurgeable() {
             @Override public @NotNull String moduleId() { return "market"; }
             @Override public int purgePlayerData(@NotNull java.util.UUID playerUuid) {
+                if (registeredService.isStopping()) return -1;
                 try { return marketRepo.deletePlayerData(playerUuid); }
                 catch (Exception e) { logger.warning("Market purge 失败: " + e.getMessage()); return -1; }
             }
             @Override public int purgeAllPlayerData() {
+                if (registeredService.isStopping()) return -1;
                 try { return marketRepo.deleteAllPlayerData(); }
                 catch (Exception e) { logger.warning("Market purgeAll 失败: " + e.getMessage()); return -1; }
             }
         });
 
-        if (exchangeEnabled) startExchange(marketDs, marketDesc, marketRepo);
-        else marketRepo.includeExchangeOperationsIfPresent(marketDesc.tablePrefix() + NpcTradeRepository.OPERATIONS_TABLE_SUFFIX);
+        if (exchangeRepository != null) startExchange(exchangeRepository, playerData);
         registerCapability(xuanmo.arcartxsuite.api.capability.AxsMarketService.class,
             new xuanmo.arcartxsuite.api.capability.AxsMarketService() {
                 @Override public boolean openSystemShop(Player player, String id) {
-                    return service != null && service.openSystemShop(player, id);
+                    return !registeredService.isStopping() && registeredService.openSystemShop(player, id);
+                }
+
+                @Override public java.util.concurrent.CompletionStage<String> describeChatLink(Player viewer, String type, String key) {
+                    return registeredService.describeChatLink(viewer, type, key);
+                }
+
+                @Override public java.util.concurrent.CompletionStage<String> openChatLink(Player viewer, String type, String key) {
+                    return registeredService.openChatLink(viewer, type, key);
                 }
 
                 @Override public void openUi(@NotNull org.bukkit.entity.Player player,
                         @NotNull MarketView view) {
-                    if (service == null) return;
+                    if (registeredService.isStopping()) return;
                     switch (view) {
-                        case AUCTION -> service.openAuctionUi(player);
-                        case AUCTION_SELL -> service.openAuctionSellUi(player);
-                        case SHOP_LIST -> service.openShopListUi(player);
-                        case SHOP -> service.openShopUi(player);
-                        case RECYCLE -> service.openRecycleUi(player);
-                        case HISTORY -> service.openHistoryUi(player);
-                        case SELL -> service.openSellUi(player);
-                        case PLAYER_SHOP -> service.openPlayerShopUi(player);
-                        case MY_LISTINGS -> service.openMyListingsUi(player);
+                        case AUCTION -> registeredService.openAuctionUi(player);
+                        case AUCTION_SELL -> registeredService.openAuctionSellUi(player);
+                        case SHOP_LIST -> registeredService.openShopListUi(player);
+                        case SHOP -> registeredService.openShopUi(player);
+                        case RECYCLE -> registeredService.openRecycleUi(player);
+                        case HISTORY -> registeredService.openHistoryUi(player);
+                        case SELL -> registeredService.openSellUi(player);
+                        case PLAYER_SHOP -> registeredService.openPlayerShopUi(player);
+                        case MY_LISTINGS -> registeredService.openMyListingsUi(player);
                     }
                 }
                 @Override public @NotNull java.util.concurrent.CompletableFuture<Boolean>
                         createAuctionListing(@NotNull org.bukkit.entity.Player player,
                         @NotNull ItemStack item, double startingBid, @Nullable String currency,
                         long durationSeconds) {
-                    return java.util.concurrent.CompletableFuture.completedFuture(
-                        service != null && service.createListing(player, item, startingBid, currency, durationSeconds));
+                    return registeredService.createAuctionListing(player, item, startingBid, currency, durationSeconds);
                 }
                 @Override public @NotNull java.util.concurrent.CompletableFuture<Boolean>
                         cancelListing(@NotNull org.bukkit.entity.Player player, long listingId) {
-                    return java.util.concurrent.CompletableFuture.completedFuture(
-                        service != null && service.cancelListing(player, listingId));
+                    return registeredService.cancelListing(player, listingId);
                 }
                 @Override public @NotNull java.util.concurrent.CompletableFuture<Boolean>
                         searchAuction(@NotNull org.bukkit.entity.Player player, @Nullable String keyword) {
-                    if (service == null) {
+                    if (registeredService.isStopping()) {
                         return java.util.concurrent.CompletableFuture.completedFuture(false);
                     }
-                    service.searchAuction(player, keyword);
+                    registeredService.searchAuction(player, keyword);
                     return java.util.concurrent.CompletableFuture.completedFuture(true);
                 }
                 @Override public int auctionCount() {
-                    return service != null ? service.getAuctionCount() : 0;
+                    return !registeredService.isStopping() ? registeredService.getAuctionCount() : 0;
                 }
                 @Override public boolean openAuctionLot(@NotNull org.bukkit.entity.Player player,long listingId) {
-                    return service != null && service.openAuctionRoom(player,listingId);
+                    return !registeredService.isStopping() && registeredService.openAuctionRoom(player,listingId);
                 }
                 @Override public boolean openPlayerStore(@NotNull org.bukkit.entity.Player player,@NotNull java.util.UUID owner) {
-                    return service!=null && service.openPlayerStore(player,owner);
+                    return !registeredService.isStopping() && registeredService.openPlayerStore(player,owner);
                 }
                 @Override public boolean openOwnStoreEditor(@NotNull org.bukkit.entity.Player player) {
-                    if(service==null || !service.isPlayerShopEnabled())return false;
-                    service.openPlayerStoreEditor(player);return true;
+                    if(registeredService.isStopping() || !registeredService.isPlayerShopEnabled())return false;
+                    registeredService.openPlayerStoreEditor(player);return true;
                 }
                 @Override public int shopCount() {
-                    return service != null ? service.getShopCount() : 0;
+                    return !registeredService.isStopping() ? registeredService.getShopCount() : 0;
                 }
                 @Override public boolean openRecycleProtection(@NotNull org.bukkit.entity.Player player){
-                    if(service==null || !configuration.recycle().enabled())return false;service.openRecycleProtection(player);return true;
+                    if(registeredService.isStopping() || !registeredConfiguration.recycle().enabled())return false;registeredService.openRecycleProtection(player);return true;
                 }
                 @Override public boolean openTradeManagement(@NotNull org.bukkit.entity.Player player){
-                    if(service==null || !player.hasPermission("arcartxsuite.market.admin"))return false;
-                    service.openTradeManagement(player);return true;
+                    if(registeredService.isStopping() || !player.hasPermission("arcartxsuite.market.admin"))return false;
+                    registeredService.openTradeManagement(player);return true;
                 }
                 @Override public int myListingCount(@NotNull org.bukkit.entity.Player player) {
-                    return service != null ? service.getMyListingsCount(player) : 0;
+                    return !registeredService.isStopping() ? registeredService.getMyListingsCount(player) : 0;
                 }
                 @Override public boolean playerShopEnabled() {
-                    return service != null && service.isPlayerShopEnabled();
+                    return !registeredService.isStopping() && registeredService.isPlayerShopEnabled();
                 }
             });
 
@@ -445,18 +473,17 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
         }
     }
 
-    private void startExchange(javax.sql.DataSource source,
-                               xuanmo.arcartxsuite.api.storage.StorageDescriptor marketDescriptor,
-                               JdbcMarketRepository marketRepository) throws Exception {
+    private void startExchange(NpcTradeRepository repository, java.nio.file.Path playerData) throws Exception {
         var buyer = registerModuleUi("arcartx/ui/market_exchange.yml", "ui/market_exchange.yml", "AXS:market_exchange", true);
         var editor = registerModuleUi("arcartx/ui/market_exchange_editor.yml", "ui/market_exchange_editor.yml", "AXS:market_exchange_editor", true);
-        var repository = new NpcTradeRepository(source, marketDescriptor, dataFolder, logger);
-        repository.initialize();
-        marketRepository.includeExchangeOperations(repository.operationsTable());
         PacketBridgeAPI notices = xuanmo.arcartxsuite.api.message.UiNoticeBridge.wrap(packetBridge, messages(), dataFolder);
         exchange = new NpcTradingService(plugin, dataFolder, notices, currencyManager, itemSourceRegistry,
             itemStackBridge, vanillaItemNameBridge, createAdyeshachNpcBridge(),
-            () -> getCapability(WarehouseMaterialAccess.class), repository, buyer.runtimeUiId(), editor.runtimeUiId(), logger);
+            () -> getCapability(WarehouseMaterialAccess.class), repository, buyer.runtimeUiId(), editor.runtimeUiId(), logger, playerData);
+        exchange.setCompletionListener((player, payload) -> {
+            var bus = getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class);
+            if (bus != null) bus.publish("axs.market.npc_exchange_completed", player, payload);
+        });
     }
 
     @Override
@@ -474,16 +501,26 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
 
     @Override
     protected void stopService() {
-        if (exchange != null) {
-            exchange.close();
-            exchange = null;
+        var npc = exchange;
+        var current = service;
+        var scope = storageScope;
+        exchange = null;
+        service = null;
+        repository = null;
+        exchangeRepository = null;
+        storageScope = null;
+        try { if (npc != null) npc.close(); }
+        finally {
+            try { if (current != null) current.shutdown(); }
+            finally {
+                var stopped = java.util.concurrent.CompletableFuture.allOf(
+                    npc == null ? java.util.concurrent.CompletableFuture.completedFuture(null) : npc.stopped().toCompletableFuture(),
+                    current == null ? java.util.concurrent.CompletableFuture.completedFuture(null) : current.databaseStopped().toCompletableFuture());
+                trackShutdown(stopped);
+                if (scope != null) { scope.retireAfter(stopped); trackShutdown(scope.retired()); }
+                configuration = null;
+            }
         }
-        if (service != null) {
-            service.shutdown();
-            service = null;
-        }
-        storageManager.closeModuleDataSource("market");
-        configuration = null;
     }
 
     @Override

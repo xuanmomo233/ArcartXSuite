@@ -68,8 +68,9 @@ final class ModuleDescriptorParser {
     }
 
     private static ModuleDescriptor buildDescriptor(YamlConfiguration yaml, String sourceName) throws ModuleLoadException {
-        if(!"3.0".equals(yaml.getString("api-version"))) {
-            throw new ModuleLoadException("模块必须使用 API 3.0；请成套更新宿主与模块: "+sourceName);
+        String apiVersion = yaml.getString("api-version");
+        if (!"3.9".equals(apiVersion)) {
+            throw new ModuleLoadException("模块必须使用异步 API 3.9；请成套更新宿主与模块: " + sourceName);
         }
         String id = yaml.getString("id");
         if (id == null || id.isBlank()) {

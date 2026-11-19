@@ -21,7 +21,6 @@ import xuanmo.arcartxsuite.api.ClientPacketHandler;
 import xuanmo.arcartxsuite.api.ModuleCommandHandler;
 import xuanmo.arcartxsuite.api.ModuleDescriptor;
 import xuanmo.arcartxsuite.api.UiBinding;
-import xuanmo.arcartxsuite.api.bridge.ClientBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
 import xuanmo.arcartxsuite.api.capability.SubtitlePlayable;
@@ -89,7 +88,8 @@ public final class AnnouncerModule extends AbstractAXSModule implements ModuleCo
     protected @NotNull PacketHandlerSpec createPacketHandlerSpec() {
         return PacketHandlerSpec.of(
             (player, packetId, data) ->
-                    service != null && service.handleClientPacket(player, packetId, data), 0, null, null);
+                    service != null && service.handleClientPacket(player, packetId, data),
+            0, AnnouncerService.CLICK_PACKET_ID, "announcer");
     }
 
     private String msg(String key, Object... args) {
@@ -168,7 +168,7 @@ public final class AnnouncerModule extends AbstractAXSModule implements ModuleCo
 
         // 跨服广播
         service = new AnnouncerService(
-            plugin, logger, configuration, packetBridge, clientBridge, packetGuard,
+            plugin, logger, configuration, packetBridge,
             java.util.List.copyOf(announcerRuntimeUiIds),
             crossServer,
             placeholderResolver
@@ -318,6 +318,7 @@ public final class AnnouncerModule extends AbstractAXSModule implements ModuleCo
                 sender.sendMessage(msg("status.groups", subtitleService != null ? subtitleService.groupCount() : 0));
                 sender.sendMessage(msg("status.playing", subtitleService != null ? subtitleService.activePlayerCount() : 0));
                 sender.sendMessage(msg("status.pending", service != null ? service.pendingManualBroadcasts() : 0));
+                sender.sendMessage(msg("status.dropped", service != null ? service.droppedManualBroadcasts() : 0));
                 sender.sendMessage(msg("status.cross-server",
                     service != null && service.crossServerActive()
                         ? messages().get("common.enabled") : messages().get("common.disabled")));
@@ -357,7 +358,10 @@ public final class AnnouncerModule extends AbstractAXSModule implements ModuleCo
             service.broadcastNow(text, forward);
             sender.sendMessage(msg("broadcast.now", scope, text));
         } else {
-            service.enqueueManualBroadcast(text, forward);
+            if (!service.enqueueManualBroadcast(text, forward)) {
+                sender.sendMessage(msg("broadcast.queue-full"));
+                return;
+            }
             sender.sendMessage(msg("broadcast.queued", scope, service.pendingManualBroadcasts(), text));
         }
     }
@@ -394,7 +398,8 @@ public final class AnnouncerModule extends AbstractAXSModule implements ModuleCo
                 if (ok) {
                     sender.sendMessage(msg("subtitle.play-success", target.getName(), args[4]));
                 } else {
-                    sender.sendMessage(msg("subtitle.play-not-found", args[4]));
+                    sender.sendMessage(msg(subtitleService.groupIds().contains(args[4])
+                        ? "subtitle.play-unavailable" : "subtitle.play-not-found", args[4]));
                 }
             }
             case "stop" -> {

@@ -38,22 +38,14 @@ ui:
       var.selectedId = ''
       // 重建卡片列表（模板在索引0，按轮次命名防冲突）
       目标数 = var.dungeonCount.round()
-      if(var.已建_dungeon_rows != 目标数){
-        var.已建_dungeon_rows = 目标数
-        for(key in var.卡片引用.keys()){
-          var.卡片引用[key].remove()
-        }
-        var.卡片引用 = {}
-        var.卡片轮次 = (var.卡片轮次 + 1).round()
-        模板 = val.dungeon_rows.get(0)
-        模板.entryKey = 0.round()
-        if(目标数 > 1){
-          for(i in range(1, 目标数 - 1)){
-            c = 模板.copy('地牢卡片_' + var.卡片轮次 + '_' + i.round())
-            c.entryKey = i.round()
-            var.卡片引用[i.round()] = c
+      if(var.dungeon_rowsGridRows == none || var.dungeon_rowsGridRows.size() != (var.dungeonCount)){
+        网格数据 = []
+        if((var.dungeonCount) > 0){
+          for(网格序号 in range(0, (var.dungeonCount) - 1)){
+            网格数据.add(网格序号.round())
           }
         }
+        var.dungeon_rowsGridRows = 网格数据
       }
       var.iconsPending = true
       // 默认选中第一张卡片
@@ -115,15 +107,13 @@ ui:
       Packet.send('abyss', 'view_ready', 'browser')
       Sound.self('minecraft:item.book.page_turn', 0.9, 14)
     tick: |-
-      if(var.iconsPending){
+      if(var.iconsPending && var.dungeon_rowsGridRows != none && val.dungeon_rows != none && val.dungeon_rows.childrenCount() == var.dungeon_rowsGridRows.size()){
         var.iconsPending = false
-        目标数 = var.dungeonCount.round()
-        // 数据就绪后触发每张卡片图标 seticon（属性不随 var 自动重算）
-        if(目标数 > 0){
-          val.dungeon_rows.get(0)['图标'].seticon()
-          if(目标数 > 1){
-            for(i in range(1, 目标数 - 1)){
-              var.卡片引用[i.round()]['图标'].seticon()
+        if(var.dungeon_rowsGridRows.size() > 0){
+          for(i in range(0, var.dungeon_rowsGridRows.size() - 1)){
+            row = val.dungeon_rows.get(i.round())
+            if(row != none && row['图标'] != none){
+              row['图标'].seticon()
             }
           }
         }
@@ -356,17 +346,20 @@ controls:
                     val.list_slider.setDragYRatio(ratio)
                 children:
                   卡片列表:
-                    type: VStack
+                    type: RepeatGrid
                     val: dungeon_rows
                     attribute:
+                      items: "var.dungeon_rowsGridRows"
+                      flow: ~row
+                      column: 1
+                      spaceBetweenY: 12
                       maxSize: 2147483647
                       width: "var.leftW - 176"
-                      spaceBetween: 12
                     children:
                       地牢卡片:
                         type: Canvas
                         attribute:
-                          entryKey: 0.round()
+                          entryKey: self.item
                           entry: var.dungeonRows[self.entryKey]
                           active: "self.entry != none && var.selectedId == self.entry['id']"
                           visible: self.entry != none

@@ -1,7 +1,5 @@
 package xuanmo.arcartxsuite.entitytracker.reward;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -10,63 +8,29 @@ import org.bukkit.ChatColor;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.command.ConsoleCommandSender;
 import org.bukkit.entity.Player;
-import org.bukkit.inventory.ItemStack;
-import org.bukkit.plugin.java.JavaPlugin;
 import xuanmo.arcartxsuite.entitytracker.boss.config.BossDamageRewardAction;
 import xuanmo.arcartxsuite.entitytracker.boss.config.BossDamageRewardMessageTarget;
-import xuanmo.arcartxsuite.api.item.ItemRewardDispatcher;
-import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
-import xuanmo.arcartxsuite.api.item.PendingRewardService;
 import xuanmo.arcartxsuite.api.placeholder.PlaceholderResolverAPI;
 
 /**
- * 通用奖励动作执行器，可由死亡即时结算和排行榜定时奖励共用。
+ * 定时排行榜的主线程奖励动作执行器。
  * <p>
  * 调用方通过 {@code variables} Map 注入占位符上下文（如 {player}, {rank}, {boss_display_name} 等），
- * 执行器负责模板渲染、物品发放、命令执行、消息发送、邮件派发和信号分发。
- * <p>
- * 物品发放统一通过 {@link ItemRewardDispatcher}（放入背包→背包满转邮件→无邮件则掉落）。
+ * 执行器负责模板渲染、命令执行、消息发送和信号分发。
  */
 public final class RewardActionExecutor {
 
     private static final Pattern PLACEHOLDER_PATTERN = Pattern.compile("\\{([a-zA-Z0-9_]+)}");
 
-    private final JavaPlugin plugin;
-    private final java.util.function.Supplier<xuanmo.arcartxsuite.api.capability.MailDispatchable> mailDispatchableProvider;
     private final java.util.function.BiConsumer<String, Player> signalDispatcher;
-    private final ItemSourceRegistry itemSourceRegistry;
-    private final ItemRewardDispatcher itemRewardDispatcher;
     private final PlaceholderResolverAPI placeholderResolver;
 
     public RewardActionExecutor(
-        JavaPlugin plugin,
-        java.util.function.Supplier<xuanmo.arcartxsuite.api.capability.MailDispatchable> mailDispatchableProvider,
         java.util.function.BiConsumer<String, Player> signalDispatcher,
-        ItemSourceRegistry itemSourceRegistry,
-        ItemRewardDispatcher itemRewardDispatcher,
         PlaceholderResolverAPI placeholderResolver
     ) {
-        this.plugin = plugin;
-        this.mailDispatchableProvider = mailDispatchableProvider == null ? () -> null : mailDispatchableProvider;
         this.signalDispatcher = signalDispatcher;
-        this.itemSourceRegistry = itemSourceRegistry;
-        this.itemRewardDispatcher = itemRewardDispatcher;
         this.placeholderResolver = placeholderResolver;
-    }
-
-    /**
-     * 执行一组奖励动作
-     */
-    public List<RewardActionResult> executeActions(
-        List<BossDamageRewardAction> actions,
-        OfflinePlayer target,
-        Map<String, String> variables
-    ) {
-        List<RewardActionResult> results = new ArrayList<>();
-        for (BossDamageRewardAction action : actions) {
-            results.add(executeAction(action, target, variables));
-        }
-        return results;
     }
 
     /**
@@ -83,52 +47,15 @@ public final class RewardActionExecutor {
 
         try {
             return switch (action.type()) {
-                case ITEM -> executeItemAction(action, target, variables);
+                case ITEM -> RewardActionResult.fail("item", "物品需要受控投递");
                 case COMMAND -> executeCommandAction(action, target, variables);
                 case MESSAGE -> executeMessageAction(action, target, variables);
-                case MAIL -> executeMailAction(action, target, variables);
+                case MAIL -> RewardActionResult.fail("mail", "邮件需要持久投递回执");
                 case SIGNAL -> executeSignalAction(action, target, variables);
             };
         } catch (Exception e) {
             return RewardActionResult.fail(action.type().configKey(), "执行异常: " + e.getMessage());
         }
-    }
-
-    // ─── 物品 ───────────────────────────────────────────
-
-    private RewardActionResult executeItemAction(
-        BossDamageRewardAction action,
-        OfflinePlayer target,
-        Map<String, String> variables
-    ) {
-        if (action.id().isBlank()) {
-            return RewardActionResult.fail(action.type().configKey(), "缺少 id");
-        }
-        if (!(target instanceof Player player) || !player.isOnline()) {
-            return RewardActionResult.fail(action.type().configKey(), "目标玩家不在线");
-        }
-
-        ItemStack itemStack = itemSourceRegistry.generateItem(action.source(), action.id(), action.amount(), action.nbt(), player);
-        if (itemStack == null || itemStack.getType().isAir()) {
-            return RewardActionResult.fail(action.type().configKey(), "物品不存在: " + action.id());
-        }
-
-        String sourceDetail = "ranking:" + variables.getOrDefault("boss_id", "unknown");
-        ItemRewardDispatcher.DispatchOptions options = ItemRewardDispatcher.DispatchOptions.builder("entitytracker")
-            .sourceDetail(sourceDetail)
-            .overflowMailSubject("Boss 奖励溢出物品")
-            .overflowMailBody("您的背包已满，Boss 排行榜奖励物品通过邮件补发。")
-            .overflowMailSenderName("Boss 追踪")
-            .build();
-        ItemRewardDispatcher.DispatchResult result = itemRewardDispatcher.dispatchItem(player, itemStack, options);
-        if (result.success()) {
-            String suffix = "";
-            if (result.mailedCount() > 0) suffix = "（部分通过邮件补发）";
-            else if (result.pendingCount() > 0) suffix = "（部分已暂存待发放）";
-            String desc = itemStack.getAmount() + "x " + action.id() + suffix;
-            return RewardActionResult.ok(action.type().configKey(), desc);
-        }
-        return RewardActionResult.fail(action.type().configKey(), result.message());
     }
 
     // ─── 命令 ───────────────────────────────────────────
@@ -149,11 +76,11 @@ public final class RewardActionExecutor {
         } catch (IllegalArgumentException e) {
             return RewardActionResult.fail(action.type().configKey(), "命令含分隔符已拒绝: " + rendered);
         }
-        boolean dispatched = xuanmo.arcartxsuite.api.command.ThrottledCommandExecutor.dispatch(stripLeadingSlash(rendered));
+        boolean dispatched = Bukkit.dispatchCommand(Bukkit.getConsoleSender(), stripLeadingSlash(rendered));
         return new RewardActionResult(
             action.type().configKey(),
             dispatched,
-            dispatched ? rendered : "控制台命令受理失败(队列已满或执行异常): " + rendered
+            dispatched ? rendered : "控制台命令执行未确认: " + rendered
         );
     }
 
@@ -184,31 +111,6 @@ public final class RewardActionExecutor {
             }
         }
         return RewardActionResult.ok(action.type().configKey(), rendered);
-    }
-
-    // ─── 邮件 ───────────────────────────────────────────
-
-    private RewardActionResult executeMailAction(
-        BossDamageRewardAction action,
-        OfflinePlayer target,
-        Map<String, String> variables
-    ) {
-        if (action.presetId().isBlank()) {
-            return RewardActionResult.fail("mail", "缺少 preset-id");
-        }
-        String targetName = resolvePlayerName(target, variables);
-        xuanmo.arcartxsuite.api.capability.MailDispatchable mailService = mailDispatchableProvider.get();
-        if (mailService == null) {
-            return RewardActionResult.fail("mail", "Mail 模块未启用");
-        }
-        String source = "RankingReward:" + variables.getOrDefault("boss_id", "unknown");
-        xuanmo.arcartxsuite.api.capability.mail.MailSendResult mailResult = mailService.dispatchPreset(
-            xuanmo.arcartxsuite.api.capability.mail.MailPresetRequest.builder(action.presetId(), targetName)
-                .sourceModule("entitytracker")
-                .sourceDetail(source)
-                .build());
-        boolean ok = mailResult.success();
-        return new RewardActionResult("mail", ok, ok ? "邮件已派发" : "邮件派发失败");
     }
 
     // ─── 信号 ───────────────────────────────────────────
