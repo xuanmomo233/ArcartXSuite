@@ -156,7 +156,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: pip install PyYAML
+      - name: Install regression check dependencies
+        run: python -m pip install PyYAML javalang==0.13.0
       - name: Verify Abyss UI contracts
         run: python modules/abyss/src/test/ui/verify_abyss_ui.py
       - name: Test public API and Abyss transactions

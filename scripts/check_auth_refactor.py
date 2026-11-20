@@ -134,17 +134,28 @@ for relative in json_paths:
     except Exception as error:
         errors.append(f"{relative}: {error}")
 
+descriptor_parser = (ROOT / "src/main/java/xuanmo/arcartxsuite/module/ModuleDescriptorParser.java").read_text(encoding="utf-8-sig")
+required_api = re.search(r'"([0-9.]+)"\.equals\(apiVersion\)', descriptor_parser)
+if not required_api:
+    errors.append("ModuleDescriptorParser: cannot determine the required module API")
 for path in (ROOT / "modules").rglob("module.yml"):
     if "build" in path.parts:
         continue
     manifest = yaml.safe_load(path.read_text(encoding="utf-8-sig"))
-    if str(manifest.get("api-version")) != "3.0":
-        errors.append(f"{path.relative_to(ROOT)}: module must declare API 3.0")
+    if required_api and str(manifest.get("api-version")) != required_api.group(1):
+        errors.append(f"{path.relative_to(ROOT)}: module must declare API {required_api.group(1)}")
 
 gateway_prefix = "xuanmo.arcartxsuite.auth.minecraft."
-for relative in ("scripts/encrypt-jar.py", "gradle/encryption-tasks.gradle.kts", ".github/workflows/build-encrypted.yml"):
+for relative in ("scripts/encrypt-jar.py", "gradle/encryption-tasks.gradle.kts"):
     if gateway_prefix not in (ROOT / relative).read_text(encoding="utf-8-sig"):
         errors.append(f"{relative}: standalone gateway plaintext boundary missing")
+workflow = yaml.safe_load((ROOT / ".github/workflows/build-encrypted.yml").read_text(encoding="utf-8-sig"))
+core_steps = workflow["jobs"]["build-encrypted"]["steps"]
+core_encryption = next((step.get("run", "") for step in core_steps if step.get("name") == "Encrypt core classes"), "")
+if "python scripts/encrypt-jar.py" not in core_encryption or (
+    "--keep-prefixes" in core_encryption and gateway_prefix not in core_encryption
+):
+    errors.append("build-encrypted.yml: core encryption must preserve the standalone gateway")
 if "-keep class " + gateway_prefix + "**" not in (ROOT / "proguard/axs-core.pro").read_text(encoding="utf-8-sig"):
     errors.append("proguard/axs-core.pro: standalone gateway entry point can be removed or renamed")
 if "xuanmo/arcartxsuite/auth/minecraft/" not in (ROOT / "buildSrc/src/main/kotlin/StringEncryptTask.kt").read_text(encoding="utf-8-sig"):

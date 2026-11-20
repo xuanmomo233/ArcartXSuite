@@ -29,22 +29,16 @@ def statement(values, prefix):
     return next(value for value in values if value.startswith(prefix))
 
 
-def schema(connection, values):
-    tables = set()
-    for value in values:
-        match = re.match(r"CREATE TABLE IF NOT EXISTS\s+(\w+)", value)
-        if match and match.group(1) not in tables:
-            if match.group(1) == "bp_reward_requests":
-                value = value.replace("payload %s NOT NULL", "payload TEXT NOT NULL")
-            connection.execute(value)
-            tables.add(match.group(1))
+def schema(connection, values, *tables):
+    for table in tables:
+        connection.execute(statement(values, f"CREATE TABLE IF NOT EXISTS {table} ("))
 
 
 bp = sql_strings("modules/battlepass/src/main/java/xuanmo/arcartxsuite/battlepass/storage/JdbcBattlePassRepository.java")
 engine = sql_strings("auth-engine/src/main/java/xuanmo/arcartxsuite/auth/engine/JdbcAuthStore.java")
 
 with sqlite3.connect(":memory:", isolation_level=None) as database:
-    schema(database, engine)
+    schema(database, engine, "axs_auth_presence_v1")
     insert = statement(engine, "INSERT INTO axs_auth_presence_v1 (realm_id,account_id,business_date) VALUES")
     pending = statement(engine, "SELECT business_date FROM axs_auth_presence_v1")
     ack = statement(engine, "UPDATE axs_auth_presence_v1 SET delivered=1")
@@ -55,7 +49,7 @@ with sqlite3.connect(":memory:", isolation_level=None) as database:
     assert database.execute(pending, ("realm", "account", "2026-11-08")).fetchone()[0] == "2026-11-08"
 
 with sqlite3.connect(":memory:", isolation_level=None) as database:
-    schema(database, bp)
+    schema(database, bp, "bp_auth_receipts", "bp_player_progress", "bp_player_tasks")
     progress = statement(bp, "INSERT INTO bp_player_progress")
     task = statement(bp, "INSERT INTO bp_player_tasks")
     receipt = statement(bp, "INSERT INTO bp_auth_receipts")
