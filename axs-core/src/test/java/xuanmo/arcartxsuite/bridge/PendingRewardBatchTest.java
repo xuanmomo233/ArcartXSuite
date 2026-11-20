@@ -3,6 +3,7 @@ package xuanmo.arcartxsuite.bridge;
 import java.nio.file.Path;
 import java.sql.DriverManager;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Logger;
@@ -19,10 +20,10 @@ import org.bukkit.scheduler.BukkitTask;
 import org.mockito.MockedStatic;
 import xuanmo.arcartxsuite.api.auth.AuthAccess;
 import xuanmo.arcartxsuite.api.auth.AuthSnapshot;
-import xuanmo.arcartxsuite.api.capability.MailDispatchable;
-import xuanmo.arcartxsuite.api.capability.mail.MailSendResult;
 import xuanmo.arcartxsuite.api.command.ThrottledCommandExecutor;
 import xuanmo.arcartxsuite.api.item.PendingRewardService.PendingReward;
+import xuanmo.arcartxsuite.api.mail.AxsDeliveryReceipt;
+import xuanmo.arcartxsuite.api.mail.AxsMailService;
 import xuanmo.arcartxsuite.api.storage.StorageManager;
 import xuanmo.arcartxsuite.module.ModuleRegistry;
 import static org.junit.jupiter.api.Assertions.*;
@@ -136,20 +137,47 @@ class PendingRewardBatchTest {
         assertEquals(Boolean.TRUE, begin.invoke(service, batch, reward));
     }
 
-    @Test void partialLegacyBattlePassMailBatchRequiresReconciliation() throws Exception {
+    @Test void partialMailBatchRetriesWithTheSameKeysUntilAllReceiptsArrive() throws Exception {
         ModuleRegistry registry = mock(ModuleRegistry.class);
-        MailDispatchable mail = mock(MailDispatchable.class);
-        when(registry.getCapability(MailDispatchable.class)).thenReturn(mail);
-        when(mail.dispatchPreset(any())).thenReturn(MailSendResult.ok(), MailSendResult.failure("unavailable"));
-        var host = new DefaultPendingRewardService(null, Logger.getAnonymousLogger(), null, registry);
-        var dispatch = DefaultPendingRewardService.class.getDeclaredMethod("dispatchMailPreset", String.class, PendingReward.class);
-        dispatch.setAccessible(true);
-        var reward = PendingReward.mailPreset(player, "battlepass", List.of("first", "second"), "test");
+        AxsMailService mail = mock(AxsMailService.class);
+        when(registry.getCapability(AxsMailService.class)).thenReturn(mail);
+        var host = new DefaultPendingRewardService(null, Logger.getAnonymousLogger(), storage, registry);
+        assertTrue(service.savePendingBatchConfirmed("mail-batch",
+            List.of(PendingReward.mailPreset(player, "battlepass", List.of("first", "second"), "test"))));
+        var batch = claim(host);
+        var reward = claimedRewards(batch).get(0);
+        String key = "pending:" + player + ":" + reward.createdAt() + ":" + reward.id();
+        var firstReceipt = new CompletableFuture<AxsDeliveryReceipt>();
+        when(mail.sendPresetDurable(player, "first", "battlepass", key + ":preset:0"))
+            .thenReturn(firstReceipt, CompletableFuture.completedFuture(AxsDeliveryReceipt.duplicate(11)));
+        when(mail.sendPresetDurable(player, "second", "battlepass", key + ":preset:1"))
+            .thenReturn(CompletableFuture.completedFuture(AxsDeliveryReceipt.noOp()),
+                CompletableFuture.completedFuture(AxsDeliveryReceipt.ok(12, 1)));
 
-        var error = assertThrows(java.lang.reflect.InvocationTargetException.class,
-            () -> dispatch.invoke(host, "Tester", reward));
-        assertInstanceOf(IllegalStateException.class, error.getCause());
-        verify(mail, times(2)).dispatchPreset(any());
+        var scheduler = mock(BukkitScheduler.class);
+        doAnswer(call -> {
+            call.<Runnable>getArgument(1).run();
+            return null;
+        }).when(scheduler).runTaskAsynchronously(isNull(), any(Runnable.class));
+        try (var bukkit = mockStatic(Bukkit.class)) {
+            bukkit.when(Bukkit::getScheduler).thenReturn(scheduler);
+            var dispatch = DefaultPendingRewardService.class.getDeclaredMethod("dispatchMailPreset", batch.getClass(), PendingReward.class);
+            dispatch.setAccessible(true);
+            beginDispatch(batch, reward);
+            dispatch.invoke(host, batch, reward);
+            verify(mail, never()).sendPresetDurable(eq(player), eq("second"), eq("battlepass"), anyString());
+
+            firstReceipt.complete(AxsDeliveryReceipt.ok(11, 1));
+            assertEquals(1, service.loadPending(player).get(0).attempts());
+            var retry = claim(host);
+            var pending = claimedRewards(retry).get(0);
+            beginDispatch(retry, pending);
+            dispatch.invoke(host, retry, pending);
+
+            assertTrue(service.loadPending(player).isEmpty());
+            verify(mail, times(2)).sendPresetDurable(player, "first", "battlepass", key + ":preset:0");
+            verify(mail, times(2)).sendPresetDurable(player, "second", "battlepass", key + ":preset:1");
+        }
     }
 
     @ParameterizedTest

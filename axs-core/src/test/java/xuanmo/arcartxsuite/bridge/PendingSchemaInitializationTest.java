@@ -27,12 +27,19 @@ class PendingSchemaInitializationTest {
 
     @Test void incompleteSchemaDoesNotPoisonTheSuccessCacheAndCanRetry() throws Exception {
         var storage = mock(StorageManager.class); var connection = mock(Connection.class); var statement = mock(Statement.class);
-        when(storage.getHostConnection()).thenReturn(connection); when(connection.createStatement()).thenReturn(statement);
+        when(storage.getHostConnection()).thenReturn(connection)
+            .thenAnswer(call -> DriverManager.getConnection("jdbc:sqlite:" + directory.resolve("retry.db")));
+        when(connection.createStatement()).thenReturn(statement);
         String probe = "SELECT claimed_at, claimed_by FROM axs_pending_rewards WHERE 1=0";
-        when(statement.executeQuery(probe)).thenThrow(new SQLException("column upgrade incomplete")).thenReturn(mock(ResultSet.class));
+        when(statement.executeQuery(probe)).thenThrow(new SQLException("column upgrade incomplete"));
         var quiet = Logger.getAnonymousLogger(); quiet.setUseParentHandlers(false);
         var service = new DefaultPendingRewardService(null, quiet, storage, null);
-        service.initialize(); service.initialize(); service.initialize();
-        verify(storage, times(2)).getHostConnection(); verify(statement, times(2)).executeQuery(probe);
+        service.initialize();
+        assertFalse(service.storageReady());
+        service.initialize();
+        assertTrue(service.storageReady());
+        service.initialize();
+        verify(storage, times(2)).getHostConnection();
+        verify(statement).executeQuery(probe);
     }
 }
