@@ -89,7 +89,8 @@
 
 # ─── 保留资源文件名/内容（不重命名 yml 等资源）─────────
 -adaptresourcefilenames !**.yml,!**.yaml
--adaptresourcefilecontents !**.yml,!**.yaml
+# The runtime catalog is signed over the exact bytes and the signature is binary.
+-adaptresourcefilecontents !META-INF/axs-libraries.properties,!META-INF/axs-libraries.sig,!**.yml,!**.yaml
 
 # ─── 混淆字典（使用难以辨认的名称） ──────────────────────────
 -obfuscationdictionary dictionary.txt
