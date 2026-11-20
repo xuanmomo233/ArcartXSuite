@@ -41,6 +41,7 @@ concurrency:
   cancel-in-progress: false
 env:
   PYTHONUTF8: '1'
+  AXS_CI_VALIDATION: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_upload && 'true' || 'false' }}
   # 首次验证使用 skip_upload。双平台通过后可设置仓库变量启用常规发布。
   AXS_PRODUCTION: ${{ (inputs.native_self_check || vars.AXS_NATIVE_SELF_CHECK == 'true') && 'ON' || 'OFF' }}
 
@@ -195,9 +196,9 @@ jobs:
 
       - name: Derive Native verification public keys
         env:
-          AXB_SIGN_SEED_B64: ${{ secrets.AXB_SIGN_SEED_B64 }}
-          AXB_RESP_SIGN_SEED_B64: ${{ secrets.AXB_RESP_SIGN_SEED_B64 }}
-        run: python scripts/generate-keys.py --public-only --output native-public-keys
+          AXB_SIGN_SEED_B64: ${{ inputs.skip_upload != true && secrets.AXB_SIGN_SEED_B64 || '' }}
+          AXB_RESP_SIGN_SEED_B64: ${{ inputs.skip_upload != true && secrets.AXB_RESP_SIGN_SEED_B64 || '' }}
+        run: python scripts/run-with-build-seeds.py scripts/generate-keys.py --public-only --output native-public-keys
 
       - uses: actions/upload-artifact@v5
         with:
@@ -238,8 +239,8 @@ jobs:
 
       - name: Embed native verification keys and seed parts
         env:
-          AXS_SEED_PARTS_B64: ${{ secrets.AXS_SEED_PARTS_B64 }}
-        run: python3 scripts/embed-keys.py --keys-dir native-public-keys --require-fixed-seed --embed-only
+          AXS_SEED_PARTS_B64: ${{ inputs.skip_upload != true && secrets.AXS_SEED_PARTS_B64 || '' }}
+        run: python3 scripts/run-with-build-seeds.py scripts/embed-keys.py --keys-dir native-public-keys --require-fixed-seed --embed-only
 
       - name: Build native library
         run: |
@@ -300,8 +301,8 @@ jobs:
       - name: Embed native verification keys and seed parts
         shell: pwsh
         env:
-          AXS_SEED_PARTS_B64: ${{ secrets.AXS_SEED_PARTS_B64 }}
-        run: python scripts/embed-keys.py --keys-dir native-public-keys --require-fixed-seed --embed-only
+          AXS_SEED_PARTS_B64: ${{ inputs.skip_upload != true && secrets.AXS_SEED_PARTS_B64 || '' }}
+        run: python scripts/run-with-build-seeds.py scripts/embed-keys.py --keys-dir native-public-keys --require-fixed-seed --embed-only
 
       - uses: actions/setup-java@v5
         with:
@@ -438,16 +439,16 @@ jobs:
 
       - name: Prepare local signing keys and verify Native public keys
         env:
-          AXB_SIGN_SEED_B64: ${{ secrets.AXB_SIGN_SEED_B64 }}
-          AXB_RESP_SIGN_SEED_B64: ${{ secrets.AXB_RESP_SIGN_SEED_B64 }}
-          AXS_SEED_PARTS_B64: ${{ secrets.AXS_SEED_PARTS_B64 }}
+          AXB_SIGN_SEED_B64: ${{ inputs.skip_upload != true && secrets.AXB_SIGN_SEED_B64 || '' }}
+          AXB_RESP_SIGN_SEED_B64: ${{ inputs.skip_upload != true && secrets.AXB_RESP_SIGN_SEED_B64 || '' }}
+          AXS_SEED_PARTS_B64: ${{ inputs.skip_upload != true && secrets.AXS_SEED_PARTS_B64 || '' }}
         run: |
           set -euo pipefail
           umask 077
           keys_root="$RUNNER_TEMP/axs-signing"
-          python scripts/generate-keys.py --require-fixed-seeds --class-count 0 --output "$keys_root"
+          python scripts/run-with-build-seeds.py scripts/generate-keys.py --require-fixed-seeds --class-count 0 --output "$keys_root"
           export KEYS_DIR="$keys_root/$(cat "$keys_root/current_version.txt")"
-          python scripts/embed-keys.py --keys-dir "$KEYS_DIR" --require-fixed-seed --derive-only
+          python scripts/run-with-build-seeds.py scripts/embed-keys.py --keys-dir "$KEYS_DIR" --require-fixed-seed --derive-only
           python - <<'PY'
           import os
           from pathlib import Path
