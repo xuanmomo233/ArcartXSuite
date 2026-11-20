@@ -2,6 +2,7 @@ package xuanmo.arcartxsuite.api.util;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.mockito.Mockito.mock;
 
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Proxy;
@@ -144,22 +145,21 @@ class NavigationPathfinderTest {
 
         Terrain(BiPredicate<Integer, Integer> loaded) {
             UUID worldId = UUID.randomUUID();
-            world = proxy(World.class, (self, method, args) -> switch (method.getName()) {
-                case "equals" -> self == args[0];
-                case "hashCode" -> System.identityHashCode(self);
+            // A JDK World proxy initializes Bukkit's structure registry without a server.
+            world = mock(World.class, call -> switch (call.getMethod().getName()) {
                 case "toString", "getName" -> "pathfinder-test";
                 case "getUID" -> worldId;
                 case "getGameTime" -> gameTime;
                 case "getMinHeight" -> -64;
                 case "getMaxHeight" -> 320;
-                case "isChunkLoaded" -> loaded.test((int) args[0], (int) args[1]);
+                case "isChunkLoaded" -> loaded.test(call.getArgument(0), call.getArgument(1));
                 case "getBlockAt" -> {
                     blockReads++;
-                    Cell cell = new Cell((int) args[0], (int) args[1], (int) args[2]);
+                    Cell cell = new Cell(call.getArgument(0), call.getArgument(1), call.getArgument(2));
                     if (!loaded.test(cell.x() >> 4, cell.z() >> 4)) unloadedBlockReads++;
                     yield cells.getOrDefault(cell, blocks.computeIfAbsent(Material.AIR, Terrain::block));
                 }
-                default -> throw new UnsupportedOperationException(method.toString());
+                default -> throw new UnsupportedOperationException(call.getMethod().toString());
             });
         }
 

@@ -930,9 +930,8 @@ public final class DefaultPendingRewardService implements PendingRewardService, 
         if (mail != null) {
             if (!durableMailOnSameStore(mail)) return Delivery.RETRY;
             var request = xuanmo.arcartxsuite.api.mail.AxsMailRequest
-                .builder(pendingMailKey(pending) + ":item")
+                .builder(pendingMailKey(pending) + ":item", spec.mailSubject())
                 .recipient(player.getUniqueId())
-                .title(spec.mailSubject())
                 .content(spec.mailBody() == null ? "" : spec.mailBody())
                 .item(item)
                 .senderName("战令")

@@ -1,8 +1,8 @@
 package xuanmo.arcartxsuite.api.util;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.mock;
 
-import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -19,14 +19,13 @@ class NavigationTargetServiceTest {
     private final World home = world("home");
     private final World remote = world("remote");
     private final UUID id = UUID.randomUUID();
-    private final Player player = (Player) Proxy.newProxyInstance(Player.class.getClassLoader(), new Class<?>[]{Player.class},
-        (proxy, method, args) -> switch (method.getName()) {
-            case "isOnline" -> true;
-            case "getUniqueId" -> id;
-            case "getWorld" -> home;
-            case "getLocation" -> new Location(home, 0, 64, 0);
-            default -> throw new AssertionError(method.getName());
-        });
+    private final Player player = mock(Player.class, call -> switch (call.getMethod().getName()) {
+        case "isOnline" -> true;
+        case "getUniqueId" -> id;
+        case "getWorld" -> home;
+        case "getLocation" -> new Location(home, 0, 64, 0);
+        default -> throw new AssertionError(call.getMethod().getName());
+    });
 
     @Test
     void reportsLossOnceAndRecoversAtTheSameCoordinatesInAnotherWorld() throws Exception {
@@ -81,13 +80,10 @@ class NavigationTargetServiceTest {
 
     private static World world(String name) {
         UUID id = UUID.randomUUID();
-        return (World) Proxy.newProxyInstance(World.class.getClassLoader(), new Class<?>[]{World.class},
-            (proxy, method, args) -> switch (method.getName()) {
-                case "getName" -> name;
-                case "getUID" -> id;
-                case "equals" -> proxy == args[0];
-                case "hashCode" -> id.hashCode();
-                default -> throw new AssertionError(method.getName());
-            });
+        return mock(World.class, call -> switch (call.getMethod().getName()) {
+            case "getName" -> name;
+            case "getUID" -> id;
+            default -> throw new AssertionError(call.getMethod().getName());
+        });
     }
 }
