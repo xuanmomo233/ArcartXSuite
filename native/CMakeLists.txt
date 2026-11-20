@@ -63,6 +63,8 @@ endif()
 
 # MinGW 静态链接运行时库
 if(MINGW)
+    # MinGW 的静态 OpenSSL 使用 BCryptGenRandom。
+    target_link_libraries(axs-native PRIVATE bcrypt)
     target_compile_options(axs-native PRIVATE -static-libgcc -static-libstdc++)
     target_link_options(axs-native PRIVATE -static-libgcc -static-libstdc++)
     execute_process(
