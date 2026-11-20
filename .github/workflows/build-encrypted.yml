@@ -41,7 +41,8 @@ concurrency:
   cancel-in-progress: false
 env:
   PYTHONUTF8: '1'
-  AXS_CI_VALIDATION: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_upload && 'true' || 'false' }}
+  # AXS_SKIP_CLOUD_UPLOAD=true 暂停全部云端上传；解除后需手动全量发布。
+  AXS_CI_VALIDATION: ${{ (vars.AXS_SKIP_CLOUD_UPLOAD == 'true' || (github.event_name == 'workflow_dispatch' && inputs.skip_upload)) && 'true' || 'false' }}
   # 首次验证使用 skip_upload。双平台通过后可设置仓库变量启用常规发布。
   AXS_PRODUCTION: ${{ (inputs.native_self_check || vars.AXS_NATIVE_SELF_CHECK == 'true') && 'ON' || 'OFF' }}
 
@@ -196,8 +197,8 @@ jobs:
 
       - name: Derive Native verification public keys
         env:
-          AXB_SIGN_SEED_B64: ${{ inputs.skip_upload != true && secrets.AXB_SIGN_SEED_B64 || '' }}
-          AXB_RESP_SIGN_SEED_B64: ${{ inputs.skip_upload != true && secrets.AXB_RESP_SIGN_SEED_B64 || '' }}
+          AXB_SIGN_SEED_B64: ${{ env.AXS_CI_VALIDATION != 'true' && secrets.AXB_SIGN_SEED_B64 || '' }}
+          AXB_RESP_SIGN_SEED_B64: ${{ env.AXS_CI_VALIDATION != 'true' && secrets.AXB_RESP_SIGN_SEED_B64 || '' }}
         run: python scripts/run-with-build-seeds.py scripts/generate-keys.py --public-only --output native-public-keys
 
       - uses: actions/upload-artifact@v5
@@ -239,7 +240,7 @@ jobs:
 
       - name: Embed native verification keys and seed parts
         env:
-          AXS_SEED_PARTS_B64: ${{ inputs.skip_upload != true && secrets.AXS_SEED_PARTS_B64 || '' }}
+          AXS_SEED_PARTS_B64: ${{ env.AXS_CI_VALIDATION != 'true' && secrets.AXS_SEED_PARTS_B64 || '' }}
         run: python3 scripts/run-with-build-seeds.py scripts/embed-keys.py --keys-dir native-public-keys --require-fixed-seed --embed-only
 
       - name: Build native library
@@ -301,7 +302,7 @@ jobs:
       - name: Embed native verification keys and seed parts
         shell: pwsh
         env:
-          AXS_SEED_PARTS_B64: ${{ inputs.skip_upload != true && secrets.AXS_SEED_PARTS_B64 || '' }}
+          AXS_SEED_PARTS_B64: ${{ env.AXS_CI_VALIDATION != 'true' && secrets.AXS_SEED_PARTS_B64 || '' }}
         run: python scripts/run-with-build-seeds.py scripts/embed-keys.py --keys-dir native-public-keys --require-fixed-seed --embed-only
 
       - uses: actions/setup-java@v5
@@ -439,9 +440,9 @@ jobs:
 
       - name: Prepare local signing keys and verify Native public keys
         env:
-          AXB_SIGN_SEED_B64: ${{ inputs.skip_upload != true && secrets.AXB_SIGN_SEED_B64 || '' }}
-          AXB_RESP_SIGN_SEED_B64: ${{ inputs.skip_upload != true && secrets.AXB_RESP_SIGN_SEED_B64 || '' }}
-          AXS_SEED_PARTS_B64: ${{ inputs.skip_upload != true && secrets.AXS_SEED_PARTS_B64 || '' }}
+          AXB_SIGN_SEED_B64: ${{ env.AXS_CI_VALIDATION != 'true' && secrets.AXB_SIGN_SEED_B64 || '' }}
+          AXB_RESP_SIGN_SEED_B64: ${{ env.AXS_CI_VALIDATION != 'true' && secrets.AXB_RESP_SIGN_SEED_B64 || '' }}
+          AXS_SEED_PARTS_B64: ${{ env.AXS_CI_VALIDATION != 'true' && secrets.AXS_SEED_PARTS_B64 || '' }}
         run: |
           set -euo pipefail
           umask 077
@@ -603,7 +604,7 @@ jobs:
         run: bash ./gradlew :proxy:bungee:shadowJar :proxy:velocity:shadowJar --no-build-cache --parallel
 
       - name: Upload proxy JARs to cloud
-        if: inputs.skip_upload != true
+        if: env.AXS_CI_VALIDATION != 'true'
         env:
           CLOUD_CI_TOKEN: ${{ secrets.CLOUD_CI_TOKEN }}
           CLOUD_BASE_URL: https://cloud.021209.xyz
@@ -697,7 +698,7 @@ jobs:
 
       - name: Restore Suite release inputs
         id: staged-release
-        if: inputs.skip_upload != true && github.run_attempt != '1'
+        if: env.AXS_CI_VALIDATION != 'true' && github.run_attempt != '1'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -766,20 +767,20 @@ jobs:
         run: python3 modules/abyss/src/test/protection/verify_journal_mapping.py
 
       - uses: actions/download-artifact@v5
-        if: inputs.skip_upload != true && steps.staged-release.outputs.restored != 'true' && steps.staged-release.outputs.prepared != 'true'
+        if: env.AXS_CI_VALIDATION != 'true' && steps.staged-release.outputs.restored != 'true' && steps.staged-release.outputs.prepared != 'true'
         with:
           pattern: axs-jar-encrypted-*
           path: suite-release/hosts
 
       - uses: actions/download-artifact@v5
-        if: inputs.skip_upload != true && steps.staged-release.outputs.restored != 'true' && steps.staged-release.outputs.prepared != 'true'
+        if: env.AXS_CI_VALIDATION != 'true' && steps.staged-release.outputs.restored != 'true' && steps.staged-release.outputs.prepared != 'true'
         with:
           pattern: axs-runtime-libraries-*
           path: suite-release/libraries
           merge-multiple: true
 
       - name: Prepare immutable Suite release inputs
-        if: inputs.skip_upload != true && steps.staged-release.outputs.restored != 'true' && steps.staged-release.outputs.prepared != 'true'
+        if: env.AXS_CI_VALIDATION != 'true' && steps.staged-release.outputs.restored != 'true' && steps.staged-release.outputs.prepared != 'true'
         env:
           CLOUD_CI_TOKEN: ${{ secrets.CLOUD_CI_TOKEN }}
           FLARE_BASE_URL: ${{ vars.FLARE_BASE_URL }}
@@ -787,7 +788,7 @@ jobs:
         run: python scripts/publish-suite.py prepare
 
       - name: Save Suite staging inputs
-        if: inputs.skip_upload != true && steps.staged-release.outputs.restored != 'true' && steps.staged-release.outputs.prepared != 'true'
+        if: env.AXS_CI_VALIDATION != 'true' && steps.staged-release.outputs.restored != 'true' && steps.staged-release.outputs.prepared != 'true'
         uses: actions/upload-artifact@v5
         with:
           name: suite-staging
@@ -800,7 +801,7 @@ jobs:
           if-no-files-found: error
 
       - name: Stage the Suite release
-        if: inputs.skip_upload != true && steps.staged-release.outputs.restored != 'true'
+        if: env.AXS_CI_VALIDATION != 'true' && steps.staged-release.outputs.restored != 'true'
         env:
           CLOUD_CI_TOKEN: ${{ secrets.CLOUD_CI_TOKEN }}
           FLARE_BASE_URL: ${{ vars.FLARE_BASE_URL }}
@@ -814,7 +815,7 @@ jobs:
           python scripts/publish-suite.py stage
 
       - name: Save Suite activation manifest
-        if: inputs.skip_upload != true && github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.staged-release.outputs.restored != 'true'
+        if: env.AXS_CI_VALIDATION != 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.staged-release.outputs.restored != 'true'
         uses: actions/upload-artifact@v5
         with:
           name: suite-activation
@@ -822,7 +823,7 @@ jobs:
           if-no-files-found: error
 
       - name: Activate the staged Suite release
-        if: inputs.skip_upload != true && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: env.AXS_CI_VALIDATION != 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
           CLOUD_CI_TOKEN: ${{ secrets.CLOUD_CI_TOKEN }}
           FLARE_BASE_URL: ${{ vars.FLARE_BASE_URL }}
