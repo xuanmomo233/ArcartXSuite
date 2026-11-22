@@ -10,8 +10,10 @@ import sys
 def main():
     environment = os.environ.copy()
     if environment.get("AXS_CI_VALIDATION") == "true":
-        if environment.get("GITHUB_EVENT_NAME") != "workflow_dispatch":
-            sys.exit("CI validation seeds require a manual workflow run")
+        event = environment.get("GITHUB_EVENT_NAME")
+        main_push = event == "push" and environment.get("GITHUB_REF") == "refs/heads/main"
+        if event != "workflow_dispatch" and not main_push:
+            sys.exit("CI validation seeds require a manual workflow run or a push to main")
         # A retry can reuse artifacts from a successful job in the same run.
         run = ":".join(environment[key] for key in ("GITHUB_REPOSITORY", "GITHUB_RUN_ID", "GITHUB_SHA"))
         for name in ("AXS_SEED_PARTS_B64", "AXB_SIGN_SEED_B64", "AXB_RESP_SIGN_SEED_B64"):
