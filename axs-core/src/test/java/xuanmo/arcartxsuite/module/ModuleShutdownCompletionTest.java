@@ -80,9 +80,12 @@ class ModuleShutdownCompletionTest {
         var module = mock(AXSModule.class);
         when(module.shutdownCompletion()).thenReturn(stopped);
         var loader = new TestLoader();
-        closeLoader(module, loader);
+        var registry = closeLoader(module, loader);
+        var originalWaiter = registry.retirement("title").toCompletableFuture();
         stopped.completeExceptionally(new IllegalStateException("simulated close failure"));
         assertTrue(loader.closed);
+        assertThrows(java.util.concurrent.CompletionException.class, originalWaiter::join);
+        assertDoesNotThrow(() -> registry.retirement("title").toCompletableFuture().join());
     }
 
     @Test
@@ -117,7 +120,7 @@ class ModuleShutdownCompletionTest {
             () -> module.shutdownCompletion().toCompletableFuture().join());
     }
 
-    private void closeLoader(AXSModule module, TestLoader loader) throws Exception {
+    private ModuleRegistry closeLoader(AXSModule module, TestLoader loader) throws Exception {
         var loaded = new LoadedModule(ModuleDescriptor.builder("title").name("Title").build(),
             module, loader, (File) null);
         var registry = mock(ModuleRegistry.class, CALLS_REAL_METHODS);
@@ -127,6 +130,7 @@ class ModuleShutdownCompletionTest {
         var close = ModuleRegistry.class.getDeclaredMethod("closeClassLoader", LoadedModule.class);
         close.setAccessible(true);
         close.invoke(registry, loaded);
+        return registry;
     }
 
     private static final class TestLoader extends ClassLoader implements Closeable {

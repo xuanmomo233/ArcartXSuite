@@ -1188,10 +1188,11 @@ public final class ModuleRegistry {
                     if (problem == null) problem = closeFailure;
                     else problem.addSuppressed(closeFailure);
                 }
-                if (problem == null) {
-                    retiringModules.remove(id, released);
-                    released.complete(null);
-                } else released.completeExceptionally(problem);
+                // Only pending retirements gate later requests. Existing waiters still receive
+                // this attempt's failure after all services, tasks and the loader have retired.
+                retiringModules.remove(id, released);
+                if (problem == null) released.complete(null);
+                else released.completeExceptionally(problem);
             }
         });
     }
