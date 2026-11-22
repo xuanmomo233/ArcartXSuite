@@ -41,8 +41,8 @@ concurrency:
   cancel-in-progress: false
 env:
   PYTHONUTF8: '1'
-  # AXS_SKIP_CLOUD_UPLOAD=true 暂停全部云端上传；解除后需手动全量发布。
-  AXS_CI_VALIDATION: ${{ (vars.AXS_SKIP_CLOUD_UPLOAD == 'true' || (github.event_name == 'workflow_dispatch' && inputs.skip_upload)) && 'true' || 'false' }}
+  # 暂停期间只验证。解除后可在 main 手动全量发布，或由下一次 push 补发。
+  AXS_CI_VALIDATION: ${{ (github.ref != 'refs/heads/main' || vars.AXS_SKIP_CLOUD_UPLOAD == 'true' || inputs.skip_upload) && 'true' || 'false' }}
   # 首次验证使用 skip_upload。双平台通过后可设置仓库变量启用常规发布。
   AXS_PRODUCTION: ${{ (inputs.native_self_check || vars.AXS_NATIVE_SELF_CHECK == 'true') && 'ON' || 'OFF' }}
 
@@ -66,22 +66,26 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          set -euo pipefail
           # 全部模块清单（用于手动 / 无法 diff 时的全量构建）
           # 排除 debug 模块（非生产模块，无 encryptModuleAxb 任务）
           ALL_MODULES=$(ls -d modules/*/ 2>/dev/null | sed 's#modules/##; s#/##' | sort -u | grep -v '^debug$' | jq -R -s -c 'split("\n") | map(select(. != ""))')
 
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            BASE=""
-          elif [ "${{ github.event_name }}" = "pull_request" ]; then
-            BASE="${{ github.event.pull_request.base.sha }}"
-          else
-            # A failed run may have introduced public API changes without publishing the host.
-            # Include every change since the last successful publication in the next attempt.
-            BASE=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/build-encrypted.yml/runs?branch=main&event=push&status=success&per_page=1" --jq '.workflow_runs[0].head_sha // empty') || exit 1
+          last_published() {
+            gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=$1&per_page=100" \
+              | jq -r '[.artifacts[] | select(.expired == false and .workflow_run.head_branch == "main")]
+                    | max_by(.created_at) | .workflow_run.head_sha // empty'
+          }
+          BASE=""
+          PROXY_BASE=""
+          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            # Only a completed publication writes these markers. Validation and staging do not.
+            BASE=$(last_published suite-published) || exit 1
+            PROXY_BASE=$(last_published suite-proxy-published) || exit 1
           fi
 
           # 首次提交 / 手动触发 / 无法解析 BASE 时全量构建（本体 + 全部模块）
-          if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ] || ! git rev-parse --verify "$BASE^{commit}" >/dev/null 2>&1; then
+          if [ -z "$BASE" ] || ! git merge-base --is-ancestor "$BASE" HEAD 2>/dev/null; then
             echo "无法 diff（手动/首提），全量构建本体 + 全部模块"
             echo "core_changed=true" >> $GITHUB_OUTPUT
             echo "module_changed=true" >> $GITHUB_OUTPUT
@@ -92,36 +96,38 @@ jobs:
             exit 0
           fi
 
-          git diff --name-only "$BASE" HEAD > /tmp/changed_files.txt
+          CHANGED_FILES=$(mktemp "$RUNNER_TEMP/axs-changed.XXXXXXXX")
+          trap 'rm -f "$CHANGED_FILES"' EXIT
+          git diff --name-only "$BASE" HEAD > "$CHANGED_FILES"
           echo "=== Changed files ==="
-          cat /tmp/changed_files.txt
+          cat "$CHANGED_FILES"
 
           # 仅调整工作流时不产生新的产品版本，生产链路可手动选择 skip_upload 验证。
           CORE_CHANGED=false
-          if grep -Eq '^(src/main/|axs-core/|axs-api/|axs-placeholder/|auth-(engine|minecraft|protocol)/|buildSrc/|proguard/|native/|scripts/|gradle/|keys/|gradle\.properties|settings\.gradle\.kts|build\.gradle\.kts)' /tmp/changed_files.txt; then
+          if grep -Eq '^(src/main/|axs-core/|axs-api/|axs-placeholder/|auth-(engine|minecraft|protocol)/|buildSrc/|proguard/|native/|scripts/|gradle/|keys/|gradle\.properties|settings\.gradle\.kts|build\.gradle\.kts)' "$CHANGED_FILES"; then
             CORE_CHANGED=true
           fi
 
           PROXY_CHANGED=false
-          if grep -Eq '^proxy/' /tmp/changed_files.txt; then
+          if [ -z "$PROXY_BASE" ] || ! git merge-base --is-ancestor "$PROXY_BASE" HEAD 2>/dev/null; then
             PROXY_CHANGED=true
+          else
+            if ! git diff --quiet "$PROXY_BASE" HEAD -- proxy/ auth-protocol/ gradle.properties \
+                axs-api/src/main/java/xuanmo/arcartxsuite/api/crossserver/ProxyTabVisibility.java; then
+              PROXY_CHANGED=true
+            fi
           fi
           echo "proxy_changed=$PROXY_CHANGED" >> $GITHUB_OUTPUT
 
           AUTH_CHANGED=false
-          if grep -Eq '^(auth-(center|engine|minecraft|protocol)/|src/main/java/xuanmo/arcartxsuite/auth/|modules/loginview/|proxy/)' /tmp/changed_files.txt; then
+          if [ "$PROXY_CHANGED" = "true" ] || grep -Eq '^(auth-(center|engine|minecraft|protocol)/|src/main/java/xuanmo/arcartxsuite/auth/|modules/loginview/)' "$CHANGED_FILES"; then
             AUTH_CHANGED=true
           fi
           echo "auth_changed=$AUTH_CHANGED" >> $GITHUB_OUTPUT
 
-          # 只构建当前仍存在的模块。差异中可以包含已删除模块的文件。
-          CHANGED_MODULES=$(awk -F/ '$1 == "modules" && NF > 2 { print $2 }' /tmp/changed_files.txt | sort -u |
-            while IFS= read -r module; do
-              if [ "$module" != debug ] && [ -f "modules/$module/build.gradle.kts" ]; then
-                printf '%s\n' "$module"
-              fi
-            done | jq -R -s -c 'split("\n") | map(select(. != ""))')
-          if [ "$CORE_CHANGED" = "true" ] || awk -F/ '$1 == "modules" && $2 != "debug" && NF > 2 { found=1 } END { exit !found }' /tmp/changed_files.txt; then
+          # 发布是一套完整宿主和模块。删除正式模块也必须重建发布清单。
+          CHANGED_MODULES="[]"
+          if [ "$CORE_CHANGED" = "true" ] || awk -F/ '$1 == "modules" && $2 != "debug" && NF > 2 { found=1 } END { exit !found }' "$CHANGED_FILES"; then
             CORE_CHANGED=true
             CHANGED_MODULES="$ALL_MODULES"
           fi
@@ -160,6 +166,8 @@ jobs:
           node-version: '22'
       - name: Install regression check dependencies
         run: python -m pip install PyYAML javalang==0.13.0
+      - name: Verify publication resume
+        run: python -m unittest discover -s scripts/tests -p test_release_workflow.py
       - name: Verify Abyss UI contracts
         run: python modules/abyss/src/test/ui/verify_abyss_ui.py
       - name: Test public API and Abyss transactions
@@ -612,8 +620,8 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${CLOUD_CI_TOKEN:-}" ]; then
-            echo "SKIP: CLOUD_CI_TOKEN 未配置，跳过 proxy jar 上传"
-            exit 0
+            echo "ERROR: CLOUD_CI_TOKEN 未配置"
+            exit 1
           fi
           BASEVER=$(grep -E '^version=' gradle.properties | head -n1 | cut -d= -f2 | tr -d '[:space:]')
           SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
@@ -686,6 +694,16 @@ jobs:
           }
           upload_one bungee "proxy/bungee/build/libs/ArcartXSuite-Proxy-Bungee-*.jar"
           upload_one velocity "proxy/velocity/build/libs/ArcartXSuite-Proxy-Velocity-*.jar"
+          printf '%s\n' "$GITHUB_SHA" > proxy-published.txt
+
+      - name: Record proxy publication
+        if: env.AXS_CI_VALIDATION != 'true'
+        uses: actions/upload-artifact@v5
+        with:
+          name: suite-proxy-published
+          path: proxy-published.txt
+          overwrite: true
+          if-no-files-found: error
 
   publish-suite:
     runs-on: ubuntu-latest
@@ -815,7 +833,7 @@ jobs:
           python scripts/publish-suite.py stage
 
       - name: Save Suite activation manifest
-        if: env.AXS_CI_VALIDATION != 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.staged-release.outputs.restored != 'true'
+        if: env.AXS_CI_VALIDATION != 'true' && steps.staged-release.outputs.restored != 'true'
         uses: actions/upload-artifact@v5
         with:
           name: suite-activation
@@ -823,7 +841,7 @@ jobs:
           if-no-files-found: error
 
       - name: Activate the staged Suite release
-        if: env.AXS_CI_VALIDATION != 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: env.AXS_CI_VALIDATION != 'true'
         env:
           CLOUD_CI_TOKEN: ${{ secrets.CLOUD_CI_TOKEN }}
           FLARE_BASE_URL: ${{ vars.FLARE_BASE_URL }}
@@ -834,6 +852,15 @@ jobs:
             exit 1
           fi
           python scripts/publish-suite.py activate
+
+      - name: Record Suite publication
+        if: env.AXS_CI_VALIDATION != 'true'
+        uses: actions/upload-artifact@v5
+        with:
+          name: suite-published
+          path: suite-release/activation.json
+          overwrite: true
+          if-no-files-found: error
 
       - name: Upload ProGuard mappings (modules)
         if: steps.staged-release.outputs.restored != 'true' && steps.staged-release.outputs.prepared != 'true'
