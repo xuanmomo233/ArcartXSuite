@@ -42,7 +42,7 @@ public final class LocalHandshakeClient {
                 if(!receipt.profile().equals(profile) || !receipt.name().equalsIgnoreCase(name) || receipt.issuedAt()>now+1000
                         || receipt.expiresAt()<=now || receipt.expiresAt()<=receipt.issuedAt() || receipt.expiresAt()-receipt.issuedAt()>30_000
                         || !connection.toString().equals(json.get("challenge").getAsString()) || !realm.equals(json.get("realm").getAsString())
-                        || !(receipt.provider().equals("microsoft") || receipt.provider().equals("littleskin")))
+                        || !java.util.Set.of("microsoft", "littleskin", "center").contains(receipt.provider()))
                     throw new IllegalArgumentException("Receipt binding mismatch");
                 return new HandshakeReceipts.Claim(receipt,connection,realm);
             }

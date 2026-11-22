@@ -187,6 +187,7 @@ public final class LoginViewController implements Listener, AutoCloseable {
                 job=runtime.confirmExternal(player.getUniqueId(),connection,request);
             }
             case "login","register" -> {
+                if(!runtime.passwordAuthenticationAllowed()) return true;
                 if(data.size()!=7 || !"1".equals(data.get(5))) return true;
                 if(data.get(0).equals("register") && !data.get(2).equals(data.get(3))) {
                     message(player,"两次密码不一致。",false); return true;
@@ -195,6 +196,7 @@ public final class LoginViewController implements Listener, AutoCloseable {
                     data.get(0).equals("register"),Boolean.parseBoolean(data.get(4)),data.get(6));
             }
             case "change" -> {
+                if(!runtime.passwordAuthenticationAllowed()) return true;
                 if(data.size()!=5) return true;
                 if(!data.get(3).equals(data.get(4))) { message(player,"两次新密码不一致。",false); return true; }
                 job=runtime.changePassword(player.getUniqueId(),connection,data.get(2).toCharArray(),data.get(3).toCharArray());

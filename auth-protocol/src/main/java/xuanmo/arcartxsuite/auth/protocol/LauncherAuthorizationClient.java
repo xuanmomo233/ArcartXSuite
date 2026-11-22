@@ -60,6 +60,23 @@ public final class LauncherAuthorizationClient {
         public int interval() { return interval; }
     }
 
+    /** Supply these values to the game and point the client authlib-injector at sessionApi. */
+    public static final class MinecraftSession {
+        private final URI sessionApi;
+        private final String profileId, name, accessToken;
+        private final int expiresIn;
+
+        private MinecraftSession(URI sessionApi, String profileId, String name, String accessToken, int expiresIn) {
+            this.sessionApi=sessionApi; this.profileId=profileId; this.name=name;
+            this.accessToken=accessToken; this.expiresIn=expiresIn;
+        }
+        public URI sessionApi() { return sessionApi; }
+        public String profileId() { return profileId; }
+        public String name() { return name; }
+        public String accessToken() { return accessToken; }
+        public int expiresIn() { return expiresIn; }
+    }
+
     public LauncherAuthorizationClient(URI origin, String clientId, URI redirect) {
         if (!"https".equals(origin.getScheme()) || origin.getHost()==null || origin.getUserInfo()!=null
                 || origin.getRawQuery()!=null || origin.getRawFragment()!=null || !origin.getPath().isEmpty()
@@ -120,6 +137,33 @@ public final class LauncherAuthorizationClient {
         String confirmation=call("/pair",data);
         if (!confirmation.matches("[0-9A-F]{8}")) throw new IOException("Invalid game confirmation");
         return confirmation;
+    }
+
+    /** Alternative to pair(): consumes the launch token before starting an AuthCenter account in Minecraft. */
+    public MinecraftSession minecraftSession(String launchToken) throws IOException {
+        if (launchToken == null || !launchToken.matches("[A-Za-z0-9_-]{43}")) throw new IOException("Invalid launch token");
+        var data = new JsonObject();
+        data.addProperty("launchToken",launchToken);
+        return parseMinecraftSession(origin, call("/minecraft-session",data));
+    }
+
+    static MinecraftSession parseMinecraftSession(URI origin, String json) throws IOException {
+        try {
+            var value = JsonParser.parseString(json).getAsJsonObject();
+            URI endpoint = URI.create(value.get("sessionApi").getAsString());
+            String profile = value.get("profileId").getAsString();
+            String name = value.get("name").getAsString();
+            String token = value.get("accessToken").getAsString();
+            int expires = value.get("expiresIn").getAsInt();
+            if (!origin.resolve(MinecraftSessionProtocol.API_ROOT).equals(endpoint)
+                    || !profile.matches("[0-9a-f]{32}") || !MinecraftSessionProtocol.isCenterName(name)
+                    || !token.matches("[A-Za-z0-9_-]{43}") || expires < 1 || expires > MinecraftSessionProtocol.TOKEN_SECONDS)
+                throw new IOException("Invalid Minecraft session response");
+            return new MinecraftSession(endpoint,profile,name,token,expires);
+        } catch (RuntimeException failure) {
+            // Malformed upstream response may contain the access token. Keep it out of exception messages.
+            throw new IOException("Invalid Minecraft session response");
+        }
     }
     public DeviceAttempt startDevice() throws IOException {
         try {

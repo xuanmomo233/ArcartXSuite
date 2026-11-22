@@ -9,11 +9,13 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
+import xuanmo.arcartxsuite.auth.protocol.MinecraftSessionProtocol;
 
 /** Only hasJoined can authenticate; profile lookup must never call this verifier. */
 public final class YggdrasilVerifier {
     public enum Status { VERIFIED, NO_MATCH, INVALID, UNAVAILABLE }
-    public record Provider(String id, URI hasJoinedEndpoint) {
+    public record Provider(String id, URI hasJoinedEndpoint, boolean centerProfilesOnly) {
+        public Provider(String id, URI hasJoinedEndpoint) { this(id, hasJoinedEndpoint, false); }
         public Provider {
             if(id==null || !id.matches("[a-z0-9_-]{1,64}") || !"https".equals(hasJoinedEndpoint.getScheme())
                     || hasJoinedEndpoint.getHost()==null || hasJoinedEndpoint.getRawQuery()!=null
@@ -22,10 +24,16 @@ public final class YggdrasilVerifier {
         }
     }
     public record Result(Status status, String provider, UUID profile, String name, String response) {}
+    @FunctionalInterface interface Connections { HttpURLConnection open(URI endpoint) throws java.io.IOException; }
     private final java.util.concurrent.Semaphore permits = new java.util.concurrent.Semaphore(32);
     private final List<Provider> providers;
+    private final Connections connections;
     public YggdrasilVerifier(List<Provider> providers) {
+        this(providers, endpoint -> (HttpURLConnection)endpoint.toURL().openConnection());
+    }
+    YggdrasilVerifier(List<Provider> providers, Connections connections) {
         this.providers=List.copyOf(providers);
+        this.connections=connections;
     }
     public Result verify(String username,String serverHash,String requestedIp) {
         if(!permits.tryAcquire()) return new Result(Status.UNAVAILABLE,"",null,"","");
@@ -48,13 +56,14 @@ public final class YggdrasilVerifier {
         }
         boolean unavailable=false;
         for(Provider provider:providers) {
+            if (provider.centerProfilesOnly() && !MinecraftSessionProtocol.isCenterName(username)) continue;
             URI uri=URI.create(provider.hasJoinedEndpoint()+"?username="+URLEncoder.encode(username,StandardCharsets.UTF_8)
                 +"&serverId="+URLEncoder.encode(serverHash,StandardCharsets.UTF_8)
                 +(requestedIp==null?"":"&ip="+URLEncoder.encode(requestedIp,StandardCharsets.UTF_8)));
             HttpURLConnection connection=null;
             try {
                 long deadline=System.nanoTime()+Duration.ofSeconds(4).toNanos();
-                connection=(HttpURLConnection)uri.toURL().openConnection();
+                connection=connections.open(uri);
                 connection.setConnectTimeout(2000); connection.setReadTimeout(2000);
                 connection.setInstanceFollowRedirects(false);
                 int status=connection.getResponseCode();

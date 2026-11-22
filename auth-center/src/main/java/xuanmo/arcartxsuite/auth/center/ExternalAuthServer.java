@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.net.*;
 import java.util.*;
 import java.util.concurrent.*;
+import xuanmo.arcartxsuite.auth.protocol.MinecraftSessionProtocol;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static xuanmo.arcartxsuite.auth.center.CenterConfiguration.*;
 import static xuanmo.arcartxsuite.auth.center.ExternalConfiguration.PATH;
@@ -16,6 +17,8 @@ final class ExternalAuthServer implements AutoCloseable {
     private static final String COOKIE = "__Host-axs_external";
     private final ExternalConfiguration config;
     private final ExternalAuthorization authorization;
+    private final CenterService center;
+    private final MinecraftSessions minecraft;
     private final HttpServer server;
     private final ExecutorService workers = new ThreadPoolExecutor(4,4,0,TimeUnit.MILLISECONDS,new ArrayBlockingQueue<>(32),new ThreadPoolExecutor.AbortPolicy());
     private final ScheduledExecutorService deadlines = Executors.newSingleThreadScheduledExecutor();
@@ -23,16 +26,26 @@ final class ExternalAuthServer implements AutoCloseable {
     private final ExternalRequestBudget budget=new ExternalRequestBudget();
     private final Semaphore starts=new Semaphore(2);
     private final Semaphore completions=new Semaphore(2);
+    private final Semaphore minecraftWork=new Semaphore(2);
     private final Set<String> inFlight=ConcurrentHashMap.newKeySet();
 
     ExternalAuthServer(ExternalConfiguration config, CenterService center) throws IOException {
+        this(config,center,new ExternalAuthorization(config,center));
+    }
+
+    ExternalAuthServer(ExternalConfiguration config, CenterService center, ExternalAuthorization authorization) throws IOException {
         this.config = config;
-        authorization = new ExternalAuthorization(config,center);
+        this.center = center;
+        this.authorization = authorization;
+        minecraft = config.minecraftSessions()
+            ? new MinecraftSessions(config.origin().resolve(MinecraftSessionProtocol.API_ROOT),
+                center::minecraftIdentityCurrent, System::currentTimeMillis) : null;
         server = HttpServer.create(new InetSocketAddress("127.0.0.1",config.port()),32);
         server.setExecutor(workers);
         server.createContext(PATH,this::handle);
     }
     void start() { server.start(); }
+    int port() { return server.getAddress().getPort(); }
 
     private void handle(HttpExchange exchange) throws IOException {
         var deadline = deadlines.schedule(exchange::close,8,TimeUnit.SECONDS);
@@ -46,31 +59,40 @@ final class ExternalAuthServer implements AutoCloseable {
             headers.set("X-Content-Type-Options","nosniff");
             String path = exchange.getRequestURI().getRawPath();
             String method = exchange.getRequestMethod();
-            if(!Set.of(PATH+"/verify",PATH+"/device",PATH+"/launcher/authorize",PATH+"/callback",PATH+"/confirm",
+            boolean minecraftPath = minecraft != null && minecraftPath(path);
+            if(!minecraftPath && !Set.of(PATH+"/verify",PATH+"/device",PATH+"/launcher/authorize",PATH+"/callback",PATH+"/confirm",
                     PATH+"/launcher/start",PATH+"/launcher/exchange",PATH+"/launcher/pair",PATH+"/launcher/device/start",
-                    PATH+"/launcher/device/poll",PATH+"/launcher/device/cancel").contains(path)) { html(exchange,404,"未找到该入口。"); return; }
+                    PATH+"/launcher/device/poll",PATH+"/launcher/device/cancel",MinecraftSessionProtocol.LAUNCHER_EXCHANGE)
+                    .contains(path)) { html(exchange,404,"未找到该入口。"); return; }
             var forwarded=exchange.getRequestHeaders().get("X-AXS-Client-IP");
             if(!exchange.getRemoteAddress().getAddress().isLoopbackAddress() || forwarded==null || forwarded.size()!=1)
                 throw new SecurityException("Trusted proxy client address required");
             String source=ExternalRequestBudget.source(forwarded.get(0));
-            String group=path.endsWith("/callback") || path.endsWith("/confirm") || path.endsWith("/exchange") || path.endsWith("/pair")
-                || path.endsWith("/cancel")?"complete":path.endsWith("/poll")?"poll":"start";
+            String group=minecraftPath
+                ? path.equals(MinecraftSessionProtocol.JOIN) ? "minecraft-join" : "minecraft-query"
+                : path.endsWith("/callback") || path.endsWith("/confirm") || path.endsWith("/exchange") || path.endsWith("/pair")
+                || path.endsWith("/cancel") || path.equals(MinecraftSessionProtocol.LAUNCHER_EXCHANGE)
+                ? "complete" : path.endsWith("/poll") ? "poll" : "start";
             // Completion routes are already bounded by single-use state/code/token ownership. Anonymous input
             // must never spend a valid flow's minute allowance, including clients behind the same NAT.
-            if (!group.equals("complete") && !budget.acquire(source,group,group.equals("poll")?240:60)) {
+            int limit = group.equals("minecraft-query") ? 1200 : group.equals("poll") ? 240 : 60;
+            if (!group.equals("complete") && !budget.acquire(source,group,limit)) {
                 headers.set("Retry-After","60");
                 html(exchange,429,"请求过多，请稍候再试。");
                 return;
             }
-            sourceSlot=source+"/"+group;
-            if(!inFlight.add(sourceSlot)) { sourceSlot=null; headers.set("Retry-After","1"); html(exchange,429,"当前来源已有正在处理的请求。"); return; }
-            slot=group.equals("complete")?completions:starts;
+            if (!minecraftPath) {
+                sourceSlot=source+"/"+group;
+                if(!inFlight.add(sourceSlot)) { sourceSlot=null; headers.set("Retry-After","1"); html(exchange,429,"当前来源已有正在处理的请求。"); return; }
+            }
+            slot=minecraftPath ? minecraftWork : group.equals("complete") ? completions : starts;
             if(!slot.tryAcquire()) { slot=null; headers.set("Retry-After","1"); html(exchange,429,"认证繁忙，请稍后重试。"); return; }
+            if (minecraftPath) { minecraftRequest(exchange,path,source); return; }
             switch (method+" "+path) {
                 case "GET "+PATH+"/verify" -> {
                     String realm = required(parameters(exchange.getRequestURI().getRawQuery()),"realm");
                     if (!config.providers().containsKey(realm)) throw new SecurityException("Unknown realm");
-                    html(exchange,200,"<h1>游戏授权</h1><form method=\"post\" action=\""+PATH+"/verify\">"
+                    browserFormPage(exchange,"<h1>游戏授权</h1><form method=\"post\" action=\""+PATH+"/verify\">"
                         +"<input type=\"hidden\" name=\"realm\" value=\""+escape(realm)+"\">"
                         +"<label>游戏授权码 <input name=\"user_code\" required maxlength=\"20\" autocomplete=\"off\"></label>"
                         +" <button>通过官网登录</button></form>");
@@ -83,7 +105,7 @@ final class ExternalAuthServer implements AutoCloseable {
                     String client=required(parameters(exchange.getRequestURI().getRawQuery()),"client");
                     var app=config.launchers().get(client);
                     if(app==null) throw new SecurityException("Unknown launcher");
-                    html(exchange,200,"<h1>启动器设备授权</h1><form method=\"post\" action=\""+PATH+"/device\">"
+                    browserFormPage(exchange,"<h1>启动器设备授权</h1><form method=\"post\" action=\""+PATH+"/device\">"
                         +"<input type=\"hidden\" name=\"client\" value=\""+escape(client)+"\">"
                         +"<label>设备用户码 <input name=\"user_code\" required maxlength=\"20\" autocomplete=\"off\"></label>"
                         +" <button>通过官网登录</button></form>");
@@ -107,7 +129,7 @@ final class ExternalAuthServer implements AutoCloseable {
                         ? "授权启动器 "+(request.device()==null?request.launcher().app().id():request.device().app.id())
                         : (request.pairing().link()?"关联官网身份到 ":"允许本次游戏连接 ")+request.pairing().context().name()
                             +"（"+request.realm()+" / "+request.pairing().context().audience()+"）";
-                    html(exchange,200,"<h1>确认授权</h1><p>"+escape(action)+"</p>"
+                    browserFormPage(exchange,"<h1>确认授权</h1><p>"+escape(action)+"</p>"
                         +"<form method=\"post\" action=\""+PATH+"/confirm\"><input type=\"hidden\" name=\"state\" value=\""+escape(state)+"\">"
                         +"<button name=\"decision\" value=\"approve\">确认</button> <button name=\"decision\" value=\"deny\">拒绝</button></form>");
                 }
@@ -118,7 +140,8 @@ final class ExternalAuthServer implements AutoCloseable {
                     finishBrowser(exchange,authorization.confirm(required(form,"state"),cookie(exchange),"approve".equals(decision)));
                 }
                 case "POST "+PATH+"/launcher/start", "POST "+PATH+"/launcher/exchange", "POST "+PATH+"/launcher/pair",
-                     "POST "+PATH+"/launcher/device/start", "POST "+PATH+"/launcher/device/poll", "POST "+PATH+"/launcher/device/cancel" -> launcher(exchange,path,source);
+                     "POST "+PATH+"/launcher/device/start", "POST "+PATH+"/launcher/device/poll", "POST "+PATH+"/launcher/device/cancel",
+                     "POST "+MinecraftSessionProtocol.LAUNCHER_EXCHANGE -> launcher(exchange,path,source);
                 default -> html(exchange,404,"未找到该入口。");
             }
         } catch (IllegalArgumentException | SecurityException e) {
@@ -126,6 +149,66 @@ final class ExternalAuthServer implements AutoCloseable {
         } catch (Exception e) {
             html(exchange,503,"认证暂时不可用，请重新发起授权。");
         } finally { if(slot!=null) slot.release(); if(sourceSlot!=null) inFlight.remove(sourceSlot); deadline.cancel(false); exchange.close(); }
+    }
+
+    private static boolean minecraftPath(String path) {
+        String root = MinecraftSessionProtocol.API_ROOT;
+        return path.equals(root) || path.equals(root.substring(0, root.length() - 1)) ||
+            path.equals(MinecraftSessionProtocol.JOIN) || path.equals(MinecraftSessionProtocol.HAS_JOINED) ||
+            path.startsWith(MinecraftSessionProtocol.PROFILE);
+    }
+
+    private void minecraftRequest(HttpExchange exchange, String path, String source) throws IOException {
+        String method = exchange.getRequestMethod();
+        String query = exchange.getRequestURI().getRawQuery();
+        try {
+            if (path.equals(MinecraftSessionProtocol.JOIN) && method.equals("POST")) {
+                String type = exchange.getRequestHeaders().getFirst("Content-Type");
+                if (query != null || type == null || !type.split(";",2)[0].strip().equalsIgnoreCase("application/json"))
+                    throw new IllegalArgumentException("Expected a Minecraft join request");
+                var value = JsonParser.parseString(body(exchange));
+                if (!value.isJsonObject()) throw new IllegalArgumentException("Expected an object");
+                var data = value.getAsJsonObject();
+                keys(data,Set.of("accessToken","selectedProfile","serverId"));
+                if (!minecraft.join(string(data,"accessToken"),string(data,"selectedProfile"),string(data,"serverId"),source)) {
+                    send(exchange,403,"application/json","{\"error\":\"ForbiddenOperationException\",\"errorMessage\":\"Invalid Minecraft session\"}");
+                } else exchange.sendResponseHeaders(204,-1);
+                return;
+            }
+            if (!method.equals("GET")) { exchange.sendResponseHeaders(405,-1); return; }
+            if (path.equals(MinecraftSessionProtocol.HAS_JOINED)) {
+                if (query == null || query.length() > 2048) throw new IllegalArgumentException("Invalid Minecraft session query");
+                var args = parameters(query);
+                if (!Set.of("username","serverId","ip").containsAll(args.keySet()))
+                    throw new IllegalArgumentException("Unknown Minecraft session fields");
+                String ip = args.containsKey("ip") ? ExternalRequestBudget.source(args.get("ip")) : null;
+                minecraftProfile(exchange,minecraft.hasJoined(required(args,"username"),required(args,"serverId"),ip));
+                return;
+            }
+            if (path.startsWith(MinecraftSessionProtocol.PROFILE)) {
+                String id = path.substring(MinecraftSessionProtocol.PROFILE.length());
+                if (!id.matches("[a-fA-F0-9]{32}")) { exchange.sendResponseHeaders(204,-1); return; }
+                var uuid = UUID.fromString(id.substring(0,8)+"-"+id.substring(8,12)+"-"+id.substring(12,16)+"-"
+                    +id.substring(16,20)+"-"+id.substring(20));
+                minecraftProfile(exchange,center.minecraftProfile(uuid));
+                return;
+            }
+            if (path.equals(MinecraftSessionProtocol.JOIN)) { exchange.sendResponseHeaders(405,-1); return; }
+            send(exchange,200,"application/json","{\"meta\":{\"serverName\":\"Suite AuthCenter\"},\"skinDomains\":[]}");
+        } catch (IllegalArgumentException | SecurityException | JsonParseException e) {
+            exchange.sendResponseHeaders(400,-1);
+        } catch (java.sql.SQLException e) {
+            exchange.sendResponseHeaders(503,-1);
+        }
+    }
+
+    private static void minecraftProfile(HttpExchange exchange, GameExternalStore.MinecraftProfile profile) throws IOException {
+        if (profile == null) { exchange.sendResponseHeaders(204,-1); return; }
+        var json = new JsonObject();
+        json.addProperty("id",MinecraftSessionProtocol.profileId(profile.id()));
+        json.addProperty("name",profile.name());
+        json.add("properties",new JsonArray());
+        send(exchange,200,"application/json",JSON.toJson(json));
     }
 
     private void finishBrowser(HttpExchange exchange, ExternalAuthorization.ConsentResult result) throws IOException {
@@ -163,6 +246,11 @@ final class ExternalAuthServer implements AutoCloseable {
                 case PATH+"/launcher/pair" -> {
                     keys(json,Set.of("version","requestId","clientId","launchToken","userCode"));
                     value = authorization.pairLauncher(client,string(json,"launchToken"),string(json,"userCode"));
+                }
+                case MinecraftSessionProtocol.LAUNCHER_EXCHANGE -> {
+                    if (minecraft == null) throw new SecurityException("Minecraft authorization disabled");
+                    keys(json,Set.of("version","requestId","clientId","launchToken"));
+                    value = JSON.toJson(minecraft.issue(authorization.minecraftIdentity(client,string(json,"launchToken"))));
                 }
                 case PATH+"/launcher/device/start" -> {
                     keys(json,Set.of("version","requestId","clientId"));
@@ -240,6 +328,11 @@ final class ExternalAuthServer implements AutoCloseable {
     }
     private static String escape(String value) {
         return value.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;").replace("\"","&quot;");
+    }
+    private static void browserFormPage(HttpExchange exchange,String content) throws IOException {
+        // Preserve Origin on same-origin form POSTs without sending callback parameters in Referer.
+        exchange.getResponseHeaders().set("Referrer-Policy","strict-origin");
+        html(exchange,200,content);
     }
     private static void html(HttpExchange exchange, int status, String content) throws IOException {
         send(exchange,status,"text/html; charset=utf-8","<!doctype html><html lang=\"zh-CN\"><meta charset=\"utf-8\"><title>AXS 授权</title><body>"+content+"</body></html>");

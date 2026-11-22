@@ -21,6 +21,7 @@ import java.util.logging.ConsoleHandler;
 import java.util.logging.Formatter;
 import java.util.logging.LogRecord;
 import java.util.logging.Logger;
+import xuanmo.arcartxsuite.auth.protocol.MinecraftSessionProtocol;
 
 /**
  * Shared local verification gateway. Only successful hasJoined requests authenticate a transport.
@@ -28,6 +29,9 @@ import java.util.logging.Logger;
  */
 public class MixedYggdrasilGateway {
     private final HandshakeReceipts receipts=new HandshakeReceipts();
+    private final YggdrasilVerifier handshakeVerifier;
+    private final java.net.URI suiteCenterOrigin;
+    private final java.util.List<YggdrasilVerifier.Provider> providers;
 
     private static final String LITTLESKIN_BASE = "https://littleskin.cn/api/yggdrasil";
     private static final String MOJANG_SESSION = "https://sessionserver.mojang.com";
@@ -62,8 +66,17 @@ public class MixedYggdrasilGateway {
      * @param allowIps   允许访问 health 的客户端 IP 白名单（null/空 表示不限制）
      */
     public MixedYggdrasilGateway(Logger logger, boolean debug, String bindHost, String authToken, java.util.Collection<String> allowIps) {
+        this(logger, debug, bindHost, authToken, allowIps, System.getenv("AXS_MIXED_CENTER_HAS_JOINED"),
+            System.getenv("AXS_MIXED_CENTER_ORIGIN"));
+    }
+
+    MixedYggdrasilGateway(Logger logger, boolean debug, String bindHost, String authToken,
+            java.util.Collection<String> allowIps, String centerEndpoint, String suiteCenter) {
         this.logger = logger;
         this.debug = debug;
+        this.suiteCenterOrigin = suiteCenterOrigin(suiteCenter);
+        this.providers = verificationProviders(centerEndpoint, suiteCenter);
+        this.handshakeVerifier = new YggdrasilVerifier(providers);
         this.bindHost = (bindHost == null || bindHost.isBlank()) ? LOOPBACK_HOST : bindHost.trim();
         this.authToken = (authToken == null || authToken.isBlank()) ? null : authToken.trim();
         this.allowIps = (allowIps == null || allowIps.isEmpty())
@@ -107,7 +120,7 @@ public class MixedYggdrasilGateway {
                     + (allowIps.isEmpty() ? "" : " + IP 白名单 " + allowIps));
             }
             if (debug) {
-                logger.info("[MixedProxy] hasJoined 顺序: Mojang -> LittleSkin");
+                logger.info("[MixedProxy] 会话验证来源: " + providers.stream().map(YggdrasilVerifier.Provider::id).toList());
             }
             return port;
         } catch (IOException e) {
@@ -235,7 +248,16 @@ public class MixedYggdrasilGateway {
             return;
         }
 
-        // 3. 都未命中 → 204 No Content（Minecraft 规范：验证失败）
+        if (suiteCenterOrigin != null) {
+            String path = exchange.getRequestURI().getPath();
+            String id = path.substring(path.lastIndexOf('/') + 1);
+            if (id.matches("[a-fA-F0-9]{32}")) {
+                response = tryFetch(suiteCenterOrigin.resolve(MinecraftSessionProtocol.PROFILE + id).toString());
+                if (response != null) { sendJson(exchange,200,response); return; }
+            }
+        }
+
+        // 无档案时按 session API 返回 204。
         if (debug) {
             logger.info("[MixedProxy] Mojang + LittleSkin 均未命中 -> 204 | " + fullPath);
         }
@@ -244,12 +266,41 @@ public class MixedYggdrasilGateway {
     }
 
 
-    private final xuanmo.arcartxsuite.auth.minecraft.YggdrasilVerifier handshakeVerifier =
-        new xuanmo.arcartxsuite.auth.minecraft.YggdrasilVerifier(java.util.List.of(
-            new xuanmo.arcartxsuite.auth.minecraft.YggdrasilVerifier.Provider("microsoft",
-                java.net.URI.create("https://sessionserver.mojang.com/session/minecraft/hasJoined")),
-            new xuanmo.arcartxsuite.auth.minecraft.YggdrasilVerifier.Provider("littleskin",
-                java.net.URI.create("https://littleskin.cn/api/yggdrasil/sessionserver/session/minecraft/hasJoined"))));
+    static java.util.List<YggdrasilVerifier.Provider> verificationProviders(String centerEndpoint) {
+        return verificationProviders(centerEndpoint,null);
+    }
+
+    static java.util.List<YggdrasilVerifier.Provider> verificationProviders(String centerEndpoint,String suiteCenter) {
+        var providers = new java.util.ArrayList<YggdrasilVerifier.Provider>();
+        java.net.URI origin = suiteCenterOrigin(suiteCenter);
+        if (origin != null) {
+            if (centerEndpoint != null && !centerEndpoint.isBlank())
+                throw new IllegalArgumentException("Suite AuthCenter 与自定义认证端点只能选择一个");
+            providers.add(new YggdrasilVerifier.Provider("center",origin.resolve(MinecraftSessionProtocol.HAS_JOINED),true));
+        }
+        providers.add(new YggdrasilVerifier.Provider("microsoft",
+            java.net.URI.create(MOJANG_SESSION + "/session/minecraft/hasJoined")));
+        providers.add(new YggdrasilVerifier.Provider("littleskin",
+            java.net.URI.create(LITTLESKIN_BASE + SESSION_PREFIX + "/session/minecraft/hasJoined")));
+        if (centerEndpoint != null && !centerEndpoint.isBlank()) {
+            var center = java.net.URI.create(centerEndpoint.strip());
+            if (providers.stream().anyMatch(provider -> provider.hasJoinedEndpoint().equals(center))) {
+                throw new IllegalArgumentException("独立认证中心应使用自己的 hasJoined 服务地址");
+            }
+            providers.add(new YggdrasilVerifier.Provider("center", center));
+        }
+        return java.util.List.copyOf(providers);
+    }
+
+    private static java.net.URI suiteCenterOrigin(String configured) {
+        if (configured == null || configured.isBlank()) return null;
+        var uri = java.net.URI.create(configured.strip());
+        if (!"https".equals(uri.getScheme()) || uri.getHost() == null || uri.getUserInfo() != null
+                || uri.getPort() == 0 || uri.getPort() > 65535 || !uri.getRawPath().isEmpty()
+                || uri.getRawQuery() != null || uri.getRawFragment() != null)
+            throw new IllegalArgumentException("AXS_MIXED_CENTER_ORIGIN 必须是 Suite AuthCenter 的 HTTPS 根地址");
+        return uri;
+    }
 
     private void handleVerifiedHandshake(HttpExchange exchange) throws IOException {
         if(!exchange.getRemoteAddress().getAddress().isLoopbackAddress()) {

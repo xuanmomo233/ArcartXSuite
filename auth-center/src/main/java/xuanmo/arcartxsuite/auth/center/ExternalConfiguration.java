@@ -9,16 +9,23 @@ import java.util.*;
 
 import static xuanmo.arcartxsuite.auth.center.CenterConfiguration.*;
 
-record ExternalConfiguration(int port, URI origin, Map<String, Provider> providers, Map<String, Launcher> launchers) {
+record ExternalConfiguration(int port, URI origin, Map<String, Provider> providers, Map<String, Launcher> launchers,
+                             boolean minecraftSessions) {
     static final String PATH = "/v1/external";
 
     record Provider(URI issuer, URI authorize, URI token, String clientId, String secret, String keyId, RSAPublicKey key) {}
     record Launcher(String id, String realm, URI redirect) {}
 
+    ExternalConfiguration(int port, URI origin, Map<String, Provider> providers, Map<String, Launcher> launchers) {
+        this(port, origin, providers, launchers, false);
+    }
+
     static ExternalConfiguration parse(JsonElement element, Set<String> realms, int nodePort) throws Exception {
         if (element.isJsonNull()) return null;
         var config = element.getAsJsonObject();
-        keys(config, Set.of("port", "origin", "providers", "launchers"));
+        boolean minecraftSessions = config.has("minecraftSessions") && bool(config, "minecraftSessions");
+        if (config.has("minecraftSessions")) keys(config, Set.of("port", "origin", "providers", "launchers", "minecraftSessions"));
+        else keys(config, Set.of("port", "origin", "providers", "launchers"));
         int port = integer(config, "port");
         if (port < 1024 || port > 65535 || port == nodePort) throw new IllegalArgumentException("Invalid external listener port");
         URI origin = https(string(config, "origin"));
@@ -54,7 +61,8 @@ record ExternalConfiguration(int port, URI origin, Map<String, Provider> provide
             if (launchers.putIfAbsent(id, new Launcher(id, realm, redirect)) != null) throw new IllegalArgumentException("Duplicate launcher id");
         }
         if (providers.isEmpty() || launchers.size() > 64) throw new IllegalArgumentException("Invalid external provider or launcher count");
-        return new ExternalConfiguration(port, origin, Map.copyOf(providers), Map.copyOf(launchers));
+        if (minecraftSessions && launchers.isEmpty()) throw new IllegalArgumentException("Minecraft sessions require a registered launcher");
+        return new ExternalConfiguration(port, origin, Map.copyOf(providers), Map.copyOf(launchers), minecraftSessions);
     }
 
     URI url(String endpoint) { return origin.resolve(PATH + endpoint); }

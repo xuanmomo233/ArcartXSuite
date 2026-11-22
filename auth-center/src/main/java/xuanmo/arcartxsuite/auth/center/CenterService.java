@@ -349,6 +349,46 @@ final class CenterService {
     synchronized boolean attachLauncher(GameExternalStore.Pairing pairing,OidcLogin.Identity identity,GameExternalStore.Ownership expected) throws Exception {
         return Objects.equals(expected,external.ownership(pairing.context().realm(),identity)) && external.decide(pairing,identity,true);
     }
+    synchronized GameExternalStore.MinecraftIdentity minecraftIdentity(String realm, OidcLogin.Identity identity,
+            GameExternalStore.Ownership expected) throws java.sql.SQLException {
+        if (!minecraftIssuerAllowed(realm,identity)) throw new SecurityException("Minecraft identity provider is unavailable");
+        return outbox.transaction(c -> {
+            var owner = external.ownership(c,realm,identity);
+            if (!Objects.equals(expected,owner)) throw new SecurityException("External identity ownership changed");
+            var alias = external.minecraftAlias(c,realm,identity);
+            if (alias != null) {
+                if (owner == null || !alias.account().equals(owner.account()))
+                    throw new SecurityException("Minecraft profile ownership changed");
+                return new GameExternalStore.MinecraftIdentity(realm,identity,owner,alias.profile());
+            }
+            UUID id = UUID.randomUUID();
+            String name = "AXS_" + xuanmo.arcartxsuite.auth.protocol.MinecraftSessionProtocol.profileId(id).substring(0,12);
+            var profile = new GameExternalStore.MinecraftProfile(id,name);
+            if (owner == null) {
+                var account = stores.get(realm).createIdentity(c,name,id,"","oidc");
+                external.link(c,realm,identity,account.id());
+                CenterOutbox.append(c,realm,account.id()+":created",EventType.ACCOUNT_CREATED,account,account.version(),null,"");
+                owner = new GameExternalStore.Ownership(account.id(),account.version());
+            }
+            external.registerMinecraftAlias(c,realm,identity,owner.account(),profile);
+            return new GameExternalStore.MinecraftIdentity(realm,identity,owner,profile);
+        });
+    }
+
+    synchronized boolean minecraftIdentityCurrent(GameExternalStore.MinecraftIdentity identity) throws java.sql.SQLException {
+        return minecraftIssuerAllowed(identity.realm(),identity.identity())
+            && identity.owner().equals(external.ownership(identity.realm(),identity.identity()));
+    }
+
+    private boolean minecraftIssuerAllowed(String realm, OidcLogin.Identity identity) {
+        if (external == null || !config.external().minecraftSessions()) return false;
+        var provider = config.external().providers().get(realm);
+        return provider != null && provider.issuer().toString().equals(identity.issuer());
+    }
+
+    GameExternalStore.MinecraftProfile minecraftProfile(UUID id) throws java.sql.SQLException {
+        return external == null || !config.external().minecraftSessions() ? null : external.minecraftProfile(id);
+    }
     private Reply finishExternal(CenterConfiguration.Node node,GameExternalStore.Pairing pairing,JdbcAuthStore store,Policy policy) throws Exception {
         Context context=pairing.context();
         var identity=pairing.identity();

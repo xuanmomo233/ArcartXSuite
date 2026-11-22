@@ -45,6 +45,7 @@ public final class AuthenticationRuntime implements HostAuthentication, Listener
     private final List<xuanmo.arcartxsuite.auth.minecraft.ProxyProofs.Trust> trustedProxies;
     private final String audience;
     private final boolean passwordAllowed;
+    private final boolean microsoftOnline;
     private ProxyProofIngress proxyIngress;
     private final boolean requireBinding;
     private final Object bindingLock = new Object();
@@ -74,6 +75,7 @@ public final class AuthenticationRuntime implements HostAuthentication, Listener
         realm=settings.realm(); timezone=settings.timezone(); loginTimeoutNanos=settings.loginTimeoutNanos();
         nativeGateway=settings.nativeGateway(); trustedProxies=settings.trustedProxies(); audience=settings.audience();
         passwordAllowed=settings.passwordAllowed(); requireBinding=settings.requireBinding();
+        microsoftOnline=settings.ingress()==AuthenticationSettings.Ingress.ONLINE;
         terms=settings.terms(); requireTerms=terms.enabled();
         var policy=settings.passwordPolicy();
         minLength=policy.minLength(); maxLength=policy.maxLength(); maxAttempts=policy.maxAttempts(); cooldown=policy.cooldownMillis();
@@ -305,7 +307,7 @@ public final class AuthenticationRuntime implements HostAuthentication, Listener
         return submit(c,()->{ ensureInitialized(); return store.find(name); },account->{
             var snapshot=c.session().snapshot();
             c.session().loaded(new AuthSession.Operation(connectionId,snapshot.generation()),account!=null);
-            if(nativeGateway!=null) Bukkit.getScheduler().runTask(plugin,()->verifyNative(c));
+            if(microsoftOnline || nativeGateway!=null) Bukkit.getScheduler().runTask(plugin,()->verifyTransport(c));
             return result(uuid,true,"READY");
         });
     }
@@ -375,6 +377,10 @@ public final class AuthenticationRuntime implements HostAuthentication, Listener
         return future;
     }
     private void attach(Player player) {
+        if (passwordAllowed && !LoginTransport.localPeer(player.getAddress())) {
+            player.kickPlayer("本机离线密码入口仅对回环连接开放。");
+            return;
+        }
         if(!player.getName().matches("[\\p{L}\\p{N}_]{1,16}")) {
             player.kickPlayer("当前账号名不受支持，请使用 1 至 16 个字母、数字或下划线。"); return;
         }
@@ -388,7 +394,7 @@ public final class AuthenticationRuntime implements HostAuthentication, Listener
         String name = player.getName();
         submit(c, () -> { ensureInitialized(); return store.find(name); }, account -> {
             c.session().loaded(new AuthSession.Operation(c.session().snapshot().connectionId(), c.session().snapshot().generation()), account != null);
-            if(nativeGateway!=null) Bukkit.getScheduler().runTask(plugin,()->verifyNative(c));
+            if(microsoftOnline || nativeGateway!=null) Bukkit.getScheduler().runTask(plugin,()->verifyTransport(c));
             return result(uuid, true, "READY");
         });
     }
@@ -405,7 +411,10 @@ public final class AuthenticationRuntime implements HostAuthentication, Listener
 
     @Override public CompletionStage<Result> authenticate(UUID uuid, UUID connectionId, char[] password, boolean register, boolean agreed,String termsVersion) {
         Connection c = connection(uuid, connectionId);
-        if(!passwordAllowed) { Arrays.fill(password,'\0'); return CompletableFuture.completedFuture(result(uuid,false,"TRUSTED_INGRESS_REQUIRED")); }
+        if(!passwordAllowed || c != null && !LoginTransport.localPeer(c.player().getAddress())) {
+            Arrays.fill(password,'\0');
+            return CompletableFuture.completedFuture(result(uuid,false,"TRUSTED_INGRESS_REQUIRED"));
+        }
         if(register && !passwordRegistrationAllowed()) {
             Arrays.fill(password,'\0'); return CompletableFuture.completedFuture(result(uuid,false,"TRANSPORT_RECONNECT"));
         }
@@ -447,12 +456,13 @@ public final class AuthenticationRuntime implements HostAuthentication, Listener
         }, password);
     }
     @Override public CompletionStage<Result> changePassword(UUID uuid, UUID connectionId, char[] oldPassword, char[] newPassword) {
-        if(!snapshot(uuid).provider().equals("local-password")) {
+        if(!passwordAllowed || !snapshot(uuid).provider().equals("local-password")) {
             Arrays.fill(oldPassword,'\0'); Arrays.fill(newPassword,'\0');
             return CompletableFuture.completedFuture(result(uuid,false,"EXTERNAL_PROVIDER"));
         }
         Connection c = connection(uuid, connectionId);
-        if (c == null || !snapshot(uuid).admitted() || newPassword.length < minLength || newPassword.length > maxLength) {
+        if (c == null || !LoginTransport.localPeer(c.player().getAddress()) || !snapshot(uuid).admitted()
+                || newPassword.length < minLength || newPassword.length > maxLength) {
             Arrays.fill(oldPassword, '\0'); Arrays.fill(newPassword, '\0');
             return CompletableFuture.completedFuture(result(uuid, false, "INVALID_STATE"));
         }
@@ -510,12 +520,14 @@ public final class AuthenticationRuntime implements HostAuthentication, Listener
         return new IdentityVerification(account,provider,Set.copyOf(pending),"");
     }
     private record IdentityVerification(JdbcAuthStore.Account account,String provider,Set<AuthSnapshot.Requirement> pending,String error) {}
-    private void verifyNative(Connection c) {
-        if(!active || nativeGateway==null || connections.get(c.player().getUniqueId())!=c || c.session().snapshot().identityVerified()) return;
+    private void verifyTransport(Connection c) {
+        if(!active || !Bukkit.getOnlineMode() || connections.get(c.player().getUniqueId())!=c
+                || c.session().snapshot().identityVerified()) return;
         UUID uuid=c.player().getUniqueId(),connection=c.session().snapshot().connectionId();
         UUID challenge=c.session().challengeId();
         String name=c.player().getName();
         submit(c,()->{
+            if (microsoftOnline) return resolveTransportIdentity(uuid,name,"microsoft");
             xuanmo.arcartxsuite.auth.minecraft.HandshakeReceipts.Claim claim;
             try { claim=nativeGateway.claim(uuid,name,challenge,realm); }
             catch(Exception e) { return new IdentityVerification(null,"",Set.of(),"TRANSPORT_RECONNECT"); }
