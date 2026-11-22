@@ -23,12 +23,10 @@ final class GameExternalStore {
         try (var c = connections.open(); var s = c.createStatement()) {
             s.executeUpdate("CREATE TABLE IF NOT EXISTS axs_center_external_pairs_v1 (id TEXT PRIMARY KEY,node TEXT NOT NULL,connection_id TEXT NOT NULL,context TEXT NOT NULL,realm TEXT NOT NULL,code_hash TEXT NOT NULL UNIQUE,account TEXT,version BIGINT NOT NULL,link INTEGER NOT NULL,expires BIGINT NOT NULL,status TEXT NOT NULL,issuer TEXT,subject TEXT,UNIQUE(node,connection_id))");
             s.executeUpdate("CREATE TABLE IF NOT EXISTS axs_center_external_identities_v1 (realm TEXT NOT NULL,issuer TEXT NOT NULL,subject TEXT NOT NULL,account TEXT NOT NULL,PRIMARY KEY(realm,issuer,subject),UNIQUE(realm,account))");
-            s.executeUpdate("""
-                CREATE TABLE IF NOT EXISTS axs_center_minecraft_profiles_v1 (
-                    realm TEXT NOT NULL, issuer TEXT NOT NULL, subject TEXT NOT NULL, account TEXT NOT NULL,
-                    profile TEXT NOT NULL UNIQUE, name TEXT COLLATE NOCASE NOT NULL UNIQUE,
-                    PRIMARY KEY(realm,issuer,subject))
-                """);
+            s.executeUpdate("CREATE TABLE IF NOT EXISTS axs_center_minecraft_profiles_v1 ("
+                + "realm TEXT NOT NULL, issuer TEXT NOT NULL, subject TEXT NOT NULL, account TEXT NOT NULL,"
+                + "profile TEXT NOT NULL UNIQUE, name TEXT COLLATE NOCASE NOT NULL UNIQUE,"
+                + "PRIMARY KEY(realm,issuer,subject))");
         }
     }
 
