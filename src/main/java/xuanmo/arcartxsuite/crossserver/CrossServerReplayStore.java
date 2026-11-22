@@ -59,28 +59,30 @@ final class CrossServerReplayStore implements AutoCloseable {
         return cursor;
     }
 
-    InboxPage pending(String scope, long afterRow, int maxItems, int maxBytes) throws IOException, SQLException {
+    InboxPage pending(String scope, String moduleId, long afterRow, int maxItems, int maxBytes) throws IOException, SQLException {
         Connection db = open();
         var pending = new ArrayList<InboxItem>();
         long lastRow = afterRow;
         int remaining = maxBytes;
         boolean hasMore = false;
+        String moduleFilter = moduleId == null ? "" : " AND module_id = ?";
         try (var select = db.prepareStatement("""
-                SELECT rowid, message_id, expires_at, length(CAST(wire AS BLOB)), wire
-                FROM cross_server_inbox WHERE scope = ? AND rowid > ? ORDER BY rowid LIMIT ?
-                """)) {
+                SELECT rowid, message_id, module_id, expires_at, length(CAST(wire AS BLOB)), wire
+                FROM cross_server_inbox WHERE scope = ? AND rowid > ?
+                """ + moduleFilter + " ORDER BY rowid LIMIT ?")) {
             select.setString(1, scope);
             select.setLong(2, afterRow);
-            select.setInt(3, maxItems + 1);
+            if (moduleId != null) select.setString(3, moduleId);
+            select.setInt(moduleId == null ? 3 : 4, maxItems + 1);
             try (var result = select.executeQuery()) {
                 while (result.next()) {
-                    int bytes = result.getInt(4);
+                    int bytes = result.getInt(5);
                     if (pending.size() == maxItems || (!pending.isEmpty() && bytes > remaining)) {
                         hasMore = true;
                         break;
                     }
                     lastRow = result.getLong(1);
-                    pending.add(new InboxItem(result.getString(2), result.getLong(3), result.getString(5)));
+                    pending.add(new InboxItem(result.getString(2), result.getString(3), result.getLong(4), result.getString(6)));
                     remaining -= bytes;
                 }
             }
@@ -108,19 +110,20 @@ final class CrossServerReplayStore implements AutoCloseable {
                 AND (SELECT COUNT(*) FROM cross_server_inbox WHERE scope = ?) < ?
                 """;
         try (var insert = db.prepareStatement("""
-                INSERT OR IGNORE INTO cross_server_inbox (message_id, scope, expires_at, wire)
-                SELECT ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM cross_server_replay WHERE message_id = ?)
+                INSERT OR IGNORE INTO cross_server_inbox (message_id, scope, module_id, expires_at, wire)
+                SELECT ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM cross_server_replay WHERE message_id = ?)
                 """ + limit)) {
             for (int index = 0; index < candidates.size(); index++) {
                 InboxItem item = candidates.get(index);
                 insert.setString(1, item.messageId());
                 insert.setString(2, scope);
-                insert.setLong(3, item.expiresAt());
-                insert.setString(4, item.wire());
-                insert.setString(5, item.messageId());
+                insert.setString(3, item.moduleId());
+                insert.setLong(4, item.expiresAt());
+                insert.setString(5, item.wire());
+                insert.setString(6, item.messageId());
                 if (maxPending != 0) {
-                    insert.setString(6, scope);
-                    insert.setInt(7, maxPending);
+                    insert.setString(7, scope);
+                    insert.setInt(8, maxPending);
                 }
                 inserted[index] = insert.executeUpdate() == 1;
             }
@@ -165,6 +168,21 @@ final class CrossServerReplayStore implements AutoCloseable {
         db.commit();
     }
 
+    void expireInactive(String scope, java.util.Set<String> liveModules, long now) throws IOException, SQLException {
+        Connection db = open();
+        String excludeActive = liveModules.isEmpty() ? "" : " AND module_id NOT IN ("
+            + String.join(",", java.util.Collections.nCopies(liveModules.size(), "?")) + ")";
+        try (var delete = db.prepareStatement(
+                "DELETE FROM cross_server_inbox WHERE scope = ? AND expires_at < ?" + excludeActive)) {
+            delete.setString(1, scope);
+            delete.setLong(2, now);
+            int parameter = 3;
+            for (String moduleId : liveModules) delete.setString(parameter++, moduleId);
+            delete.executeUpdate();
+        }
+        db.commit();
+    }
+
     private boolean cleanup(Connection db, long now) throws SQLException {
         if (now < nextCleanup) return false;
         try (var delete = db.prepareStatement("DELETE FROM cross_server_replay WHERE expires_at < ?")) {
@@ -201,11 +219,14 @@ final class CrossServerReplayStore implements AutoCloseable {
                 CREATE TABLE IF NOT EXISTS cross_server_inbox (
                     message_id TEXT PRIMARY KEY,
                     scope TEXT NOT NULL,
+                    module_id TEXT NOT NULL,
                     expires_at INTEGER NOT NULL,
                     wire TEXT NOT NULL
                 )
                 """);
             statement.execute("CREATE INDEX IF NOT EXISTS cross_server_inbox_scope ON cross_server_inbox(scope)");
+            statement.execute("CREATE INDEX IF NOT EXISTS cross_server_inbox_module ON cross_server_inbox(scope, module_id)");
+            statement.execute("CREATE INDEX IF NOT EXISTS cross_server_inbox_expiry ON cross_server_inbox(scope, expires_at)");
             statement.execute("CREATE TABLE IF NOT EXISTS cross_server_cursor (scope TEXT PRIMARY KEY, cursor TEXT NOT NULL)");
             db.commit();
         } catch (SQLException failure) {
@@ -224,7 +245,7 @@ final class CrossServerReplayStore implements AutoCloseable {
     }
 
     record Claim(String messageId, long timestamp) {}
-    record InboxItem(String messageId, long expiresAt, String wire) {}
+    record InboxItem(String messageId, String moduleId, long expiresAt, String wire) {}
     record InboxPage(List<InboxItem> items, long lastRow, boolean hasMore) {}
     record StageResult(boolean[] inserted, boolean atCapacity) {}
 }

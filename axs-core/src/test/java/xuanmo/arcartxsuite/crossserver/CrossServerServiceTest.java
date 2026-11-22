@@ -54,7 +54,7 @@ class CrossServerServiceTest {
         var dormantWire = CrossServerEnvelopeCodec.encode(
             CrossServerSigner.withSignature(dormant, "test-key".getBytes(StandardCharsets.UTF_8)));
         try (var store = new CrossServerReplayStore(dataFolder.resolve("data/cross-server-replay.db"))) {
-            var item = new CrossServerReplayStore.InboxItem(dormant.messageId(), dormant.timestamp() + 60_000, dormantWire);
+            var item = new CrossServerReplayStore.InboxItem(dormant.messageId(), dormant.module(), dormant.timestamp() + 60_000, dormantWire);
             store.stage("127.0.0.1:6379/0\nAXS:CROSS\nlocal", "0-0", List.of(item), dormant.timestamp());
         }
         when(jedis.xread(any(redis.clients.jedis.params.XReadParams.class), anyMap())).thenAnswer(call -> {
@@ -100,6 +100,75 @@ class CrossServerServiceTest {
                 serverField.set(null, previousServer);
             }
         }
+    }
+
+    @Test
+    void failedAndUnconfirmedRedisReceiptsDoNotBlockAnotherModule() throws Exception {
+        var jedis = mock(redis.clients.jedis.Jedis.class);
+        when(jedis.scriptLoad(anyString())).thenReturn("checkpoint");
+        when(jedis.evalsha(eq("checkpoint"), anyList(), anyList())).thenReturn(1L);
+        var attempts = new java.util.concurrent.atomic.AtomicInteger();
+        var waiting = new java.util.concurrent.CompletableFuture<Boolean>();
+        var healthy = new LinkedBlockingQueue<CrossServerDelivery>();
+        var brokenWire = redisWire("fishing", "pending");
+        var healthyWire = redisWire("chat", "unrelated");
+        when(jedis.xread(any(redis.clients.jedis.params.XReadParams.class), anyMap())).thenAnswer(call -> {
+            var entry = call.<Map<String, redis.clients.jedis.StreamEntryID>>getArgument(1).entrySet().iterator().next();
+            String cursor = entry.getValue().toString();
+            if (cursor.equals("0-0")) {
+                return List.of(Map.entry(entry.getKey(), List.of(streamEntry("1-0", "0-0", brokenWire))));
+            }
+            if (cursor.equals("1-0") && attempts.get() >= 2) {
+                return List.of(Map.entry(entry.getKey(), List.of(streamEntry("2-0", "1-0", healthyWire))));
+            }
+            return List.of();
+        });
+        try (var bukkit = mockStatic(Bukkit.class);
+             var pools = mockConstruction(redis.clients.jedis.JedisPool.class, (pool, context) -> when(pool.getResource()).thenReturn(jedis))) {
+            var fixture = new Fixture(bukkit, true, true, "test-key");
+            var serverField = Bukkit.class.getDeclaredField("server");
+            serverField.setAccessible(true);
+            var previousServer = serverField.get(null);
+            serverField.set(null, fixture.server);
+            try (fixture) {
+                fixture.configuration.set("cross-server.redis.enabled", true);
+                fixture.service.openChannelCompleting("fishing", CrossServerChannelConfig.enabledDefault(), message ->
+                    attempts.incrementAndGet() == 1 ? java.util.concurrent.CompletableFuture.completedFuture(false) : waiting);
+                fixture.service.openChannel("chat", CrossServerChannelConfig.enabledDefault(), healthy::add);
+                fixture.service.start();
+                long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+                while (healthy.isEmpty() && System.nanoTime() < deadline) {
+                    var callback = fixture.timerTasks.poll(100, TimeUnit.MILLISECONDS);
+                    if (callback != null) callback.run();
+                }
+                assertFalse(waiting.isDone());
+                assertEquals(2, attempts.get(), "do not run a second copy while the receipt is outstanding");
+                assertFalse(healthy.isEmpty(), "read the subsequent stream entry while Fishing is waiting");
+                assertEquals("unrelated", healthy.remove().payload());
+                waiting.complete(true);
+                try (var store = new CrossServerReplayStore(dataFolder.resolve("data/cross-server-replay.db"))) {
+                    String scope = "127.0.0.1:6379/0\nAXS:CROSS\nlocal";
+                    deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+                    while (!store.pending(scope, "fishing", 0, 128, 8_192).items().isEmpty()
+                           && System.nanoTime() < deadline) Thread.sleep(20);
+                    assertEquals("2-0", store.cursor(scope));
+                    assertTrue(store.pending(scope, "fishing", 0, 128, 8_192).items().isEmpty());
+                }
+            } finally {
+                serverField.set(null, previousServer);
+            }
+        }
+    }
+
+    private static String redisWire(String module, String payload) {
+        var envelope = new CrossServerEnvelope(1, module, "remote", UUID.randomUUID().toString(),
+            System.currentTimeMillis(), payload, "");
+        return CrossServerEnvelopeCodec.encode(CrossServerSigner.withSignature(envelope, "test-key".getBytes(StandardCharsets.UTF_8)));
+    }
+
+    private static redis.clients.jedis.resps.StreamEntry streamEntry(String id, String previous, String wire) {
+        return new redis.clients.jedis.resps.StreamEntry(new redis.clients.jedis.StreamEntryID(id),
+            Map.of("wire", wire, "prev", previous));
     }
 
     @Test
@@ -220,7 +289,7 @@ class CrossServerServiceTest {
     @Test
     void redisCursorAndPendingPayloadSurviveRestartBeforeCallback() throws Exception {
         Path database = dataFolder.resolve("inbox.db");
-        var item = new CrossServerReplayStore.InboxItem("item", 60_000, "signed envelope");
+        var item = new CrossServerReplayStore.InboxItem("item", "test", 60_000, "signed envelope");
         var proxy = new CrossServerReplayStore.Claim("item", 1_000);
         try (var store = new CrossServerReplayStore(database)) {
             assertEquals("0-0", store.cursor("local"));
@@ -228,13 +297,27 @@ class CrossServerServiceTest {
         }
         try (var restarted = new CrossServerReplayStore(database)) {
             assertEquals("2000-1", restarted.cursor("local"));
-            assertEquals(List.of(item), restarted.pending("local", 0, 128, 8_192).items());
+            assertEquals(List.of(item), restarted.pending("local", "test", 0, 128, 8_192).items());
             assertArrayEquals(new boolean[] { false }, restarted.claim(List.of(proxy), 3_000, 60_000));
             restarted.finish(List.of(item));
         }
         try (var restarted = new CrossServerReplayStore(database)) {
-            assertTrue(restarted.pending("local", 0, 128, 8_192).items().isEmpty());
+            assertTrue(restarted.pending("local", "test", 0, 128, 8_192).items().isEmpty());
             assertArrayEquals(new boolean[] { false }, restarted.stage("local", "3000-1", List.of(item), 3_000));
+        }
+    }
+
+    @Test
+    void expiredInactiveRowsDoNotRemoveLiveOrAwaitingRecords() throws Exception {
+        try (var store = new CrossServerReplayStore(dataFolder.resolve("inbox.db"))) {
+            var old = new CrossServerReplayStore.InboxItem("expired", "inactive", 100, "wire");
+            var awaitingRegistration = new CrossServerReplayStore.InboxItem("new", "inactive", 300, "wire");
+            var waitingForReceipt = new CrossServerReplayStore.InboxItem("live", "active", 100, "wire");
+            store.stage("local", "1-0", List.of(old, awaitingRegistration, waitingForReceipt), 100);
+            store.expireInactive("local", java.util.Set.of("active"), 200);
+            assertEquals(List.of(awaitingRegistration), store.pending("local", "inactive", 0, 128, 8_192).items());
+            assertEquals(List.of(waitingForReceipt), store.pending("local", "active", 0, 128, 8_192).items());
+            assertEquals("1-0", store.cursor("local"));
         }
     }
 

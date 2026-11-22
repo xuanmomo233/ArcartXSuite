@@ -645,11 +645,11 @@ public final class CrossServerService implements CrossServerAPI, PluginMessageLi
                 }
                 if (now < proxyInboxNextCheck) return;
                 if (proxyInboxAfterRow == 0) proxyInboxDeferredUntil = Long.MAX_VALUE;
-                var batch = readInboxBatch(store, proxyInboxScope, proxyInboxAfterRow, Transport.PROXY, config,
+                var batch = readInboxBatch(store, proxyInboxScope, null, proxyInboxAfterRow, Transport.PROXY, config,
                     PROXY_MAX_BYTES * INBOUND_BATCH_SIZE, this::active);
                 if (!active()) return;
                 if (!batch.deliveries().isEmpty()) {
-                    proxyDispatch = new InboxDispatch(batch.deliveries(), config, this::active, nextInboundWarning, false);
+                    proxyDispatch = new InboxDispatch(batch.deliveries(), config, this::active, nextInboundWarning, false, () -> 1);
                 }
                 proxyInboxDeferredUntil = Math.min(proxyInboxDeferredUntil, batch.deferredUntil());
                 proxyInboxAfterRow = batch.hasMore() ? batch.lastRow() : 0;
@@ -674,7 +674,7 @@ public final class CrossServerService implements CrossServerAPI, PluginMessageLi
                 var candidates = new ArrayList<InboundMessage>(accepted.size());
                 for (var item : accepted) {
                     if (item.proxyWire() == null) candidates.add(item);
-                    else inbox.add(new CrossServerReplayStore.InboxItem(item.delivery().messageId(),
+                    else inbox.add(new CrossServerReplayStore.InboxItem(item.delivery().messageId(), item.registration().moduleId,
                         CrossServerReplayStore.expiry(item.timestamp(), config.dedupeTtlMs()), item.proxyWire()));
                 }
                 if (!inbox.isEmpty()) {
@@ -779,20 +779,19 @@ public final class CrossServerService implements CrossServerAPI, PluginMessageLi
 
     private record InboxDelivery(CrossServerReplayStore.InboxItem item, InboundMessage message) {}
     private record InboxReceipt(CrossServerReplayStore.InboxItem item, CompletableFuture<Boolean> finished) {}
-    private record InboxRecovery(boolean completed, long deferredUntil) {}
     private record InboxBatch(List<InboxDelivery> deliveries, long lastRow, boolean hasMore, long deferredUntil) {}
 
-    private InboxBatch readInboxBatch(CrossServerReplayStore store, String scope, long afterRow, Transport transport,
+    private InboxBatch readInboxBatch(CrossServerReplayStore store, String scope, String moduleId, long afterRow, Transport transport,
             CrossServerGlobalConfiguration config, int maxBytes, BooleanSupplier active)
             throws IOException, SQLException {
-        var page = store.pending(scope, afterRow, INBOUND_BATCH_SIZE, maxBytes);
+        var page = store.pending(scope, moduleId, afterRow, INBOUND_BATCH_SIZE, maxBytes);
         var deliveries = new ArrayList<InboxDelivery>(page.items().size());
         var discarded = new ArrayList<CrossServerReplayStore.InboxItem>();
         long now = System.currentTimeMillis();
         long deferredUntil = Long.MAX_VALUE;
         for (var item : page.items()) {
             var envelope = verifyWire(item.wire(), config, true);
-            if (envelope == null) {
+            if (envelope == null || !item.moduleId().equals(envelope.module())) {
                 // An obsolete or invalid signature must not become trusted through recovery.
                 discarded.add(item);
                 continue;
@@ -814,46 +813,6 @@ public final class CrossServerService implements CrossServerAPI, PluginMessageLi
         return new InboxBatch(deliveries, page.lastRow(), page.hasMore(), deferredUntil);
     }
 
-    private InboxRecovery recoverInbox(CrossServerReplayStore store, String scope, Transport transport,
-            CrossServerGlobalConfiguration config, int maxBytes, BooleanSupplier active, AtomicLong nextWarning)
-            throws IOException, SQLException, InterruptedException {
-        long deferredUntil = Long.MAX_VALUE;
-        long afterRow = 0;
-        while (active.getAsBoolean()) {
-            var batch = readInboxBatch(store, scope, afterRow, transport, config, maxBytes, active);
-            if (!active.getAsBoolean()) break;
-            deferredUntil = Math.min(deferredUntil, batch.deferredUntil());
-            if (!dispatchInbox(batch.deliveries(), store, config, active, nextWarning, null)) break;
-            if (!batch.hasMore()) return new InboxRecovery(true, deferredUntil);
-            afterRow = batch.lastRow();
-        }
-        return new InboxRecovery(false, deferredUntil);
-    }
-
-    private boolean dispatchInbox(List<InboxDelivery> deliveries, CrossServerReplayStore store,
-            CrossServerGlobalConfiguration config, BooleanSupplier active, AtomicLong nextWarning, Runnable heartbeat)
-            throws IOException, SQLException, InterruptedException {
-        if (deliveries.isEmpty()) return true;
-        if (!active.getAsBoolean()) return false;
-        try (var dispatch = new InboxDispatch(deliveries, config, active, nextWarning, true)) {
-            long renewAt = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
-            while (active.getAsBoolean()) {
-                dispatch.saveCompleted(store);
-                if (dispatch.settled()) return dispatch.confirmed();
-                if (heartbeat != null && System.nanoTime() >= renewAt) {
-                    try {
-                        heartbeat.run();
-                    } catch (RuntimeException failure) {
-                        warnAtMostOncePerInterval(nextWarning, "[CrossServer] Redis Stream 游标续租暂时失败");
-                    }
-                    renewAt = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
-                }
-                Thread.sleep(25);
-            }
-            return false;
-        }
-    }
-
     /** A bounded dispatch batch. Bukkit admits callbacks; the owning worker persists their receipts. */
     private final class InboxDispatch implements AutoCloseable {
         private final int expected;
@@ -866,7 +825,8 @@ public final class CrossServerService implements CrossServerAPI, PluginMessageLi
         private int committed;
 
         private InboxDispatch(List<InboxDelivery> deliveries, CrossServerGlobalConfiguration config,
-                BooleanSupplier active, AtomicLong nextWarning, boolean stopOnFailure) {
+                BooleanSupplier active, AtomicLong nextWarning, boolean stopOnFailure,
+                java.util.function.IntSupplier dispatchCount) {
             expected = deliveries.size();
             this.stopOnFailure = stopOnFailure;
             task = new BukkitRunnable() {
@@ -874,11 +834,13 @@ public final class CrossServerService implements CrossServerAPI, PluginMessageLi
 
                 @Override
                 public void run() {
-                    long deadline = System.nanoTime() + INBOUND_CALLBACK_BUDGET_NS;
+                    int parallel = Math.max(1, dispatchCount.getAsInt());
+                    long deadline = System.nanoTime() + INBOUND_CALLBACK_BUDGET_NS / parallel;
+                    int callbackLimit = Math.max(1, INBOUND_CALLBACKS_PER_TICK / parallel);
                     int callbacks = 0;
                     try {
                         while (active.getAsBoolean() && !stopSubmitting.get() && offset < deliveries.size()
-                                && callbacks < INBOUND_CALLBACKS_PER_TICK && System.nanoTime() < deadline) {
+                                && callbacks < callbackLimit && System.nanoTime() < deadline) {
                             if (!tryDeliver(deliveries.get(offset))) break;
                             offset++;
                             callbacks++;
@@ -895,7 +857,10 @@ public final class CrossServerService implements CrossServerAPI, PluginMessageLi
                     if (message.registration().accepts(message.transport(), config)) {
                         try {
                             var finished = message.registration().admit.apply(message.delivery());
-                            if (finished == null) return false;
+                            if (finished == null) {
+                                if (stopOnFailure) stopSubmitting.set(true);
+                                return false;
+                            }
                             receipts.add(new InboxReceipt(delivery.item(), finished.toCompletableFuture()));
                         } catch (RuntimeException failure) {
                             warnAtMostOncePerInterval(nextWarning, "[CrossServer] 模块回调失败，收件箱保留待重试");
@@ -962,6 +927,14 @@ public final class CrossServerService implements CrossServerAPI, PluginMessageLi
         private final String scope;
         private final AtomicLong nextWarning = new AtomicLong();
         private final AtomicLong nextGapWarning = new AtomicLong();
+        private final Map<String, InboxLane> inboxLanes = new java.util.HashMap<>();
+        private long nextInboxCleanup;
+        private volatile int dispatchCount;
+        private static final class InboxLane {
+            private InboxDispatch dispatch;
+            private long nextAttemptAt;
+            private boolean retrying;
+        }
 
         private RedisStreamReceiver(JedisPool pool, CrossServerRedisStream stream, InboundWorker worker, int frameBytes,
                                     CompletableFuture<Void> modulesReady) {
@@ -994,18 +967,14 @@ public final class CrossServerService implements CrossServerAPI, PluginMessageLi
                             catch (TimeoutException waiting) { continue; }
                             if (!active()) return;
                         }
+                        advanceInbox();
                         if (registrations.isEmpty()) {
                             Thread.sleep(250);
                             continue;
                         }
                         long revision = redisRegistrationRevision.get();
-                        InboxRecovery recovery = recoverInbox();
-                        if (!recovery.completed()) {
-                            Thread.sleep(250);
-                            continue;
-                        }
                         try (Jedis jedis = pool.getResource()) {
-                            readStream(jedis, revision, recovery.deferredUntil());
+                            readStream(jedis, revision);
                         }
                     } catch (IOException | SQLException | ExecutionException | RuntimeException failure) {
                         try { store.close(); } catch (SQLException closeFailure) { failure.addSuppressed(closeFailure); }
@@ -1020,63 +989,99 @@ public final class CrossServerService implements CrossServerAPI, PluginMessageLi
                 Thread.currentThread().interrupt();
             } catch (SQLException failure) {
                 warnAtMostOncePerInterval(nextWarning, "[CrossServer] 关闭 Redis Stream 收件箱失败");
-            }
-        }
-
-        private InboxRecovery recoverInbox() throws IOException, SQLException, InterruptedException {
-            reserve(REDIS_QUEUE_CHARS);
-            try {
-                return CrossServerService.this.recoverInbox(store, scope, Transport.REDIS, config,
-                    REDIS_QUEUE_CHARS, this::active, nextWarning);
             } finally {
-                release(REDIS_QUEUE_CHARS);
+                for (var lane : inboxLanes.values()) if (lane.dispatch != null) lane.dispatch.close();
             }
         }
 
-        private void readStream(Jedis jedis, long revision, long deferredUntil)
+        /** One outstanding batch per module. The cursor and other modules never wait on its receipt. */
+        private boolean advanceInbox() throws IOException, SQLException {
+            long now = System.currentTimeMillis();
+            var iterator = inboxLanes.entrySet().iterator();
+            while (iterator.hasNext()) {
+                var entry = iterator.next();
+                var lane = entry.getValue();
+                if (lane.dispatch != null) {
+                    lane.dispatch.saveCompleted(store);
+                    if (!lane.dispatch.settled()) continue;
+                    lane.retrying = !lane.dispatch.confirmed();
+                    lane.nextAttemptAt = lane.retrying ? now + INBOX_RETRY_MS : 0;
+                    lane.dispatch.close();
+                    lane.dispatch = null;
+                }
+                var registration = registrations.get(entry.getKey());
+                if (registration == null || !registration.accepts(Transport.REDIS, config)) iterator.remove();
+            }
+            int dispatchBytes = Math.max(frameBytes, 256 * 1024);
+            int running = 0;
+            for (var registration : registrations.values()) {
+                if (!registration.accepts(Transport.REDIS, config)) continue;
+                var lane = inboxLanes.computeIfAbsent(registration.moduleId, ignored -> new InboxLane());
+                if (lane.dispatch == null && now >= lane.nextAttemptAt) {
+                    lane.retrying = false;
+                    var batch = readInboxBatch(store, scope, registration.moduleId, 0, Transport.REDIS,
+                        config, dispatchBytes, this::active);
+                    if (!active()) break;
+                    if (batch.deliveries().isEmpty()) lane.nextAttemptAt = now + INBOX_RETRY_MS;
+                    else lane.dispatch = new InboxDispatch(batch.deliveries(), config, this::active, nextWarning, true,
+                        () -> dispatchCount);
+                }
+                if (lane.dispatch != null) running++;
+            }
+            dispatchCount = running;
+            if (now >= nextInboxCleanup && active()) {
+                // Include retired channels whose callbacks can still write a receipt. Never
+                // expire a live module's rows while that module is waiting to process them.
+                store.expireInactive(scope, inboxLanes.keySet(), now);
+                nextInboxCleanup = now + 60_000;
+            }
+            return running != 0;
+        }
+
+        private void readStream(Jedis jedis, long revision)
                 throws IOException, SQLException, InterruptedException {
             String cursor = store.cursor(scope);
             stream.checkpoint(jedis, cursor);
             long nextRenew = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
-            while (canReadStream(revision, deferredUntil)) {
+            while (canReadStream(revision)) {
+                boolean dispatching = advanceInbox();
                 reserve(batchBytes);
                 try {
-                    var entries = readBatch(jedis, cursor);
+                    var entries = readBatch(jedis, cursor, !dispatching && !config.proxyEnabled());
                     if (entries.isEmpty()) {
                         if (System.nanoTime() >= nextRenew) {
                             stream.checkpoint(jedis, cursor);
                             nextRenew = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
                         }
-                        // In dual-transport mode, do not hold the Proxy budget during a blocking read.
-                        if (config.proxyEnabled()) Thread.sleep(10);
+                    } else {
+                        if (!canReadStream(revision)) return;
+                        var first = entries.get(0);
+                        String preceding = first.getFields().get("prev");
+                        if (!CrossServerRedisStream.START.equals(cursor) && preceding != null && !preceding.equals(cursor)) {
+                            warnAtMostOncePerInterval(nextGapWarning, "[CrossServer] Redis Stream 留存已越过本机游标，部分历史无法补发");
+                        }
+                        cursor = entries.get(entries.size() - 1).getID().toString();
+                        stage(jedis, entries, cursor);
+                        nextRenew = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
                         continue;
                     }
-                    if (!canReadStream(revision, deferredUntil)) return;
-                    var first = entries.get(0);
-                    String preceding = first.getFields().get("prev");
-                    if (!CrossServerRedisStream.START.equals(cursor) && preceding != null && !preceding.equals(cursor)) {
-                        warnAtMostOncePerInterval(nextGapWarning, "[CrossServer] Redis Stream 留存已越过本机游标，部分历史无法补发");
-                    }
-                    cursor = entries.get(entries.size() - 1).getID().toString();
-                    if (!stageAndDispatch(jedis, entries, cursor)) return;
-                    nextRenew = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
                 } finally {
                     release(batchBytes);
                 }
+                if (dispatching || config.proxyEnabled()) Thread.sleep(10);
             }
         }
 
-        private boolean canReadStream(long revision, long deferredUntil) {
-            return active() && !registrations.isEmpty() && redisRegistrationRevision.get() == revision
-                && (deferredUntil == Long.MAX_VALUE || System.currentTimeMillis() <= deferredUntil);
+        private boolean canReadStream(long revision) {
+            return active() && !registrations.isEmpty() && redisRegistrationRevision.get() == revision;
         }
 
-        private List<StreamEntry> readBatch(Jedis jedis, String cursor) {
+        private List<StreamEntry> readBatch(Jedis jedis, String cursor, boolean wait) {
             var entries = new ArrayList<StreamEntry>(INBOUND_BATCH_SIZE);
             int remaining = batchBytes;
             while (active() && remaining >= frameBytes && entries.size() < INBOUND_BATCH_SIZE) {
                 int count = Math.min(remaining / frameBytes, INBOUND_BATCH_SIZE - entries.size());
-                var next = stream.read(jedis, cursor, count, entries.isEmpty() && !config.proxyEnabled());
+                var next = stream.read(jedis, cursor, count, entries.isEmpty() && wait);
                 if (next.isEmpty()) break;
                 for (var entry : next) {
                     String wire = entry.getFields().get("wire");
@@ -1089,28 +1094,24 @@ public final class CrossServerService implements CrossServerAPI, PluginMessageLi
             return entries;
         }
 
-        private boolean stageAndDispatch(Jedis jedis, List<StreamEntry> entries, String cursor)
-                throws IOException, SQLException, InterruptedException {
-            var candidates = new ArrayList<InboxDelivery>(entries.size());
+        private void stage(Jedis jedis, List<StreamEntry> entries, String cursor) throws IOException, SQLException {
+            var candidates = new ArrayList<CrossServerReplayStore.InboxItem>(entries.size());
             for (var entry : entries) {
                 String wire = entry.getFields().get("wire");
                 var envelope = verifyWire(wire, config, false);
                 if (envelope == null) continue;
-                var message = inboundMessage(envelope, wire, Transport.REDIS, config);
-                if (message == null) continue;
-                var item = new CrossServerReplayStore.InboxItem(envelope.messageId(),
-                    CrossServerReplayStore.expiry(envelope.timestamp(), config.dedupeTtlMs()), wire);
-                candidates.add(new InboxDelivery(item, message));
+                var registration = registrations.get(envelope.module());
+                if (registration == null || !registration.accepts(Transport.REDIS, config)) continue;
+                candidates.add(new CrossServerReplayStore.InboxItem(envelope.messageId(), envelope.module(),
+                    CrossServerReplayStore.expiry(envelope.timestamp(), config.dedupeTtlMs()), wire));
             }
-            boolean[] inserted = store.stage(scope, cursor, candidates.stream().map(InboxDelivery::item).toList(),
-                System.currentTimeMillis());
-            stream.checkpoint(jedis, cursor);
-            var admitted = new ArrayList<InboxDelivery>(candidates.size());
+            boolean[] inserted = store.stage(scope, cursor, candidates, System.currentTimeMillis());
             for (int index = 0; index < inserted.length; index++) {
-                if (inserted[index]) admitted.add(candidates.get(index));
+                if (!inserted[index]) continue;
+                var lane = inboxLanes.get(candidates.get(index).moduleId());
+                if (lane != null && !lane.retrying) lane.nextAttemptAt = 0;
             }
-            return dispatchInbox(admitted, store, config, this::active, nextWarning,
-                () -> stream.checkpoint(jedis, cursor));
+            stream.checkpoint(jedis, cursor);
         }
 
         private void reserve(int bytes) throws InterruptedException {
