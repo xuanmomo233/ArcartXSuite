@@ -44,8 +44,12 @@ public record BattlePassTask(
     List<TaskCondition> conditions,
     IncrementStrategy incrementStrategy,
     int weight,
-    TriggerLimits limits
+    TriggerLimits limits,
+    Navigation navigation
 ) {
+    public static final String PRESENCE_TOPIC = "axs.auth.presence_day_started";
+    public record Navigation(String type, String target) {}
+
 
     public BattlePassTask {
         if (conditions == null) conditions = Collections.emptyList();

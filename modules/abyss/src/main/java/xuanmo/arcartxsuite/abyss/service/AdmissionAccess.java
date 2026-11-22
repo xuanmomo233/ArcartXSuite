@@ -93,6 +93,7 @@ final class AdmissionAccess implements AbyssAdmissionAccess {
             op.restored = true;
             op.phase = Phase.valueOf(yaml.getString("phase"));
             op.reason = yaml.getString("reason");
+            op.costUncertain = yaml.getBoolean("native-cost-uncertain");
             if (yaml.isString("run")) op.runId = UUID.fromString(yaml.getString("run"));
             if (yaml.isString("cost.id")) {
                 op.costOwner = yaml.getString("cost.owner");
@@ -537,6 +538,7 @@ final class AdmissionAccess implements AbyssAdmissionAccess {
         yaml.set("phase", op.phase.name());
         yaml.set("run", op.runId == null ? null : op.runId.toString());
         yaml.set("reason", op.reason);
+        if (op.costUncertain) yaml.set("native-cost-uncertain", true);
         if (op.costId != null) {
             yaml.set("cost.owner", op.costOwner);
             yaml.set("cost.id", op.costId.toString());

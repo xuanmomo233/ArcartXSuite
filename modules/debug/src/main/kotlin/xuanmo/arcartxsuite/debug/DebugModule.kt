@@ -4,10 +4,8 @@ import org.bukkit.command.CommandSender
 import org.bukkit.configuration.file.YamlConfiguration
 import org.bukkit.event.Listener
 import xuanmo.arcartxsuite.api.AbstractAXSModule
-import xuanmo.arcartxsuite.api.ClientPacketHandler
 import xuanmo.arcartxsuite.api.ModuleCommandHandler
 import xuanmo.arcartxsuite.api.ModuleDescriptor
-import xuanmo.arcartxsuite.api.PacketHandlerSpec
 import xuanmo.arcartxsuite.api.config.ModuleConfig
 import java.io.File
 import java.util.logging.Level
@@ -70,17 +68,29 @@ class DebugModule : AbstractAXSModule(), ModuleCommandHandler {
             logger.info("Debug Bridge WebSocket 已在配置中禁用，跳过启动（PackDiag 通道诊断仍可用）")
             return
         }
+        val loopback = when (cfg.host.lowercase(java.util.Locale.ROOT)) {
+            "localhost", "127.0.0.1" -> "127.0.0.1"
+            "::1" -> "::1"
+            else -> {
+                logger.warning("Debug Bridge 仅支持回环监听，请设置 websocket.host 为 127.0.0.1 或 ::1")
+                return
+            }
+        }
+        if (!cfg.token.matches(Regex("[A-Za-z0-9_-]{32,}"))) {
+            logger.warning("Debug Bridge 需要独立令牌，请设置至少 32 字符的 URL 安全随机令牌")
+            return
+        }
 
         // 创建包流捕获管理器（环形缓冲）
         packetCapture = PacketCaptureManager(cfg.captureBufferSize, cfg.logPayload)
 
         // 创建 RPC 路由器并启动 WebSocket 服务端
         val dispatcher = DebugRpcDispatcher(this, packetCapture!!, logger)
-        val server = DebugWebSocketServer(cfg.host, cfg.port, cfg.token, dispatcher, logger)
+        val server = DebugWebSocketServer(loopback, cfg.port, cfg.token, dispatcher, logger)
         server.start()
 
         webSocketServer = server
-        logger.info("Debug Bridge 已启动，WebSocket 监听 ${cfg.host}:${cfg.port} (token=${cfg.token})")
+        logger.info("Debug Bridge WebSocket 监听 $loopback:${cfg.port}")
     }
 
     override fun stopService() {
@@ -107,11 +117,8 @@ class DebugModule : AbstractAXSModule(), ModuleCommandHandler {
         logger.info("Debug Bridge 已停止")
     }
 
-    override fun createPacketHandlerSpec(): PacketHandlerSpec =
-        packetCapture?.let { PacketHandlerSpec.of(it) } ?: PacketHandlerSpec.NONE
-
     override fun createListeners(): List<Listener> =
-        rawDiag?.let { listOf(RawPacketEventListener(it)) } ?: emptyList()
+        rawDiag?.let { listOf(RawPacketEventListener(it, packetCapture, config?.logPayload == true)) } ?: emptyList()
 
     // ── /axs debug 管理子命令 ──────────────────────────────
 

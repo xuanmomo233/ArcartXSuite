@@ -1,5 +1,6 @@
 package xuanmo.arcartxsuite.api.item;
 
+import java.util.List;
 import org.bukkit.inventory.ItemStack;
 
 /**
@@ -17,4 +18,7 @@ public interface ItemMatcherAPI {
      * @return true 如果匹配
      */
     boolean matches(ItemMatcher matcher, ItemStack itemStack);
+
+    /** Matches any rule, keeping the declared ordering and short circuit behavior. */
+    boolean matchesAny(List<ItemMatcher> matchers, ItemStack itemStack);
 }

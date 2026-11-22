@@ -20,6 +20,7 @@ import xuanmo.arcartxsuite.battlepass.service.BattlePassService;
  * 通过 {@link BattlePassService} 执行管理操作并向发送者反馈本地化消息。
  */
 public final class BattlePassAdminCommand implements ModuleCommandHandler {
+    private final org.bukkit.plugin.Plugin plugin;
 
     private final Supplier<BattlePassService> serviceProvider;
     private final java.util.function.BiFunction<String, Object[], String> messageResolver;
@@ -32,9 +33,10 @@ public final class BattlePassAdminCommand implements ModuleCommandHandler {
      * @param messageResolver  消息解析函数（key + 参数 → 本地化文本）
      * @param moduleVersion    模块版本号（用于 help 显示）
      */
-    public BattlePassAdminCommand(Supplier<BattlePassService> serviceProvider,
+    public BattlePassAdminCommand(org.bukkit.plugin.Plugin plugin, Supplier<BattlePassService> serviceProvider,
                                    java.util.function.BiFunction<String, Object[], String> messageResolver,
                                    String moduleVersion) {
+        this.plugin = plugin;
         this.serviceProvider = serviceProvider;
         this.messageResolver = messageResolver;
         this.moduleVersion = moduleVersion;
@@ -128,7 +130,6 @@ public final class BattlePassAdminCommand implements ModuleCommandHandler {
         } catch (Exception e) {
             sender.sendMessage(msg("admin.status.players", "N/A"));
         }
-        sender.sendMessage(msg("admin.status.cross-server", config.crossServer().enabled() ? msg("common.enabled") : msg("common.disabled")));
         sender.sendMessage(msg("admin.status.rewards", String.valueOf(config.rewards().size())));
     }
 
@@ -147,8 +148,9 @@ public final class BattlePassAdminCommand implements ModuleCommandHandler {
             sender.sendMessage(msg("common.service-unavailable"));
             return;
         }
-        service.resetPlayerProgress(target.getUniqueId());
-        sender.sendMessage(msg("admin.reset-success", target.getName()));
+        var uuid = target.getUniqueId();
+        String name = target.getName();
+        service.resetProgressAsync(uuid).whenComplete((ignored,failure)->service.onMain(()->sender.sendMessage(msg(failure==null?"admin.reset-success":"admin.reset-failed",name))));
     }
 
     private void handleUnlock(CommandSender sender, String[] args) {
@@ -177,11 +179,11 @@ public final class BattlePassAdminCommand implements ModuleCommandHandler {
             sender.sendMessage(msg("common.service-unavailable"));
             return;
         }
-        if (service.unlockTier(target, tier)) {
-            sender.sendMessage(msg("admin.unlock-success", target.getName(), ChatColor.translateAlternateColorCodes('&', tier.name())));
-        } else {
-            sender.sendMessage(msg("admin.unlock-already", target.getName(), ChatColor.translateAlternateColorCodes('&', tier.name())));
-        }
+        String name=target.getName();String display=ChatColor.translateAlternateColorCodes('&',tier.name());
+        service.unlockTierAsync(target,tier).whenComplete((changed,failure)->service.onMain(()->{
+            if(failure!=null)sender.sendMessage(msg("common.service-unavailable"));
+            else sender.sendMessage(msg(changed?"admin.unlock-success":"admin.unlock-already",name,display));
+        }));
     }
 
     private void handleAddExp(CommandSender sender, String[] args) {
@@ -210,8 +212,7 @@ public final class BattlePassAdminCommand implements ModuleCommandHandler {
             sender.sendMessage(msg("common.service-unavailable"));
             return;
         }
-        service.addXp(target, xp);
-        sender.sendMessage(msg("admin.addexp-success", target.getName(), String.valueOf(xp)));
+        replyAfter(service,sender,service.addXpAsync(target,xp),"admin.addexp-success",target.getName(),String.valueOf(xp));
     }
 
     private void handleSetExp(CommandSender sender, String[] args) {
@@ -240,8 +241,7 @@ public final class BattlePassAdminCommand implements ModuleCommandHandler {
             sender.sendMessage(msg("common.service-unavailable"));
             return;
         }
-        service.setXp(target, xp);
-        sender.sendMessage(msg("admin.setexp-success", target.getName(), String.valueOf(xp)));
+        replyAfter(service,sender,service.setXpAsync(target,xp),"admin.setexp-success",target.getName(),String.valueOf(xp));
     }
 
     private void handleRemoveExp(CommandSender sender, String[] args) {
@@ -270,8 +270,7 @@ public final class BattlePassAdminCommand implements ModuleCommandHandler {
             sender.sendMessage(msg("common.service-unavailable"));
             return;
         }
-        service.removeXp(target, xp);
-        sender.sendMessage(msg("admin.removeexp-success", target.getName(), String.valueOf(xp)));
+        replyAfter(service,sender,service.removeXpAsync(target,xp),"admin.removeexp-success",target.getName(),String.valueOf(xp));
     }
 
     private void handleSetLevel(CommandSender sender, String[] args) {
@@ -305,8 +304,11 @@ public final class BattlePassAdminCommand implements ModuleCommandHandler {
             sender.sendMessage(msg("admin.setlevel-exceed-max", String.valueOf(maxLevel)));
             return;
         }
-        service.setLevel(target, level);
-        sender.sendMessage(msg("admin.setlevel-success", target.getName(), String.valueOf(level)));
+        replyAfter(service,sender,service.setLevelAsync(target,level),"admin.setlevel-success",target.getName(),String.valueOf(level));
+    }
+
+    private void replyAfter(BattlePassService service,CommandSender sender,java.util.concurrent.CompletionStage<?> result,String success,Object... args) {
+        result.whenComplete((ignored,failure)->service.onMain(()->sender.sendMessage(msg(failure==null?success:"common.service-unavailable",args))));
     }
 
     private void handleSettle(CommandSender sender, String[] args) {
@@ -317,18 +319,16 @@ public final class BattlePassAdminCommand implements ModuleCommandHandler {
         }
         sender.sendMessage(msg("admin.settle-start"));
         // 异步执行结算，避免阻塞主线程
-        org.bukkit.Bukkit.getScheduler().runTaskAsynchronously(
-            org.bukkit.Bukkit.getPluginManager().getPlugin("ArcartXSuite"),
-            () -> {
-                String seasonId = service.configuration().season().seasonId();
-                boolean success = service.settlementService().settle(seasonId, true);
-                if (success) {
-                    sender.sendMessage(msg("admin.settle-success", seasonId));
-                } else {
-                    sender.sendMessage(msg("admin.settle-already", seasonId));
-                }
-            }
-        );
+        service.async( () -> {
+            String seasonId = service.configuration().season().seasonId();
+            String key = switch (service.settlementService().settle(true)) {
+                case COMPLETED -> "admin.settle-queued";
+                case ALREADY_SETTLED -> "admin.settle-already";
+                case RUNNING -> "admin.settle-running";
+                case RETRY, NOT_ENDED -> "admin.settle-retry";
+            };
+            service.onMain( () -> sender.sendMessage(msg(key, seasonId)));
+        });
     }
 
     private void handleSeason(CommandSender sender) {
@@ -343,8 +343,10 @@ public final class BattlePassAdminCommand implements ModuleCommandHandler {
         sender.sendMessage(msg("admin.season.name", season.displayName()));
         sender.sendMessage(msg("admin.season.max-level", String.valueOf(season.maxLevel())));
         sender.sendMessage(msg("admin.season.dates", season.startDate().toString(), season.endDate().toString()));
-        sender.sendMessage(msg("admin.season.settlement",
-            service.settlementService().getSettlementStatus(season.seasonId())));
+        service.async(()->{
+            String status=service.settlementService().getSettlementStatus(season.seasonId());
+            service.onMain(()->sender.sendMessage(msg("admin.season.settlement",status)));
+        });
     }
 
     private String msg(String key, Object... args) {

@@ -13,12 +13,11 @@ import xuanmo.arcartxsuite.api.condition.ScriptCondition;
  * @param displayName         道具显示名称，用于消息提示
  * @param coolDownGroup       冷却组名称，同组道具共享冷却
  * @param coolDownTimeSeconds 冷却时长（秒）
- * @param durationSeconds     效果持续时间（秒）
  * @param remove              使用后是否消耗一个物品
  * @param hand                是否允许手持右键使用
  * @param key                 是否允许按键使用
  * @param permission          使用所需权限节点，空字符串表示无限制
- * @param effects             效果行列表，格式为 {@code type|payload}
+ * @param effects             已验证的道具效果
  * @param conditions          使用条件列表，全部满足才可使用
  * @param auto                自动触发定义，未配置时为 {@link PropAutoTriggerDefinition#DISABLED}
  */
@@ -27,18 +26,16 @@ public record PropDefinition(
     String displayName,
     String coolDownGroup,
     int coolDownTimeSeconds,
-    int durationSeconds,
     boolean remove,
     boolean hand,
     boolean key,
     String permission,
-    List<String> effects,
+    PropEffects effects,
     List<ScriptCondition> conditions,
     PropAutoTriggerDefinition auto
 ) {
 
     public PropDefinition {
-        effects = List.copyOf(effects);
         conditions = List.copyOf(conditions);
     }
 }

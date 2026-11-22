@@ -2,7 +2,10 @@ package xuanmo.arcartxsuite.fishing.command;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
@@ -16,6 +19,7 @@ import xuanmo.arcartxsuite.api.util.PointInPolygon;
 import xuanmo.arcartxsuite.fishing.model.FishingPermanentData;
 import xuanmo.arcartxsuite.fishing.model.FishingSeasonData;
 import xuanmo.arcartxsuite.fishing.service.FishingService;
+import xuanmo.arcartxsuite.fishing.service.FishingService.TrialHook;
 
 /**
  * 钓鱼模块的管理员命令处理器。
@@ -29,6 +33,9 @@ import xuanmo.arcartxsuite.fishing.service.FishingService;
  * {@code args[1]} 为子动作，后续为参数。
  */
 public final class FishingAdminCommand implements ModuleCommandHandler {
+    private static final String ADMIN_PERMISSION = "axs.fishing.admin";
+    private static final String PERSONALITY_OPTION = "personality=";
+    private static final String TEST_ARGUMENTS = "test <鱼种ID> <体型cm> <reeds|clear> [水流区ID] [personality=<ID>] [hook|hook-loop]";
 
     private final java.util.function.Supplier<FishingService> serviceSupplier;
     private final java.util.function.BiFunction<String, Object[], String> msg;
@@ -51,7 +58,7 @@ public final class FishingAdminCommand implements ModuleCommandHandler {
     @Override public String commandId() { return "fishing"; }
 
     @Override public List<String> actions() {
-        return List.of("help", "stats", "givexp", "reset", "settlement", "resetseason", "water", "fatigue");
+        return List.of("help", "stats", "givexp", "reset", "settlement", "resetseason", "water", "fatigue", "test");
     }
 
     @Override
@@ -67,10 +74,10 @@ public final class FishingAdminCommand implements ModuleCommandHandler {
             return true;
         }
 
-        String action = args[1].toLowerCase();
+        String action = args[1].toLowerCase(Locale.ROOT);
         if ((action.equals("stats") || action.equals("givexp") || action.equals("reset")
-            || action.equals("settlement") || action.equals("resetseason") || action.equals("water"))
-            && !sender.hasPermission("axs.fishing.admin")) {
+            || action.equals("settlement") || action.equals("resetseason") || action.equals("water") || action.equals("test"))
+            && !sender.hasPermission(ADMIN_PERMISSION)) {
             sender.sendMessage(msg.apply("command_no_permission", new Object[]{}));
             return true;
         }
@@ -83,9 +90,59 @@ public final class FishingAdminCommand implements ModuleCommandHandler {
             case "resetseason" -> handleResetSeason(sender, service);
             case "water" -> handleWater(sender, args);
             case "fatigue" -> handleFatigue(sender, args, service);
+            case "test" -> handleTest(sender, label, args, service);
             default -> showHelp(sender, label);
         }
         return true;
+    }
+
+    private void handleTest(CommandSender sender, String label, String[] args, FishingService service) {
+        if (!(sender instanceof Player player)) {
+            sender.sendMessage("§c请在游戏内执行试钓命令。");
+            return;
+        }
+        if (args.length < 5 || args.length > 8 || !(args[4].equalsIgnoreCase("reeds") || args[4].equalsIgnoreCase("clear"))) {
+            sender.sendMessage("§e/" + label + " fishing " + TEST_ARGUMENTS);
+            return;
+        }
+        int size;
+        try {
+            size = Integer.parseInt(args[3]);
+        } catch (NumberFormatException e) {
+            sender.sendMessage("§c体型必须填写整数厘米数，例如 80。");
+            return;
+        }
+        String current = null;
+        String personality = null;
+        TrialHook hook = TrialHook.NONE;
+        for (int index = 5; index < args.length; index++) {
+            String option = args[index];
+            TrialHook requestedHook = trialHookOption(option);
+            if (requestedHook != TrialHook.NONE && hook == TrialHook.NONE) {
+                hook = requestedHook;
+            } else if (isPersonalityOption(option) && personality == null && option.length() > PERSONALITY_OPTION.length()) {
+                personality = option.substring(PERSONALITY_OPTION.length());
+            } else if (current == null && requestedHook == TrialHook.NONE && !option.contains("=")) {
+                current = option;
+            } else {
+                sender.sendMessage("§e/" + label + " fishing " + TEST_ARGUMENTS);
+                return;
+            }
+        }
+        service.startTrial(player, args[2], size, args[4].equalsIgnoreCase("reeds"), current,
+            personality == null ? "normal" : personality, hook);
+    }
+
+    private static boolean isPersonalityOption(String option) {
+        return option.regionMatches(true, 0, PERSONALITY_OPTION, 0, PERSONALITY_OPTION.length());
+    }
+
+    private static TrialHook trialHookOption(String option) {
+        return switch (option.toLowerCase(Locale.ROOT)) {
+            case "hook" -> TrialHook.SINGLE;
+            case "hook-loop" -> TrialHook.LOOP;
+            default -> TrialHook.NONE;
+        };
     }
 
     private void handleStats(@NotNull CommandSender sender, @NotNull String[] args, @NotNull FishingService service) {
@@ -157,8 +214,13 @@ public final class FishingAdminCommand implements ModuleCommandHandler {
     }
 
     private void handleSettlement(@NotNull CommandSender sender, @NotNull FishingService service) {
-        service.triggerSettlement();
-        sender.sendMessage("§a赛季结算已触发，所有在线玩家的结算奖励已发放。");
+        service.triggerSettlement().whenComplete((failed, failure) -> service.onMain(() -> {
+            if (serviceSupplier.get() != service || !sender.hasPermission(ADMIN_PERMISSION)) return;
+            if (sender instanceof Player player && Bukkit.getPlayer(player.getUniqueId()) != player) return;
+            if (failure != null) sender.sendMessage("§c赛季结算未能确认，请查看服务端日志。");
+            else sender.sendMessage(failed == 0 ? "§a在线玩家赛季奖励已进入待发队列。"
+                : "§e赛季结算有 " + failed + " 项未确认，请查看服务端日志。");
+        }));
     }
 
     private void handleResetSeason(@NotNull CommandSender sender, @NotNull FishingService service) {
@@ -184,6 +246,9 @@ public final class FishingAdminCommand implements ModuleCommandHandler {
         sender.sendMessage("§e" + cmd + " fatigue set <player> <value> §7— 设置玩家疲惫值");
         sender.sendMessage("§e" + cmd + " fatigue reset <player> §7— 重置玩家疲惫值为0");
         sender.sendMessage("§e" + cmd + " fatigue view <player> §7— 查看玩家疲惫值");
+        if (sender instanceof Player && sender.hasPermission(ADMIN_PERMISSION)) {
+            sender.sendMessage("§e" + cmd + " " + TEST_ARGUMENTS + " §7— 在龙泉湖配置下直接试钓");
+        }
     }
 
     // ─── 疲惫值管理 ────────────────────────────────────────────
@@ -394,9 +459,25 @@ public final class FishingAdminCommand implements ModuleCommandHandler {
     @Override
     public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull String[] args) {
         if (args.length == 2) {
+            boolean canTest = sender instanceof Player && sender.hasPermission(ADMIN_PERMISSION);
             return actions().stream()
+                .filter(a -> canTest || !a.equals("test"))
                 .filter(a -> a.startsWith(args[1].toLowerCase()))
                 .toList();
+        }
+        if (args.length >= 3 && args[1].equalsIgnoreCase("test")) {
+            if (!(sender instanceof Player) || !sender.hasPermission(ADMIN_PERMISSION)) return List.of();
+            FishingService service = serviceSupplier.get();
+            if (service == null) return List.of();
+            List<String> options = switch (args.length) {
+                case 3 -> service.trialFishIds();
+                case 4 -> service.trialSizes(args[2]);
+                case 5 -> List.of("reeds", "clear");
+                case 6, 7, 8 -> trialOptions(args, service);
+                default -> List.of();
+            };
+            String prefix = args[args.length - 1].toLowerCase(Locale.ROOT);
+            return options.stream().filter(option -> option.toLowerCase(Locale.ROOT).startsWith(prefix)).toList();
         }
         if (args.length == 3 && (args[1].equalsIgnoreCase("stats") || args[1].equalsIgnoreCase("givexp")
             || args[1].equalsIgnoreCase("reset") || args[1].equalsIgnoreCase("settlement")
@@ -435,5 +516,21 @@ public final class FishingAdminCommand implements ModuleCommandHandler {
                 .toList();
         }
         return List.of();
+    }
+
+    private List<String> trialOptions(String[] args, FishingService service) {
+        List<String> used = Arrays.asList(args).subList(5, args.length - 1);
+        var options = new ArrayList<String>();
+        if (used.stream().allMatch(option -> trialHookOption(option) != TrialHook.NONE || isPersonalityOption(option))) {
+            options.addAll(service.trialCurrentIds());
+        }
+        if (used.stream().noneMatch(FishingAdminCommand::isPersonalityOption)) {
+            service.trialPersonalityIds(args[2]).forEach(id -> options.add(PERSONALITY_OPTION + id));
+        }
+        if (used.stream().noneMatch(option -> trialHookOption(option) != TrialHook.NONE)) {
+            options.add("hook");
+            options.add("hook-loop");
+        }
+        return options;
     }
 }

@@ -11,6 +11,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import org.bukkit.Location;
 import org.bukkit.World;
+import xuanmo.arcartxsuite.map.config.MapModuleConfiguration.AnchorDefinition;
 import xuanmo.arcartxsuite.map.config.MapModuleConfiguration.PolygonRegion;
 import xuanmo.arcartxsuite.map.config.MapModuleConfiguration.WorldDefinition;
 import xuanmo.arcartxsuite.map.model.MapOperationResult;
@@ -43,6 +44,13 @@ final class MapPreloadService {
     private final Map<WorldDefinition, Set<Long>> preloadRegionCoordCache = new ConcurrentHashMap<>();
     private record Coverage(double x, double z, Set<Long> chunks) { }
     private final Map<WorldDefinition, Coverage> coverageCache = new ConcurrentHashMap<>();
+    private final Map<String, Set<Long>> anchorCoverage = new java.util.HashMap<>();
+    private static final class SpawnCenter {
+        Location location;
+        long refreshedAt;
+        boolean loading;
+    }
+    private final Map<WorldDefinition, SpawnCenter> spawnCenters = new java.util.HashMap<>();
 
 
     /** 世界预加载区域 → 多边形并集（preload.radius 圆心=配置 center 或出生点链，16 边形近似）。 */
@@ -104,11 +112,11 @@ final class MapPreloadService {
      * payload 下发与 terrainPush sourceVersion 必须同源，否则客户端永判过期。
      */
     int effectivePreloadVersion(WorldDefinition world) {
+        int base = world.preloadVersion();
+        if (base == 0) base = Math.max(1, java.util.Objects.hash("anchor-terrain", world.id()) & Integer.MAX_VALUE);
         Integer bump = preloadVersionBumps.get(world.id());
-        if (bump == null) {
-            return world.preloadVersion();
-        }
-        return Math.max(1, java.util.Objects.hash(world.preloadVersion(), bump) & 0x7FFFFFFF);
+        if (bump == null) return base;
+        return Math.max(1, java.util.Objects.hash(base, bump) & 0x7FFFFFFF);
     }
 
 
@@ -121,7 +129,9 @@ final class MapPreloadService {
         if (world == null) {
             return MapOperationResult.failure(service.message("refresh.world-unknown", worldId));
         }
-        if (!world.hasPreload()) {
+        if (!world.hasPreload() && service.configuration.anchors().values().stream().noneMatch(anchor ->
+                world.id().equalsIgnoreCase(anchor.worldId())
+                    && (anchor.lightRadius() > 0 || !anchor.lightRegions().isEmpty()))) {
             return MapOperationResult.failure(service.message("refresh.world-no-preload", world.id()));
         }
         int bump = preloadVersionBumps.merge(world.id(), 1, Integer::sum);
@@ -140,12 +150,37 @@ final class MapPreloadService {
         if (world.hasPreloadCenter()) {
             return new Location(bukkitWorld, world.preloadCenterX(), 0, world.preloadCenterZ());
         }
-        return service.resolveWorldSpawn(bukkitWorld);
+        if (bukkitWorld == null) return null;
+        SpawnCenter center = spawnCenters.computeIfAbsent(world, unused -> new SpawnCenter());
+        long now = System.nanoTime();
+        if (!center.loading && (center.refreshedAt == 0 || now - center.refreshedAt >= 5_000_000_000L)) {
+            center.loading = true;
+            service.resolveWorldSpawn(bukkitWorld, location -> {
+                Location previous = center.location;
+                center.location = location;
+                center.refreshedAt = System.nanoTime();
+                center.loading = false;
+                if (!java.util.Objects.equals(previous, location)) service.refreshSpawnViews();
+            });
+        }
+        return center.location;
     }
 
 
     List<int[]> preloadChunkCoords(WorldDefinition world) {
-        Set<Long> coords = preloadPackedChunkCoords(world);
+        return chunkCoords(preloadPackedChunkCoords(world));
+    }
+
+    Set<Long> anchorPackedChunkCoords(AnchorDefinition anchor) {
+        return anchorCoverage.computeIfAbsent(anchor.id(), ignored -> {
+            Set<Long> coords = new HashSet<>();
+            for (PolygonRegion region : anchor.lightRegions()) collectPolygonChunks(coords, region.points());
+            if (anchor.lightRadius() > 0) collectCircleChunks(coords, anchor.x(), anchor.z(), anchor.lightRadius());
+            return Set.copyOf(coords);
+        });
+    }
+
+    static List<int[]> chunkCoords(Set<Long> coords) {
         List<int[]> out = new ArrayList<>(coords.size());
         for (long packed : coords) out.add(new int[]{(int) (packed >> 32), (int) packed});
         return out;

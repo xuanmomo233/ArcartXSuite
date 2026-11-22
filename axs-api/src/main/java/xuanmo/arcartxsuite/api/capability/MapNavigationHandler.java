@@ -15,6 +15,9 @@ import org.jetbrains.annotations.NotNull;
  */
 public interface MapNavigationHandler {
 
+    /** 地图重启恢复时检查来源是否仍在运行。模块停用后应返回 false。 */
+    default boolean isActive() { return true; }
+
     /**
      * 玩家请求开始导航到该外部目标。
      *

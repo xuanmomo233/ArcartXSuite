@@ -41,10 +41,8 @@ bool native_hard_reject_signal(JNIEnv *env);
 // 保护层未就位（pcl == null：明文 dev jar / 测试 / CI harness）或检测基础设施异常时放行。
 bool trusted_decrypt_caller(JNIEnv *env);
 
-// JAR 明文层完整性校验（bootstrap_verify.cpp）
-// 通过 JVM CodeSource 定位插件 JAR，自行解析 ZIP，验签 BOOTSTRAP.MF 清单，
-// 比对全部非 ENCRYPTED/ .class 条目哈希，并复核 .enc Merkle+Ed25519。
-// 明文 jar（无 PROTECTION.MF）或 jar 无法定位时跳过；加密 jar 校验失败返回 false。
+// 从 JVM CodeSource 定位宿主，验证 BOOTSTRAP.MF v2 和全部文件条目。
+// 发布库要求可读的签名宿主，明文开发库允许普通 JAR 与类目录。
 bool verify_bootstrap_classes(JNIEnv *env);
 // .axb 验签复用的 Ed25519 公钥（integrity_check.cpp 内嵌的同一密钥）
 const uint8_t* axb_sign_pubkey();

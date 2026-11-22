@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -21,6 +22,7 @@ import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
+import xuanmo.arcartxsuite.api.auth.AuthAccess;
 import xuanmo.arcartxsuite.api.bridge.ItemBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge;
@@ -41,7 +43,8 @@ public final class MarketManagementController implements AutoCloseable {
     }
     private record GuardView(int page,String kind){}
     private record Pick(String token,RecycleProtectionRule rule,long version){}
-    private final JavaPlugin plugin;private final MarketRepository repository;private final MarketModuleConfiguration config;
+    private final JavaPlugin plugin;
+    private final MarketWork work;private final MarketRepository repository;private final MarketModuleConfiguration config;
     private final PacketBridgeAPI packets;private final ItemBridgeAPI items;private final AuctionItemSerializer serializer;private final Host host;private final Logger logger;
     private final RecycleProtectionService protection;
     private final Map<UUID,GuardView> guardViews=new ConcurrentHashMap<>();private final Map<UUID,Pick> picks=new ConcurrentHashMap<>();
@@ -49,20 +52,20 @@ public final class MarketManagementController implements AutoCloseable {
     private final Map<UUID,MarketAuditFilter> filters=new ConcurrentHashMap<>(),backFilters=new ConcurrentHashMap<>();
     private final Map<UUID,String> selectedRows=new ConcurrentHashMap<>();private final AtomicLong sequence=new AtomicLong();
     private final Map<UUID,String> listRequests=new ConcurrentHashMap<>(),detailRequests=new ConcurrentHashMap<>();
-    private final Set<UUID> auditListsLoading=ConcurrentHashMap.newKeySet();
+    private final Map<UUID, Long> auditListsLoading = new ConcurrentHashMap<>();
     private final Set<String> runningReads=ConcurrentHashMap.newKeySet();
     private volatile boolean closed;
 
-    public MarketManagementController(JavaPlugin plugin,MarketRepository repository,MarketModuleConfiguration config,PacketBridgeAPI packets,
+    public MarketManagementController(MarketWork work, JavaPlugin plugin,MarketRepository repository,MarketModuleConfiguration config,PacketBridgeAPI packets,
                                        ItemBridgeAPI items,AuctionItemSerializer serializer,VanillaItemNameBridge names,Host host,Logger logger){
-        this.plugin=plugin;this.repository=repository;this.config=config;this.packets=packets;this.items=items;this.serializer=serializer;this.host=host;this.logger=logger;
-        protection=new RecycleProtectionService(plugin,repository,config.recycle(),names,this::protectionReady,this::protectionUnavailable,logger);
+        this.plugin=plugin;this.work = work;this.repository=repository;this.config=config;this.packets=packets;this.items=items;this.serializer=serializer;this.host=host;this.logger=logger;
+        protection=new RecycleProtectionService(work, plugin,repository,config.recycle(),names,this::protectionReady,this::protectionUnavailable,logger);
     }
     public RecycleProtectionService protection(){return protection;}
     public boolean admin(Player player){return player.hasPermission("arcartxsuite.market.admin");}
     public void warm(Player player){
         if(closed)return;UUID id=player.getUniqueId();String name=player.getName();
-        Bukkit.getScheduler().runTaskAsynchronously(plugin,()->{try{if(!closed)repository.noteMarketPlayer(id,name);}catch(RuntimeException exception){logger.warning("[MarketAudit] 玩家名记录暂不可用");}});
+        work.async(()->{try{if(!closed)repository.noteMarketPlayer(id,name);}catch(RuntimeException exception){logger.warning("[MarketAudit] 玩家名记录暂不可用");}});
         if(config.recycle().enabled())protection.request(player);
     }
     public void clear(UUID id){protection.clear(id);epochs.remove(id);picks.remove(id);guardViews.remove(id);filters.remove(id);backFilters.remove(id);selectedRows.remove(id);listRequests.remove(id);detailRequests.remove(id);auditListsLoading.remove(id);tickets.keySet().removeIf(key->key.startsWith(id+":"));}
@@ -218,22 +221,52 @@ public final class MarketManagementController implements AutoCloseable {
         });
     }
 
-    private <T> void readAdmin(Player player,String channel,Supplier<T> work,Consumer<T> render){
-        if(!authorize(player) || !inAudit(player))return;
-        UUID id=player.getUniqueId();long epoch=epochs.computeIfAbsent(id,key->sequence.incrementAndGet()),ticket=sequence.incrementAndGet();String key=id+":"+channel;tickets.put(key,ticket);
-        if(!runningReads.add(key)){auditFailure(player,channel,"上一条查询尚未结束，请稍后重新读取");return;}
-        if("list".equals(channel)){auditListsLoading.add(id);tickets.remove(id+":detail");}
-        Bukkit.getScheduler().runTaskAsynchronously(plugin,()->{
-            T value=null;String failure=null;try{if(!closed)value=work.get();}catch(RuntimeException exception){failure=exception instanceof IllegalArgumentException?exception.getMessage():"管理数据查询暂不可用，请重试";logger.warning("[MarketAudit] "+exception.getMessage());}
-            finally{runningReads.remove(key);}
-            if(closed)return;final T loaded=value;final String error=failure;
-            Bukkit.getScheduler().runTask(plugin,()->{
-                Player online=Bukkit.getPlayer(id);
-                if(closed || online==null || !online.isOnline() || epochs.getOrDefault(id,0L)!=epoch || !Long.valueOf(ticket).equals(tickets.get(key)) || !inAudit(online))return;
-                if(!authorize(online))return;
-                if("list".equals(channel))auditListsLoading.remove(id);
-                try{if(error==null)render.accept(loaded);else auditFailure(online,channel,error);}
-                catch(RuntimeException exception){logger.warning("[MarketAudit] 页面回包失败: "+exception.getMessage());auditFailure(online,channel,"管理页面未完成加载，请刷新");}
+    private <T> void readAdmin(Player player, String channel, Supplier<T> read, Consumer<T> render) {
+        UUID id = player.getUniqueId();
+        var admission = AuthAccess.snapshot(id);
+        if (!admission.admitted() || !authorize(player) || !inAudit(player)) return;
+        long epoch = epochs.computeIfAbsent(id, ignored -> sequence.incrementAndGet());
+        long ticket = sequence.incrementAndGet();
+        String key = id + ":" + channel;
+        tickets.put(key, ticket);
+        if (!runningReads.add(key)) {
+            auditFailure(player, channel, "上一条查询尚未结束，请稍后重新读取");
+            return;
+        }
+        boolean list = "list".equals(channel);
+        if (list) {
+            auditListsLoading.put(id, ticket);
+            tickets.remove(id + ":detail");
+        }
+        work.async(() -> {
+            T value = null;
+            String failure = null;
+            try {
+                if (!closed) value = read.get();
+            } catch (RuntimeException exception) {
+                failure = exception instanceof IllegalArgumentException ? exception.getMessage() : "管理数据查询暂不可用，请重试";
+                logger.warning("[MarketAudit] " + exception.getMessage());
+            } finally {
+                runningReads.remove(key);
+            }
+            if (closed) return;
+            T loaded = value;
+            String error = failure;
+            work.main(() -> {
+                if (list) auditListsLoading.remove(id, ticket);
+                if (closed || Bukkit.getPlayer(id) != player || !player.isOnline()
+                    || epochs.getOrDefault(id, 0L) != epoch || !Long.valueOf(ticket).equals(tickets.get(key))
+                    || !inAudit(player)) return;
+                var current = AuthAccess.snapshot(id);
+                if (!current.admitted() || current.generation() != admission.generation()
+                    || !Objects.equals(current.connectionId(), admission.connectionId()) || !authorize(player)) return;
+                try {
+                    if (error == null) render.accept(loaded);
+                    else auditFailure(player, channel, error);
+                } catch (RuntimeException exception) {
+                    logger.warning("[MarketAudit] 页面回包失败: " + exception.getMessage());
+                    auditFailure(player, channel, "管理页面未完成加载，请刷新");
+                }
             });
         });
     }
@@ -271,6 +304,7 @@ public final class MarketManagementController implements AutoCloseable {
         if("HISTORY".equals(row.source()) && "DONE".equals(row.state()))return "业务已记录";
         String label=switch(row.state()){
             case "PREPARED" -> "已准备";case "READY" -> "待执行";case "RUNNING" -> "处理中";
+            case "ITEM_SAVING" -> "待原子服保存";
             case "REVIEW" -> "需核对";case "DONE" -> "本条已完成";case "FAILED" -> "明确失败";
             case "APPLIED" -> "已交付";case "CONFIRMED" -> "已核对";
             case "CANCELLED" -> "已取消";case "EXPIRED" -> "已到期";default -> row.state();
@@ -296,7 +330,7 @@ public final class MarketManagementController implements AutoCloseable {
     }
     private void detail(Player player,String id){
         if(id.isBlank() || id.length()>100)throw new IllegalArgumentException("记录ID无效");
-        if(auditListsLoading.contains(player.getUniqueId())){auditFailure(player,"detail","列表正在刷新，请稍后重新选择记录");return;}
+        if(auditListsLoading.containsKey(player.getUniqueId())){auditFailure(player,"detail","列表正在刷新，请稍后重新选择记录");return;}
         selectedRows.put(player.getUniqueId(),id);
         readAdmin(player,"detail",()->repository.marketAuditRow(id),row->{
             if(!id.equals(selectedRows.get(player.getUniqueId())))return;

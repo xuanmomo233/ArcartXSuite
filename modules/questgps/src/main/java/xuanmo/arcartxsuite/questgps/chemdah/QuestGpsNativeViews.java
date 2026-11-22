@@ -77,26 +77,25 @@ public final class QuestGpsNativeViews implements AutoCloseable {
             Class<?> type = Class.forName(name, true, chemdah.getClass().getClassLoader());
             if (!Event.class.isAssignableFrom(type)) throw new IllegalStateException("Chemdah 重载事件不可用: " + name);
             Bukkit.getPluginManager().registerEvent((Class<? extends Event>) type, listener, EventPriority.MONITOR,
-                (unused, event) -> requestRefresh(), plugin, true);
+                (unused, event) -> {
+                    // TabooLib BukkitProxyEvent 子类共用注册表。
+                    if (event.getClass() == type) requestRefresh();
+                }, plugin, true);
         } catch (ReflectiveOperationException e) {
             throw new IllegalStateException("Chemdah 版本不支持原生展示组件重载", e);
         }
     }
 
     public void requestRefresh() {
-        if (!active) return;
-        if (!Bukkit.isPrimaryThread()) {
-            Bukkit.getScheduler().runTask(plugin, this::requestRefresh);
-            return;
-        }
-        refresh.request();
+        if (active) refresh.request();
     }
 
     private void rebuild(boolean forced) {
         if (!active) return;
         try {
-            Map<String, Template> templates = snapshotTemplates();
-            if (!forced && sameTemplates(lastTemplates, templates)) return;
+            Map<String, Template> liveTemplates = ChemdahAPI.INSTANCE.getQuestTemplate();
+            if (!forced && sameTemplates(lastTemplates, liveTemplates)) return;
+            Map<String, Template> templates = Map.copyOf(liveTemplates);
             Map<String, QuestGpsCategory> categories = new LinkedHashMap<>(configuration.categoryStyles());
             for (Template template : templates.values()) {
                 Object meta = template.metaAll().get("type");
@@ -124,7 +123,7 @@ public final class QuestGpsNativeViews implements AutoCloseable {
                         new MemoryConfiguration(), tasks, categories, logger));
                 }
             }
-            if (!sameTemplates(templates, snapshotTemplates())) return;
+            if (!sameTemplates(templates, ChemdahAPI.INSTANCE.getQuestTemplate())) return;
             configuration.definitions().publish(views, categories);
             // Release components on replaced templates too: active quests may still reference those templates.
             Set<QuestContainer> live = java.util.Collections.newSetFromMap(new IdentityHashMap<>());

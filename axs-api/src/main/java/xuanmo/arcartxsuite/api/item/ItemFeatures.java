@@ -32,6 +32,8 @@ final class ItemFeatures {
     private String normalizedName;
     private List<String> loreLines;
     private Set<String> kinds;
+    private ItemMeta meta;
+    private boolean metaRead;
 
     ItemFeatures(
         ItemStack itemStack,
@@ -95,7 +97,7 @@ final class ItemFeatures {
     }
 
     private String rawDisplayName() {
-        ItemMeta meta = itemStack.getItemMeta();
+        ItemMeta meta = itemMeta();
         if (meta == null || !meta.hasDisplayName()) {
             return itemStack.getType().name();
         }
@@ -103,15 +105,24 @@ final class ItemFeatures {
     }
 
     private List<String> normalizedLore() {
-        ItemMeta meta = itemStack.getItemMeta();
-        if (meta == null || meta.getLore() == null) {
+        ItemMeta meta = itemMeta();
+        List<String> lore = meta == null || !meta.hasLore() ? null : meta.getLore();
+        if (lore == null || lore.isEmpty()) {
             return List.of();
         }
-        List<String> result = new ArrayList<>();
-        for (String line : meta.getLore()) {
+        List<String> result = new ArrayList<>(lore.size());
+        for (String line : lore) {
             result.add(normalizeToken(line));
         }
         return List.copyOf(result);
+    }
+
+    private ItemMeta itemMeta() {
+        if (!metaRead) {
+            meta = itemStack.getItemMeta();
+            metaRead = true;
+        }
+        return meta;
     }
 
     private Set<String> detectKinds() {
@@ -139,7 +150,9 @@ final class ItemFeatures {
     }
 
     private static String normalizeToken(String value) {
-        return ChatColor.stripColor(value == null ? "" : value).trim().toLowerCase(Locale.ROOT);
+        if (value == null) return "";
+        if (value.indexOf(ChatColor.COLOR_CHAR) >= 0) value = ChatColor.stripColor(value);
+        return value.trim().toLowerCase(Locale.ROOT);
     }
 
     /** 材质名 → kind 的静态规则表，按声明顺序求值。 */

@@ -20,7 +20,10 @@ dependencies {
     compileOnly("at.favre.lib:bcrypt:0.10.2")
 }
 
-tasks.test { useJUnitPlatform() }
+tasks.test {
+    useJUnitPlatform()
+    systemProperty("java.io.tmpdir", temporaryDir.absolutePath)
+}
 
 tasks.compileJava {
     options.encoding = "UTF-8"

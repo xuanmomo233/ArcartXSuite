@@ -20,6 +20,6 @@ public final class TooltipPlayerListener implements Listener {
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void onQuit(PlayerQuitEvent event) {
-        cache.removePlayer(event.getPlayer().getUniqueId());
+        cache.removePlayer(event.getPlayer());
     }
 }

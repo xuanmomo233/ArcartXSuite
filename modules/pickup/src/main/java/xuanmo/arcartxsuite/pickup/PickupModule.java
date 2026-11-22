@@ -167,6 +167,10 @@ public final class PickupModule extends AbstractAXSModule {
             public boolean notifyPickup(Player player, ItemStack itemStack, int amount) {
                 return notificationService != null && notificationService.notifyPickup(player, itemStack, amount);
             }
+            @Override
+            public boolean notifyPickupPrepared(Player player, ItemStack itemStack, int amount, String previewJson) {
+                return notificationService != null && notificationService.notifyPickupPrepared(player, itemStack, amount, previewJson);
+            }
         });
 
     }

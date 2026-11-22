@@ -63,16 +63,14 @@ ui:
         }
       }
 
-      while(val.reply_list.childrenCount() > 1){
-        val.reply_list.get(1).remove()
-      }
-
-      for(i in range(1, var.replyCount)){
-        key = i.round()
-        if(val.reply_list['回复模板'] != none) {
-          ri = val.reply_list['回复模板'].copy('reply_' + i.round())
-          ri.entryKey = key
+      if(var.reply_listRows == none || var.reply_listRows.size() != (var.replyCount)){
+        网格数据 = []
+        if((var.replyCount) > 0){
+          for(网格序号 in range(0, (var.replyCount) - 1)){
+            网格数据.add(网格序号.round())
+          }
         }
+        var.reply_listRows = 网格数据
       }
 
     # packetHandler: close
@@ -93,14 +91,16 @@ ui:
         }
       }
     tick: |-
-      mw = 0
-      for(i in range(0, val.reply_list.childrenCount())){
-        w = val.reply_list.get(i)['回复文字'].width
-        if(w > mw){
-          mw = w
+      if(val.reply_list != none && val.reply_list.childrenCount() > 0){
+        mw = 0
+        for(i in range(0, val.reply_list.childrenCount() - 1)){
+          row = val.reply_list.get(i.round())
+          if(row != none && row['回复文字'] != none){
+            mw = Math.max(mw, row['回复文字'].width)
+          }
         }
+        var.maxReplyWidth = mw + 80
       }
-      var.maxReplyWidth = mw + 80
 
 controls:
   自适应全局布局:
@@ -212,16 +212,20 @@ controls:
                     }
                 children:
                   选项列表:
-                    type: VStack
+                    type: RepeatGrid
                     val: reply_list
                     attribute:
+                      items: "var.reply_listRows"
+                      flow: ~row
+                      column: 1
+                      spaceBetweenY: 5
+                      maxSize: "var.reply_listRows == none ? 0 : var.reply_listRows.size()"
                       width: var.maxReplyWidth
-                      spaceBetween: 5
                     children:
                       回复模板:
                         type: Canvas
                         attribute:
-                          entryKey: 0.round()
+                          entryKey: self.item
                           entry: "var.replyRows[self.entryKey] != none ? var.replyRows[self.entryKey] : none"
                           replyId: "self.entry != none ? self.entry['id'] : none"
                           visible: self.entry != none

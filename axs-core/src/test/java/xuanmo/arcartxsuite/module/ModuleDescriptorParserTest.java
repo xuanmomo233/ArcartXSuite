@@ -20,11 +20,20 @@ class ModuleDescriptorParserTest {
     @Test void rejectsOldContractBeforeLoadingAnyModuleClass() throws Exception {
         assertThrows(ModuleLoadException.class,()->ModuleDescriptorParser.parse(module("api-version: 1.0\n")));
         assertThrows(ModuleLoadException.class,()->ModuleDescriptorParser.parse(module("api-version: 2.0\n")));
+        assertThrows(ModuleLoadException.class,()->ModuleDescriptorParser.parse(module("api-version: 3.0\n")));
+        assertThrows(ModuleLoadException.class,()->ModuleDescriptorParser.parse(module("api-version: 3.1\n")));
+        assertThrows(ModuleLoadException.class,()->ModuleDescriptorParser.parse(module("api-version: 3.2\n")));
+        assertThrows(ModuleLoadException.class,()->ModuleDescriptorParser.parse(module("api-version: 3.3\n")));
+        assertThrows(ModuleLoadException.class,()->ModuleDescriptorParser.parse(module("api-version: 3.4\n")));
+        assertThrows(ModuleLoadException.class,()->ModuleDescriptorParser.parse(module("api-version: 3.5\n")));
+        assertThrows(ModuleLoadException.class,()->ModuleDescriptorParser.parse(module("api-version: 3.6\n")));
+        assertThrows(ModuleLoadException.class,()->ModuleDescriptorParser.parse(module("api-version: 3.7\n")));
+        assertThrows(ModuleLoadException.class,()->ModuleDescriptorParser.parse(module("api-version: 3.8\n")));
     }
     @Test void missingApiVersionDoesNotFallBackToLegacyContract() {
         assertThrows(ModuleLoadException.class,()->ModuleDescriptorParser.parse(module("")));
     }
     @Test void acceptsTheExplicitNewContract() throws Exception {
-        assertEquals("example",ModuleDescriptorParser.parse(module("api-version: 3.0\n")).id());
+        assertEquals("example",ModuleDescriptorParser.parse(module("api-version: 3.9\n")).id());
     }
 }

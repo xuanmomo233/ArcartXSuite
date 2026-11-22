@@ -165,7 +165,7 @@ public final class TalentEngine {
     }
 
     /**
-     * 解锁一个天赋节点（消耗1点天赋点，等级固定为 1）。
+     * 解锁或升级一个天赋节点，消耗 1 点天赋点。
      *
      * @param data   玩家赛季数据
      * @param nodeId 节点 ID
@@ -173,7 +173,7 @@ public final class TalentEngine {
      */
     public @NotNull FishingSeasonData levelUp(@NotNull FishingSeasonData data, @NotNull String nodeId) {
         if (!canLevelUp(data, nodeId)) return data;
-        return data.withTalentLeveledUp(nodeId, 1);
+        return data.withTalentLeveledUp(nodeId, nodesById.get(nodeId).maxLevel());
     }
 
     /**

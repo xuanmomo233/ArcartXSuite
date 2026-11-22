@@ -6,13 +6,14 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.TimeUnit;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 import xuanmo.arcartxsuite.api.auth.AuthAccess;
+import xuanmo.arcartxsuite.api.scheduler.ModuleExecutor;
 import xuanmo.arcartxsuite.qqbot.config.QQBotConfiguration;
 import xuanmo.arcartxsuite.qqbot.config.QQBotGroupConfig;
 import xuanmo.arcartxsuite.qqbot.onebot.OneBotClient;
@@ -27,11 +28,12 @@ public final class QQBotMessageGateway implements AutoCloseable {
     private final OneBotClient client;
     private final SlidingWindowRateLimiter<UUID> players;
     private final SlidingWindowRateLimiter<UUID> mentions = new SlidingWindowRateLimiter<>(1, 10000L, 4096);
-    private final ThreadPoolExecutor worker = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,
+    private final ModuleExecutor worker = new ModuleExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,
         new ArrayBlockingQueue<>(64), r -> {
             Thread thread = new Thread(r, "QQBot-Delivery"); thread.setDaemon(true); return thread;
-        }, new ThreadPoolExecutor.AbortPolicy());
+        });
     private volatile boolean closed;
+    private final CompletableFuture<Void> acknowledgementsStopped = new CompletableFuture<>();
     private final java.util.Set<CompletableFuture<OneBotResult>> outstanding = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
     public QQBotMessageGateway(JavaPlugin plugin, QQBotConfiguration config, QQBotRepository repository, OneBotClient client) {
@@ -40,6 +42,10 @@ public final class QQBotMessageGateway implements AutoCloseable {
     }
 
     public CompletableFuture<OneBotResult> sendPlayer(Player player, String text, Long mention) {
+        return sendPlayer(player, text, mention, null);
+    }
+
+    public CompletableFuture<OneBotResult> sendPlayer(Player player, String text, Long mention, String channelId) {
         if (closed) return failure("QQBot 正在关闭");
         if (!Bukkit.isPrimaryThread()) {
             CompletableFuture<OneBotResult> result = new CompletableFuture<>();
@@ -47,7 +53,7 @@ public final class QQBotMessageGateway implements AutoCloseable {
             result.whenComplete((value, error) -> outstanding.remove(result));
             if (closed) { result.complete(OneBotResult.failure(-1, "服务已停止，消息未发送")); return result; }
             try {
-                Bukkit.getScheduler().runTask(plugin, () -> sendPlayer(player, text, mention)
+                Bukkit.getScheduler().runTask(plugin, () -> sendPlayer(player, text, mention, channelId)
                     .whenComplete((value, error) -> complete(result, value, error)));
             } catch (RuntimeException stopped) { result.complete(OneBotResult.failure(-1, "服务已停止，消息未发送")); }
             return result;
@@ -58,7 +64,9 @@ public final class QQBotMessageGateway implements AutoCloseable {
         String message = normalize(text);
         if (message == null) return failure("消息为空、过长或包含不支持的控制字符（上限 " + config.delivery().maxMessageLength() + " 字）");
         if (!client.isConnected()) return failure("机器人未连接，消息未发送");
-        List<QQBotGroupConfig> targets = config.groups().stream().filter(QQBotGroupConfig::syncGameToQq).toList();
+        List<QQBotGroupConfig> targets = config.groups().stream()
+            .filter(QQBotGroupConfig::syncGameToQq)
+            .filter(group -> channelId == null || group.chatChannel().equalsIgnoreCase(channelId)).toList();
         if (targets.isEmpty()) return failure("没有允许接收游戏消息的 QQ 群");
         UUID id = player.getUniqueId();
         long now = System.nanoTime() / 1_000_000L;
@@ -107,11 +115,22 @@ public final class QQBotMessageGateway implements AutoCloseable {
     }
 
     public void clearPlayer(UUID player) { players.remove(player); mentions.remove(player); }
-    @Override public void close() {
-        closed = true; worker.shutdownNow(); players.clear(); mentions.clear();
-        outstanding.forEach(future -> future.complete(OneBotResult.failure(-2, "模块关闭，未完成操作的结果未知，请核对后再操作")));
-        outstanding.clear();
+    @Override public synchronized void close() {
+        if (closed) return;
+        closed = true;
+        worker.shutdown();
+        players.clear();
+        mentions.clear();
+        CompletableFuture.runAsync(() -> {
+            outstanding.forEach(future -> future.complete(OneBotResult.failure(-2, "模块关闭，未完成操作的结果未知，请核对后再操作")));
+            outstanding.clear();
+        }).whenComplete((ignored, failure) -> {
+            if (failure == null) acknowledgementsStopped.complete(null);
+            else acknowledgementsStopped.completeExceptionally(failure);
+        });
     }
+
+    CompletionStage<Void> stopped() { return CompletableFuture.allOf(worker.stopped().toCompletableFuture(), acknowledgementsStopped); }
 
     private String normalize(String message) {
         if (message == null) return null;

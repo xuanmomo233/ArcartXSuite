@@ -10,6 +10,7 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static xuanmo.arcartxsuite.menu.service.MenuRepeatGridAssertions.*;
 
 class MenuPanelGridResourceTest {
 
@@ -48,7 +49,9 @@ class MenuPanelGridResourceTest {
         assertTrue(refs.keySet().containsAll(Set.of("button_rows", "footer_rows", "detail_rows",
             "grid_slider", "footer_slider", "detail_slider", "detail_icon")));
         ConfigurationSection grid = refs.get("button_rows");
-        assertEquals("HGrid", grid.getString("type"));
+        assertGrid(refs, "button_rows", "row", "buttonRows");
+        assertGrid(refs, "footer_rows", "column", "footerRows");
+        assertGrid(refs, "detail_rows", "row", "detailRows");
         assertEquals("var.columns", grid.getString("attribute.column"));
         String apply = yaml.getString("ui.action.applyPacket");
         assertTrue(apply.contains("var.columns = var.incoming['columns']"));
@@ -63,16 +66,8 @@ class MenuPanelGridResourceTest {
     void hoverOnlyPreviewsAndWriteActionsKeepTokens() throws Exception {
         Map<String, ConfigurationSection> refs = new HashMap<>();
         visit(load().getConfigurationSection("controls"), "UI", refs);
-        for (String name : Set.of("button_rows", "footer_rows")) {
-            ConfigurationSection children = refs.get(name).getConfigurationSection("children");
-            ConfigurationSection button = children.getConfigurationSection(children.getKeys(false).iterator().next());
-            assertFalse(button.getString("action.enter").contains("Packet.send"));
-            assertFalse(button.getString("action.leave").contains("Packet.send"));
-            assertTrue(button.getString("action.clickLeft").contains("var.actionToken, self.entry['id']"));
-            assertTrue(button.getString("action.clickLeft").contains("self.entry['enabled']"));
-            assertEquals("0.round()", button.getString("attribute.entryKey"));
-            assertNull(button.get("attribute.enable"));
-        }
+        assertButton(assertGrid(refs, "button_rows", "row", "buttonRows"), "click", "iconJsons");
+        assertButton(assertGrid(refs, "footer_rows", "column", "footerRows"), "footer", "footerIconJsons");
     }
 
     @Test
@@ -83,12 +78,10 @@ class MenuPanelGridResourceTest {
         }
         String apply = yaml.getString("ui.action.applyPacket");
         assertTrue(apply.contains("var.selectedId == entry['id']"));
-        assertTrue(apply.contains("if(目标按钮数 > 0)"));
-        assertTrue(apply.contains("if(目标页脚数 > 0)"));
-        assertTrue(apply.contains("val.button_rows.get(0)"));
-        assertTrue(apply.contains("var.按钮引用[i.round()] = mb"));
-        assertTrue(apply.contains("var.页脚引用[i.round()] = fb"));
-        assertTrue(apply.contains("mb['图标'].seticon()"));
+        assertIndexedRows(apply, "button_rows", "buttonCount");
+        assertIndexedRows(apply, "footer_rows", "footerCount");
+        assertIconRefresh(yaml, "button_rows", "buttonCount");
+        assertIconRefresh(yaml, "footer_rows", "footerCount");
         assertTrue(apply.contains("var.iconJsons[key] = entry['hasIcon'] ? entry['itemJson'] : var.air"));
         assertTrue(apply.contains("var.footerIconJsons[key] = entry['hasIcon'] ? entry['itemJson'] : var.air"));
         assertFalse(apply.contains("['菜单按钮'].copy"));
@@ -96,7 +89,10 @@ class MenuPanelGridResourceTest {
         assertFalse(apply.contains(".clear()"));
         String refresh = yaml.getString("ui.action.refreshDetails");
         assertTrue(refresh.contains(": var.air"));
-        assertTrue(refresh.contains("var.说明引用[i.round()] = row"));
+        assertIndexedRows(refresh, "detail_rows", "detailCount");
+        assertTrue(apply.contains("previousId != var.selectedId"));
+        assertTrue(apply.contains("previousFooter != var.selectedFooter"));
+        assertTrue(apply.contains("val.detail_slider.setDragYRatio(0)"));
         assertFalse(yaml.getString("ui.action.tick").contains(".copy("));
     }
 
@@ -149,7 +145,7 @@ class MenuPanelGridResourceTest {
                 assertNotNull(nested);
                 assertEquals(1, nested.getKeys(false).size());
                 String only = nested.getKeys(false).iterator().next();
-                assertTrue(Set.of("Canvas", "HStack", "VStack", "HGrid").contains(nested.getString(only + ".type")));
+                assertTrue(Set.of("Canvas", "HStack", "VStack", "HGrid", "RepeatGrid").contains(nested.getString(only + ".type")));
             }
             if (nested != null) visit(nested, type, refs);
         }

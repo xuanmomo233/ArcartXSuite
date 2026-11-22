@@ -13,7 +13,7 @@ import org.bukkit.configuration.ConfigurationSection;
  * 负责从配置节解析排名奖励开关以及各名次奖励定义，
  * 供结算服务在 Boss 死亡后按名次发放奖励。
  * <p>
- * 物品发放的背包满处理统一由 {@link xuanmo.arcartxsuite.api.item.ItemRewardDispatcher} 负责
+ * 背包无法容纳的整份物品由宿主的持久待发队列接管。
  * （放入背包→背包满转邮件→无邮件则掉落），不再需要配置策略。
  *
  * @param enabled               是否启用排名奖励

@@ -33,6 +33,8 @@ import xuanmo.arcartxsuite.title.placeholder.TitlePlaceholderExpansion;
 import xuanmo.arcartxsuite.title.service.TitleOperationResult;
 import xuanmo.arcartxsuite.title.service.TitleService;
 import xuanmo.arcartxsuite.title.storage.JdbcTitleRepository;
+import xuanmo.arcartxsuite.api.storage.ModuleStorage;
+import java.util.concurrent.CompletableFuture;
 
 public final class TitleModule extends AbstractAXSModule implements ModuleCommandHandler {
 
@@ -43,6 +45,7 @@ public final class TitleModule extends AbstractAXSModule implements ModuleComman
 
     private TitleModuleConfiguration configuration;
     private TitleService service;
+    private ModuleStorage storageScope;
 
     @Override
     public ModuleDescriptor descriptor() {
@@ -88,7 +91,7 @@ public final class TitleModule extends AbstractAXSModule implements ModuleComman
     protected @NotNull PacketHandlerSpec createPacketHandlerSpec() {
         return PacketHandlerSpec.of(
             (player, packetId, data) ->
-                    service != null && service.handleClientPacket(player, packetId, data), 0, null, null);
+                    service != null && service.handleClientPacket(player, packetId, data), 0, TitleService.CLIENT_PACKET_ID, "title");
     }
 
     @Override
@@ -143,16 +146,15 @@ public final class TitleModule extends AbstractAXSModule implements ModuleComman
         // 共享模式：使用本体统一数据源，模块只需提供表前缀
         // 若模块配置了独立 storage 节（dialect=mysql 等），则走自建模式（向后兼容）
         xuanmo.arcartxsuite.api.storage.StorageDescriptor titleDesc;
-        javax.sql.DataSource titleDs;
         if (configuration.storage().hasOverride()) {
             titleDesc = configuration.storage().toDescriptor();
-            titleDs = storageManager.resolveModuleDataSource("title", null, dataFolder, titleDesc);
+            storageScope = storageManager.openModuleStorage("title", null, dataFolder, titleDesc);
         } else {
             titleDesc = storageManager.getDescriptor().withTablePrefix("");
-            titleDs = storageManager.resolveModuleDataSource("title",
+            storageScope = storageManager.openModuleStorage("title",
                 configuration.storage().sqliteFileName(), dataFolder, null);
         }
-        JdbcTitleRepository titleRepo = new JdbcTitleRepository(titleDs, titleDesc, dataFolder, logger);
+        JdbcTitleRepository titleRepo = new JdbcTitleRepository(storageScope.dataSource(), titleDesc, dataFolder, logger);
         service = new TitleService(
             plugin, logger, configuration,
             titleRepo,
@@ -171,19 +173,28 @@ public final class TitleModule extends AbstractAXSModule implements ModuleComman
         for (String uiId : service.registeredUiIds()) {
             recordExternalUi(uiId, uiId);
         }
-        adminCommand = new TitleAdminCommand(() -> service, messages());
+        adminCommand = new TitleAdminCommand(plugin, () -> service, messages());
 
         // 注册跨模块称号授予能力（EventPacket 等模块通过 capability 调用）
-        registerCapability(TitleGrantable.class,
-            (playerId, titleId, duration, source) -> {
+        registerCapability(TitleGrantable.class, new TitleGrantable() {
+            @Override public boolean giveTitle(java.util.UUID playerId, String titleId, String duration, String source) {
                 var specOpt = xuanmo.arcartxsuite.title.TitleDurationParser.parse(duration);
                 if (specOpt.isEmpty()) {
                     logger.warning("TitleGrantable 收到无效的 duration 格式: " + duration);
                     return false;
                 }
-                TitleOperationResult result = service.giveTitle(playerId, titleId, specOpt.get(), source);
+                TitleService current = service;
+                if (current == null) return false;
+                TitleOperationResult result = current.giveTitle(playerId, titleId, specOpt.get(), source);
                 return result.success();
-            });
+            }
+
+            @Override public java.util.concurrent.CompletableFuture<Boolean> grantPermanent(
+                    java.util.UUID playerId, String titleId, String source) {
+                return service == null ? java.util.concurrent.CompletableFuture.completedFuture(false)
+                    : service.grantPermanent(playerId, titleId, source);
+            }
+        });
 
         registerCapability(TitleConfigQueryable.class, titleId -> {
             if (configuration == null) return null;
@@ -195,14 +206,17 @@ public final class TitleModule extends AbstractAXSModule implements ModuleComman
             return new TitleConfigQueryable.TitleInfo(def.displayName(), qualityName, def.description());
         });
 
+        TitleService startedService = service;
         registerCapability(xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable.class,
             new xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable() {
                 @Override public @NotNull String moduleId() { return "title"; }
                 @Override public int purgePlayerData(@NotNull java.util.UUID playerUuid) {
+                    if (!startedService.isReady()) return -1;
                     try { return titleRepo.deletePlayerData(playerUuid); }
                     catch (Exception e) { logger.warning("Title purge 失败: " + e.getMessage()); return -1; }
                 }
                 @Override public int purgeAllPlayerData() {
+                    if (!startedService.isReady()) return -1;
                     try { return titleRepo.deleteAllPlayerData(); }
                     catch (Exception e) { logger.warning("Title purgeAll 失败: " + e.getMessage()); return -1; }
                 }
@@ -213,6 +227,11 @@ public final class TitleModule extends AbstractAXSModule implements ModuleComman
                 @Override public @NotNull String moduleId() { return "title"; }
                 @Override public @NotNull xuanmo.arcartxsuite.api.storage.MigrationResult migrateDatabase(
                         @NotNull xuanmo.arcartxsuite.api.storage.StorageDescriptor target, boolean overwrite) {
+                    if (!startedService.isReady()) {
+                        var result = new xuanmo.arcartxsuite.api.storage.MigrationResult(false, 0, 0);
+                        result.addError("Title 存储尚未就绪或正在停用");
+                        return result;
+                    }
                     return titleRepo.migrateData(target, overwrite);
                 }
                 @Override public @NotNull xuanmo.arcartxsuite.api.storage.StorageDescriptor currentDescriptor() {
@@ -228,12 +247,22 @@ public final class TitleModule extends AbstractAXSModule implements ModuleComman
 
     @Override
     protected void stopService() {
-        if (service != null) {
-            service.shutdown();
-            storageManager.closeModuleDataSource("title");
-            service = null;
+        TitleService current = service;
+        ModuleStorage scope = storageScope;
+        service = null;
+        storageScope = null;
+        try {
+            if (current != null) current.shutdown();
+        } finally {
+            if (scope != null) {
+                scope.retireAfter(current == null
+                    ? CompletableFuture.completedFuture(null) : current.databaseStopped());
+                trackShutdown(scope.retired());
+            } else if (current != null) {
+                trackShutdown(current.databaseStopped());
+            }
+            configuration = null;
         }
-        configuration = null;
     }
 
     @Override

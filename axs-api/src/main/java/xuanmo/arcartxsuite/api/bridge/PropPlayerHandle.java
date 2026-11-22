@@ -17,6 +17,12 @@ public interface PropPlayerHandle {
     /** 设置指定额外槽位的物品 */
     void setSlotItemStack(String slotId, ItemStack itemStack);
 
+    /** 写入并确认服务端槽位的新内容。供执行消耗前使用。 */
+    boolean trySetSlotItemStack(String slotId, ItemStack itemStack);
+
+    /** 回推一个槽位的服务端快照，且不触发槽位更新脚本。 */
+    void syncSlotToClient(String slotId);
+
     /** 仅客户端移除指定前缀的额外槽位物品 */
     void removeSlotItemStackOnlyClient(String slotPrefix, boolean recursive);
 

@@ -21,11 +21,11 @@ season-kill-1000:
     type: fixed
     value: 1
 
-# -------- 交易大师 --------
-# axs.market.listing_created 由 market 模块发布，market 模块通常已加载，无需降级
+# -------- 上架达人 --------
+# axs.market.listing_created 在市场上架时发布
 season-market-50:
-  display-name: "交易大师"
-  description: "本赛季在市场累计交易50次"
+  display-name: "上架达人"
+  description: "本赛季在市场累计上架50次"
   difficulty: normal
   event-topic: "axs.market.listing_created"
   required-count: 50
@@ -151,8 +151,7 @@ season-treasure-50:
 
 # -------- 累计登录 --------
 # 赛季累计登录 30 天
-# limits.max-per-day: 1 确保每天只计 1 次，无论玩家当天进服多少次
-# loginview 模块存在时走 EventBus（登录成功），不存在时走 PlayerJoinEvent
+# 由宿主认证在线事件驱动，同一业务日的重连和事件重发只计 1 次。
 season-login-30:
   display-name: "坚持不懈"
   description: "本赛季累计登录30天"
@@ -164,8 +163,6 @@ season-login-30:
   increment-strategy:
     type: fixed
     value: 1
-  limits:
-    max-per-day: 1
 
 # -------- 赛季附魔宗师 --------
 season-enchant-200:

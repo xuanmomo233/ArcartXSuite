@@ -3,6 +3,7 @@ package xuanmo.arcartxsuite.map.service;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.BooleanSupplier;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI.CurrencyBridge;
@@ -26,6 +27,15 @@ final class MapChargeService {
 
 
     CurrencyChargeReceipt chargeCurrencies(Player player, List<CurrencyCost> costs) {
+        return chargeCurrencies(player, costs, false, () -> true);
+    }
+
+    CurrencyChargeReceipt chargeCurrencies(Player player, List<CurrencyCost> costs, BooleanSupplier eligible) {
+        return chargeCurrencies(player, costs, true, eligible);
+    }
+
+    private CurrencyChargeReceipt chargeCurrencies(Player player, List<CurrencyCost> costs,
+                                                  boolean requireConfirmedDebit, BooleanSupplier eligible) {
         if (costs == null || costs.isEmpty()) {
             return CurrencyChargeReceipt.success(List.of());
         }
@@ -33,6 +43,12 @@ final class MapChargeService {
             CurrencyBridge bridge = service.currencyBridgeManager.bridge(cost.currencyId());
             if (bridge == null || !bridge.available()) {
                 return CurrencyChargeReceipt.failure(service.message("player.currency-bridge-unavailable", cost.currencyId()));
+            }
+            if (requireConfirmedDebit && (bridge.debitRequiresReconciliation() || switch (MapService.normalizeId(bridge.definition().provider())) {
+                case "placeholder-command", "command", "custom" -> true;
+                default -> false;
+            })) {
+                return CurrencyChargeReceipt.failure(service.message("player.anchor-unlock-currency-unconfirmed", cost.currencyId()));
             }
             if (bridge.balance(player).compareTo(cost.amount()) < 0) {
                 return CurrencyChargeReceipt.failure(service.message("player.insufficient-balance", cost.currencyId()));
@@ -42,13 +58,28 @@ final class MapChargeService {
         for (CurrencyCost cost : costs) {
             CurrencyBridge bridge = service.currencyBridgeManager.bridge(cost.currencyId());
             if (bridge == null || !bridge.available()) {
-                rollbackCurrencies(player, successfulCharges);
-                return CurrencyChargeReceipt.failure(service.message("player.currency-bridge-unavailable", cost.currencyId()));
+                return CurrencyChargeReceipt.failure(service.message("player.currency-bridge-unavailable", cost.currencyId()),
+                    !rollbackCurrencies(player, successfulCharges));
             }
-            CurrencyTransactionResult result = bridge.withdraw(player, cost.amount());
-            if (!result.success()) {
+            if (!eligible.getAsBoolean()) {
+                return CurrencyChargeReceipt.failure(service.message("common.no-permission"),
+                    !rollbackCurrencies(player, successfulCharges));
+            }
+            CurrencyTransactionResult result;
+            try {
+                result = bridge.withdraw(player, cost.amount());
+            } catch (RuntimeException | LinkageError failure) {
+                result = CurrencyTransactionResult.unknown("扣费结果待核对");
+            }
+            if (result == null || result.uncertain()
+                || (requireConfirmedDebit && result.success() && bridge.debitRequiresReconciliation())) {
                 rollbackCurrencies(player, successfulCharges);
-                return CurrencyChargeReceipt.failure(result.message().isBlank() ? service.message("player.charge-failed", cost.currencyId()) : result.message());
+                return CurrencyChargeReceipt.failure("扣费结果待核对", true);
+            }
+            if (!result.success()) {
+                boolean refunded = rollbackCurrencies(player, successfulCharges);
+                String reason = result.message().isBlank() ? service.message("player.charge-failed", cost.currencyId()) : result.message();
+                return CurrencyChargeReceipt.failure(reason, !refunded);
             }
             successfulCharges.add(cost);
         }
@@ -56,13 +87,21 @@ final class MapChargeService {
     }
 
 
-    void rollbackCurrencies(Player player, List<CurrencyCost> successfulCharges) {
+    boolean rollbackCurrencies(Player player, List<CurrencyCost> successfulCharges) {
+        boolean confirmed = true;
         for (CurrencyCost cost : successfulCharges) {
-            CurrencyBridge bridge = service.currencyBridgeManager.bridge(cost.currencyId());
-            if (bridge != null && bridge.available()) {
-                bridge.deposit(player, cost.amount());
+            try {
+                CurrencyBridge bridge = service.currencyBridgeManager.bridge(cost.currencyId());
+                var receipt = bridge == null || !bridge.available() ? null : bridge.deposit(player, cost.amount());
+                if (receipt != null && receipt.success() && !receipt.uncertain() && !bridge.creditRequiresReconciliation()) continue;
+            } catch (RuntimeException | LinkageError failure) {
+                service.logger.warning("[Map] 费用退回异常: " + failure.getMessage());
             }
+            confirmed = false;
+            service.logger.warning("[Map] 费用退回待核对: player=" + player.getUniqueId()
+                + " currency=" + cost.currencyId() + " amount=" + cost.amount());
         }
+        return confirmed;
     }
 
 
@@ -134,15 +173,20 @@ final class MapChargeService {
     record CurrencyChargeReceipt(
         boolean success,
         String message,
-        List<CurrencyCost> successfulCharges
+        List<CurrencyCost> successfulCharges,
+        boolean reviewRequired
     ) {
 
         static CurrencyChargeReceipt success(List<CurrencyCost> successfulCharges) {
-            return new CurrencyChargeReceipt(true, "", List.copyOf(successfulCharges));
+            return new CurrencyChargeReceipt(true, "", List.copyOf(successfulCharges), false);
         }
 
         static CurrencyChargeReceipt failure(String message) {
-            return new CurrencyChargeReceipt(false, message, List.of());
+            return failure(message, false);
+        }
+
+        static CurrencyChargeReceipt failure(String message, boolean reviewRequired) {
+            return new CurrencyChargeReceipt(false, message, List.of(), reviewRequired);
         }
     }
 

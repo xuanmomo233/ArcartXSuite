@@ -23,6 +23,7 @@ import hashlib
 import json
 import os
 import random
+import re
 import secrets
 import struct
 import sys
@@ -30,6 +31,10 @@ import time
 import zipfile
 from pathlib import Path
 from datetime import datetime
+from host_seal import (
+    HOST_MANIFEST, HOST_NOTICE, HOST_NOTICE_SIGNATURE, HOST_SIGNATURE,
+    PLAIN_HOST_CLASSES, SEAL_FILES, make_manifest, notice_digest, verify_host_seal,
+)
 
 # 加密算法标志
 ALG_AES_256_GCM = 0x01
@@ -286,7 +291,7 @@ def main():
     parser.add_argument("--protection-level", default="high",
                        choices=["standard", "high", "extreme"],
                        help="保护级别")
-    parser.add_argument("--bootstrap-classes", default="NativeBridge,NativeClassLoader,PluginEntry",
+    parser.add_argument("--bootstrap-classes", default=",".join(PLAIN_HOST_CLASSES),
                        help="不加密的引导类（逗号分隔）")
     parser.add_argument("--fake-classes-count", type=int, default=0,
                        help="虚假加密类数量（噪声注入）")
@@ -302,7 +307,27 @@ def main():
                        help="加密选择策略。prefix（默认，core 用）按 encrypt-prefixes 匹配；"
                             "default-package（模块用）仅加密默认包（无点分包名）的类，"
                             "即 ProGuard -repackageclasses '' 扁平化后的模块自身代码。")
+    parser.add_argument("--build-commit", help="写入受宿主签名覆盖的 axs-build.json")
+    parser.add_argument("--build-release", help="写入受宿主签名覆盖的发行批次")
     args = parser.parse_args()
+
+    host_release = not args.module_seed_b64
+    signing_dir = Path(args.keys_dir) if args.keys_dir else None
+    if host_release and (
+        not HAS_SIGN or signing_dir is None or not all(
+            (signing_dir / name).is_file()
+            for name in ("root_seed.bin", "ed25519_private.pem", "ed25519_public.pem")
+        )
+    ):
+        parser.error("加密宿主必须提供 root_seed.bin 和有效的 Ed25519 密钥对")
+    if args.build_commit and (
+        not host_release or re.fullmatch(r"[0-9a-fA-F]{40}", args.build_commit) is None
+    ):
+        parser.error("--build-commit 仅用于宿主，值须为 40 位 Git commit SHA")
+    if args.build_release and (not args.build_commit
+            or re.fullmatch(r"[a-zA-Z0-9._-]+-suite\.\d+\.\d+-ci\.[0-9a-f]{7}", args.build_release) is None
+            or not args.build_release.endswith("-ci." + args.build_commit[:7].lower())):
+        parser.error("--build-release 必须与宿主 commit 一致")
 
     if not HAS_CRYPTO:
         print("[!] cryptography 库未安装")
@@ -349,11 +374,23 @@ def main():
     if root_seed is None:
         root_seed = secrets.token_bytes(32)
         print("[!] 未找到 root_seed.bin / --module-seed-b64，使用随机种子（仅用于测试，运行时无法解密）")
+    if len(root_seed) != 32:
+        sys.exit("[!] 逐类加密种子必须为 32 字节")
 
     # 读取输入 JAR
     print(f"\n[1/6] 读取输入 JAR...")
     with zipfile.ZipFile(input_jar, 'r') as zin:
-        all_files = {name: zin.read(name) for name in zin.namelist()}
+        names = zin.namelist()
+        if host_release and len(names) != len(set(names)):
+            sys.exit("[!] 输入宿主 JAR 含重复条目")
+        all_files = {name: zin.read(name) for name in names}
+    if args.build_commit:
+        build = {"commit": args.build_commit.lower()}
+        if args.build_release:
+            build["release"] = args.build_release
+        all_files["axs-build.json"] = json.dumps(
+            build, separators=(",", ":")
+        ).encode("utf-8")
 
     class_files = {k: v for k, v in all_files.items() if k.endswith('.class')}
     resource_files = {k: v for k, v in all_files.items() if not k.endswith('.class')}
@@ -451,7 +488,7 @@ def main():
             native_platforms.append("linux-x86_64")
 
     # 构建完整性哈希树并签名
-    # 关键：叶子集合与排序必须与 Java/native 端 computeMerkleRoot 完全一致——
+    # 关键：叶子集合与排序必须与 Java 端 computeMerkleRoot 完全一致——
     #   即【所有 ENCRYPTED/*.enc 条目（真实 + 虚假），按最终 JAR 条目名字典序】，
     #   叶子哈希 = SHA256(enc_data)。否则 root 不一致 → 完整性校验必失败。
     print(f"\n[5/6] 构建完整性哈希树并签名...")
@@ -475,30 +512,6 @@ def main():
         len(final_enc_entries), list(algorithms_used), native_platforms, signature, root_hash
     )
 
-    # ─── 明文引导类清单（BOOTSTRAP.MF + BOOTSTRAP.SIG） ────────────
-    # 覆盖 jar 内全部明文 .class 条目（引导类 + api/auth 包 + shaded 库），
-    # native 侧 verify_bootstrap_classes() 据此做字节级完整性比对——
-    # 任何对明文类的 patch（插桩 defineEncrypted 旁路解密）都会被检出。
-    # 模块 jar（--module-seed-b64 模式）不生成：.axb 载荷本身已带 Ed25519 平台签名。
-    bootstrap_mf_bytes = None
-    bootstrap_sig = None
-    if not args.module_seed_b64:
-        manifest_lines = ["Bootstrap-Version: 1.0",
-                          f"Class-Count: {len(bootstrap)}",
-                          ""]
-        for name in sorted(bootstrap.keys()):
-            manifest_lines.append(f"{name} {hashlib.sha256(bootstrap[name]).hexdigest()}")
-        bootstrap_mf_bytes = ("\n".join(manifest_lines) + "\n").encode("utf-8")
-
-        bootstrap_sig = b'\x00' * 64
-        if args.keys_dir:
-            priv_key_path = Path(args.keys_dir) / "ed25519_private.pem"
-            if priv_key_path.exists():
-                bootstrap_sig = sign_hash(hashlib.sha256(bootstrap_mf_bytes).digest(), priv_key_path)
-                print(f"    BOOTSTRAP.MF 已签名（明文类 {len(bootstrap)} 个）")
-            else:
-                print("    [!] Ed25519 私钥未找到，BOOTSTRAP.SIG 使用占位签名")
-
     # 保留原始 MANIFEST.MF 主属性区，并做净化防御。
     # Protection-Enabled 标记已移至 PROTECTION.MF，无需写入 MANIFEST.MF。
     # 防御点：旧版本曾把 Protection-Enabled 追加到「终止空行之后」，导致 Java
@@ -509,9 +522,16 @@ def main():
     def _sanitize_main_manifest(raw: bytes) -> bytes:
         text = raw.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
         main = []
+        skip_notice = False
         for line in text.split(b"\n"):
             if line == b"":
                 break  # 主属性区在首个空行结束
+            if host_release and line.lower().startswith(b"axs-security-notice:"):
+                skip_notice = True
+                continue
+            if skip_notice and line.startswith(b" "):
+                continue
+            skip_notice = False
             main.append(line)
         if not main or not main[0].lower().startswith(b"manifest-version:"):
             main = [b"Manifest-Version: 1.0"] + [
@@ -527,6 +547,8 @@ def main():
         ns_key = b"paperweight-mappings-namespace:"
         if not any(l.lower().startswith(ns_key) for l in main):
             main.append(b"paperweight-mappings-namespace: mojang")
+        if host_release:
+            main.append(f"AXS-Security-Notice: {HOST_NOTICE}".encode("ascii"))
         return b"".join(l + b"\r\n" for l in main) + b"\r\n"
 
     raw_manifest = all_files.get("META-INF/MANIFEST.MF", b"Manifest-Version: 1.0\r\n\r\n")
@@ -542,70 +564,62 @@ def main():
         return u.startswith("META-INF/") and (
             u.endswith(".SF") or u.endswith(".RSA") or u.endswith(".DSA") or u.endswith(".EC"))
 
-    # 写入输出 JAR
+    notice_entries = {}
+    if host_release:
+        notice_file = Path(__file__).resolve().parent.parent / "src" / "main" / "resources" / HOST_NOTICE
+        notice = notice_file.read_bytes()
+        notice_entries[HOST_NOTICE] = notice
+        notice_entries[HOST_NOTICE_SIGNATURE] = sign_hash(
+            notice_digest(notice), signing_dir / "ed25519_private.pem"
+        )
+
+    # 先确定最终条目，再签清单。模块继续使用 .axb 外层签名。
+    output_entries = {
+        "META-INF/MANIFEST.MF": manifest_bytes,
+        **notice_entries,
+        "META-INF/PROTECTION.MF": protection_mf.encode("utf-8"),
+        **native_files,
+        **bootstrap,
+        **final_enc_entries,
+    }
+    for name, data in resource_files.items():
+        if (name in ("META-INF/MANIFEST.MF", "META-INF/PROTECTION.MF") or name in SEAL_FILES
+                or name in notice_entries or _is_sig_file(name)):
+            continue
+        if name in output_entries:
+            sys.exit(f"[!] 输出 JAR 条目冲突: {name}")
+        output_entries[name] = data
+
+    if host_release:
+        try:
+            inventory = make_manifest((name, data) for name, data in output_entries.items() if not name.endswith("/"))
+        except ValueError as exc:
+            sys.exit(f"[!] 宿主发布检查失败: {exc}")
+        output_entries[HOST_MANIFEST] = inventory
+        output_entries[HOST_SIGNATURE] = sign_hash(
+            hashlib.sha256(inventory).digest(), signing_dir / "ed25519_private.pem"
+        )
+
     print(f"\n[6/6] 写入加密 JAR...")
     output_jar.parent.mkdir(parents=True, exist_ok=True)
 
-    with zipfile.ZipFile(output_jar, 'w', zipfile.ZIP_DEFLATED) as zout:
+    with zipfile.ZipFile(output_jar, 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as zout:
         # MANIFEST.MF 使用 STORED（不压缩），匹配标准 JAR 惯例
         mf_info = zipfile.ZipInfo("META-INF/MANIFEST.MF")
         mf_info.compress_type = zipfile.ZIP_STORED
         zout.writestr(mf_info, manifest_bytes)
-        zout.writestr("META-INF/PROTECTION.MF", protection_mf)
-        if bootstrap_mf_bytes is not None:
-            zout.writestr("META-INF/BOOTSTRAP.MF", bootstrap_mf_bytes)
-            zout.writestr("META-INF/BOOTSTRAP.SIG", bootstrap_sig)
+        for name, data in output_entries.items():
+            if name != mf_info.filename:
+                zout.writestr(name, data)
 
-        # 额外嵌入的 native 库（--no-native 时为空；正常 CI 走资源保留分支）
-        for name, data in native_files.items():
-            zout.writestr(name, data)
-
-        # 引导类（不加密）：写在【原始路径】，供 Bukkit PluginClassLoader 正常加载主类等
-        for name, data in bootstrap.items():
-            zout.writestr(name, data)
-
-        # 加密类（真实）：ENCRYPTED/<path>.enc
-        for name, enc_data in encrypted_files.items():
-            zout.writestr(real_enc_entry(name), enc_data)
-
-        # 虚假加密类
-        for entry, enc_data in fake_entries.items():
-            zout.writestr(entry, enc_data)
-
-        # 资源文件（不加密）：保留除 MANIFEST/PROTECTION/JAR 签名文件外的所有原始资源
-        # （含 plugin.yml、native/ 库、语言文件等），确保插件运行所需资源完整
-        for name, data in resource_files.items():
-            if name in ("META-INF/MANIFEST.MF", "META-INF/PROTECTION.MF",
-                        "META-INF/BOOTSTRAP.MF", "META-INF/BOOTSTRAP.SIG"):
-                continue
-            if _is_sig_file(name):
-                continue
-            zout.writestr(name, data)
-
-    # ─── 输出自校验：清单写错 = 所有用户 n5 拒绝启动，必须在生成时 fail-fast ──
-    if bootstrap_mf_bytes is not None:
-        print(f"\n[自检] 校验输出 JAR 的 BOOTSTRAP.MF 完整性...")
+    if host_release:
+        public_key = serialization.load_pem_public_key((signing_dir / "ed25519_public.pem").read_bytes())
         with zipfile.ZipFile(output_jar, 'r') as zin:
-            names = set(zin.namelist())
-            if "META-INF/BOOTSTRAP.MF" not in names or "META-INF/BOOTSTRAP.SIG" not in names:
-                sys.exit("[!] 自检失败：BOOTSTRAP.MF/BOOTSTRAP.SIG 未写入输出 JAR")
-            if zin.read("META-INF/BOOTSTRAP.MF") != bootstrap_mf_bytes:
-                sys.exit("[!] 自检失败：BOOTSTRAP.MF 内容与生成值不一致")
-            plain = {n for n in names if n.endswith(".class") and not n.startswith("ENCRYPTED/")}
-            manifest_names = {l.rsplit(" ", 1)[0] for l in
-                              bootstrap_mf_bytes.decode("utf-8").split("\n\n", 1)[1].splitlines() if l}
-            if plain != manifest_names:
-                sys.exit(f"[!] 自检失败：明文类集合与清单不符 (jar={len(plain)} 清单={len(manifest_names)})")
-            pub = Path(args.keys_dir) / "ed25519_public.pem" if args.keys_dir else None
-            if pub is not None and pub.exists() and HAS_SIGN:
-                from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
-                pub_key = serialization.load_pem_public_key(pub.read_bytes())
-                try:
-                    pub_key.verify(zin.read("META-INF/BOOTSTRAP.SIG"),
-                                   hashlib.sha256(bootstrap_mf_bytes).digest())
-                except Exception as exc:
-                    sys.exit(f"[!] 自检失败：BOOTSTRAP.SIG 验签不通过: {exc}")
-        print(f"    自检通过（{len(manifest_names)} 个明文类）")
+            try:
+                count = verify_host_seal(zin, public_key)
+            except Exception as exc:
+                sys.exit(f"[!] 宿主签名清单自检失败: {type(exc).__name__}: {exc}")
+        print(f"    宿主签名清单自检通过（{count} 个条目）")
 
     jar_size = output_jar.stat().st_size
     print(f"\n[+] 加密 JAR 生成完成！")

@@ -58,26 +58,14 @@ ui:
         }
       }
       // 动态生成等级列（模板在索引0，复制 1~count-1 共 count-1 项）
-      while(val.等级列表.childrenCount() > 1){
-        val.等级列表.get(1).remove()
-      }
-      for(i in range(1, var.levelCount)){
-        key = i.round()
-        if(val.等级列表['等级列'] != none) {
-          e = val.等级列表['等级列'].copy('等级列' + key)
-          e.levelKey = key
+      var.等级列表网格数据 = []
+      if((var.levelCount) >= 0){
+        for(网格序号 in range(0, var.levelCount)){
+          var.等级列表网格数据.add(网格序号.round())
         }
       }
       // 数据就绪后触发每个奖励图标的 seticon()，否则 Slot 的 seticon 属性不会自动生效
-      for(i in range(1, var.levelCount)){
-        key = i.round()
-        e = val.等级列表['等级列' + key]
-        if(e != none){
-          e['免费档卡片']['物品图标'].seticon()
-          e['高级档卡片']['物品图标'].seticon()
-          e['典藏档卡片']['物品图标'].seticon()
-        }
-      }
+      var.等级列表图标待刷新 = true
       var.actionBusy = false
   action:
     seconds: |-
@@ -127,6 +115,32 @@ ui:
       var.contentW = var.viewW - 420
 
 # ─── 控件树 ────────────────────────────────────────────────────────
+tasks:
+  refresh-repeat-grid-icons:
+    type: loop
+    time: 100
+    cycle: 100
+    run: |-
+      if(var.等级列表图标待刷新 == true && var.等级列表网格数据 != none && val.等级列表 != none && val.等级列表.childrenCount() == var.等级列表网格数据.size()){
+        var.等级列表图标待刷新 = false
+        if(var.等级列表网格数据.size() > 0){
+          for(网格序号 in range(0, var.等级列表网格数据.size() - 1)){
+            网格项 = val.等级列表.get(网格序号.round())
+            if(网格项 != none){
+              if(网格项['免费档卡片']['物品图标'] != none){
+                网格项['免费档卡片']['物品图标'].seticon()
+              }
+              if(网格项['典藏档卡片']['物品图标'] != none){
+                网格项['典藏档卡片']['物品图标'].seticon()
+              }
+              if(网格项['高级档卡片']['物品图标'] != none){
+                网格项['高级档卡片']['物品图标'].seticon()
+              }
+            }
+          }
+        }
+      }
+
 controls:
   # 全屏毛玻璃底（真高斯模糊世界背景）
   全屏玻璃底:
@@ -602,10 +616,14 @@ controls:
             children:
               等级列表:
                 val: 等级列表
-                type: HStack
+                type: RepeatGrid
                 attribute:
+                  items: "var.等级列表网格数据"
+                  flow: ~column
+                  row: 1
+                  spaceBetweenX: 20
+                  maxSize: "var.等级列表网格数据 == none ? 0 : var.等级列表网格数据.size()"
                   width: "var.contentW - 48"
-                  spaceBetween: 20
                   height: "var.viewH - 346"
                 children:
                   # ── 等级列模板（索引0）──────────────────────────
@@ -613,7 +631,7 @@ controls:
                   等级列:
                     type: Canvas
                     attribute:
-                      levelKey: 0.round()
+                      levelKey: self.item
                       levelData: var.levels[self.levelKey]
                       visible: self.levelData != none
                       width: 240

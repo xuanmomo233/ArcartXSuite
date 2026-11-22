@@ -6,6 +6,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Logger;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
@@ -49,7 +50,7 @@ public final class DefaultPotionAuraService implements PotionAuraService, Listen
     private final JavaPlugin plugin;
     private final Logger logger;
     /** 玩家 UUID → 来源 ID → 效果表（效果类型 → 等级，1 起） */
-    private final ConcurrentMap<UUID, ConcurrentMap<String, Map<PotionEffectType, Integer>>> tracked =
+    private final ConcurrentMap<UUID, EffectSources<PotionEffectType>> tracked =
         new ConcurrentHashMap<>();
 
     private volatile boolean enabled = true;
@@ -58,6 +59,9 @@ public final class DefaultPotionAuraService implements PotionAuraService, Listen
     private volatile boolean particles = false;
     private volatile boolean icon = true;
     private BukkitTask refreshTask;
+    private final Object taskLock = new Object();
+    private boolean started;
+    private int scheduledIntervalTicks;
     private boolean listenerRegistered;
 
     public DefaultPotionAuraService(JavaPlugin plugin) {
@@ -81,38 +85,43 @@ public final class DefaultPotionAuraService implements PotionAuraService, Listen
     }
 
     /** 初始化：注册退出监听（仅一次）并按当前配置调度刷新任务。 */
-    public synchronized void initialize() {
-        if (!listenerRegistered) {
-            Bukkit.getPluginManager().registerEvents(this, plugin);
-            listenerRegistered = true;
+    public void initialize() {
+        synchronized (taskLock) {
+            if (!listenerRegistered) {
+                Bukkit.getPluginManager().registerEvents(this, plugin);
+                listenerRegistered = true;
+            }
+            started = true;
         }
-        reschedule();
+        if (!enabled) clearAllTracked();
+        reconcileRefreshTask();
     }
 
     /** 停止刷新任务、清空登记并主动移除已施加的效果。 */
-    public synchronized void shutdown() {
-        if (refreshTask != null) {
-            refreshTask.cancel();
-            refreshTask = null;
+    public void shutdown() {
+        synchronized (taskLock) {
+            started = false;
+            cancelRefreshTask();
         }
         clearAllTracked();
     }
 
-    private synchronized void reschedule() {
-        if (refreshTask != null) {
-            refreshTask.cancel();
-            refreshTask = null;
+    private void reconcileRefreshTask() {
+        synchronized (taskLock) {
+            if (!started || !enabled || tracked.isEmpty()) {
+                cancelRefreshTask();
+                return;
+            }
+            if (refreshTask != null && !refreshTask.isCancelled() && scheduledIntervalTicks == refreshIntervalTicks) return;
+            cancelRefreshTask();
+            refreshTask = Bukkit.getScheduler().runTaskTimer(plugin, this::tick,
+                refreshIntervalTicks, refreshIntervalTicks);
+            scheduledIntervalTicks = refreshIntervalTicks;
         }
-        if (!enabled) {
-            clearAllTracked();
-            return;
-        }
-        refreshTask = Bukkit.getScheduler().runTaskTimer(
-            plugin,
-            this::tick,
-            refreshIntervalTicks,
-            refreshIntervalTicks
-        );
+    }
+
+    private void cancelRefreshTask() {
+        if (refreshTask != null) { refreshTask.cancel(); refreshTask = null; }
     }
 
     @Override
@@ -135,13 +144,14 @@ public final class DefaultPotionAuraService implements PotionAuraService, Listen
             clearSource(player, sourceId);
             return;
         }
-        ConcurrentMap<String, Map<PotionEffectType, Integer>> sources =
-            tracked.computeIfAbsent(player.getUniqueId(), ignored -> new ConcurrentHashMap<>());
-        Map<PotionEffectType, Integer> previous = sources.put(sourceId, sanitized);
-        if (sanitized.equals(previous)) {
-            return;
-        }
-        applyEffects(player, mergedEffects(sources));
+        var change = new AtomicReference<EffectSources.Change<PotionEffectType>>();
+        tracked.compute(player.getUniqueId(), (id, sources) -> {
+            if (sources == null) sources = new EffectSources<>();
+            change.set(sources.replace(sourceId, sanitized));
+            return sources;
+        });
+        reconcileRefreshTask();
+        if (change.get().changed()) applyEffects(player, change.get().merged());
     }
 
     @Override
@@ -149,24 +159,19 @@ public final class DefaultPotionAuraService implements PotionAuraService, Listen
         if (player == null || sourceId == null) {
             return;
         }
-        Map<PotionEffectType, Integer> removed = null;
-        Map<PotionEffectType, Integer> merged = Map.of();
-        ConcurrentMap<String, Map<PotionEffectType, Integer>> sources = tracked.get(player.getUniqueId());
-        if (sources != null) {
-            removed = sources.remove(sourceId);
-            if (sources.isEmpty()) {
-                tracked.remove(player.getUniqueId(), sources);
-            } else {
-                merged = mergedEffects(sources);
-            }
-        }
-        if (removed == null || !player.isOnline()) {
+        var change = new AtomicReference<EffectSources.Change<PotionEffectType>>();
+        tracked.computeIfPresent(player.getUniqueId(), (id, sources) -> {
+            change.set(sources.remove(sourceId));
+            return sources.isEmpty() ? null : sources;
+        });
+        reconcileRefreshTask();
+        if (change.get() == null || !change.get().changed() || !player.isOnline()) {
             return;
         }
-        removeAppliedEffects(player, removed);
-        if (!merged.isEmpty()) {
+        removeAppliedEffects(player, change.get().previous());
+        if (!change.get().merged().isEmpty()) {
             // 其他来源仍登记同类型效果时立即恢复，避免等到下个刷新周期才补回
-            applyEffects(player, merged);
+            applyEffects(player, change.get().merged());
         }
     }
 
@@ -175,11 +180,12 @@ public final class DefaultPotionAuraService implements PotionAuraService, Listen
         if (player == null) {
             return;
         }
-        ConcurrentMap<String, Map<PotionEffectType, Integer>> removed = tracked.remove(player.getUniqueId());
+        EffectSources<PotionEffectType> removed = tracked.remove(player.getUniqueId());
+        reconcileRefreshTask();
         if (removed == null || !player.isOnline()) {
             return;
         }
-        removeAppliedEffects(player, mergedEffects(removed));
+        removeAppliedEffects(player, removed.snapshot());
     }
 
     @Override
@@ -187,30 +193,32 @@ public final class DefaultPotionAuraService implements PotionAuraService, Listen
         if (sourceId == null) {
             return;
         }
-        for (Map.Entry<UUID, ConcurrentMap<String, Map<PotionEffectType, Integer>>> entry : tracked.entrySet()) {
-            Map<PotionEffectType, Integer> removed = entry.getValue().remove(sourceId);
-            if (entry.getValue().isEmpty()) {
-                tracked.remove(entry.getKey(), entry.getValue());
-            }
-            if (removed == null) {
+        for (UUID id : tracked.keySet()) {
+            var change = new AtomicReference<EffectSources.Change<PotionEffectType>>();
+            tracked.computeIfPresent(id, (key, sources) -> {
+                change.set(sources.remove(sourceId));
+                return sources.isEmpty() ? null : sources;
+            });
+            if (change.get() == null || !change.get().changed()) {
                 continue;
             }
-            Player player = Bukkit.getPlayer(entry.getKey());
+            Player player = Bukkit.getPlayer(id);
             if (player != null && player.isOnline()) {
-                removeAppliedEffects(player, removed);
-                if (!entry.getValue().isEmpty()) {
-                    applyEffects(player, mergedEffects(entry.getValue()));
+                removeAppliedEffects(player, change.get().previous());
+                if (!change.get().merged().isEmpty()) {
+                    applyEffects(player, change.get().merged());
                 }
             }
         }
+        reconcileRefreshTask();
     }
 
     /** 主动移除全部登记效果：禁用时立即清 buff，而不是等短时长自然衰减。 */
     private void clearAllTracked() {
-        for (Map.Entry<UUID, ConcurrentMap<String, Map<PotionEffectType, Integer>>> entry : tracked.entrySet()) {
+        for (Map.Entry<UUID, EffectSources<PotionEffectType>> entry : tracked.entrySet()) {
             Player player = Bukkit.getPlayer(entry.getKey());
             if (player != null && player.isOnline()) {
-                removeAppliedEffects(player, mergedEffects(entry.getValue()));
+                removeAppliedEffects(player, entry.getValue().snapshot());
             }
         }
         tracked.clear();
@@ -222,20 +230,23 @@ public final class DefaultPotionAuraService implements PotionAuraService, Listen
     @EventHandler(priority = EventPriority.MONITOR)
     public void onQuit(PlayerQuitEvent event) {
         tracked.remove(event.getPlayer().getUniqueId());
+        reconcileRefreshTask();
     }
 
     private void tick() {
-        for (Map.Entry<UUID, ConcurrentMap<String, Map<PotionEffectType, Integer>>> entry : tracked.entrySet()) {
+        if (!enabled) { reconcileRefreshTask(); return; }
+        for (Map.Entry<UUID, EffectSources<PotionEffectType>> entry : tracked.entrySet()) {
             Player player = Bukkit.getPlayer(entry.getKey());
             if (player == null || !player.isOnline()) {
                 tracked.remove(entry.getKey(), entry.getValue());
                 continue;
             }
-            Map<PotionEffectType, Integer> merged = mergedEffects(entry.getValue());
+            Map<PotionEffectType, Integer> merged = entry.getValue().snapshot();
             if (!merged.isEmpty()) {
                 applyEffects(player, merged);
             }
         }
+        reconcileRefreshTask();
     }
 
     /**
@@ -264,23 +275,6 @@ public final class DefaultPotionAuraService implements PotionAuraService, Listen
             sanitized.merge(type, level, Math::max);
         }
         return Collections.unmodifiableMap(sanitized);
-    }
-
-    /**
-     * 合并某玩家全部登记来源的效果表：同类型效果取各来源中的最大等级。
-     */
-    private static Map<PotionEffectType, Integer> mergedEffects(
-        Map<String, Map<PotionEffectType, Integer>> sources) {
-        Map<PotionEffectType, Integer> merged = new LinkedHashMap<>();
-        for (Map<PotionEffectType, Integer> effects : sources.values()) {
-            for (Map.Entry<PotionEffectType, Integer> entry : effects.entrySet()) {
-                if (entry.getKey() == null || entry.getValue() == null) {
-                    continue;
-                }
-                merged.merge(entry.getKey(), entry.getValue(), Math::max);
-            }
-        }
-        return merged;
     }
 
     private void applyEffects(Player player, Map<PotionEffectType, Integer> effects) {

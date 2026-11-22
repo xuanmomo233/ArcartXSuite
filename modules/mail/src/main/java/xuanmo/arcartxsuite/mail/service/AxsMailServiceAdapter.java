@@ -7,8 +7,12 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executor;
-import java.util.concurrent.Executors;
+import java.util.concurrent.ArrayBlockingQueue;
+import xuanmo.arcartxsuite.api.scheduler.ModuleExecutor;
+import java.util.concurrent.TimeUnit;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.HexFormat;
 import java.util.logging.Logger;
 import org.bukkit.Bukkit;
 import org.bukkit.inventory.ItemStack;
@@ -28,6 +32,7 @@ import xuanmo.arcartxsuite.mail.model.MailAttachment;
 import xuanmo.arcartxsuite.mail.model.MailAttachmentType;
 import xuanmo.arcartxsuite.mail.model.MailInboxFilter;
 import xuanmo.arcartxsuite.mail.model.MailInboxQuery;
+import xuanmo.arcartxsuite.mail.model.MailLogEntry;
 import xuanmo.arcartxsuite.mail.model.MailMessage;
 import xuanmo.arcartxsuite.mail.model.MailOperationResult;
 import xuanmo.arcartxsuite.mail.model.MailPage;
@@ -39,83 +44,163 @@ import xuanmo.arcartxsuite.mail.model.MailStatus;
  * <p>
  * 查询类方法（getMail/getInbox/getUnreadCount/markRead/delete）在异步线程池执行，
  * 不阻塞 Bukkit 主线程。
- * 发送和领取方法涉及 Bukkit API（在线通知、物品发放），在主线程执行。
+ * 发送在主线程序列化附件，异步提交邮件，主线程通知在线玩家。
  */
 public final class AxsMailServiceAdapter implements AxsMailService {
+
+    // Paper closes the outer plugin JAR before asynchronous module retirement finishes.
+    // Resolve this response type while the adapter is created, before any JDBC work starts.
+    private static final AxsDeliveryReceipt UNAVAILABLE_RECEIPT = AxsDeliveryReceipt.noOp();
 
     private final JavaPlugin plugin;
     private final MailService mailService;
     private final Logger logger;
-    private final Executor asyncExecutor;
+    private final ModuleExecutor asyncExecutor;
+    private final java.util.Set<PrimaryCall> primaryCalls = new java.util.HashSet<>();
+    private final boolean sharedHostStorage;
+    private volatile boolean active = true;
 
-    public AxsMailServiceAdapter(@NotNull JavaPlugin plugin, @NotNull MailService mailService, @NotNull Logger logger) {
+    public AxsMailServiceAdapter(@NotNull JavaPlugin plugin, @NotNull MailService mailService, @NotNull Logger logger,
+                                 boolean sharedHostStorage) {
         this.plugin = plugin;
         this.mailService = mailService;
         this.logger = logger;
-        this.asyncExecutor = Executors.newFixedThreadPool(2, r -> {
+        this.sharedHostStorage = sharedHostStorage;
+        this.asyncExecutor = new ModuleExecutor(2, 2, 0, TimeUnit.SECONDS, new ArrayBlockingQueue<>(128), r -> {
             Thread t = new Thread(r, "AxsMailService-Async");
             t.setDaemon(true);
             return t;
         });
     }
 
+    public void close() {
+        java.util.List<PrimaryCall> pending;
+        synchronized (primaryCalls) { active = false; pending = java.util.List.copyOf(primaryCalls); }
+        pending.forEach(PrimaryCall::cancel);
+        CompletableFuture.allOf(pending.stream().map(call -> call.stopped).toArray(CompletableFuture[]::new))
+            .whenComplete((ignored,failure) -> asyncExecutor.shutdown());
+    }
+
+    public java.util.concurrent.CompletionStage<Void> stopped() { return asyncExecutor.stopped(); }
+
+    @Override public boolean usesSharedHostStorage() {
+        return sharedHostStorage;
+    }
+
     // ── 发送 ──────────────────────────────────────────────
 
     @Override
     public @NotNull CompletableFuture<AxsDeliveryReceipt> send(@NotNull AxsMailRequest request) {
-        return sendInternal(request, false);
+        return sendDurable(request);
     }
 
     @Override
     public @NotNull CompletableFuture<AxsDeliveryReceipt> sendDurable(@NotNull AxsMailRequest request) {
-        return sendInternal(request, true);
-    }
-
-    private CompletableFuture<AxsDeliveryReceipt> sendInternal(AxsMailRequest request, boolean durable) {
-        if (mailService == null) {
-            return CompletableFuture.completedFuture(AxsDeliveryReceipt.noOp());
+        if (!active) {
+            return CompletableFuture.completedFuture(UNAVAILABLE_RECEIPT);
         }
         CompletableFuture<AxsDeliveryReceipt> future = new CompletableFuture<>();
-        // 发送涉及在线通知（Bukkit API），在主线程执行
-        Bukkit.getScheduler().runTask(plugin, () -> {
+        Runnable prepare = () -> {
             try {
                 List<MailAttachment> attachments = buildAttachments(request);
                 List<String> claimCommands = buildClaimCommands(request);
-                String logContent = request.sourcePlugin() + ":" + request.idempotencyKey();
                 Instant expiresAt = request.expireAt() != null
                     ? request.expireAt()
                     : Instant.now().plus(java.time.Duration.ofDays(30));
                 String senderName = request.senderName() != null && !request.senderName().isBlank()
                     ? request.senderName() : "系统";
+                var messages = request.recipients().stream().distinct().map(recipient ->
+                    mailService.systemMail(recipient, request.title(), request.content(), attachments,
+                        claimCommands, expiresAt, senderName)).toList();
+                asyncExecutor.execute(() -> commitMail(request.sourcePlugin(), request.idempotencyKey(), messages, future));
+            } catch (Exception | LinkageError e) {
+                future.completeExceptionally(e);
+            }
+        };
+        primary(prepare, () -> future.complete(UNAVAILABLE_RECEIPT), future::completeExceptionally,
+            request.items().isEmpty() || Bukkit.isPrimaryThread());
+        return future;
+    }
 
-                int successCount = 0;
-                for (UUID recipient : request.recipients()) {
-                    MailOperationResult result = mailService.sendSystemMail(
-                        recipient, logContent, request.title(), request.content(),
-                        attachments, claimCommands, expiresAt, senderName
-                    );
-                    if (result.success()) {
-                        successCount++;
+    @Override
+    public @NotNull CompletableFuture<AxsDeliveryReceipt> sendPresetDurable(@NotNull UUID recipient, @NotNull String presetId,
+            @NotNull String sourcePlugin, @NotNull String idempotencyKey) {
+        if (idempotencyKey.isBlank()) return CompletableFuture.failedFuture(new IllegalArgumentException("idempotencyKey 不能为空"));
+        if (!active) return CompletableFuture.completedFuture(UNAVAILABLE_RECEIPT);
+        var future = new CompletableFuture<AxsDeliveryReceipt>();
+        try {
+            var mail = mailService.durablePreset(recipient, presetId, MailTexts.crop(sourcePlugin, 64));
+            asyncExecutor.execute(() -> {
+                if (mail != null) {
+                    commitMail(sourcePlugin, idempotencyKey, List.of(mail), future);
+                    return;
+                }
+                // A preset may be disabled or removed after this exact delivery already committed.
+                try {
+                    long existing = mailService.repository().readPlayerSendReceipt(durableKey(sourcePlugin, idempotencyKey), recipient);
+                    future.complete(existing > 0 ? AxsDeliveryReceipt.duplicate(existing) : UNAVAILABLE_RECEIPT);
+                } catch (Exception | LinkageError failure) {
+                    future.completeExceptionally(failure);
+                }
+            });
+        } catch (RuntimeException | LinkageError failure) {
+            future.completeExceptionally(failure);
+        }
+        return future;
+    }
+
+    private void commitMail(String sourcePlugin, String idempotencyKey, List<MailMessage> messages,
+                            CompletableFuture<AxsDeliveryReceipt> future) {
+        var created = new ArrayList<MailMessage>();
+        try {
+            if (messages.isEmpty()) {
+                future.complete(UNAVAILABLE_RECEIPT);
+                return;
+            }
+            String key = durableKey(sourcePlugin, idempotencyKey);
+            long firstId = 0L;
+            for (MailMessage message : messages) {
+                var receipt = mailService.repository().insertDurableMail(key, message);
+                if (firstId == 0L) firstId = receipt.id();
+                if (!receipt.duplicate()) {
+                    created.add(message);
+                    try {
+                        String action = message.sourceType() == MailSourceType.PRESET ? "preset" : "system";
+                        mailService.repository().appendLog(new MailLogEntry(0L, message.ownerUuid(), action,
+                            sourcePlugin + ":" + idempotencyKey, Instant.now()));
+                    } catch (Exception failure) {
+                        logger.warning("邮件已入库，日志写入失败: " + failure.getMessage());
                     }
                 }
-                if (successCount > 0) {
-                    future.complete(AxsDeliveryReceipt.ok(1L, successCount));
-                } else {
-                    future.complete(AxsDeliveryReceipt.noOp());
-                }
-            } catch (Exception e) {
-                logger.warning("AxsMailService send 失败: " + e.getMessage());
-                future.complete(AxsDeliveryReceipt.noOp());
             }
-        });
-        return future;
+            future.complete(created.isEmpty() ? AxsDeliveryReceipt.duplicate(firstId)
+                : AxsDeliveryReceipt.ok(firstId, created.size()));
+        } catch (Exception | LinkageError failure) {
+            future.completeExceptionally(failure);
+        } finally {
+            if (active && !created.isEmpty()) {
+                try {
+                    Bukkit.getScheduler().runTask(plugin, () -> {
+                        if (active) created.forEach(mailService::notifyDurableMail);
+                    });
+                } catch (RuntimeException failure) {
+                    logger.fine("邮件已入库，在线通知调度失败: " + failure.getMessage());
+                }
+            }
+        }
+    }
+
+    private static String durableKey(String sourcePlugin, String idempotencyKey) throws java.security.NoSuchAlgorithmException {
+        String identity = sourcePlugin.length() + ":" + sourcePlugin + idempotencyKey;
+        return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+            .digest(identity.getBytes(StandardCharsets.UTF_8)));
     }
 
     // ── 查询 ──────────────────────────────────────────────
 
     @Override
     public @NotNull CompletableFuture<AxsMailView> getMail(@NotNull UUID playerId, long mailId) {
-        return CompletableFuture.supplyAsync(() -> {
+        return submit(() -> {
             try {
                 Optional<MailMessage> mail = mailService.repository().loadMail(playerId, mailId);
                 return mail.map(this::toView).orElse(null);
@@ -123,12 +208,12 @@ public final class AxsMailServiceAdapter implements AxsMailService {
                 logger.warning("AxsMailService getMail 失败: " + e.getMessage());
                 return null;
             }
-        }, asyncExecutor);
+        }, null);
     }
 
     @Override
     public @NotNull CompletableFuture<List<AxsMailView>> getInbox(@NotNull UUID playerId, @NotNull AxsMailQuery query) {
-        return CompletableFuture.supplyAsync(() -> {
+        return submit(() -> {
             try {
                 MailInboxFilter filter = mapFilter(query);
                 MailInboxQuery inboxQuery = new MailInboxQuery(filter, query.page(), query.pageSize());
@@ -145,26 +230,26 @@ public final class AxsMailServiceAdapter implements AxsMailService {
                 logger.warning("AxsMailService getInbox 失败: " + e.getMessage());
                 return List.of();
             }
-        }, asyncExecutor);
+        }, List.of());
     }
 
     @Override
     public @NotNull CompletableFuture<Integer> getUnreadCount(@NotNull UUID playerId) {
-        return CompletableFuture.supplyAsync(() -> {
+        return submit(() -> {
             try {
                 return mailService.unreadCount(playerId);
             } catch (Exception e) {
                 logger.warning("AxsMailService getUnreadCount 失败: " + e.getMessage());
                 return 0;
             }
-        }, asyncExecutor);
+        }, 0);
     }
 
     // ── 操作 ──────────────────────────────────────────────
 
     @Override
     public @NotNull CompletableFuture<AxsMailView> markRead(@NotNull UUID playerId, long mailId) {
-        return CompletableFuture.supplyAsync(() -> {
+        return submit(() -> {
             try {
                 Optional<MailMessage> mail = mailService.markMailRead(playerId, mailId);
                 return mail.map(this::toView).orElse(null);
@@ -172,32 +257,29 @@ public final class AxsMailServiceAdapter implements AxsMailService {
                 logger.warning("AxsMailService markRead 失败: " + e.getMessage());
                 return null;
             }
-        }, asyncExecutor);
+        }, null);
     }
 
     @Override
     public @NotNull CompletableFuture<AxsClaimResult> claim(@NotNull UUID playerId, long mailId) {
         CompletableFuture<AxsClaimResult> future = new CompletableFuture<>();
-        // 领取涉及物品发放（Bukkit API），在主线程执行
-        Bukkit.getScheduler().runTask(plugin, () -> {
+        primary(() -> {
             try {
-                MailOperationResult result = mailService.claimMailByUuid(playerId, mailId);
-                if (result.success()) {
-                    future.complete(AxsClaimResult.ok(result.message()));
-                } else {
-                    future.complete(mapClaimFailure(result.message()));
-                }
-            } catch (Exception e) {
-                logger.warning("AxsMailService claim 失败: " + e.getMessage());
+                mailService.claimMailByUuid(playerId, mailId).whenComplete((result,failure) -> {
+                    if (failure != null) future.complete(AxsClaimResult.failure("CLAIM_FAILED"));
+                    else future.complete(result.success() ? AxsClaimResult.ok(result.message()) : mapClaimFailure(result.message()));
+                });
+            } catch (RuntimeException | LinkageError failure) {
                 future.complete(AxsClaimResult.failure("CLAIM_FAILED"));
             }
-        });
+        }, () -> future.complete(AxsClaimResult.failure("MODULE_DISABLED")),
+            failure -> future.complete(AxsClaimResult.failure("CLAIM_FAILED")), false);
         return future;
     }
 
     @Override
     public @NotNull CompletableFuture<AxsDeleteResult> delete(@NotNull UUID playerId, long mailId) {
-        return CompletableFuture.supplyAsync(() -> {
+        return submit(() -> {
             try {
                 MailOperationResult result = mailService.deleteMailByUuid(playerId, mailId);
                 if (result.success()) {
@@ -208,7 +290,56 @@ public final class AxsMailServiceAdapter implements AxsMailService {
                 logger.warning("AxsMailService delete 失败: " + e.getMessage());
                 return AxsDeleteResult.failure("DELETE_FAILED");
             }
-        }, asyncExecutor);
+        }, AxsDeleteResult.failure("MODULE_DISABLED"));
+    }
+
+    private <T> CompletableFuture<T> submit(java.util.function.Supplier<T> work, T unavailable) {
+        if (!active) return CompletableFuture.completedFuture(unavailable);
+        try { return CompletableFuture.supplyAsync(work,asyncExecutor); }
+        catch (java.util.concurrent.RejectedExecutionException busy) { return CompletableFuture.failedFuture(busy); }
+    }
+
+    private void primary(Runnable action,Runnable cancelled,java.util.function.Consumer<Throwable> failed,boolean inline) {
+        PrimaryCall call;
+        synchronized (primaryCalls) {
+            if (!active) { cancelled.run(); return; }
+            if (primaryCalls.size() >= 128) {
+                failed.accept(new java.util.concurrent.RejectedExecutionException("邮件准备队列已满")); return;
+            }
+            call = new PrimaryCall(action,cancelled,failed);
+            primaryCalls.add(call);
+        }
+        try {
+            if (inline) call.run(); else Bukkit.getScheduler().runTask(plugin,call);
+        } catch (RuntimeException | LinkageError failure) { call.reject(failure); }
+    }
+
+    private final class PrimaryCall extends java.util.concurrent.atomic.AtomicBoolean implements Runnable {
+        private final Runnable action;
+        private final Runnable cancelled;
+        private final java.util.function.Consumer<Throwable> failed;
+        private final CompletableFuture<Void> stopped = new CompletableFuture<>();
+        PrimaryCall(Runnable action,Runnable cancelled,java.util.function.Consumer<Throwable> failed) {
+            this.action=action;this.cancelled=cancelled;this.failed=failed;
+        }
+        @Override public void run() {
+            if (!compareAndSet(false,true)) return;
+            try { action.run(); }
+            catch (Throwable failure) { failed.accept(failure); }
+            finally { finish(); }
+        }
+        void cancel() {
+            if (!compareAndSet(false,true)) return;
+            try { cancelled.run(); } finally { finish(); }
+        }
+        void reject(Throwable failure) {
+            if (!compareAndSet(false,true)) return;
+            try { failed.accept(failure); } finally { finish(); }
+        }
+        private void finish() {
+            synchronized (primaryCalls) { primaryCalls.remove(this); }
+            stopped.complete(null);
+        }
     }
 
     // ── 转换工具 ──────────────────────────────────────────
@@ -248,6 +379,8 @@ public final class AxsMailServiceAdapter implements AxsMailService {
         return switch (status) {
             case UNREAD -> AxsMailState.UNREAD;
             case READ -> AxsMailState.READ;
+            case CLAIM_PENDING -> AxsMailState.CLAIM_PENDING;
+            case CLAIM_REVIEW -> AxsMailState.CLAIM_REVIEW;
             case CLAIMED -> AxsMailState.CLAIMED;
             case DELETED -> AxsMailState.DELETED;
             case EXPIRED -> AxsMailState.EXPIRED;

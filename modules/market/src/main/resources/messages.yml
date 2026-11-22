@@ -42,7 +42,7 @@ status:
 
 # ── 管理操作 ──────────────────────────────────────────
 admin:
-  clear-expired-success: "&a已处理 {0} 个到期物品"
+  clear-expired-success: "&a已将 {0} 个到期物品加入处理队列"
   remove-usage: "&e用法: /axs market remove <auction|pshop> <上架ID>（省略类型时为 auction）"
   remove-success: "&a已强制移除上架物品"
   remove-not-found: "&c未找到该上架ID"
@@ -104,7 +104,7 @@ recycle-nothing: "&7背包中没有可回收的物品。"          # 无可回�
 player-shop-listed: "&a商品已上架到你的商店！"          # 上架成功
 player-shop-bought: "&a购买成功！花费: &e{amount}"     # {amount}=花费金额
 player-shop-sold: "&a你商店中的 &e{item} &a已售出！收入: &e{amount}"  # {item}=物品名 {amount}=税后收入
-player-shop-expired: "&7你商店中的 &e{item} &7已到期，已退回。"  # 到期退回通知
+player-shop-expired: "&7你商店中的 &e{item} &7已到期，物品已加入返还队列。"
 player-shop-cancelled: "&7已下架商品。"                # 下架成功
 # ── 通用错误消息 ──
 insufficient-funds: "&c余额不足。"                    # 货币余额不足

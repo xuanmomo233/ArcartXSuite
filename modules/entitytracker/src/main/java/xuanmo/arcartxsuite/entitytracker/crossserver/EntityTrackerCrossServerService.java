@@ -2,10 +2,10 @@ package xuanmo.arcartxsuite.entitytracker.crossserver;
 
 import java.sql.SQLException;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import javax.sql.DataSource;
-import org.bukkit.Location;
 import org.bukkit.plugin.java.JavaPlugin;
-import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerAPI;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerChannel;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerChannelConfig;
@@ -28,8 +28,14 @@ public final class EntityTrackerCrossServerService {
     private final CrossServerAPI crossServer;
     private final CrossServerChannelConfig channelConfig;
     private final PlayerBossBestDamageDao damageDao;
+    private final xuanmo.arcartxsuite.api.scheduler.ModuleExecutor worker =
+        new xuanmo.arcartxsuite.api.scheduler.ModuleExecutor(0,1,30,java.util.concurrent.TimeUnit.SECONDS,
+            new java.util.concurrent.ArrayBlockingQueue<>(256),task->{
+                var thread=new Thread(task,"AXS-EntityTracker-Inbound");thread.setDaemon(true);return thread;
+            });
+    private volatile boolean closed;
 
-    private CrossServerChannel channel;
+    private volatile CrossServerChannel channel;
     private BossKillRecordingService killRecordingService;
     private CrossServerRankingCacheService rankingCacheService;
 
@@ -56,10 +62,10 @@ public final class EntityTrackerCrossServerService {
     }
 
     public void start() {
-        channel = crossServer.openChannel(
+        channel = crossServer.openChannelCompleting(
             "entitytracker",
             channelConfig,
-            delivery -> handlePayload(delivery.payload())
+            delivery -> admit(delivery.payload())
         );
         if (channel.isActive()) {
             this.logger.info("跨服 Boss 排行通道已启用");
@@ -67,62 +73,96 @@ public final class EntityTrackerCrossServerService {
     }
 
     public void shutdown() {
-        if (channel != null) {
-            channel.close();
-            channel = null;
-        }
+        closed=true;
+        try { if (channel != null) { channel.close(); channel = null; } }
+        finally { worker.shutdown(); }
+    }
+
+    public java.util.concurrent.CompletionStage<Void> databaseStopped() { return worker.stopped(); }
+
+    private java.util.concurrent.CompletionStage<Boolean> admit(String payload) {
+        if(closed)return null;
+        var done=new java.util.concurrent.CompletableFuture<Boolean>();
+        try{worker.execute(()->{try{handlePayload(payload);done.complete(true);}catch(Exception|LinkageError failure){
+            logger.log(java.util.logging.Level.WARNING,"跨服 Boss 入站未确认",failure);done.complete(false);
+        }});}catch(java.util.concurrent.RejectedExecutionException full){return null;}
+        return done.copy();
     }
 
     public boolean isActive() {
         return channel != null && channel.isActive();
     }
 
-    public void publishSettlement(BossDamageSettlementRecord record, @Nullable Location location) {
-        if (channel == null || !channel.isActive() || record == null) {
+    /** Called only by an accepted kill worker, whose lifetime also owns these SQL operations. */
+    public void publishSettlement(BossDamageSettlementRecord record, BossKillRecord location) {
+        if (record == null) {
             return;
         }
         String nodeId = crossServer.nodeId();
-        String worldName = location == null || location.getWorld() == null ? "" : location.getWorld().getName();
-        Double locX = location == null ? null : location.getX();
-        Double locY = location == null ? null : location.getY();
-        Double locZ = location == null ? null : location.getZ();
+        String worldName = location.getWorldName();
+        Double locX = location.getLocationX();
+        Double locY = location.getLocationY();
+        Double locZ = location.getLocationZ();
         LocalDateTime now = LocalDateTime.now();
 
-        for (BossDamageSettlementEntry entry : record.entriesByPlayer().values()) {
-            if (entry == null || entry.playerUuid() == null || entry.damage() <= 0.0D) {
-                continue;
-            }
-            PlayerBossBestDamage candidate = new PlayerBossBestDamage(
-                entry.playerUuid().toString(),
-                entry.playerName(),
-                record.mythicMobId(),
-                record.bossDisplayName(),
-                (int) Math.round(entry.damage()),
-                now,
-                nodeId
-            );
-            candidate.setWorldName(worldName);
-            candidate.setLocationX(locX);
-            candidate.setLocationY(locY);
-            candidate.setLocationZ(locZ);
-            try {
-                if (damageDao.insertOrUpdateIfBetter(candidate)) {
-                    channel.publish(EntityTrackerCrossServerPayloadCodec.encodeBestDamage(candidate));
+        boolean changed = false;
+        int batchSize = PlayerBossBestDamageDao.WRITE_BATCH_SIZE;
+        var candidates = new ArrayList<PlayerBossBestDamage>(batchSize);
+        try {
+            for (BossDamageSettlementEntry entry : record.entriesByPlayer().values()) {
+                if (entry == null || entry.playerUuid() == null || entry.damage() <= 0.0D) {
+                    continue;
                 }
-            } catch (SQLException exception) {
-                this.logger.warning("写入 Boss 最高伤害失败: " + exception.getMessage());
+                PlayerBossBestDamage candidate = new PlayerBossBestDamage(
+                    entry.playerUuid().toString(),
+                    entry.playerName(),
+                    record.mythicMobId(),
+                    record.bossDisplayName(),
+                    (int) Math.round(entry.damage()),
+                    now,
+                    nodeId
+                );
+                candidate.setWorldName(worldName);
+                candidate.setLocationX(locX);
+                candidate.setLocationY(locY);
+                candidate.setLocationZ(locZ);
+                candidates.add(candidate);
+                if (candidates.size() == batchSize) {
+                    changed |= saveAndPublishDamage(record.mythicMobId(), candidates);
+                    candidates.clear();
+                }
+            }
+            if (!candidates.isEmpty()) changed |= saveAndPublishDamage(record.mythicMobId(), candidates);
+        } finally {
+            if (changed) requestDamageRefresh(record.mythicMobId());
+        }
+    }
+
+    private boolean saveAndPublishDamage(String bossId, List<PlayerBossBestDamage> candidates) {
+        List<PlayerBossBestDamage> improved;
+        try {
+            improved = damageDao.saveBetterBatch(bossId, candidates);
+        } catch (SQLException failure) {
+            logger.warning("批量写入 Boss 最高伤害失败: " + failure.getMessage());
+            return false;
+        }
+        for (var record : improved) {
+            try {
+                publish(EntityTrackerCrossServerPayloadCodec.encodeBestDamage(record));
+            } catch (RuntimeException failure) {
+                logger.warning("最高伤害已提交，跨服广播失败: " + failure.getMessage());
             }
         }
+        return !improved.isEmpty();
     }
 
     public void publishKillRecord(BossKillRecord record) {
-        if (channel == null || !channel.isActive() || record == null) {
-            return;
-        }
-        channel.publish(EntityTrackerCrossServerPayloadCodec.encodeKillRecord(record));
+        if (record != null) publish(EntityTrackerCrossServerPayloadCodec.encodeKillRecord(record));
     }
 
-    private void handlePayload(String payload) {
+    private void publish(String payload) { var current=channel;if(current!=null&&current.isActive())current.publish(payload); }
+
+    private void handlePayload(String payload) throws SQLException {
         if (payload == null || payload.isBlank()) {
             return;
         }
@@ -135,8 +175,6 @@ public final class EntityTrackerCrossServerService {
                 mergeKillRecord(decoded.killRecord());
             }
         } catch (IllegalArgumentException ignored) {
-        } catch (SQLException exception) {
-            this.logger.warning("合并跨服 Boss 数据失败: " + exception.getMessage());
         }
     }
 
@@ -146,20 +184,19 @@ public final class EntityTrackerCrossServerService {
             return;
         }
         if (damageDao.insertOrUpdateIfBetter(remote)) {
-            requestRankingRefresh();
+            requestDamageRefresh(remote.getBossId());
         }
     }
 
     private void mergeKillRecord(BossKillRecord remote) throws SQLException {
-        if (remote == null || killRecordingService == null) {
-            return;
-        }
+        if (remote == null) return;
+        if (killRecordingService == null) throw new SQLException("Kill recorder not ready");
         killRecordingService.applyRemoteKillRecord(remote);
     }
 
-    private void requestRankingRefresh() {
+    private void requestDamageRefresh(String bossId) {
         if (rankingCacheService != null) {
-            rankingCacheService.requestRefresh();
+            rankingCacheService.requestDamageRefresh(bossId);
         }
     }
 }

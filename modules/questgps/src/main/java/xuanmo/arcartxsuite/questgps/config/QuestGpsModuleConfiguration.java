@@ -1,7 +1,6 @@
 package xuanmo.arcartxsuite.questgps.config;
 
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -70,12 +69,6 @@ public record QuestGpsModuleConfiguration(
     public TaskDefinition task(String questId, String taskId) {
         QuestDefinition definition = quest(questId);
         return definition == null ? null : definition.task(taskId);
-    }
-
-    public List<QuestDefinition> orderedQuests() {
-        return definitions.snapshot().quests().values().stream()
-            .sorted(Comparator.comparingInt(QuestDefinition::sortOrder)
-                .thenComparing(QuestDefinition::id, String.CASE_INSENSITIVE_ORDER)).toList();
     }
 
     public int configuredQuestCount() {

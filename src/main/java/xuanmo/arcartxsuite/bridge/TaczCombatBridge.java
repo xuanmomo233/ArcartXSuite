@@ -27,6 +27,7 @@ import xuanmo.arcartxsuite.api.event.TaczGunKillEvent;
 public final class TaczCombatBridge {
 
     private static final String TACZ_HURT_EVENT_CLASS = "com.tacz.guns.api.event.common.EntityHurtByGunEvent$Pre";
+    private static final String TACZ_HURT_POST_CLASS = "com.tacz.guns.api.event.common.EntityHurtByGunEvent$Post";
     private static final String TACZ_KILL_EVENT_CLASS = "com.tacz.guns.api.event.common.EntityKillByGunEvent";
     private static final String FORGE_CLASS = "net.minecraftforge.common.MinecraftForge";
     private static final String FORGE_PRIORITY_CLASS = "net.minecraftforge.eventbus.api.EventPriority";
@@ -36,6 +37,8 @@ public final class TaczCombatBridge {
     private final boolean debug;
     private final ClassLoader modClassLoader;
     private boolean active;
+    private CombatDamageRouter damageRouter;
+    private boolean hitTracking;
 
     // Forge 反射缓存（伤害事件）
     private volatile Method getHurtEntityMethod;
@@ -44,6 +47,8 @@ public final class TaczCombatBridge {
     private volatile Method isHeadShotMethod;
     private volatile Method getGunIdMethod;
     private volatile Method getBukkitEntityMethod;
+    private Method getBulletMethod;
+    private Method isCancelledMethod;
 
     // Forge 反射缓存（击杀事件）
     private volatile Method killGetKilledEntityMethod;
@@ -51,6 +56,7 @@ public final class TaczCombatBridge {
     private volatile Method killGetBaseDamageMethod;
     private volatile Method killIsHeadShotMethod;
     private volatile Method killGetGunIdMethod;
+    private Method killGetBulletMethod;
 
     private TaczCombatBridge(JavaPlugin plugin, boolean debug, ClassLoader modClassLoader) {
         this.plugin = plugin;
@@ -108,6 +114,10 @@ public final class TaczCombatBridge {
         return active;
     }
 
+    void setDamageRouter(CombatDamageRouter router) {
+        damageRouter = router;
+    }
+
     // ---- Forge 事件注册 ----
 
     @SuppressWarnings({"unchecked", "rawtypes"})
@@ -122,6 +132,8 @@ public final class TaczCombatBridge {
             getBaseAmountMethod = findMethodByNames(eventPreClass, "getBaseAmount", "getAmount", "getDamage");
             isHeadShotMethod = findMethodByNames(eventPreClass, "isHeadShot", "isHeadshot");
             getGunIdMethod = findMethodByNames(eventPreClass, "getGunId", "getGunID");
+            getBulletMethod = findMethodByNames(eventPreClass, "getBullet");
+            isCancelledMethod = findMethodByNames(eventPreClass, "isCanceled");
 
             if (getHurtEntityMethod == null || getAttackerMethod == null || getBaseAmountMethod == null) {
                 xuanmo.arcartxsuite.module.AxsLog.logger().warning("[TaczCombat] 无法找到 TACZ 伤害事件所需方法: hurtEntity="
@@ -143,6 +155,7 @@ public final class TaczCombatBridge {
             // 5. 获取 EventPriority.NORMAL
             Class<?> priorityClass = Class.forName(FORGE_PRIORITY_CLASS, true, modClassLoader);
             Object normalPriority = Enum.valueOf((Class<Enum>) priorityClass, "NORMAL");
+            Object lowestPriority = Enum.valueOf((Class<Enum>) priorityClass, "LOWEST");
 
             // 6. 查找 addListener 方法
             Method addListenerMethod = findAddListenerMethod(eventBus, priorityClass);
@@ -153,7 +166,7 @@ public final class TaczCombatBridge {
 
             // 7. 注册伤害事件监听器
             Consumer<Object> hurtListener = this::handleGunDamageEvent;
-            addListenerMethod.invoke(eventBus, normalPriority, false, eventPreClass, hurtListener);
+            addListenerMethod.invoke(eventBus, lowestPriority, false, eventPreClass, hurtListener);
             if (debug) {
                 xuanmo.arcartxsuite.module.AxsLog.logger().info("[TaczCombat] Forge 伤害事件监听器注册成功 -> " + TACZ_HURT_EVENT_CLASS);
             }
@@ -170,6 +183,7 @@ public final class TaczCombatBridge {
                 if (killGetKilledEntityMethod != null && killGetAttackerMethod != null) {
                     Consumer<Object> killListener = this::handleGunKillEvent;
                     addListenerMethod.invoke(eventBus, normalPriority, false, killEventClass, killListener);
+                    killGetBulletMethod = findMethodByNames(killEventClass, "getBullet");
                     if (debug) {
                         xuanmo.arcartxsuite.module.AxsLog.logger().info("[TaczCombat] Forge 击杀事件监听器注册成功 -> " + TACZ_KILL_EVENT_CLASS);
                     }
@@ -180,6 +194,17 @@ public final class TaczCombatBridge {
                 xuanmo.arcartxsuite.module.AxsLog.logger().warning("[TaczCombat] TACZ 击杀事件类未找到，击杀桥接未启用: " + TACZ_KILL_EVENT_CLASS);
             } catch (Exception e) {
                 xuanmo.arcartxsuite.module.AxsLog.logger().warning("[TaczCombat] 注册 TACZ 击杀事件监听器失败: " + e.getMessage());
+            }
+
+            if (getBulletMethod != null && isCancelledMethod != null && killGetBulletMethod != null) {
+                try {
+                    Class<?> post = Class.forName(TACZ_HURT_POST_CLASS, false, modClassLoader);
+                    Consumer<Object> postListener = this::handleGunPostEvent;
+                    addListenerMethod.invoke(eventBus, normalPriority, false, post, postListener);
+                    hitTracking = true;
+                } catch (ReflectiveOperationException | LinkageError e) {
+                    xuanmo.arcartxsuite.module.AxsLog.logger().warning("[TaczCombat] 枪械结算只使用 Bukkit 伤害事件: " + e);
+                }
             }
 
             return true;
@@ -263,6 +288,13 @@ public final class TaczCombatBridge {
             };
             if (Bukkit.isPrimaryThread()) {
                 fireEvent.run();
+                if (hitTracking && damageRouter != null) {
+                    Entity bullet = bukkitEntity(getBulletMethod.invoke(event));
+                    if (bullet != null) {
+                        damageRouter.beginGun(bullet.getUniqueId(), player, livingTarget, gunId, headShot,
+                            () -> preCancelled(event));
+                    }
+                }
             } else {
                 Bukkit.getScheduler().runTask(plugin, fireEvent);
             }
@@ -270,6 +302,38 @@ public final class TaczCombatBridge {
             if (debug) {
                 xuanmo.arcartxsuite.module.AxsLog.logger().log(Level.WARNING, "[TaczCombat] 处理 TACZ 伤害事件异常", e);
             }
+        }
+    }
+
+    private void handleGunPostEvent(Object event) {
+        if (!active || !hitTracking || damageRouter == null || !Bukkit.isPrimaryThread()) return;
+        try {
+            if (bukkitEntity(getHurtEntityMethod.invoke(event)) instanceof LivingEntity target) {
+                finishGunHit(event, getBulletMethod, target);
+            }
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            if (debug) xuanmo.arcartxsuite.module.AxsLog.logger().fine("[TaczCombat] 枪械结算失败: " + e);
+        }
+    }
+
+    private void finishGunHit(Object event, Method bulletGetter, LivingEntity target) {
+        try {
+            Entity bullet = bukkitEntity(bulletGetter.invoke(event));
+            if (bullet != null) damageRouter.endGun(bullet.getUniqueId(), target);
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            if (debug) xuanmo.arcartxsuite.module.AxsLog.logger().fine("[TaczCombat] 枪械结算失败: " + e);
+        }
+    }
+
+    private Entity bukkitEntity(Object nmsEntity) throws ReflectiveOperationException {
+        return nmsEntity == null ? null : (Entity) getBukkitEntityMethod.invoke(nmsEntity);
+    }
+
+    private boolean preCancelled(Object event) {
+        try {
+            return Boolean.TRUE.equals(isCancelledMethod.invoke(event));
+        } catch (ReflectiveOperationException e) {
+            return true;
         }
     }
 
@@ -298,6 +362,9 @@ public final class TaczCombatBridge {
             }
             if (player.equals(killedEntity)) {
                 return;
+            }
+            if (hitTracking && damageRouter != null && Bukkit.isPrimaryThread()) {
+                finishGunHit(event, killGetBulletMethod, killedEntity);
             }
 
             // 3. 提取额外信息

@@ -42,7 +42,11 @@ public final class MultiverseSpawnBackend implements SpawnBackend {
     }
 
     @Override
-    public boolean setSpawn(@NotNull Location loc) {
+    public java.util.concurrent.CompletionStage<Boolean> setSpawn(@NotNull Location loc) {
+        return java.util.concurrent.CompletableFuture.completedFuture(setSpawnNow(loc));
+    }
+
+    private boolean setSpawnNow(Location loc) {
         try {
             org.mvplugins.multiverse.core.world.WorldManager worldManager =
                 org.mvplugins.multiverse.core.MultiverseCoreApi.get().getWorldManager();
@@ -66,7 +70,11 @@ public final class MultiverseSpawnBackend implements SpawnBackend {
     }
 
     @Override
-    public @Nullable Location getSpawn(@NotNull World context) {
+    public java.util.concurrent.CompletionStage<Location> getSpawn(@NotNull World context) {
+        return java.util.concurrent.CompletableFuture.completedFuture(getSpawnNow(context));
+    }
+
+    private @Nullable Location getSpawnNow(World context) {
         try {
             org.mvplugins.multiverse.external.vavr.control.Option<org.mvplugins.multiverse.core.world.LoadedMultiverseWorld> mvWorld =
                 org.mvplugins.multiverse.core.MultiverseCoreApi.get().getWorldManager().getLoadedWorld(context);

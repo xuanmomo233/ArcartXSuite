@@ -9,14 +9,12 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.sql.DataSource;
-import org.bukkit.Bukkit;
-import org.bukkit.Location;
-import org.bukkit.World;
 import xuanmo.arcartxsuite.api.storage.AbstractModuleRepository;
 import xuanmo.arcartxsuite.api.storage.StorageDescriptor;
 
@@ -24,7 +22,7 @@ import xuanmo.arcartxsuite.api.storage.StorageDescriptor;
  * Essentials 模块数据仓储。
  * <p>
  * 继承 {@link AbstractModuleRepository}，支持 SQLite 与 MySQL 双方言，
- * 负责家、传送点、出生点、封禁、警告、昵称与玩家数据的持久化读写。
+ * 负责家、传送点收藏、出生点、封禁、警告、昵称与玩家数据的持久化读写。
  * 实现了玩家数据清除（{@code playerDataTables}）与全表枚举（{@code allTables}）
  * 以支持宿主的统一数据管理与数据库迁移能力。
  */
@@ -44,7 +42,9 @@ public final class EssentialsRepository extends AbstractModuleRepository impleme
 
     @Override
     protected List<String> playerDataTables() {
-        return List.of(tablePrefix() + "homes", tablePrefix() + "bans", tablePrefix() + "warnings", tablePrefix() + "nicknames", tablePrefix() + "player_data");
+        return List.of(tablePrefix() + "homes", tablePrefix() + "bans", tablePrefix() + "warnings", tablePrefix() + "nicknames",
+            tablePrefix() + "player_data", tablePrefix() + "warp_favorites", tablePrefix() + "tpa_preferences",
+            tablePrefix() + "known_players", tablePrefix() + "moderation_history");
     }
 
     @Override
@@ -55,7 +55,10 @@ public final class EssentialsRepository extends AbstractModuleRepository impleme
             tablePrefix() + "warnings",
             tablePrefix() + "nicknames",
             tablePrefix() + "player_data",
-            tablePrefix() + "warps",
+            tablePrefix() + "warp_favorites",
+            tablePrefix() + "tpa_preferences",
+            tablePrefix() + "known_players",
+            tablePrefix() + "moderation_history",
             tablePrefix() + "spawn"
         );
     }
@@ -67,19 +70,42 @@ public final class EssentialsRepository extends AbstractModuleRepository impleme
 
     private void initTables(Statement stmt) throws SQLException {
         stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tablePrefix() + """
+            warp_favorites (
+                uuid VARCHAR(36) NOT NULL, warp_name VARCHAR(64) NOT NULL,
+                PRIMARY KEY (uuid, warp_name)
+            )
+            """);
+        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tablePrefix() + """
+            tpa_preferences (
+                uuid VARCHAR(36) NOT NULL PRIMARY KEY,
+                receiving INTEGER NOT NULL
+            )
+            """);
+        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tablePrefix() + """
+            known_players (
+                uuid VARCHAR(36) NOT NULL, lookup_name VARCHAR(32) NOT NULL,
+                player_name VARCHAR(32) NOT NULL, seen_at BIGINT NOT NULL,
+                PRIMARY KEY (lookup_name, uuid)
+            )
+            """);
+        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tablePrefix() + """
+            moderation_history (
+                id INTEGER PRIMARY KEY""" + " " + (isMysql() ? "AUTO_INCREMENT" : "AUTOINCREMENT") + """
+                , uuid VARCHAR(36) NOT NULL, player_name VARCHAR(32) NOT NULL, action VARCHAR(16) NOT NULL,
+                reason TEXT, operator VARCHAR(32) NOT NULL, created_at BIGINT NOT NULL, expires_at BIGINT NOT NULL
+            """ + (isMysql() ? ", INDEX (uuid, id)" : "") + """
+            )
+            """);
+        if (!isMysql()) {
+            stmt.executeUpdate("CREATE INDEX IF NOT EXISTS " + tablePrefix() + "moderation_history_uuid ON "
+                + tablePrefix() + "moderation_history (uuid,id)");
+        }
+        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tablePrefix() + """
             homes (
                 uuid VARCHAR(36) NOT NULL, name VARCHAR(64) NOT NULL,
                 world VARCHAR(128) NOT NULL, x DOUBLE NOT NULL, y DOUBLE NOT NULL, z DOUBLE NOT NULL,
                 yaw FLOAT NOT NULL, pitch FLOAT NOT NULL,
                 PRIMARY KEY (uuid, name)
-            )
-            """);
-
-        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tablePrefix() + """
-            warps (
-                name VARCHAR(64) NOT NULL PRIMARY KEY,
-                world VARCHAR(128) NOT NULL, x DOUBLE NOT NULL, y DOUBLE NOT NULL, z DOUBLE NOT NULL,
-                yaw FLOAT NOT NULL, pitch FLOAT NOT NULL
             )
             """);
 
@@ -138,20 +164,73 @@ public final class EssentialsRepository extends AbstractModuleRepository impleme
      * @param loc  家位置
      * @throws SQLException 数据库操作失败时抛出
      */
-    public void setHome(UUID uuid, String name, Location loc) throws SQLException {
-        String sql = "REPLACE INTO " + tablePrefix() + "homes (uuid, name, world, x, y, z, yaw, pitch) VALUES (?,?,?,?,?,?,?,?)";
-        try (Connection conn = getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, uuid.toString());
-            ps.setString(2, name.toLowerCase());
-            ps.setString(3, loc.getWorld().getName());
-            ps.setDouble(4, loc.getX());
-            ps.setDouble(5, loc.getY());
-            ps.setDouble(6, loc.getZ());
-            ps.setFloat(7, loc.getYaw());
-            ps.setFloat(8, loc.getPitch());
-            ps.executeUpdate();
+    public HomeSave setHome(UUID uuid, String name, Position loc, int maximum) throws SQLException {
+        for (int attempt = 0; ; attempt++) {
+            try { return saveHome(uuid, name, loc, maximum); }
+            catch (SQLException failure) {
+                // InnoDB can abort one of two empty-range inserts. Retry only a confirmed transaction rollback.
+                if (!isMysql() || !"40001".equals(failure.getSQLState()) || attempt >= 2) throw failure;
+            }
         }
     }
+
+    private HomeSave saveHome(UUID uuid, String name, Position loc, int maximum) throws SQLException {
+        String normalized = name.toLowerCase(Locale.ROOT);
+        String sql = "REPLACE INTO " + tablePrefix() + "homes (uuid, name, world, x, y, z, yaw, pitch) VALUES (?,?,?,?,?,?,?,?)";
+        try (Connection conn = getConnection()) {
+            boolean autoCommit = conn.getAutoCommit();
+            int isolation = conn.getTransactionIsolation();
+            // Lock this owner's indexed range, including an empty range, across shared-storage nodes.
+            if (isMysql()) conn.setTransactionIsolation(Connection.TRANSACTION_SERIALIZABLE);
+            conn.setAutoCommit(false);
+            try {
+                List<String> names = new ArrayList<>();
+                String existingName = null;
+                try (var query = conn.prepareStatement("SELECT name, name=? AS matched FROM " + tablePrefix() + "homes WHERE uuid=?"
+                    + (isMysql() ? " FOR UPDATE" : ""))) {
+                    query.setString(1, normalized);
+                    query.setString(2, uuid.toString());
+                    try (var rows = query.executeQuery()) {
+                        while (rows.next()) {
+                            names.add(rows.getString(1));
+                            if (rows.getBoolean(2)) existingName = rows.getString(1);
+                        }
+                    }
+                }
+                if (existingName == null && names.size() >= maximum) {
+                    conn.commit();
+                    return new HomeSave(false, List.copyOf(names));
+                }
+                try (PreparedStatement ps = conn.prepareStatement(sql)) {
+                    ps.setString(1, uuid.toString());
+                    ps.setString(2, normalized);
+                    ps.setString(3, loc.world());
+                    ps.setDouble(4, loc.x());
+                    ps.setDouble(5, loc.y());
+                    ps.setDouble(6, loc.z());
+                    ps.setFloat(7, loc.yaw());
+                    ps.setFloat(8, loc.pitch());
+                    ps.executeUpdate();
+                }
+                conn.commit();
+                if (existingName != null) names.remove(existingName);
+                names.add(normalized);
+                names.sort(String::compareTo);
+                return new HomeSave(true, List.copyOf(names));
+            } catch (SQLException | RuntimeException failure) {
+                conn.rollback();
+                throw failure;
+            } finally {
+                conn.setAutoCommit(autoCommit);
+                if (isMysql()) conn.setTransactionIsolation(isolation);
+            }
+        }
+    }
+
+    public record HomeSave(boolean saved, List<String> names) {}
+
+    /** Immutable database coordinates; world lookup and Bukkit location creation belong to the caller's main thread. */
+    public record Position(String world, double x, double y, double z, float yaw, float pitch) {}
 
     /**
      * 删除玩家的指定家。
@@ -160,12 +239,12 @@ public final class EssentialsRepository extends AbstractModuleRepository impleme
      * @param name 家名称
      * @throws SQLException 数据库操作失败时抛出
      */
-    public void deleteHome(UUID uuid, String name) throws SQLException {
+    public boolean deleteHome(UUID uuid, String name) throws SQLException {
         String sql = "DELETE FROM " + tablePrefix() + "homes WHERE uuid=? AND name=?";
         try (Connection conn = getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, uuid.toString());
-            ps.setString(2, name.toLowerCase());
-            ps.executeUpdate();
+            ps.setString(2, name.toLowerCase(Locale.ROOT));
+            return ps.executeUpdate() > 0;
         }
     }
 
@@ -177,13 +256,13 @@ public final class EssentialsRepository extends AbstractModuleRepository impleme
      * @return 家位置，不存在时返回 null
      * @throws SQLException 数据库操作失败时抛出
      */
-    public Location getHome(UUID uuid, String name) throws SQLException {
+    public Position getHome(UUID uuid, String name) throws SQLException {
         String sql = "SELECT world, x, y, z, yaw, pitch FROM " + tablePrefix() + "homes WHERE uuid=? AND name=?";
         try (Connection conn = getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, uuid.toString());
-            ps.setString(2, name.toLowerCase());
+            ps.setString(2, name.toLowerCase(Locale.ROOT));
             try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) return toLocation(rs);
+                if (rs.next()) return toPosition(rs);
             }
         }
         return null;
@@ -196,19 +275,18 @@ public final class EssentialsRepository extends AbstractModuleRepository impleme
      * @return 家名称到位置的映射，无记录时返回空映射
      * @throws SQLException 数据库操作失败时抛出
      */
-    public Map<String, Location> getHomes(UUID uuid) throws SQLException {
-        Map<String, Location> homes = new HashMap<>();
-        String sql = "SELECT name, world, x, y, z, yaw, pitch FROM " + tablePrefix() + "homes WHERE uuid=?";
+    public List<String> listHomeNames(UUID uuid) throws SQLException {
+        List<String> homes = new ArrayList<>();
+        String sql = "SELECT name FROM " + tablePrefix() + "homes WHERE uuid=? ORDER BY name";
         try (Connection conn = getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, uuid.toString());
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
-                    Location loc = toLocation(rs);
-                    if (loc != null) homes.put(rs.getString("name"), loc);
+                    homes.add(rs.getString("name"));
                 }
             }
         }
-        return homes;
+        return List.copyOf(homes);
     }
 
     /**
@@ -228,76 +306,68 @@ public final class EssentialsRepository extends AbstractModuleRepository impleme
         }
     }
 
-    // ─── Warps ───
-
-    /**
-     * 新增或更新公共传送点。
-     *
-     * @param name 传送点名称
-     * @param loc  传送点位置
-     * @throws SQLException 数据库操作失败时抛出
-     */
-    public void setWarp(String name, Location loc) throws SQLException {
-        String sql = "REPLACE INTO " + tablePrefix() + "warps (name, world, x, y, z, yaw, pitch) VALUES (?,?,?,?,?,?,?)";
+    public List<HomeSummary> listHomes(UUID uuid, int limit, int offset) throws SQLException {
+        String sql = "SELECT name, world, x, y, z FROM " + tablePrefix() + "homes"
+            + " WHERE uuid=? ORDER BY name LIMIT ? OFFSET ?";
+        List<HomeSummary> homes = new ArrayList<>();
         try (Connection conn = getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, name.toLowerCase());
-            ps.setString(2, loc.getWorld().getName());
-            ps.setDouble(3, loc.getX());
-            ps.setDouble(4, loc.getY());
-            ps.setDouble(5, loc.getZ());
-            ps.setFloat(6, loc.getYaw());
-            ps.setFloat(7, loc.getPitch());
-            ps.executeUpdate();
-        }
-    }
-
-    /**
-     * 删除指定公共传送点。
-     *
-     * @param name 传送点名称
-     * @throws SQLException 数据库操作失败时抛出
-     */
-    public void deleteWarp(String name) throws SQLException {
-        String sql = "DELETE FROM " + tablePrefix() + "warps WHERE name=?";
-        try (Connection conn = getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, name.toLowerCase());
-            ps.executeUpdate();
-        }
-    }
-
-    /**
-     * 查询指定公共传送点的位置。
-     *
-     * @param name 传送点名称
-     * @return 传送点位置，不存在时返回 null
-     * @throws SQLException 数据库操作失败时抛出
-     */
-    public Location getWarp(String name) throws SQLException {
-        String sql = "SELECT world, x, y, z, yaw, pitch FROM " + tablePrefix() + "warps WHERE name=?";
-        try (Connection conn = getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, name.toLowerCase());
+            ps.setString(1, uuid.toString());
+            ps.setInt(2, limit);
+            ps.setInt(3, offset);
             try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) return toLocation(rs);
+                while (rs.next()) {
+                    homes.add(new HomeSummary(rs.getString("name"), rs.getString("world"),
+                        rs.getInt("x"), rs.getInt("y"), rs.getInt("z")));
+                }
             }
         }
-        return null;
+        return homes;
     }
 
-    /**
-     * 返回全部公共传送点名称列表（按名称排序）。
-     *
-     * @return 传送点名称列表
-     * @throws SQLException 数据库操作失败时抛出
-     */
-    public List<String> getWarpNames() throws SQLException {
-        List<String> names = new ArrayList<>();
-        String sql = "SELECT name FROM " + tablePrefix() + "warps ORDER BY name";
-        try (Connection conn = getConnection();
-             Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery(sql)) {
-            while (rs.next()) names.add(rs.getString("name"));
+    public record HomeSummary(String name, String world, int x, int y, int z) {}
+
+    // ─── Warp favorites ───
+
+    public java.util.Set<String> warpFavorites(UUID id) throws SQLException {
+        java.util.Set<String> names = new java.util.HashSet<>();
+        try (Connection conn = getConnection(); PreparedStatement ps = conn.prepareStatement(
+            "SELECT warp_name FROM " + tablePrefix() + "warp_favorites WHERE uuid=?")) {
+            ps.setString(1, id.toString());
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) names.add(rs.getString(1));
+            }
         }
         return names;
+    }
+
+    public void setWarpFavorite(UUID id, String name, boolean favorite) throws SQLException {
+        String sql = favorite
+            ? "REPLACE INTO " + tablePrefix() + "warp_favorites (uuid,warp_name) VALUES (?,?)"
+            : "DELETE FROM " + tablePrefix() + "warp_favorites WHERE uuid=? AND warp_name=?";
+        try (Connection conn = getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, id.toString());
+            ps.setString(2, name);
+            ps.executeUpdate();
+        }
+    }
+
+    public boolean receivesTpa(UUID id) throws SQLException {
+        try (Connection conn = getConnection(); PreparedStatement ps = conn.prepareStatement(
+            "SELECT receiving FROM " + tablePrefix() + "tpa_preferences WHERE uuid=?")) {
+            ps.setString(1, id.toString());
+            try (ResultSet rs = ps.executeQuery()) {
+                return !rs.next() || rs.getInt(1) != 0;
+            }
+        }
+    }
+
+    public void setReceivesTpa(UUID id, boolean receiving) throws SQLException {
+        try (Connection conn = getConnection(); PreparedStatement ps = conn.prepareStatement(
+            "REPLACE INTO " + tablePrefix() + "tpa_preferences (uuid,receiving) VALUES (?,?)")) {
+            ps.setString(1, id.toString());
+            ps.setInt(2, receiving ? 1 : 0);
+            ps.executeUpdate();
+        }
     }
 
     // ─── Spawn ───
@@ -308,15 +378,15 @@ public final class EssentialsRepository extends AbstractModuleRepository impleme
      * @param loc 出生点位置
      * @throws SQLException 数据库操作失败时抛出
      */
-    public void setSpawn(Location loc) throws SQLException {
+    public void setSpawn(Position loc) throws SQLException {
         String sql = "REPLACE INTO " + tablePrefix() + "spawn (id, world, x, y, z, yaw, pitch) VALUES (1,?,?,?,?,?,?)";
         try (Connection conn = getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, loc.getWorld().getName());
-            ps.setDouble(2, loc.getX());
-            ps.setDouble(3, loc.getY());
-            ps.setDouble(4, loc.getZ());
-            ps.setFloat(5, loc.getYaw());
-            ps.setFloat(6, loc.getPitch());
+            ps.setString(1, loc.world());
+            ps.setDouble(2, loc.x());
+            ps.setDouble(3, loc.y());
+            ps.setDouble(4, loc.z());
+            ps.setFloat(5, loc.yaw());
+            ps.setFloat(6, loc.pitch());
             ps.executeUpdate();
         }
     }
@@ -327,12 +397,12 @@ public final class EssentialsRepository extends AbstractModuleRepository impleme
      * @return 出生点位置，未设置时返回 null
      * @throws SQLException 数据库操作失败时抛出
      */
-    public Location getSpawn() throws SQLException {
+    public Position getSpawn() throws SQLException {
         String sql = "SELECT world, x, y, z, yaw, pitch FROM " + tablePrefix() + "spawn WHERE id=1";
         try (Connection conn = getConnection();
              Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(sql)) {
-            if (rs.next()) return toLocation(rs);
+            if (rs.next()) return toPosition(rs);
         }
         return null;
     }
@@ -350,18 +420,38 @@ public final class EssentialsRepository extends AbstractModuleRepository impleme
      * @param ip        玩家 IP 地址，可为 null
      * @throws SQLException 数据库操作失败时抛出
      */
-    public void ban(UUID uuid, String playerName, String reason, String operator, long expiresAt, String ip) throws SQLException {
+    public BanRecord ban(UUID uuid, String playerName, String reason, String operator, long expiresAt, String ip) throws SQLException {
+        long now = System.currentTimeMillis();
+        return transaction(conn -> ban(conn, uuid, playerName, reason, operator, now, expiresAt, ip));
+    }
+
+    private BanRecord ban(Connection conn, UUID uuid, String playerName, String reason, String operator,
+                           long now, long expiresAt, String ip) throws SQLException {
         String sql = "REPLACE INTO " + tablePrefix() + "bans (uuid, player_name, reason, operator, created_at, expires_at, ip) VALUES (?,?,?,?,?,?,?)";
-        try (Connection conn = getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, uuid.toString());
-            ps.setString(2, playerName);
-            ps.setString(3, reason);
-            ps.setString(4, operator);
-            ps.setLong(5, System.currentTimeMillis());
-            ps.setLong(6, expiresAt);
-            ps.setString(7, ip);
-            ps.executeUpdate();
-        }
+            String expire = "INSERT INTO " + tablePrefix() + "moderation_history"
+                + " (uuid,player_name,action,reason,operator,created_at,expires_at)"
+                + " SELECT uuid,player_name,'EXPIRE',reason,?,?,expires_at FROM " + tablePrefix() + "bans"
+                + " WHERE uuid=? AND expires_at>0 AND expires_at<=?";
+            try (PreparedStatement ps = conn.prepareStatement(expire)) {
+                ps.setString(1, "系统");
+                ps.setLong(2, now);
+                ps.setString(3, uuid.toString());
+                ps.setLong(4, now);
+                ps.executeUpdate();
+            }
+            try (PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setString(1, uuid.toString());
+                ps.setString(2, playerName);
+                ps.setString(3, reason);
+                ps.setString(4, operator);
+                ps.setLong(5, now);
+                ps.setLong(6, expiresAt);
+                ps.setString(7, ip);
+                ps.executeUpdate();
+            }
+            String action = "系统".equals(operator) ? "AUTO_BAN" : expiresAt > 0 ? "TEMPBAN" : "BAN";
+            insertHistory(conn, uuid, playerName, action, reason, operator, now, expiresAt);
+            return new BanRecord(uuid, playerName, reason, operator, now, expiresAt, ip);
     }
 
     /**
@@ -370,13 +460,141 @@ public final class EssentialsRepository extends AbstractModuleRepository impleme
      * @param uuid 玩家 UUID
      * @throws SQLException 数据库操作失败时抛出
      */
-    public void unban(UUID uuid) throws SQLException {
-        String sql = "DELETE FROM " + tablePrefix() + "bans WHERE uuid=?";
+    public boolean unban(UUID uuid, String operator) throws SQLException {
+        BanRecord record = getBan(uuid);
+        if (record == null) return false;
+        return removeBan(record, record.isExpired() ? "EXPIRE" : "UNBAN", operator);
+    }
+
+    public void expireBans(int limit) throws SQLException {
+        String sql = "SELECT * FROM " + tablePrefix() + "bans WHERE expires_at>0 AND expires_at<=?"
+            + " ORDER BY expires_at LIMIT ?";
+        List<BanRecord> expired = new ArrayList<>();
         try (Connection conn = getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, uuid.toString());
+            ps.setLong(1, System.currentTimeMillis());
+            ps.setInt(2, limit);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) expired.add(BanRecord.from(rs));
+            }
+        }
+        for (BanRecord record : expired) removeBan(record, "EXPIRE", "系统");
+    }
+
+    private boolean removeBan(BanRecord record, String action, String operator) throws SQLException {
+        String sql = "DELETE FROM " + tablePrefix() + "bans WHERE uuid=? AND created_at=? AND expires_at=?";
+        return transaction(conn -> {
+            try (PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setString(1, record.uuid().toString());
+                ps.setLong(2, record.createdAt());
+                ps.setLong(3, record.expiresAt());
+                if (ps.executeUpdate() == 0) return false;
+            }
+            insertHistory(conn, record.uuid(), record.playerName(), action, record.reason(),
+                operator, System.currentTimeMillis(), record.expiresAt());
+            return true;
+        });
+    }
+
+    public void rememberPlayer(UUID id, String name) throws SQLException {
+        String sql = "REPLACE INTO " + tablePrefix() + "known_players (uuid,lookup_name,player_name,seen_at) VALUES (?,?,?,?)";
+        try (Connection conn = getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, id.toString());
+            ps.setString(2, name.toLowerCase(java.util.Locale.ROOT));
+            ps.setString(3, name);
+            ps.setLong(4, System.currentTimeMillis());
             ps.executeUpdate();
         }
     }
+
+    public List<UUID> findKnownPlayers(String name) throws SQLException {
+        String sql = "SELECT uuid FROM " + tablePrefix() + "known_players WHERE lookup_name=? UNION"
+            + " SELECT uuid FROM " + tablePrefix() + "bans WHERE LOWER(player_name)=? UNION"
+            + " SELECT uuid FROM " + tablePrefix() + "moderation_history WHERE LOWER(player_name)=? LIMIT 2";
+        String lookup = name.toLowerCase(java.util.Locale.ROOT);
+        List<UUID> ids = new ArrayList<>();
+        try (Connection conn = getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, lookup);
+            ps.setString(2, lookup);
+            ps.setString(3, lookup);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) ids.add(UUID.fromString(rs.getString(1)));
+            }
+        }
+        return ids;
+    }
+
+    public String knownPlayerName(UUID id) throws SQLException {
+        String sql = "SELECT player_name FROM " + tablePrefix() + "known_players WHERE uuid=? ORDER BY seen_at DESC LIMIT 1";
+        try (Connection conn = getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, id.toString());
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) return rs.getString(1);
+            }
+        }
+        BanRecord ban = getBan(id);
+        if (ban != null) return ban.playerName();
+        var history = history(id, 1, 0);
+        return history.isEmpty() ? null : history.get(0).playerName();
+    }
+
+    public List<ModerationEntry> history(UUID id, int limit, int offset) throws SQLException {
+        String sql = "SELECT * FROM " + tablePrefix() + "moderation_history WHERE uuid=? ORDER BY id DESC LIMIT ? OFFSET ?";
+        List<ModerationEntry> entries = new ArrayList<>();
+        try (Connection conn = getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, id.toString());
+            ps.setInt(2, limit);
+            ps.setInt(3, offset);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    entries.add(new ModerationEntry(rs.getString("player_name"), rs.getString("action"), rs.getString("reason"),
+                        rs.getString("operator"), rs.getLong("created_at"), rs.getLong("expires_at")));
+                }
+            }
+        }
+        return entries;
+    }
+
+    private void insertHistory(Connection conn, UUID id, String playerName, String action, String reason,
+                               String operator, long now, long expiry) throws SQLException {
+        String sql = "INSERT INTO " + tablePrefix() + "moderation_history"
+            + " (uuid,player_name,action,reason,operator,created_at,expires_at) VALUES (?,?,?,?,?,?,?)";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, id.toString());
+            ps.setString(2, playerName);
+            ps.setString(3, action);
+            ps.setString(4, reason);
+            ps.setString(5, operator);
+            ps.setLong(6, now);
+            ps.setLong(7, expiry);
+            ps.executeUpdate();
+        }
+    }
+
+    private <T> T transaction(SqlOperation<T> operation) throws SQLException {
+        try (Connection conn = getConnection()) {
+            conn.setAutoCommit(false);
+            try {
+                T result = operation.execute(conn);
+                conn.commit();
+                return result;
+            } catch (SQLException | RuntimeException e) {
+                try {
+                    conn.rollback();
+                } catch (SQLException rollback) {
+                    e.addSuppressed(rollback);
+                }
+                throw e;
+            }
+        }
+    }
+
+    @FunctionalInterface
+    private interface SqlOperation<T> {
+        T execute(Connection conn) throws SQLException;
+    }
+
+    public record ModerationEntry(String playerName, String action, String reason, String operator,
+                                  long createdAt, long expiresAt) {}
 
     /**
      * 查询全部封禁记录（按创建时间降序）。
@@ -384,12 +602,17 @@ public final class EssentialsRepository extends AbstractModuleRepository impleme
      * @return 封禁记录列表
      * @throws SQLException 数据库操作失败时抛出
      */
-    public List<BanRecord> getAllBans() throws SQLException {
-        String sql = "SELECT * FROM " + tablePrefix() + "bans ORDER BY created_at DESC";
+    public List<BanRecord> listActiveBans(int limit, int offset) throws SQLException {
+        String sql = "SELECT * FROM " + tablePrefix() + "bans WHERE expires_at<=0 OR expires_at>?"
+            + " ORDER BY created_at DESC, uuid LIMIT ? OFFSET ?";
         List<BanRecord> list = new ArrayList<>();
-        try (Connection conn = getConnection(); PreparedStatement ps = conn.prepareStatement(sql);
-             ResultSet rs = ps.executeQuery()) {
-            while (rs.next()) list.add(BanRecord.from(rs));
+        try (Connection conn = getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, System.currentTimeMillis());
+            ps.setInt(2, limit);
+            ps.setInt(3, offset);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) list.add(BanRecord.from(rs));
+            }
         }
         return list;
     }
@@ -414,63 +637,37 @@ public final class EssentialsRepository extends AbstractModuleRepository impleme
 
     // ─── Warnings ───
 
-    /**
-     * 新增一条警告记录。
-     *
-     * @param uuid      玩家 UUID
-     * @param playerName 玩家名称
-     * @param reason    警告原因
-     * @param operator  操作者名称
-     * @throws SQLException 数据库操作失败时抛出
-     */
-    public void addWarning(UUID uuid, String playerName, String reason, String operator) throws SQLException {
+    public record WarningResult(int count, BanRecord ban) {}
+
+    /** One committed warning/history/optional automatic-ban unit. */
+    public WarningResult warn(UUID uuid, String playerName, String reason, String operator, int maximum, long since) throws SQLException {
+        return transaction(conn -> {
+            long now = System.currentTimeMillis();
+            addWarning(conn, uuid, playerName, reason, operator, now);
+            int count = 0;
+            if (maximum > 0) {
+                try (var query = conn.prepareStatement("SELECT COUNT(*) FROM " + tablePrefix() + "warnings WHERE uuid=? AND created_at>=?")) {
+                    query.setString(1, uuid.toString()); query.setLong(2, since);
+                    try (var rows = query.executeQuery()) { if (rows.next()) count = rows.getInt(1); }
+                }
+            }
+            BanRecord automatic = maximum > 0 && count >= maximum
+                ? ban(conn, uuid, playerName, "警告次数达到上限 (" + count + ")", "系统", now, -1, null) : null;
+            return new WarningResult(count, automatic);
+        });
+    }
+
+    private void addWarning(Connection conn, UUID uuid, String playerName, String reason, String operator, long now) throws SQLException {
         String sql = "INSERT INTO " + tablePrefix() + "warnings (uuid, player_name, reason, operator, created_at) VALUES (?,?,?,?,?)";
-        try (Connection conn = getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, uuid.toString());
-            ps.setString(2, playerName);
-            ps.setString(3, reason);
-            ps.setString(4, operator);
-            ps.setLong(5, System.currentTimeMillis());
-            ps.executeUpdate();
-        }
-    }
-
-    /**
-     * 统计玩家自指定时间以来的警告次数。
-     *
-     * @param uuid  玩家 UUID
-     * @param since 起始时间戳（毫秒）
-     * @return 警告次数
-     * @throws SQLException 数据库操作失败时抛出
-     */
-    public int getWarningCount(UUID uuid, long since) throws SQLException {
-        String sql = "SELECT COUNT(*) FROM " + tablePrefix() + "warnings WHERE uuid=? AND created_at>=?";
-        try (Connection conn = getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, uuid.toString());
-            ps.setLong(2, since);
-            try (ResultSet rs = ps.executeQuery()) {
-                return rs.next() ? rs.getInt(1) : 0;
+            try (PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setString(1, uuid.toString());
+                ps.setString(2, playerName);
+                ps.setString(3, reason);
+                ps.setString(4, operator);
+                ps.setLong(5, now);
+                ps.executeUpdate();
             }
-        }
-    }
-
-    /**
-     * 查询玩家全部警告记录（按创建时间降序）。
-     *
-     * @param uuid 玩家 UUID
-     * @return 警告记录列表
-     * @throws SQLException 数据库操作失败时抛出
-     */
-    public List<WarnRecord> getWarnings(UUID uuid) throws SQLException {
-        List<WarnRecord> list = new ArrayList<>();
-        String sql = "SELECT * FROM " + tablePrefix() + "warnings WHERE uuid=? ORDER BY created_at DESC";
-        try (Connection conn = getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, uuid.toString());
-            try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) list.add(WarnRecord.from(rs));
-            }
-        }
-        return list;
+            insertHistory(conn, uuid, playerName, "WARN", reason, operator, now, -1);
     }
 
     // ─── Nicknames ───
@@ -608,10 +805,9 @@ public final class EssentialsRepository extends AbstractModuleRepository impleme
     }
 
     // ─── Helper ───
-    private static Location toLocation(ResultSet rs) throws SQLException {
-        World world = Bukkit.getWorld(rs.getString("world"));
-        if (world == null) return null;
-        return new Location(world, rs.getDouble("x"), rs.getDouble("y"), rs.getDouble("z"),
+    private static Position toPosition(ResultSet rs) throws SQLException {
+        return new Position(rs.getString("world"), rs.getDouble("x"), rs.getDouble("y"), rs.getDouble("z"),
             rs.getFloat("yaw"), rs.getFloat("pitch"));
     }
+
 }

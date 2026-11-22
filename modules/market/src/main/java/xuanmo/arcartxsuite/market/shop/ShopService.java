@@ -1,5 +1,6 @@
 package xuanmo.arcartxsuite.market.shop;
 
+import xuanmo.arcartxsuite.market.MarketWork;
 import java.io.File;
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -7,6 +8,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -19,6 +21,8 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
 import org.jetbrains.annotations.Nullable;
+import xuanmo.arcartxsuite.api.auth.AuthAccess;
+import xuanmo.arcartxsuite.api.auth.AuthSnapshot;
 import xuanmo.arcartxsuite.api.condition.ScriptCondition;
 import xuanmo.arcartxsuite.api.condition.ScriptConditionEvaluator;
 import xuanmo.arcartxsuite.api.condition.ScriptConditionsLoader;
@@ -29,7 +33,9 @@ import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
 import xuanmo.arcartxsuite.market.config.MarketModuleConfiguration.MessagesConfiguration;
 import xuanmo.arcartxsuite.market.config.MarketModuleConfiguration.ShopConfiguration;
 import xuanmo.arcartxsuite.market.dynamic.DynamicShopService;
+import xuanmo.arcartxsuite.market.storage.MarketOperation;
 import xuanmo.arcartxsuite.market.storage.MarketRepository;
+import xuanmo.arcartxsuite.market.storage.ShopCheckout;
 
 /**
  * 系统商店业务服务。
@@ -46,6 +52,7 @@ public class ShopService {
     }
 
     private final JavaPlugin plugin;
+    private final MarketWork work;
     private final ShopConfiguration config;
     private final MessagesConfiguration messages;
     private final MarketRepository repository;
@@ -58,17 +65,22 @@ public class ShopService {
     private final Map<String, ShopDefinition> shops = new LinkedHashMap<>();
     private final Map<String, Long> restockIntervals = new java.util.concurrent.ConcurrentHashMap<>();
     private BukkitTask refreshTask;
+    private volatile long paymentGeneration;
+    private final java.util.concurrent.ConcurrentLinkedQueue<QueuedPayment> payments = new java.util.concurrent.ConcurrentLinkedQueue<>();
+    private final java.util.concurrent.Semaphore backgroundDebits = new java.util.concurrent.Semaphore(4);
+    private static final int PAYMENTS_PER_TICK = 4;
+    private static final long PAYMENT_BUDGET_NANOS = 2_000_000L;
     private volatile LimitUpdateBroadcaster limitBroadcaster;
     private volatile DynamicShopService dynamicShopService;
 
     /** 单次购买数量上限（36 格 × 64），防止客户端传入超大值导致整数溢出 / 刷物品。 */
     private static final int MAX_PURCHASE_AMOUNT = 36 * 64;
 
-    public ShopService(JavaPlugin plugin, ShopConfiguration config, MessagesConfiguration messages,
+    public ShopService(MarketWork work, JavaPlugin plugin, ShopConfiguration config, MessagesConfiguration messages,
                        MarketRepository repository, CurrencyBridgeAPI currencyManager,
                        ItemSourceRegistry itemSourceRegistry, ScriptConditionEvaluator conditionEvaluator,
                        File dataFolder, Logger logger) {
-        this.plugin = plugin;
+        this.plugin = plugin;this.work = work;
         this.config = config;
         this.messages = messages;
         this.repository = repository;
@@ -91,11 +103,15 @@ public class ShopService {
 
     public void start() {
         loadShops();
-        refreshTask = Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, this::refreshStocks, config.refreshIntervalTicks(), config.refreshIntervalTicks());
+        refreshTask = work.repeatAsync(this::refreshStocks, config.refreshIntervalTicks(), config.refreshIntervalTicks());
         logger.info("[Shop] 系统商店已加载 " + shops.size() + " 个商店");
     }
 
     public void shutdown() {
+        paymentGeneration++;
+        for (QueuedPayment payment; (payment = payments.poll()) != null; ) {
+            finishAsync(payment, CurrencyTransactionResult.failure("商店已重载，请重新报价"));
+        }
         if (refreshTask != null) {
             refreshTask.cancel();
             refreshTask = null;
@@ -207,113 +223,310 @@ public class ShopService {
     }
 
     public BuyResult buy(Player player, String shopId, String itemId, int amount, @Nullable BigDecimal expectedUnitPrice) {
-        return ledger.trade("SHOP_BUY", player.getUniqueId(), shopId + "/" + itemId + ",amount=" + amount,
-            () -> buyWork(player, shopId, itemId, amount, expectedUnitPrice), result -> result.success());
+        return checkout(player, shopId, itemId, amount, expectedUnitPrice, null,
+            UUID.randomUUID().toString(), UUID.randomUUID().toString());
     }
 
-public BuyResult buyWork(Player player, String shopId, String itemId, int amount, @Nullable BigDecimal expectedUnitPrice) {
+    public BuyResult checkout(Player player, String shopId, String itemId, int amount, @Nullable BigDecimal expectedUnitPrice,
+                              @Nullable ShopItem expectedItem, String quote, String request) {
+        var session = AuthAccess.snapshot(player.getUniqueId());
+        long generation = paymentGeneration;
+        try {
+            requireMarketAccess(player, session);
+            var plan = prepareCheckout(player, shopId, itemId, amount, expectedUnitPrice, expectedItem, quote, request);
+            var payment = armPayment(plan);
+            if (payment == null) return previousOrder(plan, quote);
+            var rejection = debitRejection(player, plan, session, generation);
+            return finishPayment(payment, rejection == null ? invokePayment(player, plan) : rejection);
+        } catch (CheckoutRejected rejection) {
+            return BuyResult.fail(rejection.getMessage());
+        }
+    }
+
+    public void checkoutAsync(Player player, String shopId, String itemId, int amount, BigDecimal expectedUnitPrice,
+                              ShopItem expectedItem, String quote, String request, java.util.function.Consumer<BuyResult> reply) {
+        var session = AuthAccess.snapshot(player.getUniqueId());
+        long generation = paymentGeneration;
+        PreparedCheckout plan;
+        try {
+            requireMarketAccess(player, session);
+            plan = prepareCheckout(player, shopId, itemId, amount, expectedUnitPrice, expectedItem, quote, request);
+        } catch (CheckoutRejected rejection) {
+            reply.accept(BuyResult.fail(rejection.getMessage()));
+            return;
+        }
+        var backgroundDebit = plan.bridge().prepareBackgroundDebit(player, plan.totalPrice());
+        work.async(() -> {
+            try {
+                var payment = armPayment(plan);
+                if (payment == null) {
+                    replyOnMain(reply, previousOrder(plan, quote));
+                    return;
+                }
+                if (generation != paymentGeneration) {
+                    replyOnMain(reply, finishPayment(payment, CurrencyTransactionResult.failure("商店已重载，请重新报价")));
+                    return;
+                }
+                var queued = new QueuedPayment(player, session, payment, reply, generation, backgroundDebit);
+                payments.add(queued);
+                if (generation != paymentGeneration && payments.remove(queued)) {
+                    replyOnMain(reply, finishPayment(payment, CurrencyTransactionResult.failure("商店已重载，请重新报价")));
+                }
+            } catch (RuntimeException exception) {
+                replyOnMain(reply, unknownOrder(plan.order(), exception));
+            }
+        });
+    }
+
+    private void requireMarketAccess(Player player, AuthSnapshot session) {
+        if (!session.admitted() || !player.hasPermission("arcartxsuite.market.use")) {
+            throw new CheckoutRejected("当前无法使用市场，请重新报价");
+        }
+    }
+
+    private ShopItem requirePurchasableItem(Player player, String shopId, String itemId, @Nullable ShopItem expectedItem) {
         ShopDefinition shop = getEffectiveShop(shopId);
-        if (shop == null) return BuyResult.fail("商店不存在");
+        if (shop == null) throw new CheckoutRejected("商店不存在");
         if (!shop.permission().isEmpty() && !player.hasPermission(shop.permission())) {
-            return BuyResult.fail("无权限访问该商店");
+            throw new CheckoutRejected("无权限访问该商店");
         }
 
         ShopItem shopItem = shop.items().get(itemId);
-        if (shopItem == null) return BuyResult.fail("商品不存在");
-        ledger.describe(shopItem.displayName(),shopItem.type()==ShopItemType.COMMAND?"COMMAND":shopItem.item().id(),"");
+        if (shopItem == null) throw new CheckoutRejected("商品不存在");
+        if (expectedItem != null && !expectedItem.equals(shopItem)) throw new CheckoutRejected("商品已变化，请重新报价");
 
         // 上架条件校验（AXS 统一条件系统）
         // 正常途径下不满足条件的商品不会出现在商店 UI 中，此处为伪造包兜底
         List<ScriptCondition> conditions = shopItem.conditions();
         if (conditions != null && !conditions.isEmpty()
             && conditionEvaluator.firstFailed(player, conditions) != null) {
-            return BuyResult.fail(messages.shopConditionDenied());
+            throw new CheckoutRejected(messages.shopConditionDenied());
         }
+        return shopItem;
+    }
 
+    private PreparedCheckout prepareCheckout(Player player, String shopId, String itemId, int amount,
+                                              @Nullable BigDecimal expectedUnitPrice, @Nullable ShopItem expectedItem,
+                                              String quote, String request) {
+        var shopItem = requirePurchasableItem(player, shopId, itemId, expectedItem);
         // 数量校验：防止客户端传入 <=0 或超大值（整数溢出绕过限购 / 刷物品）
         if (amount < 1 || amount > MAX_PURCHASE_AMOUNT) {
-            return BuyResult.fail("购买数量非法");
+            throw new CheckoutRejected("购买数量非法");
         }
 
-        // 限购检查（用 long 运算，避免 int 溢出绕过）
-        if (shopItem.limitPerPlayer() > 0) {
-            ShopLimitRecord limit = repository.getShopLimit(player.getUniqueId(), shopId, itemId);
-            long purchased = limit == null || (limit.resetTime() > 0 && limit.resetTime() <= System.currentTimeMillis())
-                ? 0L : limit.purchasedCount();
-            if (purchased + (long) amount > shopItem.limitPerPlayer()) {
-                return BuyResult.fail(messages.shopLimitReached());
-            }
-        }
-
-        // 库存检查（stock-mode: global / per-player）
-        // 计算价格（含折扣），全程 BigDecimal 避免浮点累计误差
-        BigDecimal unitPrice = BigDecimal.valueOf(shopItem.buyPrice());
-        BigDecimal bestDiscount = null;
-        for (var entry : shopItem.discount().entrySet()) {
-            if (player.hasPermission(entry.getKey())) {
-                BigDecimal discount = BigDecimal.valueOf(entry.getValue());
-                if (bestDiscount == null || discount.compareTo(bestDiscount) < 0) {
-                    bestDiscount = discount;
-                }
-            }
-        }
-        if (bestDiscount != null) {
-            unitPrice = unitPrice.multiply(bestDiscount);
-        }
+        BigDecimal unitPrice = displayBuyPriceDecimal(player, shopItem);
         BigDecimal totalPrice = unitPrice.multiply(BigDecimal.valueOf(amount));
         if (expectedUnitPrice != null && unitPrice.compareTo(expectedUnitPrice) != 0) {
-            return BuyResult.fail("商品价格已变化，请刷新并重新确认金额");
+            throw new CheckoutRejected("商品价格已变化，请刷新并重新确认金额");
         }
 
         // 扣款
         CurrencyBridgeAPI.CurrencyBridge bridge = currencyManager.bridge(shopItem.currency());
         if (bridge == null || !bridge.available()) {
-            return BuyResult.fail("货币系统不可用");
+            throw new CheckoutRejected("货币系统不可用");
+        }
+        if (totalPrice.signum() > 0 && bridge.debitRequiresReconciliation()) {
+            throw new CheckoutRejected("该货币无法确认扣款");
         }
 
         if (shopItem.type() == ShopItemType.COMMAND && !hasRewardCommands(shopItem)) {
-            return BuyResult.fail("指令商品未配置有效的 reward-commands");
+            throw new CheckoutRejected("指令商品未配置有效的 reward-commands");
         }
 
         ItemStack preparedItem = shopItem.type() == ShopItemType.ITEM ? createItem(shopItem, amount, player) : null;
-        if (shopItem.type() == ShopItemType.ITEM && preparedItem == null) return BuyResult.fail("物品生成失败");
-        if (preparedItem != null && preparedItem.getAmount() != amount) return BuyResult.fail("物品来源未生成请求数量，已取消购买");
-        if(preparedItem!=null)ledger.describe(shopItem.displayName(),preparedItem.getType().name(),
-            java.util.Base64.getEncoder().encodeToString(xuanmo.arcartxsuite.api.util.ItemSerializer.serialize(preparedItem)));
-        List<String> preparedRewards = prepareRewards(player,shopItem,amount,preparedItem);
-        if (!tryConsumeStock(player, shopId, itemId, shopItem, amount)) {
-            ledger.activatePrepared(preparedRewards,false);
-            return BuyResult.fail("商品库存不足");
+        if (shopItem.type() == ShopItemType.ITEM && preparedItem == null) throw new CheckoutRejected("物品生成失败");
+        if (preparedItem != null && preparedItem.getAmount() != amount) throw new CheckoutRejected("物品来源未生成请求数量，已取消购买");
+        String snapshot = preparedItem == null ? "" : java.util.Base64.getEncoder().encodeToString(
+            xuanmo.arcartxsuite.api.util.ItemSerializer.serialize(preparedItem));
+        String display = ChatColor.stripColor(ChatColor.translateAlternateColorCodes('&', shopItem.displayName()));
+        long now = System.currentTimeMillis();
+        var order = new MarketOperation(request, request, player.getUniqueId(), "SHOP_BUY",
+            orderReference(quote) + shopId + "/" + itemId, "RUNNING", shopItem.currency(), totalPrice.toPlainString(),
+            snapshot, "已预留库存与限购，等待扣款", ledger.owner(), now, now,
+            display.substring(0, Math.min(255, display.length())), preparedItem == null ? "COMMAND" : preparedItem.getType().name());
+        var checkout = new ShopCheckout(shopId, itemId, amount, availabilityRequest(shopItem).stockMode(),
+            shopItem.stockAmount(), shopItem.limitPerPlayer(), shopItem.limitReset());
+        return new PreparedCheckout(order, checkout, bridge, totalPrice, shopItem, shopItem.displayName(),
+            prepareRewards(player, shopItem, amount, order));
+    }
+
+    private @Nullable ArmedPayment armPayment(PreparedCheckout plan) {
+        var reservation = repository.reserveShopOrder(plan.order(), plan.checkout(), plan.rewards());
+        return reservation.started() ? new ArmedPayment(plan, ledger.beginShopDebit(plan.order())) : null;
+    }
+
+    private BuyResult previousOrder(PreparedCheckout plan, String quote) {
+        var existing = repository.shopOrder(plan.order().id());
+        return matchesOrder(existing, plan.order().player(), quote) ? orderResult(existing) : BuyResult.fail("订单请求无效");
+    }
+
+    private CurrencyTransactionResult invokePayment(Player player, PreparedCheckout plan) {
+        return invokePayment(plan, () -> plan.bridge().withdraw(player, plan.totalPrice()));
+    }
+
+    private CurrencyTransactionResult invokePayment(PreparedCheckout plan, java.util.function.Supplier<CurrencyTransactionResult> debit) {
+        try {
+            return debit.get();
+        } catch (RuntimeException | LinkageError exception) {
+            logger.log(Level.WARNING, "系统商店扣款结果待核对 " + plan.order().id(), exception);
+            return CurrencyTransactionResult.unknown("扣款结果不明，请核对交易流水");
         }
-        CurrencyTransactionResult result = bridge.withdraw(player, totalPrice);
-        if (!result.success()) {
-            ledger.activatePrepared(preparedRewards,false);
-            restoreStock(player, shopId, itemId, shopItem, amount);
-            return BuyResult.fail(messages.insufficientFunds());
+    }
+
+    private BuyResult finishPayment(ArmedPayment payment, CurrencyTransactionResult result) {
+        var plan = payment.plan();
+        var order = plan.order();
+        var checkout = plan.checkout();
+        ledger.recordShopDebit(payment.debit(), result);
+        if (result.uncertain()) {
+            repository.transitionOperation(order.id(), "RUNNING", "REVIEW", "扣款结果不明，请核对交易流水", order.owner());
+            return BuyResult.fail("扣款结果不明，请核对交易流水");
         }
-
-        ledger.activatePrepared(preparedRewards,true);
-
-        // 生成物品
-        if (shopItem.type() == ShopItemType.COMMAND) {
-            updateLimit(player, shopId, itemId, shopItem, amount);
-            recordHistory(player, shopItem, amount, totalPrice, null);
-            return BuyResult.success(totalPrice.doubleValue(), shopItem.currency());
+        String failure = result.message().isBlank() ? messages.insufficientFunds() : result.message();
+        repository.finishShopOrder(order, result.success(),
+            result.success() ? "已扣款，奖励已进入交付队列" : failure);
+        if (!result.success()) return BuyResult.fail(failure);
+        if (limitBroadcaster != null && checkout.limit() > 0) {
+            var latest = repository.getShopLimit(order.player(), checkout.shop(), checkout.item());
+            if (latest != null) limitBroadcaster.broadcast(order.player(), checkout.shop(), checkout.item(), latest.purchasedCount(),
+                latest.lastPurchaseTime(), latest.resetTime());
         }
-
-        ItemStack item = preparedItem;
-        int delivered = amount;
-
-        // 更新限购记录（按实际成交数量计）
-        updateLimit(player, shopId, itemId, shopItem, delivered);
-        recordHistory(player, shopItem, delivered, unitPrice.multiply(BigDecimal.valueOf(delivered)), item);
-
-        // 记录成交量（供需模式价格浮动策略据此调价）
-        if (dynamicShopService != null) {
-            dynamicShopService.recordPurchase(shopId, itemId, delivered);
+        ledger.withShopOrder(order, () -> {
+            recordHistory(plan);
+            return null;
+        });
+        if (!order.itemData().isEmpty() && dynamicShopService != null) {
+            dynamicShopService.recordPurchase(checkout.shop(), checkout.item(), checkout.quantity());
         }
+        return BuyResult.success(plan.totalPrice().doubleValue(), order.currency());
+    }
 
-        return BuyResult.success(unitPrice.multiply(BigDecimal.valueOf(delivered)).doubleValue(), shopItem.currency());
+    public boolean hasQueuedPayments() {
+        var payment = payments.peek();
+        return payment != null && (payment.backgroundDebit() == null || backgroundDebits.availablePermits() > 0);
+    }
+
+    private boolean currentPaymentSession(AuthSnapshot session, long generation) {
+        if (generation != paymentGeneration || work.isStopping()) return false;
+        try {
+            var current = AuthAccess.snapshot(session.playerId());
+            return current.admitted() && current.generation() == session.generation()
+                && Objects.equals(current.connectionId(), session.connectionId());
+        } catch (RuntimeException | LinkageError failure) {
+            logger.log(Level.WARNING, "系统商店无法确认支付会话 " + session.playerId(), failure);
+            return false;
+        }
+    }
+
+    private @Nullable CurrencyTransactionResult debitRejection(Player player, PreparedCheckout plan, AuthSnapshot session,
+                                                                long generation) {
+        try {
+            if (!currentPaymentSession(session, generation) || !player.isOnline() || Bukkit.getPlayer(session.playerId()) != player) {
+                return CurrencyTransactionResult.failure("玩家会话或商店已变化，请重新报价");
+            }
+            requireMarketAccess(player, session);
+            var item = requirePurchasableItem(player, plan.checkout().shop(), plan.checkout().item(), plan.item());
+            var total = displayBuyPriceDecimal(player, item).multiply(BigDecimal.valueOf(plan.checkout().quantity()));
+            if (plan.totalPrice().compareTo(total) != 0) {
+                return CurrencyTransactionResult.failure("商品价格已变化，请刷新并重新确认金额");
+            }
+            return currentPaymentSession(session, generation) ? null
+                : CurrencyTransactionResult.failure("玩家会话或商店已变化，请重新报价");
+        } catch (CheckoutRejected rejection) {
+            return CurrencyTransactionResult.failure(rejection.getMessage());
+        } catch (RuntimeException | LinkageError failure) {
+            logger.log(Level.WARNING, "系统商店无法确认支付准入 " + plan.order().id(), failure);
+            return CurrencyTransactionResult.failure("无法确认购买条件，请重新报价");
+        }
+    }
+
+    public void drainPayments() {
+        long start = System.nanoTime();
+        for (int i = 0; i < PAYMENTS_PER_TICK; i++) {
+            if (!hasQueuedPayments()) return;
+            var queued = payments.poll();
+            if (queued == null) return;
+            var plan = queued.payment().plan();
+            var player = queued.player();
+            var rejection = debitRejection(player, plan, queued.session(), queued.generation());
+            if (rejection != null) {
+                finishAsync(queued, rejection);
+            } else if (queued.backgroundDebit() != null) {
+                dispatchBackgroundDebit(queued);
+            } else {
+                finishAsync(queued, invokePayment(player, plan));
+            }
+            if (System.nanoTime() - start >= PAYMENT_BUDGET_NANOS) return;
+        }
+    }
+
+    private void dispatchBackgroundDebit(QueuedPayment queued) {
+        // Only the main-thread queue consumer takes a permit. Workers never block waiting for one.
+        if (!backgroundDebits.tryAcquire()) {
+            payments.add(queued);
+            return;
+        }
+        try {
+            work.async(() -> {
+                try {
+                    var result = currentPaymentSession(queued.session(), queued.generation())
+                        ? invokePayment(queued.payment().plan(), queued.backgroundDebit())
+                        : CurrencyTransactionResult.failure("玩家会话或商店已变化，请重新报价");
+                    finishOnWorker(queued, result);
+                } finally {
+                    backgroundDebits.release();
+                }
+            });
+        } catch (RuntimeException exception) {
+            backgroundDebits.release();
+            finishAsync(queued, CurrencyTransactionResult.failure("订单支付未启动，请重新报价"));
+        }
+    }
+
+    private void finishAsync(QueuedPayment queued, CurrencyTransactionResult result) {
+        if (!plugin.isEnabled()) return;
+        work.async(() -> finishOnWorker(queued, result));
+    }
+
+    private void finishOnWorker(QueuedPayment queued, CurrencyTransactionResult result) {
+        BuyResult reply;
+        try { reply = finishPayment(queued.payment(), result); }
+        catch (RuntimeException exception) { reply = unknownOrder(queued.payment().plan().order(), exception); }
+        replyOnMain(queued.reply(), reply);
+    }
+
+    private void replyOnMain(java.util.function.Consumer<BuyResult> reply, BuyResult result) {
+        if (plugin.isEnabled()) work.main(() -> reply.accept(result));
+    }
+
+    private BuyResult unknownOrder(MarketOperation order, RuntimeException exception) {
+        logger.log(Level.WARNING, "系统商店订单待核对 " + order.id(), exception);
+        return BuyResult.pending("订单结果待确认，请使用原请求查询");
+    }
+
+    private record PreparedCheckout(MarketOperation order, ShopCheckout checkout, CurrencyBridgeAPI.CurrencyBridge bridge,
+                                    BigDecimal totalPrice, ShopItem item, String displayName, List<MarketOperation> rewards) { }
+    private record ArmedPayment(PreparedCheckout plan, MarketOperation debit) { }
+    private record QueuedPayment(Player player, AuthSnapshot session, ArmedPayment payment, java.util.function.Consumer<BuyResult> reply,
+                                 long generation, @Nullable java.util.function.Supplier<CurrencyTransactionResult> backgroundDebit) { }
+
+    private static final class CheckoutRejected extends RuntimeException {
+        CheckoutRejected(String message) { super(message, null, false, false); }
+    }
+
+    private static String orderReference(String quote) { return "shop-order:" + quote + ":"; }
+
+    public static boolean matchesOrder(@Nullable MarketOperation order, UUID player, String quote) {
+        return order != null && player.equals(order.player()) && order.reference().startsWith(orderReference(quote));
+    }
+
+    public static BuyResult orderResult(MarketOperation order) {
+        return switch (order.state()) {
+            case "DONE" -> BuyResult.success(new BigDecimal(order.amount()).doubleValue(), order.currency());
+            case "RUNNING" -> BuyResult.pending("订单处理中，可用原请求查询");
+            case "REFUND_PENDING" -> BuyResult.pending("订单退款处理中，可用原请求查询");
+            default -> BuyResult.fail(order.note());
+        };
     }
 
     /**
@@ -325,20 +538,14 @@ public BuyResult buyWork(Player player, String shopId, String itemId, int amount
         return conditionEvaluator.passes(player, conditions);
     }
 
-    private void recordHistory(Player player, ShopItem item, int amount, BigDecimal price, @Nullable ItemStack stack) {
+    private void recordHistory(PreparedCheckout plan) {
         try {
-        String data = "";
-        if (stack != null) {
-            ItemStack snapshot = stack.clone();
-            snapshot.setAmount(amount);
-            data = java.util.Base64.getEncoder().encodeToString(
-                xuanmo.arcartxsuite.api.util.ItemSerializer.serialize(snapshot));
-        }
-        repository.insertHistory(new xuanmo.arcartxsuite.market.storage.AuctionHistory(
-            0, 0, player.getUniqueId(), null, data, item.displayName() + " ×" + amount,
-            price.doubleValue(), item.currency(), 0, "SHOP_BUY", System.currentTimeMillis()));
+            var order = plan.order();
+            repository.insertHistory(new xuanmo.arcartxsuite.market.storage.AuctionHistory(
+                0, 0, order.player(), null, order.itemData(), plan.displayName() + " ×" + plan.checkout().quantity(),
+                plan.totalPrice().doubleValue(), order.currency(), 0, "SHOP_BUY", System.currentTimeMillis()));
         } catch (RuntimeException exception) {
-            logger.log(Level.SEVERE, "[Shop] 交易已完成，但历史写入失败: " + player.getUniqueId(), exception);
+            logger.log(Level.SEVERE, "[Shop] 交易已完成，但历史写入失败: " + plan.order().id(), exception);
         }
     }
 
@@ -416,22 +623,6 @@ public BuyResult buyWork(Player player, String shopId, String itemId, int amount
         );
     }
 
-    private void updateLimit(Player player, String shopId, String itemId, ShopItem shopItem, int delivered) {
-        if (shopItem.limitPerPlayer() <= 0 || delivered <= 0) return;
-        ShopLimitRecord existing = repository.getShopLimit(player.getUniqueId(), shopId, itemId);
-        int newCount = (existing == null || (existing.resetTime() > 0 && existing.resetTime() <= System.currentTimeMillis())
-            ? 0 : existing.purchasedCount()) + delivered;
-        long now = System.currentTimeMillis();
-        long resetTime = calculateResetTime(shopItem.limitReset());
-        repository.upsertShopLimit(new ShopLimitRecord(
-            player.getUniqueId(), shopId, itemId, newCount, now, resetTime
-        ));
-        // 跨服广播限购更新，其他服收到后 upsert 本地 DB
-        if (limitBroadcaster != null) {
-            limitBroadcaster.broadcast(player.getUniqueId(), shopId, itemId, newCount, now, resetTime);
-        }
-    }
-
     private boolean hasRewardCommands(ShopItem shopItem) {
         return shopItem.rewardCommands().stream().anyMatch(command -> command != null && !command.isBlank());
     }
@@ -440,43 +631,27 @@ public BuyResult buyWork(Player player, String shopId, String itemId, int amount
      * 投递商品奖励命令。命令采用“提交即成功”语义，不依据 Bukkit 的返回值退款，
      * 与 lottery 奖励命令保持一致；返回值为 false 的单条命令仅记录警告。
      */
-    private List<String> prepareRewards(Player player, ShopItem item, int amount, @Nullable ItemStack stack) {
-        List<String> ids=new ArrayList<>();
-        if(stack!=null) {
-            String data=java.util.Base64.getEncoder().encodeToString(xuanmo.arcartxsuite.api.util.ItemSerializer.serialize(stack));
-            ids.add(ledger.prepareDelivery(xuanmo.arcartxsuite.market.MarketLedger.delivery(player.getUniqueId(),"ITEM","","0",data,"shop_item:"+item.key())));
-        }
+    private List<MarketOperation> prepareRewards(Player player, ShopItem item, int amount, MarketOperation order) {
+        List<MarketOperation> rewards = new ArrayList<>();
+        if (!order.itemData().isEmpty()) rewards.add(reward(order, "ITEM", order.itemData(), "shop_item:" + item.key()));
         for(String raw:item.rewardCommands()) {
             if(raw==null || raw.isBlank()) continue;
             String name=xuanmo.arcartxsuite.api.command.CommandSanitizer.validatePlayerName(player.getName());
             String command=raw.replace("{player}",name).replace("{uuid}",player.getUniqueId().toString()).replace("{amount}",Integer.toString(amount));
             if(command.startsWith("/"))command=command.substring(1);
-            ids.add(ledger.prepareDelivery(xuanmo.arcartxsuite.market.MarketLedger.delivery(player.getUniqueId(),"COMMAND","","0",command,"shop_command:"+item.key())));
+            rewards.add(reward(order, "COMMAND", command, "shop_command:" + item.key()));
         }
-        return ids;
+        return rewards;
     }
 
-    private void depositSafe(Player player, String currency, BigDecimal amount, String reason) {
-        if (amount != null && amount.signum() > 0) repository.addPendingCurrency(player.getUniqueId(), currency, amount.doubleValue(), reason);
+    private static MarketOperation reward(MarketOperation order, String kind, String payload, String reference) {
+        return new MarketOperation(UUID.randomUUID().toString(), order.id(), order.player(), kind, reference,
+            "PREPARED", "", "0", payload, "已保存快照，尚未确认扣款", order.owner(),
+            order.createdAt(), order.updatedAt(), order.itemName(), order.material());
     }
 
     private @Nullable ItemStack createItem(ShopItem shopItem, int amount, Player player) {
         return ShopItemFactory.create(itemSourceRegistry, shopItem.item(), amount, player, logger);
-    }
-
-    private long calculateResetTime(String resetType) {
-        // 按自然日/周/月边界重置（基于服务器时区），而非固定毫秒偏移
-        java.time.ZonedDateTime now = java.time.ZonedDateTime.now(java.time.ZoneId.systemDefault());
-        return switch (resetType.toLowerCase()) {
-            case "daily" -> now.plusDays(1).truncatedTo(java.time.temporal.ChronoUnit.DAYS).toInstant().toEpochMilli();
-            case "weekly" -> now.plusWeeks(1)
-                .with(java.time.DayOfWeek.MONDAY).truncatedTo(java.time.temporal.ChronoUnit.DAYS)
-                .toInstant().toEpochMilli();
-            case "monthly" -> now.plusMonths(1)
-                .withDayOfMonth(1).truncatedTo(java.time.temporal.ChronoUnit.DAYS)
-                .toInstant().toEpochMilli();
-            default -> 0L;
-        };
     }
 
     private synchronized void refreshStocks() {
@@ -492,29 +667,6 @@ public BuyResult buyWork(Player player, String shopId, String itemId, int amount
         return shopItem.stockAmount() > 0
             && ("global".equalsIgnoreCase(shopItem.stockMode())
             || "per-player".equalsIgnoreCase(shopItem.stockMode()));
-    }
-
-    private boolean tryConsumeStock(Player player, String shopId, String itemId, ShopItem shopItem, int amount) {
-        if (!hasLimitedStock(shopItem)) {
-            return true;
-        }
-        if ("global".equalsIgnoreCase(shopItem.stockMode())) {
-            return repository.tryConsumeGlobalShopStock(shopId, itemId, amount, shopItem.stockAmount());
-        }
-        return repository.tryConsumePlayerShopStock(
-            player.getUniqueId(), shopId, itemId, amount, shopItem.stockAmount()
-        );
-    }
-
-    private void restoreStock(Player player, String shopId, String itemId, ShopItem shopItem, int amount) {
-        if (!hasLimitedStock(shopItem) || amount <= 0) {
-            return;
-        }
-        if ("global".equalsIgnoreCase(shopItem.stockMode())) {
-            repository.restoreGlobalShopStock(shopId, itemId, amount, shopItem.stockAmount());
-        } else {
-            repository.restorePlayerShopStock(player.getUniqueId(), shopId, itemId, amount, shopItem.stockAmount());
-        }
     }
 
     // ─── 商店编辑（管理 UI 持久化）──────────────────────────
@@ -803,30 +955,30 @@ public BuyResult buyWork(Player player, String shopId, String itemId, int amount
     }
 
     public record PurchaseQuote(int maximum, int stock, int limit, int capacity, BigDecimal basePrice,
-                                BigDecimal unitPrice, String currency) {}
+                                BigDecimal unitPrice, String currency, @Nullable ItemStack preview) {}
 
-    public PurchaseQuote quote(Player player, String shopId, String itemId) {
-        ShopDefinition shop = getEffectiveShop(shopId);
-        if (shop == null || (!shop.permission().isEmpty() && !player.hasPermission(shop.permission()))) return null;
-        ShopItem item = shop.items().get(itemId);
-        if (item == null || !meetsConditions(player,item)) return null;
-        int stock = MAX_PURCHASE_AMOUNT;
-        if (hasLimitedStock(item)) stock = "global".equalsIgnoreCase(item.stockMode())
-            ? repository.getGlobalShopStock(shopId,itemId,item.stockAmount())
-            : repository.getPlayerShopStock(player.getUniqueId(),shopId,itemId,item.stockAmount());
-        int limit = MAX_PURCHASE_AMOUNT;
-        if (item.limitPerPlayer() > 0) {
-            ShopLimitRecord record = repository.getShopLimit(player.getUniqueId(),shopId,itemId);
-            int used = record == null || (record.resetTime()>0 && record.resetTime()<=System.currentTimeMillis()) ? 0 : record.purchasedCount();
-            limit = Math.max(0,item.limitPerPlayer()-used);
-        }
+    public ShopCheckout.Product availabilityRequest(ShopItem item) {
+        return new ShopCheckout.Product(item.key(), hasLimitedStock(item) ? item.stockMode().toLowerCase(java.util.Locale.ROOT) : "unlimited",
+            hasLimitedStock(item) ? item.stockAmount() : MAX_PURCHASE_AMOUNT,
+            item.limitPerPlayer());
+    }
+
+    public java.util.function.Supplier<BigDecimal> prepareQuoteBalance(Player player, ShopItem item) {
+        var bridge = currencyManager.bridge(item.currency());
+        if (bridge == null || !bridge.available()) return null;
+        return bridge.prepareBackgroundBalance(player);
+    }
+
+    public PurchaseQuote quote(Player player, ShopItem item, ShopCheckout.Availability availability, @Nullable BigDecimal quotedBalance) {
+        int stock = availability.stock();
+        int limit = availability.limit();
         int capacity = MAX_PURCHASE_AMOUNT;
+        ItemStack sample = null;
         if (item.type() == ShopItemType.ITEM) {
-            ItemStack sample = createItem(item,1,player);
+            sample = createItem(item, 1, player);
             if (sample == null) return null;
-            capacity=0;
-            for (int slot=0;slot<36;slot++) {
-                ItemStack current=player.getInventory().getItem(slot);
+            capacity = 0;
+            for (ItemStack current : player.getInventory().getStorageContents()) {
                 if(current==null || current.getType().isAir()) capacity+=sample.getMaxStackSize();
                 else if(current.isSimilar(sample)) capacity+=Math.max(0,sample.getMaxStackSize()-current.getAmount());
             }
@@ -834,10 +986,10 @@ public BuyResult buyWork(Player player, String shopId, String itemId, int amount
         BigDecimal unit=displayBuyPriceDecimal(player,item);
         var bridge=currencyManager.bridge(item.currency());
         int affordable=bridge==null || !bridge.available() ? 0 : unit.signum()==0 ? MAX_PURCHASE_AMOUNT
-            : bridge.balance(player).max(BigDecimal.ZERO).divide(unit,0,java.math.RoundingMode.DOWN)
+            : (quotedBalance == null ? bridge.balance(player) : quotedBalance).max(BigDecimal.ZERO).divide(unit,0,java.math.RoundingMode.DOWN)
                 .min(BigDecimal.valueOf(MAX_PURCHASE_AMOUNT)).intValue();
         int maximum=Math.max(0,Math.min(MAX_PURCHASE_AMOUNT,Math.min(affordable,Math.min(stock,Math.min(limit,capacity)))));
-        return new PurchaseQuote(maximum,stock,limit,capacity,BigDecimal.valueOf(item.buyPrice()),unit,item.currency());
+        return new PurchaseQuote(maximum,stock,limit,capacity,BigDecimal.valueOf(item.buyPrice()),unit,item.currency(),sample);
     }
 
     // ─── 数据模型 ───────────────────────────────────────────
@@ -882,13 +1034,17 @@ public BuyResult buyWork(Player player, String shopId, String itemId, int amount
         List<ScriptCondition> conditions
     ) {}
 
-    public record BuyResult(boolean success, @Nullable String error, double totalPrice, String currency) {
+    public record BuyResult(boolean success, @Nullable String error, double totalPrice, String currency, boolean pending) {
         public static BuyResult success(double price, String currency) {
-            return new BuyResult(true, null, price, currency);
+            return new BuyResult(true, null, price, currency, false);
         }
 
         public static BuyResult fail(String error) {
-            return new BuyResult(false, error, 0, "");
+            return new BuyResult(false, error, 0, "", false);
+        }
+
+        public static BuyResult pending(String message) {
+            return new BuyResult(false, message, 0, "", true);
         }
     }
 }

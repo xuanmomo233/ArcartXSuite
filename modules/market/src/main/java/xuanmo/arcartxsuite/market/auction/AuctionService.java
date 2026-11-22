@@ -1,20 +1,28 @@
 package xuanmo.arcartxsuite.market.auction;
 
+import xuanmo.arcartxsuite.market.MarketWork;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import net.sourceforge.pinyin4j.PinyinHelper;
-import net.sourceforge.pinyin4j.format.HanyuPinyinCaseType;
-import net.sourceforge.pinyin4j.format.HanyuPinyinOutputFormat;
-import net.sourceforge.pinyin4j.format.HanyuPinyinToneType;
-import net.sourceforge.pinyin4j.format.exception.BadHanyuPinyinOutputFormatCombination;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
@@ -25,12 +33,19 @@ import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
 import org.jetbrains.annotations.Nullable;
+import xuanmo.arcartxsuite.api.auth.AuthAccess;
+import xuanmo.arcartxsuite.api.auth.AuthSnapshot;
 import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI;
+import xuanmo.arcartxsuite.api.capability.EventBusCapability;
 import xuanmo.arcartxsuite.api.currency.CurrencyTransactionResult;
 import xuanmo.arcartxsuite.api.item.ItemMatcherAPI;
 import xuanmo.arcartxsuite.market.config.MarketModuleConfiguration.AuctionConfiguration;
 import xuanmo.arcartxsuite.market.config.MarketModuleConfiguration.MessagesConfiguration;
 import xuanmo.arcartxsuite.market.storage.AuctionHistory;
+import xuanmo.arcartxsuite.market.storage.AuctionBidOrder;
+import xuanmo.arcartxsuite.market.storage.AuctionPublication;
+import xuanmo.arcartxsuite.market.storage.AuctionSettlement;
+import xuanmo.arcartxsuite.market.storage.MarketOperation;
 import xuanmo.arcartxsuite.market.storage.MarketRepository;
 import xuanmo.arcartxsuite.market.storage.RedisMarketCache;
 
@@ -45,21 +60,18 @@ public class AuctionService {
 
     /** EventBus 发布回调（由 MarketService 注入）。 */
     public interface AuctionEventPublisher {
-        void publish(String topic, @Nullable Player player, java.util.Map<String, String> payload);
+        CompletionStage<Boolean> publish(String topic, @Nullable Player player, Map<String, String> payload);
     }
 
-    private static final int AUCTION_BACKPACK_SLOTS = 36;
-    private static final HanyuPinyinOutputFormat PINYIN_FORMAT = new HanyuPinyinOutputFormat();
+    private record AuctionEvent(@Nullable Player buyer, Map<String, String> payload) { }
 
-    /** 拼音 token 缓存：displayName → [pinyin, initials]，避免同一物品名重复计算拼音 */
-    private static final ConcurrentHashMap<String, String[]> PINYIN_CACHE = new ConcurrentHashMap<>();
-
-    static {
-        PINYIN_FORMAT.setCaseType(HanyuPinyinCaseType.LOWERCASE);
-        PINYIN_FORMAT.setToneType(HanyuPinyinToneType.WITHOUT_TONE);
-    }
-
+    private static final int EXPIRED_SCAN_LIMIT = 128;
+    private static final int MAX_SETTLEMENTS_PER_TICK = 4;
+    private static final int MAX_PENDING_BIDS = 32;
+    private static final int BID_PAYMENTS_PER_TICK = 4;
+    private static final long SETTLEMENT_BUDGET_NANOS = 2_000_000L;
     private final JavaPlugin plugin;
+    private final MarketWork work;
     private final AuctionConfiguration config;
     private final MessagesConfiguration messages;
     private final MarketRepository repository;
@@ -72,13 +84,37 @@ public class AuctionService {
     private final xuanmo.arcartxsuite.api.item.ItemRewardDispatcher itemRewardDispatcher;
     private final ItemMatcherAPI itemMatcher;
     private volatile AuctionEventPublisher eventPublisher;
+    private volatile java.util.function.BiConsumer<Player, Map<String, String>> eventObserver;
+    private final ConcurrentLinkedQueue<AuctionListing> expired = new ConcurrentLinkedQueue<>();
+    private final ConcurrentLinkedQueue<PreparedExpiry> preparedExpired = new ConcurrentLinkedQueue<>();
+    private final ConcurrentLinkedQueue<ArmedBid> armedBids = new ConcurrentLinkedQueue<>();
+    private final Set<UUID> pendingBidPlayers = ConcurrentHashMap.newKeySet();
+    private final Semaphore backgroundBidSlots = new Semaphore(4);
+    private final Semaphore cancellationSlots = new Semaphore(32);
+    private final Set<CompletableFuture<Boolean>> cancellationsAwaitingMain = ConcurrentHashMap.newKeySet();
+    private final AtomicBoolean scanningExpired = new AtomicBoolean();
+    private final AtomicBoolean settlingExpired = new AtomicBoolean();
+    private final AtomicBoolean publishingExpired = new AtomicBoolean();
+    private volatile @Nullable java.util.function.Function<String, java.util.concurrent.CompletionStage<Boolean>> settlementRefresh;
+    private volatile boolean stopped;
     private BukkitTask schedulerTask;
+    private BukkitTask settlementTask;
+    private BukkitTask publicationTask;
+    private volatile @Nullable OfflineAuctionTax offlineAuctionTax;
 
     public void setEventPublisher(AuctionEventPublisher publisher) {
         this.eventPublisher = publisher;
     }
 
-    public AuctionService(JavaPlugin plugin, AuctionConfiguration config, MessagesConfiguration messages,
+    public void setEventObserver(java.util.function.BiConsumer<Player, Map<String, String>> observer) {
+        this.eventObserver = observer;
+    }
+
+    public void setSettlementRefresh(java.util.function.Function<String, java.util.concurrent.CompletionStage<Boolean>> publisher) {
+        this.settlementRefresh = publisher;
+    }
+
+    public AuctionService(MarketWork work, JavaPlugin plugin, AuctionConfiguration config, MessagesConfiguration messages,
                           MarketRepository repository, RedisMarketCache redisCache,
                           @Nullable Consumer<String> crossServerPublisher,
                           CurrencyBridgeAPI currencyManager,
@@ -86,7 +122,7 @@ public class AuctionService {
                           xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge,
                           xuanmo.arcartxsuite.api.item.ItemRewardDispatcher itemRewardDispatcher,
                           ItemMatcherAPI itemMatcher) {
-        this.plugin = plugin;
+        this.plugin = plugin;this.work = work;
         this.config = config;
         this.messages = messages;
         this.repository = repository;
@@ -101,339 +137,421 @@ public class AuctionService {
     }
 
     public void start(long intervalTicks) {
-        schedulerTask = Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, this::processExpired, intervalTicks, intervalTicks);
+        stopped = false;
+        var luckPerms = Bukkit.getPluginManager().getPlugin("LuckPerms");
+        if (luckPerms != null && luckPerms.isEnabled() && !config.taxDiscount().isEmpty()) {
+            try { offlineAuctionTax = new OfflineAuctionTax(luckPerms); }
+            catch (ReflectiveOperationException | LinkageError exception) {
+                logger.log(Level.WARNING, "[Auction] 离线税率权限桥接不可用", exception);
+            }
+        }
+        settlementTask = work.repeat(() -> {
+            settleExpired();
+            drainBidPayments();
+        }, 1L, 1L);
+        publicationTask = work.repeatAsync(this::publishSettlements, 20L, 20L);
+        schedulerTask = work.repeatAsync(this::processExpired, intervalTicks, intervalTicks);
         logger.info("[Auction] 拍卖行服务已启动，到期检查间隔: " + intervalTicks + " ticks");
     }
 
     public void shutdown() {
+        stopped = true;
+        for (var request : List.copyOf(cancellationsAwaitingMain)) request.complete(false);
+        for (ArmedBid bid; (bid = armedBids.poll()) != null; ) {
+            ArmedBid unstarted = bid;
+            work.async(() -> cancelArmedBid(unstarted));
+        }
+        pendingBidPlayers.clear();
         if (schedulerTask != null) {
             schedulerTask.cancel();
             schedulerTask = null;
         }
+        if (settlementTask != null) {
+            settlementTask.cancel();
+            settlementTask = null;
+        }
+        if (publicationTask != null) {
+            publicationTask.cancel();
+            publicationTask = null;
+        }
+        expired.clear();
+        preparedExpired.clear();
     }
 
-    /**
-     * 玩家上架物品（纯竞价，无一口价）。
-     */
-    public ListingResult createListing(Player seller, ItemStack item,
-                                       double startingBid, String currency, long durationSeconds) {
-        return createListingInternal(seller, item, startingBid, currency, durationSeconds, "", -1);
-    }
 
-    public ListingResult createListing(Player seller, int slot,
-                                       double startingBid, String currency, long durationSeconds) {
-        if (slot < 0 || slot >= AUCTION_BACKPACK_SLOTS) {
-            return ListingResult.fail("invalid item slot");
-        }
-        ItemStack item = seller.getInventory().getItem(slot);
-        return createListingInternal(seller, item, startingBid, currency, durationSeconds, "", slot);
-    }
-
-    public ListingResult createListing(Player seller, int slot, double startingBid, String currency, long durationSeconds, String message) {
-        if (slot < 0 || slot >= AUCTION_BACKPACK_SLOTS) {
-            return ListingResult.fail("invalid item slot");
-        }
-        return createListingInternal(seller, seller.getInventory().getItem(slot), startingBid, currency, durationSeconds, message, slot);
-    }
-
-    private ListingResult createListingInternal(Player seller, ItemStack item,
-                                                 double startingBid, String currency, long durationSeconds,
-                                                 String message, int sourceSlot) {
-        return ledger.trade("AUCTION_LIST", seller.getUniqueId(), "slot=" + sourceSlot + ",bid=" + startingBid, item==null?"":itemSerializer.serialize(item),
-            () -> createListingInternalWork(seller, item, startingBid, currency, durationSeconds, message, sourceSlot), result -> result.success());
-    }
-
-private ListingResult createListingInternalWork(Player seller, ItemStack item,
-                                                 double startingBid, String currency, long durationSeconds,
-                                                 String message, int sourceSlot) {
-        if (!Double.isFinite(startingBid) || startingBid < config.minPrice() || startingBid > config.maxPrice()) {
-            return ListingResult.fail("起拍价超出允许范围");
-        }
-        if (item == null || item.getType().isAir()) {
-            return ListingResult.fail("没有可上架的物品");
-        }
-        // 防止与主手物品引用别名：使用副本作为上架物品
-        item = item.clone();
-        ledger.describe(getItemDisplayName(item),item.getType().name(),itemSerializer.serialize(item));
-
-        // 检查上架数量限制
-        int currentCount = repository.countListingsBySeller(seller.getUniqueId());
-        if (currentCount >= config.maxListingsPerPlayer()) {
-            return ListingResult.fail("上架数量已达上限 (" + config.maxListingsPerPlayer() + ")");
-        }
-
-        // 检查物品黑名单
-        if (isBlacklisted(item)) {
-            return ListingResult.fail(messages.itemBlacklisted());
-        }
-
-        // 校验主手确实持有要上架的物品（防止客户端伪造物品 / 数量不符导致复制）
-        ItemStack inHand = sourceSlot >= 0
-            ? seller.getInventory().getItem(sourceSlot)
-            : seller.getInventory().getItemInMainHand();
-        if (inHand == null || inHand.getType().isAir()
-                || !inHand.isSimilar(item) || inHand.getAmount() < item.getAmount()) {
-            return ListingResult.fail("请手持要上架的物品");
-        }
-
-        // 限制时长
-        long duration = Math.max(config.minDurationSeconds(), Math.min(config.maxDurationSeconds(), durationSeconds));
-
-        // 先扣除背包物品（占有），避免"先入库后扣除"在异常时造成物品复制
-        if (inHand.getAmount() == item.getAmount()) {
-            seller.getInventory().setItem(sourceSlot >= 0 ? sourceSlot : heldSlot(seller), null);
-        } else {
-            inHand.setAmount(inHand.getAmount() - item.getAmount());
-            seller.getInventory().setItem(sourceSlot >= 0 ? sourceSlot : heldSlot(seller), inHand);
-        }
-
-        // 扣上架费（先验余额，避免不必要的扣款失败日志）
-        BigDecimal feeCharged = null;
-        CurrencyBridgeAPI.CurrencyBridge feeBridge = null;
-        if (config.listingFee() > 0) {
-            feeBridge = currencyManager.bridge(config.listingFeeCurrency());
-            if (feeBridge == null || !feeBridge.available()) {
-                giveBack(seller, item);
-                return ListingResult.fail("上架费货币不可用");
-            }
-            BigDecimal fee = BigDecimal.valueOf(config.listingFee());
-            if (feeBridge.balance(seller).compareTo(fee) < 0) {
-                giveBack(seller, item);
-                return ListingResult.fail(messages.insufficientFunds());
-            }
-            CurrencyTransactionResult feeResult = feeBridge.withdraw(seller, fee);
-            if (!feeResult.success()) {
-                giveBack(seller, item);
-                return ListingResult.fail(messages.insufficientFunds());
-            }
-            feeCharged = fee;
-        }
-
-        // 序列化物品
-        String itemData = itemSerializer.serialize(item);
-        String displayName = getItemDisplayName(item);
-        String category = classifyItem(item);
-        // 生成拼音/首字母搜索 token（多音字遍历所有读音，字间空格分隔）
-        String[] pinyinTokens = toPinyinTokens(displayName);
-        String pinyin = pinyinTokens[0];
-        String initials = pinyinTokens[1];
-
-        // 纯竞价拍卖，始终为 AUCTION 类型
-        AuctionListing.ListingType type = AuctionListing.ListingType.AUCTION;
-
-        long now = System.currentTimeMillis();
-        AuctionListing listing = new AuctionListing(
-            0, seller.getUniqueId(), seller.getName(), itemData, displayName,
-            pinyin, initials, category, 0, startingBid, 0, null,
-            currency, type, AuctionListing.ListingStatus.ACTIVE,
-            now, now + duration * 1000L
-        );
-        listing.setMessage(message);
-
-        // 入库失败则退费 + 归还物品，保证不丢
-        if (!repository.insertListing(listing)) {
-            if (feeCharged != null && feeBridge != null) {
-                feeBridge.deposit(seller, feeCharged);
-            }
-            giveBack(seller, item);
-            return ListingResult.fail("上架失败，请稍后重试");
-        }
-
-        // 使 Redis 缓存失效
-        if (redisCache.isAvailable()) {
-            redisCache.invalidateByPrefix("market:listings:");
-        }
-        publishCrossServer("LISTING_CREATED:" + listing.getId());
-
-        return ListingResult.success(listing);
-    }
-
-    /** 把物品归还给玩家，背包装不下的部分掉落在脚下（玩家在场，安全）。 */
-    private void describeListing(AuctionListing listing){
+    private String listingMaterial(AuctionListing listing) {
         String material="";
         try{ItemStack item=itemSerializer.deserialize(listing.getItemData());if(item!=null)material=item.getType().name();}
         catch(RuntimeException ignored){}
-        ledger.describe(listing.getItemDisplayName(),material,listing.getItemData());
+        return material;
     }
 
-    private int heldSlot(Player player) {
-        return player.getInventory().getHeldItemSlot();
-    }
-
-    private void giveBack(Player player, ItemStack item) {
-        repository.addPendingItem(player.getUniqueId(), itemSerializer.serialize(item), "listing_giveback");
-    }
 
     /**
      * 竞价。
      */
-    public BidResult placeBid(Player bidder, long listingId, double amount) {
-        return ledger.trade("AUCTION_BID", bidder.getUniqueId(), "listing=" + listingId + ",bid=" + amount,
-            () -> placeBidWork(bidder, listingId, amount), result -> result.success());
+    public void placeBid(Player bidder, BidConfirmation confirmation, CurrencyBridgeAPI payments,
+                         BooleanSupplier authorized, Consumer<BidResult> reply) {
+        UUID bidderId = bidder.getUniqueId();
+        var session = AuthAccess.snapshot(bidderId);
+        if (stopped || work.isStopping() || !session.admitted() || pendingBidPlayers.size() >= MAX_PENDING_BIDS
+                || !pendingBidPlayers.add(bidderId)) {
+            reply.accept(BidResult.fail("竞价暂不可用或已有竞价正在处理，请稍后重试"));
+            return;
+        }
+        var request = new RequestedBid(bidder, session, bidder.getName(), confirmation, payments, authorized, reply);
+        try {
+            work.async(() -> loadBid(request));
+        } catch (java.util.concurrent.RejectedExecutionException stopping) {
+            pendingBidPlayers.remove(bidderId);
+            reply.accept(BidResult.fail("拍卖正在停用，请重新报价"));
+        }
     }
 
-public BidResult placeBidWork(Player bidder, long listingId, double amount) {
-        AuctionListing listing = repository.getListing(listingId);
-        if (listing == null || !listing.isActive() || listing.getType()==AuctionListing.ListingType.BUY_NOW) {
-            return BidResult.fail("该物品已不可竞价");
-        }
-        if (listing.getSeller().equals(bidder.getUniqueId())) {
-            return BidResult.fail("不能对自己的物品出价");
-        }
-
-        describeListing(listing);
-        double minBid=minimumBid(listing).doubleValue();
-        int scale=currencyScale(listing.getCurrency());
-        if(!Double.isFinite(amount) || amount<=0 || amount>config.maxPrice()
-            || BigDecimal.valueOf(amount).stripTrailingZeros().scale()>scale) return BidResult.fail("出价金额或货币精度无效");
-        if(amount<minBid) return BidResult.fail("当前最低出价为 "+currencyManager.format(listing.getCurrency(),minimumBid(listing)));
-        boolean ownRaise=bidder.getUniqueId().equals(listing.getHighestBidder());
-        BigDecimal debit=BigDecimal.valueOf(amount).subtract(ownRaise?BigDecimal.valueOf(listing.getCurrentBid()):BigDecimal.ZERO);
-        long newExpiry=extendedExpiry(listing,System.currentTimeMillis());
-
-        // 冻结买家资金（扣款）
-        CurrencyBridgeAPI.CurrencyBridge bridge = currencyManager.bridge(listing.getCurrency());
-        if (bridge == null || !bridge.available()) {
-            return BidResult.fail("货币系统不可用");
-        }
-        CurrencyTransactionResult result = bridge.withdraw(bidder, debit);
-        if (!result.success()) {
-            return BidResult.fail(messages.insufficientFunds());
-        }
-
-        // 退还上一位最高出价者押金（安全发放：在线即时入账并通知，离线入待发放队列，绝不丢钱）
-        // 注：竞价使用数据库 CAS（updateListingBidIfHigher）保证原子性，防止并发覆盖；客户端包统一切主线程串行执行进一步消除竞态。
-        UUID previousBidder = listing.getHighestBidder();
-        double previousBid = listing.getCurrentBid();
-        newExpiry=extendedExpiry(listing,System.currentTimeMillis());
-
-        if (!repository.placeAuctionBid(listing,amount,bidder.getUniqueId(),bidder.getName(),newExpiry)) {
-            depositSafe(bidder.getUniqueId(),listing.getCurrency(),debit.doubleValue(),"auction_bid_race_refund");
-            return BidResult.fail("拍卖状态已变化，本次扣款已进入退款队列，请重新确认报价");
-        }
-        if(previousBidder!=null && previousBid>0 && !ownRaise) {
-            depositSafe(previousBidder,listing.getCurrency(),previousBid,"auction_outbid_refund");
-            if(config.notifyOutbid()) notice(previousBidder,messages.auctionOutbid().replace("{item}",listing.getItemDisplayName())
-                .replace("{amount}",currencyManager.format(listing.getCurrency(),BigDecimal.valueOf(amount)))+" &7原出价已进入退款队列。",config.outbidNotify(),"outbid:"+listingId);
-        }
-        String bidText="&e关注的拍卖 #"+listingId+" &f"+listing.getItemDisplayName()+" &7最新出价 &e"
-            +currencyManager.format(listing.getCurrency(),BigDecimal.valueOf(amount));
-        if(config.notifyWatchBids() || newExpiry>listing.getExpiresAt()) {
-            for(UUID watcher:repository.auctionWatchers(listingId)) {
-                if(watcher.equals(bidder.getUniqueId()) || watcher.equals(previousBidder))continue;
-                notice(watcher,bidText+(newExpiry>listing.getExpiresAt()?" &6已延时，请查看最新截止时间":""),"chat","watch-bid:"+listingId);
+    private void loadBid(RequestedBid request) {
+        var confirmation = request.confirmation();
+        try {
+            AuctionListing listing = repository.getListing(confirmation.listing());
+            if (listing == null || !listing.isActive() || listing.getType() == AuctionListing.ListingType.BUY_NOW
+                    || request.session().playerId().equals(listing.getSeller())) {
+                replyBid(request, BidResult.fail("该物品已不可竞价"));
+                return;
             }
+            if (!AuctionBidTerms.revision(listing).equals(confirmation.revision())) {
+                replyBid(request, BidResult.fail("拍卖状态已变化，请重新报价后提交"));
+                return;
+            }
+            work.main(() -> prepareBidPayment(request, listing));
+        } catch (RuntimeException failure) {
+            logger.log(Level.WARNING, "[Auction] 竞价读取失败 #" + confirmation.listing(), failure);
+            replyBid(request, BidResult.fail("拍卖状态读取失败，请重新报价"));
         }
-        if(newExpiry>listing.getExpiresAt()) bidder.sendMessage(ChatColor.GOLD+"本次有效出价触发临近结束延时，请查看最新截止时间。");
-
-        if (redisCache.isAvailable()) {
-            redisCache.invalidateByPrefix("market:listings:");
-        }
-        publishCrossServer("BID_PLACED:" + listingId + ":" + amount + ":" + bidder.getUniqueId());
-
-        return BidResult.success(amount);
     }
+
+    private void prepareBidPayment(RequestedBid request, AuctionListing listing) {
+        try {
+            if (!mayStartBid(request, listing) || !request.authorized().getAsBoolean()) {
+                replyBid(request, BidResult.fail("报价或会话已失效，请重新报价"));
+                return;
+            }
+            double amount = request.confirmation().amount();
+            BigDecimal minimum = minimumBid(listing);
+            if (!Double.isFinite(amount) || amount <= 0 || amount > config.maxPrice()
+                    || BigDecimal.valueOf(amount).stripTrailingZeros().scale() > currencyScale(listing.getCurrency())
+                    || BigDecimal.valueOf(amount).compareTo(minimum) < 0) {
+                replyBid(request, BidResult.fail("出价低于最低价、超过上限或精度无效，请重新报价"));
+                return;
+            }
+            var bridge = request.payments().bridge(listing.getCurrency());
+            if (bridge == null || !bridge.available()) {
+                replyBid(request, BidResult.fail("货币系统不可用"));
+                return;
+            }
+            UUID bidder = request.session().playerId();
+            var debitAmount = BigDecimal.valueOf(amount).subtract(bidder.equals(listing.getHighestBidder())
+                ? BigDecimal.valueOf(listing.getCurrentBid()) : BigDecimal.ZERO);
+            if (debitAmount.signum() > 0 && bridge.debitRequiresReconciliation()) {
+                replyBid(request, BidResult.fail("该货币无法确认扣款"));
+                return;
+            }
+            String id = UUID.randomUUID().toString();
+            long now = System.currentTimeMillis();
+            String name = ChatColor.stripColor(ChatColor.translateAlternateColorCodes('&', listing.getItemDisplayName()));
+            String label = name.substring(0, Math.min(255, name.length()));
+            String material = listingMaterial(listing);
+            var order = new MarketOperation(id, id, bidder, "AUCTION_BID", "listing=" + listing.getId() + ",bid=" + amount,
+                "RUNNING", listing.getCurrency(), BigDecimal.valueOf(amount).toPlainString(), listing.getItemData(),
+                "等待确认扣款", ledger.owner(), now, now, label, material);
+            var debit = new MarketOperation(id + ":debit", id, bidder, "DEBIT", "currency", "RUNNING", listing.getCurrency(),
+                debitAmount.toPlainString(), listing.getItemData(), "调用货币接口前记录", ledger.owner(), now, now, label, material);
+            var background = bridge.prepareBackgroundDebit(request.player(), debitAmount);
+            var prepared = new ArmedBid(request, new AuctionBidOrder(listing, order, debit, amount, request.bidderName()),
+                background, () -> bridge.withdraw(request.player(), debitAmount));
+            work.async(() -> armBid(prepared));
+        } catch (RuntimeException | LinkageError failure) {
+            logger.log(Level.WARNING, "[Auction] 竞价支付准备失败 #" + listing.getId(), failure);
+            replyBid(request, BidResult.fail("竞价支付准备失败，请重新报价"));
+        }
+    }
+
+    private void armBid(ArmedBid bid) {
+        try {
+            if (!mayStartBid(bid.request(), bid.order().expected()) || !repository.reserveAuctionBid(bid.order())) {
+                replyBid(bid.request(), BidResult.fail("拍卖状态已变化，请重新报价后提交"));
+                return;
+            }
+        } catch (RuntimeException failure) {
+            logger.log(Level.WARNING, "[Auction] 竞价扣款意图未确认 " + bid.order().order().id(), failure);
+            replyBid(bid.request(), BidResult.fail("扣款意图未确认，货币接口未调用"));
+            return;
+        }
+        armedBids.add(bid);
+        if ((stopped || work.isStopping()) && armedBids.remove(bid)) cancelArmedBid(bid);
+    }
+
+    void drainBidPayments() {
+        for (int i = 0; i < BID_PAYMENTS_PER_TICK && !stopped && !work.isStopping(); i++) {
+            if (backgroundBidSlots.availablePermits() == 0) return;
+            ArmedBid bid = armedBids.poll();
+            if (bid == null) return;
+            if (!eligibleArmedBid(bid)) {
+                work.async(() -> cancelArmedBid(bid));
+                continue;
+            }
+            if (bid.background() == null) {
+                var payment = invokeBidDebit(bid, bid.mainThreadDebit());
+                work.async(() -> finishBid(bid, payment));
+                return;
+            }
+            if (!backgroundBidSlots.tryAcquire()) {
+                armedBids.add(bid);
+                return;
+            }
+            work.async(() -> {
+                try {
+                    if (!mayStartBid(bid.request(), bid.order().expected())) cancelArmedBid(bid);
+                    else finishBid(bid, invokeBidDebit(bid, bid.background()));
+                } finally {
+                    backgroundBidSlots.release();
+                }
+            });
+        }
+    }
+
+    private boolean eligibleArmedBid(ArmedBid bid) {
+        try {
+            return mayStartBid(bid.request(), bid.order().expected()) && bid.request().authorized().getAsBoolean();
+        } catch (RuntimeException | LinkageError failure) {
+            logger.log(Level.WARNING, "[Auction] 竞价会话检查失败 " + bid.order().order().id(), failure);
+            return false;
+        }
+    }
+
+    private boolean mayStartBid(RequestedBid request, AuctionListing listing) {
+        var session = request.session();
+        var current = AuthAccess.snapshot(session.playerId());
+        return !stopped && !work.isStopping() && listing.isActive()
+            && request.confirmation().validUntil() - System.nanoTime() > 0
+            && current.admitted() && current.generation() == session.generation()
+            && java.util.Objects.equals(current.connectionId(), session.connectionId());
+    }
+
+    private CurrencyTransactionResult invokeBidDebit(ArmedBid bid, Supplier<CurrencyTransactionResult> operation) {
+        try {
+            return java.util.Objects.requireNonNull(operation.get());
+        } catch (RuntimeException | LinkageError failure) {
+            logger.log(Level.WARNING, "[Auction] 竞价扣款结果不明 " + bid.order().order().id(), failure);
+            return CurrencyTransactionResult.unknown("");
+        }
+    }
+
+    private void cancelArmedBid(ArmedBid bid) {
+        finishBid(bid, CurrencyTransactionResult.failure("报价、会话或模块已失效"));
+    }
+
+    private void finishBid(ArmedBid bid, CurrencyTransactionResult payment) {
+        var order = bid.order();
+        long expiry = extendedExpiry(order.expected(), System.currentTimeMillis());
+        AuctionBidOrder.Outcome outcome;
+        try {
+            outcome = repository.finishAuctionBid(order, payment, expiry);
+        } catch (RuntimeException failure) {
+            logger.log(Level.WARNING, "[Auction] 竞价回执未确认 " + order.order().id(), failure);
+            replyBid(bid.request(), BidResult.fail("竞价结果未确认，请核对流水 " + order.order().id()));
+            return;
+        }
+        BidResult reply = switch (outcome) {
+            case PLACED -> BidResult.success(order.amount(), expiry > order.expected().getExpiresAt());
+            case REFUND_QUEUED -> BidResult.fail("拍卖状态已变化，本次扣款已进入退款队列，请重新报价");
+            case DECLINED -> BidResult.fail(payment.message() == null || payment.message().isBlank()
+                ? messages.insufficientFunds() : payment.message());
+            case REVIEW -> BidResult.fail("竞价扣款结果不明，请核对流水 " + order.order().id());
+        };
+        if (outcome == AuctionBidOrder.Outcome.PLACED) refreshBidSurfaces(order);
+        replyBid(bid.request(), reply);
+        if (outcome == AuctionBidOrder.Outcome.PLACED) notifyBid(order, expiry);
+    }
+
+    private void replyBid(RequestedBid bid, BidResult reply) {
+        UUID player = bid.session().playerId();
+        if (stopped || work.isStopping()) {
+            pendingBidPlayers.remove(player);
+            return;
+        }
+        work.main(() -> {
+            pendingBidPlayers.remove(player);
+            bid.reply().accept(reply);
+        });
+    }
+
+    private void refreshBidSurfaces(AuctionBidOrder bid) {
+        try {
+            if (redisCache.isAvailable()) redisCache.invalidateByPrefix("market:listings:");
+            publishCrossServer("BID_PLACED:" + bid.expected().getId() + ":" + bid.amount() + ":" + bid.order().player());
+        } catch (RuntimeException failure) {
+            logger.log(Level.WARNING, "[Auction] 竞价已提交，跨服刷新失败 #" + bid.expected().getId(), failure);
+        }
+    }
+
+    private void notifyBid(AuctionBidOrder bid, long expiry) {
+        var listing = bid.expected();
+        var order = bid.order();
+        long id = listing.getId();
+        UUID previous = listing.getHighestBidder();
+        try {
+            String price = currencyManager.format(listing.getCurrency(), BigDecimal.valueOf(bid.amount()));
+            if (previous != null && !previous.equals(order.player()) && listing.getCurrentBid() > 0 && config.notifyOutbid()) {
+                String message = messages.auctionOutbid().replace("{item}", listing.getItemDisplayName()).replace("{amount}", price)
+                    + " &7原出价已进入退款队列。";
+                repository.insertOperation(settlementDelivery(order, previous, "NOTICE", "", "0", message,
+                    "notice-" + config.outbidNotify() + ":outbid:" + id));
+            }
+            if (config.notifyWatchBids() || expiry > listing.getExpiresAt()) {
+                String text = "&e关注的拍卖 #" + id + " &f" + listing.getItemDisplayName() + " &7最新出价 &e" + price
+                    + (expiry > listing.getExpiresAt() ? " &6已延时，请查看最新截止时间" : "");
+                for (UUID watcher : repository.auctionWatchers(id)) {
+                    if (!watcher.equals(order.player()) && !watcher.equals(previous)) {
+                        repository.insertOperation(settlementDelivery(order, watcher, "NOTICE", "", "0", text, "notice-chat:watch-bid:" + id));
+                    }
+                }
+            }
+        } catch (RuntimeException failure) {
+            logger.log(Level.WARNING, "[Auction] 竞价已提交，通知发送失败 #" + id, failure);
+        }
+    }
+
+    public record BidConfirmation(long listing, double amount, String revision, long validUntil) {}
+    private record RequestedBid(Player player, AuthSnapshot session, String bidderName, BidConfirmation confirmation,
+                                CurrencyBridgeAPI payments, BooleanSupplier authorized, Consumer<BidResult> reply) {}
+    private record ArmedBid(RequestedBid request, AuctionBidOrder order, Supplier<CurrencyTransactionResult> background,
+                            Supplier<CurrencyTransactionResult> mainThreadDebit) {}
     /**
      * 取消上架。
      */
-    public boolean cancelListing(Player seller, long listingId) {
-        return ledger.trade("AUCTION_CANCEL", seller.getUniqueId(), "listing=" + listingId,
-            () -> cancelListingWork(seller, listingId), result -> result);
-    }
-
-public boolean cancelListingWork(Player seller, long listingId) {
-        AuctionListing listing=repository.claimAuctionCancellation(listingId,seller.getUniqueId(),config.allowCancelWithBids());
-        if(listing==null)return false;
-        describeListing(listing);
-
-        // 如果有竞价者，退还押金（安全发放，离线不丢）
-        if (listing.getHighestBidder() != null && listing.getCurrentBid() > 0) {
-            depositSafe(listing.getHighestBidder(), listing.getCurrency(), listing.getCurrentBid(), "auction_cancel_refund");
+    public CompletableFuture<Boolean> cancelListing(UUID actor, long listingId, boolean forced, BooleanSupplier authorized) {
+        if (listingId <= 0 || stopped || work.isStopping() || !cancellationSlots.tryAcquire()) {
+            return CompletableFuture.completedFuture(false);
         }
-
-        listing.setStatus(AuctionListing.ListingStatus.CANCELLED);
-        repository.updateListing(listing);
-
-        // 返还物品（安全发放：背包满或离线均入待发放队列）
-        deliverItemSafe(seller.getUniqueId(), listing, "auction_cancel_return");
-
-        repository.insertHistory(new AuctionHistory(
-            0, listing.getId(), listing.getSeller(), null,
-            listing.getItemData(), listing.getItemDisplayName(),
-            0, listing.getCurrency(), 0, "CANCELLED", System.currentTimeMillis()
-        ));
-
-        if (redisCache.isAvailable()) {
-            redisCache.invalidateByPrefix("market:listings:");
+        var result = new CompletableFuture<Boolean>();
+        cancellationsAwaitingMain.add(result);
+        result.whenComplete((committed, failure) -> {
+            cancellationsAwaitingMain.remove(result);
+            cancellationSlots.release();
+        });
+        var request = new Cancellation(actor, listingId, forced, authorized, result);
+        try {
+            work.async(() -> readCancellation(request));
+        } catch (RuntimeException failure) {
+            result.completeExceptionally(failure);
         }
-        publishCrossServer("LISTING_CANCELLED:" + listingId);
-
-        java.util.Set<UUID> recipients=new java.util.HashSet<>(repository.auctionWatchers(listingId));
-        if(listing.getHighestBidder()!=null)recipients.add(listing.getHighestBidder());
-        if(config.notifySettlement()) for(UUID target:recipients) notice(target,"&7拍卖 #"+listingId+" "+listing.getItemDisplayName()+" 已取消，有效押金按记录退还。","chat","cancel:"+listingId);
-        return true;
+        return result.copy();
     }
 
-    /**
-     * 管理员强制下架：退还竞价押金与上架物品，写入历史。
-     */
-    public boolean adminForceCancelListing(long listingId) {
-        return adminForceCancelListing(new UUID(0,0),listingId);
-    }
-
-    public boolean adminForceCancelListing(UUID actor,long listingId) {
-        return ledger.trade("AUCTION_ADMIN_CANCEL", actor, "listing=" + listingId,
-            () -> adminForceCancelListingWork(listingId), result -> result);
-    }
-
-public boolean adminForceCancelListingWork(long listingId) {
-        AuctionListing listing=repository.claimAuctionCancellation(listingId,null,true);
-        if(listing==null)return false;
-        describeListing(listing);
-
-        if (listing.getHighestBidder() != null && listing.getCurrentBid() > 0) {
-            depositSafe(listing.getHighestBidder(), listing.getCurrency(), listing.getCurrentBid(), "auction_admin_cancel_refund");
-        }
-
-        listing.setStatus(AuctionListing.ListingStatus.CANCELLED);
-        repository.updateListing(listing);
-        deliverItemSafe(listing.getSeller(), listing, "auction_admin_cancel_return");
-
-        repository.insertHistory(new AuctionHistory(
-            0, listing.getId(), listing.getSeller(), null,
-            listing.getItemData(), listing.getItemDisplayName(),
-            0, listing.getCurrency(), 0, "ADMIN_CANCELLED", System.currentTimeMillis()
-        ));
-
-        if (redisCache.isAvailable()) {
-            redisCache.invalidateByPrefix("market:listings:");
-        }
-        publishCrossServer("LISTING_CANCELLED:" + listingId);
-        java.util.Set<UUID> recipients=new java.util.HashSet<>(repository.auctionWatchers(listingId));
-        if(listing.getHighestBidder()!=null)recipients.add(listing.getHighestBidder());
-        if(config.notifySettlement()) for(UUID target:recipients) notice(target,"&7拍卖 #"+listingId+" "+listing.getItemDisplayName()+" 已取消，有效押金按记录退还。","chat","cancel:"+listingId);
-        return true;
-    }
-
-    /**
-     * 切换收藏。
-     */
-    public boolean toggleFavorite(UUID player, long listingId) {
-        if (repository.isFavorite(player, listingId)) {
-            repository.removeFavorite(player, listingId);
-            return false;
-        } else {
-            repository.addFavorite(player, listingId);
-            return true;
+    private void readCancellation(Cancellation request) {
+        try {
+            var listing = repository.getListing(request.listing());
+            if (!canCancel(request, listing) || stopped || work.isStopping() || !plugin.isEnabled()) {
+                request.result().complete(false);
+                return;
+            }
+            work.main(() -> prepareCancellation(request, listing));
+        } catch (RuntimeException failure) {
+            request.result().completeExceptionally(failure);
         }
     }
+
+    private void prepareCancellation(Cancellation request, AuctionListing listing) {
+        if (!cancellationsAwaitingMain.remove(request.result())) return;
+        try {
+            if (stopped || work.isStopping() || !request.authorized().getAsBoolean()) {
+                request.result().complete(false);
+                return;
+            }
+            String material = listingMaterial(listing);
+            work.async(() -> commitCancellation(request, listing, material));
+        } catch (RuntimeException | LinkageError failure) {
+            request.result().completeExceptionally(failure);
+        }
+    }
+
+    private boolean canCancel(Cancellation request, @Nullable AuctionListing listing) {
+        return listing != null && listing.getStatus() == AuctionListing.ListingStatus.ACTIVE
+            && (request.forced() || (request.actor().equals(listing.getSeller()) && listing.isActive()
+                && (config.allowCancelWithBids() || listing.getHighestBidder() == null)));
+    }
+
+    private void commitCancellation(Cancellation request, AuctionListing listing, String material) {
+        try {
+            for (int attempt = 0; attempt < 2 && canCancel(request, listing); attempt++) {
+                var settlement = cancellationSettlement(request, listing, material);
+                if (repository.cancelAuction(settlement, request.forced() ? null : request.actor(),
+                        request.forced() || config.allowCancelWithBids())) {
+                    invalidateCancelledAuction(listing.getId());
+                    request.result().complete(true);
+                    return;
+                }
+                if (attempt == 0) listing = repository.getListing(request.listing());
+            }
+            request.result().complete(false);
+        } catch (RuntimeException failure) {
+            logger.log(Level.WARNING, "[Auction] 撤单提交未确认 #" + request.listing(), failure);
+            request.result().completeExceptionally(failure);
+        }
+    }
+
+    private AuctionSettlement cancellationSettlement(Cancellation request, AuctionListing listing, String material) {
+        long id = listing.getId();
+        long now = System.currentTimeMillis();
+        String tradeId = AuctionPublication.cancellationId(id);
+        String name = ChatColor.stripColor(ChatColor.translateAlternateColorCodes('&', listing.getItemDisplayName()));
+        String label = name.substring(0, Math.min(255, name.length()));
+        String reason = request.forced() ? "auction_admin_cancel" : "auction_cancel";
+        var receipt = new MarketOperation(tradeId, tradeId, request.actor(),
+            request.forced() ? "AUCTION_ADMIN_CANCEL" : "AUCTION_CANCEL", "listing=" + id,
+            "DONE", "", "0", listing.getItemData(), "撤单已提交，退款及物品等待交付", "", now, now, label, material);
+        var history = new AuctionHistory(0, id, listing.getSeller(), null, listing.getItemData(),
+            listing.getItemDisplayName(), 0, listing.getCurrency(), 0, request.forced() ? "ADMIN_CANCELLED" : "CANCELLED", now);
+        var deliveries = new ArrayList<MarketOperation>();
+        deliveries.add(settlementDelivery(receipt, listing.getSeller(), "ITEM", "", "0", listing.getItemData(), reason + "_return:" + id));
+        if (hasWinningBid(listing)) {
+            deliveries.add(settlementDelivery(receipt, listing.getHighestBidder(), "CURRENCY", listing.getCurrency(),
+                BigDecimal.valueOf(listing.getCurrentBid()).toPlainString(), "", reason + "_refund"));
+        }
+        if (config.notifySettlement()) {
+            var recipients = new java.util.LinkedHashSet<>(repository.auctionWatchers(id));
+            if (listing.getHighestBidder() != null) recipients.add(listing.getHighestBidder());
+            String notice = "&7拍卖 #" + id + " " + listing.getItemDisplayName() + " 已取消，有效押金按记录退还。";
+            for (UUID recipient : recipients) {
+                deliveries.add(settlementDelivery(receipt, recipient, "NOTICE", "", "0", notice, "notice-chat:cancel:" + id));
+            }
+        }
+        var publication = settlementRefresh == null ? null : new AuctionPublication(tradeId, id, listing.getSeller(), null,
+            listing.getItemDisplayName(), 0, listing.getCurrency(), 0, "", false, true, now);
+        return new AuctionSettlement(listing, receipt, history, deliveries, publication);
+    }
+
+    private void invalidateCancelledAuction(long listingId) {
+        try {
+            if (redisCache.isAvailable()) redisCache.invalidateByPrefix("market:listings:");
+        } catch (RuntimeException failure) {
+            logger.log(Level.WARNING, "[Auction] 撤单已提交，缓存失效失败 #" + listingId, failure);
+        }
+    }
+
+    private record Cancellation(UUID actor, long listing, boolean forced, BooleanSupplier authorized,
+                                CompletableFuture<Boolean> result) {}
 
     public BigDecimal minimumBid(AuctionListing listing) {
-        BigDecimal current=BigDecimal.valueOf(listing.getCurrentBid());
-        BigDecimal minimum=listing.getHighestBidder()==null?BigDecimal.valueOf(listing.getStartingBid())
+        return minimumBid(listing.getStartingBid(), listing.getCurrentBid(), listing.getHighestBidder() != null,
+            currencyScale(listing.getCurrency()));
+    }
+
+    public BigDecimal minimumBid(double startingBid, double currentBid, boolean hasBid, int scale) {
+        BigDecimal current=BigDecimal.valueOf(currentBid);
+        BigDecimal minimum=!hasBid?BigDecimal.valueOf(startingBid)
             :current.add(current.multiply(BigDecimal.valueOf(config.minBidIncrementRatio()))
                 .max(BigDecimal.valueOf(config.minBidIncrementAbsolute())));
-        return minimum.setScale(currencyScale(listing.getCurrency()),java.math.RoundingMode.CEILING);
+        return minimum.setScale(scale,java.math.RoundingMode.CEILING);
     }
 
     public int currencyScale(String currency) {
@@ -446,12 +564,6 @@ public boolean adminForceCancelListingWork(long listingId) {
             || listing.getExpiresAt()-now>config.endWindowSeconds()*1000L)return listing.getExpiresAt();
         long cap=listing.getOriginalExpiresAt()+config.endMaxExtensionSeconds()*1000L;
         return Math.max(listing.getExpiresAt(),Math.min(cap,now+config.endExtendSeconds()*1000L));
-    }
-
-    private void notice(UUID player,String text,String channel,String reference) {
-        if(player==null)return;
-        repository.insertOperation(xuanmo.arcartxsuite.market.MarketLedger.delivery(player,"NOTICE","","0",text,
-            "notice-"+channel+":"+reference));
     }
 
     public List<AuctionListing> getActiveListings(int page, int pageSize) {
@@ -494,218 +606,264 @@ public boolean adminForceCancelListingWork(long listingId) {
      * 手动触发到期处理，返回处理的条目数。
      */
     public int triggerExpiredProcessing() {
-        List<AuctionListing> expired = repository.getExpiredListings();
-        int count = expired.size();
-        for (AuctionListing listing : expired) {
-            Bukkit.getScheduler().runTask(plugin, () -> processExpiredListing(listing));
+        if (stopped || settlingExpired.get() || !expired.isEmpty() || !preparedExpired.isEmpty()
+            || !scanningExpired.compareAndSet(false, true)) return 0;
+        try {
+            var batch = repository.getExpiredListings(EXPIRED_SCAN_LIMIT);
+            if (stopped) return 0;
+            expired.addAll(batch);
+            if (stopped) expired.clear();
+            return batch.size();
+        } finally {
+            scanningExpired.set(false);
         }
-        return count;
     }
 
     // ─── 定期处理 ───────────────────────────────────────────
 
     private void processExpired() {
         try {
-            List<AuctionListing> expired = repository.getExpiredListings();
-            for (AuctionListing listing : expired) {
-                Bukkit.getScheduler().runTask(plugin, () -> processExpiredListing(listing));
-            }
+            triggerExpiredProcessing();
         } catch (Exception e) {
             logger.log(Level.SEVERE, "[Auction] 到期处理异常", e);
         }
     }
 
-    private void processExpiredListing(AuctionListing listing) {
-        ledger.trade("AUCTION_SETTLE", listing.getSeller(), "listing=" + listing.getId(),
-            () -> { processExpiredListingWork(listing); return true; }, result -> result);
-    }
-
-private void processExpiredListingWork(AuctionListing listing) {
-        listing=repository.claimAuctionSettlement(listing.getId());
-        if(listing==null)return;
-        describeListing(listing);
-        boolean hasBidder=listing.getHighestBidder()!=null && listing.getCurrentBid()>0;
-
-        if (hasBidder) {
-            // 竞价成交
-            double taxRate = getEffectiveTaxRate(listing.getSeller());
-            double tax = listing.getCurrentBid() * taxRate;
-            double sellerIncome = listing.getCurrentBid() - tax;
-
-            // 卖家收款 + 买家得物品（安全发放，离线不丢）
-            depositSafe(listing.getSeller(), listing.getCurrency(), sellerIncome, "auction_bidwin_income");
-            deliverItemSafe(listing.getHighestBidder(), listing, "auction_bidwin_item");
-
-            repository.updateListing(listing);
-            repository.insertHistory(new AuctionHistory(
-                0, listing.getId(), listing.getSeller(), listing.getHighestBidder(),
-                listing.getItemData(), listing.getItemDisplayName(),
-                listing.getCurrentBid(), listing.getCurrency(), tax,
-                "BID_WIN", System.currentTimeMillis()
-            ));
-
-            if(config.notifySettlement()) {
-                notice(listing.getSeller(),messages.auctionSold().replace("{item}",listing.getItemDisplayName())
-                    .replace("{amount}",currencyManager.format(listing.getCurrency(),BigDecimal.valueOf(sellerIncome)))+" &7收入已进入交付队列。","chat","sold:"+listing.getId());
-                notice(listing.getHighestBidder(),"&a你已拍得 #"+listing.getId()+" "+listing.getItemDisplayName()+"，成交价 "
-                    +currencyManager.format(listing.getCurrency(),BigDecimal.valueOf(listing.getCurrentBid()))+"，物品已进入交付队列。","chat","won:"+listing.getId());
-            }
-            publishAuctionPurchased(listing, tax);
-        } else {
-            // 无人竞价，退还物品给卖家（安全发放）
-            deliverItemSafe(listing.getSeller(), listing, "auction_expired_return");
-            repository.updateListing(listing);
-
-            repository.insertHistory(new AuctionHistory(
-                0, listing.getId(), listing.getSeller(), null,
-                listing.getItemData(), listing.getItemDisplayName(),
-                0, listing.getCurrency(), 0, "EXPIRED", System.currentTimeMillis()
-            ));
-
-            if(config.notifySettlement()) notice(listing.getSeller(),messages.auctionExpired().replace("{item}",listing.getItemDisplayName()),"chat","expired:"+listing.getId());
+    private void settleExpired() {
+        if (stopped) return;
+        long start = System.nanoTime();
+        for (int processed = 0; processed < MAX_SETTLEMENTS_PER_TICK; processed++) {
+            var listing = expired.poll();
+            if (listing == null) break;
+            prepareExpiry(listing);
+            if (System.nanoTime() - start >= SETTLEMENT_BUDGET_NANOS) break;
         }
-
-        if (redisCache.isAvailable()) {
-            redisCache.invalidateByPrefix("market:listings:");
-        }
-        if(config.notifySettlement()) for(UUID watcher:repository.auctionWatchers(listing.getId())) {
-            if(watcher.equals(listing.getSeller()) || watcher.equals(listing.getHighestBidder()))continue;
-            notice(watcher,"&7关注的拍卖 #"+listing.getId()+" "+listing.getItemDisplayName()
-                +(hasBidder?" 已成交，成交价 "+currencyManager.format(listing.getCurrency(),BigDecimal.valueOf(listing.getCurrentBid())):" 已流拍"),"chat","watch-ended:"+listing.getId());
-        }
-        publishCrossServer("LISTING_SETTLED:" + listing.getId());
-    }
-
-    /**
-     * 发布 {@code axs.market.auction_purchased} 事件（竞价成交结算时触发）。
-     * 买家此时通常已离线，事件 player 可能为 null，买家信息以 payload 字段为准。
-     */
-    private void publishAuctionPurchased(AuctionListing listing, double tax) {
-        AuctionEventPublisher publisher = eventPublisher;
-        if (publisher == null || listing.getHighestBidder() == null) {
-            return;
-        }
-        String buyerName;
-        var offlineBuyer = Bukkit.getOfflinePlayer(listing.getHighestBidder());
-        buyerName = offlineBuyer.getName() != null ? offlineBuyer.getName() : "未知";
-        String currency = listing.getCurrency() != null ? listing.getCurrency() : "money";
-        java.util.Map<String, String> payload = new java.util.LinkedHashMap<>();
-        payload.put("listing_id", String.valueOf(listing.getId()));
-        payload.put("item", listing.getItemDisplayName() != null ? listing.getItemDisplayName() : "");
-        payload.put("price", String.valueOf(listing.getCurrentBid()));
-        payload.put("formatted_price",
-            java.util.Objects.requireNonNullElse(
-                currencyManager.format(currency, BigDecimal.valueOf(listing.getCurrentBid())),
-                String.valueOf(listing.getCurrentBid())));
-        payload.put("currency", currency);
-        payload.put("tax", String.valueOf(tax));
-        payload.put("seller_uuid", listing.getSeller().toString());
-        payload.put("buyer_uuid", listing.getHighestBidder().toString());
-        payload.put("buyer", buyerName);
-        publisher.publish("axs.market.auction_purchased",
-            Bukkit.getPlayer(listing.getHighestBidder()), payload);
-    }
-
-    /** 在主线程执行任务（已在主线程则直接执行）。 */
-    private void runOnMain(Runnable task) {
-        if (Bukkit.isPrimaryThread()) {
-            task.run();
-        } else {
-            Bukkit.getScheduler().runTask(plugin, task);
+        if (!preparedExpired.isEmpty() && settlingExpired.compareAndSet(false, true)) {
+            work.async(this::settlePreparedExpiries);
         }
     }
 
-    /**
-     * 安全发放物品：收件人在线则在主线程放入背包（装不下的部分通过邮件返还），
-     * 离线则通过邮件发送，邮件不可用时降级入待发放队列。彻底避免物品丢失。
-     */
-    private void deliverItemSafe(UUID target, AuctionListing listing, String reason) {
-        repository.addPendingItem(target, listing.getItemData(), reason + ":" + listing.getId());
-    }
-
-    /**
-     * 安全发放货币：收件人在线且货币可用则在主线程入账，
-     * 否则入待发放队列，玩家上线时补发。彻底避免货款丢失。
-     */
-    private void depositSafe(UUID target, String currency, double amount, String reason) {
-        if (amount > 0) repository.addPendingCurrency(target, currency, amount, reason);
-    }
-
-    // ─── 工具方法 ───────────────────────────────────────────
-
-    private double getEffectiveTaxRate(UUID seller) {
-        Player player = Bukkit.getPlayer(seller);
-        if (player != null) {
-            return getEffectiveTaxRateOnline(player);
-        }
-        // 离线玩家：尝试用 LuckPerms 加载用户数据查询权限
-        return getEffectiveTaxRateOffline(seller);
-    }
-
-    /** 在线玩家权限检查 */
-    private double getEffectiveTaxRateOnline(Player player) {
-        double bestTaxRate = Double.POSITIVE_INFINITY;
-        boolean matched = false;
-        for (var entry : config.taxDiscount().entrySet()) {
-            if (player.hasPermission(entry.getKey())) {
-                double taxRate = Math.max(0, entry.getValue());
-                if (!matched || taxRate < bestTaxRate) {
-                    bestTaxRate = taxRate;
-                }
-                matched = true;
-            }
-        }
-        return matched ? bestTaxRate : config.transactionTaxRate();
-    }
-
-    /**
-     * 离线玩家权限检查：通过 LuckPerms API 异步加载用户数据后同步查询权限。
-     * <p>
-     * LuckPerms 未安装或加载失败时回退到默认税率。
-     * 定时任务（过期处理）在主线程调用，短暂阻塞可接受（loadUser 通常 <50ms）。
-     */
-    private double getEffectiveTaxRateOffline(UUID seller) {
-        if (config.taxDiscount().isEmpty()) {
-            return config.transactionTaxRate();
-        }
+    private void prepareExpiry(AuctionListing listing) {
         try {
-            net.luckperms.api.LuckPerms luckPerms = net.luckperms.api.LuckPermsProvider.get();
-            net.luckperms.api.model.user.UserManager userManager = luckPerms.getUserManager();
-            // 先查缓存（在线但 Bukkit.getPlayer 返回 null 的边缘情况）
-            net.luckperms.api.model.user.User cached = userManager.getUser(seller);
-            net.luckperms.api.model.user.User user = cached != null
-                ? cached : userManager.loadUser(seller).join();
-            if (user == null) {
-                logger.fine("LuckPerms 加载离线用户失败，使用默认税率 seller=" + seller);
-                return config.transactionTaxRate();
-            }
-            // 查询权限：user.getCachedData().getPermissionData().checkPermission(permission)
-            net.luckperms.api.cacheddata.CachedPermissionData permData = user.getCachedData().getPermissionData();
-            double bestTaxRate = Double.POSITIVE_INFINITY;
-            boolean matched = false;
-            for (var entry : config.taxDiscount().entrySet()) {
-                if (permData.checkPermission(entry.getKey()).asBoolean()) {
-                    double taxRate = Math.max(0, entry.getValue());
-                    if (!matched || taxRate < bestTaxRate) {
-                        bestTaxRate = taxRate;
-                    }
-                    matched = true;
+            Player seller = config.taxDiscount().isEmpty() || !hasWinningBid(listing)
+                ? null : Bukkit.getPlayer(listing.getSeller());
+            double taxRate = seller == null ? config.transactionTaxRate() : getEffectiveTaxRateOnline(seller);
+            preparedExpired.add(new PreparedExpiry(listing, listingMaterial(listing), taxRate,
+                seller == null && hasWinningBid(listing) && !config.taxDiscount().isEmpty()));
+        } catch (RuntimeException exception) {
+            logger.log(Level.SEVERE, "[Auction] 到期准备失败 #" + listing.getId(), exception);
+        }
+    }
+
+    private record PreparedExpiry(AuctionListing listing, String material, double taxRate, boolean lookupOfflineTax) { }
+
+    private void settlePreparedExpiries() {
+        boolean changed = false;
+        Map<UUID, Double> offlineTax = new HashMap<>();
+        try {
+            for (PreparedExpiry prepared; !stopped && (prepared = preparedExpired.poll()) != null; ) {
+                try {
+                    changed |= processExpiredListingWork(prepared, offlineTax);
+                } catch (RuntimeException exception) {
+                    logger.log(Level.SEVERE, "[Auction] 到期处理失败 #" + prepared.listing().getId(), exception);
                 }
             }
-            return matched ? bestTaxRate : config.transactionTaxRate();
-        } catch (Exception | LinkageError e) {
-            logger.fine("LuckPerms 不可用，离线卖家使用默认税率 seller=" + seller + ": " + e.getMessage());
+            if (changed && !stopped && redisCache.isAvailable()) redisCache.invalidateByPrefix("market:listings:");
+        } finally {
+            settlingExpired.set(false);
+        }
+    }
+
+    private static boolean hasWinningBid(AuctionListing listing) {
+        return listing.getHighestBidder() != null && listing.getCurrentBid() > 0;
+    }
+
+    private boolean processExpiredListingWork(PreparedExpiry prepared, Map<UUID, Double> offlineTax) {
+        var listing = prepared.listing();
+        long id = listing.getId();
+        long now = System.currentTimeMillis();
+        String tradeId = "auction-expiry:" + id;
+        boolean sold = hasWinningBid(listing);
+        double price = sold ? listing.getCurrentBid() : 0;
+        double rate = prepared.lookupOfflineTax()
+            ? offlineTax.computeIfAbsent(listing.getSeller(), this::getEffectiveTaxRateOffline) : prepared.taxRate();
+        if (stopped) return false;
+        double tax = price * rate;
+        double income = price - tax;
+        var history = new AuctionHistory(0, id, listing.getSeller(), sold ? listing.getHighestBidder() : null,
+            listing.getItemData(), listing.getItemDisplayName(), price, listing.getCurrency(), tax,
+            sold ? "BID_WIN" : "EXPIRED", now);
+        String name = ChatColor.stripColor(ChatColor.translateAlternateColorCodes('&', listing.getItemDisplayName()));
+        String label = name.substring(0, Math.min(255, name.length()));
+        var receipt = new MarketOperation(tradeId, tradeId, listing.getSeller(), "AUCTION_SETTLE", "listing=" + id,
+            "DONE", listing.getCurrency(), BigDecimal.valueOf(price).toPlainString(), listing.getItemData(),
+            sold ? "拍卖成交已结算" : "拍卖流拍已结算", "", now, now, label, prepared.material());
+        var deliveries = new ArrayList<MarketOperation>();
+        deliveries.add(settlementDelivery(receipt, sold ? listing.getHighestBidder() : listing.getSeller(),
+            "ITEM", "", "0", listing.getItemData(), (sold ? "auction_bidwin_item:" : "auction_expired_return:") + id));
+        if (income > 0) {
+            deliveries.add(settlementDelivery(receipt, listing.getSeller(), "CURRENCY", listing.getCurrency(),
+                BigDecimal.valueOf(income).toPlainString(), "", "auction_bidwin_income"));
+        }
+        if (config.notifySettlement()) addExpiryNotices(listing, receipt, deliveries, sold, income);
+        boolean eventPending = sold && eventPublisher != null;
+        String bidderName = "未知";
+        if (eventPending) {
+            try { bidderName = repository.latestAuctionBidderName(id, listing.getHighestBidder()); }
+            catch (RuntimeException exception) { logger.log(Level.WARNING, "[Auction] 成交事件买家名称读取失败 #" + id, exception); }
+        }
+        boolean refreshPending = settlementRefresh != null;
+        var publication = eventPending || refreshPending ? new AuctionPublication(tradeId, id, listing.getSeller(),
+            sold ? listing.getHighestBidder() : null, listing.getItemDisplayName(), price, listing.getCurrency(),
+            tax, bidderName, eventPending, refreshPending, now) : null;
+        return repository.settleExpiredAuction(new AuctionSettlement(listing, receipt, history, deliveries, publication));
+    }
+
+    private void addExpiryNotices(AuctionListing listing, MarketOperation receipt, List<MarketOperation> deliveries,
+                                  boolean sold, double income) {
+        long id = listing.getId();
+        String display = listing.getItemDisplayName();
+        String formatted = sold ? currencyManager.format(listing.getCurrency(), BigDecimal.valueOf(listing.getCurrentBid())) : "";
+        if (sold) {
+            String sellerNotice = messages.auctionSold().replace("{item}", display).replace("{amount}",
+                currencyManager.format(listing.getCurrency(), BigDecimal.valueOf(income))) + " &7收入已进入交付队列。";
+            deliveries.add(settlementDelivery(receipt, listing.getSeller(), "NOTICE", "", "0", sellerNotice, "notice-chat:sold:" + id));
+            deliveries.add(settlementDelivery(receipt, listing.getHighestBidder(), "NOTICE", "", "0",
+                "&a你已拍得 #" + id + " " + display + "，成交价 " + formatted + "，物品已进入交付队列。", "notice-chat:won:" + id));
+        } else {
+            deliveries.add(settlementDelivery(receipt, listing.getSeller(), "NOTICE", "", "0",
+                messages.auctionExpired().replace("{item}", display), "notice-chat:expired:" + id));
+        }
+        String text = "&7关注的拍卖 #" + id + " " + display + (sold ? " 已成交，成交价 " + formatted : " 已流拍");
+        for (UUID watcher : repository.auctionWatchers(id)) {
+            if (watcher.equals(listing.getSeller()) || watcher.equals(listing.getHighestBidder())) continue;
+            deliveries.add(settlementDelivery(receipt, watcher, "NOTICE", "", "0", text, "notice-chat:watch-ended:" + id));
+        }
+    }
+
+    private static MarketOperation settlementDelivery(MarketOperation receipt, UUID player, String kind,
+                                                      String currency, String amount, String payload, String reference) {
+        return new MarketOperation(UUID.randomUUID().toString(), receipt.id(), player, kind, reference, "READY", currency, amount,
+            payload, "等待交付", "", receipt.createdAt(), receipt.updatedAt(), receipt.itemName(), receipt.material());
+    }
+
+    private void publishSettlements() {
+        if (stopped || !publishingExpired.compareAndSet(false, true)) return;
+        String lease = UUID.randomUUID().toString();
+        try {
+            var claimed = repository.claimAuctionPublications(lease, System.currentTimeMillis(), 8);
+            if (!claimed.isEmpty() && !stopped && redisCache.isAvailable()) redisCache.invalidateByPrefix("market:listings:");
+            for (var notice : claimed) {
+                if (stopped) break;
+                boolean event = !notice.eventPending();
+                boolean refresh = !notice.refreshPending();
+                AuctionEvent observed = null;
+                if (!refresh && settlementRefresh != null) {
+                    java.util.concurrent.CompletableFuture<Boolean> submitted = null;
+                    try {
+                        submitted = settlementRefresh.apply(notice.refreshPayload()).toCompletableFuture();
+                        refresh = Boolean.TRUE.equals(submitted.get(1, TimeUnit.SECONDS));
+                    } catch (InterruptedException exception) {
+                        if (submitted != null) submitted.cancel(false);
+                        Thread.currentThread().interrupt();
+                        break;
+                    } catch (Exception exception) {
+                        if (submitted != null) submitted.cancel(false);
+                        logger.fine("[Auction] 跨服刷新稍后重试 #" + notice.listingId());
+                    }
+                }
+                if (!event && eventPublisher != null && !stopped) {
+                    var sent = new CompletableFuture<AuctionEvent>();
+                    work.main(() -> {
+                        if (sent.isCancelled() || stopped) { sent.complete(null); return; }
+                        try {
+                            publishAuctionPurchased(notice).whenComplete((accepted, failure) -> {
+                                if (failure == null) sent.complete(accepted);
+                                else sent.completeExceptionally(failure);
+                            });
+                        } catch (RuntimeException | LinkageError exception) { sent.completeExceptionally(exception); }
+                    });
+                    try {
+                        observed = sent.get(1, TimeUnit.SECONDS);
+                        event = observed != null;
+                    }
+                    catch (InterruptedException exception) { sent.cancel(false); Thread.currentThread().interrupt(); break; }
+                    catch (Exception exception) { sent.cancel(false); logger.fine("[Auction] 成交事件稍后重试 #" + notice.listingId()); }
+                }
+                if (repository.finishAuctionPublication(notice.id(), lease, event, refresh, System.currentTimeMillis() + 5_000)
+                        && observed != null && eventObserver != null) {
+                    var notification = observed;
+                    work.main(() -> notifyAuctionObservers(notification));
+                }
+            }
+        } catch (RuntimeException exception) {
+            if (!stopped) logger.log(Level.WARNING, "[Auction] 恢复拍卖通知失败", exception);
+        } finally {
+            publishingExpired.set(false);
+        }
+    }
+
+    private void notifyAuctionObservers(AuctionEvent event) {
+        var observer = eventObserver;
+        if (stopped || observer == null) return;
+        try { observer.accept(event.buyer(), event.payload()); }
+        catch (RuntimeException | LinkageError failure) {
+            logger.warning("拍卖实时通知失败: " + failure.getMessage());
+        }
+    }
+
+    private CompletionStage<AuctionEvent> publishAuctionPurchased(AuctionPublication notice) {
+        AuctionEventPublisher publisher = eventPublisher;
+        if (publisher == null || notice.buyer() == null) return CompletableFuture.completedFuture(null);
+        Player buyer = Bukkit.getPlayer(notice.buyer());
+        String currency = notice.currency();
+        Map<String, String> payload = new LinkedHashMap<>();
+        payload.put("event_id", notice.id());
+        if (notice.settledAt() > 0L) {
+            payload.put("business_date", java.time.Instant.ofEpochMilli(notice.settledAt())
+                .atZone(java.time.ZoneId.systemDefault()).toLocalDate().toString());
+        }
+        payload.put("listing_id", String.valueOf(notice.listingId()));
+        payload.put("item", notice.item());
+        payload.put("price", String.valueOf(notice.price()));
+        payload.put("formatted_price", currencyManager.format(currency, BigDecimal.valueOf(notice.price())));
+        payload.put("currency", currency);
+        payload.put("tax", String.valueOf(notice.tax()));
+        payload.put("seller_uuid", notice.seller().toString());
+        payload.put("buyer_uuid", notice.buyer().toString());
+        payload.put("buyer", buyer == null ? notice.buyerName() : buyer.getName());
+        var event = new AuctionEvent(buyer, Map.copyOf(payload));
+        return publisher.publish(EventBusCapability.MARKET_AUCTION_PURCHASED, buyer, event.payload())
+            .thenApply(accepted -> Boolean.TRUE.equals(accepted) ? event : null);
+    }
+
+    private double getEffectiveTaxRateOnline(Player player) {
+        return Math.min(config.transactionTaxRate(), config.taxDiscount().entrySet().stream()
+            .filter(entry -> player.hasPermission(entry.getKey()))
+            .mapToDouble(entry -> Math.max(0, entry.getValue())).min().orElse(config.transactionTaxRate()));
+    }
+
+    private double getEffectiveTaxRateOffline(UUID seller) {
+        var resolver = offlineAuctionTax;
+        if (resolver == null) return config.transactionTaxRate();
+        try {
+            return resolver.rate(seller, config.taxDiscount(), config.transactionTaxRate());
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("离线税率查询已中断", exception);
+        } catch (Exception | LinkageError exception) {
+            logger.log(Level.WARNING, "[Auction] 离线税率查询失败，使用默认税率 seller=" + seller, exception);
             return config.transactionTaxRate();
         }
     }
 
-    private boolean isBlacklisted(ItemStack item) {
+    public boolean isBlacklisted(ItemStack item) {
         if (item == null) return true;
         if (itemMatcher == null) return false;
         return itemMatcher.matches(config.blacklist(), item);
     }
 
-    private String classifyItem(ItemStack item) {
+    public String classifyItem(ItemStack item) {
         if (item == null || item.getType().isAir() || !item.hasItemMeta()) {
             return defaultCategoryId();
         }
@@ -752,7 +910,7 @@ private void processExpiredListingWork(AuctionListing listing) {
         }
     }
 
-    private String getItemDisplayName(ItemStack item) {
+    public String getItemDisplayName(ItemStack item) {
         if (vanillaItemNameBridge != null) {
             return vanillaItemNameBridge.resolveDisplayName(item);
         }
@@ -767,58 +925,6 @@ private void processExpiredListingWork(AuctionListing listing) {
      * 多音字遍历所有读音，同一字的多读音连续拼接；字之间用空格分隔。
      * 返回 [pinyin, initials]，如 "钻石剑" → ["zuan shi jian", "z s j"]。
      */
-    private static String[] toPinyinTokens(String rawValue) {
-        String stripped = ChatColor.stripColor(rawValue == null ? "" : value(rawValue));
-        return PINYIN_CACHE.computeIfAbsent(stripped, AuctionService::computePinyinTokens);
-    }
-
-    private static String[] computePinyinTokens(String stripped) {
-        StringBuilder pinyin = new StringBuilder();
-        StringBuilder initials = new StringBuilder();
-        for (char character : stripped.toCharArray()) {
-            if (Character.isWhitespace(character)) {
-                continue;
-            }
-            String[] values;
-            try {
-                values = PinyinHelper.toHanyuPinyinStringArray(character, PINYIN_FORMAT);
-            } catch (BadHanyuPinyinOutputFormatCombination ignored) {
-                values = null;
-            }
-            if (values != null && values.length > 0) {
-                StringBuilder charPinyin = new StringBuilder();
-                StringBuilder charInitials = new StringBuilder();
-                for (String value : values) {
-                    String candidate = value.replaceAll("[^a-z0-9]", "");
-                    if (!candidate.isBlank()) {
-                        charPinyin.append(candidate);
-                        charInitials.append(candidate.charAt(0));
-                    }
-                }
-                if (charPinyin.length() > 0) {
-                    if (pinyin.length() > 0) pinyin.append(' ');
-                    if (initials.length() > 0) initials.append(' ');
-                    pinyin.append(charPinyin);
-                    initials.append(charInitials);
-                    continue;
-                }
-            }
-            if (Character.isLetterOrDigit(character)) {
-                if (pinyin.length() > 0) pinyin.append(' ');
-                if (initials.length() > 0) initials.append(' ');
-                pinyin.append(Character.toLowerCase(character));
-                initials.append(Character.toLowerCase(character));
-            }
-        }
-        return new String[]{pinyin.toString(), initials.toString()};
-    }
-
-    private static String value(String s) {
-        return s == null ? "" : s.trim();
-    }
-
-    // 离线 / 背包溢出的发放统一由 deliverItemSafe / depositSafe + 待发放队列处理，
-    // 不再使用旧的 depositOffline / createOfflineDeposit（离线时会丢钱）。
 
     private void publishCrossServer(String message) {
         if (crossServerPublisher != null && message != null && !message.isBlank()) {
@@ -828,13 +934,9 @@ private void processExpiredListingWork(AuctionListing listing) {
 
     // ─── 结果类 ─────────────────────────────────────────────
 
-    public record ListingResult(boolean success, @Nullable String error, @Nullable AuctionListing listing) {
-        public static ListingResult success(AuctionListing listing) { return new ListingResult(true, null, listing); }
-        public static ListingResult fail(String error) { return new ListingResult(false, error, null); }
-    }
 
-    public record BidResult(boolean success, @Nullable String error, double amount) {
-        public static BidResult success(double amount) { return new BidResult(true, null, amount); }
-        public static BidResult fail(String error) { return new BidResult(false, error, 0); }
+    public record BidResult(boolean success, @Nullable String error, double amount, boolean extended) {
+        public static BidResult success(double amount, boolean extended) { return new BidResult(true, null, amount, extended); }
+        public static BidResult fail(String error) { return new BidResult(false, error, 0, false); }
     }
 }

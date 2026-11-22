@@ -1,12 +1,14 @@
 package xuanmo.arcartxsuite.combateffect.deathbuffer;
 
-import xuanmo.arcartxsuite.combateffect.chronos.ChronosHook;
-import xuanmo.arcartxsuite.combateffect.chronos.ChronosHookFactory;
-
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Supplier;
 import java.util.logging.Logger;
 import org.bukkit.Bukkit;
+import org.bukkit.GameMode;
+import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -15,14 +17,16 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
+import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
-import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
 import priv.seventeen.artist.arcartx.api.ArcartXAPI;
 import priv.seventeen.artist.arcartx.core.entity.ArcartXEntityManager;
 import priv.seventeen.artist.arcartx.core.entity.data.ArcartXPlayer;
+import xuanmo.arcartxsuite.api.bridge.ChronosAccess;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
+import xuanmo.arcartxsuite.api.capability.AbyssQueryable;
 import xuanmo.arcartxsuite.api.combat.CombatEventSupport;
 import xuanmo.arcartxsuite.combateffect.packet.config.CombatEffectPacketConfiguration;
 import xuanmo.arcartxsuite.combateffect.packet.config.CombatPacketContext;
@@ -38,35 +42,36 @@ import xuanmo.arcartxsuite.combateffect.packet.config.PacketTrigger;
  * 并触发 DEATH 类型的 CombatEffect 包。
  */
 public final class DeathBufferService implements Listener {
+    public static final String BUFFER_UI_ID = "AXS:death_buffer";
 
     private final JavaPlugin plugin;
     private final DeathBufferConfiguration config;
     private final CombatEffectPacketConfiguration packetConfig;
     private final PacketBridgeAPI packetBridge;
     private final Logger logger;
+    private final Supplier<AbyssQueryable> abyss;
 
-    private final ConcurrentHashMap<UUID, BufferState> bufferedPlayers = new ConcurrentHashMap<>();
+    private final Map<UUID, BufferState> bufferedPlayers = new HashMap<>();
+    private final Map<UUID, Player> settlingKillers = new HashMap<>();
 
     // ArcartX 视觉桥接（ArcartX 是硬依赖，可直接引用）
     private boolean arcartxVisualAvailable;
     private ArcartXEntityManager entityManager;
-
-    // Chronos（通过 ChronosHook 隔离，未装时为 null）
-    private boolean chronosAvailable;
-    private ChronosHook chronosHook;
 
     public DeathBufferService(
         JavaPlugin plugin,
         DeathBufferConfiguration config,
         CombatEffectPacketConfiguration packetConfig,
         PacketBridgeAPI packetBridge,
-        Logger logger
+        Logger logger,
+        Supplier<AbyssQueryable> abyss
     ) {
         this.plugin = plugin;
         this.config = config;
         this.packetConfig = packetConfig;
         this.packetBridge = packetBridge;
         this.logger = logger;
+        this.abyss = abyss;
     }
 
     public void start() {
@@ -74,30 +79,27 @@ public final class DeathBufferService implements Listener {
             return;
         }
         initArcartXVisuals();
-        initChronos();
         Bukkit.getPluginManager().registerEvents(this, plugin);
         if (config.debug()) {
             logger.info("DeathBuffer 已启动 | shader=" + config.shader()
                 + " | camera=" + config.cameraPreset()
-                + " | duration=" + config.durationMs() + "ms"
-                + " | chronos=" + chronosAvailable);
+                + " | duration=" + config.durationMs() + "ms");
         }
     }
 
     public void shutdown() {
         HandlerList.unregisterAll(this);
-        // 清理所有正在缓冲的玩家
-        for (var entry : bufferedPlayers.entrySet()) {
-            Player player = Bukkit.getPlayer(entry.getKey());
-            if (player != null && player.isOnline()) {
-                forceExitBuffer(player, entry.getValue(), false);
-            }
+        for (BufferState state : List.copyOf(bufferedPlayers.values())) {
+            finish(state.victim, false);
         }
-        bufferedPlayers.clear();
     }
 
     public boolean isInBuffer(Player player) {
         return bufferedPlayers.containsKey(player.getUniqueId());
+    }
+
+    public Player settlingKiller(Player victim) {
+        return settlingKillers.get(victim.getUniqueId());
     }
 
     // ========== 事件监听 ==========
@@ -111,6 +113,10 @@ public final class DeathBufferService implements Listener {
         if (!(event.getEntity() instanceof Player victim)) {
             return;
         }
+        if (inAbyss(victim)) {
+            finish(victim, false);
+            return;
+        }
         if (bufferedPlayers.containsKey(victim.getUniqueId())) {
             // 已在缓冲中，阻止一切伤害
             event.setCancelled(true);
@@ -121,19 +127,18 @@ public final class DeathBufferService implements Listener {
         }
 
         double healthAfter = victim.getHealth() - event.getFinalDamage();
-        if (healthAfter > 0) {
+        if (healthAfter > 0 || canUseTotem(victim, event.getCause())) {
             return; // 非致死伤害
         }
 
         // 确定击杀者
-        Player killer = null;
+        Player killer = victim.getKiller();
         if (event instanceof EntityDamageByEntityEvent entityEvent) {
-            killer = CombatEventSupport.resolvePlayerAttacker(entityEvent);
+            Player attacker = CombatEventSupport.resolvePlayerAttacker(entityEvent);
+            if (attacker != null) killer = attacker;
         }
 
-        // 阻止本次伤害，进入缓冲
-        event.setCancelled(true);
-        enterBuffer(victim, killer);
+        enterBuffer(victim, killer, event);
     }
 
     /**
@@ -143,27 +148,7 @@ public final class DeathBufferService implements Listener {
      */
     @EventHandler(priority = EventPriority.HIGHEST)
     public void onPlayerDeath(PlayerDeathEvent event) {
-        Player player = event.getEntity();
-        if (bufferedPlayers.containsKey(player.getUniqueId())) {
-            // 异常: 已在缓冲但仍然死了，清理状态
-            BufferState state = bufferedPlayers.remove(player.getUniqueId());
-            if (state != null && state.task != null) {
-                state.task.cancel();
-            }
-            clearVisuals(player);
-        }
-    }
-
-    /**
-     * 阻止自动复活（如果配置开启）。
-     */
-    @EventHandler(priority = EventPriority.HIGHEST)
-    public void onRespawn(PlayerRespawnEvent event) {
-        // 正常缓冲流程不应到达这里，但做防御
-        if (config.blockAutoRespawn() && bufferedPlayers.containsKey(event.getPlayer().getUniqueId())) {
-            // Bukkit 的 PlayerRespawnEvent 不可取消，但我们不应该到这里
-            // 因为伤害已被拦截，玩家不会真正死亡
-        }
+        finish(event.getEntity(), false);
     }
 
     /**
@@ -171,40 +156,34 @@ public final class DeathBufferService implements Listener {
      */
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
-        BufferState state = bufferedPlayers.remove(event.getPlayer().getUniqueId());
-        if (state != null) {
-            if (state.task != null) {
-                state.task.cancel();
-            }
-            clearVisuals(event.getPlayer());
-        }
+        finish(event.getPlayer(), true);
+    }
+
+    @EventHandler
+    public void onWorldChange(PlayerChangedWorldEvent event) {
+        finish(event.getPlayer(), true);
     }
 
     // ========== 核心流程 ==========
 
-    private void enterBuffer(Player victim, Player killer) {
+    private void enterBuffer(Player victim, Player killer, EntityDamageEvent damage) {
         UUID victimId = victim.getUniqueId();
-
-        // 冻结玩家
-        victim.setInvulnerable(true);
-        victim.setWalkSpeed(0f);
-        victim.setFlySpeed(0f);
-        // 设为极小血量（避免触发原版死亡）
-        victim.setHealth(0.001);
-
-        // 应用视觉效果
-        applyVisuals(victim);
-
-        // 发送 DEATH 触发器的包
-        dispatchDeathPackets(victim, killer);
-
-        // 调度延迟任务：缓冲结束后执行真正死亡
-        BukkitTask task = Bukkit.getScheduler().runTaskLater(plugin, () -> {
-            exitBuffer(victim);
-        }, config.durationTicks());
-
-        bufferedPlayers.put(victimId, new BufferState(killer, System.currentTimeMillis(), task));
-
+        BufferState state = new BufferState(victim, killer, damage);
+        bufferedPlayers.put(victimId, state);
+        try {
+            state.task = Bukkit.getScheduler().runTaskLater(plugin, () -> finish(victim, true), config.durationTicks());
+            victim.setInvulnerable(true);
+            victim.setWalkSpeed(0f);
+            victim.setFlySpeed(0f);
+        } catch (RuntimeException e) {
+            finish(victim, false);
+            logger.warning("DeathBuffer 无法开始缓冲: " + e);
+            return;
+        }
+        damage.setCancelled(true);
+        applyVisuals(state);
+        applyChronosDeathState(victim);
+        if (bufferedPlayers.get(victimId) == state) visual(() -> dispatchDeathPackets(state));
         if (config.debug()) {
             logger.info("DeathBuffer 进入缓冲 | victim=" + victim.getName()
                 + " | killer=" + (killer != null ? killer.getName() : "null")
@@ -212,121 +191,97 @@ public final class DeathBufferService implements Listener {
         }
     }
 
-    private void exitBuffer(Player victim) {
+    private void finish(Player victim, boolean settleDeath) {
         BufferState state = bufferedPlayers.remove(victim.getUniqueId());
-        if (state == null) {
-            return;
+        if (state == null) return;
+        if (state.task != null) state.task.cancel();
+        if (victim.isInvulnerable()) victim.setInvulnerable(state.invulnerable);
+        if (victim.getWalkSpeed() == 0f) victim.setWalkSpeed(state.walkSpeed);
+        if (victim.getFlySpeed() == 0f) victim.setFlySpeed(state.flySpeed);
+        clearVisuals(state);
+        if (!settleDeath || victim.isDead() || !shouldApply(victim) || inAbyss(victim)) return;
+
+        victim.setLastDamageCause(state.damage);
+        if (state.killer != null) {
+            settlingKillers.put(victim.getUniqueId(), state.killer);
+            setPaperKiller(victim, state.killer);
         }
-        if (!victim.isOnline()) {
-            return;
-        }
-
-        // 清除视觉效果
-        clearVisuals(victim);
-
-        // 恢复移动
-        victim.setInvulnerable(false);
-        victim.setWalkSpeed(0.2f);
-        victim.setFlySpeed(0.1f);
-
-        // 执行真正的死亡
-        victim.setHealth(0);
-
-        if (config.debug()) {
-            logger.info("DeathBuffer 缓冲结束 | victim=" + victim.getName() + " | 执行真正死亡");
+        try {
+            victim.setHealth(0);
+        } finally {
+            settlingKillers.remove(victim.getUniqueId());
         }
     }
 
-    private void forceExitBuffer(Player player, BufferState state, boolean kill) {
-        if (state.task != null) {
-            state.task.cancel();
-        }
-        clearVisuals(player);
-        player.setInvulnerable(false);
-        player.setWalkSpeed(0.2f);
-        player.setFlySpeed(0.1f);
-        if (kill && player.isOnline()) {
-            player.setHealth(0);
+    private void setPaperKiller(Player victim, Player killer) {
+        try {
+            victim.getClass().getMethod("setKiller", Player.class).invoke(victim, killer);
+        } catch (NoSuchMethodException ignored) {
+            // Spigot uses the captured killer for CombatEffect dispatch.
+        } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
+            logger.fine("DeathBuffer 无法写入 Paper 击杀者: " + e);
         }
     }
 
     // ========== 视觉效果 ==========
 
-    private void applyVisuals(Player player) {
-        if (!arcartxVisualAvailable) {
-            return;
+    private void applyVisuals(BufferState state) {
+        ArcartXPlayer player = getArcartXPlayer(state.victim);
+        if (player == null) return;
+        if (!config.shader().isBlank()) {
+            state.shader = visual(() -> player.enableShader(config.shader()));
         }
-        try {
-            ArcartXPlayer axPlayer = getArcartXPlayer(player);
-            if (axPlayer == null) {
-                return;
-            }
-
-            // Shader 效果（灰度/模糊）
-            if (!config.shader().isBlank()) {
-                axPlayer.enableShader(config.shader());
-            }
-
-            // 第三人称相机
-            if (config.thirdPersonCamera()) {
-                axPlayer.setThirdPerson(true);
-            }
-
-            // 预设相机
-            if (!config.cameraPreset().isBlank()) {
-                axPlayer.setCameraFromPreset(config.cameraPreset());
-            }
-        } catch (RuntimeException exception) {
-            if (config.debug()) {
-                logger.warning("DeathBuffer ArcartX 视觉效果应用失败: " + exception.getMessage());
-            }
+        if (config.thirdPersonCamera()) {
+            state.thirdPerson = visual(() -> player.setThirdPerson(true));
         }
-
-        // Chronos 死亡状态
-        if (chronosAvailable && config.chronosEnabled()) {
-            applyChronosDeathState(player);
+        if (!config.cameraPreset().isBlank()) {
+            state.camera = visual(() -> player.setCameraFromPreset(config.cameraPreset()));
         }
     }
 
-    private void clearVisuals(Player player) {
-        if (!arcartxVisualAvailable) {
-            return;
-        }
+    private void clearVisuals(BufferState state) {
+        if (state.bufferUi) visual(() -> packetBridge.closeUi(state.victim, BUFFER_UI_ID));
+        ArcartXPlayer player = getArcartXPlayer(state.victim);
+        if (player == null) return;
+        if (state.shader) visual(player::disableShader);
+        if (state.thirdPerson) visual(() -> player.setThirdPerson(false));
+        if (state.camera) visual(player::stopSceneCamera);
+    }
+
+    private boolean visual(Runnable effect) {
         try {
-            ArcartXPlayer axPlayer = getArcartXPlayer(player);
-            if (axPlayer == null) {
-                return;
-            }
-            if (!config.shader().isBlank()) {
-                axPlayer.disableShader();
-            }
-            if (config.thirdPersonCamera()) {
-                axPlayer.setThirdPerson(false);
-            }
-            if (!config.cameraPreset().isBlank()) {
-                axPlayer.stopSceneCamera();
-            }
-        } catch (RuntimeException exception) {
+            effect.run();
+            return true;
+        } catch (RuntimeException | LinkageError e) {
             if (config.debug()) {
-                logger.warning("DeathBuffer ArcartX 视觉清除失败: " + exception.getMessage());
+                logger.warning("DeathBuffer 视觉效果失败: " + e);
             }
+            return false;
         }
     }
 
     private void applyChronosDeathState(Player player) {
-        if (chronosHook == null) return;
-        chronosHook.tryEnterControlledState(player, config.chronosStateId(), config.durationMs());
+        if (!config.chronosEnabled() || config.chronosStateId().isBlank()) return;
+        ChronosAccess access = ChronosAccess.probe().access();
+        if (access == null) return;
+        try {
+            access.enterControlledState(player, config.chronosStateId(), config.durationMs());
+        } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
+            if (config.debug()) logger.warning("DeathBuffer Chronos 状态调用失败: " + e);
+        }
     }
 
     // ========== 包分发 ==========
 
-    private void dispatchDeathPackets(Player victim, Player killer) {
+    private void dispatchDeathPackets(BufferState state) {
         if (packetBridge == null || !packetBridge.isAvailable()) {
             return;
         }
 
         // 构建死亡上下文（attacker=killer, target=victim）
-        CombatPacketContext context = CombatPacketContext.fromDeath(victim, killer);
+        Player victim = state.victim;
+        Player killer = state.killer;
+        CombatPacketContext context = CombatPacketContext.fromDeath(victim, killer, state.damage.getFinalDamage());
 
         for (PacketDefinition definition : packetConfig.packetDefinitions()) {
             if (!definition.enabled() || !definition.triggers().contains(PacketTrigger.DEATH)) {
@@ -339,9 +294,16 @@ public final class DeathBufferService implements Listener {
                     continue;
                 }
                 Object payload = context.renderPayload(definition.packTemplate(), recipientType, recipient);
-                boolean success = packetBridge.sendPacket(
-                    recipient, definition.uiId(), definition.packetHandler(), payload
-                );
+                boolean success;
+                try {
+                    success = packetBridge.sendPacket(recipient, definition.uiId(), definition.packetHandler(), payload);
+                } catch (RuntimeException | LinkageError e) {
+                    logger.fine("DeathBuffer 发包失败: " + e);
+                    continue;
+                }
+                if (success && victim.equals(recipient) && BUFFER_UI_ID.equals(definition.uiId())) {
+                    state.bufferUi = true;
+                }
                 if (config.debug()) {
                     logger.info("DeathBuffer 发包[" + definition.id() + "] -> " + recipient.getName()
                         + " | ui=" + definition.uiId()
@@ -357,10 +319,21 @@ public final class DeathBufferService implements Listener {
         if (!config.enabled()) {
             return false;
         }
-        if (config.worldBlacklist().contains(player.getWorld().getName())) {
-            return false;
-        }
-        return true;
+        return player.getGameMode() != GameMode.SPECTATOR
+            && !config.worldBlacklist().contains(player.getWorld().getName());
+    }
+
+    private boolean inAbyss(Player player) {
+        AbyssQueryable query = abyss.get();
+        return query != null && query.isInDungeon(player.getUniqueId());
+    }
+
+    private static boolean canUseTotem(Player player, EntityDamageEvent.DamageCause cause) {
+        if (cause == EntityDamageEvent.DamageCause.VOID || cause == EntityDamageEvent.DamageCause.SUICIDE
+                || cause.name().equals("KILL")) return false;
+        var inventory = player.getInventory();
+        return inventory.getItemInMainHand().getType() == Material.TOTEM_OF_UNDYING
+            || inventory.getItemInOffHand().getType() == Material.TOTEM_OF_UNDYING;
     }
 
     // ========== 反射初始化 ==========
@@ -377,33 +350,44 @@ public final class DeathBufferService implements Listener {
                 return;
             }
             arcartxVisualAvailable = true;
-        } catch (RuntimeException exception) {
+        } catch (RuntimeException | LinkageError exception) {
             logger.warning("DeathBuffer 初始化 ArcartX 视觉桥接失败: " + exception.getMessage());
         }
     }
 
-    private void initChronos() {
-        chronosAvailable = false;
-        if (!config.chronosEnabled()) {
-            return;
-        }
-        // 通过工厂延迟加载 ChronosHook，Chronos 未装时返回 null（不触发 ChronosAPI 类加载）
-        chronosHook = ChronosHookFactory.tryCreate(plugin, logger, config.debug());
-        chronosAvailable = chronosHook != null;
-    }
-
     private ArcartXPlayer getArcartXPlayer(Player player) {
-        if (entityManager == null) {
+        if (!arcartxVisualAvailable || entityManager == null) {
             return null;
         }
         try {
             return entityManager.getPlayer(player);
-        } catch (RuntimeException exception) {
+        } catch (RuntimeException | LinkageError exception) {
             return null;
         }
     }
 
     // ========== 内部状态 ==========
 
-    private record BufferState(Player killer, long startTime, BukkitTask task) {}
+    private static final class BufferState {
+        private final Player victim;
+        private final Player killer;
+        private final EntityDamageEvent damage;
+        private final boolean invulnerable;
+        private final float walkSpeed;
+        private final float flySpeed;
+        private BukkitTask task;
+        private boolean shader;
+        private boolean thirdPerson;
+        private boolean camera;
+        private boolean bufferUi;
+
+        private BufferState(Player victim, Player killer, EntityDamageEvent damage) {
+            this.victim = victim;
+            this.killer = killer;
+            this.damage = damage;
+            this.invulnerable = victim.isInvulnerable();
+            this.walkSpeed = victim.getWalkSpeed();
+            this.flySpeed = victim.getFlySpeed();
+        }
+    }
 }

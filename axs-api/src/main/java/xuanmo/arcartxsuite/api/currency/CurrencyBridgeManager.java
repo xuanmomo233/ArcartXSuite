@@ -164,6 +164,8 @@ public final class CurrencyBridgeManager implements CurrencyBridgeAPI {
         private net.milkbowl.vault.economy.Economy economy;
         private String unavailableReason = "";
 
+        private record VaultOperation(CurrencyTransactionResult result, BigDecimal balanceAfter) { }
+
         private VaultCurrencyBridge(CurrencyDefinition definition) {
             super(definition);
             initializeVault();
@@ -197,12 +199,48 @@ public final class CurrencyBridgeManager implements CurrencyBridgeAPI {
 
         @Override
         public CurrencyTransactionResult withdraw(Player player, BigDecimal amount) {
-            return invokeEconomyTransaction(player, amount, "扣款失败。", true);
+            return invokeEconomyTransaction(player, amount, "扣款失败。", true).result();
         }
 
         @Override
         public CurrencyTransactionResult deposit(Player player, BigDecimal amount) {
-            return invokeEconomyTransaction(player, amount, "入账失败。", false);
+            return invokeEconomyTransaction(player, amount, "入账失败。", false).result();
+        }
+
+        @Override
+        public Supplier<BigDecimal> prepareBackgroundBalance(Player player) {
+            if (player == null) return null;
+            String currency = rondoVaultCurrency();
+            if (currency == null) return null;
+            UUID account = player.getUniqueId();
+            return () -> priv.seventeen.artist.rondo.api.RondoAPI.INSTANCE.getBalance(account, currency);
+        }
+
+        @Override
+        public Supplier<CurrencyTransactionResult> prepareBackgroundCredit(Player player, BigDecimal amount) {
+            if (player == null || amount == null || amount.signum() <= 0) return null;
+            String currency = rondoVaultCurrency();
+            if (currency == null) return null;
+            // Vault rounds through double and its Rondo adapter treats zero as a successful no-op.
+            double value = normalize(amount).doubleValue();
+            if (!Double.isFinite(value)) return () -> CurrencyTransactionResult.failure(RANGE_FAILURE);
+            if (value == 0) return CurrencyTransactionResult::ok;
+            return rondoCredit(player.getUniqueId(), currency, BigDecimal.valueOf(value), "vault");
+        }
+
+        private String rondoVaultCurrency() {
+            if (!available()) return null;
+            try {
+                Plugin rondo = Bukkit.getPluginManager().getPlugin("Rondo");
+                var registration = Bukkit.getServicesManager().getRegistration(net.milkbowl.vault.economy.Economy.class);
+                if (rondo == null || !rondo.isEnabled() || registration == null
+                    || registration.getProvider() != economy || registration.getPlugin() != rondo
+                    || !economy.getClass().getName().equals("priv.seventeen.artist.rondo.vault.RondoEconomy")) return null;
+                var currency = priv.seventeen.artist.rondo.currency.CurrencyRegistry.INSTANCE.getVaultPrimary();
+                return currency == null ? null : currency.getId();
+            } catch (RuntimeException | LinkageError exception) {
+                return null;
+            }
         }
 
         private void initializeVault() {
@@ -228,29 +266,71 @@ public final class CurrencyBridgeManager implements CurrencyBridgeAPI {
             }
         }
 
-        private CurrencyTransactionResult invokeEconomyTransaction(Player player, BigDecimal amount, String defaultMessage, boolean isWithdraw) {
+        private VaultOperation invokeEconomyTransaction(Player player, BigDecimal amount, String defaultMessage, boolean isWithdraw) {
             if (!available()) {
-                return CurrencyTransactionResult.failure(unavailableReason());
+                return new VaultOperation(CurrencyTransactionResult.failure(unavailableReason()), null);
             }
             if (player == null || amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
-                return CurrencyTransactionResult.failure("金额必须大于 0。");
+                return new VaultOperation(CurrencyTransactionResult.failure("金额必须大于 0。"), null);
             }
             try {
                 double value = normalize(amount).doubleValue();
                 net.milkbowl.vault.economy.EconomyResponse response = isWithdraw
                     ? economy.withdrawPlayer(player, value)
                     : economy.depositPlayer(player, value);
-                return response.transactionSuccess()
-                    ? CurrencyTransactionResult.ok()
-                    : CurrencyTransactionResult.failure(response.errorMessage != null && !response.errorMessage.isBlank() ? response.errorMessage : defaultMessage);
+                if (response.transactionSuccess()) {
+                    return new VaultOperation(CurrencyTransactionResult.ok(),
+                        reportedVaultBalance(response.balance));
+                }
+                return new VaultOperation(CurrencyTransactionResult.failure(response.errorMessage != null
+                    && !response.errorMessage.isBlank() ? response.errorMessage : defaultMessage), null);
             } catch (Exception | LinkageError exception) {
                 LOGGER.warning("[" + definition().id() + "] Vault " + (isWithdraw ? "withdraw" : "deposit") + " 失败: " + exception.getMessage());
-                return CurrencyTransactionResult.failure(defaultMessage);
+                return new VaultOperation(CurrencyTransactionResult.unknown(defaultMessage), null);
             }
+        }
+
+        private BigDecimal reportedVaultBalance(double balance) {
+            // XConomy returns the pre-credit balance even on success.
+            if (isXConomy()) return null;
+            return Double.isFinite(balance) ? BigDecimal.valueOf(balance) : null;
+        }
+
+        @Override
+        public boolean creditRequiresReconciliation() {
+            return reconciliationRequired(economy);
+        }
+
+        @Override
+        public boolean debitRequiresReconciliation() {
+            return isXConomy();
+        }
+
+        @Override
+        public boolean supportsExactAmount(BigDecimal amount) {
+            if (!super.supportsExactAmount(amount) || !available()) return false;
+            double number = amount.doubleValue();
+            if (!Double.isFinite(number) || BigDecimal.valueOf(number).compareTo(amount) != 0) return false;
+            try {
+                int digits = economy.fractionalDigits();
+                return digits < 0 || amount.stripTrailingZeros().scale() <= digits;
+            } catch (RuntimeException | LinkageError failure) {
+                return false;
+            }
+        }
+
+        private boolean isXConomy() {
+            return economy != null && economy.getClass().getName().equals("me.yic.xconomy.depend.economy.Vault");
         }
     }
 
     private final class PlayerPointsBridge extends AbstractCurrencyBridge {
+        @Override
+        public boolean supportsExactAmount(BigDecimal amount) {
+            return super.supportsExactAmount(amount) && amount.stripTrailingZeros().scale() <= 0
+                && amount.compareTo(BigDecimal.valueOf(Integer.MAX_VALUE)) <= 0;
+        }
+
 
         private org.black_ixx.playerpoints.PlayerPointsAPI api;
         private String unavailableReason = "";
@@ -337,7 +417,7 @@ public final class CurrencyBridgeManager implements CurrencyBridgeAPI {
                 return success ? CurrencyTransactionResult.ok() : CurrencyTransactionResult.failure(defaultMessage);
             } catch (Exception | LinkageError exception) {
                 LOGGER.warning("[" + definition().id() + "] PlayerPoints " + (isTake ? "take" : "give") + " 失败: " + exception.getMessage());
-                return CurrencyTransactionResult.failure(defaultMessage);
+                return CurrencyTransactionResult.unknown(defaultMessage);
             }
         }
     }
@@ -350,6 +430,17 @@ public final class CurrencyBridgeManager implements CurrencyBridgeAPI {
         private XConomyCurrencyBridge(CurrencyDefinition definition) {
             super(definition);
             initializeXConomy();
+        }
+
+        @Override
+        public boolean creditRequiresReconciliation() {
+            return true;
+        }
+
+        @Override
+        public boolean debitRequiresReconciliation() {
+            // The native return code acknowledges the balance change, with no durable receipt.
+            return true;
         }
 
         @Override
@@ -419,7 +510,7 @@ public final class CurrencyBridgeManager implements CurrencyBridgeAPI {
                 };
             } catch (Exception | LinkageError exception) {
                 LOGGER.warning("[" + definition().id() + "] XConomy changeBalance 失败: " + exception.getMessage());
-                return CurrencyTransactionResult.failure(defaultMessage);
+                return CurrencyTransactionResult.unknown(defaultMessage);
             }
         }
 
@@ -497,9 +588,17 @@ public final class CurrencyBridgeManager implements CurrencyBridgeAPI {
             if (player == null || amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
                 return CurrencyTransactionResult.failure("金额必须大于 0。");
             }
-            return dispatchConsoleCommand(definition().depositCommand(), player, amount)
+            String command = renderConsoleCommand(definition().depositCommand(), player, amount);
+            if (command == null) return CurrencyTransactionResult.failure("发放命令未通过校验。");
+            return Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command)
                 ? CurrencyTransactionResult.ok()
-                : CurrencyTransactionResult.failure("执行发放命令失败。");
+                : CurrencyTransactionResult.unknown("发放命令未能确认入账结果。");
+        }
+
+        @Override
+        public boolean creditRequiresReconciliation() {
+            // Bukkit reports command handling, not the currency provider's durable result.
+            return true;
         }
 
         private void initializePlaceholderApi() {
@@ -513,10 +612,15 @@ public final class CurrencyBridgeManager implements CurrencyBridgeAPI {
         }
 
         private boolean dispatchConsoleCommand(String template, Player player, BigDecimal amount) {
+            String command = renderConsoleCommand(template, player, amount);
+            return command != null && Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command);
+        }
+
+        private String renderConsoleCommand(String template, Player player, BigDecimal amount) {
             String playerName = player.getName();
             if (!MINECRAFT_NAME_PATTERN.matcher(playerName).matches()) {
                 LOGGER.warning("[" + definition().id() + "] 拒绝执行命令：玩家名包含非法字符: " + playerName);
-                return false;
+                return null;
             }
             String amountStr = formatAmount(amount);
             String rendered = template
@@ -529,13 +633,13 @@ public final class CurrencyBridgeManager implements CurrencyBridgeAPI {
             // 防止换行注入多条命令
             if (rendered.indexOf('\n') >= 0 || rendered.indexOf('\r') >= 0) {
                 LOGGER.warning("[" + definition().id() + "] 拒绝执行命令：渲染结果包含换行符");
-                return false;
+                return null;
             }
             if (rendered.startsWith("/")) {
                 rendered = rendered.substring(1);
             }
             LOGGER.fine("[" + definition().id() + "] 执行货币命令: " + rendered);
-            return Bukkit.dispatchCommand(Bukkit.getConsoleSender(), rendered);
+            return rendered.isBlank() ? null : rendered;
         }
     }
 
@@ -545,19 +649,17 @@ public final class CurrencyBridgeManager implements CurrencyBridgeAPI {
         private priv.seventeen.artist.rondo.api.RondoAPI rondoApi;
         private String rondoUnavailableReason = "";
 
-        // Vault 回退（Rondo 是 Vault 提供者时，单货币走 Vault 更可靠）
-        private net.milkbowl.vault.economy.Economy vaultEconomy;
-        private String vaultUnavailableReason = "";
+        private final VaultCurrencyBridge fallback;
 
         private RondoCurrencyBridge(CurrencyDefinition definition) {
             super(definition);
-            initializeVault();
             initializeRondo();
+            fallback = rondoApi == null ? new VaultCurrencyBridge(definition) : null;
         }
 
         @Override
         public boolean available() {
-            return vaultEconomy != null || rondoApi != null;
+            return fallback != null ? fallback.available() : rondoApi.getCurrency(definition().id()) != null;
         }
 
         @Override
@@ -565,33 +667,25 @@ public final class CurrencyBridgeManager implements CurrencyBridgeAPI {
             if (available()) {
                 return "";
             }
-            if (!vaultUnavailableReason.isBlank()) {
-                return vaultUnavailableReason;
+            if (fallback != null) {
+                String reason = fallback.unavailableReason();
+                return reason.isBlank() ? rondoUnavailableReason : reason;
             }
-            return rondoUnavailableReason.isBlank() ? "Rondo/Vault 货币后端不可用" : rondoUnavailableReason;
+            return "Rondo 未注册货币 " + definition().id();
         }
 
         @Override
         public BigDecimal balance(Player player) {
             if (player == null) return BigDecimal.ZERO;
-            // 优先 Vault（Rondo 作为 Vault 提供者时无需货币 ID 映射）
-            if (vaultEconomy != null) {
-                try {
-                    return BigDecimal.valueOf(vaultEconomy.getBalance(player));
-                } catch (Exception | LinkageError exception) {
-                    LOGGER.warning("[" + definition().id() + "] Rondo/Vault balance 查询失败: " + exception.getMessage());
-                }
+            // Vault 只暴露一个主货币，原生 Rondo 保留配置指定的货币 ID。
+            if (fallback != null) return fallback.balance(player);
+            try {
+                BigDecimal result = rondoApi.getBalance(player.getUniqueId(), definition().id());
+                return result != null ? result : BigDecimal.ZERO;
+            } catch (Exception | LinkageError exception) {
+                LOGGER.warning("[" + definition().id() + "] Rondo balance 查询失败: " + exception.getMessage());
+                return BigDecimal.ZERO;
             }
-            // 回退 Rondo 原生
-            if (rondoApi != null) {
-                try {
-                    BigDecimal result = rondoApi.getBalance(player.getUniqueId(), definition().id());
-                    return result != null ? result : BigDecimal.ZERO;
-                } catch (Exception | LinkageError exception) {
-                    LOGGER.warning("[" + definition().id() + "] Rondo balance 查询失败: " + exception.getMessage());
-                }
-            }
-            return BigDecimal.ZERO;
         }
 
         @Override
@@ -604,57 +698,72 @@ public final class CurrencyBridgeManager implements CurrencyBridgeAPI {
             return invokeTransaction(player, amount, "入账失败。", false);
         }
 
+        @Override
+        public Supplier<BigDecimal> prepareBackgroundBalance(Player player) {
+            if (fallback != null || player == null || !available()) return null;
+            UUID account = player.getUniqueId();
+            return () -> rondoApi.getBalance(account, definition().id());
+        }
+
+        @Override
+        public Supplier<CurrencyTransactionResult> prepareBackgroundDebit(Player player, BigDecimal amount) {
+            if (fallback != null || player == null || !available()) return null;
+            if (amount == null || amount.signum() <= 0) return () -> CurrencyTransactionResult.failure("金额必须大于 0。");
+            UUID account = player.getUniqueId();
+            return () -> invokeNativeTransaction(account, amount, "扣款失败。", true);
+        }
+
+        @Override
+        public Supplier<CurrencyTransactionResult> prepareBackgroundCredit(Player player, BigDecimal amount) {
+            if (fallback != null) return fallback.prepareBackgroundCredit(player, amount);
+            if (player == null || amount == null || amount.signum() <= 0 || !available()) return null;
+            return rondoCredit(player.getUniqueId(), definition().id(), normalize(amount), "ArcartXSuite");
+        }
+
+        @Override
+        public boolean creditRequiresReconciliation() {
+            return fallback != null && fallback.creditRequiresReconciliation();
+        }
+
+        @Override
+        public boolean debitRequiresReconciliation() {
+            return fallback != null && fallback.debitRequiresReconciliation();
+        }
+
+        @Override
+        public boolean supportsExactAmount(BigDecimal amount) {
+            if (fallback != null) return fallback.supportsExactAmount(amount);
+            if (!super.supportsExactAmount(amount)) return false;
+            try {
+                var currency = rondoApi.getCurrency(definition().id());
+                return currency != null && amount.stripTrailingZeros().scale() <= currency.getDecimalPlaces();
+            } catch (RuntimeException | LinkageError failure) {
+                return false;
+            }
+        }
+
         private CurrencyTransactionResult invokeTransaction(
             Player player, BigDecimal amount, String defaultMessage, boolean isWithdraw
         ) {
             if (player == null || amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
                 return CurrencyTransactionResult.failure("金额必须大于 0。");
             }
-            // 优先 Vault
-            if (vaultEconomy != null) {
-                try {
-                    double value = normalize(amount).doubleValue();
-                    net.milkbowl.vault.economy.EconomyResponse response = isWithdraw
-                        ? vaultEconomy.withdrawPlayer(player, value)
-                        : vaultEconomy.depositPlayer(player, value);
-                    return response.transactionSuccess()
-                        ? CurrencyTransactionResult.ok()
-                        : CurrencyTransactionResult.failure(response.errorMessage != null && !response.errorMessage.isBlank() ? response.errorMessage : defaultMessage);
-                } catch (Exception | LinkageError exception) {
-                    LOGGER.warning("[" + definition().id() + "] Rondo/Vault " + (isWithdraw ? "withdraw" : "deposit") + " 失败，回退 Rondo 原生: " + exception.getMessage());
-                }
+            if (fallback != null) {
+                return isWithdraw ? fallback.withdraw(player, amount) : fallback.deposit(player, amount);
             }
-            // 回退 Rondo 原生
-            if (rondoApi != null) {
-                try {
-                    boolean success = isWithdraw
-                        ? rondoApi.withdraw(player.getUniqueId(), definition().id(), normalize(amount), "ArcartXSuite")
-                        : rondoApi.deposit(player.getUniqueId(), definition().id(), normalize(amount), "ArcartXSuite");
-                    return success ? CurrencyTransactionResult.ok() : CurrencyTransactionResult.failure("Rondo " + defaultMessage);
-                } catch (Exception | LinkageError exception) {
-                    LOGGER.warning("[" + definition().id() + "] Rondo " + (isWithdraw ? "withdraw" : "deposit") + " 失败: " + exception.getMessage());
-                }
-            }
-            return CurrencyTransactionResult.failure(defaultMessage);
+            if (!available()) return CurrencyTransactionResult.failure(unavailableReason());
+            return invokeNativeTransaction(player.getUniqueId(), amount, defaultMessage, isWithdraw);
         }
 
-        private void initializeVault() {
-            Plugin vault = Bukkit.getPluginManager().getPlugin("Vault");
-            if (vault == null) {
-                vaultUnavailableReason = "Vault 未安装";
-                return;
-            }
+        private CurrencyTransactionResult invokeNativeTransaction(UUID account, BigDecimal amount, String defaultMessage, boolean isWithdraw) {
             try {
-                RegisteredServiceProvider<net.milkbowl.vault.economy.Economy> registration =
-                    Bukkit.getServicesManager().getRegistration(net.milkbowl.vault.economy.Economy.class);
-                if (registration == null || registration.getProvider() == null) {
-                    vaultUnavailableReason = "Vault Economy 服务未注册";
-                    return;
-                }
-                vaultEconomy = registration.getProvider();
-                vaultUnavailableReason = "";
+                boolean success = isWithdraw
+                    ? rondoApi.withdraw(account, definition().id(), normalize(amount), "ArcartXSuite")
+                    : rondoApi.deposit(account, definition().id(), normalize(amount), "ArcartXSuite");
+                return success ? CurrencyTransactionResult.ok() : CurrencyTransactionResult.failure("Rondo " + defaultMessage);
             } catch (Exception | LinkageError exception) {
-                vaultUnavailableReason = "Vault API 初始化失败: " + exception.getMessage();
+                LOGGER.warning("[" + definition().id() + "] Rondo " + (isWithdraw ? "withdraw" : "deposit") + " 失败: " + exception.getMessage());
+                return CurrencyTransactionResult.unknown(defaultMessage);
             }
         }
 
@@ -673,6 +782,30 @@ public final class CurrencyBridgeManager implements CurrencyBridgeAPI {
                 rondoUnavailableReason = "Rondo API 初始化失败: " + exception.getMessage();
             }
         }
+    }
+
+    private static Supplier<CurrencyTransactionResult> rondoCredit(UUID account, String currency, BigDecimal amount, String source) {
+        var api = priv.seventeen.artist.rondo.api.RondoAPI.INSTANCE;
+        return () -> {
+            try {
+                return api.deposit(account, currency, amount, source) ? CurrencyTransactionResult.ok()
+                    : CurrencyTransactionResult.failure("Rondo 入账失败。");
+            } catch (RuntimeException | LinkageError exception) {
+                LOGGER.warning("[" + currency + "] Rondo 后台入账失败: " + exception.getMessage());
+                return CurrencyTransactionResult.unknown("Rondo 入账结果未知。");
+            }
+        };
+    }
+
+    private static boolean reconciliationRequired(net.milkbowl.vault.economy.Economy economy) {
+        if (economy == null) return false;
+        return switch (economy.getClass().getName()) {
+            case "me.yic.xconomy.depend.economy.Vault",
+                 "com.earth2me.essentials.economy.vault.VaultEconomyProvider",
+                 "net.milkbowl.vault.economy.plugins.Economy_Essentials",
+                 "net.tnemc.bukkit.hook.economy.TNEVault" -> true;
+            default -> false;
+        };
     }
 
     private static <T> Map<String, T> immutableCopy(Map<String, T> source) {
@@ -755,6 +888,68 @@ public final class CurrencyBridgeManager implements CurrencyBridgeAPI {
         }
 
         @Override
+        public Supplier<BigDecimal> prepareBackgroundBalance(Player player) {
+            return delegate.prepareBackgroundBalance(player);
+        }
+
+        @Override
+        public Supplier<CurrencyTransactionResult> prepareBackgroundDebit(Player player, BigDecimal amount) {
+            var debit = delegate.prepareBackgroundDebit(player, amount);
+            if (debit == null) return null;
+            var balance = delegate.prepareBackgroundBalance(player);
+            UUID account = player.getUniqueId();
+            return () -> {
+                var result = debit.get();
+                if (result.success()) publishBackgroundChange(account, "withdraw", amount, balance);
+                return result;
+            };
+        }
+
+        @Override
+        public Supplier<CurrencyTransactionResult> prepareBackgroundCredit(Player player, BigDecimal amount) {
+            var credit = delegate.prepareBackgroundCredit(player, amount);
+            if (credit == null) return null;
+            var balance = delegate.prepareBackgroundBalance(player);
+            UUID account = player.getUniqueId();
+            return () -> {
+                var result = credit.get();
+                if (result.success()) publishBackgroundChange(account, "deposit", amount, balance);
+                return result;
+            };
+        }
+
+        @Override
+        public boolean creditRequiresReconciliation() {
+            return delegate.creditRequiresReconciliation();
+        }
+
+        @Override
+        public boolean debitRequiresReconciliation() {
+            return delegate.debitRequiresReconciliation();
+        }
+
+        @Override
+        public boolean supportsExactAmount(BigDecimal amount) {
+            return delegate.supportsExactAmount(amount);
+        }
+
+        private void publishBackgroundChange(UUID account, String action, BigDecimal amount, Supplier<BigDecimal> balance) {
+            var provider = eventBusProvider;
+            if (provider == null || !plugin.isEnabled()) return;
+            try {
+                var bus = provider.get();
+                if (bus == null || !bus.hasSubscribers(currencyTopic(action))) return;
+                BigDecimal balanceAfter = balance == null ? BigDecimal.ZERO : balance.get();
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    Player online = Bukkit.getPlayer(account);
+                    if (online != null) publishCurrencyEvent(online, action, amount, () -> balanceAfter);
+                });
+            } catch (Exception | LinkageError exception) {
+                LOGGER.fine("[" + currencyId + "] 后台货币事件分发失败: " + exception.getMessage());
+            }
+        }
+
+        @Override
         public CurrencyTransactionResult withdraw(Player player, BigDecimal amount) {
             CurrencyTransactionResult result = delegate.withdraw(player, amount);
             if (result.success()) {
@@ -765,6 +960,14 @@ public final class CurrencyBridgeManager implements CurrencyBridgeAPI {
 
         @Override
         public CurrencyTransactionResult deposit(Player player, BigDecimal amount) {
+            if (delegate instanceof VaultCurrencyBridge vault) {
+                var operation = vault.invokeEconomyTransaction(player, amount, "入账失败。", false);
+                if (operation.result().success()) {
+                    var balance = operation.balanceAfter();
+                    publishCurrencyEvent(player, "deposit", amount, balance == null ? () -> vault.balance(player) : () -> balance);
+                }
+                return operation.result();
+            }
             CurrencyTransactionResult result = delegate.deposit(player, amount);
             if (result.success()) {
                 publishCurrencyEvent(player, "deposit", amount);
@@ -773,19 +976,23 @@ public final class CurrencyBridgeManager implements CurrencyBridgeAPI {
         }
 
         private void publishCurrencyEvent(Player player, String action, BigDecimal amount) {
+            publishCurrencyEvent(player, action, amount, () -> delegate.balance(player));
+        }
+
+        private void publishCurrencyEvent(Player player, String action, BigDecimal amount, Supplier<BigDecimal> balance) {
             Supplier<EventBusCapability> provider = eventBusProvider;
             if (provider == null || player == null) return;
             try {
                 EventBusCapability bus = provider.get();
-                if (bus == null) return;
-                String topic = "withdraw".equals(action) ? "axs.currency.spent" : "axs.currency.earned";
+                String topic = currencyTopic(action);
+                if (bus == null || !bus.hasSubscribers(topic)) return;
                 Map<String, String> payload = new LinkedHashMap<>(4);
                 payload.put("currency_id", currencyId);
                 payload.put("amount", amount == null ? "0" : amount.stripTrailingZeros().toPlainString());
                 payload.put("action", action);
                 // 尝试获取变动后余额（best-effort，失败不影响主流程）
                 try {
-                    BigDecimal balanceAfter = delegate.balance(player);
+                    BigDecimal balanceAfter = balance.get();
                     payload.put("balance_after", balanceAfter.stripTrailingZeros().toPlainString());
                 } catch (Exception exception) {
                     LOGGER.fine("[" + currencyId + "] 货币事件 balance_after 获取失败: " + exception.getMessage());
@@ -796,6 +1003,10 @@ public final class CurrencyBridgeManager implements CurrencyBridgeAPI {
                 // 事件分发失败不应影响货币操作主流程
                 LOGGER.fine("[" + currencyId + "] 货币事件分发失败: " + exception.getMessage());
             }
+        }
+
+        private String currencyTopic(String action) {
+            return "withdraw".equals(action) ? "axs.currency.spent" : "axs.currency.earned";
         }
     }
 }

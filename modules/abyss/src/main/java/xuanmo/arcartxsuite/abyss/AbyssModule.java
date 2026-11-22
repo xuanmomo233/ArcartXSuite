@@ -95,7 +95,7 @@ public final class AbyssModule extends AbstractAXSModule implements ModuleComman
     }
 
     @Override
-    protected void startService() throws Exception {
+    protected java.util.concurrent.CompletionStage<Void> prepareService() throws Exception {
         service = new AbyssService(
             this, plugin, configuration,
             packetBridge, itemStackBridge, itemSourceRegistry,
@@ -103,14 +103,19 @@ public final class AbyssModule extends AbstractAXSModule implements ModuleComman
             vanillaItemNameBridge, currencyManager, attributeBridge,
             ariaBridge, scriptConditionEvaluator, placeholderResolver,
             storageManager, scheduler, crossServer, logger, messages());
+        return service.prepareStorage(dataFolder);
+    }
+
+    @Override
+    protected void startService() throws Exception {
         service.setEventBusProvider(() -> getCapability(EventBusCapability.class));
         service.setLinks(new xuanmo.arcartxsuite.abyss.links.AbyssLinks(
-            this::getCapability, attributeBridge, logger));
+            this::getCapability, attributeBridge, logger, plugin));
         try {
             service.setWaypointBridge(createWaypointBridge());
             service.setNpcBridge(createAdyeshachNpcBridge());
         } catch (Throwable ignored) { }
-        service.start(dataFolder);
+        service.start();
         // R3：设计模式世界内贴图标记（ArcartX 缺席时为 null，DesignManager 自动跳过）
         if (service.designManager() != null) {
             service.designManager().setTextureBridge(worldTextureBridge);
@@ -196,9 +201,11 @@ public final class AbyssModule extends AbstractAXSModule implements ModuleComman
     @Override
     protected void stopService() {
         playerCommand = null;
-        if (service != null) {
-            service.shutdown();
-            service = null;
+        var retiring = service;
+        service = null;
+        if (retiring != null) {
+            try { retiring.shutdown(); }
+            finally { trackShutdown(retiring.stopped()); }
         }
     }
 
@@ -269,7 +276,8 @@ public final class AbyssModule extends AbstractAXSModule implements ModuleComman
     protected @NotNull xuanmo.arcartxsuite.api.PacketHandlerSpec createPacketHandlerSpec() {
         return xuanmo.arcartxsuite.api.PacketHandlerSpec.of(
             (player, packetId, data) ->
-                service != null && service.handleClientPacket(player, packetId, data));
+                service != null && service.handleClientPacket(player, packetId, data),
+            0, xuanmo.arcartxsuite.abyss.ui.AbyssUiService.CHANNEL, "abyss");
     }
 
     @Override

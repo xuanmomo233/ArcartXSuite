@@ -51,7 +51,7 @@ public final class AfkRewardAdminCommand implements ModuleCommandHandler {
      */
     @Override
     public List<String> actions() {
-        return List.of("help", "status");
+        return List.of("help", "status", "review");
     }
 
     /**
@@ -73,6 +73,7 @@ public final class AfkRewardAdminCommand implements ModuleCommandHandler {
         switch (action) {
             case "help" -> sendHelp(sender, label);
             case "status" -> sendStatus(sender);
+            case "review" -> sendReviews(sender);
             default -> sender.sendMessage(msg("admin.unknown", label));
         }
         return true;
@@ -97,6 +98,16 @@ public final class AfkRewardAdminCommand implements ModuleCommandHandler {
         String cmd = "/" + label + " afkreward";
         sender.sendMessage(msg("help.title"));
         sender.sendMessage(msg("help.status", cmd));
+        sender.sendMessage("§7" + cmd + " review§f - 查看待核对的挂机结算");
+    }
+
+    private void sendReviews(CommandSender sender) {
+        AfkRewardService service = serviceSupplier.get();
+        if (service == null) {
+            sender.sendMessage(msg("common.service-down"));
+            return;
+        }
+        service.showManualSettlementReviews(sender);
     }
 
     private void sendStatus(CommandSender sender) {

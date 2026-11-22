@@ -3,6 +3,7 @@ package xuanmo.arcartxsuite.lottery.command;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -10,6 +11,7 @@ import java.util.stream.Collectors;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.command.CommandSender;
+import org.bukkit.command.ConsoleCommandSender;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -26,17 +28,10 @@ public class LotteryAdminCommand {
 
     private final Supplier<LotteryService> serviceSupplier;
     private final MessageProvider messages;
-    private final Runnable reloadAction;
 
     public LotteryAdminCommand(Supplier<LotteryService> serviceSupplier, MessageProvider messages) {
-        this(serviceSupplier, messages, () -> {});
-    }
-
-    public LotteryAdminCommand(Supplier<LotteryService> serviceSupplier,
-                               MessageProvider messages, Runnable reloadAction) {
         this.serviceSupplier = serviceSupplier;
         this.messages = messages;
-        this.reloadAction = reloadAction;
     }
 
     /**
@@ -45,7 +40,7 @@ public class LotteryAdminCommand {
      * @return 不可变操作名称列表
      */
     public List<String> actions() {
-        return List.of("help", "status", "reset", "give-points", "simulate");
+        return List.of("help", "status", "reset", "give-points", "simulate", "gacha-review", "gacha-resolve");
     }
 
     /**
@@ -94,6 +89,8 @@ public class LotteryAdminCommand {
                 }
                 handleSimulate(sender, service, args[2], args[3]);
             }
+            case "gacha-review" -> inspectGachaOperation(sender, service, args);
+            case "gacha-resolve" -> resolveGachaOperation(sender, service, args);
             default -> showHelp(sender);
         }
         return true;
@@ -156,6 +153,83 @@ public class LotteryAdminCommand {
         sender.sendMessage(msg("help.reset", cmd));
         sender.sendMessage(msg("help.give-points", cmd));
         sender.sendMessage(msg("help.simulate", cmd));
+        sender.sendMessage(msg("help.gacha-review", cmd));
+        if (sender instanceof ConsoleCommandSender) sender.sendMessage(msg("help.gacha-resolve", cmd));
+    }
+
+    private void inspectGachaOperation(CommandSender sender, LotteryService service, String[] args) {
+        if (args.length != 3 && args.length != 4) {
+            sender.sendMessage(msg("help.gacha-review", "/axs lottery"));
+            return;
+        }
+        try {
+            Player player = Bukkit.getPlayerExact(args[2]);
+            UUID playerId = player == null ? UUID.fromString(args[2]) : player.getUniqueId();
+            UUID requested = args.length == 4 ? UUID.fromString(args[3]) : null;
+            var operation = requested == null ? service.getGachaOperation(playerId)
+                : service.getGachaOperation(playerId, requested);
+            UUID operationId = operation == null ? requested : operation.id();
+            var refunds = operationId == null ? java.util.List.<xuanmo.arcartxsuite.lottery.storage.LotteryRepository.RefundClaim>of()
+                : service.getRefundClaims(playerId, operationId);
+            if (operation == null && refunds.isEmpty()) {
+                sender.sendMessage(msg("admin.gacha-review.empty", playerId));
+                return;
+            }
+            if (operation != null) {
+                sender.sendMessage(msg("admin.gacha-review.entry", playerId, operation.id(), operation.poolId(), operation.status()));
+                operation.details().lines().forEach(line -> {
+                    int snapshot = line.indexOf(" 物品快照=");
+                    if (snapshot >= 0) line = line.substring(0, snapshot) + "（完整物品快照保存在凭证表）";
+                    sender.sendMessage(line.length() > 500 ? line.substring(0, 500) + "…" : line);
+                });
+            }
+            if (!refunds.isEmpty()) {
+                sender.sendMessage("§e操作 " + operationId + " 的退料记录");
+                for (var refund : refunds) {
+                    sender.sendMessage("§7#" + refund.id() + " " + refund.itemMetadata()
+                        + (refund.transferred() ? " 已转入待发奖励" : " 待领取")
+                        + (refund.transferId() == null ? "" : " 转交凭证 " + refund.transferId()));
+                }
+            }
+        } catch (IllegalArgumentException failure) {
+            sender.sendMessage(msg("help.gacha-review", "/axs lottery"));
+        } catch (java.sql.SQLException failure) {
+            service.getLogger().log(java.util.logging.Level.WARNING, "无法读取抽卡核对记录", failure);
+            sender.sendMessage(msg("common.error"));
+        }
+    }
+
+    private void resolveGachaOperation(CommandSender sender, LotteryService service, String[] args) {
+        if (!(sender instanceof ConsoleCommandSender)) {
+            sender.sendMessage(msg("admin.gacha-review.console-only"));
+            return;
+        }
+        if (args.length < 6) {
+            sender.sendMessage(msg("help.gacha-resolve", "/axs lottery"));
+            sender.sendMessage(msg("admin.gacha-review.resolve-scope"));
+            return;
+        }
+        try {
+            UUID playerId = UUID.fromString(args[2]);
+            UUID operation = UUID.fromString(args[3]);
+            String phase = args[4].toUpperCase(Locale.ROOT);
+            String reason = String.join(" ", java.util.Arrays.copyOfRange(args, 5, args.length));
+            if (reason.isBlank() || reason.length() > 500) {
+                sender.sendMessage(msg("help.gacha-resolve", "/axs lottery"));
+                return;
+            }
+            if (service.resolveGachaOperation(playerId, operation, phase, reason)) {
+                service.getLogger().info("管理员关闭已核对的抽卡凭证: player=" + playerId + " operation=" + operation);
+                sender.sendMessage(msg("admin.gacha-review.resolved", operation));
+            } else {
+                sender.sendMessage(msg("admin.gacha-review.changed", operation));
+            }
+        } catch (IllegalArgumentException failure) {
+            sender.sendMessage(msg("help.gacha-resolve", "/axs lottery"));
+        } catch (java.sql.SQLException failure) {
+            service.getLogger().log(java.util.logging.Level.WARNING, "无法关闭抽卡核对记录", failure);
+            sender.sendMessage(msg("common.error"));
+        }
     }
 
     private void handleStatus(CommandSender sender, LotteryService service) {
@@ -178,9 +252,13 @@ public class LotteryAdminCommand {
             return;
         }
         if (pool.type() == xuanmo.arcartxsuite.lottery.config.PoolType.GACHA) {
-            service.resetGachaState(target.getUniqueId(), poolId);
-        } else {
-            service.resetCaseState(target.getUniqueId(), poolId);
+            if (!service.resetGachaState(target.getUniqueId(), poolId)) {
+                sender.sendMessage(msg("common.error"));
+                return;
+            }
+        } else if (!service.resetCaseState(target.getUniqueId(), poolId)) {
+            sender.sendMessage(msg("common.error"));
+            return;
         }
         sender.sendMessage(msg("admin.reset.success", playerName, poolId));
     }
@@ -220,11 +298,18 @@ public class LotteryAdminCommand {
         }
         try {
             long amount = Long.parseLong(amountStr);
-            if (amount <= 0 || !service.givePoints(target.getUniqueId(), pointId, amount)) {
+            if (amount <= 0) {
                 sender.sendMessage(msg("admin.invalid-number", amountStr));
                 return;
             }
-            sender.sendMessage(msg("admin.give-points.success", playerName, amount, pointId));
+            service.givePoints(target.getUniqueId(), pointId, amount).whenComplete((saved, failure) ->
+                service.reply(() -> {
+                    if (sender instanceof Player player && (!player.isOnline() || Bukkit.getPlayer(player.getUniqueId()) != player
+                        || !player.hasPermission("arcartxsuite.admin"))) return;
+                    if (failure == null && Boolean.TRUE.equals(saved))
+                        sender.sendMessage(msg("admin.give-points.success", playerName, amount, pointId));
+                    else sender.sendMessage(msg("common.error"));
+                }));
         } catch (NumberFormatException e) {
             sender.sendMessage(msg("admin.invalid-number", amountStr));
         }

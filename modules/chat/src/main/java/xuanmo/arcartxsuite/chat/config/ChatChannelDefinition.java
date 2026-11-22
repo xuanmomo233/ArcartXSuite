@@ -45,6 +45,14 @@ public record ChatChannelDefinition(
             && range == 0.0D && receivePermission.isBlank();
     }
 
+    public boolean permitsCrossServer() {
+        return enabled && crossServer && range == 0.0D && mode != ChatChannelMode.PARTY;
+    }
+
+    public String audienceKey() {
+        return mode.name() + "|" + crossServer + "|" + range + "|" + receivePermission;
+    }
+
     /**
      * 从 yml 配置节加载频道定义。
      *
@@ -60,7 +68,16 @@ public record ChatChannelDefinition(
         String sendPermission = string(configuration.getString("send-permission", ""));
         String receivePermission = string(configuration.getString("receive-permission", sendPermission));
         boolean crossServer = configuration.getBoolean("cross-server", mode == ChatChannelMode.GLOBAL || mode == ChatChannelMode.STAFF);
-        double range = Math.max(0.0D, configuration.getDouble("range", 0.0D));
+        if (configuration.isSet("range") && !(configuration.get("range") instanceof Number)) {
+            throw new IllegalArgumentException("range 必须是数字");
+        }
+        double range = configuration.getDouble("range", 0.0D);
+        if (!Double.isFinite(range) || range < 0.0D || (range > 0.0D && mode != ChatChannelMode.NORMAL)) {
+            throw new IllegalArgumentException("range 必须是非负有限数，正数仅适用于 normal 频道");
+        }
+        if (mode == ChatChannelMode.STAFF && (sendPermission.isBlank() || receivePermission.isBlank())) {
+            throw new IllegalArgumentException("staff 频道必须设置发送和接收权限");
+        }
         String format = string(configuration.getString("format", "&7[{channel}] &f{player_name}&7: &r{message}"));
         String consoleFormat = string(configuration.getString("console-format", "[{channel}] {player_name}: {message}"));
         String senderFormat = string(configuration.getString("sender-format", "&d[私聊 -> {target_name}] &f{player_name}&7: &r{message}"));

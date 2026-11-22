@@ -23,12 +23,12 @@ data class DebugConfig(
 ) {
     companion object {
         fun load(yaml: YamlConfiguration): DebugConfig {
-            val enabled = yaml.getBoolean("debug.enabled", true)
-            val host = yaml.getString("websocket.host") ?: "0.0.0.0"
+            val enabled = yaml.getBoolean("debug.enabled", false)
+            val host = yaml.getString("websocket.host")?.trim() ?: "127.0.0.1"
             val port = yaml.getInt("websocket.port", 18899)
-            val token = yaml.getString("websocket.token") ?: "axs-debug-local"
+            val token = yaml.getString("websocket.token") ?: ""
             val captureBufferSize = yaml.getInt("packet-capture.buffer-size", 256)
-            val logPayload = yaml.getBoolean("packet-capture.log-payload", true)
+            val logPayload = yaml.getBoolean("packet-capture.log-payload", false)
             return DebugConfig(enabled, host, port, token, captureBufferSize, logPayload)
         }
     }

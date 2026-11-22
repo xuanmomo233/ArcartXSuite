@@ -49,12 +49,13 @@ ui:
   packetHandler:
     update: |-
       var.actionToken = packet['action_token']
+      var.canSortBackpack = packet['canSortBackpack'] == true
       var.goldBalance = packet['goldBalance']
       var.pointsBalance = packet['pointsBalance']
       var.capacityText = packet['capacityText']
       var.maxCapacity = packet['maxCapacity']
       var.canBuySlots = packet['canBuySlots']
-      var.buySlotsText = packet['buySlotsText']
+      var.buySlotsText = packet['buySlotsText'] == none ? '' : packet['buySlotsText']
       var.remainingSlots = packet['remainingSlots']
       var.initialCapacity = packet['initialCapacity']
       var.slotPriceKnown = packet['slotPriceAmount'] != none
@@ -109,6 +110,11 @@ ui:
         noticeWrapped = var.noticeText.replaceAll('(.{22})(?=.)', '$1\n')
         var.noticeLines = noticeWrapped.split('\n')
         var.noticeCount = math.max(1, math.min(12, var.noticeLines.size()))
+        noticeLongest = 0
+        for(i in range(0, var.noticeCount - 1)){
+          noticeLongest = math.max(noticeLongest, var.noticeLines.get(i.round()).length())
+        }
+        var.noticeWidth = math.max(320, math.min(560, noticeLongest * 18 + 88))
         var.noticeFade.reset()
         var.noticePeaked = false
         var.noticeActive = true
@@ -126,14 +132,14 @@ ui:
       }
     tick: |-
       // 相机偏转保持：玩家转向后重设状态相机（与 menu_esc 相同模式）
-      if(server.player_yaw != var.yaw){
+      if(server.player_yaw != var.yaw && (var.backpackEnter == none || var.backpackEnter.get() >= 1)){
         var.yaw = server.player_yaw
         Camera.setState(-0.7, -0.5, 2.1, 210, 0.0, 600)
       }
       // 主武器 Icon 槽随主手物品变化刷新
       mh = Player.getMainHandItem()
       mk = mh == none ? '' : mh.getName() + '#' + mh.getCount()
-      if(mk != var.主手缓存){
+      if(val.主武器槽 != none && mk != var.主手缓存){
         var.主手缓存 = mk
         val.主武器槽.setItemIcon(mh == none ? '' : mh.toJson())
       }
@@ -177,7 +183,6 @@ ui:
           var.noticeActive = false
           var.noticePeaked = false
           var.noticeText = ''
-          var.noticeDetail = ''
         }
       }
     load: |-
@@ -189,6 +194,7 @@ ui:
       var.slotPriceAmount = 0
       var.slotPriceCurrency = ''
       var.slotCurrencyName = ''
+      var.buySlotsText = ''
       var.canBuySlots = false
       var.capacityText = '—'
       var.maxCapacity = 0
@@ -202,6 +208,9 @@ ui:
       var.searchText = ''
       // 服务端在注册 UI 前写入此标记；布局不依赖物品数据包。
       var.whLayoutEnabled = false
+      // Vanilla 注册 UI 时写入时长，0 关闭入场转场。
+      var.backpackTransitionMs = 0
+      var.backpackEnter = none
       var.whResolved = false
       var.whAvailable = false
       var.whToken = ''
@@ -232,11 +241,11 @@ ui:
       var.whPinHovered = false
       var.noticeActive = false
       var.noticeText = ''
-      var.noticeDetail = ''
-      var.noticeFade = Fade(80, 1000, 220)
+      var.noticeFade = Fade(70, 650, 180)
       var.noticePeaked = false
       var.noticeLines = []
       var.noticeCount = 1
+      var.noticeWidth = 320
       var.actionToken = ''
     resize: |-
       sx = Screen.getWidth() / 1920
@@ -246,16 +255,25 @@ ui:
       var.viewH = Screen.getHeight() / s
       var.offX = (var.viewW - 1920) / 2
     open: |-
+      var.backpackEnter = none
+      if (var.backpackTransitionMs > 0) {
+        var.backpackEnter = Q2(0, 1, 1, var.backpackTransitionMs)
+        var.backpackEnter.reset()
+        var.yaw = server.player_yaw
+      }
       var.actionToken = ''
+      var.canSortBackpack = false
       var.noticeActive = false
       var.noticePeaked = false
       var.noticeText = ''
-      var.noticeDetail = ''
+      var.noticeLines = []
+      var.noticeCount = 1
+      var.noticeWidth = 320
       if(var.whLayoutEnabled){
         Packet.send(var.packetId, 'warehouse_panel', 'open')
       }
       Packet.send(var.packetId, 'refresh')
-      Camera.setState(-0.7, -0.5, 2.1, 210, 0.0, 600)
+      Camera.setState(-0.7, -0.5, 2.1, 210, 0.0, var.backpackTransitionMs > 0 ? var.backpackTransitionMs : 600)
       Camera.setThirdPerson(true)
       // 顶栏货币图标（原版物品 NBT，按服务器喜好更换）
       val.金币图标.setItemIcon('{"id":"minecraft:gold_ingot","Count":1b}')
@@ -280,6 +298,7 @@ controls:
         attribute:
           point: ~top_left
           x: -var.offX
+          alpha: 'var.backpackEnter == none ? 1 : var.backpackEnter.get()'
           y: 0
           width: var.viewW
           height: 88
@@ -461,7 +480,7 @@ controls:
             type: Canvas
             attribute:
               point: ~top_right
-              x: -296
+              x: -436
               y: 20
               width: 'var.whLayoutEnabled ? 1040 : 816'
               height: 48
@@ -781,13 +800,47 @@ controls:
               point: ~top_right
               x: -40
               y: 22
-              width: 224
+              width: 364
               height: 44
             children:
-              合成按钮:
+              整理背包:
                 type: Canvas
                 attribute:
                   x: 0
+                  y: 0
+                  width: 128
+                  height: 44
+                  visible: var.canSortBackpack == true
+                  enable: var.actionToken != '' && !var.carrying && !var.actionBusy && !var.设置面板开 && !var.passwordPanel['visible'] && !var.destroyPanel['visible']
+                  alpha: '(var.carrying || var.actionBusy) ? 0.5 : 1'
+                  tip: ~整理原版背包 27 格，保留快捷栏和装备
+                action:
+                  clickLeft: Packet.send(var.packetId, 'sort_backpack', var.actionToken)
+                children:
+                  底色:
+                    type: Texture
+                    attribute:
+                      width: 128
+                      height: 44
+                      normal: 'self.parent.isHovered() ? ''220,205,176,255'' : ''232,224,207,255'''
+                      shape: ~round_rect
+                      radius: 6
+                      through: true
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~151,126,80,255
+                  文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: ~&0整理背包
+                      fontSize: 32
+                      through: true
+              合成按钮:
+                type: Canvas
+                attribute:
+                  x: 140
                   y: 0
                   width: 112
                   height: 44
@@ -838,7 +891,7 @@ controls:
                 type: Canvas
                 attribute:
                   point: ~top_left
-                  x: 124
+                  x: 264
                   y: 0
                   width: 44
                   height: 44
@@ -874,7 +927,7 @@ controls:
                 type: Canvas
                 attribute:
                   point: ~top_left
-                  x: 180
+                  x: 320
                   y: 0
                   width: 44
                   height: 44
@@ -910,7 +963,8 @@ controls:
         type: Canvas
         attribute:
           point: ~top_left
-          x: 40 - var.offX
+          x: '40 - var.offX - (var.backpackEnter == none ? 0 : (1 - var.backpackEnter.get()) * 36)'
+          alpha: 'var.backpackEnter == none ? 1 : var.backpackEnter.get()'
           y: 110
           width: 420
           height: 922
@@ -1761,7 +1815,8 @@ controls:
         type: Canvas
         attribute:
           point: ~top_right
-          x: var.offX - 40
+          x: 'var.offX - 40 + (var.backpackEnter == none ? 0 : (1 - var.backpackEnter.get()) * 36)'
+          alpha: 'var.backpackEnter == none ? 1 : var.backpackEnter.get()'
           y: 110
           width: 686
           height: 'var.whLayoutEnabled ? 922 : 432'
@@ -2134,9 +2189,12 @@ controls:
                       through: true
                       rotate: 45
           分类标签行:
-            type: HGrid
+            type: RepeatGrid
             val: 分类标签行
             attribute:
+              items: "[0, 1, 2, 3, 4, 5]"
+              flow: ~row
+              maxSize: 6
               x: 24
               y: 402
               width: 588
@@ -2146,17 +2204,11 @@ controls:
               spaceBetweenY: 8
               visible: var.whLayoutEnabled
               enable: var.whAvailable
-            action:
-              create: |-
-                for(i in range(1, 5)){
-                  tab = self['项'].copy('分类项' + i.round())
-                  tab.entryKey = i.round()
-                }
             children:
               项:
                 type: Canvas
                 attribute:
-                  entryKey: 0.round()
+                  entryKey: self.item
                   entry: var.categories[(var.categoryOffset + self.entryKey).round()]
                   visible: self.entry != none
                   width: 88
@@ -2904,7 +2956,7 @@ controls:
             attribute:
               x: 24
               y: 750
-              texts: 'var.carrying ? ''&0点击上方区域存回仓库'' : ''&0左键取一组 · 右键取半组'''
+              texts: 'var.carrying ? ''&0点击上方区域存回仓库'' : ''&0左键一组 · 右键半组 · 到背包'''
               fontSize: 28
               visible: var.whLayoutEnabled
               through: true
@@ -3014,8 +3066,8 @@ controls:
               point: ~top_left
               y: 130
               limit: 28
-              texts: 'var.slotPriceKnown ? ''&0每格 '' + var.slotPriceAmount + '' '' + var.slotCurrencyName : ''&0'' + var.buySlotsText.replaceAll(''[&§][0-9a-fk-orA-FK-OR]'',
-                '''')'
+              texts: |-
+                var.slotPriceKnown ? '&0每格 ' + var.slotPriceAmount + ' ' + var.slotCurrencyName : (var.buySlotsText == none ? '' : '&0' + var.buySlotsText.replaceAll('[&§][0-9a-fk-orA-FK-OR]', ''))
               fontSize: 36
               through: true
               x: 32
@@ -3410,8 +3462,8 @@ controls:
           point: ~middle_center
           x: 0
           y: 0
-          width: 560
-          height: var.noticeCount * 28 + 36
+          width: var.noticeWidth
+          height: var.noticeCount * 32 + 56
           visible: var.noticeActive
           alpha: 'var.noticeFade == none ? 0 : var.noticeFade.get()'
           through: true
@@ -3419,45 +3471,62 @@ controls:
           阴影:
             type: Texture
             attribute:
-              x: 2
-              y: 3
-              width: 560
+              x: 3
+              y: 5
+              width: self.parent.width
               height: self.parent.height
-              normal: ~0,0,0,48
+              normal: ~86,68,39,40
               shape: ~round_rect
               radius: 6
               through: true
-          底板:
-            type: Texture
+          镶边底板:
+            type: Canvas
             attribute:
               point: ~stretch_all
-              normal: ~56,54,49,250
-              shape: ~round_rect
-              radius: 6
               through: true
-            effect:
-              stroke:
-                width: 1
-                color: ~100,98,93,255
-          侧标:
+            action:
+              create: self.create('象牙镶边10_6', '镶边')
+          顶饰左线:
             type: Texture
             attribute:
-              x: 12
-              y: 14
-              width: 2
-              height: self.parent.height - 28
-              normal: ~132,130,125,255
+              point: ~top_center
+              x: -25
+              y: 18
+              width: 28
+              height: 1
+              normal: ~181,156,108,255
+              through: true
+          顶饰右线:
+            type: Texture
+            attribute:
+              point: ~top_center
+              x: 25
+              y: 18
+              width: 28
+              height: 1
+              normal: ~181,156,108,255
+              through: true
+          顶饰菱形:
+            type: Texture
+            attribute:
+              point: ~top_center
+              x: 0
+              y: 15
+              width: 6
+              height: 6
+              rotate: 45
+              normal: ~151,126,80,255
               through: true
           文字0:
             type: Text
             attribute:
               point: ~top_center
               x: 0
-              y: 18
-              texts: 'var.noticeCount > 0 ? ''&f'' + var.noticeLines.get(0.round()) : '''''
+              y: 28
+              texts: 'var.noticeLines != none && var.noticeLines.size() > 0 ? ''&0'' + var.noticeLines.get(0.round()) : '''''
               fontSize: 36
               alignment: ~center
-              visible: var.noticeCount > 0
+              visible: var.noticeLines != none && var.noticeLines.size() > 0
               tip: var.noticeText
               through: true
           文字1:
@@ -3465,11 +3534,11 @@ controls:
             attribute:
               point: ~top_center
               x: 0
-              y: 46
-              texts: 'var.noticeCount > 1 ? ''&f'' + var.noticeLines.get(1.round()) : '''''
+              y: 60
+              texts: 'var.noticeLines != none && var.noticeLines.size() > 1 ? ''&0'' + var.noticeLines.get(1.round()) : '''''
               fontSize: 36
               alignment: ~center
-              visible: var.noticeCount > 1
+              visible: var.noticeLines != none && var.noticeLines.size() > 1
               tip: var.noticeText
               through: true
           文字2:
@@ -3477,11 +3546,11 @@ controls:
             attribute:
               point: ~top_center
               x: 0
-              y: 74
-              texts: 'var.noticeCount > 2 ? ''&f'' + var.noticeLines.get(2.round()) : '''''
+              y: 92
+              texts: 'var.noticeLines != none && var.noticeLines.size() > 2 ? ''&0'' + var.noticeLines.get(2.round()) : '''''
               fontSize: 36
               alignment: ~center
-              visible: var.noticeCount > 2
+              visible: var.noticeLines != none && var.noticeLines.size() > 2
               tip: var.noticeText
               through: true
           文字3:
@@ -3489,11 +3558,11 @@ controls:
             attribute:
               point: ~top_center
               x: 0
-              y: 102
-              texts: 'var.noticeCount > 3 ? ''&f'' + var.noticeLines.get(3.round()) : '''''
+              y: 124
+              texts: 'var.noticeLines != none && var.noticeLines.size() > 3 ? ''&0'' + var.noticeLines.get(3.round()) : '''''
               fontSize: 36
               alignment: ~center
-              visible: var.noticeCount > 3
+              visible: var.noticeLines != none && var.noticeLines.size() > 3
               tip: var.noticeText
               through: true
           文字4:
@@ -3501,11 +3570,11 @@ controls:
             attribute:
               point: ~top_center
               x: 0
-              y: 130
-              texts: 'var.noticeCount > 4 ? ''&f'' + var.noticeLines.get(4.round()) : '''''
+              y: 156
+              texts: 'var.noticeLines != none && var.noticeLines.size() > 4 ? ''&0'' + var.noticeLines.get(4.round()) : '''''
               fontSize: 36
               alignment: ~center
-              visible: var.noticeCount > 4
+              visible: var.noticeLines != none && var.noticeLines.size() > 4
               tip: var.noticeText
               through: true
           文字5:
@@ -3513,11 +3582,11 @@ controls:
             attribute:
               point: ~top_center
               x: 0
-              y: 158
-              texts: 'var.noticeCount > 5 ? ''&f'' + var.noticeLines.get(5.round()) : '''''
+              y: 188
+              texts: 'var.noticeLines != none && var.noticeLines.size() > 5 ? ''&0'' + var.noticeLines.get(5.round()) : '''''
               fontSize: 36
               alignment: ~center
-              visible: var.noticeCount > 5
+              visible: var.noticeLines != none && var.noticeLines.size() > 5
               tip: var.noticeText
               through: true
           文字6:
@@ -3525,11 +3594,11 @@ controls:
             attribute:
               point: ~top_center
               x: 0
-              y: 186
-              texts: 'var.noticeCount > 6 ? ''&f'' + var.noticeLines.get(6.round()) : '''''
+              y: 220
+              texts: 'var.noticeLines != none && var.noticeLines.size() > 6 ? ''&0'' + var.noticeLines.get(6.round()) : '''''
               fontSize: 36
               alignment: ~center
-              visible: var.noticeCount > 6
+              visible: var.noticeLines != none && var.noticeLines.size() > 6
               tip: var.noticeText
               through: true
           文字7:
@@ -3537,11 +3606,11 @@ controls:
             attribute:
               point: ~top_center
               x: 0
-              y: 214
-              texts: 'var.noticeCount > 7 ? ''&f'' + var.noticeLines.get(7.round()) : '''''
+              y: 252
+              texts: 'var.noticeLines != none && var.noticeLines.size() > 7 ? ''&0'' + var.noticeLines.get(7.round()) : '''''
               fontSize: 36
               alignment: ~center
-              visible: var.noticeCount > 7
+              visible: var.noticeLines != none && var.noticeLines.size() > 7
               tip: var.noticeText
               through: true
           文字8:
@@ -3549,11 +3618,11 @@ controls:
             attribute:
               point: ~top_center
               x: 0
-              y: 242
-              texts: 'var.noticeCount > 8 ? ''&f'' + var.noticeLines.get(8.round()) : '''''
+              y: 284
+              texts: 'var.noticeLines != none && var.noticeLines.size() > 8 ? ''&0'' + var.noticeLines.get(8.round()) : '''''
               fontSize: 36
               alignment: ~center
-              visible: var.noticeCount > 8
+              visible: var.noticeLines != none && var.noticeLines.size() > 8
               tip: var.noticeText
               through: true
           文字9:
@@ -3561,11 +3630,11 @@ controls:
             attribute:
               point: ~top_center
               x: 0
-              y: 270
-              texts: 'var.noticeCount > 9 ? ''&f'' + var.noticeLines.get(9.round()) : '''''
+              y: 316
+              texts: 'var.noticeLines != none && var.noticeLines.size() > 9 ? ''&0'' + var.noticeLines.get(9.round()) : '''''
               fontSize: 36
               alignment: ~center
-              visible: var.noticeCount > 9
+              visible: var.noticeLines != none && var.noticeLines.size() > 9
               tip: var.noticeText
               through: true
           文字10:
@@ -3573,11 +3642,11 @@ controls:
             attribute:
               point: ~top_center
               x: 0
-              y: 298
-              texts: 'var.noticeCount > 10 ? ''&f'' + var.noticeLines.get(10.round()) : '''''
+              y: 348
+              texts: 'var.noticeLines != none && var.noticeLines.size() > 10 ? ''&0'' + var.noticeLines.get(10.round()) : '''''
               fontSize: 36
               alignment: ~center
-              visible: var.noticeCount > 10
+              visible: var.noticeLines != none && var.noticeLines.size() > 10
               tip: var.noticeText
               through: true
           文字11:
@@ -3585,11 +3654,11 @@ controls:
             attribute:
               point: ~top_center
               x: 0
-              y: 326
-              texts: 'var.noticeCount > 11 ? ''&f'' + var.noticeLines.get(11.round()) : '''''
+              y: 380
+              texts: 'var.noticeLines != none && var.noticeLines.size() > 11 ? ''&0'' + var.noticeLines.get(11.round()) : '''''
               fontSize: 36
               alignment: ~center
-              visible: var.noticeCount > 11
+              visible: var.noticeLines != none && var.noticeLines.size() > 11
               tip: var.noticeText
               through: true
 template:

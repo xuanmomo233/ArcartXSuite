@@ -12,10 +12,11 @@ public enum ChatChannelMode {
     NORMAL,
     GLOBAL,
     PRIVATE,
-    STAFF;
+    STAFF,
+    PARTY;
 
     /**
-     * 将字符串解析为频道模式，无法识别时默认返回 {@link #NORMAL}。
+     * 将频道模式配置解析为枚举。空值使用 NORMAL，无法识别的模式应停用频道。
      *
      * @param rawValue 原始字符串（如 "global"、"private"、"staff"）
      * @return 对应的频道模式
@@ -26,7 +27,9 @@ public enum ChatChannelMode {
             case "global" -> GLOBAL;
             case "private" -> PRIVATE;
             case "staff" -> STAFF;
-            default -> NORMAL;
+            case "party" -> PARTY;
+            case "", "normal" -> NORMAL;
+            default -> throw new IllegalArgumentException("未知频道模式 " + rawValue);
         };
     }
 }

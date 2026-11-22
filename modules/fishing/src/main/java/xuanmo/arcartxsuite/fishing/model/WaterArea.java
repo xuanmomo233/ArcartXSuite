@@ -41,8 +41,75 @@ public record WaterArea(
     int minPlayerLevel,
     int maxPlayerLevel,
     @NotNull Map<String, Double> baitMultipliers,
-    @Nullable String requirePermission
+    @Nullable String requirePermission,
+    @NotNull List<School> schools,
+    @NotNull List<ObstacleZone> obstacleZones,
+    @NotNull List<CurrentZone> currentZones
 ) {
+    public WaterArea {
+        obstacleZones = List.copyOf(obstacleZones);
+        currentZones = List.copyOf(currentZones);
+    }
+
+    public record ObstacleZone(String id, String displayName, List<PointInPolygon.Vertex> vertices,
+                               double trackMin, double trackMax, int warningTicks, double tensionPerTick) {
+        public ObstacleZone {
+            vertices = List.copyOf(vertices);
+            if (vertices.stream().distinct().count() < 3 || !(trackMin >= 0 && trackMin < trackMax && trackMax <= 1)
+                || warningTicks < 0 || !Double.isFinite(tensionPerTick) || tensionPerTick <= 0) {
+                throw new IllegalArgumentException("障碍区坐标、危险带或张力参数无效 " + id);
+            }
+        }
+
+        public boolean containsTrackPosition(double position) {
+            return position >= trackMin && position <= trackMax;
+        }
+    }
+
+    /** 在已解析的水域中选择第一个命中浮漂 XZ 方块坐标的障碍区。 */
+    public @Nullable ObstacleZone obstacleAt(Location hook) {
+        int x = hook.getBlockX();
+        int z = hook.getBlockZ();
+        for (ObstacleZone zone : obstacleZones) {
+            if (PointInPolygon.contains(zone.vertices(), x, z)) return zone;
+        }
+        return null;
+    }
+
+    public record CurrentZone(String id, String displayName, List<PointInPolygon.Vertex> vertices,
+                              double trackMin, double trackMax, double driftPerTick, int carryTicks) {
+        public CurrentZone {
+            vertices = List.copyOf(vertices);
+            if (vertices.stream().distinct().count() < 3 || !(trackMin >= 0 && trackMin < trackMax && trackMax <= 1)
+                || !(Math.abs(driftPerTick) > 0 && Math.abs(driftPerTick) <= 0.05) || carryTicks <= 0) {
+                throw new IllegalArgumentException("水流区坐标、水层、漂移或持续时间无效 " + id);
+            }
+        }
+    }
+
+    public @Nullable CurrentZone currentAt(Location hook) {
+        int x = hook.getBlockX();
+        int z = hook.getBlockZ();
+        for (CurrentZone zone : currentZones) {
+            if (PointInPolygon.contains(zone.vertices(), x, z)) return zone;
+        }
+        return null;
+    }
+
+    public record School(String id, double x, double y, double z, double radius, long activeTicks,
+                         long intervalTicks, boolean rainOnly, Map<String, Double> weights,
+                         double shoreX, double shoreY, double shoreZ) {
+        public School {
+            weights = Map.copyOf(weights);
+            if (!Double.isFinite(radius) || radius <= 0 || radius > 64
+                || activeTicks <= 0 || intervalTicks < activeTicks
+                || !Double.isFinite(x) || !Double.isFinite(y) || !Double.isFinite(z)
+                || !Double.isFinite(shoreX) || !Double.isFinite(shoreY) || !Double.isFinite(shoreZ)
+                || weights.values().stream().anyMatch(weight -> !Double.isFinite(weight) || weight <= 0 || weight > 100)) {
+                throw new IllegalArgumentException("鱼讯范围、时长、坐标或权重无效 " + id);
+            }
+        }
+    }
 
     // ─── bounding box 缓存（record 不能有实例字段，用外部 Map） ──
     private record Bbox(int minX, int maxX, int minZ, int maxZ) {}

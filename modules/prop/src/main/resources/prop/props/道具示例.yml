@@ -3,7 +3,7 @@
 # 前置依赖: ArcartX；Prop 模块启用后生效。
 # 启用开关: config.yml -> modules.prop.enabled + modules.prop.password
 # 关联文件: ArcartXProp.yml、prop/key.yml、prop/language.yml
-# 重载命令: /axs prop reload
+# 重载命令: /axs reload prop
 # 最小使用路径: coolDownGroup + effects
 
 # 冷却组；同一组内的多个道具会共享冷却时间。
@@ -11,9 +11,6 @@ coolDownGroup: "默认冷却组"
 
 # 冷却时间，单位秒。
 coolDownTime: 10
-
-# 持续时间，单位秒；部分效果会在该时间结束后自动移除。
-Duration: 10
 
 # 使用后是否消耗物品。
 remove: true
@@ -75,18 +72,41 @@ conditions: []
 #   conditions:
 #     - "%player_health% < 10"
 
-# 效果列表示例:
-# cmd|say hello {player}        -> 执行后台命令
-# msg|hello {player}            -> 给玩家发送消息
-# food|10                       -> 恢复饱食度
-# health|10                     -> 恢复生命值
-# exp|10                        -> 增加经验
-# healthPercent|10              -> 按百分比恢复生命值
-# potion|SPEED:1                -> 附加药水效果（等级 1 起；支持新旧枚举名与中文别名，如 potion|速度:1）
-# ap|物理伤害:10                 -> 附加 AttributePlus 词条
-# ml|ATTACK_DAMAGE:5            -> 附加 MythicLib 临时属性
-# mythiclib|critical_damage:8   -> 同上，支持完整前缀写法
-# 最小示例保留一个可运行效果，实际可继续追加多行。
+# 每种药水和每组属性单独配置 duration，单位为秒。
 effects:
-  # potion|SPEED:2 -> 附加速度 II 药水效果
-  - "potion|SPEED:2"
+  potions:
+    - id: minecraft:speed
+      level: 2
+      duration: 10
+      particles: false
+
+  # 可选即时效果
+  # health:
+  #   points: 4
+  #   max-health-percent: 10
+  # food: 2
+  # experience: 5
+  # messages:
+  #   - "&a{player} 已获得补给"
+  # commands:
+  #   - "say {player} 使用了补给"
+
+  # 可选模组属性示例。要求本体模组属性桥接可用，且装有相应模组。
+  # mod 和 symphony 支持 add、multiply-base、multiply-total。
+  # 倍率填写比例，例 0.2 表示 20%。不同组可作用于同一属性。
+  # attributes:
+  #   mod:
+  #     gun-damage:
+  #       duration: 15
+  #       modifiers:
+  #         - id: gunsmithlib:bullet_damage
+  #           amount: 5
+  #           operation: add
+  #           # amount 也可直接填写 Aria 表达式，例如：
+  #           # amount: "math.min(20, 5 + global.stats.symphony('physical_damage') * 0.2)"
+  #     fast-reload:
+  #       duration: 8
+  #       modifiers:
+  #         - id: gunsmithlib:reload_speed
+  #           amount: 0.2
+  #           operation: multiply-total

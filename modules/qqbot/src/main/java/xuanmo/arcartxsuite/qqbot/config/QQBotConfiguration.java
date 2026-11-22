@@ -165,7 +165,8 @@ public record QQBotConfiguration(
                     toStr(map.get("qq-to-game"), "&7[QQ] &f{nick}: &7{message}"),
                     toBoolean(map.get("commands-enabled")),
                     toStr(map.get("join-message"), "[MC] {player} 加入了服务器"),
-                    toStr(map.get("quit-message"), "[MC] {player} 离开了服务器")
+                    toStr(map.get("quit-message"), "[MC] {player} 离开了服务器"),
+                    toStr(map.get("chat-channel"), "normal")
                 ));
             }
         }

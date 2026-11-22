@@ -1,5 +1,6 @@
 package xuanmo.arcartxsuite.market.playershop;
 
+import xuanmo.arcartxsuite.market.MarketWork;
 import java.util.List;
 import java.util.Map;
 import java.util.LinkedHashMap;
@@ -38,6 +39,7 @@ public final class PlayerShopController implements AutoCloseable {
     private record StoreQuery(int page,String keyword) {}
     private record DirectoryQuery(int page,String keyword,boolean favorites) {}
     private final JavaPlugin plugin;
+    private final MarketWork work;
     private final MarketRepository repository;
     private final MarketModuleConfiguration config;
     private final PacketBridgeAPI packets;
@@ -55,6 +57,7 @@ public final class PlayerShopController implements AutoCloseable {
     private final Map<UUID,UUID> stores=new ConcurrentHashMap<>();
     private final Map<UUID,String> origins=new ConcurrentHashMap<>();
     private final Map<UUID,StoreQuery> storeQueries=new ConcurrentHashMap<>();
+    private final Map<UUID, Long> sharedListings = new ConcurrentHashMap<>();
     private final Map<UUID,DirectoryQuery> directoryQueries=new ConcurrentHashMap<>();
     private final Set<UUID> directoryRestore=ConcurrentHashMap.newKeySet();
     private final Set<UUID> saving=ConcurrentHashMap.newKeySet();
@@ -63,18 +66,19 @@ public final class PlayerShopController implements AutoCloseable {
     private final Map<UUID,Long> checkoutTickets=new ConcurrentHashMap<>();
     private volatile boolean closed;
 
-    public PlayerShopController(JavaPlugin plugin,MarketRepository repository,MarketModuleConfiguration config,PacketBridgeAPI packets,
+    public PlayerShopController(MarketWork work, JavaPlugin plugin,MarketRepository repository,MarketModuleConfiguration config,PacketBridgeAPI packets,
                                  ItemBridgeAPI items,AuctionItemSerializer serializer,CurrencyBridgeAPI currencies,ContentModerator moderator,Host host,Logger logger) {
-        this.plugin=plugin;this.repository=repository;this.config=config;this.packets=packets;this.items=items;
+        this.plugin=plugin;this.work = work;this.repository=repository;this.config=config;this.packets=packets;this.items=items;
         this.serializer=serializer;this.currencies=currencies;this.host=host;this.logger=logger;
         identities=new PlayerShopIdentityService(repository,config.playerShop(),serializer,moderator);
     }
 
     public void clear(UUID player) {
         tickets.remove(player);epochs.remove(player);pendingReads.remove(player);stores.remove(player);origins.remove(player);storeQueries.remove(player);directoryQueries.remove(player);
+        sharedListings.remove(player);
         directoryRestore.remove(player);identities.clear(player);checkoutTickets.remove(player);
     }
-    @Override public void close(){closed=true;tickets.clear();epochs.clear();pendingReads.clear();reading.clear();stores.clear();origins.clear();storeQueries.clear();directoryQueries.clear();identities.clear();directoryRestore.clear();saving.clear();following.clear();checkoutReading.clear();checkoutTickets.clear();}
+    @Override public void close(){closed=true;tickets.clear();epochs.clear();pendingReads.clear();reading.clear();stores.clear();origins.clear();storeQueries.clear();directoryQueries.clear();identities.clear();directoryRestore.clear();saving.clear();following.clear();checkoutReading.clear();checkoutTickets.clear();sharedListings.clear();}
     public boolean isStoreOpen(Player player){return packets.isUiOpen(player,config.ui().playerStoreId());}
     public UUID selectedOwner(Player player){return stores.get(player.getUniqueId());}
     public String tradeUi(Player player){return isStoreOpen(player)?config.ui().playerStoreId():config.ui().playerShopId();}
@@ -83,8 +87,18 @@ public final class PlayerShopController implements AutoCloseable {
     private void newView(Player player){long epoch=sequence.incrementAndGet();epochs.put(player.getUniqueId(),epoch);tickets.put(player.getUniqueId(),epoch);pendingReads.remove(player.getUniqueId());}
     public void openDirectory(Player player){newView(player);host.open(player,config.ui().playerShopsId());}
     public boolean openStore(Player player,UUID owner){
+        return openStore(player, owner, null);
+    }
+
+    public boolean openSharedListing(Player player, PlayerShopListing listing) {
+        return openStore(player, listing.getSeller(), listing.getId());
+    }
+
+    private boolean openStore(Player player, UUID owner, Long sharedListing) {
         if(owner==null)return false;
         UUID viewer=player.getUniqueId();
+        if (sharedListing == null) sharedListings.remove(viewer);
+        else sharedListings.put(viewer, sharedListing);
         if(packets.isUiOpen(player,config.ui().playerShopId()))origins.put(viewer,"market");
         else if(packets.isUiOpen(player,config.ui().playerShopsId()))origins.put(viewer,"directory");
         else origins.putIfAbsent(viewer,"directory");
@@ -115,12 +129,12 @@ public final class PlayerShopController implements AutoCloseable {
         }
         long ticket=sequence.incrementAndGet();tickets.put(viewer,ticket);
         if(mutation)pendingReads.remove(viewer);
-        Bukkit.getScheduler().runTaskAsynchronously(plugin,()->{
+        this.work.async(()->{
             T result=null;String failure=null;
             try{if(!closed)result=work.get();}catch(RuntimeException exception){failure="店铺数据处理暂不可用，请重新加载核对";logger.warning("[PlayerShop] "+exception.getMessage());}
             if(closed){if(!mutation)reading.remove(viewer);else releaseWrite(viewer,errorHandler);return;}
             final T loaded=result;final String message=failure;
-            Bukkit.getScheduler().runTask(plugin,()->{
+            this.work.main(()->{
                 Player online=Bukkit.getPlayer(viewer);
                 if(mutation)releaseWrite(viewer,errorHandler);
                 if(!mutation)reading.remove(viewer);
@@ -253,6 +267,8 @@ public final class PlayerShopController implements AutoCloseable {
                 row.put("amount",amount);row.put("expires",new java.text.SimpleDateFormat("MM-dd HH:mm").format(new java.util.Date(listing.getExpiresAt())));
                 packet.put("itemJson"+key,json);listings.put(key,row);
             }
+            Long sharedListing = sharedListings.remove(viewer);
+            packet.put("sharedListingId", sharedListing == null ? "" : Long.toString(sharedListing));
             packet.put("listings",listings);packet.put("count",index);host.send(player,config.ui().playerStoreId(),"storefront_data",packet);
             storeQueries.put(viewer,new StoreQuery(view.page(),view.keyword()));
         },"store_result");
@@ -274,7 +290,7 @@ public final class PlayerShopController implements AutoCloseable {
     public void refresh(Player player){if(isStoreOpen(player))loadStore(player,List.of("pshop_store_refresh"));}
     public void changed(){
         Runnable update=()->{if(closed)return;for(UUID viewer:stores.keySet()){Player player=Bukkit.getPlayer(viewer);if(player!=null && player.isOnline() && isStoreOpen(player))refresh(player);}};
-        if(Bukkit.isPrimaryThread())update.run();else Bukkit.getScheduler().runTask(plugin,update);
+        if(Bukkit.isPrimaryThread())update.run();else work.main(update);
     }
 
     private void saveStatus(Player player){
@@ -298,13 +314,13 @@ public final class PlayerShopController implements AutoCloseable {
         if(!checkoutReading.add(viewer)){checkoutFailure(player,owner,id,"商品正在核对，请稍后重新核对");return;}
         final long listingId=id,epoch=epochs.computeIfAbsent(viewer,key->sequence.incrementAndGet()),ticket=sequence.incrementAndGet();
         checkoutTickets.put(viewer,ticket);
-        Bukkit.getScheduler().runTaskAsynchronously(plugin,()->{
+        work.async(()->{
             PlayerShopListing listing=null;
             try{if(!closed)listing=repository.getPlayerShopListing(listingId);}
             catch(RuntimeException exception){logger.warning("[PlayerShop] 商品核对暂不可用: "+exception.getMessage());}
             if(closed){checkoutReading.remove(viewer);return;}
             final PlayerShopListing loaded=listing;
-            Bukkit.getScheduler().runTask(plugin,()->{
+            work.main(()->{
                 checkoutReading.remove(viewer);Player online=Bukkit.getPlayer(viewer);
                 if(closed || online==null || !online.isOnline() || epochs.getOrDefault(viewer,0L)!=epoch
                     || !Long.valueOf(ticket).equals(checkoutTickets.get(viewer)) || !isStoreOpen(online) || !owner.equals(selectedOwner(online)))return;

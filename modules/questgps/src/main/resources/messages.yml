@@ -45,6 +45,7 @@ player:
   chemdah-not-found: "&c未找到 Chemdah 任务: {0}"      # {0}=任务ID
   category-not-registered: "&c任务分类未在 categories 注册，无法接取: {0}"  # {0}=分类ID
   accept-failed: "&c接取任务失败，请检查控制台。"
+  quest-change-pending: "&e正在处理任务接取或放弃，请稍后重试。"
   accept-success: "&a已接取任务: {0}"                  # {0}=任务名
   accept-result-failed: "&c接取失败: {0}"              # {0}=失败原因
   abandon-not-allowed: "&c该任务不允许放弃。"

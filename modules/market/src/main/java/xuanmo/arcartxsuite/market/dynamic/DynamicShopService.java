@@ -1,5 +1,6 @@
 package xuanmo.arcartxsuite.market.dynamic;
 
+import xuanmo.arcartxsuite.market.MarketWork;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -44,6 +45,7 @@ public class DynamicShopService {
     }
 
     private final JavaPlugin plugin;
+    private final MarketWork work;
     private final Logger logger;
     private final SchedulerAPI scheduler;
     private final ShopService shopService;
@@ -61,11 +63,11 @@ public class DynamicShopService {
     private volatile EventPublisher eventPublisher;
 
     public DynamicShopService(
-        JavaPlugin plugin, Logger logger, SchedulerAPI scheduler,
+        MarketWork work, JavaPlugin plugin, Logger logger, SchedulerAPI scheduler,
         ShopService shopService, MarketRepository repository,
         List<DynamicStrategyConfig> strategyConfigs
     ) {
-        this.plugin = plugin;
+        this.plugin = plugin;this.work = work;
         this.logger = logger;
         this.scheduler = scheduler;
         this.shopService = shopService;
@@ -99,13 +101,15 @@ public class DynamicShopService {
             task.cancel();
         }
         scheduledTasks.clear();
+    }
+
+    /** Runs after accepted purchases and calendar callbacks have stopped. */
+    public void finishShutdown() {
         // 持久化所有策略状态
         for (Map.Entry<String, DynamicShopContextImpl> entry : contexts.entrySet()) {
             try {
                 persistState(entry.getKey(), entry.getValue());
-            } catch (Exception e) {
-                logger.log(Level.WARNING, "[DynamicShop] 持久化策略状态失败: " + entry.getKey(), e);
-            }
+            } catch (Exception e) { throw new IllegalStateException("动态策略状态未确认保存: " + entry.getKey(), e); }
         }
         strategies.clear();
         contexts.clear();
@@ -139,13 +143,13 @@ public class DynamicShopService {
         ScheduleSpec spec = config.schedule();
         String taskKey = "market:dynamic:" + config.strategyKey();
 
-        ScheduledTask task = scheduler.scheduleCalendarLeaderOnly(taskKey, plugin, () -> {
+        ScheduledTask task = scheduler.scheduleCalendarLeaderOnly(taskKey, plugin, work.callback(() -> {
             try {
                 triggerStrategy(config, strategy, context);
             } catch (Throwable t) {
                 logger.log(Level.WARNING, "[DynamicShop] 策略触发异常: " + config.strategyKey(), t);
             }
-        }, spec);
+        }), spec);
         scheduledTasks.add(task);
 
         logger.fine("[DynamicShop] 已注册策略: " + config.strategyKey()

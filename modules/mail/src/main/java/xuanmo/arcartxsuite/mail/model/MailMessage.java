@@ -49,6 +49,11 @@ public record MailMessage(
     Instant claimedAt,
     Instant deletedAt
 ) {
+    public MailMessage withAttachments(List<MailAttachment> items) {
+        return new MailMessage(id, ownerUuid, senderUuid, senderName, sourceType, presetId, cdkCode, subject, body,
+            status, items, claimCommands, claimConditions, createdAt, expiresAt, updatedAt, claimedAt, deletedAt);
+    }
+
     /**
      * 判断该邮件是否未读。
      *
@@ -64,7 +69,7 @@ public record MailMessage(
      * @return {@code true} 表示可领取
      */
     public boolean claimable() {
-        return status == MailStatus.UNREAD || status == MailStatus.READ;
+        return status == MailStatus.UNREAD || status == MailStatus.READ || status == MailStatus.CLAIM_PENDING;
     }
 
     /**

@@ -1,14 +1,11 @@
 package xuanmo.arcartxsuite.vanilla.listener;
 
-import org.bukkit.block.Furnace;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.inventory.InventoryOpenEvent;
-import org.bukkit.inventory.FurnaceInventory;
-import org.bukkit.inventory.Inventory;
 import xuanmo.arcartxsuite.vanilla.task.FurnaceStateTask;
 
 /**
@@ -33,12 +30,7 @@ public final class InventoryOpenListener implements Listener {
         if (!(event.getPlayer() instanceof Player)) {
             return;
         }
-        Player player = (Player) event.getPlayer();
-
-        for (var type : xuanmo.arcartxsuite.vanilla.recipe.WorkshopType.values())
-            if (type.processing() && event.getView().getType().name().equals(type.name())) {
-                furnaceTask.track(player, type); break;
-            }
+        furnaceTask.track((Player) event.getPlayer(), event.getView());
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
@@ -48,6 +40,6 @@ public final class InventoryOpenListener implements Listener {
             return;
         }
         Player player = (Player) event.getPlayer();
-        furnaceTask.untrackPlayer(player.getUniqueId());
+        furnaceTask.untrack(player.getUniqueId(), event.getView());
     }
 }

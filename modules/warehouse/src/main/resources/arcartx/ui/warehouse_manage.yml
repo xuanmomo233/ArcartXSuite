@@ -23,7 +23,17 @@ ui:
   itemSize: 16
   screenScale: true
   packetHandler:
+    shared_activity: |-
+      if(var.activityOpen && packet['warehouse'] == var.ownerId){
+        var.activityRows = packet['rows']
+        var.activityPage = packet['page']
+        var.activityNext = packet['hasNext']
+      }
     update: |-
+      if(var.ownerId != packet['ownerId'] || !packet['sharedActivityAllowed']){
+        var.activityOpen = false
+      }
+      var.activityAllowed = packet['sharedActivityAllowed']
       // 保存旧数量，用于判断是否需要重建列表（首次 update 时旧数量为 0，数量从 0 变为 N 时触发重建）
       oldMaxManageCount = var.maxManageCount != none ? var.maxManageCount : 0
       oldMaxMemberCount = var.maxMemberCount != none ? var.maxMemberCount : 0
@@ -73,30 +83,20 @@ ui:
       // ── 共享列表：仅在数量变化时重建 ──
       if(var.maxManageCount != oldMaxManageCount){
         var.刷新轮次 = (var.刷新轮次 + 1).round()
-        while(val.共享列表.childrenCount() > 1){
-          val.共享列表.get(1).remove()
-        }
-        if(var.maxManageCount > 1){
-          for(序号 in range(1, var.maxManageCount - 1)){
-            if(val.共享列表['项'] != none) {
-              项 = val.共享列表['项'].copy('共享项_' + var.刷新轮次.round() + '_' + 序号.round())
-              项.entryKey = 序号.round()
-            }
+        var.共享列表网格数据 = []
+        if((var.maxManageCount - 1) >= 0){
+          for(网格序号 in range(0, var.maxManageCount - 1)){
+            var.共享列表网格数据.add(网格序号.round())
           }
         }
       }
       // ── 成员列表：仅在数量变化时重建 ──
       if(var.maxMemberCount != oldMaxMemberCount){
         var.刷新轮次 = (var.刷新轮次 + 1).round()
-        while(val.成员列表.childrenCount() > 1){
-          val.成员列表.get(1).remove()
-        }
-        if(var.maxMemberCount > 1){
-          for(序号 in range(1, var.maxMemberCount - 1)){
-            if(val.成员列表['项'] != none) {
-              项 = val.成员列表['项'].copy('成员项_' + var.刷新轮次.round() + '_' + 序号.round())
-              项.entryKey = 序号.round()
-            }
+        var.成员列表网格数据 = []
+        if((var.maxMemberCount - 1) >= 0){
+          for(网格序号 in range(0, var.maxMemberCount - 1)){
+            var.成员列表网格数据.add(网格序号.round())
           }
         }
       }
@@ -155,6 +155,17 @@ ui:
         var.notifyBusySeconds = 0
       }
     load: |-
+      var.activityOpen = false
+      var.activityAllowed = false
+      var.activityRows = {}
+      var.activityPage = 0
+      var.activityNext = false
+      var.activityMember = ''
+      var.activityItem = ''
+      var.activityDays = ''
+      var.activityFilterMember = ''
+      var.activityFilterItem = ''
+      var.activityFilterDays = ''
       var.actionToken = ''
       var.autoPickup = true
       var.autoPickupMythic = true
@@ -298,6 +309,47 @@ controls:
               texts: '''&f'' + var.warehouseName + (var.ownerType == ''shared'' ? ''  &b共享仓库'' : ''  &a个人仓库'') + (var.readOnly ? ''  &c只读'' :
                 '''') + (!var.hasPassword ? ''  &e未设置密码'' : (var.unlocked ? ''  &a已解锁'' : ''  &e未解锁''))'
               fontSize: 36
+          共享记录入口:
+            type: Canvas
+            attribute:
+              x: -112
+              y: 0
+              width: 168
+              height: 48
+              point: ~middle_right
+              visible: var.activityAllowed
+            children:
+              底色:
+                type: Texture
+                attribute:
+                  x: 0
+                  y: 0
+                  width: 168
+                  height: 48
+                  normal: 'self.isHovered() ? ''58,68,80,255'' : ''44,50,58,245'''
+                  shape: ~round_rect
+                  radius: 6
+                  through: true
+                effect:
+                  stroke:
+                    width: 3
+                    color: ~100,110,120,220
+              文字:
+                type: Text
+                attribute:
+                  x: 0
+                  y: 0
+                  texts: ~&f取放记录
+                  fontSize: 28
+                  through: true
+                  point: ~middle_center
+            action:
+              clickLeft: |-
+                var.activityOpen = true
+                var.activityRows = {}
+                var.activityPage = 0
+                var.activityNext = false
+                Packet.send(var.packetId, 'shared_activity', var.activityFilterMember, var.activityFilterItem, var.activityFilterDays, '0')
           关闭按钮:
             type: Canvas
             attribute:
@@ -590,15 +642,19 @@ controls:
             children:
               共享列表:
                 val: 共享列表
-                type: VStack
+                type: RepeatGrid
                 attribute:
+                  items: "var.共享列表网格数据"
+                  flow: ~row
+                  column: 1
+                  spaceBetweenY: 8
+                  maxSize: "var.共享列表网格数据 == none ? 0 : var.共享列表网格数据.size()"
                   width: 258
-                  spaceBetween: 8
                 children:
                   项:
                     type: Canvas
                     attribute:
-                      entryKey: 0.round()
+                      entryKey: self.item
                       entry: var.manageWarehouses[self.entryKey]
                       visible: self.entry != none
                       width: 258
@@ -1148,7 +1204,7 @@ controls:
                       height: 36
                       length: 4
                       emptyText: ~&7数量
-                      inputPattern: ^[0-9]*$
+                      inputPattern: ~^[0-9]*$
                       fontSize: 36
                     action:
                       textChange: var.buyAmount = self.getContent()
@@ -1471,16 +1527,20 @@ controls:
                     }
                 children:
                   成员列表:
-                    type: VStack
+                    type: RepeatGrid
                     val: 成员列表
                     attribute:
+                      items: "var.成员列表网格数据"
+                      flow: ~row
+                      column: 1
+                      spaceBetweenY: 8
+                      maxSize: "var.成员列表网格数据 == none ? 0 : var.成员列表网格数据.size()"
                       width: var.halfW - 96
-                      spaceBetween: 8
                     children:
                       项:
                         type: Canvas
                         attribute:
-                          entryKey: 0.round()
+                          entryKey: self.item
                           entry: var.sharedMembers[self.entryKey]
                           visible: self.entry != none
                           width: var.halfW - 96
@@ -1609,6 +1669,830 @@ controls:
                       texts: 'var.memberName != none ? ''&f将所有权转让给 '' + var.memberName : ''&e请先选中一个成员'''
                       fontSize: 36
                       through: true
+      共享记录遮罩:
+        type: Texture
+        attribute:
+          point: ~middle_center
+          width: var.viewW
+          height: var.viewH
+          normal: ~18,15,13,110
+          visible: var.activityOpen
+          through: false
+        action:
+          clickLeft: var.activityOpen = false
+      共享记录面板:
+        type: Canvas
+        attribute:
+          x: 0
+          y: 0
+          width: 1128
+          height: 724
+          point: ~middle_center
+          visible: var.activityOpen
+        children:
+          面板底:
+            type: Texture
+            attribute:
+              x: 0
+              y: 0
+              width: 1128
+              height: 724
+              normal: ~32,39,49,255
+              shape: ~round_rect
+              radius: 12
+              through: true
+            effect:
+              stroke:
+                width: 3
+                color: ~100,110,120,220
+          标题:
+            type: Text
+            attribute:
+              x: 28
+              y: 24
+              texts: '''&f取放记录 · '' + var.warehouseName'
+              fontSize: 39
+              through: true
+              limit: 32
+          关闭:
+            type: Canvas
+            attribute:
+              x: 1050
+              y: 20
+              width: 48
+              height: 44
+            children:
+              底色:
+                type: Texture
+                attribute:
+                  x: 0
+                  y: 0
+                  width: 48
+                  height: 44
+                  normal: 'self.isHovered() ? ''58,68,80,255'' : ''44,50,58,245'''
+                  shape: ~round_rect
+                  radius: 6
+                  through: true
+                effect:
+                  stroke:
+                    width: 3
+                    color: ~100,110,120,220
+              文字:
+                type: Text
+                attribute:
+                  x: 0
+                  y: 0
+                  texts: ~&f×
+                  fontSize: 28
+                  through: true
+                  point: ~middle_center
+            action:
+              clickLeft: var.activityOpen = false
+          成员:
+            type: Canvas
+            attribute:
+              x: 26
+              y: 91
+              width: 256
+              height: 46
+            children:
+              底色:
+                type: Texture
+                attribute:
+                  x: 0
+                  y: 0
+                  width: 256
+                  height: 46
+                  normal: ~212,219,228,255
+                  shape: ~round_rect
+                  radius: 6
+                  through: true
+                effect:
+                  stroke:
+                    width: 3
+                    color: ~125,139,155,255
+              输入:
+                type: TextBox
+                attribute:
+                  x: 12
+                  y: 7
+                  width: 232
+                  height: 32
+                  length: 64
+                  emptyText: ~&8成员名称或 UUID
+                  fontSize: 28
+                action:
+                  textChange: var.activityMember = self.getContent()
+          物品:
+            type: Canvas
+            attribute:
+              x: 298
+              y: 91
+              width: 326
+              height: 46
+            children:
+              底色:
+                type: Texture
+                attribute:
+                  x: 0
+                  y: 0
+                  width: 326
+                  height: 46
+                  normal: ~212,219,228,255
+                  shape: ~round_rect
+                  radius: 6
+                  through: true
+                effect:
+                  stroke:
+                    width: 3
+                    color: ~125,139,155,255
+              输入:
+                type: TextBox
+                attribute:
+                  x: 12
+                  y: 7
+                  width: 302
+                  height: 32
+                  length: 64
+                  emptyText: ~&8物品名称或材质
+                  fontSize: 28
+                action:
+                  textChange: var.activityItem = self.getContent()
+          时间:
+            type: Canvas
+            attribute:
+              x: 640
+              y: 91
+              width: 206
+              height: 46
+            children:
+              底色:
+                type: Texture
+                attribute:
+                  x: 0
+                  y: 0
+                  width: 206
+                  height: 46
+                  normal: ~212,219,228,255
+                  shape: ~round_rect
+                  radius: 6
+                  through: true
+                effect:
+                  stroke:
+                    width: 3
+                    color: ~125,139,155,255
+              输入:
+                type: TextBox
+                attribute:
+                  x: 12
+                  y: 7
+                  width: 182
+                  height: 32
+                  length: 3
+                  emptyText: ~&8近几天，空为全部
+                  fontSize: 28
+                action:
+                  textChange: var.activityDays = self.getContent()
+          筛选:
+            type: Canvas
+            attribute:
+              x: 864
+              y: 91
+              width: 218
+              height: 46
+            children:
+              底色:
+                type: Texture
+                attribute:
+                  x: 0
+                  y: 0
+                  width: 218
+                  height: 46
+                  normal: 'self.isHovered() ? ''58,68,80,255'' : ''44,50,58,245'''
+                  shape: ~round_rect
+                  radius: 6
+                  through: true
+                effect:
+                  stroke:
+                    width: 3
+                    color: ~100,110,120,220
+              文字:
+                type: Text
+                attribute:
+                  x: 0
+                  y: 0
+                  texts: ~&f筛选记录
+                  fontSize: 28
+                  through: true
+                  point: ~middle_center
+            action:
+              clickLeft: |-
+                var.activityFilterMember = var.activityMember
+                var.activityFilterItem = var.activityItem
+                var.activityFilterDays = var.activityDays
+                var.activityRows = {}
+                var.activityPage = 0
+                var.activityNext = false
+                Packet.send(var.packetId, 'shared_activity', var.activityFilterMember, var.activityFilterItem, var.activityFilterDays, '0')
+          表头底:
+            type: Texture
+            attribute:
+              x: 24
+              y: 162
+              width: 1080
+              height: 42
+              normal: ~60,70,84,255
+              shape: ~round_rect
+              radius: 6
+              through: true
+            effect:
+              stroke:
+                width: 3
+                color: ~100,110,120,220
+          上一页:
+            type: Canvas
+            attribute:
+              x: 26
+              y: 654
+              width: 130
+              height: 46
+              enable: var.activityPage > 0
+              alpha: '(var.activityPage > 0) ? 1 : 0.45'
+            children:
+              底色:
+                type: Texture
+                attribute:
+                  x: 0
+                  y: 0
+                  width: 130
+                  height: 46
+                  normal: 'self.isHovered() ? ''58,68,80,255'' : ''44,50,58,245'''
+                  shape: ~round_rect
+                  radius: 6
+                  through: true
+                effect:
+                  stroke:
+                    width: 3
+                    color: ~100,110,120,220
+              文字:
+                type: Text
+                attribute:
+                  x: 0
+                  y: 0
+                  texts: ~&f上一页
+                  fontSize: 28
+                  through: true
+                  point: ~middle_center
+            action:
+              clickLeft: Packet.send(var.packetId, 'shared_activity', var.activityFilterMember, var.activityFilterItem, var.activityFilterDays, (var.activityPage - 1).round())
+          页码:
+            type: Text
+            attribute:
+              x: 185
+              y: 665
+              texts: '''&f第 '' + (var.activityPage + 1).round() + '' 页'''
+              fontSize: 29
+              through: true
+          下一页:
+            type: Canvas
+            attribute:
+              x: 316
+              y: 654
+              width: 130
+              height: 46
+              enable: var.activityNext
+              alpha: '(var.activityNext) ? 1 : 0.45'
+            children:
+              底色:
+                type: Texture
+                attribute:
+                  x: 0
+                  y: 0
+                  width: 130
+                  height: 46
+                  normal: 'self.isHovered() ? ''58,68,80,255'' : ''44,50,58,245'''
+                  shape: ~round_rect
+                  radius: 6
+                  through: true
+                effect:
+                  stroke:
+                    width: 3
+                    color: ~100,110,120,220
+              文字:
+                type: Text
+                attribute:
+                  x: 0
+                  y: 0
+                  texts: ~&f下一页
+                  fontSize: 28
+                  through: true
+                  point: ~middle_center
+            action:
+              clickLeft: Packet.send(var.packetId, 'shared_activity', var.activityFilterMember, var.activityFilterItem, var.activityFilterDays, (var.activityPage + 1).round())
+          空提示:
+            type: Text
+            attribute:
+              x: 28
+              y: 223
+              texts: 'var.activityRows[0.round()] == none ? ''&7暂无符合条件的记录'' : '''''
+              fontSize: 28
+              through: true
+          表头time:
+            type: Text
+            attribute:
+              x: 40
+              y: 172
+              texts: ~&f时间
+              fontSize: 27
+              through: true
+          表头actor:
+            type: Text
+            attribute:
+              x: 335
+              y: 172
+              texts: ~&f成员
+              fontSize: 27
+              through: true
+          表头action:
+            type: Text
+            attribute:
+              x: 530
+              y: 172
+              texts: ~&f操作
+              fontSize: 27
+              through: true
+          表头item:
+            type: Text
+            attribute:
+              x: 645
+              y: 172
+              texts: ~&f物品
+              fontSize: 27
+              through: true
+          表头amount:
+            type: Text
+            attribute:
+              x: 984
+              y: 172
+              texts: ~&f数量
+              fontSize: 27
+              through: true
+          行底0:
+            type: Texture
+            attribute:
+              x: 24
+              y: 211
+              width: 1080
+              height: 46
+              normal: ~51,58,69,255
+              shape: ~round_rect
+              radius: 5
+              through: true
+              visible: var.activityRows[0.round()] != none
+          行0_time:
+            type: Text
+            attribute:
+              x: 40
+              y: 221
+              texts: 'var.activityRows[0.round()] == none ? '''' : ''&f'' + var.activityRows[0.round()][''time'']'
+              fontSize: 26
+              through: true
+              limit: 20
+          行0_actor:
+            type: Text
+            attribute:
+              x: 335
+              y: 221
+              texts: 'var.activityRows[0.round()] == none ? '''' : ''&f'' + var.activityRows[0.round()][''actor'']'
+              fontSize: 26
+              through: true
+              limit: 16
+          行0_action:
+            type: Text
+            attribute:
+              x: 530
+              y: 221
+              texts: 'var.activityRows[0.round()] == none ? '''' : ''&f'' + var.activityRows[0.round()][''action'']'
+              fontSize: 26
+              through: true
+              limit: 5
+          行0_item:
+            type: Text
+            attribute:
+              x: 645
+              y: 221
+              texts: 'var.activityRows[0.round()] == none ? '''' : ''&f'' + var.activityRows[0.round()][''item'']'
+              fontSize: 26
+              through: true
+              limit: 24
+          行0_amount:
+            type: Text
+            attribute:
+              x: 984
+              y: 221
+              texts: 'var.activityRows[0.round()] == none ? '''' : ''&f'' + var.activityRows[0.round()][''amount'']'
+              fontSize: 26
+              through: true
+              limit: 10
+          行底1:
+            type: Texture
+            attribute:
+              x: 24
+              y: 262
+              width: 1080
+              height: 46
+              normal: ~51,58,69,255
+              shape: ~round_rect
+              radius: 5
+              through: true
+              visible: var.activityRows[1.round()] != none
+          行1_time:
+            type: Text
+            attribute:
+              x: 40
+              y: 272
+              texts: 'var.activityRows[1.round()] == none ? '''' : ''&f'' + var.activityRows[1.round()][''time'']'
+              fontSize: 26
+              through: true
+              limit: 20
+          行1_actor:
+            type: Text
+            attribute:
+              x: 335
+              y: 272
+              texts: 'var.activityRows[1.round()] == none ? '''' : ''&f'' + var.activityRows[1.round()][''actor'']'
+              fontSize: 26
+              through: true
+              limit: 16
+          行1_action:
+            type: Text
+            attribute:
+              x: 530
+              y: 272
+              texts: 'var.activityRows[1.round()] == none ? '''' : ''&f'' + var.activityRows[1.round()][''action'']'
+              fontSize: 26
+              through: true
+              limit: 5
+          行1_item:
+            type: Text
+            attribute:
+              x: 645
+              y: 272
+              texts: 'var.activityRows[1.round()] == none ? '''' : ''&f'' + var.activityRows[1.round()][''item'']'
+              fontSize: 26
+              through: true
+              limit: 24
+          行1_amount:
+            type: Text
+            attribute:
+              x: 984
+              y: 272
+              texts: 'var.activityRows[1.round()] == none ? '''' : ''&f'' + var.activityRows[1.round()][''amount'']'
+              fontSize: 26
+              through: true
+              limit: 10
+          行底2:
+            type: Texture
+            attribute:
+              x: 24
+              y: 313
+              width: 1080
+              height: 46
+              normal: ~51,58,69,255
+              shape: ~round_rect
+              radius: 5
+              through: true
+              visible: var.activityRows[2.round()] != none
+          行2_time:
+            type: Text
+            attribute:
+              x: 40
+              y: 323
+              texts: 'var.activityRows[2.round()] == none ? '''' : ''&f'' + var.activityRows[2.round()][''time'']'
+              fontSize: 26
+              through: true
+              limit: 20
+          行2_actor:
+            type: Text
+            attribute:
+              x: 335
+              y: 323
+              texts: 'var.activityRows[2.round()] == none ? '''' : ''&f'' + var.activityRows[2.round()][''actor'']'
+              fontSize: 26
+              through: true
+              limit: 16
+          行2_action:
+            type: Text
+            attribute:
+              x: 530
+              y: 323
+              texts: 'var.activityRows[2.round()] == none ? '''' : ''&f'' + var.activityRows[2.round()][''action'']'
+              fontSize: 26
+              through: true
+              limit: 5
+          行2_item:
+            type: Text
+            attribute:
+              x: 645
+              y: 323
+              texts: 'var.activityRows[2.round()] == none ? '''' : ''&f'' + var.activityRows[2.round()][''item'']'
+              fontSize: 26
+              through: true
+              limit: 24
+          行2_amount:
+            type: Text
+            attribute:
+              x: 984
+              y: 323
+              texts: 'var.activityRows[2.round()] == none ? '''' : ''&f'' + var.activityRows[2.round()][''amount'']'
+              fontSize: 26
+              through: true
+              limit: 10
+          行底3:
+            type: Texture
+            attribute:
+              x: 24
+              y: 364
+              width: 1080
+              height: 46
+              normal: ~51,58,69,255
+              shape: ~round_rect
+              radius: 5
+              through: true
+              visible: var.activityRows[3.round()] != none
+          行3_time:
+            type: Text
+            attribute:
+              x: 40
+              y: 374
+              texts: 'var.activityRows[3.round()] == none ? '''' : ''&f'' + var.activityRows[3.round()][''time'']'
+              fontSize: 26
+              through: true
+              limit: 20
+          行3_actor:
+            type: Text
+            attribute:
+              x: 335
+              y: 374
+              texts: 'var.activityRows[3.round()] == none ? '''' : ''&f'' + var.activityRows[3.round()][''actor'']'
+              fontSize: 26
+              through: true
+              limit: 16
+          行3_action:
+            type: Text
+            attribute:
+              x: 530
+              y: 374
+              texts: 'var.activityRows[3.round()] == none ? '''' : ''&f'' + var.activityRows[3.round()][''action'']'
+              fontSize: 26
+              through: true
+              limit: 5
+          行3_item:
+            type: Text
+            attribute:
+              x: 645
+              y: 374
+              texts: 'var.activityRows[3.round()] == none ? '''' : ''&f'' + var.activityRows[3.round()][''item'']'
+              fontSize: 26
+              through: true
+              limit: 24
+          行3_amount:
+            type: Text
+            attribute:
+              x: 984
+              y: 374
+              texts: 'var.activityRows[3.round()] == none ? '''' : ''&f'' + var.activityRows[3.round()][''amount'']'
+              fontSize: 26
+              through: true
+              limit: 10
+          行底4:
+            type: Texture
+            attribute:
+              x: 24
+              y: 415
+              width: 1080
+              height: 46
+              normal: ~51,58,69,255
+              shape: ~round_rect
+              radius: 5
+              through: true
+              visible: var.activityRows[4.round()] != none
+          行4_time:
+            type: Text
+            attribute:
+              x: 40
+              y: 425
+              texts: 'var.activityRows[4.round()] == none ? '''' : ''&f'' + var.activityRows[4.round()][''time'']'
+              fontSize: 26
+              through: true
+              limit: 20
+          行4_actor:
+            type: Text
+            attribute:
+              x: 335
+              y: 425
+              texts: 'var.activityRows[4.round()] == none ? '''' : ''&f'' + var.activityRows[4.round()][''actor'']'
+              fontSize: 26
+              through: true
+              limit: 16
+          行4_action:
+            type: Text
+            attribute:
+              x: 530
+              y: 425
+              texts: 'var.activityRows[4.round()] == none ? '''' : ''&f'' + var.activityRows[4.round()][''action'']'
+              fontSize: 26
+              through: true
+              limit: 5
+          行4_item:
+            type: Text
+            attribute:
+              x: 645
+              y: 425
+              texts: 'var.activityRows[4.round()] == none ? '''' : ''&f'' + var.activityRows[4.round()][''item'']'
+              fontSize: 26
+              through: true
+              limit: 24
+          行4_amount:
+            type: Text
+            attribute:
+              x: 984
+              y: 425
+              texts: 'var.activityRows[4.round()] == none ? '''' : ''&f'' + var.activityRows[4.round()][''amount'']'
+              fontSize: 26
+              through: true
+              limit: 10
+          行底5:
+            type: Texture
+            attribute:
+              x: 24
+              y: 466
+              width: 1080
+              height: 46
+              normal: ~51,58,69,255
+              shape: ~round_rect
+              radius: 5
+              through: true
+              visible: var.activityRows[5.round()] != none
+          行5_time:
+            type: Text
+            attribute:
+              x: 40
+              y: 476
+              texts: 'var.activityRows[5.round()] == none ? '''' : ''&f'' + var.activityRows[5.round()][''time'']'
+              fontSize: 26
+              through: true
+              limit: 20
+          行5_actor:
+            type: Text
+            attribute:
+              x: 335
+              y: 476
+              texts: 'var.activityRows[5.round()] == none ? '''' : ''&f'' + var.activityRows[5.round()][''actor'']'
+              fontSize: 26
+              through: true
+              limit: 16
+          行5_action:
+            type: Text
+            attribute:
+              x: 530
+              y: 476
+              texts: 'var.activityRows[5.round()] == none ? '''' : ''&f'' + var.activityRows[5.round()][''action'']'
+              fontSize: 26
+              through: true
+              limit: 5
+          行5_item:
+            type: Text
+            attribute:
+              x: 645
+              y: 476
+              texts: 'var.activityRows[5.round()] == none ? '''' : ''&f'' + var.activityRows[5.round()][''item'']'
+              fontSize: 26
+              through: true
+              limit: 24
+          行5_amount:
+            type: Text
+            attribute:
+              x: 984
+              y: 476
+              texts: 'var.activityRows[5.round()] == none ? '''' : ''&f'' + var.activityRows[5.round()][''amount'']'
+              fontSize: 26
+              through: true
+              limit: 10
+          行底6:
+            type: Texture
+            attribute:
+              x: 24
+              y: 517
+              width: 1080
+              height: 46
+              normal: ~51,58,69,255
+              shape: ~round_rect
+              radius: 5
+              through: true
+              visible: var.activityRows[6.round()] != none
+          行6_time:
+            type: Text
+            attribute:
+              x: 40
+              y: 527
+              texts: 'var.activityRows[6.round()] == none ? '''' : ''&f'' + var.activityRows[6.round()][''time'']'
+              fontSize: 26
+              through: true
+              limit: 20
+          行6_actor:
+            type: Text
+            attribute:
+              x: 335
+              y: 527
+              texts: 'var.activityRows[6.round()] == none ? '''' : ''&f'' + var.activityRows[6.round()][''actor'']'
+              fontSize: 26
+              through: true
+              limit: 16
+          行6_action:
+            type: Text
+            attribute:
+              x: 530
+              y: 527
+              texts: 'var.activityRows[6.round()] == none ? '''' : ''&f'' + var.activityRows[6.round()][''action'']'
+              fontSize: 26
+              through: true
+              limit: 5
+          行6_item:
+            type: Text
+            attribute:
+              x: 645
+              y: 527
+              texts: 'var.activityRows[6.round()] == none ? '''' : ''&f'' + var.activityRows[6.round()][''item'']'
+              fontSize: 26
+              through: true
+              limit: 24
+          行6_amount:
+            type: Text
+            attribute:
+              x: 984
+              y: 527
+              texts: 'var.activityRows[6.round()] == none ? '''' : ''&f'' + var.activityRows[6.round()][''amount'']'
+              fontSize: 26
+              through: true
+              limit: 10
+          行底7:
+            type: Texture
+            attribute:
+              x: 24
+              y: 568
+              width: 1080
+              height: 46
+              normal: ~51,58,69,255
+              shape: ~round_rect
+              radius: 5
+              through: true
+              visible: var.activityRows[7.round()] != none
+          行7_time:
+            type: Text
+            attribute:
+              x: 40
+              y: 578
+              texts: 'var.activityRows[7.round()] == none ? '''' : ''&f'' + var.activityRows[7.round()][''time'']'
+              fontSize: 26
+              through: true
+              limit: 20
+          行7_actor:
+            type: Text
+            attribute:
+              x: 335
+              y: 578
+              texts: 'var.activityRows[7.round()] == none ? '''' : ''&f'' + var.activityRows[7.round()][''actor'']'
+              fontSize: 26
+              through: true
+              limit: 16
+          行7_action:
+            type: Text
+            attribute:
+              x: 530
+              y: 578
+              texts: 'var.activityRows[7.round()] == none ? '''' : ''&f'' + var.activityRows[7.round()][''action'']'
+              fontSize: 26
+              through: true
+              limit: 5
+          行7_item:
+            type: Text
+            attribute:
+              x: 645
+              y: 578
+              texts: 'var.activityRows[7.round()] == none ? '''' : ''&f'' + var.activityRows[7.round()][''item'']'
+              fontSize: 26
+              through: true
+              limit: 24
+          行7_amount:
+            type: Text
+            attribute:
+              x: 984
+              y: 578
+              texts: 'var.activityRows[7.round()] == none ? '''' : ''&f'' + var.activityRows[7.round()][''amount'']'
+              fontSize: 26
+              through: true
+              limit: 10
       居中操作提示:
         type: Canvas
         attribute:

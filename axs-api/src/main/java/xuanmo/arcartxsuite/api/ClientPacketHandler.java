@@ -8,7 +8,7 @@ import org.jetbrains.annotations.NotNull;
  * 客户端自定义包处理器。
  * <p>
  * 模块实现此接口后通过 {@link ModuleContext#registerClientPacketHandler} 注册，
- * 宿主按优先级顺序遍历注册表分发客户端回包。
+ * 宿主按包 ID 查找已注册的处理器，并在服务器主线程按优先级分发。
  */
 @FunctionalInterface
 public interface ClientPacketHandler {

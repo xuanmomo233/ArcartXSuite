@@ -47,35 +47,23 @@ ui:
       var.maxDailyCount = packet['maxDailyCount']
       var.maxWeeklyCount = packet['maxWeeklyCount']
       var.maxSeasonCount = packet['maxSeasonCount']
-      while(val.每日任务列表.childrenCount() > 1){
-        val.每日任务列表.get(1).remove()
-      }
       // range(a,b) 左闭右闭，生成 a~b 含两端；模板在索引0，故复制 1~count-1 共 count-1 项
-      for(i in range(1, var.maxDailyCount - 1)){
-        key = i.round()
-        if(val.每日任务列表['任务项'] != none) {
-          e = val.每日任务列表['任务项'].copy('任务项' + key)
-          e.entryKey = key
+      var.每日任务列表网格数据 = []
+      if((var.maxDailyCount - 1) >= 0){
+        for(网格序号 in range(0, var.maxDailyCount - 1)){
+          var.每日任务列表网格数据.add(网格序号.round())
         }
       }
-      while(val.每周任务列表.childrenCount() > 1){
-        val.每周任务列表.get(1).remove()
-      }
-      for(i in range(1, var.maxWeeklyCount - 1)){
-        key = i.round()
-        if(val.每周任务列表['任务项'] != none) {
-          e = val.每周任务列表['任务项'].copy('任务项' + key)
-          e.entryKey = key
+      var.每周任务列表网格数据 = []
+      if((var.maxWeeklyCount - 1) >= 0){
+        for(网格序号 in range(0, var.maxWeeklyCount - 1)){
+          var.每周任务列表网格数据.add(网格序号.round())
         }
       }
-      while(val.赛季任务列表.childrenCount() > 1){
-        val.赛季任务列表.get(1).remove()
-      }
-      for(i in range(1, var.maxSeasonCount - 1)){
-        key = i.round()
-        if(val.赛季任务列表['任务项'] != none) {
-          e = val.赛季任务列表['任务项'].copy('任务项' + key)
-          e.entryKey = key
+      var.赛季任务列表网格数据 = []
+      if((var.maxSeasonCount - 1) >= 0){
+        for(网格序号 in range(0, var.maxSeasonCount - 1)){
+          var.赛季任务列表网格数据.add(网格序号.round())
         }
       }
   action:
@@ -814,20 +802,24 @@ controls:
                           through: true
                       每日任务列表:
                         val: 每日任务列表
-                        type: VStack
+                        type: RepeatGrid
                         attribute:
+                          items: "var.每日任务列表网格数据"
+                          flow: ~row
+                          column: 1
+                          spaceBetweenY: 8
+                          maxSize: "var.每日任务列表网格数据 == none ? 0 : var.每日任务列表网格数据.size()"
                           point: ~top_left
                           x: 20
                           y: 60
                           width: "var.contentW - 120"
-                          spaceBetween: 8
                         children:
                           # 任务项：Canvas 容器，背景为子 Texture（stretch_all + through）
                           # 其他子控件（Text/Texture）可正确使用 point 锚点
                           任务项:
                             type: Canvas
                             attribute:
-                              entryKey: 0.round()
+                              entryKey: self.item
                               entry: var.dailyTasks[self.entryKey]
                               visible: self.entry != none
                               width: "var.contentW - 120"
@@ -903,6 +895,26 @@ controls:
                                   fontSize: 28
                                   limit: 36
                                   through: true
+                              前往按钮:
+                                type: Canvas
+                                attribute:
+                                  point: ~top_right
+                                  x: -215
+                                  y: 20
+                                  width: 74
+                                  height: 38
+                                  visible: self.parent.entry != none && self.parent.entry['navigable'] == 'true'
+                                action:
+                                  clickLeft: |-
+                                    Packet.send(var.packetId, 'navigate_task', self.parent.entry['instanceId'])
+                                children:
+                                  前往文字:
+                                    type: Text
+                                    attribute:
+                                      point: ~middle_center
+                                      texts: "~&e前往"
+                                      fontSize: 27
+                                      through: true
                               任务奖励:
                                 type: Text
                                 attribute:
@@ -1004,18 +1016,22 @@ controls:
                           through: true
                       每周任务列表:
                         val: 每周任务列表
-                        type: VStack
+                        type: RepeatGrid
                         attribute:
+                          items: "var.每周任务列表网格数据"
+                          flow: ~row
+                          column: 1
+                          spaceBetweenY: 8
+                          maxSize: "var.每周任务列表网格数据 == none ? 0 : var.每周任务列表网格数据.size()"
                           point: ~top_left
                           x: 20
                           y: 60
                           width: "var.contentW - 120"
-                          spaceBetween: 8
                         children:
                           任务项:
                             type: Canvas
                             attribute:
-                              entryKey: 0.round()
+                              entryKey: self.item
                               entry: var.weeklyTasks[self.entryKey]
                               visible: self.entry != none
                               width: "var.contentW - 120"
@@ -1090,6 +1106,26 @@ controls:
                                   fontSize: 28
                                   limit: 36
                                   through: true
+                              前往按钮:
+                                type: Canvas
+                                attribute:
+                                  point: ~top_right
+                                  x: -215
+                                  y: 20
+                                  width: 74
+                                  height: 38
+                                  visible: self.parent.entry != none && self.parent.entry['navigable'] == 'true'
+                                action:
+                                  clickLeft: |-
+                                    Packet.send(var.packetId, 'navigate_task', self.parent.entry['instanceId'])
+                                children:
+                                  前往文字:
+                                    type: Text
+                                    attribute:
+                                      point: ~middle_center
+                                      texts: "~&e前往"
+                                      fontSize: 27
+                                      through: true
                               任务奖励:
                                 type: Text
                                 attribute:
@@ -1191,18 +1227,22 @@ controls:
                           through: true
                       赛季任务列表:
                         val: 赛季任务列表
-                        type: VStack
+                        type: RepeatGrid
                         attribute:
+                          items: "var.赛季任务列表网格数据"
+                          flow: ~row
+                          column: 1
+                          spaceBetweenY: 8
+                          maxSize: "var.赛季任务列表网格数据 == none ? 0 : var.赛季任务列表网格数据.size()"
                           point: ~top_left
                           x: 20
                           y: 60
                           width: "var.contentW - 120"
-                          spaceBetween: 8
                         children:
                           任务项:
                             type: Canvas
                             attribute:
-                              entryKey: 0.round()
+                              entryKey: self.item
                               entry: var.seasonTasks[self.entryKey]
                               visible: self.entry != none
                               width: "var.contentW - 120"
@@ -1277,6 +1317,26 @@ controls:
                                   fontSize: 28
                                   limit: 36
                                   through: true
+                              前往按钮:
+                                type: Canvas
+                                attribute:
+                                  point: ~top_right
+                                  x: -215
+                                  y: 20
+                                  width: 74
+                                  height: 38
+                                  visible: self.parent.entry != none && self.parent.entry['navigable'] == 'true'
+                                action:
+                                  clickLeft: |-
+                                    Packet.send(var.packetId, 'navigate_task', self.parent.entry['instanceId'])
+                                children:
+                                  前往文字:
+                                    type: Text
+                                    attribute:
+                                      point: ~middle_center
+                                      texts: "~&e前往"
+                                      fontSize: 27
+                                      through: true
                               任务奖励:
                                 type: Text
                                 attribute:

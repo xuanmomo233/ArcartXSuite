@@ -39,20 +39,14 @@ ui:
         Packet.send(var.packetId, 'close_view', 'leaderboard', var.actionToken, var.viewNonce)
       }
     rebuild: |-
-      if(var.builtCount != var.count){
-        for(key in var.rowRefs.keys()){ var.rowRefs[key].remove() }
-        var.rowRefs = {}
-        var.builtCount = var.count
-        var.revision = (var.revision + 1).round()
-        template = val.rows.get(0)
-        template.entryKey = 0.round()
-        if(var.count > 1){
-          for(i in range(1, var.count - 1)){
-            row = template.copy('row_' + var.revision + '_' + i.round())
-            row.entryKey = i.round()
-            var.rowRefs[i.round()] = row
+      if(var.leaderRows == none || var.leaderRows.size() != (var.count)){
+        网格数据 = []
+        if((var.count) > 0){
+          for(网格序号 in range(0, (var.count) - 1)){
+            网格数据.add(网格序号.round())
           }
         }
+        var.leaderRows = 网格数据
       }
 controls:
   全屏磨砂:
@@ -216,19 +210,22 @@ controls:
                 val.slider.setDragYRatio(Math.max(0, Math.min(1, self.moveY - self.wheelValue * 0.1)))
             children:
               行列表:
-                type: VStack
+                type: RepeatGrid
                 val: rows
                 attribute:
+                  items: "var.leaderRows"
+                  flow: ~row
+                  column: 1
+                  spaceBetweenY: 6
                   maxSize: 2147483647
                   width: 964
-                  spaceBetween: 6
                 children:
                   行:
                     type: Canvas
                     attribute:
                       width: 964
                       height: 52
-                      entryKey: 0.round()
+                      entryKey: self.item
                       entry: "var.rows[self.entryKey]"
                       visible: "self.entry != none"
                     children:

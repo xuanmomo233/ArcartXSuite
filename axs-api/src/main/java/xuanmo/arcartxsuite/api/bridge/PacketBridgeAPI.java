@@ -104,7 +104,15 @@ public interface PacketBridgeAPI {
     /** 非安全关闭 UI（不经过 ArcartX 服务端校验） */
     boolean closeUiUnsafe(@NotNull Player player, @NotNull String uiId);
 
-    // ─── 关闭回调 ──────────────────────────────────────────────
+    // ─── 界面回调 ──────────────────────────────────────────────
+
+    /** 在主线程接收客户端确认打开界面的通知，支持 match 自动打开的界面。 */
+    default boolean registerUiOpenCallback(@NotNull String uiId, @NotNull Consumer<Player> callback) {
+        return false;
+    }
+
+    /** 注销一个已注册的打开回调。 */
+    default void unregisterUiOpenCallback(@NotNull String uiId, @NotNull Consumer<Player> callback) {}
 
     /** 注册 UI 关闭回调 */
     boolean registerUiCloseCallback(@NotNull String uiId, @NotNull Consumer<Player> callback);

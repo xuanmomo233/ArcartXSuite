@@ -309,7 +309,7 @@ class QQBotMessageGatewayTest {
     }
 
     private static QQBotGroupConfig group(long id, String mode) {
-        return new QQBotGroupConfig(id, mode, "[{server}] {player}/{display_name}: {message}", "{message}", true, "", "");
+        return new QQBotGroupConfig(id, mode, "[{server}] {player}/{display_name}: {message}", "{message}", true, "", "", "normal");
     }
 
     private static CompletableFuture<OneBotResult> acknowledged() {

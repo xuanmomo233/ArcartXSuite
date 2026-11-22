@@ -146,7 +146,7 @@ CREATE TABLE IF NOT EXISTS ranking_reward_records (
     period_end TIMESTAMP NOT NULL,
     player_uuid VARCHAR(36) NOT NULL,
     player_name VARCHAR(100),
-    rank INTEGER NOT NULL,
+    `rank` INTEGER NOT NULL,
     score INTEGER NOT NULL,
     reward_items TEXT,
     reward_commands TEXT,

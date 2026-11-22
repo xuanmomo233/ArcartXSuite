@@ -4,14 +4,17 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.logging.Logger;
 import java.util.stream.Stream;
 import org.bukkit.configuration.ConfigurationSection;
+import org.bukkit.configuration.InvalidConfigurationException;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import xuanmo.arcartxsuite.api.condition.ScriptCondition;
@@ -42,6 +45,7 @@ public final class PropDefinitionLoader {
         }
 
         LinkedHashMap<String, PropDefinition> definitions = new LinkedHashMap<>();
+        Set<String> seen = new HashSet<>();
         try (Stream<Path> stream = Files.walk(propsDirectory.toPath())) {
             for (Path file : stream
                 .filter(Files::isRegularFile)
@@ -49,13 +53,25 @@ public final class PropDefinitionLoader {
                 .sorted()
                 .toList()
             ) {
-                String id = toDefinitionId(propsDirectory.toPath(), file);
-                FileConfiguration configuration = YamlConfiguration.loadConfiguration(file.toFile());
-                PropDefinition definition = loadDefinition(id, configuration, logger);
-                definitions.put(id.toLowerCase(Locale.ROOT), definition);
+                String id = toDefinitionId(propsDirectory.toPath(), file).trim();
+                String key = id.toLowerCase(Locale.ROOT);
+                if (!seen.add(key)) {
+                    definitions.remove(key);
+                    if (logger != null) logger.warning("Prop 道具 ID 重复，已停用: " + id);
+                    continue;
+                }
+                try {
+                    FileConfiguration configuration = new YamlConfiguration();
+                    try (var reader = Files.newBufferedReader(file)) {
+                        configuration.load(reader);
+                    }
+                    definitions.put(key, loadDefinition(id, configuration, logger));
+                } catch (IOException | InvalidConfigurationException | IllegalArgumentException exception) {
+                    if (logger != null) logger.warning("Prop 无法载入 " + file + ": " + exception.getMessage());
+                }
             }
         }
-        return Map.copyOf(definitions);
+        return Collections.unmodifiableMap(definitions);
     }
 
     /**
@@ -68,21 +84,17 @@ public final class PropDefinitionLoader {
      */
     public static PropDefinition loadDefinition(String id, FileConfiguration configuration, Logger logger) {
         String normalizedId = safe(id);
-        String displayName = readString(configuration, "name", normalizedId);
+        String displayName = readString(configuration, "name", "");
         String coolDownGroup = readString(configuration, "coolDownGroup", "默认冷却组");
         int coolDownTimeSeconds = Math.max(0, configuration.getInt("coolDownTime", 10));
-        int durationSeconds = Math.max(0, configuration.getInt("Duration", 10));
         boolean remove = configuration.getBoolean("remove", true);
         boolean hand = configuration.getBoolean("hand", true);
         boolean key = configuration.getBoolean("key", true);
         String permission = readString(configuration, "permission", "");
-        List<String> effects = readEffects(configuration);
-        List<ScriptCondition> conditions = readConditions(configuration, normalizedId, logger);
+        PropEffects effects = PropEffects.load(configuration);
+        List<ScriptCondition> conditions = readConditions(configuration);
         PropAutoTriggerDefinition auto = readAutoTrigger(configuration, normalizedId, logger);
 
-        if (displayName.isBlank()) {
-            displayName = normalizedId;
-        }
         if (coolDownGroup.isBlank()) {
             coolDownGroup = "默认冷却组";
             if (logger != null) {
@@ -95,7 +107,6 @@ public final class PropDefinitionLoader {
             displayName,
             coolDownGroup,
             coolDownTimeSeconds,
-            durationSeconds,
             remove,
             hand,
             key,
@@ -117,27 +128,38 @@ public final class PropDefinitionLoader {
         return extensionIndex > 0 ? relative.substring(0, extensionIndex) : relative;
     }
 
-    private static List<String> readEffects(FileConfiguration configuration) {
-        List<String> effects = new ArrayList<>();
-        List<?> rawList = configuration.getList("effects");
-        if (rawList == null) {
-            return List.of();
-        }
-        for (Object raw : rawList) {
-            String effect = safe(raw == null ? "" : String.valueOf(raw));
-            if (!effect.isBlank()) {
-                effects.add(effect);
+    private static List<ScriptCondition> readConditions(ConfigurationSection configuration) {
+        List<ScriptCondition> conditions = ScriptConditionsLoader.loadModuleConditions(configuration);
+        Object raw = configuration.get("conditions");
+        if (raw == null) return conditions;
+        int count;
+        if (raw instanceof ConfigurationSection nested) {
+            count = 0;
+            for (String key : nested.getKeys(false)) {
+                if ("list".equals(key)) {
+                    count += countEntries(nested.getList(key));
+                } else if (nested.isConfigurationSection(key)) {
+                    count++;
+                } else {
+                    throw new IllegalArgumentException("conditions." + key + " 必须为配置节");
+                }
             }
+        } else {
+            count = countEntries(configuration.getList("conditions"));
         }
-        return List.copyOf(effects);
+        if (count != conditions.size()) {
+            throw new IllegalArgumentException("conditions 含有无法解析的条件");
+        }
+        return conditions;
     }
 
-    private static List<ScriptCondition> readConditions(FileConfiguration configuration, String propId, Logger logger) {
-        return ScriptConditionsLoader.loadModuleConditions(
-            configuration,
-            logger,
-            "Prop " + propId + " 条件格式无效，已跳过: "
-        );
+    private static int countEntries(List<?> entries) {
+        if (entries == null) throw new IllegalArgumentException("conditions 必须为列表或配置节");
+        int count = 0;
+        for (Object entry : entries) {
+            if (entry != null && !(entry instanceof String text && text.isBlank())) count++;
+        }
+        return count;
     }
 
     private static PropAutoTriggerDefinition readAutoTrigger(FileConfiguration configuration, String propId, Logger logger) {
@@ -145,17 +167,12 @@ public final class PropDefinitionLoader {
         if (section == null) {
             return PropAutoTriggerDefinition.DISABLED;
         }
-        List<ScriptCondition> conditions = ScriptConditionsLoader.load(section, "conditions");
-        if (conditions.isEmpty() && logger != null) {
-            List<?> rawConditions = section.getList("conditions");
-            if (rawConditions != null) {
-                for (Object rawCondition : rawConditions) {
-                    String line = rawCondition == null ? "" : String.valueOf(rawCondition).trim();
-                    if (!line.isBlank()) {
-                        logger.warning("Prop " + propId + " 自动触发条件格式无效，已跳过: " + line);
-                    }
-                }
-            }
+        List<ScriptCondition> conditions;
+        try {
+            conditions = readConditions(section);
+        } catch (IllegalArgumentException exception) {
+            if (logger != null) logger.warning("Prop " + propId + " 已停用自动触发: " + exception.getMessage());
+            return PropAutoTriggerDefinition.DISABLED;
         }
         return new PropAutoTriggerDefinition(
             section.getBoolean("enabled", false),

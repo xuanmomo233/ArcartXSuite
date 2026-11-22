@@ -54,6 +54,72 @@ class SettlementLifecycleTest {
     }
     @AfterEach void restore()throws Exception{serverField.set(null,previous);}
 
+    @Test void failedExitDuringStopKeepsTheWorldAndWaitsForTheRecoveryWriteAsynchronously() throws Exception {
+        var database = fake(xuanmo.arcartxsuite.abyss.data.PlayerDataManager.class);
+        var scope = mock(xuanmo.arcartxsuite.api.storage.ModuleStorage.class);
+        var dbStopped = new java.util.concurrent.CompletableFuture<Void>();
+        var worldStopped = new java.util.concurrent.CompletableFuture<Void>();
+        var locationSaved = new java.util.concurrent.CompletableFuture<Void>();
+        var scopeRetired = new java.util.concurrent.CompletableFuture<Void>();
+        when(database.stopped()).thenReturn(dbStopped);
+        when(pool.stopped()).thenReturn(worldStopped);
+        when(scope.retired()).thenReturn(scopeRetired);
+        when(database.saveShutdownReturn(eq(player.getUniqueId()), any(), isNull(), isNull(), any())).thenReturn(locationSaved);
+        doReturn(false).when(player).teleport(any(Location.class));
+        set(service, "playerData", database);
+        set(service, "storageScope", scope);
+        service.shutdown();
+        assertFalse(service.running());
+        verify(database).saveShutdownReturn(eq(player.getUniqueId()), argThat(loc -> loc.getWorld() == home), isNull(), isNull(), any());
+        verify(pool, never()).releaseWorld(instance.getInstanceId());
+        verify(scope).retireAfter(dbStopped);
+        assertFalse(service.stopped().toCompletableFuture().isDone());
+        locationSaved.complete(null);
+        dbStopped.complete(null);
+        worldStopped.complete(null);
+        assertFalse(service.stopped().toCompletableFuture().isDone());
+        scopeRetired.complete(null);
+        service.stopped().toCompletableFuture().get(2, java.util.concurrent.TimeUnit.SECONDS);
+    }
+
+    @Test void missingReturnPointWaitsForEssentialsWithoutReleasingTheInstance() throws Exception {
+        var spawn = new java.util.concurrent.CompletableFuture<Location>();
+        var essentials = mock(xuanmo.arcartxsuite.api.capability.EssentialsQueryable.class);
+        when(essentials.getSpawn(world)).thenReturn(spawn);
+        var links = new xuanmo.arcartxsuite.abyss.links.AbyssLinks(
+            new xuanmo.arcartxsuite.abyss.links.AbyssLinks.CapabilityResolver() {
+                public <T> T get(Class<T> type) { return type == xuanmo.arcartxsuite.api.capability.EssentialsQueryable.class ? type.cast(essentials) : null; }
+            }, null, Logger.getAnonymousLogger(), null);
+        service.setLinks(links);
+        instance.saveOriginalLocation(player, new Location(world, 1, 64, 1));
+        assertFalse(service.playerExit(instance, player, LeaveReason.QUIT));
+        assertTrue(service.isExiting(player));
+        assertTrue(instance.hasPlayer(player.getUniqueId()));
+        assertFalse(service.playerExit(instance, player, LeaveReason.QUIT));
+        verify(essentials, times(1)).getSpawn(world);
+        spawn.complete(new Location(home, 12, 70, 14));
+        assertTrue(instance.hasPlayer(player.getUniqueId()));
+        jobs.stream().filter(job -> job.ticks() == 1).findFirst().orElseThrow().run().run();
+        assertSame(home, currentWorld.get());
+        assertFalse(instance.hasPlayer(player.getUniqueId()));
+        assertFalse(service.isExiting(player));
+        verify(player, times(1)).teleport(any(Location.class));
+    }
+
+    @Test void anAlreadyCompletedSpawnLookupStillDefersTheExitUntilAfterTheCallerReturns() throws Exception {
+        var links = fake(xuanmo.arcartxsuite.abyss.links.AbyssLinks.class);
+        when(links.essentialsSpawn(player)).thenReturn(java.util.concurrent.CompletableFuture.completedFuture(new Location(home, 4, 70, 6)));
+        doAnswer(call -> { ((Runnable)call.getArgument(0)).run(); return null; }).when(links).onMain(any());
+        service.setLinks(links);
+        instance.saveOriginalLocation(player, new Location(world, 1, 64, 1));
+        assertFalse(service.playerExit(instance, player, LeaveReason.QUIT));
+        assertTrue(instance.hasPlayer(player.getUniqueId()));
+        verify(player, never()).teleport(any(Location.class));
+        jobs.stream().filter(job -> job.ticks() == 1).findFirst().orElseThrow().run().run();
+        assertFalse(instance.hasPlayer(player.getUniqueId()));
+        verify(player, times(1)).teleport(any(Location.class));
+    }
+
     @Test void failedInitializationReturnsTheArrivedPlayerWithoutOpeningTheRun() throws Exception {
         var operation = pendingAdmission();
         var advance = AbyssService.class.getDeclaredMethod("advanceAdmission", AbyssInstance.class,

@@ -249,6 +249,8 @@ public final class MailInboxPacketFactory {
             case UNREAD -> message(messages, "ui.status-unread", "未读");
             case READ -> message(messages, "ui.status-read", "已读");
             case CLAIMED -> message(messages, "ui.status-claimed", "已领取");
+            case CLAIM_PENDING -> message(messages, "ui.status-claim-pending", "待继续领取");
+            case CLAIM_REVIEW -> message(messages, "ui.status-claim-review", "领取待核对");
             case DELETED -> message(messages, "ui.status-deleted", "已删除");
             case EXPIRED -> message(messages, "ui.status-expired", "已过期");
         };

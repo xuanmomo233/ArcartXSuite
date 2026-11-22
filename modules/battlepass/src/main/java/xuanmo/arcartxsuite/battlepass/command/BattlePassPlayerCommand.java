@@ -2,14 +2,18 @@ package xuanmo.arcartxsuite.battlepass.command;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.function.Supplier;
+import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabExecutor;
 import org.bukkit.entity.Player;
+import org.bukkit.plugin.Plugin;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import xuanmo.arcartxsuite.api.auth.AuthAccess;
 import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.battlepass.packet.BattlePassPacketHandler;
 import xuanmo.arcartxsuite.battlepass.service.BattlePassService;
@@ -22,6 +26,7 @@ import xuanmo.arcartxsuite.battlepass.service.BattlePassService;
  */
 public final class BattlePassPlayerCommand implements TabExecutor {
 
+    private final Plugin plugin;
     private final Supplier<BattlePassPacketHandler> packetHandlerSupplier;
     private final Supplier<BattlePassService> serviceSupplier;
     private final MessageProvider messages;
@@ -33,8 +38,9 @@ public final class BattlePassPlayerCommand implements TabExecutor {
      * @param serviceSupplier       BattlePassService 提供者（延迟获取，可能为 null）
      * @param messages              消息提供者
      */
-    public BattlePassPlayerCommand(Supplier<BattlePassPacketHandler> packetHandlerSupplier,
+    public BattlePassPlayerCommand(Plugin plugin, Supplier<BattlePassPacketHandler> packetHandlerSupplier,
                                     Supplier<BattlePassService> serviceSupplier, MessageProvider messages) {
+        this.plugin = plugin;
         this.packetHandlerSupplier = packetHandlerSupplier;
         this.serviceSupplier = serviceSupplier;
         this.messages = messages;
@@ -70,6 +76,10 @@ public final class BattlePassPlayerCommand implements TabExecutor {
             case "tasks" -> handler.openTasks(player);
             case "rewards" -> handler.openRewards(player);
             case "claim" -> handleClaim(player, args, label);
+            case "go" -> {
+                if (args.length == 2) handler.navigateTask(player, args[1], false);
+                else player.sendMessage(fullMsg("player.help.go"));
+            }
             default -> {
                 player.sendMessage(fullMsg("player.unknown-subcommand", label));
                 handler.openMain(player);
@@ -89,7 +99,7 @@ public final class BattlePassPlayerCommand implements TabExecutor {
         if (args.length == 1) {
             String prefix = args[0].toLowerCase();
             List<String> completions = new ArrayList<>();
-            for (String cmd : List.of("open", "tasks", "rewards", "claim", "help")) {
+            for (String cmd : List.of("open", "tasks", "rewards", "claim", "go", "help")) {
                 if (cmd.startsWith(prefix)) completions.add(cmd);
             }
             return completions;
@@ -110,13 +120,14 @@ public final class BattlePassPlayerCommand implements TabExecutor {
             player.sendMessage(fullMsg("claim.usage", label));
             return;
         }
-        String key = switch (service.claimRewards(player, level)) {
-            case SUCCESS -> "claim.success";
-            case LEVEL_NOT_REACHED -> "claim.level-not-reached";
-            case ALREADY_CLAIMED -> "claim.already-claimed";
-            case NOT_FOUND -> "claim.none";
-        };
-        player.sendMessage(fullMsg(key, level));
+        var session = AuthAccess.snapshot(player.getUniqueId());
+        service.claimLevelAsync(player, level, () -> true).whenComplete((result, error) -> service.onMain(() -> {
+            var current = AuthAccess.snapshot(player.getUniqueId());
+            if (!player.isOnline() || !player.hasPermission("arcartxsuite.battlepass.use")
+                || !current.admitted() || current.generation() != session.generation()
+                || !Objects.equals(current.connectionId(), session.connectionId())) return;
+            player.sendMessage(fullMsg(error == null ? result.messageKey() : "claim.retry", level));
+        }));
     }
 
     private void showHelp(Player player) {
@@ -125,6 +136,7 @@ public final class BattlePassPlayerCommand implements TabExecutor {
         player.sendMessage(fullMsg("player.help.tasks"));
         player.sendMessage(fullMsg("player.help.rewards"));
         player.sendMessage(fullMsg("player.help.claim"));
+        player.sendMessage(fullMsg("player.help.go"));
         player.sendMessage(fullMsg("player.help.help"));
     }
 

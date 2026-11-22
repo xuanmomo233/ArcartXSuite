@@ -4,6 +4,7 @@ import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -626,13 +627,38 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         if(instance!=null && instance.isFinished()) {
             StatsSnapshot cached=recentStats.get(player.getUniqueId());
             if(cached!=null && cached.instance().equals(instance.getInstanceId()) && cached.expires()>System.currentTimeMillis())presentStats(player,cached);
-            else captureSettlementStats(player,instance).run();
+            else captureSettlementStats(player, instance, statsRows(instance)).run();
             return;
         }
-        openView(player,statsUi(),statsPayload(player,instance));
+        openView(player, statsUi(), statsPayload(player, instance, statsRows(instance)));
     }
 
-    private Map<String,Object> statsPayload(Player player,AbyssInstance instance) {
+    private Map<String, Object> statsRows(@Nullable AbyssInstance instance) {
+        if (instance == null) return Map.of();
+        var players = new java.util.LinkedHashSet<>(instance.getPlayerUUIDs());
+        players.addAll(instance.getKillCounts().keySet());
+        Map<String, Object> rows = new LinkedHashMap<>();
+        int i = 0;
+        for (UUID playerId : players) {
+            Player player = org.bukkit.Bukkit.getPlayer(playerId);
+            Map<String, Double> sum = service.stats().summary(instance, playerId);
+            int kills = instance.getKillCounts().getOrDefault(playerId, 0);
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("name", player != null ? player.getName() : "?");
+            row.put("kills", kills);
+            row.put("damage", sum.get("damage"));
+            row.put("taken", sum.get("damage_taken"));
+            row.put("heal", sum.get("healing"));
+            row.put("killsText", compact(kills));
+            row.put("damageText", compact(sum.getOrDefault("damage", 0.0)));
+            row.put("takenText", compact(sum.getOrDefault("damage_taken", 0.0)));
+            row.put("healText", compact(sum.getOrDefault("healing", 0.0)));
+            rows.put(Integer.toString(i++), row);
+        }
+        return rows;
+    }
+
+    private Map<String,Object> statsPayload(Player player, @Nullable AbyssInstance instance, Map<String, Object> rows) {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("packetId", CHANNEL);
         payload.put("action_token", token(player));
@@ -640,32 +666,11 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         payload.put("mode", "stats");
         if(instance!=null)payload.put("instance_id",instance.getInstanceId().toString());
 
-        Map<String, Object> rows = new LinkedHashMap<>();
-        int i = 0;
-        if (instance != null) {
-            Set<UUID> players = new java.util.LinkedHashSet<>(instance.getPlayerUUIDs());
-            players.addAll(instance.getKillCounts().keySet());
-            for (UUID playerId : players) {
-                Player p = org.bukkit.Bukkit.getPlayer(playerId);
-                Map<String, Double> sum = service.stats().summary(instance, playerId);
-                Map<String, Object> r = new LinkedHashMap<>();
-                r.put("name", p != null ? p.getName() : "?");
-                r.put("kills", instance.getKillCounts().getOrDefault(playerId, 0));
-                r.put("damage", sum.get("damage"));
-                r.put("taken", sum.get("damage_taken"));
-                r.put("heal", sum.get("healing"));
-                r.put("killsText", compact(instance.getKillCounts().getOrDefault(playerId, 0)));
-                r.put("damageText", compact(sum.getOrDefault("damage", 0.0)));
-                r.put("takenText", compact(sum.getOrDefault("damage_taken", 0.0)));
-                r.put("healText", compact(sum.getOrDefault("healing", 0.0)));
-                rows.put(Integer.toString(i++), r);
-            }
-        }
         payload.put("statRows", rows);
         payload.put("statCount", rows.size());
         PendingChest pending = pendingChests.get(player.getUniqueId());
         payload.put("hasChest", pending != null && pending.instance() == instance);
-        payload.put("hasRewardGame", instance.isFinished() && instance.getTemplate().rewards() != null
+        payload.put("hasRewardGame", instance != null && instance.isFinished() && instance.getTemplate().rewards() != null
             && !instance.getTemplate().rewards().games().isEmpty());
         payload.put("settling",instance!=null && instance.isFinished());
         payload.put("canLeave",false);
@@ -677,9 +682,21 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         return payload;
     }
 
-    public Runnable captureSettlementStats(Player player,AbyssInstance instance) {
+    public Map<UUID, Runnable> prepareSettlementViews(AbyssInstance instance, List<Player> players, boolean autoShow) {
+        if (players.isEmpty()) return Map.of();
+        Map<String, Object> rows = statsRows(instance);
+        var presentations = new LinkedHashMap<UUID, Runnable>();
+        for (Player player : players) {
+            closeInstanceViews(player);
+            Runnable show = captureSettlementStats(player, instance, rows);
+            if (autoShow) presentations.put(player.getUniqueId(), show);
+        }
+        return presentations;
+    }
+
+    private Runnable captureSettlementStats(Player player, AbyssInstance instance, Map<String, Object> rows) {
         if(views.isOpen(player,statsUi()))views.close(player,statsUi());
-        StatsSnapshot snapshot=new StatsSnapshot(instance.getInstanceId(),Map.copyOf(statsPayload(player,instance)),System.currentTimeMillis()+600_000L);
+        StatsSnapshot snapshot=new StatsSnapshot(instance.getInstanceId(),Map.copyOf(statsPayload(player, instance, rows)),System.currentTimeMillis()+600_000L);
         recentStats.put(player.getUniqueId(),snapshot);
         return ()->{
             StatsSnapshot latest=recentStats.get(player.getUniqueId());
@@ -714,7 +731,7 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         if(snapshot==null || !snapshot.instance().equals(instance.getInstanceId()) || !instance.getInstanceId().equals(statsViews.get(player.getUniqueId()))
             || !views.isOpen(player,statsUi()))return;
         PendingChest pending=pendingChests.get(player.getUniqueId());
-        views.send(player,statsUi(),"settlement_update",Map.of("settlementHint",service.settlementHint(instance),"canLeave",true,
+        views.sendChanged(player,statsUi(),"settlement_update",Map.of("settlementHint",service.settlementHint(instance),"canLeave",true,
             "hasChest",pending!=null && pending.instance()==instance));
     }
 
@@ -1170,36 +1187,66 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
 
     // ═══ HUD ═══
 
-    /** HUD 已确认打开的玩家（仅这些玩家会收到周期推送，避免给未渲染客户端刷屏包）。 */
-    private final Set<UUID> hudOpen = ConcurrentHashMap.newKeySet();
+    /** HUD 只接收当前视图绑定的副本快照。 */
+    private final Map<UUID, UUID> hudRuns = new ConcurrentHashMap<>();
 
     /** 进入副本：开 HUD + 首帧数据。 */
     public void openHud(Player player, AbyssInstance instance) {
+        openHud(instance, List.of(player));
+    }
+
+    public void openHud(AbyssInstance instance, List<Player> players) {
         if (!available()) return;
-        if (views.open(player, hudUi(), "update", hudPayload(instance), true))
-            hudOpen.add(player.getUniqueId());
+        UUID run = instance.getInstanceId();
+        String ui = hudUi();
+        Map<String, Object> payload = null;
+        for (Player player : players) {
+            if (!player.isOnline()) continue;
+            if (payload == null) payload = hudPayload(instance);
+            UUID id = player.getUniqueId();
+            hudRuns.remove(id);
+            try {
+                if (views.open(player, ui, "update", payload, true)) hudRuns.put(id, run);
+            } catch (RuntimeException | LinkageError failure) {
+                logger.fine(() -> "无法打开副本 HUD " + id + ": " + failure.getMessage());
+            }
+        }
     }
 
     /** 离开副本：关 HUD。 */
     public void closeHud(Player player) {
-        hudOpen.remove(player.getUniqueId());
+        hudRuns.remove(player.getUniqueId());
         if (available()) views.close(player, hudUi());
     }
 
-    /** HUD 周期数据推送（service proximityTick 调用）。仅在 HUD 已打开时推送。 */
-    public void pushHudUpdate(Player player, AbyssInstance instance) {
-        if (!available() || !hudOpen.contains(player.getUniqueId())) return;
-        views.send(player, hudUi(), "update", hudPayload(instance));
+    /** 同一轮的快照由仍绑定本副本的 HUD 共用。 */
+    public void pushHudUpdate(AbyssInstance instance, List<Player> players) {
+        if (!available()) return;
+        UUID run = instance.getInstanceId();
+        String ui = hudUi();
+        Map<String, Object> payload = null;
+        for (Player player : players) {
+            UUID id = player.getUniqueId();
+            if (!run.equals(hudRuns.get(id)) || !player.isOnline()) continue;
+            if (!views.isOpen(player, ui)) {
+                hudRuns.remove(id, run);
+                continue;
+            }
+            if (payload == null) payload = hudPayload(instance);
+            views.sendChanged(player, ui, "update", payload);
+        }
     }
 
     private Map<String, Object> hudPayload(AbyssInstance instance) {
         var mgr = service.mobGroups();
-        int[] gp = mgr.groupProgress(instance);
+        int[] gp;
         String progressLabel = "波次";
         if (instance.getTemplate().procgen() != null && service.procgen() != null) {
             gp = service.procgen().progress(instance); progressLabel = "房间";
         } else if (instance.getTemplate().mode() == AbyssTemplate.Mode.FLOORS && service.roomManager() != null) {
             gp = service.roomManager().progress(instance); progressLabel = "房间";
+        } else {
+            gp = mgr.groupProgress(instance);
         }
         long limit = instance.getTemplate().timeLimitSeconds();
         long remain = limit > 0 ? Math.max(0, limit - instance.getRunningTime()) : 0;
@@ -1213,8 +1260,8 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         p.put("progressLabel", progressLabel);
         p.put("groupTotal", gp[0]);
         p.put("groupDone", gp[1]);
-        p.put("activeGroup", mgr.activeGroupName(instance) != null
-            ? mgr.activeGroupName(instance) : "");
+        String activeGroup = mgr.activeGroupName(instance);
+        p.put("activeGroup", activeGroup == null ? "" : activeGroup);
         p.put("aliveMobs", mgr.totalAlive(instance));
         p.put("alivePlayers", instance.getAlivePlayerCount());
         p.put("totalPlayers", instance.getOnlinePlayerCount());
@@ -1243,26 +1290,29 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
 
     @Override
     public boolean handlePacket(Player player, String packetId, List<String> data) {
+        if (!CHANNEL.equalsIgnoreCase(packetId) || data == null || data.isEmpty() || data.get(0) == null) {
+            return false;
+        }
+        String action = data.get(0).toLowerCase(Locale.ROOT);
+        if (!action.equals(data.get(0))) {
+            data = new ArrayList<>(data);
+            data.set(0, action);
+        }
         try {
-            if (CHANNEL.equalsIgnoreCase(packetId) && data != null && !data.isEmpty()
-                && data.get(0).startsWith("design_")) {
+            if (action.startsWith("design_")) {
                 var s = designSession(player);
                 if (s == null || !player.hasPermission("arcartxsuite.abyss.admin")) return true;
                 if (s.saving()) { player.sendMessage("§e正在保存，请等待完成。"); return true; }
                 if (data.stream().anyMatch(v -> v == null || v.length() > 65536)) return true;
             }
-            return handlePacketChecked(player, packetId, data);
+            return handlePacketChecked(player, action, data);
         } catch (IllegalArgumentException ex) {
             player.sendMessage("§c操作未应用: " + ex.getMessage());
             return true;
         }
     }
 
-    private boolean handlePacketChecked(Player player, String packetId, List<String> data) {
-        if (!CHANNEL.equalsIgnoreCase(packetId) || data == null || data.isEmpty()) {
-            return false;
-        }
-        String action = data.get(0).toLowerCase();
+    private boolean handlePacketChecked(Player player, String action, List<String> data) {
         switch (action) {
             case "close_view" -> {
                 if (data.size()>3 && (checkToken(player, data, 2)
@@ -2074,7 +2124,7 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         var query=boardQueries.remove(uid);if(query!=null)query.cancel(false);
         views.clear(player);
         shopOffers.remove(uid); inputOffers.remove(uid); buffOffers.remove(uid);
-        hudOpen.remove(uid);
+        hudRuns.remove(uid);
         flushPendingChest(player);
     }
 

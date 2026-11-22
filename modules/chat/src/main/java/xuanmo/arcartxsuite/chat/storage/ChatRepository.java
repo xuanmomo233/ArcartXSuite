@@ -1,17 +1,22 @@
 package xuanmo.arcartxsuite.chat.storage;
 
 import java.sql.SQLException;
+import xuanmo.arcartxsuite.api.capability.ChatMutable.MuteInfo;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import xuanmo.arcartxsuite.chat.model.ChatMuteRecord;
+import xuanmo.arcartxsuite.chat.model.ChatModerationReceipt;
+import xuanmo.arcartxsuite.chat.model.ChatMessageReport;
 import xuanmo.arcartxsuite.chat.model.ChatPlayerProfile;
 import xuanmo.arcartxsuite.chat.model.ChatPlayerState;
 import xuanmo.arcartxsuite.chat.model.RedPacket;
 import xuanmo.arcartxsuite.chat.model.RedPacketClaim;
 import xuanmo.arcartxsuite.chat.model.RedPacketClaimOutcome;
+import xuanmo.arcartxsuite.chat.model.RedPacketDelivery;
 import xuanmo.arcartxsuite.chat.model.RedPacketEntryRow;
 
 /**
@@ -28,6 +33,12 @@ public interface ChatRepository {
      */
     void initialize() throws SQLException;
 
+    /** Database identity shared by Chat nodes using the same MySQL schema. */
+    Optional<String> networkId() throws SQLException;
+
+    /** The shared MySQL relay state, or null for local SQLite repositories. */
+    default ChatRelayJournal relayJournal() { return null; }
+
     /**
      * 加载玩家聊天状态，不存在时返回默认状态。
      *
@@ -38,22 +49,61 @@ public interface ChatRepository {
      */
     ChatPlayerState loadState(UUID playerUuid, String defaultChannelId) throws SQLException;
 
+    record RouteState(ChatPlayerState player, boolean subscribed, boolean quiet) {}
+
+    Map<UUID, RouteState> loadRouteStates(Set<UUID> players, String channelId, String defaultChannelId) throws SQLException;
+
+    default boolean supportsIgnoreGuards() { return false; }
+
+    /** Acquire off-thread. The caller holds the lease until its bounded delivery callback finishes. */
+    default GuardedRoutes lockRouteStates(Set<UUID> actors) throws SQLException {
+        Set<UUID> covered = Set.copyOf(actors);
+        return new GuardedRoutes() {
+            @Override
+            public Map<UUID, RouteState> loadRouteStates(Set<UUID> players, String channelId, String defaultChannelId)
+                    throws SQLException {
+                if (!covered.containsAll(players)) throw new IllegalArgumentException("Chat route actor is not guarded");
+                return ChatRepository.this.loadRouteStates(players, channelId, defaultChannelId);
+            }
+
+            @Override
+            public void close() {}
+        };
+    }
+
+    interface GuardedRoutes extends AutoCloseable {
+        Map<UUID, RouteState> loadRouteStates(Set<UUID> players, String channelId, String defaultChannelId)
+            throws SQLException;
+
+        @Override
+        void close() throws SQLException;
+    }
+
+    void setChannelPreference(UUID player, String channelId, boolean quietField, boolean value) throws SQLException;
+
+    void addUnreadMention(UUID player) throws SQLException;
+
+    int takeUnreadMentions(UUID player) throws SQLException;
+
     /**
      * 保存或更新玩家聊天状态。
      *
      * @param state 玩家聊天状态
      * @throws SQLException SQL 异常
      */
-    void saveState(ChatPlayerState state) throws SQLException;
+    enum StateField { CHANNEL, PRIVATE_MESSAGES, MENTIONS, SOCIAL_SPY }
+
+    void saveState(ChatPlayerState state, StateField field) throws SQLException;
 
     /**
-     * 全量替换保存玩家的屏蔽列表。
+     * 更新一条屏蔽关系。
      *
      * @param playerUuid      玩家 UUID
-     * @param ignoredPlayers  屏蔽的玩家 UUID 集合
+     * @param ignoredUuid     屏蔽对象
+     * @param ignored         是否屏蔽
      * @throws SQLException SQL 异常
      */
-    void saveIgnoredPlayers(UUID playerUuid, Set<UUID> ignoredPlayers) throws SQLException;
+    boolean setIgnored(UUID playerUuid, UUID ignoredUuid, boolean ignored) throws SQLException;
 
     /**
      * 加载玩家禁言记录。
@@ -70,7 +120,7 @@ public interface ChatRepository {
      * @param muteRecord 禁言记录
      * @throws SQLException SQL 异常
      */
-    void saveMute(ChatMuteRecord muteRecord) throws SQLException;
+    void saveMute(ChatMuteRecord muteRecord, ChatModerationReceipt receipt) throws SQLException;
 
     /**
      * 删除玩家禁言记录（解除禁言）。
@@ -78,7 +128,23 @@ public interface ChatRepository {
      * @param playerUuid 玩家 UUID
      * @throws SQLException SQL 异常
      */
-    void deleteMute(UUID playerUuid) throws SQLException;
+    void deleteMute(UUID playerUuid, ChatModerationReceipt receipt) throws SQLException;
+
+    List<MuteInfo> loadActiveMutes(Instant now, int limit, int offset) throws SQLException;
+
+    void deleteExpiredMutes(Instant now) throws SQLException;
+
+    List<ChatModerationReceipt> moderationHistory(String playerName, int limit) throws SQLException;
+
+    Optional<ChatModerationReceipt> findModerationReceipt(UUID id) throws SQLException;
+
+    boolean saveReport(ChatMessageReport report) throws SQLException;
+
+    List<ChatMessageReport> loadOpenReports(int limit) throws SQLException;
+
+    Optional<ChatMessageReport> findReport(UUID id) throws SQLException;
+
+    boolean closeReport(UUID id, String operator) throws SQLException;
 
     /**
      * 保存或更新玩家档案。
@@ -149,8 +215,8 @@ public interface ChatRepository {
      * @return 领取结果（含抽中的奖励快照）
      * @throws SQLException SQL 异常
      */
-    RedPacketClaimOutcome claimRedPacket(String packetId, UUID playerUuid, String playerName,
-                                         boolean senderCanClaim, Instant now) throws SQLException;
+    RedPacketClaimOutcome claimRedPacket(RedPacket authorizedPacket, UUID playerUuid, String playerName,
+                                         boolean senderCanClaim) throws SQLException;
 
     /**
      * 将红包原子标记为指定状态（仅当当前状态为 active 时生效）。
@@ -163,7 +229,7 @@ public interface ChatRepository {
      * @return {@code true} 表示本次调用完成了状态翻转
      * @throws SQLException SQL 异常
      */
-    boolean updateRedPacketStatus(String packetId, String status) throws SQLException;
+    boolean expireRedPacket(String packetId) throws SQLException;
 
     /**
      * 扣减红包剩余金额（退款结算用）。
@@ -172,7 +238,20 @@ public interface ChatRepository {
      * @param remainingAmount 新的剩余金额
      * @throws SQLException SQL 异常
      */
-    void updateRedPacketRemaining(String packetId, java.math.BigDecimal remainingAmount) throws SQLException;
+    boolean completeDebit(String packetId, boolean charged) throws SQLException;
+
+    Optional<RedPacket> reconcileDebit(String packetId, boolean charged, Instant before) throws SQLException;
+
+    List<RedPacket> loadUncertainDebits(Instant before) throws SQLException;
+
+    List<RedPacketDelivery> loadReadyDeliveries(Set<UUID> players, int limit) throws SQLException;
+
+    List<RedPacketDelivery> loadUncertainDeliveries(Instant before) throws SQLException;
+
+    boolean transitionDelivery(RedPacketDelivery delivery, RedPacketDelivery.Status next, Instant now)
+        throws SQLException;
+
+    boolean reconcileDelivery(String id, Instant before, RedPacketDelivery.Status next) throws SQLException;
 
     /**
      * 查询红包的全部领取记录（按领取时间升序）。

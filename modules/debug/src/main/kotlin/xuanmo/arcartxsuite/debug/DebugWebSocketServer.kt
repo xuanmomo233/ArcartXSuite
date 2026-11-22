@@ -7,7 +7,6 @@ import org.java_websocket.WebSocket
 import org.java_websocket.handshake.ClientHandshake
 import org.java_websocket.server.WebSocketServer
 import java.net.InetSocketAddress
-import java.util.logging.Level
 import java.util.logging.Logger
 
 /**
@@ -30,34 +29,40 @@ class DebugWebSocketServer(
 ) : WebSocketServer(InetSocketAddress(host, port)) {
 
     private val gson: Gson = Gson()
+    private val authenticated = java.util.concurrent.ConcurrentHashMap.newKeySet<WebSocket>()
 
     override fun onStart() {
-        logger.info("Debug WebSocket 服务端已就绪，等待连接 (token=${token})")
+        logger.info("Debug WebSocket 服务端已就绪，等待本地连接")
     }
 
     override fun onOpen(conn: WebSocket, handshake: ClientHandshake) {
         // Token 认证：从连接 URL 的 query 参数中提取 token
         val uri = handshake.resourceDescriptor
         val provided = extractToken(uri)
-        if (provided == null || provided != token) {
-            logger.warning("Debug WebSocket 拒绝连接: token 认证失败 (uri=$uri)")
+        if (conn.remoteSocketAddress?.address?.isLoopbackAddress != true || provided == null ||
+            !java.security.MessageDigest.isEqual(token.toByteArray(Charsets.UTF_8), provided.toByteArray(Charsets.UTF_8))
+        ) {
+            logger.warning("Debug WebSocket 拒绝未经认证的连接")
             conn.close(4401, "Unauthorized: invalid or missing token")
             return
         }
+        authenticated.add(conn)
         logger.info("Debug WebSocket 客户端已连接: ${conn.remoteSocketAddress}")
     }
 
     override fun onClose(conn: WebSocket, code: Int, reason: String?, remote: Boolean) {
-        logger.fine("Debug WebSocket 客户端断开: ${conn.remoteSocketAddress} code=$code reason=$reason")
+        authenticated.remove(conn)
+        logger.fine("Debug WebSocket 客户端断开: ${conn.remoteSocketAddress} code=$code")
     }
 
     override fun onMessage(conn: WebSocket, message: String) {
+        if (conn !in authenticated) return
         val response = handleRpc(message)
         conn.send(response)
     }
 
     override fun onError(conn: WebSocket?, ex: Exception) {
-        logger.log(Level.WARNING, "Debug WebSocket 异常: ${ex.message}", ex)
+        logger.warning("Debug WebSocket 异常: ${ex.javaClass.simpleName}")
     }
 
     /** 解析并分发一条 JSON-RPC 请求，返回 JSON 响应字符串 */

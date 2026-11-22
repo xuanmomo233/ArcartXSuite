@@ -22,6 +22,9 @@ import java.util.function.Supplier;
 
 /** NPC exchange and online catalog authoring share only public host bridges. */
 public final class NpcTradingService implements Listener {
+    public void setCompletionListener(java.util.function.BiConsumer<Player, Map<String, String>> listener) {
+        exchange.setCompletionListener(listener);
+    }
     public static final String ADMIN="arcartxsuite.market.exchange.admin";
     private static final class Buyer {final String shop,origin;final long revision;final String session=UUID.randomUUID().toString();String token=UUID.randomUUID().toString(),lastResult="";Buyer(String shop,String origin,long revision){this.shop=shop;this.origin=origin;this.revision=revision;}}
     private static final class Editor {
@@ -49,9 +52,9 @@ public final class NpcTradingService implements Listener {
     private String buyerUi,editorUi;
     private boolean closed;
     public NpcTradingService(Plugin plugin,File folder,PacketBridgeAPI bridge,CurrencyBridgeAPI currencies,ItemSourceRegistry sources,ItemBridgeAPI items,VanillaItemNameBridge names,
-                             AdyeshachNpcBridgeAPI npcs,Supplier<WarehouseMaterialAccess> warehouse,NpcTradeRepository repository,String buyerUi,String editorUi,Logger logger)throws IOException{
+                             AdyeshachNpcBridgeAPI npcs,Supplier<WarehouseMaterialAccess> warehouse,NpcTradeRepository repository,String buyerUi,String editorUi,Logger logger,Path playerData)throws IOException{
         this.plugin=plugin;this.folder=folder;this.bridge=bridge;this.currencies=currencies;this.sources=sources;this.items=items;this.npcs=npcs;this.warehouse=warehouse;this.repository=repository;
-        this.buyerUi=buyerUi;this.editorUi=editorUi;this.logger=logger;catalog=new TradeCatalog(folder);exchange=new NpcExchange(plugin,repository,currencies,logger);previews=new ItemPresentation(items,names);bindNpcs();
+        this.buyerUi=buyerUi;this.editorUi=editorUi;this.logger=logger;catalog=new TradeCatalog(folder);exchange=new NpcExchange(plugin,repository,currencies,logger,playerData);previews=new ItemPresentation(items,names);bindNpcs();
     }
     public boolean busy(Player player){return InventoryOperation.busy(player)||pending.containsKey(player.getUniqueId());}
     public void warehouseChanged(){
@@ -213,6 +216,10 @@ public final class NpcTradingService implements Listener {
         });
     }
     private static String operationId(String value){try{return UUID.fromString(value).toString();}catch(IllegalArgumentException e){throw new IllegalArgumentException("请输入有效的凭证 UUID");}}
+    public List<String> packetIds() {
+        return List.of(buyerUi, editorUi, "AXS:market_exchange", "AXS:market_exchange_editor");
+    }
+
     public boolean ownsPacket(String id) {
         return buyerUi.equalsIgnoreCase(id) || editorUi.equalsIgnoreCase(id)
             || "AXS:market_exchange".equalsIgnoreCase(id) || "AXS:market_exchange_editor".equalsIgnoreCase(id);
@@ -365,4 +372,7 @@ public final class NpcTradingService implements Listener {
     @EventHandler(priority=EventPriority.LOWEST)public void swap(PlayerSwapHandItemsEvent event){if(busy(event.getPlayer()))event.setCancelled(true);}
     @EventHandler(priority=EventPriority.LOWEST,ignoreCancelled=true)public void pickup(org.bukkit.event.entity.EntityPickupItemEvent event){if(event.getEntity() instanceof Player p&&busy(p))event.setCancelled(true);}
     public void close(){closed=true;pending.clear();exchange.close();if(npcs!=null)npcs.shutdown();buyers.clear();editors.clear();}
+    public java.util.concurrent.CompletionStage<Void> stopped() {
+        return exchange.stopped().whenComplete((ignored, failure) -> repository.shutdown());
+    }
 }

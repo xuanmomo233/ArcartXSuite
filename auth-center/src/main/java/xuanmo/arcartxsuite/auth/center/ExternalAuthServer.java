@@ -97,6 +97,10 @@ final class ExternalAuthServer implements AutoCloseable {
                 case "GET "+PATH+"/callback" -> {
                     var query = parameters(exchange.getRequestURI().getRawQuery());
                     String state = required(query,"state");
+                    if ("access_denied".equals(query.get("error")) && !query.containsKey("code")) {
+                        finishBrowser(exchange,authorization.denyBrowser(state,cookie(exchange)));
+                        return;
+                    }
                     var consent = authorization.callback(state,cookie(exchange),query.containsKey("error")?null:query.get("code"));
                     var request = consent.request();
                     String action = request.pairing()==null
@@ -111,12 +115,7 @@ final class ExternalAuthServer implements AutoCloseable {
                     var form = browserForm(exchange);
                     String decision = required(form,"decision");
                     if (!Set.of("approve","deny").contains(decision)) throw new IllegalArgumentException("Invalid decision");
-                    var result = authorization.confirm(required(form,"state"),cookie(exchange),"approve".equals(decision));
-                    headers.set("Set-Cookie",COOKIE+"=; Path=/; Max-Age=0; Secure; HttpOnly; SameSite=Lax");
-                    if (result.redirect()!=null) link(exchange,result.redirect(),"返回启动器");
-                    else if(!result.approved()) html(exchange,200,"已拒绝授权。");
-                    else if(result.confirmation().isEmpty()) html(exchange,200,"已批准设备授权，请返回启动器。");
-                    else html(exchange,200,"授权核对码 <strong>"+escape(result.confirmation())+"</strong>。返回游戏刷新，核对后确认。");
+                    finishBrowser(exchange,authorization.confirm(required(form,"state"),cookie(exchange),"approve".equals(decision)));
                 }
                 case "POST "+PATH+"/launcher/start", "POST "+PATH+"/launcher/exchange", "POST "+PATH+"/launcher/pair",
                      "POST "+PATH+"/launcher/device/start", "POST "+PATH+"/launcher/device/poll", "POST "+PATH+"/launcher/device/cancel" -> launcher(exchange,path,source);
@@ -127,6 +126,14 @@ final class ExternalAuthServer implements AutoCloseable {
         } catch (Exception e) {
             html(exchange,503,"认证暂时不可用，请重新发起授权。");
         } finally { if(slot!=null) slot.release(); if(sourceSlot!=null) inFlight.remove(sourceSlot); deadline.cancel(false); exchange.close(); }
+    }
+
+    private void finishBrowser(HttpExchange exchange, ExternalAuthorization.ConsentResult result) throws IOException {
+        exchange.getResponseHeaders().set("Set-Cookie",COOKIE+"=; Path=/; Max-Age=0; Secure; HttpOnly; SameSite=Lax");
+        if (result.redirect()!=null) link(exchange,result.redirect(),"返回启动器");
+        else if(!result.approved()) html(exchange,200,"已拒绝授权。");
+        else if(result.confirmation().isEmpty()) html(exchange,200,"已批准设备授权，请返回启动器。");
+        else html(exchange,200,"授权核对码 <strong>"+escape(result.confirmation())+"</strong>。返回游戏刷新，核对后确认。");
     }
 
     private void launcher(HttpExchange exchange, String path,String source) throws IOException {

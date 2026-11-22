@@ -61,6 +61,7 @@ public final class VanillaModule extends AbstractAXSModule implements Listener,x
     private InventoryOpenListener inventoryListener;
     private ExtraBackpackConfiguration backpackConfiguration;
     private ExtraBackpackService backpack;
+    private Runnable unregisterMmoItemsAccessories;
     private ExtraBackpackAdminCommand backpackCommand;
     private VanillaRecipeRegistry recipes;
     private RecipeEditor recipeEditor;
@@ -86,6 +87,15 @@ public final class VanillaModule extends AbstractAXSModule implements Listener,x
         List<ValidationRule> rules = new ArrayList<>();
         rules.add(ValidationRule.of("ui.overwrite-ui-files", ValueType.BOOLEAN));
         rules.add(ValidationRule.of("backpack.enabled", ValueType.BOOLEAN));
+        rules.add(ValidationRule.of("backpack.mmoitems-attribute-slots", ValueType.STRING_LIST));
+        rules.add(ValidationRule.of("backpack.presentation.enabled", ValueType.BOOLEAN));
+        rules.add(ValidationRule.of("backpack.presentation.transition-ms", ValueType.INT).withRange(0, 3000));
+        rules.add(ValidationRule.of("backpack.presentation.blend-ms", ValueType.INT).withRange(0, 2000));
+        rules.add(ValidationRule.of("backpack.presentation.open.animation", ValueType.STRING));
+        rules.add(ValidationRule.of("backpack.presentation.open.duration-ms", ValueType.INT).withRange(50, 60000));
+        rules.add(ValidationRule.of("backpack.presentation.idle.animation", ValueType.STRING));
+        rules.add(ValidationRule.of("backpack.presentation.random.min-interval-ms", ValueType.INT).withRange(250, 120000));
+        rules.add(ValidationRule.of("backpack.presentation.random.max-interval-ms", ValueType.INT).withRange(250, 120000));
         rules.add(ValidationRule.of("recipes.enabled", ValueType.BOOLEAN));
         for (WorkshopType type : WorkshopType.values()) {
             rules.add(ValidationRule.of("ui." + type.configKey() + "-ui-id", ValueType.STRING));
@@ -94,9 +104,10 @@ public final class VanillaModule extends AbstractAXSModule implements Listener,x
         }
         return ModuleConfig.builder()
             .configFileName("ArcartXVanilla.yml")
-            .messagesFileName("messages.yml")
-            .syncPolicy(SyncPolicy.builder().dynamicSection("backpack.categories").build())
-            .currentVersion(2)
+            .messagesFileName("message.yml")
+            .syncPolicy(SyncPolicy.builder().obsoletePath("backpack.categories")
+                .dynamicSection("backpack.presentation.random.actions").build())
+            .currentVersion(3)
             .validations(rules)
             .build();
     }
@@ -111,19 +122,18 @@ public final class VanillaModule extends AbstractAXSModule implements Listener,x
 
     @Override
     protected @NotNull PacketHandlerSpec createPacketHandlerSpec() {
-        return PacketHandlerSpec.of((player, packetId, data) -> {
-            var editor = recipeEditor;
+        var editor = recipeEditor;
+        var current = service;
+        var packetIds = new java.util.ArrayList<String>();
+        if (current != null) packetIds.addAll(current.packetIds());
+        if (editor != null) packetIds.addAll(editor.packetIds());
+        return new PacketHandlerSpec((player, packetId, data) -> {
             if (editor != null && editor.ownsPacket(packetId)) {
-                if (Bukkit.isPrimaryThread()) editor.handle(player, data);
-                else Bukkit.getScheduler().runTask(plugin, () -> editor.handle(player, data));
+                editor.handle(player, data);
                 return true;
             }
-            var current = service;
-            if (current == null || !current.ownsPacket(packetId)) return false;
-            if (Bukkit.isPrimaryThread()) return current.handleClientPacket(player, packetId, data);
-            Bukkit.getScheduler().runTask(plugin, () -> current.handleClientPacket(player, packetId, data));
-            return true;
-        }, 0, null, null);
+            return current != null && current.handleClientPacket(player, packetId, data);
+        }, 0, packetIds, "vanilla");
     }
 
     @Override
@@ -135,13 +145,13 @@ public final class VanillaModule extends AbstractAXSModule implements Listener,x
         configuration = VanillaConfiguration.load(yaml);
         recipesEnabled = yaml.getBoolean("recipes.enabled", true);
         var backpackSection = yaml.getConfigurationSection("backpack");
-        backpackConfiguration = backpackSection == null ? null : ExtraBackpackConfiguration.load(backpackSection, logger);
+        backpackConfiguration = backpackSection == null ? null : ExtraBackpackConfiguration.load(backpackSection);
     }
 
     @Override
     protected void startService() throws Exception {
         stopping = false;
-        PacketBridgeAPI noticeBridge=xuanmo.arcartxsuite.api.message.UiNoticeBridge.wrap(packetBridge,messages(),dataFolder);
+        PacketBridgeAPI noticeBridge=xuanmo.arcartxsuite.api.message.UiNoticeBridge.wrap(packetBridge,messages(),dataFolder,"message.yml");
         service = new VanillaService(plugin,noticeBridge,itemStackBridge,vanillaItemNameBridge,configuration,logger);
         service.setWarehousePanel(() -> getCapability(WarehousePanelAccess.class));
         service.materialPlanner().setProvider(() -> getCapability(xuanmo.arcartxsuite.api.capability.WarehouseMaterialAccess.class));
@@ -161,7 +171,7 @@ public final class VanillaModule extends AbstractAXSModule implements Listener,x
         }
         startBackpack();
         if (recipesEnabled) startRecipes(noticeBridge);
-        logger.info("VanillaUI 模块已启用 | 界面=" + layoutUiFiles.size());
+        logger.info("VanillaUI 模块已启用 | 原版工位及容器界面=" + layoutUiFiles.size());
     }
 
     private void startRecipes(PacketBridgeAPI noticeBridge) {
@@ -174,8 +184,9 @@ public final class VanillaModule extends AbstractAXSModule implements Listener,x
         }
         UiBinding editor = registerModuleUi("arcartx/ui/vanilla_recipe_editor.yml", "ui/vanilla_recipe_editor.yml",
             RecipeEditor.UI, true);
-        recipeEditor = new RecipeEditor(recipes, noticeBridge, new ItemPresentation(itemStackBridge, vanillaItemNameBridge),
+        recipeEditor = new RecipeEditor(plugin, recipes, noticeBridge, new ItemPresentation(itemStackBridge, vanillaItemNameBridge), itemStackBridge,
             editor.runtimeUiId());
+        recipeEditor.registerExtraEvents();
         service.setCustomRecipes(recipes, recipeEditor);
         registerCapability(VanillaRecipeAccess.class, recipes);
     }
@@ -197,6 +208,10 @@ public final class VanillaModule extends AbstractAXSModule implements Listener,x
             recipes = null;
         }
         backpackCommand = null;
+        if (unregisterMmoItemsAccessories != null) {
+            unregisterMmoItemsAccessories.run();
+            unregisterMmoItemsAccessories = null;
+        }
         if (backpack != null) {
             backpack.shutdown();
             backpack = null;
@@ -291,17 +306,25 @@ public final class VanillaModule extends AbstractAXSModule implements Listener,x
     }
 
     private void startBackpack() throws Exception {
-        if (backpackConfiguration == null || !backpackConfiguration.extraBackpack().enabled()) return;
-        var messages = new MessageProvider(dataFolder, "backpack-messages.yml", moduleClassLoader(), logger,
-            resource -> openResource(resource, moduleClassLoader()));
-        messages.load();
-        backpack = new ExtraBackpackService(plugin, logger, packetBridge,
+        if (backpackConfiguration == null || !backpackConfiguration.enabled()) {
+            logger.info("Vanilla 随身背包未启用（backpack.enabled 未开启）");
+            return;
+        }
+        var messages = messages();
+        backpack = new ExtraBackpackService(plugin, logger, packetBridge, clientBridge,
             (resource, path, overwrite) -> exportUiResource(resource, path, overwrite, moduleClassLoader()),
-            backpackConfiguration, messages, vanillaItemNameBridge, currencyManager, rondoBridge);
+            backpackConfiguration, messages, vanillaItemNameBridge, currencyManager, rondoBridge, configuration.sortMode());
         backpack.setEventBusProvider(() -> getCapability(EventBusCapability.class));
         backpack.setWarehouseProvider(() -> getCapability(WarehouseAccess.class));
         backpack.setPanelProvider(() -> getCapability(WarehousePanelAccess.class));
         backpack.start();
+        var accessorySlots = backpackConfiguration.mmoItemsAttributeSlots();
+        if (!accessorySlots.isEmpty()) {
+            unregisterMmoItemsAccessories = propBridge == null ? null : propBridge.registerMmoItemsAccessories(accessorySlots);
+            if (unregisterMmoItemsAccessories == null) {
+                logger.warning("MMOItems 饰品槽未接入，请确认 ArcartX、MMOItems 和 MythicLib 的接口可用。");
+            }
+        }
         backpackCommand = new ExtraBackpackAdminCommand(() -> backpack, messages);
         for (String uiId : backpack.registeredUiIds()) recordExternalUi(uiId, uiId);
         registerCapability(VanillaBackpackAccess.class, backpack);

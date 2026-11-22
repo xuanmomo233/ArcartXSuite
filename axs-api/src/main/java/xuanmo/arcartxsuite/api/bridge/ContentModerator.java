@@ -10,14 +10,7 @@ import org.jetbrains.annotations.Nullable;
  * 统一管理本地词库、云端词库、标点穿透防护、白名单等过滤规则，
  * 供 chat / market / mail 等模块统一调用。
  * <p>
- * 过滤流程：
- * <ol>
- *   <li>剥离 {@code ignoredPunctuations} 中的标点（防止 {@code f.u.c.k} 绕过）</li>
- *   <li>检查白名单，命中则跳过</li>
- *   <li>逐词匹配本地 + 云端屏蔽词</li>
- *   <li>匹配正则屏蔽模式</li>
- *   <li>命中时按 {@code cancelOnMatch} 决定取消或替换</li>
- * </ol>
+ * 白名单豁免完全落在白名单词组内的命中。过滤模式按配置拦截操作或替换原文中的命中区间。
  *
  * @since 1.3.3
  */

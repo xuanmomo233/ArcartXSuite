@@ -173,6 +173,12 @@ public final class PartyManager {
         inviteCooldowns.put(cdKey, now);
         party.invite(target.getUniqueId(), cfg.inviteTimeout());
         party.appendFeed(null, "已向 " + target.getName() + " 发送邀请");
+        var cards = xuanmo.arcartxsuite.api.AxsCapabilities.get(
+            xuanmo.arcartxsuite.api.capability.ChatCardSendable.class);
+        if (cards != null && xuanmo.arcartxsuite.api.auth.AuthAccess.admitted(target.getUniqueId())) {
+            cards.sendChatCard(target, "axs_chat_party_invite",
+                Map.of("inviter", inviter.getName(), "partyId", party.id().toString()));
+        }
         return new InviteResult.Ok(party);
     }
 
@@ -363,6 +369,12 @@ public final class PartyManager {
         boolean ready = p.toggleReady(player.getUniqueId());
         p.appendFeed(null, player.getName() + (ready ? " 已准备" : " 取消准备"));
         return ready;
+    }
+
+    public boolean setReady(Player player, boolean ready) {
+        Party party = partyOf(player);
+        if (party == null || party.isLeader(player.getUniqueId())) return true;
+        return party.isReady(player.getUniqueId()) == ready ? ready : toggleReady(player);
     }
 
     public sealed interface JoinResult {

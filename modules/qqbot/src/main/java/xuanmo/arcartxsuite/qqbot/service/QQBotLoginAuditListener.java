@@ -15,13 +15,20 @@ public final class QQBotLoginAuditListener implements Listener {
     private final QQBotConfiguration config;
     private final QQBotRepository repository;
     private final Logger logger;
-    public QQBotLoginAuditListener(JavaPlugin plugin,QQBotConfiguration config,QQBotRepository repository,Logger logger) {
+    private final QQBotService service;
+    public QQBotLoginAuditListener(JavaPlugin plugin,QQBotConfiguration config,QQBotRepository repository,Logger logger, QQBotService service) {
         this.plugin=plugin; this.config=config; this.repository=repository; this.logger=logger;
+        this.service = service;
     }
     public void register() { org.bukkit.Bukkit.getPluginManager().registerEvents(this,plugin); }
     public void unregister() { HandlerList.unregisterAll(this); }
     @EventHandler public void onAdmission(AuthAdmissionEvent event) {
-        if(config.debug()) logger.info("[Auth] profile="+event.snapshot().playerId()+" provider="+event.snapshot().provider()
-            +" qqBound="+(repository.findByPlayer(event.snapshot().playerId())!=null));
+        if (!config.debug()) return;
+        var identity = event.snapshot();
+        service.submitIo(() -> {
+            logger.info("[Auth] profile=" + identity.playerId() + " provider=" + identity.provider()
+                + " qqBound=" + (repository.findByPlayer(identity.playerId()) != null));
+            return null;
+        });
     }
 }

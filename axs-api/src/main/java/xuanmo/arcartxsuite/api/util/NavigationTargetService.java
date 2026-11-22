@@ -73,6 +73,7 @@ public final class NavigationTargetService {
     private final Config config;
     /** 路径渲染器列表（模型标记/贴图提示等可并存），tick 线程只读遍历。 */
     private final java.util.List<NavigationRouteRenderer> routeRenderers = new java.util.concurrent.CopyOnWriteArrayList<>();
+    private final NavigationRouteCache routeCache = new NavigationRouteCache();
 
     /** 玩家 → 期望目标集合（navId → 状态，LinkedHashMap 保序：后注册在后）。 */
     private final ConcurrentMap<UUID, LinkedHashMap<String, TargetState>> desiredTargets = new ConcurrentHashMap<>();
@@ -97,9 +98,7 @@ public final class NavigationTargetService {
     ) {
         this.plugin = plugin;
         this.waypointBridge = waypointBridge;
-        if (markerService != null) {
-            routeRenderers.add(markerService);
-        }
+        addRouteRenderer(markerService);
         this.logger = logger;
         this.config = config == null ? Config.defaults() : config;
     }
@@ -113,6 +112,11 @@ public final class NavigationTargetService {
      * @since 1.7.0
      */
     public void addRouteRenderer(NavigationRouteRenderer renderer) {
+        if (renderer instanceof NavigationMarkerService model) {
+            model.setRouteCache(routeCache);
+        } else if (renderer instanceof NavigationTextureMarkerService texture) {
+            texture.setRouteCache(routeCache);
+        }
         if (renderer != null) {
             routeRenderers.add(renderer);
         }
@@ -161,9 +165,15 @@ public final class NavigationTargetService {
         if (player == null || !player.isOnline() || target == null || target.navId().isBlank()) {
             return false;
         }
+        UUID playerId = player.getUniqueId();
         LinkedHashMap<String, TargetState> targets =
-            desiredTargets.computeIfAbsent(player.getUniqueId(), ignored -> new LinkedHashMap<>());
-        targets.put(target.navId(), new TargetState(target));
+            desiredTargets.computeIfAbsent(playerId, ignored -> new LinkedHashMap<>());
+        TargetState previous = targets.remove(target.navId());
+        TargetState next = new TargetState(target);
+        if (previous != null) next.lastReported = previous.lastReported;
+        targets.put(target.navId(), next);
+        Map<String, CachedLocation> cache = resolverCache.get(playerId);
+        if (cache != null) cache.remove(target.navId());
         // 立即推送一次（调用方一般在主线程的 UI 回调中）
         refreshPlayer(player, targets);
         return true;
@@ -281,7 +291,7 @@ public final class NavigationTargetService {
         this.arriveHandler = handler;
     }
 
-    /** 目标解析位置变化回调（动态目标移动时触发，供外部目标同步等场景）。 */
+    /** 目标位置变化回调，包括跨世界变化。已上报的坐标失效时回调位置为 {@code null}。 */
     public void setPositionChangedHandler(TargetCallback handler) {
         this.positionChangedHandler = handler;
     }
@@ -333,6 +343,7 @@ public final class NavigationTargetService {
             TargetState state = entry.getValue();
             NavigationTarget target = state.target;
             Location resolved = state.lastResolved;
+            maybeFirePositionChanged(player, target, state, resolved);
 
             if (resolved == null) {
                 suppressPushed(player, navId, pushed);
@@ -348,7 +359,6 @@ public final class NavigationTargetService {
             if (!primary) {
                 // 非主目标：只保留数据追踪（位置上报 + 到达判定），不渲染路标/路线，避免误导玩家
                 suppressPushed(player, navId, pushed);
-                maybeFirePositionChanged(player, target, state, resolved);
                 updateArrival(player, target, state, resolved, playerLoc.distance(resolved));
                 continue;
             }
@@ -364,7 +374,6 @@ public final class NavigationTargetService {
                 if (pushWaypoint(player, navId, title, target.styleId(), resolved)) {
                     pushed.put(navId, next);
                 }
-                maybeFirePositionChanged(player, target, state, resolved);
             } else if (!prev.equals(next)) {
                 if (prev.sameGeometry(next)) {
                     // 仅标题变化（如 %distance% 刷新）：同 id 重发即可覆盖
@@ -373,7 +382,6 @@ public final class NavigationTargetService {
                     dropWaypoint(player, navId);
                     pushWaypoint(player, navId, title, target.styleId(), resolved);
                 }
-                maybeFirePositionChanged(player, target, state, resolved);
                 pushed.put(navId, next);
             }
 
@@ -383,19 +391,20 @@ public final class NavigationTargetService {
         }
     }
 
-    /** 位置变化上报：与上次上报位置相比世界不同或位移超过阈值时触发。 */
+    /** 上报坐标可用性、世界和位移的变化。 */
     private void maybeFirePositionChanged(Player player, NavigationTarget target, TargetState state, Location resolved) {
-        Location prev = state.lastReported;
-        String prevWorld = prev == null || prev.getWorld() == null ? "" : prev.getWorld().getName();
-        String nextWorld = resolved.getWorld() == null ? "" : resolved.getWorld().getName();
-        boolean changed = prev == null
-            || !prevWorld.equalsIgnoreCase(nextWorld)
-            || prev.distanceSquared(resolved) > 0.05 * 0.05;
-        if (!changed) {
-            return;
+        if (positionChangedHandler == null) return;
+        ReportedPosition previous = state.lastReported;
+        World world = resolved == null ? null : resolved.getWorld();
+        if (world == null) {
+            if (previous == null) return;
+            state.lastReported = null;
+        } else {
+            UUID worldId = world.getUID();
+            if (previous != null && previous.matches(worldId, resolved)) return;
+            state.lastReported = new ReportedPosition(worldId, resolved.getX(), resolved.getY(), resolved.getZ());
         }
-        state.lastReported = resolved.clone();
-        firePositionChanged(player, target, resolved);
+        firePositionChanged(player, target, world == null ? null : resolved);
     }
 
     // ==================== 内部实现 ====================
@@ -655,10 +664,19 @@ public final class NavigationTargetService {
         volatile boolean armed = true;
         volatile Location lastResolved;
         /** 上次已上报给 positionChangedHandler 的位置（变化检测用）。 */
-        volatile Location lastReported;
+        volatile ReportedPosition lastReported;
 
         TargetState(NavigationTarget target) {
             this.target = target;
+        }
+    }
+
+    private record ReportedPosition(UUID worldId, double x, double y, double z) {
+        boolean matches(UUID currentWorld, Location current) {
+            double dx = x - current.getX();
+            double dy = y - current.getY();
+            double dz = z - current.getZ();
+            return worldId.equals(currentWorld) && dx * dx + dy * dy + dz * dz <= 0.05 * 0.05;
         }
     }
 

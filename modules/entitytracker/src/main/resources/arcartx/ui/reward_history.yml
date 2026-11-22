@@ -435,7 +435,7 @@ controls:
                           width: 80
                           height: 36
                           visible: |-
-                            each.status == 'failed'
+                            each.status == 'pending' || each.status == 'mail_issuing'
                         action:
                           click: |-
                             Packet.send('AXS_ENTITY_TRACKER_REWARD', 'retry', var.actionToken, each.id)

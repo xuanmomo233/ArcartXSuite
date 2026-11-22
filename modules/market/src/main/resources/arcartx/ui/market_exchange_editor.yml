@@ -34,9 +34,15 @@ ui:
       var.shops = {}
       var.shopCount = 0
       var.shopPage = 0
+      var.shopRows = []
+      for(i in range(0, 7)){ var.shopRows.add(i.round()) }
+      var.inventoryRows = []
+      for(i in range(0, 35)){ var.inventoryRows.add((i < 27 ? i + 9 : i - 27).round()) }
       var.offers = {}
       var.offerCount = 0
       var.offerPage = 0
+      var.offerRows = []
+      for(i in range(0, 5)){ var.offerRows.add(i.round()) }
       var.offerId = ''
       var.offerName = ''
       var.offerPermission = ''
@@ -91,24 +97,30 @@ ui:
       Packet.send('AXS:market_exchange_editor', 'list')
     close: Packet.send('AXS:market_exchange_editor', 'close', var.session)
     tick: |-
-      if(var.assetRowsDirty && var.assetIcons != none){
-        var.assetRowsDirty = false
+      if(var.assetRowsDirty && val.exchangeAssetGrid != none && val.exchangeAssetGrid.childrenCount() == 8){
+        ready = true
         for(i in range(0, 7)){
           row = var.assetSide == 'cost' ? var.costRows[i.round()] : var.rewardRows[i.round()]
-          var.assetIcons[i.round()].setItemIcon(row == none ? '' : row['icon'])
+          slot = val.exchangeAssetGrid.get(i.round())['图标']
+          if(slot == none){ ready = false }
+          elif(row != none){ slot.setItemIcon(row['icon']) }
         }
+        var.assetRowsDirty = !ready
       }
       if(var.assetPreviewDirty && val.assetPreview != none){
         var.assetPreviewDirty = false
         row = var.assetSide == 'cost' ? var.costRows[var.assetIndex.round()] : var.rewardRows[var.assetIndex.round()]
         val.assetPreview.setItemIcon(row == none ? '' : row['icon'])
       }
-      if(var.pickDirty && var.pickIcons != none){
-        var.pickDirty = false
+      if(var.pickDirty && var.modal == 'pick' && val.exchangePickGrid != none && val.exchangePickGrid.childrenCount() == 36){
+        ready = true
         for(i in range(0, 35)){
-          row = var.inventory[i.round()]
-          var.pickIcons[i.round()].setItemIcon(row == none ? '' : row['icon'])
+          row = var.inventory[var.inventoryRows[i.round()]]
+          slot = val.exchangePickGrid.get(i.round())['图标']
+          if(slot == none){ ready = false }
+          elif(row != none){ slot.setItemIcon(row['icon']) }
         }
+        var.pickDirty = !ready
       }
       if(var.noticeActive){
         var.noticeOpacity = var.noticeFade.get()
@@ -608,17 +620,17 @@ controls:
                   fontSize: 36
                   through: true
               列表:
-                type: VStack
+                type: RepeatGrid
                 attribute:
+                  items: var.shopRows
+                  maxSize: 8
+                  flow: ~row
+                  column: 1
                   x: 16
                   y: 72
                   width: 248
                   height: 600
-                  spaceBetween: 8
-                action:
-                  create: |-
-                    for(i in range(1, 7)){ cell = self['店铺'].copy('店铺' + i.round())
-                    cell.index = i.round() }
+                  spaceBetweenY: 8
                 children:
                   店铺:
                     type: Canvas
@@ -627,8 +639,8 @@ controls:
                       y: 0
                       width: 248
                       height: 66
-                      index: 0.round()
-                      entry: var.shops[(var.shopPage * 8 + self.index.toInt()).round()]
+                      entryKey: "(var.shopPage * 8 + self.item).round()"
+                      entry: "self.entryKey < var.shopCount ? var.shops[self.entryKey] : none"
                       visible: self.entry != none
                     children:
                       底:
@@ -896,17 +908,17 @@ controls:
                   through: true
                   limit: 32
               列表:
-                type: VStack
+                type: RepeatGrid
                 attribute:
+                  items: var.offerRows
+                  maxSize: 6
+                  flow: ~row
+                  column: 1
                   x: 20
                   y: 96
                   width: 460
                   height: 552
-                  spaceBetween: 10
-                action:
-                  create: |-
-                    for(i in range(1, 5)){ cell = self['商品'].copy('商品' + i.round())
-                    cell.index = i.round() }
+                  spaceBetweenY: 10
                 children:
                   商品:
                     type: Canvas
@@ -915,8 +927,8 @@ controls:
                       y: 0
                       width: 460
                       height: 82
-                      index: 0.round()
-                      entry: var.offers[(var.offerPage * 6 + self.index.toInt()).round()]
+                      entryKey: "(var.offerPage * 6 + self.item).round()"
+                      entry: "self.entryKey < var.offerCount ? var.offers[self.entryKey] : none"
                       visible: self.entry != none
                     children:
                       底:
@@ -955,7 +967,7 @@ controls:
                     action:
                       clickLeft: |-
                         if(self.entry != none && !var.busy){
-                        var.pendingOffer = var.offerPage * 6 + self.index.toInt()
+                        var.pendingOffer = self.entryKey
                         if(var.dirty){ var.confirmKind = 'switch_offer'
                         var.modal = 'confirm' }else{
                         var.requestedOfferId = var.offers[var.pendingOffer.round()]['id']
@@ -1932,8 +1944,12 @@ controls:
                     var.assetRowsDirty = true
                     var.assetPreviewDirty = true
               资产列表:
-                type: HGrid
+                type: RepeatGrid
+                val: exchangeAssetGrid
                 attribute:
+                  items: var.shopRows
+                  maxSize: 8
+                  flow: ~row
                   x: 24
                   y: 286
                   width: 588
@@ -1941,14 +1957,6 @@ controls:
                   column: 2
                   spaceBetweenX: 12
                   spaceBetweenY: 8
-                action:
-                  create: |-
-                    var.assetIcons = {}
-                    for(i in range(0, 7)){ cell = self['资产']
-                    if(i > 0){cell = cell.copy('资产' + i.round())}
-                    cell.index = i.round()
-                    var.assetIcons[i.round()] = cell['图标']
-                    }
                 children:
                   资产:
                     type: Canvas
@@ -1957,8 +1965,8 @@ controls:
                       y: 0
                       width: 288
                       height: 46
-                      index: 0.round()
-                      entry: 'var.assetSide == ''cost'' ? var.costs[self.index] : var.rewards[self.index]'
+                      entryKey: self.item
+                      entry: 'var.assetSide == ''cost'' ? var.costs[self.entryKey] : var.rewards[self.entryKey]'
                     children:
                       底:
                         type: Texture
@@ -1967,7 +1975,7 @@ controls:
                           y: 0
                           width: 288
                           height: 46
-                          normal: 'self.parent.entry != none && self.parent.index.toInt() == var.assetIndex ? ''62,79,91,255'' : (self.isHovered()
+                          normal: 'self.parent.entry != none && self.parent.entryKey == var.assetIndex ? ''62,79,91,255'' : (self.isHovered()
                             ? ''45,59,69,255'' : ''23,29,35,255'')'
                           through: true
                           shape: ~round_rect
@@ -1984,6 +1992,8 @@ controls:
                           width: 36
                           height: 36
                           slotType: ~Icon
+                          id: self.parent.entryKey
+                          visible: "var.assetSide == 'cost' ? var.costRows[self.parent.entryKey] != none : var.rewardRows[self.parent.entryKey] != none"
                           normal: ~0,0,0,0
                           through: true
                           itemScale: 0.8
@@ -2007,7 +2017,7 @@ controls:
                           point: ~top_right
                     action:
                       clickLeft: |-
-                        if(self.entry != none){ var.assetIndex = self.index.toInt()
+                        if(self.entry != none){ var.assetIndex = self.entryKey
                         var.asset = var.assetSide == 'cost' ? var.costs[var.assetIndex.round()] : var.rewards[var.assetIndex.round()]
                         var.hydrating = true
                         val.assetIdInput.setContent(var.asset == none ? '' : var.asset['id'])
@@ -2649,8 +2659,12 @@ controls:
                   fontSize: 28
                   through: true
               背包:
-                type: HGrid
+                type: RepeatGrid
+                val: exchangePickGrid
                 attribute:
+                  items: var.inventoryRows
+                  maxSize: 36
+                  flow: ~row
                   x: 28
                   y: 112
                   width: 884
@@ -2658,15 +2672,6 @@ controls:
                   column: 9
                   spaceBetweenX: 10
                   spaceBetweenY: 10
-                action:
-                  create: |-
-                    var.pickIcons = {}
-                    for(i in range(0, 35)){cell = self['物品']
-                    if(i > 0){cell = cell.copy('背包' + i.round())}
-                    raw = i < 27 ? i + 9 : i - 27
-                    cell.raw = raw.round()
-                    var.pickIcons[raw.round()] = cell['图标']
-                    }
                 children:
                   物品:
                     type: Canvas
@@ -2675,7 +2680,7 @@ controls:
                       y: 0
                       width: 88
                       height: 88
-                      raw: 9.round()
+                      raw: self.item
                     children:
                       底:
                         type: Texture
@@ -2700,12 +2705,16 @@ controls:
                           width: 80
                           height: 80
                           slotType: ~Icon
+                          id: "(10 + self.parent.raw).round()"
+                          visible: var.inventory[self.parent.raw] != none
                           normal: ~0,0,0,0
                           through: true
                           itemScale: 0.8
                     action:
-                      clickLeft: Packet.send('AXS:market_exchange_editor', 'pick', self.raw, var.assetSide + ':' + var.assetIndex.toInt().round(),
-                        var.token)
+                      clickLeft: |-
+                        if(var.inventory[self.raw] != none){
+                          Packet.send('AXS:market_exchange_editor', 'pick', self.raw, var.assetSide + ':' + var.assetIndex.toInt().round(), var.token)
+                        }
           source:
             type: Canvas
             attribute:

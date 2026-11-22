@@ -57,6 +57,7 @@ public final class MailModule extends AbstractAXSModule implements ModuleCommand
     private MailService service;
     private JdbcMailRepository repository;
     private AxsMailServiceAdapter mailApiAdapter;
+    private xuanmo.arcartxsuite.api.storage.ModuleStorage storageScope;
 
     @Override
     public ModuleDescriptor descriptor() {
@@ -114,7 +115,7 @@ public final class MailModule extends AbstractAXSModule implements ModuleCommand
     }
 
     @Override
-    protected void startService() throws Exception {
+    protected java.util.concurrent.CompletionStage<Void> prepareService() throws Exception {
 
         MailService.UiResourceExporter uiExporter = (resourcePath, relativeUiPath, overwrite) -> {
             try {
@@ -146,12 +147,14 @@ public final class MailModule extends AbstractAXSModule implements ModuleCommand
         if (configuration.storage().hasOverride()) {
             // 自建模式：模块配置了独立 storage 节
             mailDesc = configuration.storage().toDescriptor();
-            mailDs = storageManager.resolveModuleDataSource("mail", null, dataFolder, mailDesc);
+            storageScope = storageManager.openModuleStorage("mail", null, dataFolder, mailDesc);
+            mailDs = storageScope.dataSource();
         } else {
             // 共享模式：使用本体统一数据源
             mailDesc = storageManager.getDescriptor().withTablePrefix("");
-            mailDs = storageManager.resolveModuleDataSource("mail",
+            storageScope = storageManager.openModuleStorage("mail",
                 configuration.storage().sqliteFileName(), dataFolder, null);
+            mailDs = storageScope.dataSource();
         }
         JdbcMailRepository mailRepo = new JdbcMailRepository(mailDs, mailDesc, dataFolder, logger);
         repository = mailRepo;
@@ -167,6 +170,12 @@ public final class MailModule extends AbstractAXSModule implements ModuleCommand
             itemStackBridge,
             contentModerator
         );
+        return service.prepareStorage(storageScope);
+    }
+
+    @Override
+    protected void startService() throws Exception {
+        var mailRepo = repository;
         service.start();
         // 将 Service 手动注册的 UI 纳入基类生命周期管理（onDisable 时兜底注销）
         for (String uiId : service.registeredUiIds()) {
@@ -175,9 +184,12 @@ public final class MailModule extends AbstractAXSModule implements ModuleCommand
         adminCommand = new MailAdminCommand(() -> service, messages());
 
         // 注册 MailDispatchable capability，供其他模块调用
+        MailService registeredService = service;
+        MailSendResult unavailableMail = MailSendResult.failure("邮件模块正在停用");
         registerCapability(MailDispatchable.class, new MailDispatchable() {
             @Override
             public MailSendResult sendMail(@NotNull MailSendRequest request) {
+                return registeredService.callApi(() -> {
                 try {
                     java.util.List<xuanmo.arcartxsuite.mail.model.MailAttachment> attachments = new java.util.ArrayList<>();
                     int sortOrder = 0;
@@ -208,7 +220,7 @@ public final class MailModule extends AbstractAXSModule implements ModuleCommand
                         : java.time.Instant.now().plus(java.time.Duration.ofDays(30));
                     String senderName = request.senderName() != null && !request.senderName().isBlank()
                         ? request.senderName() : "系统";
-                    var result = service.sendSystemMail(
+                    var result = registeredService.sendSystemMail(
                         request.playerUuid(),
                         logContent,
                         request.subject(),
@@ -228,16 +240,18 @@ public final class MailModule extends AbstractAXSModule implements ModuleCommand
                     logger.warning("sendMail 发送失败: " + e.getMessage());
                     return MailSendResult.failure("发送失败: " + e.getMessage());
                 }
+                            }, unavailableMail);
             }
 
             @Override
             public MailSendResult dispatchPreset(@NotNull MailPresetRequest request) {
+                return registeredService.callApi(() -> {
                 try {
                     String actorName = buildLogContent(request.sourceModule(), request.sourceDetail());
                     Player player = Bukkit.getPlayerExact(request.playerName());
                     var result = (player != null && player.isOnline())
-                        ? service.dispatchPresetToPlayer(request.presetId(), player, actorName)
-                        : service.dispatchPreset(request.presetId(), request.playerName(), actorName);
+                        ? registeredService.dispatchPresetToPlayer(request.presetId(), player, actorName)
+                        : registeredService.dispatchPreset(request.presetId(), request.playerName(), actorName);
                     return result.success()
                         ? MailSendResult.ok()
                         : MailSendResult.failure(result.message());
@@ -245,6 +259,7 @@ public final class MailModule extends AbstractAXSModule implements ModuleCommand
                     logger.warning("dispatchPreset 发送失败: " + e.getMessage());
                     return MailSendResult.failure("发送失败: " + e.getMessage());
                 }
+                            }, unavailableMail);
             }
 
             private String buildLogContent(@NotNull String sourceModule, @Nullable String sourceDetail) {
@@ -260,11 +275,17 @@ public final class MailModule extends AbstractAXSModule implements ModuleCommand
             new xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable() {
                 @Override public @NotNull String moduleId() { return "mail"; }
                 @Override public int purgePlayerData(@NotNull java.util.UUID playerUuid) {
-                    try { return mailRepo.deletePlayerData(playerUuid); }
+                    try { return registeredService.callApi(() -> {
+                        try { return mailRepo.deletePlayerData(playerUuid); }
+                        catch (Exception failure) { throw new IllegalStateException(failure); }
+                    }, -1); }
                     catch (Exception e) { logger.warning("Mail purge 失败: " + e.getMessage()); return -1; }
                 }
                 @Override public int purgeAllPlayerData() {
-                    try { return mailRepo.deleteAllPlayerData(); }
+                    try { return registeredService.callApi(() -> {
+                        try { return mailRepo.deleteAllPlayerData(); }
+                        catch (Exception failure) { throw new IllegalStateException(failure); }
+                    }, -1); }
                     catch (Exception e) { logger.warning("Mail purgeAll 失败: " + e.getMessage()); return -1; }
                 }
             });
@@ -274,7 +295,9 @@ public final class MailModule extends AbstractAXSModule implements ModuleCommand
                 @Override public @NotNull String moduleId() { return "mail"; }
                 @Override public @NotNull xuanmo.arcartxsuite.api.storage.MigrationResult migrateDatabase(
                         @NotNull xuanmo.arcartxsuite.api.storage.StorageDescriptor target, boolean overwrite) {
-                    return mailRepo.migrateData(target, overwrite);
+                    var unavailable = new xuanmo.arcartxsuite.api.storage.MigrationResult(false, 0, 0);
+                    unavailable.addError("Mail 正在停用");
+                    return registeredService.callApi(() -> mailRepo.migrateData(target, overwrite), unavailable);
                 }
                 @Override public @NotNull xuanmo.arcartxsuite.api.storage.StorageDescriptor currentDescriptor() {
                     return mailRepo.getDescriptor();
@@ -283,7 +306,8 @@ public final class MailModule extends AbstractAXSModule implements ModuleCommand
 
         // 注册公开 API capability：外部插件经 AxsCapabilities.get(AxsMailService.class) 获取，
         // 模块内部也可 getCapability(AxsMailService.class) 使用同一实例（统一入口，无双通道）
-        mailApiAdapter = new AxsMailServiceAdapter(plugin, service, logger);
+        mailApiAdapter = new AxsMailServiceAdapter(plugin, service, logger,
+            mailRepo.getDescriptor().isMysql() && !configuration.storage().hasOverride());
         registerCapability(AxsMailService.class, mailApiAdapter);
         logger.info("Mail 公开 API 已注册（AxsMailService capability）");
 
@@ -297,17 +321,27 @@ public final class MailModule extends AbstractAXSModule implements ModuleCommand
 
     @Override
     protected void stopService() {
-        // 注销公开 API（capability 由注册表随模块卸载自动清理，这里仅释放引用）
+        var adapter = mailApiAdapter;
+        var current = service;
+        var repo = repository;
+        var scope = storageScope;
         mailApiAdapter = null;
-        if (service != null) {
-            service.shutdown();
-            service = null;
+        service = null;
+        repository = null;
+        storageScope = null;
+        try { if (adapter != null) adapter.close(); }
+        finally {
+            try { if (current != null) current.shutdown(); }
+            finally {
+                var stopped = java.util.concurrent.CompletableFuture.allOf(
+                    adapter == null ? java.util.concurrent.CompletableFuture.completedFuture(null) : adapter.stopped().toCompletableFuture(),
+                    current == null ? java.util.concurrent.CompletableFuture.completedFuture(null) : current.databaseStopped().toCompletableFuture())
+                    .thenRun(() -> { if (repo != null) repo.close(); });
+                trackShutdown(stopped);
+                if (scope != null) { scope.retireAfter(stopped); trackShutdown(scope.retired()); }
+                configuration = null;
+            }
         }
-        if (repository != null) {
-            storageManager.closeModuleDataSource("mail");
-            repository = null;
-        }
-        configuration = null;
     }
 
     @Override

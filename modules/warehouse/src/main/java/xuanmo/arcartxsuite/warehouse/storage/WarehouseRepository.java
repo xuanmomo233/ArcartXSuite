@@ -16,6 +16,8 @@ public interface WarehouseRepository {
 
     void upsertPersonalWarehouse(UUID playerUuid, String warehouseId, int level, String customName, long updatedAt) throws SQLException;
 
+    void ensureDefaultPersonalWarehouse(UUID playerUuid, String warehouseId, long now) throws SQLException;
+
     /** 个人仓库额外购买槽位数原子递增（可为负值，结果不小于 0）。 */
     void addPersonalExtraSlots(UUID playerUuid, String warehouseId, long delta, long updatedAt) throws SQLException;
 
@@ -72,17 +74,61 @@ public interface WarehouseRepository {
 
     /** 一次提交槽位变更；旧数量或物品已变化时整批回滚，避免跨服覆盖与部分提交。 */
     boolean applySlotChanges(List<SlotChange> changes) throws SQLException;
+    boolean applySharedSlotChanges(List<SlotChange> changes, SharedActor actor) throws SQLException;
+
+    String INVENTORY_TRANSFER = "warehouse-inventory-v1";
+    String INVENTORY_DEPOSIT = "MANUAL_DEPOSIT";
+    String INVENTORY_WITHDRAW_RESERVED = "MANUAL_RESERVED";
+    String INVENTORY_WITHDRAW = "MANUAL_WITHDRAW";
+    String INVENTORY_DONE = "MANUAL_DONE";
+
+    boolean stageInventoryTransfer(MaterialTransfer transfer, List<SlotChange> changes, SharedActor actor) throws SQLException;
+    boolean settleInventoryTransfer(MaterialTransfer transfer, List<SlotChange> changes, SharedActor actor,
+                                    boolean restored) throws SQLException;
+    Optional<MaterialTransfer> pendingInventoryTransfer(UUID player, String serverId) throws SQLException;
+
+    boolean acquireSharedLease(String sharedId, UUID player, UUID token, String name, String node, long durationMs)
+        throws SQLException;
+
+    boolean renewSharedLease(String sharedId, UUID player, UUID token, long durationMs) throws SQLException;
+
+    void releaseSharedLease(String sharedId, UUID player, UUID token) throws SQLException;
+
+    Optional<SharedLease> sharedLease(String sharedId) throws SQLException;
+    List<SharedActivity> sharedActivity(String warehouseId, UUID owner, String member, String item,
+                                        long since, int offset, int limit) throws SQLException;
     boolean escrowMaterials(List<SlotChange> changes, MaterialTransfer transfer) throws SQLException;
+    boolean commitGroundDeposit(List<SlotChange> changes, MaterialTransfer transfer, long storedAmount) throws SQLException;
+    boolean commitRewardDeposit(List<SlotChange> changes, MaterialTransfer receipt) throws SQLException;
     boolean transitionMaterialTransfer(String operationId, String ownerId, String from, String to, String note) throws SQLException;
     boolean restoreHeldMaterialTransfer(MaterialTransfer transfer, List<SlotChange> reverse) throws SQLException;
-    List<MaterialTransfer> oldMaterialTransfers(String serverId, String runId, int limit) throws SQLException;
+    List<MaterialTransfer> oldMaterialTransfers(String serverId, String runId, String afterId, int limit) throws SQLException;
     List<MaterialTransfer> materialTransfers(String ownerId, int limit) throws SQLException;
     java.util.Optional<MaterialTransfer> materialTransfer(String id, String ownerId) throws SQLException;
+    default GroundSource groundSource(String operationId) throws SQLException { return null; }
+    default boolean prepareGroundSource(MaterialTransfer transfer, GroundSource source) throws SQLException { return false; }
+    default boolean finishGroundSource(GroundSource source, boolean committed) throws SQLException { return false; }
+    default boolean supportsParallelGroundSettlement() { return false; }
+
+    record GroundSource(String id, String owner, String world, String entity, int chunkX, int chunkZ,
+                        int original, int stored, String state) {
+        public int remaining() { return original - stored; }
+    }
 
     record MaterialTransfer(String id, String ownerId, String warehouseId, String serverId, String runId,
-        String state, String adapter, String target, String evidence, String payload, long createdAt, long updatedAt, String note) { }
+        String state, String adapter, String target, String evidence, String payload, long createdAt, long updatedAt, String note) {
+        public MaterialTransfer withState(String next, String nextNote) {
+            return new MaterialTransfer(id, ownerId, warehouseId, serverId, runId, next, adapter, target, evidence,
+                payload, createdAt, updatedAt, nextNote);
+        }
+    }
 
     record SlotChange(SlotItemRecord before, SlotItemRecord after) { }
+
+    record SharedActor(UUID id, String name, boolean discarded, UUID leaseToken) { }
+
+    record SharedLease(UUID player, UUID token, String name, String node) { }
+    record SharedActivity(String actor, String action, String item, long amount, long time) { }
 
     Map<String, BigDecimal> loadBankBalances(UUID playerUuid) throws SQLException;
 
@@ -91,12 +137,23 @@ public interface WarehouseRepository {
     /** 原子增加银行余额（记录不存在则创建）。 */
     void creditBankBalance(UUID playerUuid, String currencyId, BigDecimal amount, long updatedAt) throws SQLException;
 
-    /**
-     * 原子扣减银行余额。
-     *
-     * @return {@code true} 表示扣减成功
-     */
-    boolean debitBankBalance(UUID playerUuid, String currencyId, BigDecimal amount, long updatedAt) throws SQLException;
+    record BankTransfer(String id, UUID playerUuid, String currencyId, BigDecimal amount, long createdAt) { }
+
+    /** Reserve bank funds and retain a receipt until the external credit is confirmed. */
+    boolean beginBankWithdrawal(BankTransfer withdrawal) throws SQLException;
+
+    /** Close a confirmed withdrawal. Only a definite rejection restores the reserved funds. */
+    void finishBankWithdrawal(BankTransfer withdrawal, boolean credited) throws SQLException;
+
+    void beginBankDeposit(BankTransfer deposit) throws SQLException;
+
+    /** Consume the original receipt in the same transaction as the bank credit. */
+    void creditBankDeposit(BankTransfer deposit) throws SQLException;
+
+    /** Only an unconsumed deposit receipt can authorize a refund. */
+    boolean reserveBankDepositRefund(BankTransfer deposit) throws SQLException;
+
+    void closeBankDeposit(BankTransfer deposit, boolean refunded) throws SQLException;
 
     /**
      * 原子领取定期存款：标记 claimed 并将本息入账。
@@ -105,7 +162,7 @@ public interface WarehouseRepository {
      */
     java.util.Optional<BigDecimal> claimFixedDepositAtomic(String depositId, UUID playerUuid, long now) throws SQLException;
 
-    void createFixedDeposit(FixedDepositRecord deposit) throws SQLException;
+    boolean purchaseFixedDeposit(FixedDepositRecord deposit) throws SQLException;
 
     List<FixedDepositRecord> loadFixedDeposits(UUID playerUuid) throws SQLException;
 
@@ -137,6 +194,10 @@ public interface WarehouseRepository {
     void deletePendingTransfer(String sharedId) throws SQLException;
 
     void deleteSharedWarehouse(String sharedId, UUID ownerUuid) throws SQLException;
+
+    default void deleteSharedWarehouse(String sharedId, UUID ownerUuid, UUID leaseToken, long leaseDurationMs) throws SQLException {
+        throw new SQLException("Shared warehouse deletion requires lease support");
+    }
 
     List<SharedWarehouseRecord> loadSharedWarehouses(UUID playerUuid) throws SQLException;
 

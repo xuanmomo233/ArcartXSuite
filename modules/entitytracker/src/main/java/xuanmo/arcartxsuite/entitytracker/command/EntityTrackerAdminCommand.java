@@ -17,7 +17,6 @@ import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.ModuleCommandHandler;
 import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.entitytracker.boss.tracker.ActiveBossSessionView;
-import xuanmo.arcartxsuite.entitytracker.boss.tracker.BossDamageRewardDispatchResult;
 import xuanmo.arcartxsuite.entitytracker.boss.tracker.BossDamageSettlementEntry;
 import xuanmo.arcartxsuite.entitytracker.boss.tracker.BossDamageSettlementRecord;
 import xuanmo.arcartxsuite.entitytracker.boss.tracker.BossSessionRankingView;
@@ -246,9 +245,10 @@ public final class EntityTrackerAdminCommand implements ModuleCommandHandler {
         sender.sendMessage(fullMsg("admin.settlement.info", DATE_FMT.format(new Date(record.settledAtMillis())), record.participantCount(), DF.format(record.totalDamage())));
         int page = args.length >= 4 ? parsePageNumber(args[3]) : 1;
         List<BossDamageSettlementEntry> entries = record.rankedEntries();
+        boolean issuing = svc.settlementIssuing(record.settlementId());
         sendPagedEntries(sender, entries, page, (entry, idx) -> {
             var e = (BossDamageSettlementEntry) entry;
-            String rewarded = e.rewarded() ? ChatColor.GREEN + "✓" : ChatColor.RED + "✗";
+            String rewarded = issuing ? ChatColor.YELLOW + "…" : e.rewarded() ? ChatColor.GREEN + "✓" : ChatColor.RED + "✗";
             return fullMsg("admin.settlement.item-format", e.rank(), e.playerName(), DF.format(e.damage()), rewarded);
         });
     }
@@ -272,8 +272,8 @@ public final class EntityTrackerAdminCommand implements ModuleCommandHandler {
             return;
         }
         OfflinePlayer overridePlayer = args.length >= 5 ? Bukkit.getOfflinePlayer(args[4]) : null;
-        BossDamageRewardDispatchResult result = svc.reissueSettlementReward(args[2], rank, overridePlayer);
-        sender.sendMessage(fullMsg("admin.reissue.result", result.message()));
+        svc.reissueSettlementReward(args[2], rank, overridePlayer)
+            .thenAccept(result -> sender.sendMessage(fullMsg("admin.reissue.result", result.message())));
     }
 
     // ─── Utilities ──────────────────────────────────────────

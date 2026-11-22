@@ -2,9 +2,8 @@ package xuanmo.arcartxsuite.essentials.service;
 
 import java.util.ArrayDeque;
 import java.util.Deque;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -19,10 +18,9 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageEvent;
-import org.bukkit.event.inventory.InventoryClickEvent;
-import org.bukkit.event.inventory.InventoryCloseEvent;
-import org.bukkit.event.inventory.InventoryDragEvent;
+import org.bukkit.event.player.AsyncPlayerPreLoginEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerLoginEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.Inventory;
@@ -30,6 +28,7 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.inventory.meta.Damageable;
 import org.bukkit.plugin.java.JavaPlugin;
+import xuanmo.arcartxsuite.api.auth.AuthAccess;
 import xuanmo.arcartxsuite.api.util.AttributeResolver;
 import xuanmo.arcartxsuite.api.capability.TabRefreshable;
 import xuanmo.arcartxsuite.essentials.config.EssentialsConfiguration;
@@ -48,20 +47,19 @@ public final class PlayerManagementService implements Listener {
     private final Logger logger;
     private final EssentialsConfiguration config;
     private final java.util.function.Supplier<TabRefreshable> tabRefreshProvider;
+    private final VelocityVanishProfile velocityVanishProfile;
 
-    private final Set<UUID> flyEnabled = ConcurrentHashMap.newKeySet();
-    private final Set<UUID> godEnabled = ConcurrentHashMap.newKeySet();
+    private final Map<UUID, FlightState> flyEnabled = new ConcurrentHashMap<>();
+    private final Map<UUID, Boolean> godEnabled = new ConcurrentHashMap<>();
     private final Set<UUID> vanished = ConcurrentHashMap.newKeySet();
     private final Set<UUID> afkPlayers = ConcurrentHashMap.newKeySet();
     private final Map<UUID, Long> lastActivity = new ConcurrentHashMap<>();
     private final Map<UUID, Deque<Location>> backStacks = new ConcurrentHashMap<>();
 
-    /**
-     * 查看者 UUID → 被查看玩家 UUID 的映射，用于 /ess inv player 重排背包同步。
-     */
-    private final Map<UUID, UUID> invViewerToTarget = new ConcurrentHashMap<>();
-
+    private boolean active = true;
     private int afkTaskId = -1;
+    private final xuanmo.arcartxsuite.api.scheduler.ModuleCallback afkPulse =
+        new xuanmo.arcartxsuite.api.scheduler.ModuleCallback(this::checkAfk);
 
     /**
      * 构造玩家管理服务。
@@ -78,6 +76,7 @@ public final class PlayerManagementService implements Listener {
         this.logger = logger;
         this.config = config;
         this.tabRefreshProvider = tabRefreshProvider;
+        this.velocityVanishProfile = VelocityVanishProfile.detect(logger);
     }
 
     /**
@@ -85,9 +84,12 @@ public final class PlayerManagementService implements Listener {
      */
     public void start() {
         Bukkit.getPluginManager().registerEvents(this, plugin);
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            lastActivity.put(player.getUniqueId(), System.currentTimeMillis());
+        }
         int timeout = config.player().afkTimeout();
         if (timeout > 0) {
-            afkTaskId = Bukkit.getScheduler().runTaskTimer(plugin, this::checkAfk, 200L, 200L).getTaskId();
+            afkTaskId = Bukkit.getScheduler().runTaskTimer(plugin, afkPulse, 200L, 200L).getTaskId();
         }
     }
 
@@ -95,19 +97,23 @@ public final class PlayerManagementService implements Listener {
      * 注销事件监听器、取消定时任务并清空全部运行时状态。
      */
     public void shutdown() {
+        active = false;
+        afkPulse.close();
         HandlerList.unregisterAll(this);
         if (afkTaskId != -1) {
             Bukkit.getScheduler().cancelTask(afkTaskId);
             afkTaskId = -1;
         }
+        for (Player player : Bukkit.getOnlinePlayers()) restorePlayerState(player, false);
         flyEnabled.clear();
         godEnabled.clear();
         vanished.clear();
         afkPlayers.clear();
         lastActivity.clear();
         backStacks.clear();
-        invViewerToTarget.clear();
     }
+
+    public java.util.concurrent.CompletionStage<Void> stopped(){return afkPulse.stopped();}
 
     // ─── Fly ───
 
@@ -118,13 +124,12 @@ public final class PlayerManagementService implements Listener {
      */
     public void toggleFly(Player player) {
         UUID uuid = player.getUniqueId();
-        if (flyEnabled.contains(uuid)) {
-            flyEnabled.remove(uuid);
-            player.setAllowFlight(player.getGameMode() == GameMode.CREATIVE || player.getGameMode() == GameMode.SPECTATOR);
-            player.setFlying(false);
+        FlightState original = flyEnabled.remove(uuid);
+        if (original != null) {
+            restoreFlight(player, original);
             player.sendMessage(prefix() + config.messages().flyDisabled());
         } else {
-            flyEnabled.add(uuid);
+            flyEnabled.put(uuid, new FlightState(player.getGameMode(), player.getAllowFlight(), player.isFlying()));
             player.setAllowFlight(true);
             player.sendMessage(prefix() + config.messages().flyEnabled());
         }
@@ -150,7 +155,7 @@ public final class PlayerManagementService implements Listener {
      * @return {@code true} 表示已启用
      */
     public boolean isFlyEnabled(UUID uuid) {
-        return flyEnabled.contains(uuid);
+        return flyEnabled.containsKey(uuid);
     }
 
     // ─── God ───
@@ -162,12 +167,12 @@ public final class PlayerManagementService implements Listener {
      */
     public void toggleGod(Player player) {
         UUID uuid = player.getUniqueId();
-        if (godEnabled.contains(uuid)) {
-            godEnabled.remove(uuid);
-            player.setInvulnerable(false);
+        Boolean original = godEnabled.remove(uuid);
+        if (original != null) {
+            player.setInvulnerable(original);
             player.sendMessage(prefix() + config.messages().godDisabled());
         } else {
-            godEnabled.add(uuid);
+            godEnabled.put(uuid, player.isInvulnerable());
             player.setInvulnerable(true);
             player.sendMessage(prefix() + config.messages().godEnabled());
         }
@@ -180,7 +185,7 @@ public final class PlayerManagementService implements Listener {
      * @return {@code true} 表示已启用
      */
     public boolean isGodEnabled(UUID uuid) {
-        return godEnabled.contains(uuid);
+        return godEnabled.containsKey(uuid);
     }
 
     // ─── Heal / Feed ───
@@ -248,23 +253,45 @@ public final class PlayerManagementService implements Listener {
      * @param player 目标玩家
      */
     public void toggleVanish(Player player) {
-        UUID uuid = player.getUniqueId();
-        if (vanished.contains(uuid)) {
-            vanished.remove(uuid);
-            for (Player online : Bukkit.getOnlinePlayers()) {
-                online.showPlayer(plugin, player);
-            }
-            player.sendMessage(prefix() + config.messages().vanishDisabled());
-        } else {
-            vanished.add(uuid);
-            for (Player online : Bukkit.getOnlinePlayers()) {
-                if (!online.hasPermission("axs.essentials.vanish.see")) {
-                    online.hidePlayer(plugin, player);
+        UUID id = player.getUniqueId();
+        boolean hide = !isVanished(id);
+        TabRefreshable tab = tabRefreshProvider.get();
+        if (hide && tab != null) {
+            var session = AuthAccess.snapshot(id);
+            if (!session.admitted()) return;
+            tab.requestVanish(player).thenAccept(granted -> {
+                if (!active || !player.isOnline() || Bukkit.getPlayer(id) != player) return;
+                var current = AuthAccess.snapshot(id);
+                if (!current.admitted() || current.generation() != session.generation()
+                        || !Objects.equals(current.connectionId(), session.connectionId())) return;
+                if (!player.hasPermission("axs.essentials.vanish")) {
+                    player.sendMessage(prefix() + config.messages().noPermission());
+                    return;
                 }
-            }
-            player.sendMessage(prefix() + config.messages().vanishEnabled());
+                if (granted) applyVanishToggle(player, true);
+                else player.sendMessage(prefix() + ChatColor.RED + "代理暂未确认隐身，请稍后重试。");
+            });
+            return;
         }
+        applyVanishToggle(player, hide);
+    }
+
+    private void applyVanishToggle(Player player, boolean hide) {
+        setVanished(player, hide);
         refreshTab(player, "essentials-vanish");
+        player.sendMessage(prefix() + (hide ? config.messages().vanishEnabled() : config.messages().vanishDisabled()));
+    }
+
+    private void setVanished(Player player, boolean hide) {
+        if (hide) {
+            vanished.add(player.getUniqueId());
+            for (Player viewer : Bukkit.getOnlinePlayers()) {
+                if (!viewer.equals(player) && !viewer.hasPermission("axs.essentials.vanish.see")) viewer.hidePlayer(plugin, player);
+            }
+        } else {
+            vanished.remove(player.getUniqueId());
+            for (Player viewer : Bukkit.getOnlinePlayers()) viewer.showPlayer(plugin, player);
+        }
     }
 
     /**
@@ -276,6 +303,43 @@ public final class PlayerManagementService implements Listener {
     public boolean isVanished(UUID uuid) {
         return vanished.contains(uuid);
     }
+
+    public boolean canSee(org.bukkit.command.CommandSender viewer, Player target) {
+        return !(viewer instanceof Player player) || viewer.equals(target) || player.canSee(target);
+    }
+
+    private void restorePlayerState(Player player, boolean disconnecting) {
+        UUID id = player.getUniqueId();
+        FlightState flight = flyEnabled.remove(id);
+        if (flight != null) restoreFlight(player, flight);
+        Boolean invulnerable = godEnabled.remove(id);
+        if (invulnerable != null) player.setInvulnerable(invulnerable);
+        boolean refresh = vanished.remove(id);
+        if (refresh && !disconnecting) {
+            for (Player viewer : Bukkit.getOnlinePlayers()) viewer.showPlayer(plugin, player);
+        }
+        boolean wasAfk = afkPlayers.remove(id);
+        if (!disconnecting && (wasAfk || refresh)) refreshTab(player, "essentials-state-reset");
+    }
+
+    private static void restoreFlight(Player player, FlightState original) {
+        if (player.getGameMode() != original.mode()) {
+            if (player.getGameMode() != GameMode.CREATIVE && player.getGameMode() != GameMode.SPECTATOR) {
+                player.setFlying(false);
+                player.setAllowFlight(false);
+            }
+            return;
+        }
+        if (original.allowed()) {
+            player.setAllowFlight(true);
+            player.setFlying(original.flying());
+        } else {
+            player.setFlying(false);
+            player.setAllowFlight(false);
+        }
+    }
+
+    private record FlightState(GameMode mode, boolean allowed, boolean flying) {}
 
     // ─── AFK ───
 
@@ -334,28 +398,33 @@ public final class PlayerManagementService implements Listener {
     // ─── Back ───
 
     /**
-     * 将玩家当前位置压入 /back 返回栈，超出上限时丢弃最旧记录。
+     * 将成功传送前的位置压入 /back 返回栈，超出上限时丢弃最旧记录。
      *
      * @param player 目标玩家
      */
-    public void pushBackLocation(Player player) {
+    public void pushBackLocation(Player player, Location origin) {
         UUID uuid = player.getUniqueId();
         Deque<Location> stack = backStacks.computeIfAbsent(uuid, k -> new ArrayDeque<>());
-        stack.push(player.getLocation().clone());
+        stack.push(origin.clone());
         while (stack.size() > config.teleport().backStackSize()) {
             stack.removeLast();
         }
     }
 
     /**
-     * 弹出并返回玩家 /back 栈中最新的位置。
+     * 查看玩家 /back 栈中最新的位置。
      *
      * @param player 目标玩家
      * @return 上一次位置，栈为空时返回 null
      */
-    public Location popBackLocation(Player player) {
+    public Location peekBackLocation(Player player) {
         Deque<Location> stack = backStacks.get(player.getUniqueId());
-        return stack != null && !stack.isEmpty() ? stack.pop() : null;
+        return stack == null ? null : stack.peek();
+    }
+
+    public void consumeBackLocation(Player player, Location expected) {
+        Deque<Location> stack = backStacks.get(player.getUniqueId());
+        if (stack != null && stack.peek() == expected) stack.pop();
     }
 
     // ─── Repair ───
@@ -440,273 +509,41 @@ public final class PlayerManagementService implements Listener {
         player.openInventory(Bukkit.createInventory(null, 54, ChatColor.DARK_RED + "垃圾桶"));
     }
 
-    /**
-     * 打开目标玩家的背包，以"主背包在前、工具栏在后"的顺序展示（与玩家自己打开背包的视觉一致）。
-     * 通过自定义 36 格容器 + 事件同步实现，修改会实时写回目标玩家真实背包。
-     *
-     * @param viewer 查看者
-     * @param target 被查看背包的玩家
-     */
-    public void openPlayerInventory(Player viewer, Player target) {
-        Inventory inv = Bukkit.createInventory(viewer, 36,
-                ChatColor.DARK_GREEN + target.getName() + ChatColor.GRAY + " 的背包");
-        PlayerInventory targetInv = target.getInventory();
-        // 自定义槽位 0-26 ← 目标槽位 9-35（主背包）
-        for (int i = 0; i < 27; i++) {
-            inv.setItem(i, targetInv.getItem(9 + i));
-        }
-        // 自定义槽位 27-35 ← 目标槽位 0-8（工具栏）
-        for (int i = 0; i < 9; i++) {
-            inv.setItem(27 + i, targetInv.getItem(i));
-        }
-        invViewerToTarget.put(viewer.getUniqueId(), target.getUniqueId());
-        viewer.openInventory(inv);
-    }
 
-    // ─── Inventory View Sync ───
+    // ─── Events ───
 
-    /**
-     * 将自定义查看容器中的槽位索引映射回目标玩家真实背包槽位索引。
-     *
-     * @param viewSlot 自定义容器槽位 (0-35)
-     * @return 目标 PlayerInventory 槽位 (0-35)，-1 表示越界
-     */
-    private int mapToTargetSlot(int viewSlot) {
-        if (viewSlot < 0 || viewSlot >= 36) return -1;
-        if (viewSlot < 27) return 9 + viewSlot;   // 主背包
-        return viewSlot - 27;                      // 工具栏
-    }
-
-    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
-    public void onInvClick(InventoryClickEvent event) {
-        if (!(event.getWhoClicked() instanceof Player viewer)) return;
-        UUID targetId = invViewerToTarget.get(viewer.getUniqueId());
-        if (targetId == null) return;
-        Player target = Bukkit.getPlayer(targetId);
-        if (target == null) {
-            event.setCancelled(true);
-            viewer.closeInventory();
-            return;
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void captureProxyVanish(AsyncPlayerPreLoginEvent event) {
+        if (velocityVanishProfile == null) return;
+        try {
+            if (velocityVanishProfile.capture(event)) return;
+        } catch (ReflectiveOperationException failure) {
+            logger.log(java.util.logging.Level.WARNING, "无法读取 Velocity 隐身交接。", failure);
         }
-        Inventory top = event.getView().getTopInventory();
-        if (!top.equals(event.getClickedInventory()) && event.getClickedInventory() != null) {
-            // 点击的是玩家自己的下半区，不拦截
-            return;
-        }
-        if (event.getClickedInventory() == null) return;
-        int rawSlot = event.getRawSlot();
-        // 仅处理点击顶部自定义容器的操作
-        if (rawSlot >= 0 && rawSlot < top.getSize()) {
-            int targetSlot = mapToTargetSlot(rawSlot);
-            if (targetSlot < 0) {
-                event.setCancelled(true);
-                return;
-            }
-            // 取消原事件，手动同步到目标玩家背包
-            event.setCancelled(true);
-            PlayerInventory targetInv = target.getInventory();
-            ItemStack cursor = event.getCursor();
-            ItemStack current = top.getItem(rawSlot);
-            switch (event.getAction()) {
-                case PICKUP_ALL, PICKUP_SOME, PICKUP_HALF, PICKUP_ONE -> {
-                    if (current != null) {
-                        event.setCursor(current.clone());
-                        top.setItem(rawSlot, null);
-                        targetInv.setItem(targetSlot, null);
-                    }
-                }
-                case PLACE_ALL, PLACE_SOME, PLACE_ONE -> {
-                    if (cursor != null && !cursor.getType().isAir()) {
-                        int amountToPlace = event.getAction().toString().contains("ONE") ? 1
-                                : (event.isRightClick() ? 1 : cursor.getAmount());
-                        if (current == null || current.getType().isAir()) {
-                            ItemStack placed = cursor.clone();
-                            placed.setAmount(Math.min(amountToPlace, cursor.getAmount()));
-                            top.setItem(rawSlot, placed);
-                            targetInv.setItem(targetSlot, placed);
-                            cursor.setAmount(cursor.getAmount() - placed.getAmount());
-                            event.setCursor(cursor.getAmount() <= 0 ? null : cursor);
-                        } else if (current.isSimilar(cursor)) {
-                            int max = current.getMaxStackSize();
-                            int canAdd = max - current.getAmount();
-                            int toAdd = Math.min(Math.min(amountToPlace, canAdd), cursor.getAmount());
-                            if (toAdd > 0) {
-                                current.setAmount(current.getAmount() + toAdd);
-                                top.setItem(rawSlot, current);
-                                targetInv.setItem(targetSlot, current);
-                                cursor.setAmount(cursor.getAmount() - toAdd);
-                                event.setCursor(cursor.getAmount() <= 0 ? null : cursor);
-                            }
-                        }
-                    }
-                }
-                case SWAP_WITH_CURSOR -> {
-                    event.setCursor(current == null ? null : current.clone());
-                    ItemStack placeItem = cursor == null ? null : cursor.clone();
-                    top.setItem(rawSlot, placeItem);
-                    targetInv.setItem(targetSlot, placeItem);
-                }
-                case MOVE_TO_OTHER_INVENTORY -> {
-                    // shift-click 从顶部容器移到玩家自身背包：直接取出
-                    if (current != null) {
-                        top.setItem(rawSlot, null);
-                        targetInv.setItem(targetSlot, null);
-                        // 给查看者玩家背包加物品
-                        viewer.getInventory().addItem(current).forEach((idx, leftover) ->
-                                viewer.getWorld().dropItemNaturally(viewer.getLocation(), leftover));
-                    }
-                }
-                case HOTBAR_MOVE_AND_READD, HOTBAR_SWAP -> {
-                    // 数字键交换：从顶部容器槽位与查看者 hotbar 交换
-                    int hotbarButton = event.getHotbarButton();
-                    if (hotbarButton >= 0 && hotbarButton < 9) {
-                        ItemStack hotbarItem = viewer.getInventory().getItem(hotbarButton);
-                        viewer.getInventory().setItem(hotbarButton, current == null ? null : current.clone());
-                        top.setItem(rawSlot, hotbarItem == null ? null : hotbarItem.clone());
-                        targetInv.setItem(targetSlot, hotbarItem == null ? null : hotbarItem.clone());
-                    }
-                }
-                case COLLECT_TO_CURSOR -> {
-                    // 简化处理：收集同类型到光标
-                    if (cursor != null && current != null && current.isSimilar(cursor)) {
-                        int max = cursor.getMaxStackSize();
-                        int canAdd = max - cursor.getAmount();
-                        int toAdd = Math.min(canAdd, current.getAmount());
-                        if (toAdd > 0) {
-                            cursor.setAmount(cursor.getAmount() + toAdd);
-                            event.setCursor(cursor);
-                            current.setAmount(current.getAmount() - toAdd);
-                            top.setItem(rawSlot, current.getAmount() <= 0 ? null : current);
-                            targetInv.setItem(targetSlot, current.getAmount() <= 0 ? null : current);
-                        }
-                    }
-                }
-                default -> {
-                    // 其他操作（如克隆）不同步
-                }
-            }
-            viewer.updateInventory();
-        } else if (event.getAction() == org.bukkit.event.inventory.InventoryAction.MOVE_TO_OTHER_INVENTORY
-                && event.getClickedInventory() != null
-                && !event.getClickedInventory().equals(top)) {
-            // shift-click 从查看者自身背包移到顶部容器：需要按重排顺序找空位
-            event.setCancelled(true);
-            ItemStack toMove = event.getCurrentItem();
-            if (toMove == null) return;
-            PlayerInventory targetInv = target.getInventory();
-            // 先尝试在顶部容器中找同类型堆叠
-            for (int i = 0; i < top.getSize() && toMove.getAmount() > 0; i++) {
-                ItemStack slotItem = top.getItem(i);
-                if (slotItem != null && slotItem.isSimilar(toMove) && slotItem.getAmount() < slotItem.getMaxStackSize()) {
-                    int canAdd = slotItem.getMaxStackSize() - slotItem.getAmount();
-                    int toAdd = Math.min(canAdd, toMove.getAmount());
-                    slotItem.setAmount(slotItem.getAmount() + toAdd);
-                    top.setItem(i, slotItem);
-                    targetInv.setItem(mapToTargetSlot(i), slotItem);
-                    toMove.setAmount(toMove.getAmount() - toAdd);
-                }
-            }
-            // 再找空槽
-            for (int i = 0; i < top.getSize() && toMove.getAmount() > 0; i++) {
-                ItemStack slotItem = top.getItem(i);
-                if (slotItem == null || slotItem.getType().isAir()) {
-                    ItemStack placed = toMove.clone();
-                    placed.setAmount(Math.min(toMove.getAmount(), toMove.getMaxStackSize()));
-                    top.setItem(i, placed);
-                    targetInv.setItem(mapToTargetSlot(i), placed);
-                    toMove.setAmount(toMove.getAmount() - placed.getAmount());
-                }
-            }
-            event.setCurrentItem(toMove.getAmount() <= 0 ? null : toMove);
-            viewer.updateInventory();
-        }
-    }
-
-    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
-    public void onInvDrag(InventoryDragEvent event) {
-        if (!(event.getWhoClicked() instanceof Player viewer)) return;
-        UUID targetId = invViewerToTarget.get(viewer.getUniqueId());
-        if (targetId == null) return;
-        Player target = Bukkit.getPlayer(targetId);
-        if (target == null) {
-            event.setCancelled(true);
-            viewer.closeInventory();
-            return;
-        }
-        Inventory top = event.getView().getTopInventory();
-        PlayerInventory targetInv = target.getInventory();
-        // 检查是否有拖拽到顶部容器的槽位
-        boolean touchedTop = false;
-        for (int slot : event.getRawSlots()) {
-            if (slot >= 0 && slot < top.getSize()) {
-                touchedTop = true;
-                break;
-            }
-        }
-        if (!touchedTop) return;
-        // 取消事件，手动同步
-        event.setCancelled(true);
-        ItemStack cursor = event.getCursor();
-        if (cursor == null || cursor.getType().isAir()) return;
-        int totalSlots = event.getRawSlots().size();
-        if (totalSlots == 0) return;
-        // 只处理拖入顶部容器的槽位
-        java.util.List<Integer> topSlots = new java.util.ArrayList<>();
-        for (int slot : event.getRawSlots()) {
-            if (slot >= 0 && slot < top.getSize()) {
-                topSlots.add(slot);
-            }
-        }
-        if (topSlots.isEmpty()) return;
-        int perSlot = cursor.getAmount() / topSlots.size();
-        int remainder = cursor.getAmount() % topSlots.size();
-        int idx = 0;
-        for (int rawSlot : topSlots) {
-            int amount = perSlot + (idx < remainder ? 1 : 0);
-            idx++;
-            if (amount <= 0) continue;
-            ItemStack existing = top.getItem(rawSlot);
-            if (existing == null || existing.getType().isAir()) {
-                ItemStack placed = cursor.clone();
-                placed.setAmount(amount);
-                top.setItem(rawSlot, placed);
-                targetInv.setItem(mapToTargetSlot(rawSlot), placed);
-            } else if (existing.isSimilar(cursor)) {
-                int max = existing.getMaxStackSize();
-                int canAdd = max - existing.getAmount();
-                int toAdd = Math.min(canAdd, amount);
-                if (toAdd > 0) {
-                    existing.setAmount(existing.getAmount() + toAdd);
-                    top.setItem(rawSlot, existing);
-                    targetInv.setItem(mapToTargetSlot(rawSlot), existing);
-                }
-            }
-        }
-        // 更新光标
-        int consumed = 0;
-        for (int rawSlot : topSlots) {
-            // 简化：重新计算消耗
-        }
-        // 重新计算光标剩余量
-        int newCursorAmount = 0;
-        for (int rawSlot : topSlots) {
-            ItemStack item = top.getItem(rawSlot);
-            if (item != null && item.isSimilar(cursor)) {
-                // 不精确，简化处理
-            }
-        }
-        // 简化：直接清空光标如果全部拖入
-        event.setCursor(null);
-        viewer.updateInventory();
+        event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER, "无法完成 Velocity 隐身交接，请重新连接。");
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
-    public void onInvClose(InventoryCloseEvent event) {
-        if (!(event.getPlayer() instanceof Player viewer)) return;
-        invViewerToTarget.remove(viewer.getUniqueId());
+    public void clearDeniedProxyVanish(PlayerLoginEvent event) {
+        if (velocityVanishProfile != null && event.getResult() != PlayerLoginEvent.Result.ALLOWED) {
+            velocityVanishProfile.take(event.getPlayer().getUniqueId());
+        }
     }
 
-    // ─── Events ───
+    @EventHandler(priority = EventPriority.LOWEST)
+    public void applyProxyVanish(PlayerJoinEvent event) {
+        if (velocityVanishProfile == null) return;
+        Player player = event.getPlayer();
+        var origin = velocityVanishProfile.take(player.getUniqueId());
+        if (origin == null) return;
+        var address = player.getAddress();
+        if (address == null || !origin.equals(address.getAddress())) {
+            player.kickPlayer("无法完成 Velocity 隐身交接，请重新连接。");
+            return;
+        }
+        // Paper publishes its native player-list entries after the join event.
+        setVanished(player, true);
+    }
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void onJoin(PlayerJoinEvent event) {
@@ -733,10 +570,8 @@ public final class PlayerManagementService implements Listener {
         if (config.player().vanishHideQuitMessage() && vanished.contains(uuid)) {
             event.setQuitMessage(null);
         }
-        flyEnabled.remove(uuid);
-        godEnabled.remove(uuid);
-        vanished.remove(uuid);
-        afkPlayers.remove(uuid);
+        // Showing a still-connected hidden player here can emit a native add immediately before removal.
+        restorePlayerState(event.getPlayer(), true);
         lastActivity.remove(uuid);
         backStacks.remove(uuid);
     }
@@ -752,7 +587,7 @@ public final class PlayerManagementService implements Listener {
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onDamage(EntityDamageEvent event) {
-        if (event.getEntity() instanceof Player player && godEnabled.contains(player.getUniqueId())) {
+        if (event.getEntity() instanceof Player player && godEnabled.containsKey(player.getUniqueId())) {
             event.setCancelled(true);
         }
     }

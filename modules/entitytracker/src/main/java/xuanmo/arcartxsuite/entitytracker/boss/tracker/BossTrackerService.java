@@ -9,6 +9,7 @@ import java.lang.reflect.Method;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -73,11 +74,19 @@ public final class BossTrackerService implements Listener {
     private final BossDamageSettlementService settlementService;
     private final EntityTrackerCrossServerService crossServerService;
     private final BossKillRecordingService killRecordingService;
+    private java.util.function.Consumer<BossDamageSettlementRecord> periodScoreRecorder = record -> {};
+
+    public void setPeriodScoreRecorder(java.util.function.Consumer<BossDamageSettlementRecord> recorder) {
+        periodScoreRecorder = recorder;
+    }
     private final xuanmo.arcartxsuite.api.attribute.AttributeBridgeRegistry attributeBridge;
     private final Map<UUID, BossSession> sessions = new LinkedHashMap<>();
     private final Map<UUID, ViewerState> viewerStates = new ConcurrentHashMap<>();
 
     private BukkitTask refreshTask;
+    private volatile boolean closed;
+    private final xuanmo.arcartxsuite.api.scheduler.ModuleCallback refresh =
+        new xuanmo.arcartxsuite.api.scheduler.ModuleCallback(this::refreshViewers);
     private BukkitTask queuedRefreshTask;
     private BukkitTask hybridWarmupRescanTask;
     private BukkitTask hybridPersistentRescanTask;
@@ -99,7 +108,7 @@ public final class BossTrackerService implements Listener {
         xuanmo.arcartxsuite.api.attribute.AttributeBridgeRegistry attributeBridge
     ) {
         this(plugin, logger, configuration, arcartXBridge, runtimeUiIds, serverPlatform, signalDispatcher,
-            () -> null, itemSourceRegistry, attributeBridge, null, null, null, null, null, null);
+            () -> null, itemSourceRegistry, attributeBridge, null, null, null, null, null);
     }
 
     public BossTrackerService(
@@ -115,7 +124,7 @@ public final class BossTrackerService implements Listener {
         EntityTrackerCrossServerService crossServerService
     ) {
         this(plugin, logger, configuration, arcartXBridge, runtimeUiIds, serverPlatform, signalDispatcher,
-            () -> null, itemSourceRegistry, attributeBridge, crossServerService, null, null, null, null, null);
+            () -> null, itemSourceRegistry, attributeBridge, crossServerService, null, null, null, null);
     }
 
     public BossTrackerService(
@@ -132,7 +141,7 @@ public final class BossTrackerService implements Listener {
         BossKillRecordingService killRecordingService
     ) {
         this(plugin, logger, configuration, arcartXBridge, runtimeUiIds, serverPlatform, signalDispatcher,
-            () -> null, itemSourceRegistry, attributeBridge, crossServerService, killRecordingService, null, null, null, null);
+            () -> null, itemSourceRegistry, attributeBridge, crossServerService, killRecordingService, null, null, null);
     }
 
     public BossTrackerService(
@@ -143,14 +152,13 @@ public final class BossTrackerService implements Listener {
         List<String> runtimeUiIds,
         xuanmo.arcartxsuite.entitytracker.boss.platform.ServerPlatform serverPlatform,
         java.util.function.BiConsumer<String, Player> signalDispatcher,
-        java.util.function.Supplier<xuanmo.arcartxsuite.api.capability.MailDispatchable> mailDispatchableProvider,
+        java.util.function.Supplier<xuanmo.arcartxsuite.api.mail.AxsMailService> mailProvider,
         xuanmo.arcartxsuite.api.item.ItemSourceRegistry itemSourceRegistry,
         xuanmo.arcartxsuite.api.attribute.AttributeBridgeRegistry attributeBridge,
         EntityTrackerCrossServerService crossServerService,
         BossKillRecordingService killRecordingService,
         PlaceholderResolverAPI placeholderResolver,
         xuanmo.arcartxsuite.api.message.MessageProvider messages,
-        xuanmo.arcartxsuite.api.item.ItemRewardDispatcher itemRewardDispatcher,
         xuanmo.arcartxsuite.api.item.PendingRewardService pendingRewardService
     ) {
         this.plugin = plugin;
@@ -164,8 +172,8 @@ public final class BossTrackerService implements Listener {
         this.crossServerService = crossServerService;
         this.killRecordingService = killRecordingService;
         this.settlementService = new BossDamageSettlementService(
-            plugin, logger, mailDispatchableProvider, signalDispatcher, itemSourceRegistry,
-            itemRewardDispatcher, placeholderResolver, messages, pendingRewardService
+            plugin, logger, mailProvider, signalDispatcher, itemSourceRegistry,
+            placeholderResolver, messages, pendingRewardService
         );
     }
 
@@ -177,25 +185,33 @@ public final class BossTrackerService implements Listener {
         List<String> runtimeUiIds,
         xuanmo.arcartxsuite.entitytracker.boss.platform.ServerPlatform serverPlatform,
         java.util.function.BiConsumer<String, Player> signalDispatcher,
-        java.util.function.Supplier<xuanmo.arcartxsuite.api.capability.MailDispatchable> mailDispatchableProvider,
+        java.util.function.Supplier<xuanmo.arcartxsuite.api.mail.AxsMailService> mailProvider,
         xuanmo.arcartxsuite.api.item.ItemSourceRegistry itemSourceRegistry,
         xuanmo.arcartxsuite.api.attribute.AttributeBridgeRegistry attributeBridge
     ) {
         this(plugin, logger, configuration, arcartXBridge, runtimeUiIds, serverPlatform, signalDispatcher,
-            mailDispatchableProvider, itemSourceRegistry, attributeBridge, null, null, null, null, null, null);
+            mailProvider, itemSourceRegistry, attributeBridge, null, null, null, null, null);
     }
 
-    public void start() {
+    public Map<UUID, BossSession> captureSessionsForReload() {
+        return Map.copyOf(sessions);
+    }
+
+    public void start(Map<UUID, BossSession> previousSessions) {
         Bukkit.getPluginManager().registerEvents(this, plugin);
-        restoreTrackedBosses("启动扫描", true);
+        for (BossSession session : previousSessions.values()) {
+            nextSpawnOrder = Math.max(nextSpawnOrder, session.getSpawnOrder());
+        }
+        restoreTrackedBosses("启动扫描", true, previousSessions);
         refreshTask = Bukkit.getScheduler().runTaskTimer(
             plugin,
-            this::refreshViewers,
+            refresh,
             configuration.refreshIntervalTicks(),
             configuration.refreshIntervalTicks()
         );
         if (attributeBridge != null && attributeBridge.hasDamageSource()) {
             attributeDamageListener = event -> {
+                if (closed) return;
                 if (!(event.target() instanceof LivingEntity target)) return;
                 BossSession session = sessions.get(target.getUniqueId());
                 if (session == null) return;
@@ -204,7 +220,6 @@ public final class BossTrackerService implements Listener {
                 double effectiveDamage = resolveEffectiveDamage(target, event.damage());
                 if (effectiveDamage <= 0.0D) return;
                 session.recordDamage(attacker, effectiveDamage);
-                requestRefresh();
             };
             attributeBridge.registerDamageListener(attributeDamageListener);
         }
@@ -213,6 +228,8 @@ public final class BossTrackerService implements Listener {
     }
 
     public void shutdown() {
+        closed = true;
+        refresh.close();
         if (queuedRefreshTask != null) {
             queuedRefreshTask.cancel();
             queuedRefreshTask = null;
@@ -246,6 +263,11 @@ public final class BossTrackerService implements Listener {
         return sessions.size();
     }
 
+    public java.util.concurrent.CompletionStage<Void> databaseStopped() {
+        return java.util.concurrent.CompletableFuture.allOf(refresh.stopped().toCompletableFuture(),
+            settlementService.databaseStopped().toCompletableFuture());
+    }
+
     public boolean isTrackedConfiguredBoss(UUID entityUuid) {
         if (entityUuid == null) {
             return false;
@@ -257,7 +279,7 @@ public final class BossTrackerService implements Listener {
     }
 
     public int getActiveViewerCount() {
-        return viewerStates.size();
+        return (int) viewerStates.values().stream().filter(ViewerState::open).count();
     }
 
     public boolean attributePlusHooked() {
@@ -276,7 +298,9 @@ public final class BossTrackerService implements Listener {
         return settlementService.settlement(settlementId);
     }
 
-    public BossDamageRewardDispatchResult reissueSettlementReward(String settlementId, int rank, OfflinePlayer overridePlayer) {
+    public boolean settlementIssuing(String settlementId) { return settlementService.issuing(settlementId); }
+
+    public java.util.concurrent.CompletionStage<BossDamageRewardDispatchResult> reissueSettlementReward(String settlementId, int rank, OfflinePlayer overridePlayer) {
         return settlementService.reissueReward(settlementId, rank, overridePlayer);
     }
 
@@ -358,10 +382,11 @@ public final class BossTrackerService implements Listener {
     }
 
     public PlayerBossViewSnapshot getViewerSnapshot(Player player) {
-        if (player == null) {
-            return PlayerBossViewSnapshot.empty(configuration.maxVisibleBars(), configuration.sortMode());
-        }
-        ViewerState state = viewerStates.get(player.getUniqueId());
+        return getViewerSnapshotById(player == null ? null : player.getUniqueId());
+    }
+
+    public PlayerBossViewSnapshot getViewerSnapshotById(UUID viewerId) {
+        ViewerState state = viewerId == null ? null : viewerStates.get(viewerId);
         return state == null
             ? PlayerBossViewSnapshot.empty(configuration.maxVisibleBars(), configuration.sortMode())
             : state.snapshot();
@@ -406,9 +431,7 @@ public final class BossTrackerService implements Listener {
             return;
         }
         BossDamageSettlementRecord record = settlementService.settle(session, entity);
-        if (crossServerService != null && record != null) {
-            crossServerService.publishSettlement(record, entity.getLocation());
-        }
+        if (record != null) periodScoreRecorder.accept(record);
         if (killRecordingService != null && record != null) {
             killRecordingService.recordBossDeath(session, entity, record, entity.getLocation());
         }
@@ -443,7 +466,8 @@ public final class BossTrackerService implements Listener {
     }
 
     private void refreshViewers() {
-        if (Bukkit.getOnlinePlayers().isEmpty()) {
+        var players = Bukkit.getOnlinePlayers();
+        if (players.isEmpty()) {
             viewerStates.clear();
             pruneSessions();
             return;
@@ -454,53 +478,64 @@ public final class BossTrackerService implements Listener {
             if (viewerStates.isEmpty()) {
                 return;
             }
-            for (Player player : Bukkit.getOnlinePlayers()) {
+            for (Player player : players) {
                 closeBossHud(player);
             }
             return;
         }
 
-        Map<UUID, List<TrackedBossSnapshot>> snapshotsByWorld = indexSnapshotsByWorld(activeSnapshots);
+        var snapshotsByWorld = indexSnapshotsByWorld(activeSnapshots);
+        if (players.size() >= 8) snapshotsByWorld.values().forEach(WorldBossSnapshots::indexCells);
 
-        for (Player player : Bukkit.getOnlinePlayers()) {
-            VisibleBossView visibleBossView = collectVisibleSessions(player, snapshotsByWorld.get(player.getWorld().getUID()));
+        for (Player player : players) {
+            WorldBossSnapshots world = snapshotsByWorld.get(player.getWorld().getUID());
+            if (world == null || !player.isOnline() || player.isDead()) {
+                closeBossHud(player);
+                continue;
+            }
+            Location playerLocation = player.getLocation();
+            VisibleBossView visibleBossView = collectVisibleSessions(playerLocation, world,
+                configuration.sortMode(), configuration.maxVisibleBars());
             if (visibleBossView.totalVisibleCount() == 0) {
                 closeBossHud(player);
                 continue;
             }
 
-            PlayerBossViewSnapshot snapshot = buildViewSnapshot(player, visibleBossView);
-            Map<String, Object> packet = buildUiPacket(snapshot);
-            ViewerState previousState = viewerStates.get(player.getUniqueId());
-            if (previousState == null) {
-                if (!arcartXBridge.openUiAll(player, runtimeUiIds)) {
-                    continue;
-                }
-                if (!arcartXBridge.sendPacketToAll(player, runtimeUiIds, "init", packet)) {
-                    viewerStates.remove(player.getUniqueId());
-                    arcartXBridge.closeUiAll(player, runtimeUiIds);
-                    continue;
-                }
-                viewerStates.put(player.getUniqueId(), new ViewerState(snapshot));
+            PlayerBossViewSnapshot snapshot = buildViewSnapshot(player, playerLocation, visibleBossView);
+            UUID viewerId = player.getUniqueId();
+            ViewerState previous = viewerStates.get(viewerId);
+            if (runtimeUiIds.isEmpty()) {
+                viewerStates.put(viewerId, new ViewerState(snapshot, false, null));
                 continue;
             }
-
-            if (!arcartXBridge.sendPacketToAll(player, runtimeUiIds, "update", packet)) {
-                viewerStates.remove(player.getUniqueId());
+            boolean open = previous != null && previous.open();
+            if (open && previous.snapshot().equals(snapshot)) {
+                continue;
+            }
+            Map<String, Object> packet = buildCompactUiPacket(snapshot);
+            if (open && packet.equals(previous.compactPacket())) {
+                viewerStates.put(viewerId, new ViewerState(snapshot, true, previous.compactPacket()));
+                continue;
+            }
+            if (!open && !arcartXBridge.openUiAll(player, runtimeUiIds)) {
+                viewerStates.put(viewerId, new ViewerState(snapshot, false, null));
+                continue;
+            }
+            boolean sent = arcartXBridge.sendPacketToAll(player, runtimeUiIds, open ? "update" : "init", packet);
+            if (!sent) {
                 arcartXBridge.closeUiAll(player, runtimeUiIds);
-                continue;
             }
-            viewerStates.put(player.getUniqueId(), new ViewerState(snapshot));
+            viewerStates.put(viewerId, new ViewerState(snapshot, sent, sent ? packet : null));
         }
     }
 
     private void requestRefresh() {
-        if (queuedRefreshTask != null) {
+        if (closed || queuedRefreshTask != null) {
             return;
         }
         queuedRefreshTask = Bukkit.getScheduler().runTask(plugin, () -> {
             queuedRefreshTask = null;
-            refreshViewers();
+            refresh.run();
         });
     }
 
@@ -513,6 +548,7 @@ public final class BossTrackerService implements Listener {
         hybridWarmupRescanTask = Bukkit.getScheduler().runTaskTimer(
             plugin,
             () -> {
+                if (closed) return;
                 hybridWarmupRescanAttempts++;
                 int restoredCount = restoreTrackedBosses("Mohist 启动补扫", false);
                 if (restoredCount > 0) {
@@ -533,6 +569,7 @@ public final class BossTrackerService implements Listener {
         hybridPersistentRescanTask = Bukkit.getScheduler().runTaskTimer(
             plugin,
             () -> {
+                if (closed) return;
                 int restoredCount = restoreTrackedBosses("Mohist 持续补扫", false);
                 if (restoredCount > 0) {
                     this.logger.info("Mohist 持续补扫恢复了 " + restoredCount + " 个遗漏的 MythicMobs Boss。");
@@ -566,6 +603,7 @@ public final class BossTrackerService implements Listener {
     }
 
     private void runPersistentRescan() {
+        if (closed) return;
         int restoredCount = restoreTrackedBosses("Mohist 持续补扫", false);
         if (restoredCount > 0) {
             this.logger.info("Mohist 持续补扫恢复了 " + restoredCount + " 个遗漏的 MythicMobs Boss。");
@@ -575,6 +613,10 @@ public final class BossTrackerService implements Listener {
     }
 
     private int restoreTrackedBosses(String reason, boolean logWhenEmpty) {
+        return restoreTrackedBosses(reason, logWhenEmpty, Map.of());
+    }
+
+    private int restoreTrackedBosses(String reason, boolean logWhenEmpty, Map<UUID, BossSession> previousSessions) {
         int restoredCount = 0;
         try {
             List<ActiveMob> activeMobs = new ArrayList<>(MythicBukkit.inst().getMobManager().getActiveMobs());
@@ -591,7 +633,8 @@ public final class BossTrackerService implements Listener {
                 SessionRegistration registration = registerTrackedBoss(
                     livingEntity,
                     resolveMobId(activeMob),
-                    activeMob.getDisplayName()
+                    activeMob.getDisplayName(),
+                    previousSessions.get(livingEntity.getUniqueId())
                 );
                 if (registration.created()) {
                     restoredCount++;
@@ -611,6 +654,11 @@ public final class BossTrackerService implements Listener {
     }
 
     private SessionRegistration registerTrackedBoss(LivingEntity livingEntity, String mythicMobId, String displayName) {
+        return registerTrackedBoss(livingEntity, mythicMobId, displayName, null);
+    }
+
+    private SessionRegistration registerTrackedBoss(LivingEntity livingEntity, String mythicMobId, String displayName,
+                                                     BossSession previous) {
         if (livingEntity == null || livingEntity.isDead() || !livingEntity.isValid()) {
             return SessionRegistration.SKIPPED;
         }
@@ -630,13 +678,13 @@ public final class BossTrackerService implements Listener {
         }
 
         String resolvedDisplayName = (displayName == null || displayName.isBlank()) ? livingEntity.getCustomName() : displayName;
-        BossSession session = new BossSession(
-            livingEntity.getUniqueId(),
-            definition,
-            mythicMobId,
-            resolvedDisplayName,
-            ++nextSpawnOrder
-        );
+        BossSession session;
+        if (previous != null && previous.matchesMob(mythicMobId)) {
+            session = new BossSession(previous, definition);
+            session.rememberDisplayName(resolvedDisplayName);
+        } else {
+            session = new BossSession(livingEntity.getUniqueId(), definition, mythicMobId, resolvedDisplayName, ++nextSpawnOrder);
+        }
         sessions.put(livingEntity.getUniqueId(), session);
         return new SessionRegistration(session, true);
     }
@@ -688,48 +736,55 @@ public final class BossTrackerService implements Listener {
         return activeSnapshots;
     }
 
-    private Map<UUID, List<TrackedBossSnapshot>> indexSnapshotsByWorld(List<TrackedBossSnapshot> activeSnapshots) {
-        Map<UUID, List<TrackedBossSnapshot>> snapshotsByWorld = new LinkedHashMap<>();
+    private Map<UUID, WorldBossSnapshots> indexSnapshotsByWorld(List<TrackedBossSnapshot> activeSnapshots) {
+        Map<UUID, WorldBossSnapshots> snapshotsByWorld = new HashMap<>();
         for (TrackedBossSnapshot snapshot : activeSnapshots) {
             World world = snapshot.renderState().location().getWorld();
             if (world == null) {
                 continue;
             }
-            snapshotsByWorld.computeIfAbsent(world.getUID(), unused -> new ArrayList<>()).add(snapshot);
+            snapshotsByWorld.computeIfAbsent(world.getUID(), unused -> new WorldBossSnapshots(new ArrayList<>())).all.add(snapshot);
         }
         return snapshotsByWorld;
     }
 
-    private VisibleBossView collectVisibleSessions(Player player, List<TrackedBossSnapshot> worldSnapshots) {
-        if (worldSnapshots == null || worldSnapshots.isEmpty()) {
+    static VisibleBossView collectVisibleSessions(Location playerLocation, WorldBossSnapshots world, BossSortMode sortMode, int maxBars) {
+        List<TrackedBossSnapshot> nearby = world.nearby(playerLocation);
+        if (nearby.isEmpty() && world.wide.isEmpty()) {
             return VisibleBossView.EMPTY;
         }
 
-        List<TrackedBossSnapshot> visibleSnapshots = new ArrayList<>(worldSnapshots.size());
-
-        for (TrackedBossSnapshot snapshot : worldSnapshots) {
-            if (!snapshot.session().canView(player, snapshot.renderState())) {
-                continue;
-            }
-            visibleSnapshots.add(snapshot);
-        }
+        List<TrackedBossSnapshot> visibleSnapshots = new ArrayList<>(Math.min(maxBars, nearby.size() + world.wide.size()));
+        addVisibleSnapshots(playerLocation, nearby, visibleSnapshots);
+        int nearbyCount = visibleSnapshots.size();
+        addVisibleSnapshots(playerLocation, world.wide, visibleSnapshots);
 
         if (visibleSnapshots.isEmpty()) {
             return VisibleBossView.EMPTY;
         }
 
-        visibleSnapshots.sort(comparatorFor(player, configuration.sortMode()));
-        int maxBars = configuration.maxVisibleBars();
+        // Both candidate lists retain spawn order. Restore it when combining them.
+        if (sortMode != BossSortMode.SPAWN_ORDER || nearbyCount > 0 && nearbyCount < visibleSnapshots.size()) {
+            visibleSnapshots.sort(comparatorFor(playerLocation, sortMode));
+        }
         List<TrackedBossSnapshot> limitedSnapshots = visibleSnapshots.size() > maxBars
-            ? List.copyOf(visibleSnapshots.subList(0, maxBars))
-            : List.copyOf(visibleSnapshots);
+            ? List.copyOf(visibleSnapshots.subList(0, maxBars)) : List.copyOf(visibleSnapshots);
         return new VisibleBossView(limitedSnapshots, visibleSnapshots.size());
     }
 
-    private PlayerBossViewSnapshot buildViewSnapshot(Player player, VisibleBossView visibleBossView) {
+    private static void addVisibleSnapshots(Location location, List<TrackedBossSnapshot> candidates, List<TrackedBossSnapshot> visible) {
+        for (TrackedBossSnapshot candidate : candidates) {
+            var state = candidate.renderState();
+            if (location.distanceSquared(state.location()) <= state.viewerRangeSquared()) {
+                visible.add(candidate);
+            }
+        }
+    }
+
+    private PlayerBossViewSnapshot buildViewSnapshot(Player player, Location playerLocation, VisibleBossView visibleBossView) {
         List<BossViewSlot> slots = new ArrayList<>(visibleBossView.visibleSnapshots().size());
         for (TrackedBossSnapshot snapshot : visibleBossView.visibleSnapshots()) {
-            slots.add(snapshot.session().toViewSlot(player, snapshot.renderState()));
+            slots.add(snapshot.session().toViewSlot(player, playerLocation, snapshot.renderState()));
         }
         return new PlayerBossViewSnapshot(
             slots.size(),
@@ -740,129 +795,25 @@ public final class BossTrackerService implements Listener {
         );
     }
 
-    private Map<String, Object> buildUiPacket(PlayerBossViewSnapshot snapshot) {
-        Map<String, Object> packet = new LinkedHashMap<>();
-        packet.put("bossCount", snapshot.bossCount());
-        packet.put("totalBossCount", snapshot.totalBossCount());
-        packet.put("maxVisibleBars", snapshot.maxVisibleBars());
-        packet.put("maxDamageRankingEntries", configuration.getMaxDamageRankingEntries());
-        packet.put("sortMode", snapshot.sortMode().configKey());
-
-        int slot = 1;
-        for (; slot <= snapshot.visibleSlots().size(); slot++) {
-            BossViewSlot slotData = snapshot.visibleSlots().get(slot - 1);
-            writeBossSlot(packet, slot, slotData);
+    private static Map<String, Object> buildCompactUiPacket(PlayerBossViewSnapshot snapshot) {
+        var rows = new ArrayList<Map<String, Object>>(snapshot.visibleSlots().size());
+        for (BossViewSlot slot : snapshot.visibleSlots()) {
+            var context = slot.context();
+            rows.add(Map.of("id", context.entityUuid(), "title", slot.title(), "distance", context.distanceText(),
+                "rank", context.viewerRankText(), "damage", context.viewerDamageText(), "progress", context.progress(),
+                "health", context.healthText(), "maxHealth", context.maxHealthText()));
         }
-        for (; slot <= configuration.maxVisibleBars(); slot++) {
-            writeEmptySlot(packet, slot);
-        }
-        return packet;
+        return Map.of("rows", rows, "totalBossCount", snapshot.totalBossCount());
     }
 
     private void closeBossHud(Player player) {
         UUID playerId = player.getUniqueId();
-        if (viewerStates.remove(playerId) == null) {
+        ViewerState previous = viewerStates.remove(playerId);
+        if (previous == null || !previous.open()) {
             return;
         }
         arcartXBridge.sendPacketToAll(player, runtimeUiIds, "close", Map.of("bossCount", 0, "totalBossCount", 0));
         arcartXBridge.closeUiAll(player, runtimeUiIds);
-    }
-
-    private void writeBossSlot(Map<String, Object> packet, int slot, BossViewSlot slotData) {
-        String prefix = "slot" + slot + "_";
-        BossPlaceholderContext context = slotData.context();
-        BossDamageRankingSnapshot ranking = context.damageRanking();
-        BossDamageRankingEntry viewerEntry = context.viewerDamageEntry();
-        packet.put(prefix + "visible", context.visible());
-        packet.put(prefix + "title", slotData.title());
-        packet.put(prefix + "subtitle", slotData.subtitle());
-        packet.put(prefix + "health", context.health());
-        packet.put(prefix + "maxHealth", context.maxHealth());
-        packet.put(prefix + "healthText", context.healthText());
-        packet.put(prefix + "maxHealthText", context.maxHealthText());
-        packet.put(prefix + "healthPercent", context.healthPercent());
-        packet.put(prefix + "healthPercentText", context.healthPercentText());
-        packet.put(prefix + "distance", context.distance());
-        packet.put(prefix + "distanceText", context.distanceText());
-        packet.put(prefix + "progress", context.progress());
-        packet.put(prefix + "mobId", context.mythicMobId());
-        packet.put(prefix + "displayName", context.displayName());
-        packet.put(prefix + "entityUuid", context.entityUuid());
-        packet.put(prefix + "hasTarget", context.hasTarget());
-        packet.put(prefix + "targetDisplayName", context.targetDisplayName());
-        packet.put(prefix + "targetUuid", context.targetUuid());
-        packet.put(prefix + "targetType", context.targetType());
-        packet.put(prefix + "spawnOrder", context.spawnOrder());
-        packet.put(prefix + "priority", context.priority());
-        packet.put(prefix + "world", context.world());
-        packet.put(prefix + "x", context.x());
-        packet.put(prefix + "y", context.y());
-        packet.put(prefix + "z", context.z());
-        packet.put(prefix + "aliveSeconds", context.aliveSeconds());
-        packet.put(prefix + "aliveTime", context.aliveTime());
-        packet.put(prefix + "rankingEnabled", ranking.enabled());
-        packet.put(prefix + "damageParticipantCount", ranking.participantCount());
-        packet.put(prefix + "damageTrackedPlayerCount", ranking.trackedPlayerCount());
-        packet.put(prefix + "totalDamage", ranking.totalDamage());
-        packet.put(prefix + "totalDamageText", context.totalDamageText());
-        packet.put(prefix + "viewerRank", viewerEntry.rank());
-        packet.put(prefix + "viewerRankText", context.viewerRankText());
-        packet.put(prefix + "viewerQualified", viewerEntry.qualified());
-        packet.put(prefix + "viewerDamage", viewerEntry.damage());
-        packet.put(prefix + "viewerDamageText", context.viewerDamageText());
-        packet.put(prefix + "viewerDamagePercent", viewerEntry.damagePercent());
-        packet.put(prefix + "viewerDamagePercentText", context.viewerDamagePercentText());
-        packet.put(prefix + "viewerTakenDamage", viewerEntry.takenDamage());
-        packet.put(prefix + "viewerTakenDamageText", context.viewerTakenDamageText());
-        writeRankingEntries(packet, prefix, ranking, configuration.getMaxDamageRankingEntries());
-    }
-
-    private void writeEmptySlot(Map<String, Object> packet, int slot) {
-        String prefix = "slot" + slot + "_";
-        packet.put(prefix + "visible", false);
-        packet.put(prefix + "title", "");
-        packet.put(prefix + "subtitle", "");
-        packet.put(prefix + "health", 0.0D);
-        packet.put(prefix + "maxHealth", 0.0D);
-        packet.put(prefix + "healthText", "0");
-        packet.put(prefix + "maxHealthText", "0");
-        packet.put(prefix + "healthPercent", 0.0D);
-        packet.put(prefix + "healthPercentText", "0");
-        packet.put(prefix + "distance", 0);
-        packet.put(prefix + "distanceText", "-");
-        packet.put(prefix + "progress", 0.0D);
-        packet.put(prefix + "mobId", "");
-        packet.put(prefix + "displayName", "");
-        packet.put(prefix + "entityUuid", "");
-        packet.put(prefix + "hasTarget", false);
-        packet.put(prefix + "targetDisplayName", "");
-        packet.put(prefix + "targetUuid", "");
-        packet.put(prefix + "targetType", "");
-        packet.put(prefix + "spawnOrder", 0L);
-        packet.put(prefix + "priority", 0);
-        packet.put(prefix + "world", "");
-        packet.put(prefix + "x", 0);
-        packet.put(prefix + "y", 0);
-        packet.put(prefix + "z", 0);
-        packet.put(prefix + "aliveSeconds", 0L);
-        packet.put(prefix + "aliveTime", "00:00");
-        packet.put(prefix + "rankingEnabled", false);
-        packet.put(prefix + "damageParticipantCount", 0);
-        packet.put(prefix + "damageTrackedPlayerCount", 0);
-        packet.put(prefix + "totalDamage", 0.0D);
-        packet.put(prefix + "totalDamageText", "0");
-        packet.put(prefix + "viewerRank", 0);
-        packet.put(prefix + "viewerRankText", "-");
-        packet.put(prefix + "viewerQualified", false);
-        packet.put(prefix + "viewerDamage", 0.0D);
-        packet.put(prefix + "viewerDamageText", "0");
-        packet.put(prefix + "viewerDamagePercent", 0.0D);
-        packet.put(prefix + "viewerDamagePercentText", "0");
-        packet.put(prefix + "viewerTakenDamage", 0.0D);
-        packet.put(prefix + "viewerTakenDamageText", "0");
-        for (int rank = 1; rank <= configuration.getMaxDamageRankingEntries(); rank++) {
-            writeRankingEntry(packet, prefix, rank, BossDamageRankingEntry.empty());
-        }
     }
 
     private static void writeRankingEntries(
@@ -937,7 +888,6 @@ public final class BossTrackerService implements Listener {
             return;
         }
         session.recordDamage(attacker, damage);
-        requestRefresh();
     }
 
     private void recordBossDamageTaken(EntityDamageByEntityEvent event) {
@@ -955,7 +905,6 @@ public final class BossTrackerService implements Listener {
             return;
         }
         session.recordTakenDamage(targetPlayer, damage);
-        requestRefresh();
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
@@ -971,7 +920,6 @@ public final class BossTrackerService implements Listener {
             return;
         }
         session.recordDamage(attacker, damage);
-        requestRefresh();
     }
 
     private BossSession resolveDamagerSession(Entity damager) {
@@ -997,9 +945,8 @@ public final class BossTrackerService implements Listener {
         return Math.max(0.0D, Math.min(rawDamage, target.getHealth()));
     }
 
-    private Comparator<TrackedBossSnapshot> comparatorFor(Player player, BossSortMode sortMode) {
+    private static Comparator<TrackedBossSnapshot> comparatorFor(Location playerLocation, BossSortMode sortMode) {
         Comparator<TrackedBossSnapshot> fallback = SNAPSHOT_ORDER;
-        Location playerLocation = player.getLocation();
         return switch (sortMode) {
             case DISTANCE -> Comparator
                 .comparingDouble((TrackedBossSnapshot snapshot) -> playerLocation.distanceSquared(snapshot.renderState().location()))
@@ -1021,14 +968,73 @@ public final class BossTrackerService implements Listener {
         };
     }
 
-    private record TrackedBossSnapshot(BossSession session, BossSession.BossRenderState renderState) {
+    record TrackedBossSnapshot(BossSession session, BossSession.BossRenderState renderState) {
     }
 
-    private record VisibleBossView(List<TrackedBossSnapshot> visibleSnapshots, long totalVisibleCount) {
+    static final class WorldBossSnapshots {
+        private static final int CELL_SHIFT = 7;
+        private static final double MAX_INDEXED_RANGE_SQUARED = 64.0D * 64.0D;
+        private static final int MIN_INDEXED_BOSSES = 16;
+
+        private final List<TrackedBossSnapshot> all;
+        private Map<Long, List<TrackedBossSnapshot>> cells = Map.of();
+        private List<TrackedBossSnapshot> wide = List.of();
+
+        WorldBossSnapshots(List<TrackedBossSnapshot> snapshots) {
+            all = snapshots;
+        }
+
+        void indexCells() {
+            if (all.size() < MIN_INDEXED_BOSSES) return;
+
+            var byCell = new HashMap<Long, List<TrackedBossSnapshot>>();
+            var wideRange = new ArrayList<TrackedBossSnapshot>();
+            for (var snapshot : all) {
+                var state = snapshot.renderState();
+                if (!(state.viewerRangeSquared() <= MAX_INDEXED_RANGE_SQUARED)) {
+                    wideRange.add(snapshot);
+                    continue;
+                }
+
+                // Round outward at cell boundaries. Visibility still uses the exact 3D distance.
+                double radius = Math.nextUp(Math.sqrt(state.viewerRangeSquared()));
+                double x = state.location().getX();
+                double z = state.location().getZ();
+                int minX = cell(Math.nextDown(x - radius));
+                int maxX = cell(Math.nextUp(x + radius));
+                int minZ = cell(Math.nextDown(z - radius));
+                int maxZ = cell(Math.nextUp(z + radius));
+                for (int cellX = minX; cellX <= maxX; cellX++) {
+                    for (int cellZ = minZ; cellZ <= maxZ; cellZ++) {
+                        byCell.computeIfAbsent(cellKey(cellX, cellZ), key -> new ArrayList<>()).add(snapshot);
+                    }
+                }
+            }
+            if (!byCell.isEmpty()) {
+                cells = byCell;
+                wide = wideRange;
+            }
+        }
+
+        List<TrackedBossSnapshot> nearby(Location location) {
+            if (cells.isEmpty()) return all;
+            return cells.getOrDefault(cellKey(cell(location.getX()), cell(location.getZ())), List.of());
+        }
+
+        private static int cell(double coordinate) {
+            return Location.locToBlock(coordinate) >> CELL_SHIFT;
+        }
+
+        private static long cellKey(int x, int z) {
+            return ((long) x << Integer.SIZE) | Integer.toUnsignedLong(z);
+        }
+    }
+
+    record VisibleBossView(List<TrackedBossSnapshot> visibleSnapshots, long totalVisibleCount) {
         private static final VisibleBossView EMPTY = new VisibleBossView(List.of(), 0L);
     }
 
-    private record ViewerState(PlayerBossViewSnapshot snapshot) {
+    private record ViewerState(PlayerBossViewSnapshot snapshot, boolean open, Map<String, Object> compactPacket) {
     }
 
     private record SessionRegistration(BossSession session, boolean created) {

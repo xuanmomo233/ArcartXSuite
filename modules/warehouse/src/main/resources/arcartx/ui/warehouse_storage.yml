@@ -77,45 +77,30 @@ ui:
       // ── 个人仓库列表：仅在数量变化时重建 ──
       if(var.maxPersonalCount != oldMaxPersonalCount){
         var.刷新轮次 = (var.刷新轮次 + 1).round()
-        while(val.个人仓库列表.childrenCount() > 1){
-          val.个人仓库列表.get(1).remove()
-        }
-        if(var.maxPersonalCount > 1){
-          for(序号 in range(1, var.maxPersonalCount - 1)){
-            if(val.个人仓库列表['项'] != none) {
-              项 = val.个人仓库列表['项'].copy('个人仓库项_' + var.刷新轮次.round() + '_' + 序号.round())
-              项.entryKey = 序号.round()
-            }
+        var.个人仓库列表网格数据 = []
+        if((var.maxPersonalCount - 1) >= 0){
+          for(网格序号 in range(0, var.maxPersonalCount - 1)){
+            var.个人仓库列表网格数据.add(网格序号.round())
           }
         }
       }
       // ── 共享仓库列表：仅在数量变化时重建 ──
       if(var.maxSharedCount != oldMaxSharedCount){
         var.刷新轮次 = (var.刷新轮次 + 1).round()
-        while(val.共享仓库列表.childrenCount() > 1){
-          val.共享仓库列表.get(1).remove()
-        }
-        if(var.maxSharedCount > 1){
-          for(序号 in range(1, var.maxSharedCount - 1)){
-            if(val.共享仓库列表['项'] != none) {
-              项 = val.共享仓库列表['项'].copy('共享仓库项_' + var.刷新轮次.round() + '_' + 序号.round())
-              项.entryKey = 序号.round()
-            }
+        var.共享仓库列表网格数据 = []
+        if((var.maxSharedCount - 1) >= 0){
+          for(网格序号 in range(0, var.maxSharedCount - 1)){
+            var.共享仓库列表网格数据.add(网格序号.round())
           }
         }
       }
       // ── 分类列表：仅在数量变化时重建 ──
       if(var.maxCategoryCount != oldMaxCategoryCount){
         var.刷新轮次 = (var.刷新轮次 + 1).round()
-        while(val.分类列表.childrenCount() > 1){
-          val.分类列表.get(1).remove()
-        }
-        if(var.maxCategoryCount > 1){
-          for(序号 in range(1, var.maxCategoryCount - 1)){
-            if(val.分类列表['项'] != none) {
-              项 = val.分类列表['项'].copy('分类项_' + var.刷新轮次.round() + '_' + 序号.round())
-              项.entryKey = 序号.round()
-            }
+        var.分类列表网格数据 = []
+        if((var.maxCategoryCount - 1) >= 0){
+          for(网格序号 in range(0, var.maxCategoryCount - 1)){
+            var.分类列表网格数据.add(网格序号.round())
           }
         }
       }
@@ -131,33 +116,16 @@ ui:
         }
       }
       // ── 仓库网格（Slot 控件）：仅在数量变化时重建 ──
-      if(var.pageSize != oldPageSize){
-        var.warehouseIcons = {}
-        var.warehouseIcons[0.round()] = val.warehouse_slot_0
-        var.刷新轮次 = (var.刷新轮次 + 1).round()
-        while(val.仓库网格.childrenCount() > 1){
-          val.仓库网格.get(1).remove()
-        }
-        if(var.pageSize > 1){
-          for(序号 in range(1, var.pageSize - 1)){
-            if(val.仓库网格['物品图标'] != none) {
-              slot = val.仓库网格['物品图标'].copy('仓库物品图标_' + var.刷新轮次.round() + '_' + 序号.round())
-              slot.entryKey = 序号.round()
-              var.warehouseIcons[序号.round()] = slot
-            }
+      if(var.warehouseRows == none || var.warehouseRows.size() != (var.pageSize)){
+        网格数据 = []
+        if((var.pageSize) > 0){
+          for(网格序号 in range(0, (var.pageSize) - 1)){
+            网格数据.add(网格序号.round())
           }
         }
+        var.warehouseRows = 网格数据
       }
-      // 对已存在的 Slot 控件重新调用 seticon（数据变了但 seticon 不会自动刷新）
-      // 注意：icon 为裸变量块级作用域，seticon 必须放在赋值所在的 if 块内
-      for(i in range(0, var.pageSize - 1)){
-        if(val.仓库网格 != none){
-          icon = var.warehouseIcons[i.round()]
-          if(icon != none){
-            icon.seticon()
-          }
-        }
-      }
+      var.warehouseIconsDirty = true
       // update 包到达，重置防抖标志，恢复按钮可点击
       var.actionBusy = false
     ui_notice: |-
@@ -195,6 +163,7 @@ ui:
       var.level = 1
       var.packetId = 'AXS_WAREHOUSE'
       var.page = 1
+      var.pageTotal = 1
       var.pageText = '1/1'
       var.personalWarehouseTexts = {}
       var.selectedBackpackSlot = -1
@@ -295,6 +264,22 @@ ui:
           var.noticeDetail = ''
         }
       }
+tasks:
+  refresh-repeat-grid-icons:
+    type: loop
+    time: 100
+    cycle: 100
+    run: |-
+      if(var.warehouseIconsDirty == true && var.warehouseRows != none && val.仓库网格 != none && val.仓库网格.childrenCount() == var.warehouseRows.size()){
+        var.warehouseIconsDirty = false
+        if(var.warehouseRows.size() > 0){
+          for(i in range(0, var.warehouseRows.size() - 1)){
+            icon = val.仓库网格.get(i.round())
+            if(icon != none){ icon.seticon() }
+          }
+        }
+      }
+
 controls:
   全屏玻璃底:
     type: Texture
@@ -404,11 +389,17 @@ controls:
               y: 18
               width: 272
               height: 58
+            action:
+              clickLeft: |-
+                if(var.previewMode){
+                  Packet.send(var.packetId, 'open')
+                }
             children:
               仓库底:
                 type: Texture
                 attribute:
                   point: ~stretch_all
+                  through: true
                   normal: ~180,190,200,255
                   shape: ~round_rect
                   radius: 10
@@ -423,6 +414,7 @@ controls:
                   x: 8
                   width: 4
                   height: 28
+                  through: true
                   normal: ~180,190,200,255
                   shape: ~round_rect
                   radius: 2
@@ -431,8 +423,9 @@ controls:
                 attribute:
                   point: ~middle_left
                   x: 28
-                  texts: ~&0仓库
+                  texts: 'var.previewMode ? ''&0返回我的仓库'' : ''&0仓库'''
                   fontSize: 36
+                  through: true
           导航银行:
             type: Canvas
             attribute:
@@ -441,6 +434,7 @@ controls:
               y: 84
               width: 272
               height: 58
+              visible: '!var.previewMode'
             action:
               clickLeft: Packet.send(var.packetId, 'bank')
             children:
@@ -473,6 +467,7 @@ controls:
               y: 150
               width: 272
               height: 58
+              visible: '!var.previewMode'
             action:
               clickLeft: Packet.send(var.packetId, 'manage')
             children:
@@ -669,16 +664,20 @@ controls:
                 }
             children:
               分类列表:
-                type: VStack
+                type: RepeatGrid
                 val: 分类列表
                 attribute:
+                  items: "var.分类列表网格数据"
+                  flow: ~row
+                  column: 1
+                  spaceBetweenY: 8
+                  maxSize: "var.分类列表网格数据 == none ? 0 : var.分类列表网格数据.size()"
                   width: 258
-                  spaceBetween: 8
                 children:
                   项:
                     type: Canvas
                     attribute:
-                      entryKey: 0.round()
+                      entryKey: self.item
                       entry: var.categories[self.entryKey]
                       visible: self.entry != none
                       width: 258
@@ -741,7 +740,7 @@ controls:
               point: ~top_left
               x: var.gridBgX
               y: 15
-              texts: ~&f仓库物品
+              texts: 'var.previewMode ? ''&f仓库预览（只读）'' : ''&f仓库物品'''
               fontSize: 36
           仓库网格底:
             type: Texture
@@ -760,9 +759,12 @@ controls:
                 width: 3
                 color: ~100,110,120,220
           仓库网格:
-            type: HGrid
+            type: RepeatGrid
             val: 仓库网格
             attribute:
+              items: "var.warehouseRows"
+              flow: ~row
+              maxSize: "var.warehouseRows == none ? 0 : var.warehouseRows.size()"
               point: ~top_left
               x: var.gridBgX + 16
               y: 67
@@ -774,9 +776,8 @@ controls:
             children:
               物品图标:
                 type: Slot
-                val: warehouse_slot_0
                 attribute:
-                  entryKey: 0.round()
+                  entryKey: self.item
                   entry: var.slots[self.entryKey]
                   visible: self.entry != none
                   slotType: ~Icon
@@ -823,7 +824,7 @@ controls:
               模式切换:
                 type: Canvas
                 attribute:
-                  visible: var.ownerType == 'shared'
+                  visible: var.ownerType == 'shared' && !var.previewMode
                   width: var.toolW
                   height: 48
                   enable: '!var.actionBusy && var.actionToken != '''''
@@ -913,6 +914,7 @@ controls:
                 attribute:
                   width: var.toolW
                   height: 48
+                  visible: '!var.previewMode'
                 action:
                   clickLeft: Packet.send(var.packetId, 'showcase')
                 children:
@@ -940,8 +942,9 @@ controls:
                 attribute:
                   width: var.toolW
                   height: 48
+                  enable: var.page > 1
                 action:
-                  clickLeft: Packet.send(var.packetId, 'page', var.page - 1)
+                  clickLeft: Packet.send(var.packetId, 'page', 'prev')
                 children:
                   上页底:
                     type: Texture
@@ -992,8 +995,9 @@ controls:
                 attribute:
                   width: var.toolW
                   height: 48
+                  enable: var.page < var.pageTotal
                 action:
-                  clickLeft: Packet.send(var.packetId, 'page', var.page + 1)
+                  clickLeft: Packet.send(var.packetId, 'page', 'next')
                 children:
                   下页底:
                     type: Texture
@@ -1021,6 +1025,7 @@ controls:
               x: var.gridAreaW
               y: 52 + var.whGridH + 94
               width: var.toolW
+              visible: '!var.previewMode'
               spaceBetween: 5
             children:
               数量输入:
@@ -1639,16 +1644,20 @@ controls:
                   spaceBetween: 8
                 children:
                   个人仓库列表:
-                    type: VStack
+                    type: RepeatGrid
                     val: 个人仓库列表
                     attribute:
+                      items: "var.个人仓库列表网格数据"
+                      flow: ~row
+                      column: 1
+                      spaceBetweenY: 8
+                      maxSize: "var.个人仓库列表网格数据 == none ? 0 : var.个人仓库列表网格数据.size()"
                       width: 258
-                      spaceBetween: 8
                     children:
                       项:
                         type: Canvas
                         attribute:
-                          entryKey: 0.round()
+                          entryKey: self.item
                           entry: var.personalWarehouses[self.entryKey]
                           visible: self.entry != none
                           width: 258
@@ -1678,16 +1687,20 @@ controls:
                               fontSize: 36
                               through: true
                   共享仓库列表:
-                    type: VStack
+                    type: RepeatGrid
                     val: 共享仓库列表
                     attribute:
+                      items: "var.共享仓库列表网格数据"
+                      flow: ~row
+                      column: 1
+                      spaceBetweenY: 8
+                      maxSize: "var.共享仓库列表网格数据 == none ? 0 : var.共享仓库列表网格数据.size()"
                       width: 258
-                      spaceBetween: 8
                     children:
                       项:
                         type: Canvas
                         attribute:
-                          entryKey: 0.round()
+                          entryKey: self.item
                           entry: var.sharedWarehouses[self.entryKey]
                           visible: self.entry != none
                           width: 258

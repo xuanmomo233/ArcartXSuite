@@ -2,6 +2,7 @@ package xuanmo.arcartxsuite.warehouse.crossserver;
 
 import java.util.UUID;
 import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerAPI;
@@ -10,7 +11,7 @@ import xuanmo.arcartxsuite.api.crossserver.CrossServerChannelConfig;
 import java.util.logging.Logger;
 
 /**
- * 共享仓库编辑锁跨服广播：获取/释放时通知其他子服更新锁视图。
+ * 跨服同步共享仓库编辑锁和公开预览撤回。
  */
 public final class WarehouseCrossServerLockService {
 
@@ -20,6 +21,7 @@ public final class WarehouseCrossServerLockService {
     private final CrossServerChannelConfig channelConfig;
     private final BiConsumer<String, SharedEditLock> remoteLockHandler;
     private final BiConsumer<WarehouseCrossServerPayloadCodec.UnlockPayload, Void> remoteUnlockHandler;
+    private final Consumer<WarehouseCrossServerPayloadCodec.ShowcaseRevocation> remoteShowcaseHandler;
 
     private CrossServerChannel channel;
     private volatile boolean active;
@@ -30,7 +32,8 @@ public final class WarehouseCrossServerLockService {
         CrossServerAPI crossServer,
         CrossServerChannelConfig channelConfig,
         BiConsumer<String, SharedEditLock> remoteLockHandler,
-        BiConsumer<WarehouseCrossServerPayloadCodec.UnlockPayload, Void> remoteUnlockHandler
+        BiConsumer<WarehouseCrossServerPayloadCodec.UnlockPayload, Void> remoteUnlockHandler,
+        Consumer<WarehouseCrossServerPayloadCodec.ShowcaseRevocation> remoteShowcaseHandler
     ) {
         this.plugin = plugin;
         this.logger = logger;
@@ -38,6 +41,7 @@ public final class WarehouseCrossServerLockService {
         this.channelConfig = channelConfig == null ? CrossServerChannelConfig.disabled() : channelConfig;
         this.remoteLockHandler = remoteLockHandler;
         this.remoteUnlockHandler = remoteUnlockHandler;
+        this.remoteShowcaseHandler = remoteShowcaseHandler;
     }
 
     public void start() {
@@ -51,7 +55,7 @@ public final class WarehouseCrossServerLockService {
             delivery -> handlePayload(delivery.payload())
         );
         if (channel.isActive()) {
-            this.logger.info("跨服共享仓库编辑锁已启用");
+            this.logger.info("仓库跨服通道已启用");
         }
     }
 
@@ -85,6 +89,10 @@ public final class WarehouseCrossServerLockService {
         channel.publish(WarehouseCrossServerPayloadCodec.encodeUnlock(sharedId, playerUuid, nodeId()));
     }
 
+    public void publishShowcaseRevocation(WarehouseCrossServerPayloadCodec.ShowcaseRevocation revoke) {
+        if (isActive()) channel.publish(WarehouseCrossServerPayloadCodec.encodeShowcaseRevoked(revoke));
+    }
+
     private void handlePayload(@Nullable String payload) {
         if (payload == null || payload.isBlank()) {
             return;
@@ -92,15 +100,14 @@ public final class WarehouseCrossServerLockService {
         try {
             WarehouseCrossServerPayloadCodec.DecodedPayload decoded = WarehouseCrossServerPayloadCodec.decode(payload);
             Runnable apply = () -> {
-            if (!active) return;
-            if (WarehouseCrossServerPayloadCodec.TYPE_LOCK.equals(decoded.type())) {
+                if (!active) return;
                 if (decoded.lock() != null && decoded.sharedId() != null) {
                     remoteLockHandler.accept(decoded.sharedId(), decoded.lock());
+                } else if (decoded.unlock() != null) {
+                    remoteUnlockHandler.accept(decoded.unlock(), null);
+                } else if (decoded.showcaseRevocation() != null) {
+                    remoteShowcaseHandler.accept(decoded.showcaseRevocation());
                 }
-            } else if (WarehouseCrossServerPayloadCodec.TYPE_UNLOCK.equals(decoded.type())
-                && decoded.unlock() != null) {
-                remoteUnlockHandler.accept(decoded.unlock(), null);
-            }
             };
             if (org.bukkit.Bukkit.isPrimaryThread()) apply.run();
             else org.bukkit.Bukkit.getScheduler().runTask(plugin, apply);

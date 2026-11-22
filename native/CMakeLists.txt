@@ -63,6 +63,8 @@ endif()
 
 # MinGW 静态链接运行时库
 if(MINGW)
+    # MinGW 的静态 OpenSSL 使用 BCryptGenRandom。
+    target_link_libraries(axs-native PRIVATE bcrypt)
     target_compile_options(axs-native PRIVATE -static-libgcc -static-libstdc++)
     target_link_options(axs-native PRIVATE -static-libgcc -static-libstdc++)
     execute_process(
@@ -91,6 +93,10 @@ endif()
 option(AXS_PRODUCTION "Enable fail-closed native production checks" OFF)
 if(AXS_PRODUCTION)
     target_compile_definitions(axs-native PRIVATE AXS_PRODUCTION)
+endif()
+option(AXS_REQUIRE_HOST_SEAL "Require a signed host release inventory at native initialization" OFF)
+if(AXS_REQUIRE_HOST_SEAL)
+    target_compile_definitions(axs-native PRIVATE AXS_REQUIRE_HOST_SEAL)
 endif()
 # ─── OLLVM 混淆（可选，极高保护级别） ───────────────────────────
 option(ENABLE_OLLVM "Enable OLLVM obfuscation" OFF)

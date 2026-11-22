@@ -138,7 +138,9 @@ public final class DungeonExternalInstaller {
         if (links == null) return;
         try {
             var cap = links.moduleAdmin();
-            if (cap != null) cap.reloadModule(moduleId);
+            if (cap != null) cap.reloadModule(moduleId).whenComplete((success, failure) -> {
+                if (failure != null || !Boolean.TRUE.equals(success)) logger.warning("[abyss] 重载模块 " + moduleId + " 失败");
+            });
         } catch (Throwable t) {
             logger.warning("[abyss] 重载模块 " + moduleId + " 失败: " + t.getMessage());
         }

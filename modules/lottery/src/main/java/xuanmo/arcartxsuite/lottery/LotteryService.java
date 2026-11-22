@@ -1,25 +1,34 @@
 package xuanmo.arcartxsuite.lottery;
 
 import java.math.BigDecimal;
+import java.io.IOException;
+import java.nio.file.Path;
+import java.sql.SQLException;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.function.Supplier;
 import java.util.logging.Logger;
+import org.bukkit.Bukkit;
+import org.bukkit.NamespacedKey;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.capability.MailDispatchable;
+import xuanmo.arcartxsuite.api.auth.AuthAccess;
+import xuanmo.arcartxsuite.api.auth.AuthSnapshot;
 import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI;
+import xuanmo.arcartxsuite.api.inventory.PlayerDataReceipt;
 import xuanmo.arcartxsuite.api.item.ItemMatcher;
 import xuanmo.arcartxsuite.api.item.ItemMatcherAPI;
-import xuanmo.arcartxsuite.api.item.ItemRewardDispatcher;
 import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
 import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.api.util.ItemSerializer;
@@ -46,9 +55,11 @@ import xuanmo.arcartxsuite.lottery.storage.LotteryRepository;
  * <p>
  * 统筹 GACHA 抽卡与 CASE 开箱的完整流程：费用扣除、引擎抽奖、
  * 状态持久化、日志记录、奖品发放与待领取入队。
- * 通过每玩家 {@link ReentrantLock} 保证并发安全。
+ * 每个玩家同时只接受一项业务操作，跨节点由持久预留串行。
  */
 public class LotteryService {
+
+    private static final NamespacedKey COST_RECEIPT = new NamespacedKey("arcartxsuite", "lottery_item_cost");
 
     private final JavaPlugin plugin;
     private final LotteryModuleConfiguration configuration;
@@ -57,14 +68,16 @@ public class LotteryService {
     private final ItemSourceRegistry itemSourceRegistry;
     private final ItemMatcherAPI itemMatcherSupport;
     private final Supplier<MailDispatchable> mailSupplier;
-    private final ItemRewardDispatcher itemRewardDispatcher;
     private final Logger logger;
     private final GachaEngine gachaEngine;
     private final CaseOpeningEngine caseEngine;
     private final PrizeDistributor distributor;
+    private final LotteryPlaceholderReads placeholderReads;
+    private final LotteryWork work;
+    private final LotteryClaimTransfer claimTransfer;
+    private final java.util.Set<UUID> activePlayers = ConcurrentHashMap.newKeySet();
 
     private volatile MessageProvider messageProvider;
-    private final ConcurrentHashMap<UUID, ReentrantLock> playerLocks = new ConcurrentHashMap<>();
 
     /**
      * 构造 Lottery 服务。
@@ -75,7 +88,6 @@ public class LotteryService {
      * @param currencyManager   货币桥接 API
      * @param itemSourceRegistry 物品来源注册表
      * @param mailSupplier      邮件能力延迟供应器
-     * @param itemRewardDispatcher 统一物品奖励发放器
      * @param logger            日志记录器
      */
     public LotteryService(JavaPlugin plugin,
@@ -85,8 +97,8 @@ public class LotteryService {
                           ItemSourceRegistry itemSourceRegistry,
                            ItemMatcherAPI itemMatcherSupport,
                            Supplier<MailDispatchable> mailSupplier,
-                          ItemRewardDispatcher itemRewardDispatcher,
-                          Logger logger) {
+                          Logger logger,
+                          @Nullable LotteryClaimTransfer claimTransfer) {
         this.plugin = plugin;
         this.configuration = configuration;
         this.repository = repository;
@@ -94,11 +106,15 @@ public class LotteryService {
         this.itemSourceRegistry = itemSourceRegistry;
         this.itemMatcherSupport = itemMatcherSupport;
         this.mailSupplier = mailSupplier;
-        this.itemRewardDispatcher = itemRewardDispatcher;
         this.logger = logger;
-        this.gachaEngine = new GachaEngine();
-        this.caseEngine = new CaseOpeningEngine();
-        this.distributor = new PrizeDistributor(plugin, itemSourceRegistry, mailSupplier, itemRewardDispatcher, logger);
+        this.claimTransfer = claimTransfer;
+        this.gachaEngine = new GachaEngine(configuration.pools().values().stream()
+            .map(PoolDefinition::gacha).filter(java.util.Objects::nonNull).toList());
+        this.caseEngine = new CaseOpeningEngine(configuration.pools().values().stream()
+            .map(PoolDefinition::caseConfig).filter(java.util.Objects::nonNull).toList());
+        this.distributor = new PrizeDistributor(plugin, itemSourceRegistry, mailSupplier, logger);
+        this.placeholderReads = new LotteryPlaceholderReads(repository, logger);
+        this.work = new LotteryWork(plugin);
     }
 
     /**
@@ -130,7 +146,75 @@ public class LotteryService {
      * 关闭服务，释放资源。
      */
     public void shutdown() {
+        work.close();
+        placeholderReads.close();
         logger.info("服务已关闭");
+    }
+
+    CompletionStage<Void> stopped() {
+        return CompletableFuture.allOf(work.stopped().toCompletableFuture(), placeholderReads.stopped().toCompletableFuture());
+    }
+
+    public void reply(Runnable action) { work.reply(action); }
+
+    private final class Actor {
+        final Player player;
+        final UUID id;
+        final AuthSnapshot connection;
+
+        Actor(Player player) {
+            this.player = player;
+            this.id = player.getUniqueId();
+            this.connection = AuthAccess.snapshot(id);
+        }
+
+        boolean current() {
+            AuthSnapshot now = AuthAccess.snapshot(id);
+            return player.isOnline() && Bukkit.getPlayer(id) == player && connection.admitted() && now.admitted()
+                && now.generation() == connection.generation()
+                && java.util.Objects.equals(now.connectionId(), connection.connectionId());
+        }
+
+        <T> T effect(Supplier<T> action) {
+            return work.main(() -> {
+                if (!current()) throw new LotteryWork.BeforeEffect("Lottery player session changed");
+                return action.get();
+            });
+        }
+
+        void message(String key, Object... args) {
+            if (messageProvider == null) return;
+            work.reply(() -> { if (current()) sendMessage(player, key, args); });
+        }
+    }
+
+    @FunctionalInterface
+    private interface PlayerOperation<T> { T execute(Actor actor) throws Exception; }
+
+    private <T> CompletionStage<T> submitPlayer(Player player, T fallback, PlayerOperation<T> operation) {
+        if (!Bukkit.isPrimaryThread()) return CompletableFuture.failedFuture(
+            new IllegalStateException("Submit Lottery player operations on the server thread"));
+        var actor = new Actor(player);
+        if (!actor.current()) return CompletableFuture.completedFuture(fallback);
+        if (!activePlayers.add(actor.id)) {
+            sendMessage(player, "common.lock-busy");
+            return CompletableFuture.completedFuture(fallback);
+        }
+        return work.submit(() -> operation.execute(actor), false)
+            .whenComplete((value, failure) -> activePlayers.remove(actor.id)).copy();
+    }
+
+    Long placeholderPoint(UUID player, String point) { return placeholderReads.point(player, point); }
+
+    PlayerGachaState placeholderPity(UUID player, String poolId) {
+        var pool = getPool(poolId);
+        return pool == null || pool.type() != PoolType.GACHA ? null
+            : placeholderReads.pity(player, resolveSharedPoolId(poolId));
+    }
+
+    PlayerCaseState placeholderOpened(UUID player, String poolId) {
+        var pool = getPool(poolId);
+        return pool == null || pool.type() != PoolType.CASE ? null : placeholderReads.opened(player, poolId);
     }
 
     // ─── 查询 ─────────────────────────────────────────────
@@ -176,7 +260,11 @@ public class LotteryService {
      */
     public PlayerGachaState getGachaState(@NotNull Player player, @NotNull String poolId) {
         String effectivePoolId = resolveSharedPoolId(poolId);
-        return repository.loadGachaState(player.getUniqueId(), effectivePoolId);
+        try {
+            return repository.loadGachaState(player.getUniqueId(), effectivePoolId);
+        } catch (SQLException failure) {
+            throw new IllegalStateException("无法读取抽卡保底", failure);
+        }
     }
 
     /**
@@ -228,275 +316,352 @@ public class LotteryService {
      * @throws IllegalArgumentException 当奖池不存在或类型错误时抛出
      */
     @NotNull
-    public GachaResult pullGacha(@NotNull Player player, @NotNull String poolId, int count) {
-        ReentrantLock lock = playerLocks.computeIfAbsent(player.getUniqueId(), ignored -> new ReentrantLock());
-        if (!lock.tryLock()) {
-            sendMessage(player, "common.lock-busy");
-            return new GachaResult(List.of(), PlayerGachaState.empty(player.getUniqueId(), poolId), false, false);
-        }
-        try {
-            return pullGachaLocked(player, poolId, count);
-        } finally {
-            unlock(player, lock);
-        }
+    public CompletionStage<GachaResult> pullGacha(@NotNull Player player, @NotNull String poolId, int count) {
+        if (!Bukkit.isPrimaryThread()) return CompletableFuture.failedFuture(new IllegalStateException("Lottery draw requires the server thread"));
+        var empty = new GachaResult(List.of(), PlayerGachaState.empty(player.getUniqueId(), poolId), false, false);
+        return submitPlayer(player, empty, actor -> pullGachaLocked(actor, poolId, count));
     }
 
-    private GachaResult pullGachaLocked(@NotNull Player player, @NotNull String poolId, int count) {
+    private GachaResult pullGachaLocked(Actor actor, String poolId, int count) {
         if (count != 1 && count != 10) {
             throw new IllegalArgumentException("Lottery pull count must be 1 or 10");
         }
         PoolDefinition poolDef = getPool(poolId);
-        if (poolDef == null || poolDef.type() != PoolType.GACHA || poolDef.gacha() == null) {
+        if (poolDef == null || !poolDef.enabled() || poolDef.type() != PoolType.GACHA || poolDef.gacha() == null) {
             throw new IllegalArgumentException("奖池不存在或类型错误: " + poolId);
         }
 
-        if (!deductCost(player, poolDef.cost(), count)) {
-            return new GachaResult(List.of(), PlayerGachaState.empty(player.getUniqueId(), poolId), false, false);
-        }
-
+        UUID playerId = actor.id;
+        UUID operation = UUID.randomUUID();
         String effectivePoolId = resolveSharedPoolId(poolId);
-        PlayerGachaState state = repository.loadGachaState(player.getUniqueId(), effectivePoolId);
-        GachaResult result = gachaEngine.pull(poolDef.gacha(), state, count);
+        GachaResult empty = new GachaResult(List.of(), PlayerGachaState.empty(playerId, effectivePoolId), false, false);
+        try {
+            var entries = count == 10 ? poolDef.cost().ten() : poolDef.cost().single();
+            if (count == 10 && entries.isEmpty()) {
+                actor.message("common.ten-unavailable");
+                return empty;
+            }
+            String costs = entries.stream()
+                .map(LotteryService::describeCost)
+                .collect(java.util.stream.Collectors.joining(", "));
+            if (!repository.beginGachaOperation(playerId, operation, poolId,
+                "抽数=" + count + " 保底组=" + effectivePoolId + " 费用=" + costs)) {
+                var pending = repository.findGachaOperation(playerId);
+                if (pending != null) actor.message("common.gacha-review", pending.id());
+                else actor.message("common.lock-busy");
+                return empty;
+            }
 
-        // 保存 GachaEngine 返回的最终状态
-        repository.saveGachaState(result.finalState());
+            GachaResult result;
+            Map<String, Long> pointCosts = new LinkedHashMap<>();
+            List<CostConfig.CostEntry> externalCosts = new ArrayList<>();
+            for (var entry : entries) {
+                if (entry.type() == CostConfig.CostMode.POINT) pointCosts.merge(entry.id(), (long) entry.amount(), Long::sum);
+                else externalCosts.add(entry);
+            }
+            try {
+                var state = repository.loadGachaState(playerId, effectivePoolId);
+                for (var entry : pointCosts.entrySet()) {
+                    if (repository.getPoint(playerId, entry.getKey()) < entry.getValue()) {
+                        repository.finishGachaOperation(playerId, operation, "DEBITING");
+                        actor.message("common.insufficient-point", entry.getKey());
+                        return empty;
+                    }
+                }
+                result = gachaEngine.pull(poolDef.gacha(), state, count);
+                if (result.items().size() != count || result.items().stream().anyMatch(java.util.Objects::isNull)) {
+                    throw new IllegalStateException("奖池没有生成完整的抽卡结果");
+                }
+            } catch (SQLException | RuntimeException failure) {
+                if (!repository.finishGachaOperation(playerId, operation, "DEBITING")) throw failure;
+                logger.log(java.util.logging.Level.WARNING, "抽卡准备失败: " + operation, failure);
+                actor.message("common.error");
+                return empty;
+            }
+            CostTransaction cost = debitCosts(actor, externalCosts, operation);
+            if (!cost.success()) {
+                if (cost.refundComplete()) repository.finishGachaOperation(playerId, operation, "DEBITING");
+                else {
+                    repository.changeGachaOperation(playerId, operation, "DEBITING", "DEBIT_REVIEW");
+                    actor.message("common.gacha-review", operation);
+                }
+                return empty;
+            }
 
-        // 日志
-        String itemsJson = serializeItems(result.items());
-        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () ->
-            repository.logGachaPull(player.getUniqueId(), poolId, count, itemsJson,
-                result.finalState().pity5star(), result.guaranteed()));
+            if (!commitOrRefund(actor, operation, cost,
+                () -> repository.commitGachaPull(operation, result.finalState(), poolId, count,
+                    serializeItems(result.items()), result.guaranteed(), result.items(), pointCosts,
+                    pointAwards(poolDef, result.items())))) return empty;
+            placeholderReads.invalidatePity(playerId, effectivePoolId);
+            placeholderReads.invalidatePoints(playerId);
+            if (!deliverOperationPrizes(actor, poolId, operation)) return empty;
+            return result;
+        } catch (SQLException | RuntimeException failure) {
+            logger.log(java.util.logging.Level.WARNING, "抽卡操作异常: player=" + playerId + " operation=" + operation, failure);
+            actor.message("common.gacha-review", operation);
+            return empty;
+        }
+    }
 
-        // 发放奖品
-        for (PoolItem item : result.items()) {
-            if (item != null) {
-                distributeOrEnqueue(player, poolId, item);
+    @FunctionalInterface
+    private interface CommitOperation {
+        void commit() throws SQLException;
+    }
+
+    private boolean commitOrRefund(Actor actor, UUID operation, CostTransaction cost, CommitOperation writer) throws SQLException {
+        UUID playerId = actor.id;
+        try {
+            writer.commit();
+            return true;
+        } catch (SQLException | RuntimeException failure) {
+            // 取得退款权才代表奖池结果和积分未提交。
+            if (repository.changeGachaOperation(playerId, operation, "DEBITING", "REFUNDING")) {
+                if (!rollbackCost(actor, cost.deducted(), cost.snapshots(), operation, "REFUNDING")) {
+                    repository.changeGachaOperation(playerId, operation, "REFUNDING", "REFUND_REVIEW");
+                    throw failure;
+                }
+                if (!repository.finishGachaOperation(playerId, operation, "REFUNDING")) throw failure;
+                logger.log(java.util.logging.Level.WARNING, "奖池保存失败，已退款: " + operation, failure);
+                actor.message("common.error");
+                return false;
+            }
+            var receipt = repository.findGachaOperation(playerId);
+            if (receipt == null || !receipt.id().equals(operation) || !"COMMITTED".equals(receipt.status())) {
+                throw failure;
+            }
+            return true;
+        }
+    }
+
+    private boolean deliverOperationPrizes(Actor actor, String poolId, UUID operation) throws SQLException {
+        UUID playerId = actor.id;
+        var plan = repository.loadCommittedPrizes(playerId, operation);
+        if (plan == null || plan.items().isEmpty() || plan.nextIndex() < 0 || plan.nextIndex() > plan.items().size()) {
+            actor.message("common.gacha-review", operation);
+            return false;
+        }
+        for (int index = plan.nextIndex(); index < plan.items().size(); index++) {
+            PoolItem item = plan.items().get(index);
+            String prize = (index + 1) + " " + describePrize(item);
+            if (!repository.beginPrize(playerId, operation, index, "开始发放 " + prize)) return false;
+            boolean confirmed;
+            try {
+                confirmed = item.delivery() == PoolItem.DeliveryType.DIRECT
+                    ? handoffDrawItem(actor, poolId, operation, index, item)
+                    : distributeOrEnqueue(actor, poolId, item);
+            } catch (LotteryWork.BeforeEffect cancelled) {
+                if (repository.changeGachaOperation(playerId, operation, "DELIVERING", "COMMITTED")) {
+                    gachaEvidence(playerId, operation, "COMMITTED", "发放前取消，待继续 " + prize);
+                    actor.message("common.gacha-prize-pending");
+                }
+                return false;
+            }
+            if (!confirmed) {
+                gachaEvidence(playerId, operation, "DELIVERING", "发放待核对 " + prize);
+                repository.changeGachaOperation(playerId, operation, "DELIVERING", "PRIZE_REVIEW");
+                actor.message("common.gacha-review", operation);
+                return false;
+            }
+            if (!repository.completePrize(playerId, operation, index, "确认发放或入队 " + prize)) {
+                actor.message("common.gacha-review", operation);
+                return false;
             }
         }
-        awardPoints(player, poolDef, result.items());
+        if (repository.finishGachaOperation(playerId, operation, "COMMITTED")) return true;
+        actor.message("common.gacha-review", operation);
+        return false;
+    }
 
-        return result;
+    private static String describePrize(PoolItem item) {
+        return item.key() + " " + item.delivery() + " " + item.source() + ":" + item.id() + " ×" + item.amount()
+            + (item.nbt() == null ? "" : " NBT=" + item.nbt())
+            + " 邮件=" + item.mailPresets() + " 命令=" + item.commands() + " 附加命令=" + item.extraCommands();
+    }
+
+    private static String describeCost(CostConfig.CostEntry entry) {
+        return entry.type() + ":" + entry.id() + ":" + entry.amount()
+            + (entry.matcher() == null ? "" : ":" + entry.matcher());
+    }
+
+    private void gachaEvidence(UUID playerId, UUID operation, String phase, String details) {
+        if (operation == null) return;
+        try {
+            if (!repository.appendGachaEvidence(playerId, operation, phase, details)) {
+                throw new IllegalStateException("抽卡凭证状态已变更: " + operation);
+            }
+        } catch (SQLException failure) {
+            throw new IllegalStateException("无法保存抽卡操作凭证: " + operation, failure);
+        }
     }
 
     // ─── Case 开箱 ────────────────────────────────────────
 
-    /**
-     * 执行一次 CASE 开箱。
-     * <p>
-     * 通过玩家锁保证并发安全，扣除费用后调用引擎开箱并发放奖品。
-     *
-     * @param player 玩家
-     * @param poolId 奖池 ID
-     * @return 开箱结果，锁繁忙或费用不足时返回空结果
-     * @throws IllegalArgumentException 当奖池不存在或类型错误时抛出
-     */
+    /** Open at most ten cases per operation. */
     @NotNull
-    public CaseResult openCase(@NotNull Player player, @NotNull String poolId) {
-        ReentrantLock lock = playerLocks.computeIfAbsent(player.getUniqueId(), ignored -> new ReentrantLock());
-        if (!lock.tryLock()) {
-            sendMessage(player, "common.lock-busy");
-            return new CaseResult(null, "", -1);
-        }
-        try {
-            return openCaseLocked(player, poolId);
-        } finally {
-            unlock(player, lock);
-        }
+    public CompletionStage<List<CaseResult>> openCaseBatch(@NotNull Player player, @NotNull String poolId, int count) {
+        if (count < 1 || count > 10) return CompletableFuture.completedFuture(List.of());
+        return submitPlayer(player, List.of(), actor -> openCaseBatchLocked(actor, poolId, count));
     }
 
-    /**
-     * 批量 CASE 开箱（十连抽）。
-     * <p>
-     * 一次性扣除十连费用，执行指定次数开箱并逐个发放奖品。
-     *
-     * @param player 玩家
-     * @param poolId 奖池 ID
-     * @param count  开箱次数
-     * @return 开箱结果列表，锁繁忙或费用不足时返回空列表
-     * @throws IllegalArgumentException 当奖池不存在或类型错误时抛出
-     */
-    @NotNull
-    public List<CaseResult> openCaseBatch(@NotNull Player player, @NotNull String poolId, int count) {
-        ReentrantLock lock = playerLocks.computeIfAbsent(player.getUniqueId(), ignored -> new ReentrantLock());
-        if (!lock.tryLock()) {
-            sendMessage(player, "common.lock-busy");
-            return List.of();
-        }
-        try {
-            return openCaseBatchLocked(player, poolId, count);
-        } finally {
-            unlock(player, lock);
-        }
-    }
-
-    private CaseResult openCaseLocked(@NotNull Player player, @NotNull String poolId) {
+    private List<CaseResult> openCaseBatchLocked(Actor actor, String poolId, int count) {
         PoolDefinition poolDef = getPool(poolId);
-        if (poolDef == null || poolDef.type() != PoolType.CASE || poolDef.caseConfig() == null) {
+        if (poolDef == null || !poolDef.enabled() || poolDef.type() != PoolType.CASE || poolDef.caseConfig() == null) {
             throw new IllegalArgumentException("奖池不存在或类型错误: " + poolId);
         }
 
-        CostConfig effectiveCost = buildEffectiveCaseCost(poolDef);
-        if (!deductCost(player, effectiveCost, 1)) {
-            return new CaseResult(null, "", -1);
-        }
-
-        CaseResult result = caseEngine.openCase(poolDef.caseConfig());
-
-        // 更新统计
-        PlayerCaseState state = repository.loadCaseState(player.getUniqueId(), poolId);
-        PlayerCaseState newState = new PlayerCaseState(
-            state.playerUuid(), state.poolId(), state.openCount() + 1, System.currentTimeMillis());
-        repository.saveCaseState(newState);
-
-        // 日志
-        if (result != null && result.item() != null) {
-            plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () ->
-                repository.logCaseOpen(player.getUniqueId(), poolId, result.item().key(), result.rarity()));
-        }
-
-        // 发放奖品
-        if (result != null && result.item() != null) {
-            distributeOrEnqueue(player, poolId, result.item());
-        }
-        if (result != null && result.item() != null) awardPoints(player, poolDef, List.of(result.item()));
-
-        return result;
-    }
-
-    private List<CaseResult> openCaseBatchLocked(@NotNull Player player, @NotNull String poolId, int count) {
-        PoolDefinition poolDef = getPool(poolId);
-        if (poolDef == null || poolDef.type() != PoolType.CASE || poolDef.caseConfig() == null) {
-            throw new IllegalArgumentException("奖池不存在或类型错误: " + poolId);
-        }
-
-        CostConfig effectiveCost = buildEffectiveCaseCost(poolDef);
-        if (!deductCost(player, effectiveCost, count)) {
+        if (count <= 0) return List.of();
+        List<CostConfig.CostEntry> entries = costEntries(actor, buildEffectiveCaseCost(poolDef), count);
+        if (entries == null) return List.of();
+        List<CaseResult> results = caseEngine.openCaseBatch(poolDef.caseConfig(), count);
+        if (results.size() != count || results.stream().anyMatch(result -> result == null || result.item() == null)) {
+            actor.message("common.error");
             return List.of();
         }
-
-        List<CaseResult> results = new ArrayList<>();
-        for (int i = 0; i < count; i++) {
-            CaseResult result = caseEngine.openCase(poolDef.caseConfig());
-            results.add(result);
-            if (result != null && result.item() != null) {
-                distributeOrEnqueue(player, poolId, result.item());
+        List<PoolItem> items = results.stream().map(CaseResult::item).toList();
+        Map<String, Long> pointCosts = new LinkedHashMap<>();
+        List<CostConfig.CostEntry> externalCosts = new ArrayList<>();
+        for (var entry : entries) {
+            if (entry.type() == CostConfig.CostMode.POINT) pointCosts.merge(entry.id(), (long) entry.amount(), Long::sum);
+            else externalCosts.add(entry);
+        }
+        UUID playerId = actor.id;
+        for (var entry : pointCosts.entrySet()) {
+            if (repository.getPoint(playerId, entry.getKey()) < entry.getValue()) {
+                actor.message("common.insufficient-point", entry.getKey());
+                return List.of();
             }
         }
 
-        // 更新统计
-        PlayerCaseState state = repository.loadCaseState(player.getUniqueId(), poolId);
-        PlayerCaseState newState = new PlayerCaseState(
-            state.playerUuid(), state.poolId(), state.openCount() + count, System.currentTimeMillis());
-        repository.saveCaseState(newState);
-
-        // 日志（异步批量记录）
-        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
-            for (CaseResult result : results) {
-                if (result != null && result.item() != null) {
-                    repository.logCaseOpen(player.getUniqueId(), poolId, result.item().key(), result.rarity());
+        UUID operation = UUID.randomUUID();
+        try {
+            String details = "开箱数量=" + count + " 费用=" + entries.stream().map(LotteryService::describeCost).toList()
+                + " 预计奖品=" + items.stream().map(LotteryService::describePrize).toList();
+            if (!repository.beginGachaOperation(playerId, operation, poolId, details)) {
+                var pending = repository.findGachaOperation(playerId);
+                if (pending != null) actor.message("common.gacha-review", pending.id());
+                else actor.message("common.lock-busy");
+                return List.of();
+            }
+            CostTransaction cost = debitCosts(actor, externalCosts, operation);
+            if (!cost.success()) {
+                if (cost.refundComplete() && repository.finishGachaOperation(playerId, operation, "DEBITING")) {
+                    return List.of();
                 }
+                repository.changeGachaOperation(playerId, operation, "DEBITING", "DEBIT_REVIEW");
+                actor.message("common.gacha-review", operation);
+                return List.of();
             }
-        });
-        for (CaseResult result : results) {
-            if (result != null && result.item() != null) awardPoints(player, poolDef, List.of(result.item()));
+            Map<String, Long> rewards = new LinkedHashMap<>();
+            for (PoolItem item : items) {
+                pointAwards(poolDef, List.of(item)).forEach((point, amount) -> rewards.merge(point, amount, Long::sum));
+            }
+            if (!commitOrRefund(actor, operation, cost,
+                () -> repository.commitCaseOpen(playerId, operation, poolId, results, pointCosts, rewards))) return List.of();
+            placeholderReads.invalidateOpened(playerId, poolId);
+            placeholderReads.invalidatePoints(playerId);
+            return deliverOperationPrizes(actor, poolId, operation) ? results : List.of();
+        } catch (SQLException | RuntimeException failure) {
+            logger.log(java.util.logging.Level.WARNING, "开箱操作异常: player=" + playerId + " operation=" + operation, failure);
+            actor.message("common.gacha-review", operation);
+            return List.of();
         }
-
-        return results;
     }
 
-    private void distributeOrEnqueue(@NotNull Player player, @NotNull String poolId, @NotNull PoolItem item) {
-        PrizeDistributor.DistributionResult outcome = distributor.distribute(player, item);
+    private record PrizeEffect(PrizeDistributor.DistributionResult result, String itemData) {}
+
+    private boolean handoffDrawItem(Actor actor, String poolId, UUID operation, int index, PoolItem item) {
+        String metadata = item.key() + "|" + item.name() + "|DIRECT";
+        String data = actor.effect(() -> {
+            ItemStack stack = distributor.generateItem(item, actor.player);
+            return xuanmo.arcartxsuite.api.inventory.InventoryItems.empty(stack) ? "" : distributor.toItemJson(stack);
+        });
+        if (data.isBlank()) {
+            if (repository.enqueuePendingClaim(actor.id, poolId, metadata, null) > 0) {
+                actor.message("common.pending-claim-manual", item.name());
+            }
+            actor.message("common.distribution-failed", item.name());
+            return false;
+        }
+        if (claimTransfer == null || !claimTransfer.available()) {
+            if (repository.enqueuePendingClaim(actor.id, poolId, metadata, data) <= 0) return false;
+            actor.message("common.pending-claim-enqueued", item.name());
+        } else {
+            if (!claimTransfer.acceptDrawPrize(actor.id, operation, index, data)) return false;
+            actor.message("common.draw-item-queued", item.name());
+            work.reply(() -> {
+                if (actor.current()) claimTransfer.flush(actor.player);
+            });
+        }
+        try {
+            return item.extraCommands().isEmpty() || actor.effect(() -> distributor.executeExtraCommands(actor.player, item));
+        } catch (LotteryWork.BeforeEffect cancelled) {
+            // The item is already handed off; this prize cannot be retried as entirely unstarted.
+            return false;
+        }
+    }
+
+    private boolean distributeOrEnqueue(Actor actor, String poolId, PoolItem item) {
+        var effect = actor.effect(() -> {
+            var outcome = distributor.distribute(actor.player, item);
+            return new PrizeEffect(outcome, outcome.success() ? "" : distributor.toItemJson(outcome.item()));
+        });
+        var outcome = effect.result();
         if (outcome.success()) {
             if (outcome.mailSent()) {
-                sendMessage(player, "common.mail-sent", item.name());
-            } else if (outcome.pendingSaved()) {
-                sendMessage(player, "common.pending-saved", item.name());
+                actor.message("common.mail-sent", item.name());
             }
-            return;
+            return true;
         }
 
-        String itemData = distributor.toItemJson(outcome.item());
+        String itemData = effect.itemData();
         String metadata = item.key() + "|" + item.name() + "|" + item.delivery().name();
         if (!itemData.isBlank()) {
-            long claimId = repository.enqueuePendingClaim(player.getUniqueId(), poolId, metadata, itemData);
+            long claimId = repository.enqueuePendingClaim(actor.id, poolId, metadata, itemData);
             if (claimId > 0) {
-                sendMessage(player, "common.pending-claim-enqueued", item.name());
+                actor.message("common.pending-claim-enqueued", item.name());
             }
+            return claimId > 0;
         } else if (item.delivery() != PoolItem.DeliveryType.COMMAND) {
-            long claimId = repository.enqueuePendingClaim(player.getUniqueId(), poolId, metadata, null);
+            long claimId = repository.enqueuePendingClaim(actor.id, poolId, metadata, null);
             if (claimId > 0) {
-                sendMessage(player, "common.pending-claim-manual", item.name());
+                actor.message("common.pending-claim-manual", item.name());
             }
-            sendMessage(player, "common.distribution-failed", item.name());
+            actor.message("common.distribution-failed", item.name());
             logger.severe("奖励投递失败且无法序列化，需管理员处理: player="
-                + player.getName() + ", pool=" + poolId + ", item=" + item.key()
+                + actor.id + ", pool=" + poolId + ", item=" + item.key()
                 + ", reason=" + outcome.failureReason());
         } else {
-            sendMessage(player, "common.distribution-failed", item.name());
+            actor.message("common.distribution-failed", item.name());
             logger.severe("非物品奖励投递失败，需管理员处理: player="
-                + player.getName() + ", pool=" + poolId + ", item=" + item.key()
+                + actor.id + ", pool=" + poolId + ", item=" + item.key()
                 + ", reason=" + outcome.failureReason());
         }
+        return false;
     }
 
-    /**
-     * 领取全部待发放奖励。
-     *
-     * @param player 玩家
-     * @return 本次成功领取的奖励数量
-     */
-    public int claimPending(@NotNull Player player) {
-        int claimed = 0;
-        List<LotteryRepository.PendingClaim> pending = repository.getPendingClaims(player.getUniqueId());
-        for (LotteryRepository.PendingClaim claim : pending) {
-            if (claim.itemData() == null || claim.itemData().isBlank()) {
-                continue;
-            }
+    /** Acknowledge host ownership on the SQL worker, then ask the host to try delivery. */
+    public CompletionStage<Integer> claimPending(@NotNull Player player) {
+        return submitPlayer(player, 0, actor -> {
             try {
-                org.bukkit.inventory.ItemStack stack = ItemSerializer.deserialize(
-                    java.util.Base64.getDecoder().decode(claim.itemData()));
-                if (stack == null) continue;
-                ItemRewardDispatcher.DispatchOptions options = ItemRewardDispatcher.DispatchOptions.builder("lottery")
-                    .sourceDetail("pending-claim")
-                    .overflowMailSubject("抽奖待领取奖励溢出物品")
-                    .overflowMailBody("您的背包已满，待领取奖励物品通过邮件补发。")
-                    .overflowMailSenderName("抽奖")
-                    .build();
-                ItemRewardDispatcher.DispatchResult result = itemRewardDispatcher.dispatchItem(player, stack, options);
-                if (!result.success()) {
-                    break;
+                var operation = repository.findGachaOperation(actor.id);
+                if (operation != null && "COMMITTED".equals(operation.status())
+                        && deliverOperationPrizes(actor, operation.poolId(), operation.id())) {
+                    actor.message("common.gacha-prize-resumed");
                 }
-                repository.markPendingClaimClaimed(claim.id());
-                claimed++;
-            } catch (Exception e) {
-                logger.warning("待领取奖励解析失败: " + e.getMessage());
+                if (claimTransfer == null) return 0;
+                var result = claimTransfer.transfer(actor.id);
+                if (result.transferred() > 0) actor.message("common.pending-claim-transferred", result.transferred());
+                if (result.remaining() > 0) actor.message("common.pending-claim-remaining", result.remaining());
+                if (result.hostAccepted()) work.reply(() -> {
+                    if (actor.current()) claimTransfer.flush(actor.player);
+                });
+                return result.transferred();
+            } catch (SQLException | java.io.IOException | RuntimeException failure) {
+                logger.log(java.util.logging.Level.WARNING, "抽奖待发物品交接暂未完成: " + actor.id, failure);
+                actor.message("common.pending-claim-retry");
+                return 0;
             }
-        }
-        if (claimed > 0) {
-            sendMessage(player, "common.pending-claim-claimed", claimed);
-        }
-        int remaining = pending.size() - claimed;
-        if (remaining > 0) {
-            sendMessage(player, "common.pending-claim-available", remaining);
-        }
-        return claimed;
-    }
-
-    /**
-     * 移除玩家的并发锁（在玩家退出时调用）。
-     *
-     * @param playerUuid 玩家 UUID
-     */
-    public void removePlayerLock(@NotNull UUID playerUuid) {
-        ReentrantLock lock = playerLocks.get(playerUuid);
-        if (lock == null || !lock.isLocked()) {
-            playerLocks.remove(playerUuid, lock);
-        }
-    }
-
-    private void unlock(Player player, ReentrantLock lock) {
-        lock.unlock();
-        removePlayerLock(player.getUniqueId());
+        });
     }
 
     // ─── 消耗扣除 ─────────────────────────────────────────
@@ -543,75 +708,133 @@ public class LotteryService {
      */
     private record CostTransaction(
         boolean success,
+        boolean refundComplete,
         List<CostConfig.CostEntry> deducted,
         Map<String, List<ItemStack>> snapshots
     ) {
         static CostTransaction failed() {
-            return new CostTransaction(false, List.of(), Map.of());
+            return new CostTransaction(false, true, List.of(), Map.of());
         }
     }
 
-    private boolean deductCost(Player player, CostConfig cost, int multiplier) {
-        return deductCostTransaction(player, cost, multiplier).success();
-    }
-
-    private CostTransaction deductCostTransaction(Player player, CostConfig cost, int multiplier) {
+    private List<CostConfig.CostEntry> costEntries(Actor actor, CostConfig cost, int multiplier) {
         List<CostConfig.CostEntry> source = multiplier == 10 ? cost.ten() : cost.single();
         if (multiplier == 10 && source.isEmpty()) {
-            sendMessage(player, "common.ten-unavailable");
-            return CostTransaction.failed();
+            actor.message("common.ten-unavailable");
+            return null;
         }
         List<CostConfig.CostEntry> entries = new ArrayList<>();
         for (CostConfig.CostEntry entry : source) {
-            int amount = multiplier == 10 ? entry.amount() : entry.amount() * multiplier;
+            int amount = multiplier == 10 ? entry.amount() : Math.multiplyExact(entry.amount(), multiplier);
+            if (amount <= 0) throw new IllegalArgumentException("Invalid Lottery cost");
             entries.add(new CostConfig.CostEntry(entry.type(), entry.id(), amount,
                 entry.displayName(), entry.icon(), entry.matcher()));
         }
-        if (entries.isEmpty()) return new CostTransaction(true, List.of(), Map.of());
-        Map<String, Long> required = new java.util.LinkedHashMap<>();
-        for (CostConfig.CostEntry entry : entries) {
-            String key = costKey(entry);
-            required.merge(key, (long) entry.amount(), Long::sum);
-        }
-        for (CostConfig.CostEntry entry : entries) {
-            String key = costKey(entry);
-            if (!required.containsKey(key)) continue;
-            long amount = required.remove(key);
-            boolean enough = switch (entry.type()) {
-                case POINT -> repository.getPoint(player.getUniqueId(), entry.id()) >= amount;
-                case ITEM -> countInventory(player, entry.matcher()) >= amount;
-                case CURRENCY -> hasCurrency(player, entry.id(), amount);
-            };
-            if (!enough) {
-                String insufficientKey = entry.type() == CostConfig.CostMode.POINT
-                    ? "common.insufficient-point"
-                    : entry.type() == CostConfig.CostMode.ITEM
-                        ? "common.insufficient-item" : "common.insufficient-currency";
-                String insufficientArg = entry.type() == CostConfig.CostMode.ITEM && entry.displayName() != null
-                    ? entry.displayName() : entry.id();
-                sendMessage(player, insufficientKey, insufficientArg);
+        return entries;
+    }
+
+    private record ItemPlan(List<ItemDebit> slots, String evidence) {}
+    private enum Debit { APPLIED, REJECTED, UNCERTAIN }
+
+    private CostTransaction debitCosts(Actor actor, List<CostConfig.CostEntry> entries, UUID operation) {
+        try {
+            var insufficient = actor.effect(() -> findInsufficientExternalCost(actor.player, entries));
+            if (insufficient != null) {
+                boolean item = insufficient.type() == CostConfig.CostMode.ITEM;
+                actor.message(item ? "common.insufficient-item" : "common.insufficient-currency",
+                    item && insufficient.displayName() != null ? insufficient.displayName() : insufficient.id());
                 return CostTransaction.failed();
             }
-        }
+        } catch (LotteryWork.BeforeEffect disconnected) { return CostTransaction.failed(); }
+
         List<CostConfig.CostEntry> changed = new ArrayList<>();
-        Map<String, List<ItemStack>> snapshots = new java.util.LinkedHashMap<>();
-        for (CostConfig.CostEntry entry : entries) {
-            if (entry.type() == CostConfig.CostMode.ITEM) {
-                snapshots.computeIfAbsent(costKey(entry), ignored -> snapshotInventory(player, entry.matcher()));
+        Map<String, List<ItemStack>> snapshots = new LinkedHashMap<>();
+        for (var entry : entries) {
+            String description = describeCost(entry);
+            boolean mayHaveApplied = false;
+            boolean item = entry.type() == CostConfig.CostMode.ITEM;
+            ItemPlan plan = null;
+            Debit debit = Debit.REJECTED;
+            try {
+                plan = item ? actor.effect(() -> captureItemPlan(actor.player.getInventory(), entry)) : null;
+                if (!item || !plan.slots().isEmpty()) {
+                    ItemPlan snapshot = plan;
+                    if (snapshot != null) description += " 物品快照=" + snapshot.evidence();
+                    gachaEvidence(actor.id, operation, "DEBITING", "开始扣费 " + description);
+                    mayHaveApplied = true;
+                    debit = item
+                        ? actor.effect(() -> applyItemDebits(actor.player.getInventory(), snapshot.slots()) ? Debit.APPLIED : Debit.REJECTED)
+                        : actor.effect(() -> withdrawCurrency(actor.player, entry.id(), entry.amount()));
+                }
+            } catch (LotteryWork.BeforeEffect beforeEffect) {
+                // The scheduled action never started.
+            } catch (RuntimeException | LinkageError failure) {
+                logger.log(java.util.logging.Level.WARNING, "抽奖扣费未确认: " + operation, failure);
+                if (mayHaveApplied) debit = Debit.UNCERTAIN;
             }
-            boolean ok = switch (entry.type()) {
-                case POINT -> repository.subtractPoints(player.getUniqueId(), entry.id(), entry.amount());
-                case ITEM -> removeItemFromInventory(player, entry.matcher(), entry.amount());
-                case CURRENCY -> withdrawCurrency(player, entry.id(), entry.amount());
-            };
-            if (!ok) {
-                rollbackCost(player, changed, snapshots);
-                sendMessage(player, "common.resource-cost-failed", entry.id());
-                return CostTransaction.failed();
-            }
+            if (debit != Debit.APPLIED) return failedDebit(actor, operation, entry, changed, snapshots, debit == Debit.UNCERTAIN);
             changed.add(entry);
+            if (plan != null) snapshots.computeIfAbsent(costKey(entry), ignored -> new ArrayList<>())
+                .addAll(plan.slots().stream().map(ItemDebit::removed).toList());
+            gachaEvidence(actor.id, operation, "DEBITING", "确认扣费 " + description);
         }
-        return new CostTransaction(true, changed, snapshots);
+        if (!snapshots.isEmpty() && !confirmItemCostSave(actor, operation, "DEBITING", "deducted")) {
+            return new CostTransaction(false, false, List.of(), Map.of());
+        }
+        return new CostTransaction(true, true, changed, snapshots);
+    }
+
+    private boolean confirmItemCostSave(Actor actor, UUID operation, String phase, String effect) {
+        String token = operation + ":" + effect;
+        try {
+            gachaEvidence(actor.id, operation, phase, "等待背包存档回执 " + token);
+            Path file = actor.effect(() -> {
+                Path path = Bukkit.getWorlds().get(0).getWorldFolder().toPath()
+                    .resolve("playerdata").resolve(actor.id + ".dat");
+                PlayerDataReceipt.save(actor.player, COST_RECEIPT, token);
+                return path;
+            });
+            if (token.equals(PlayerDataReceipt.read(file, COST_RECEIPT.toString()))) return true;
+            logger.warning("抽奖未找到背包存档回执: " + token);
+        } catch (IOException | RuntimeException | LinkageError failure) {
+            logger.log(java.util.logging.Level.WARNING, "抽奖背包存档待核对: " + token, failure);
+        }
+        return false;
+    }
+
+    private CostConfig.CostEntry findInsufficientExternalCost(Player player, List<CostConfig.CostEntry> entries) {
+        Map<String, Long> required = new LinkedHashMap<>();
+        for (var entry : entries) {
+            if (entry.type() == CostConfig.CostMode.POINT) throw new IllegalArgumentException("Points settle in SQL");
+            required.merge(costKey(entry), (long) entry.amount(), Long::sum);
+        }
+        for (var entry : entries) {
+            Long amount = required.remove(costKey(entry));
+            if (amount == null) continue;
+            boolean enough = entry.type() == CostConfig.CostMode.ITEM ? countInventory(player, entry.matcher()) >= amount
+                : hasCurrency(player, entry.id(), amount);
+            if (!enough) return entry;
+        }
+        return null;
+    }
+
+    private ItemPlan captureItemPlan(PlayerInventory inventory, CostConfig.CostEntry entry) {
+        var slots = planItemDebits(inventory, entry.matcher(), entry.amount());
+        String evidence = slots.stream().map(slot -> slot.slot() + "=" + encodeItem(slot.removed()))
+            .collect(java.util.stream.Collectors.joining(","));
+        return new ItemPlan(slots, evidence);
+    }
+
+    private static String encodeItem(ItemStack item) {
+        return java.util.Base64.getEncoder().encodeToString(ItemSerializer.serialize(item));
+    }
+
+    private CostTransaction failedDebit(Actor actor, UUID operation, CostConfig.CostEntry entry,
+                                         List<CostConfig.CostEntry> changed, Map<String, List<ItemStack>> snapshots,
+                                         boolean uncertain) {
+        boolean refunded = rollbackCost(actor, changed, snapshots, operation, "DEBITING");
+        actor.message("common.resource-cost-failed", entry.id());
+        return new CostTransaction(false, refunded && !uncertain, List.of(), Map.of());
     }
 
     private String costKey(CostConfig.CostEntry entry) {
@@ -633,94 +856,97 @@ public class LotteryService {
             && bridge.balance(player).compareTo(BigDecimal.valueOf(amount)) >= 0;
     }
 
-    private boolean withdrawCurrency(Player player, String id, long amount) {
-        if (currencyManager == null) return false;
-        var bridge = currencyManager.bridge(id);
-        return bridge != null && bridge.available()
-            && bridge.withdraw(player, BigDecimal.valueOf(amount)).success();
+    private Debit withdrawCurrency(Player player, String id, long amount) {
+        var bridge = currencyManager == null ? null : currencyManager.bridge(id);
+        if (bridge == null || !bridge.available()) return Debit.REJECTED;
+        var result = bridge.withdraw(player, BigDecimal.valueOf(amount));
+        if (result == null || result.uncertain()) return Debit.UNCERTAIN;
+        if (!result.success()) return Debit.REJECTED;
+        return bridge.debitRequiresReconciliation() ? Debit.UNCERTAIN : Debit.APPLIED;
     }
 
-    private void rollbackCost(Player player, List<CostConfig.CostEntry> changed,
-                              Map<String, List<ItemStack>> snapshots) {
+    private boolean rollbackCost(Actor actor, List<CostConfig.CostEntry> changed,
+                                 Map<String, List<ItemStack>> snapshots, UUID operation, String phase) {
+        boolean refunded = true;
         java.util.Set<String> restoredItems = new java.util.HashSet<>();
+        List<RefundItem> overflow = new ArrayList<>();
         Map<String, Integer> itemAmounts = new java.util.HashMap<>();
-        for (CostConfig.CostEntry entry : changed) {
-            if (entry.type() == CostConfig.CostMode.ITEM) {
-                itemAmounts.merge(costKey(entry), entry.amount(), Integer::sum);
-            }
-        }
+        for (var entry : changed) if (entry.type() == CostConfig.CostMode.ITEM)
+            itemAmounts.merge(costKey(entry), entry.amount(), Math::addExact);
         for (int i = changed.size() - 1; i >= 0; i--) {
-            CostConfig.CostEntry entry = changed.get(i);
-            switch (entry.type()) {
-                case POINT -> repository.addPoints(player.getUniqueId(), entry.id(), entry.amount());
-                case ITEM -> {
-                    if (!restoredItems.add(costKey(entry))) break;
-                    List<ItemStack> stacks = snapshots.get(costKey(entry));
-                    if (stacks != null) {
-                        restoreItemSnapshots(
-                            player,
-                            stacks,
-                            itemAmounts.getOrDefault(costKey(entry), 0)
-                        );
-                    }
+            var entry = changed.get(i);
+            try {
+                String key = costKey(entry);
+                if (entry.type() == CostConfig.CostMode.ITEM && !restoredItems.add(key)) continue;
+                String description = entry.type() == CostConfig.CostMode.ITEM ? key + ":" + itemAmounts.get(key) : describeCost(entry);
+                gachaEvidence(actor.id, operation, phase, "开始退款 " + description);
+                boolean confirmed;
+                if (entry.type() == CostConfig.CostMode.ITEM) {
+                    var returned = actor.effect(() -> restoreItemSnapshots(actor.player, snapshots.getOrDefault(key, List.of()), itemAmounts.get(key)));
+                    confirmed = returned.complete();
+                    overflow.addAll(returned.leftovers());
+                } else {
+                    confirmed = actor.effect(() -> refundCurrency(actor.player, entry.id(), entry.amount()));
                 }
-                case CURRENCY -> refundCurrency(player, entry.id(), entry.amount());
+                String status = !confirmed ? "退款待核对 " : entry.type() == CostConfig.CostMode.ITEM
+                    ? "退料等待存档 " : "确认退款 ";
+                gachaEvidence(actor.id, operation, phase, status + description);
+                refunded &= confirmed;
+            } catch (RuntimeException failure) {
+                refunded = false;
+                logger.log(java.util.logging.Level.WARNING, "退款异常: " + actor.id + " " + entry.id(), failure);
             }
         }
-    }
-
-    private List<ItemStack> snapshotInventory(Player player, ItemMatcher matcher) {
-        List<ItemStack> snapshots = new ArrayList<>();
-        for (ItemStack stack : player.getInventory().getContents()) {
-            if (stack != null && itemMatcherSupport.matches(matcher, stack)) snapshots.add(stack.clone());
+        if (!restoredItems.isEmpty()) {
+            for (var leftover : overflow) {
+                gachaEvidence(actor.id, operation, phase, "退料溢出待核对 " + leftover.metadata() + " " + leftover.data());
+            }
+            if (!confirmItemCostSave(actor, operation, phase, "returned")) return false;
+            for (var leftover : overflow) {
+                long claim = repository.enqueuePendingClaim(actor.id, LotteryRepository.refundClaimPool(operation),
+                    leftover.metadata(), leftover.data());
+                if (claim > 0) gachaEvidence(actor.id, operation, phase, "退料已开放待领 #" + claim);
+                else refunded = false;
+            }
         }
-        return snapshots;
+        return refunded;
     }
 
-    private void restoreItemSnapshots(
-            Player player,
-            List<ItemStack> snapshots,
-            int amount
-    ) {
+    private record RefundItem(String metadata, String data) {}
+    private record ItemRefund(boolean complete, List<RefundItem> leftovers) {}
+
+    private ItemRefund restoreItemSnapshots(Player player, List<ItemStack> snapshots, int amount) {
         int remaining = amount;
+        List<RefundItem> pending = new ArrayList<>();
         for (ItemStack snapshot : snapshots) {
             if (remaining <= 0) break;
             ItemStack restored = snapshot.clone();
             restored.setAmount(Math.min(restored.getAmount(), remaining));
             remaining -= restored.getAmount();
-            Map<Integer, ItemStack> leftovers = player.getInventory().addItem(restored);
-            enqueueOverflowItems(player, leftovers.values());
+            for (ItemStack leftover : player.getInventory().addItem(restored).values()) {
+                if (leftover != null && leftover.getAmount() > 0)
+                    pending.add(new RefundItem("rollback|" + leftover.getType().name(), encodeItem(leftover)));
+            }
         }
+        return new ItemRefund(remaining == 0, pending);
     }
 
-    private void enqueueOverflowItems(
-            Player player,
-            Collection<ItemStack> leftovers
-    ) {
-        for (ItemStack leftover : leftovers) {
-            if (leftover == null || leftover.getAmount() <= 0) continue;
-            String itemData = java.util.Base64.getEncoder().encodeToString(
-                ItemSerializer.serialize(leftover)
-            );
-            repository.enqueuePendingClaim(
-                player.getUniqueId(),
-                "rollback",
-                "rollback|" + leftover.getType().name(),
-                itemData
-            );
-        }
+    private static boolean confirmed(xuanmo.arcartxsuite.api.currency.CurrencyTransactionResult result) {
+        return result != null && result.success() && !result.uncertain();
     }
 
-    private void refundCurrency(Player player, String id, long amount) {
-        if (currencyManager == null) return;
-        var bridge = currencyManager.bridge(id);
+    private boolean refundCurrency(Player player, String id, long amount) {
+        var bridge = currencyManager == null ? null : currencyManager.bridge(id);
         if (bridge == null || !bridge.available()
-                || !bridge.deposit(player, BigDecimal.valueOf(amount)).success()) {
+                || !confirmed(bridge.deposit(player, BigDecimal.valueOf(amount))) || bridge.creditRequiresReconciliation()) {
             logger.warning("Currency rollback failed for " + id);
+            return false;
         }
+        return true;
     }
 
-    private void awardPoints(Player player, PoolDefinition pool, List<PoolItem> items) {
+    private Map<String, Long> pointAwards(PoolDefinition pool, List<PoolItem> items) {
+        Map<String, Long> awards = new LinkedHashMap<>();
         for (PointDefinition point : pool.points().values()) {
             long amount = point.perPull();
             for (PoolItem item : items) {
@@ -732,16 +958,42 @@ public class LotteryService {
                     amount += point.rarityRewards().getOrDefault(rarity, 0);
                 }
             }
-            if (amount > 0) repository.addPoints(player.getUniqueId(), point.id(), amount);
+            if (amount > 0) awards.merge(point.id(), amount, Long::sum);
         }
+        return awards;
     }
 
-    public Map<String, Long> getPoints(@NotNull UUID playerUuid) {
-        return repository.getPoints(playerUuid);
+    public CompletionStage<Map<String, Long>> getPoints(@NotNull UUID playerUuid) {
+        return work.submit(() -> repository.loadAllPointBalances(playerUuid), false).copy();
     }
 
-    public long getPoint(@NotNull UUID playerUuid, @NotNull String pointId) {
-        return repository.getPoint(playerUuid, pointId);
+    public CompletionStage<Long> getPoint(@NotNull UUID playerUuid, @NotNull String pointId) {
+        return work.submit(() -> repository.loadPointBalances(playerUuid, java.util.Set.of(pointId))
+            .getOrDefault(pointId, 0L), false).copy();
+    }
+
+    public LotteryRepository.GachaView loadGachaView(UUID playerId, String poolId, java.util.Set<String> pointIds)
+        throws SQLException {
+        return repository.loadGachaView(playerId, resolveSharedPoolId(poolId), pointIds);
+    }
+
+    public Map<String, Long> loadPointBalances(UUID playerId, java.util.Set<String> pointIds) throws SQLException {
+        return repository.loadPointBalances(playerId, pointIds);
+    }
+
+    public LotteryRepository.ExchangeView loadExchangeView(UUID playerId, java.util.Set<String> pointIds,
+                                                            java.util.Set<String> exchangeIds) throws SQLException {
+        return repository.loadExchangeView(playerId, pointIds, exchangeIds);
+    }
+
+    public List<LotteryRepository.GachaLogEntry> loadGachaHistory(UUID playerId, String poolId, int limit)
+        throws SQLException {
+        return repository.loadGachaHistory(playerId, poolId, limit);
+    }
+
+    public List<LotteryRepository.CaseLogEntry> loadCaseHistory(UUID playerId, String poolId, int limit)
+        throws SQLException {
+        return repository.loadCaseHistory(playerId, poolId, limit);
     }
 
     public long getCurrencyBalance(@NotNull Player player, @NotNull String currencyId) {
@@ -755,8 +1007,12 @@ public class LotteryService {
         return countInventory(player, matcher);
     }
 
-    public boolean givePoints(@NotNull UUID playerUuid, @NotNull String pointId, long amount) {
-        return repository.addPoints(playerUuid, pointId, amount);
+    public CompletionStage<Boolean> givePoints(@NotNull UUID playerUuid, @NotNull String pointId, long amount) {
+        return work.submit(() -> {
+            boolean saved = repository.addPoints(playerUuid, pointId, amount);
+            if (saved) placeholderReads.invalidatePoints(playerUuid);
+            return saved;
+        }, true).copy();
     }
 
     public Map<String, ExchangeShopItem> getExchangeItems() {
@@ -767,37 +1023,72 @@ public class LotteryService {
         return repository.getExchangeCount(playerUuid, itemId);
     }
 
-    public boolean exchange(@NotNull Player player, @NotNull String itemId) {
+    public CompletionStage<Boolean> exchange(@NotNull Player player, @NotNull String itemId) {
+        return submitPlayer(player, false, actor -> exchangeReserved(actor, itemId));
+    }
+
+    private boolean exchangeReserved(Actor actor, String itemId) {
         ExchangeShopItem item = configuration.exchangeItems().get(itemId);
         if (item == null) {
-            sendMessage(player, "common.exchange-not-found");
+            actor.message("common.exchange-not-found");
             return false;
         }
-        int used = repository.getExchangeCount(player.getUniqueId(), itemId);
-        if (item.limit() > 0 && used >= item.limit()) {
-            sendMessage(player, "common.exchange-limit");
-            return false;
-        }
-        if (!repository.incrementExchangeCount(player.getUniqueId(), itemId)) {
-            sendMessage(player, "common.exchange-failed");
-            return false;
-        }
-        CostConfig cost = new CostConfig(item.cost(), item.cost());
-        CostTransaction transaction = deductCostTransaction(player, cost, 1);
-        if (!transaction.success()) {
-            repository.decrementExchangeCount(player.getUniqueId(), itemId);
-            return false;
+        UUID operation = UUID.randomUUID();
+        String pool = item.poolId() == null ? "exchange" : item.poolId();
+        var pointCosts = new LinkedHashMap<String, Long>();
+        var externalCosts = new ArrayList<CostConfig.CostEntry>();
+        for (var entry : item.cost()) {
+            if (entry.amount() <= 0) throw new IllegalArgumentException("Invalid Lottery exchange cost");
+            if (entry.type() == CostConfig.CostMode.POINT) pointCosts.merge(entry.id(), (long) entry.amount(), Math::addExact);
+            else externalCosts.add(entry);
         }
         try {
-            distributeOrEnqueue(player, item.poolId() == null ? "exchange" : item.poolId(), item.reward());
-        } catch (RuntimeException exception) {
-            rollbackCost(player, transaction.deducted(), transaction.snapshots());
-            repository.decrementExchangeCount(player.getUniqueId(), itemId);
-            sendMessage(player, "common.exchange-failed");
+            String prize = describePrize(item.reward());
+            if (!repository.beginGachaOperation(actor.id, operation, pool, "兑换 " + itemId + " 预计奖品=" + prize)) {
+                var previous = repository.findGachaOperation(actor.id);
+                if (previous == null) actor.message("common.lock-busy");
+                else actor.message("common.gacha-review", previous.id());
+                return false;
+            }
+            try {
+                var stored = repository.loadExchangeView(actor.id, pointCosts.keySet(), java.util.Set.of(itemId));
+                if (item.limit() > 0 && stored.counts().getOrDefault(itemId, 0) >= item.limit()) {
+                    repository.finishGachaOperation(actor.id, operation, "DEBITING");
+                    actor.message("common.exchange-limit");
+                    return false;
+                }
+                for (var entry : pointCosts.entrySet()) {
+                    if (stored.points().getOrDefault(entry.getKey(), 0L) < entry.getValue()) {
+                        repository.finishGachaOperation(actor.id, operation, "DEBITING");
+                        actor.message("common.insufficient-point", entry.getKey());
+                        return false;
+                    }
+                }
+            } catch (SQLException | RuntimeException rejected) {
+                if (!repository.finishGachaOperation(actor.id, operation, "DEBITING")) throw rejected;
+                actor.message("common.exchange-failed");
+                logger.log(java.util.logging.Level.WARNING, "读取兑换状态失败: " + operation, rejected);
+                return false;
+            }
+            var costs = debitCosts(actor, externalCosts, operation);
+            if (!costs.success()) {
+                if (!costs.refundComplete() || !repository.finishGachaOperation(actor.id, operation, "DEBITING")) {
+                    repository.changeGachaOperation(actor.id, operation, "DEBITING", "DEBIT_REVIEW");
+                    actor.message("common.gacha-review", operation);
+                }
+                return false;
+            }
+            if (!commitOrRefund(actor, operation, costs,
+                () -> repository.commitExchange(actor.id, operation, itemId, item.limit(), prize, item.reward(), pointCosts))) return false;
+            placeholderReads.invalidatePoints(actor.id);
+            if (!deliverOperationPrizes(actor, pool, operation)) return false;
+            actor.message("common.exchange-success", item.displayName());
+            return true;
+        } catch (SQLException | RuntimeException failure) {
+            logger.log(java.util.logging.Level.WARNING, "兑换结果待核对: " + operation, failure);
+            actor.message("common.gacha-review", operation);
             return false;
         }
-        sendMessage(player, "common.exchange-success", item.displayName());
-        return true;
     }
 
     public GachaItemInfo describeGachaItem(@NotNull PoolDefinition pool, @NotNull PoolItem item) {
@@ -816,27 +1107,34 @@ public class LotteryService {
 
     public record GachaItemInfo(int star, boolean up) {}
 
-    private boolean removeItemFromInventory(Player player, ItemMatcher matcher, int amount) {
-        if (amount <= 0) return false;
-        int available = 0;
-        for (int i = 0; i < player.getInventory().getSize(); i++) {
-            org.bukkit.inventory.ItemStack stack = player.getInventory().getItem(i);
-            if (stack != null && itemMatcherSupport.matches(matcher, stack)) {
-                available += stack.getAmount();
-                if (available >= amount) break;
-            }
-        }
-        if (available < amount) return false;
-        int removed = 0;
-        for (int i = 0; i < player.getInventory().getSize(); i++) {
-            org.bukkit.inventory.ItemStack stack = player.getInventory().getItem(i);
+    private record ItemDebit(int slot, ItemStack original, ItemStack removed, ItemStack remaining) {}
+
+    private List<ItemDebit> planItemDebits(PlayerInventory inventory, ItemMatcher matcher, int amount) {
+        List<ItemDebit> debits = new ArrayList<>();
+        int stillNeeded = amount;
+        for (int i = 0; i < inventory.getSize() && stillNeeded > 0; i++) {
+            ItemStack stack = inventory.getItem(i);
             if (stack == null || !itemMatcherSupport.matches(matcher, stack)) continue;
-            int toRemove = Math.min(stack.getAmount(), amount - removed);
-            stack.setAmount(stack.getAmount() - toRemove);
-            removed += toRemove;
-            if (removed >= amount) break;
+            int removedCount = Math.min(stack.getAmount(), stillNeeded);
+            ItemStack removed = stack.clone();
+            removed.setAmount(removedCount);
+            ItemStack remainder = null;
+            if (stack.getAmount() > removedCount) {
+                remainder = stack.clone();
+                remainder.setAmount(stack.getAmount() - removedCount);
+            }
+            debits.add(new ItemDebit(i, stack.clone(), removed, remainder));
+            stillNeeded -= removedCount;
         }
-        return removed == amount;
+        return stillNeeded == 0 ? debits : List.of();
+    }
+
+    private boolean applyItemDebits(PlayerInventory inventory, List<ItemDebit> debits) {
+        for (ItemDebit debit : debits) {
+            if (!java.util.Objects.equals(inventory.getItem(debit.slot()), debit.original())) return false;
+        }
+        for (ItemDebit debit : debits) inventory.setItem(debit.slot(), debit.remaining());
+        return true;
     }
 
     private String resolveSharedPoolId(String poolId) {
@@ -897,9 +1195,40 @@ public class LotteryService {
      * @param playerUuid 玩家 UUID
      * @param poolId     奖池 ID
      */
-    public void resetGachaState(@NotNull UUID playerUuid, @NotNull String poolId) {
+    public boolean resetGachaState(@NotNull UUID playerUuid, @NotNull String poolId) {
         String effectivePoolId = resolveSharedPoolId(poolId);
-        repository.deleteGachaState(playerUuid, effectivePoolId);
+        UUID operation = UUID.randomUUID();
+        try {
+            if (!repository.beginGachaOperation(playerUuid, operation, poolId, "管理员重置保底")) return false;
+            repository.deleteGachaState(playerUuid, effectivePoolId);
+            placeholderReads.invalidatePity(playerUuid, effectivePoolId);
+            return repository.finishGachaOperation(playerUuid, operation, "DEBITING");
+        } catch (SQLException failure) {
+            logger.log(java.util.logging.Level.WARNING, "重置保底失败: " + operation, failure);
+            return false;
+        }
+    }
+
+    public LotteryRepository.GachaOperation getGachaOperation(UUID playerId) throws SQLException {
+        return repository.findGachaOperation(playerId);
+    }
+
+    public LotteryRepository.GachaOperation getGachaOperation(UUID playerId, UUID operation) throws SQLException {
+        return repository.findGachaOperation(playerId, operation);
+    }
+
+    public List<LotteryRepository.RefundClaim> getRefundClaims(UUID playerId, UUID operation) throws SQLException {
+        return repository.findRefundClaims(playerId, operation);
+    }
+
+    public boolean resolveGachaOperation(UUID playerId, UUID operation, String expected, String reason)
+        throws SQLException {
+        if (!activePlayers.add(playerId)) return false;
+        try {
+            return repository.resolveGachaOperation(playerId, operation, expected, reason);
+        } finally {
+            activePlayers.remove(playerId);
+        }
     }
 
     /**
@@ -908,8 +1237,13 @@ public class LotteryService {
      * @param playerUuid 玩家 UUID
      * @param poolId     奖池 ID
      */
-    public void resetCaseState(@NotNull UUID playerUuid, @NotNull String poolId) {
-        repository.deleteCaseState(playerUuid, poolId);
+    public boolean resetCaseState(@NotNull UUID playerUuid, @NotNull String poolId) {
+        if (!activePlayers.add(playerUuid)) return false;
+        try {
+            repository.deleteCaseState(playerUuid, poolId);
+            placeholderReads.invalidateOpened(playerUuid, poolId);
+            return true;
+        } finally { activePlayers.remove(playerUuid); }
     }
 
     // ─── 概率模拟 ─────────────────────────────────────────

@@ -73,27 +73,13 @@ ui:
           var.shopIconJsons[key] = var.air
         }
       }
-      while(val.商店行区.childrenCount() > 1){
-        val.商店行区.get(1).remove()
-      }
-      if(var.maxShopCount > 1){
-        for(i in range(1, var.maxShopCount - 1)){
-          key = i.round()
-          if(val.商店行区['商店行'] != none) {
-            e = val.商店行区['商店行'].copy('商店行' + key)
-            e.entryKey = key
-          }
+      var.商店行区网格数据 = []
+      if((var.maxShopCount - 1) >= 0){
+        for(网格序号 in range(0, var.maxShopCount - 1)){
+          var.商店行区网格数据.add(网格序号.round())
         }
       }
-      if(var.maxShopCount > 0){
-        for(i in range(0, var.maxShopCount - 1)){
-          key = i.round()
-          e = val.商店行区.get(key)
-          if(e != none && e['商店行图标'] != none){
-            e['商店行图标'].seticon()
-          }
-        }
-      }
+      var.商店行区图标待刷新 = true
       var.actionBusy = false
     edit_shop: |-
       var.packetId = packet['packetId']
@@ -136,27 +122,13 @@ ui:
             var.fShopIconJson = var.air
           }
           val.商店图标预览.seticon()
-          while(val.商品行区.childrenCount() > 1){
-            val.商品行区.get(1).remove()
-          }
-          if(var.maxEditItemCount > 1){
-            for(i in range(1, var.maxEditItemCount - 1)){
-              key = i.round()
-              if(val.商品行区['商品行'] != none) {
-                e = val.商品行区['商品行'].copy('商品行' + key)
-                e.entryKey = key
-              }
+          var.商品行区网格数据 = []
+          if((var.maxEditItemCount - 1) >= 0){
+            for(网格序号 in range(0, var.maxEditItemCount - 1)){
+              var.商品行区网格数据.add(网格序号.round())
             }
           }
-          if(var.maxEditItemCount > 0){
-            for(i in range(0, var.maxEditItemCount - 1)){
-              key = i.round()
-              e = val.商品行区.get(key)
-              if(e != none && e['商品行图标'] != none){
-                e['商品行图标'].seticon()
-              }
-            }
-          }
+          var.商品行区图标待刷新 = true
           var.hydrating = false
           var.formLoading = false
         })
@@ -375,6 +347,39 @@ ui:
       var.contentW = var.viewW - 420
       var.scrollW = var.contentW - 72
 
+tasks:
+  refresh-repeat-grid-icons:
+    type: loop
+    time: 100
+    cycle: 100
+    run: |-
+      if(var.商店行区图标待刷新 == true && var.商店行区网格数据 != none && val.商店行区 != none && val.商店行区.childrenCount() == var.商店行区网格数据.size()){
+        var.商店行区图标待刷新 = false
+        if(var.商店行区网格数据.size() > 0){
+          for(网格序号 in range(0, var.商店行区网格数据.size() - 1)){
+            网格项 = val.商店行区.get(网格序号.round())
+            if(网格项 != none){
+              if(网格项['商店行图标'] != none){
+                网格项['商店行图标'].seticon()
+              }
+            }
+          }
+        }
+      }
+      if(var.商品行区图标待刷新 == true && var.商品行区网格数据 != none && val.商品行区 != none && val.商品行区.childrenCount() == var.商品行区网格数据.size()){
+        var.商品行区图标待刷新 = false
+        if(var.商品行区网格数据.size() > 0){
+          for(网格序号 in range(0, var.商品行区网格数据.size() - 1)){
+            网格项 = val.商品行区.get(网格序号.round())
+            if(网格项 != none){
+              if(网格项['商品行图标'] != none){
+                网格项['商品行图标'].seticon()
+              }
+            }
+          }
+        }
+      }
+
 controls:
   全屏玻璃底:
     type: Texture
@@ -528,9 +533,6 @@ controls:
                     val.商店权限输入.setContent('')
                     val.商店标签输入.setContent('')
                     val.商店图标预览.seticon()
-                    while(val.商品行区.childrenCount() > 1){
-                      val.商品行区.get(1).remove()
-                    }
                     var.hydrating = false
                     var.formLoading = false
                     var.dirty = false
@@ -615,15 +617,19 @@ controls:
             children:
               商店行区:
                 val: 商店行区
-                type: VStack
+                type: RepeatGrid
                 attribute:
+                  items: "var.商店行区网格数据"
+                  flow: ~row
+                  column: 1
+                  spaceBetweenY: 8
+                  maxSize: "var.商店行区网格数据 == none ? 0 : var.商店行区网格数据.size()"
                   width: 254
-                  spaceBetween: 8
                 children:
                   商店行:
                     type: Canvas
                     attribute:
-                      entryKey: 0.round()
+                      entryKey: self.item
                       entry: var.editShops[self.entryKey]
                       visible: self.entry != none
                       width: 254
@@ -1185,15 +1191,19 @@ controls:
                 children:
                   商品行区:
                     val: 商品行区
-                    type: VStack
+                    type: RepeatGrid
                     attribute:
+                      items: "var.商品行区网格数据"
+                      flow: ~row
+                      column: 1
+                      spaceBetweenY: 8
+                      maxSize: "var.商品行区网格数据 == none ? 0 : var.商品行区网格数据.size()"
                       width: "var.scrollW - 8"
-                      spaceBetween: 8
                     children:
                       商品行:
                         type: Canvas
                         attribute:
-                          entryKey: 0.round()
+                          entryKey: self.item
                           entry: var.editItems[self.entryKey]
                           visible: self.entry != none
                           width: "var.scrollW - 8"
@@ -1685,7 +1695,7 @@ controls:
                               width: 140
                               height: 32
                               length: 32
-                              inputPattern: "^[0-9.]*$"
+                              inputPattern: ~^[0-9.]*$
                               emptyText: "~&8买入价"
                               fontSize: 32
                             action:
@@ -1722,7 +1732,7 @@ controls:
                               width: 140
                               height: 32
                               length: 32
-                              inputPattern: "^[0-9.]*$"
+                              inputPattern: ~^[0-9.]*$
                               emptyText: "~&8预留字段，不用于回收"
                               fontSize: 32
                             action:
@@ -1787,7 +1797,7 @@ controls:
                             if(var.fStockMode == 'unlimited'){
                               var.fStockMode = 'global'
                               var.dirty = true
-                            } else if(var.fStockMode == 'global'){
+                            } elif(var.fStockMode == 'global'){
                               var.fStockMode = 'per-player'
                               var.dirty = true
                             } else {
@@ -1846,7 +1856,7 @@ controls:
                               width: 120
                               height: 32
                               length: 10
-                              inputPattern: "^[0-9]*$"
+                              inputPattern: ~^[0-9]*$
                               emptyText: "~&8数量"
                               fontSize: 32
                             action:
@@ -1892,7 +1902,7 @@ controls:
                               width: 120
                               height: 32
                               length: 10
-                              inputPattern: "^[0-9]*$"
+                              inputPattern: ~^[0-9]*$
                               emptyText: "~&8数量"
                               fontSize: 32
                             action:
@@ -1912,10 +1922,10 @@ controls:
                             if(var.fLimitReset == 'never'){
                               var.fLimitReset = 'daily'
                               var.dirty = true
-                            } else if(var.fLimitReset == 'daily'){
+                            } elif(var.fLimitReset == 'daily'){
                               var.fLimitReset = 'weekly'
                               var.dirty = true
-                            } else if(var.fLimitReset == 'weekly'){
+                            } elif(var.fLimitReset == 'weekly'){
                               var.fLimitReset = 'monthly'
                               var.dirty = true
                             } else {
@@ -2070,7 +2080,7 @@ controls:
                               width: 220
                               height: 40
                               length: 8
-                              inputPattern: "^[0-9]*$"
+                              inputPattern: ~^[0-9]*$
                               fontSize: 28
                             action:
                               textChange: |-
@@ -2121,7 +2131,7 @@ controls:
                               width: 220
                               height: 40
                               length: 7
-                              inputPattern: "^[0-9]*$"
+                              inputPattern: ~^[0-9]*$
                               emptyText: "~&7补货数量（默认1）"
                               fontSize: 26
                             action:
@@ -2808,7 +2818,7 @@ controls:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~0,0,0,180
+              normal: ~12,19,33,178
           选物面板:
             type: Canvas
             attribute:
@@ -2821,7 +2831,7 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~36,38,48,245
+                  normal: ~32,43,62,250
                   shape: ~round_rect
                   radius: 14
                 effect:
@@ -2939,7 +2949,7 @@ controls:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~0,0,0,180
+              normal: ~12,19,33,178
           确认面板:
             type: Canvas
             attribute:
@@ -2952,7 +2962,7 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~36,38,48,245
+                  normal: ~32,43,62,250
                   shape: ~round_rect
                   radius: 14
                 effect:
@@ -2989,13 +2999,13 @@ controls:
                     if(var.confirmTarget == 'discard'){
                       var.dirty = false
                       var.pendingNavigation()
-                    } else if(var.confirmTarget == 'stock'){
+                    } elif(var.confirmTarget == 'stock'){
                       Packet.send(var.packetId, 'shop_edit_stock', var.editShopId, var.editItemKey, var.stockAction, var.stockAmountArg, var.stockTarget, var.actionToken, var.shopRevision)
-                    } else if(var.confirmTarget == 'save-stock'){
+                    } elif(var.confirmTarget == 'save-stock'){
                       Packet.send(var.packetId, 'shop_edit_item_save', var.pendingSaveShop, var.pendingSaveNew, var.pendingSaveJson, var.actionToken)
-                    } else if(var.confirmTarget == 'shop'){
+                    } elif(var.confirmTarget == 'shop'){
                       Packet.send(var.packetId, 'shop_edit_shop_delete', var.editShopId, var.actionToken, var.shopRevision)
-                    } else if(var.confirmTarget == 'item'){
+                    } elif(var.confirmTarget == 'item'){
                       Packet.send(var.packetId, 'shop_edit_item_delete', var.editShopId, var.confirmKey, var.actionToken, var.shopRevision)
                     }
                     var.showConfirm = false

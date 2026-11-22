@@ -144,7 +144,8 @@ public final class FishingPlayerCommand implements TabExecutor {
             sender.sendMessage(msg.apply("command_ui_not_configured", new Object[]{}));
             return true;
         }
-        bridge.openUi(player, uiId);
+        if (service != null) service.openUi(player, uiId);
+        else bridge.openUi(player, uiId);
         // UI 数据推送由 packetHandler.init 处理
         return true;
     }

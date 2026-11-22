@@ -13,19 +13,28 @@ import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
+import org.bukkit.event.server.PluginDisableEvent;
+import org.bukkit.event.server.PluginEnableEvent;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.scheduler.BukkitTask;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.AbstractAXSModule;
 import xuanmo.arcartxsuite.api.ModuleCommandHandler;
 import xuanmo.arcartxsuite.api.ModuleDescriptor;
+import xuanmo.arcartxsuite.api.capability.AbyssQueryable;
 import xuanmo.arcartxsuite.api.capability.CombatEffectTriggerable;
+import xuanmo.arcartxsuite.api.capability.EventBusCapability;
 import xuanmo.arcartxsuite.api.config.SyncPolicy;
+import xuanmo.arcartxsuite.api.bridge.ChronosAccess;
 import xuanmo.arcartxsuite.api.bridge.ClientBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.config.ModuleConfig;
 import xuanmo.arcartxsuite.api.ModuleUiSpec;
 import xuanmo.arcartxsuite.combateffect.combo.ComboTrackerConfiguration;
+import xuanmo.arcartxsuite.combateffect.chronos.SkillEffectService;
 import xuanmo.arcartxsuite.combateffect.combo.ComboTrackerService;
 import xuanmo.arcartxsuite.combateffect.deathbuffer.DeathBufferConfiguration;
 import xuanmo.arcartxsuite.combateffect.deathbuffer.DeathBufferService;
@@ -46,6 +55,8 @@ public final class CombatEffectModule extends AbstractAXSModule implements Modul
 
     private static final String CONFIG_FILE_NAME = "ArcartXCombatEffect.yml";
     private static final String MESSAGES_FILE_NAME = "messages.yml";
+    private static final String COMBO_HUD_FILE = "ui/combo_effect.yml";
+    private static final String COMBO_HUD_RESOURCE = "arcartx/" + COMBO_HUD_FILE;
 
     private FileConfiguration rawConfiguration;
     private CombatEffectPacketConfiguration packetConfiguration;
@@ -58,6 +69,10 @@ public final class CombatEffectModule extends AbstractAXSModule implements Modul
     private ComboTrackerService comboTrackerService;
     private KeybindTriggerService keybindTriggerService;
     private StateTriggerService stateTriggerService;
+    private SkillEffectService skillEffectService;
+    private BukkitTask chronosRefreshTask;
+    private EventBusCapability abyssEventBus;
+    private String abyssDeathSubscription;
 
     @Override
     public ModuleDescriptor descriptor() {
@@ -79,6 +94,7 @@ public final class CombatEffectModule extends AbstractAXSModule implements Modul
                     .dynamicSection("death-buffer")
                     .dynamicSection("keybind-trigger")
                     .dynamicSection("state-trigger")
+                    .dynamicSection("skill-effects")
                     .dynamicSection("digis-display")
                 .build())
             .currentVersion(1)
@@ -89,8 +105,8 @@ public final class CombatEffectModule extends AbstractAXSModule implements Modul
     protected @NotNull ModuleUiSpec uiSpec() {
         Map<String, String> mappings = new LinkedHashMap<>();
         mappings.put("arcartx/ui/combat_kill_effect.yml", "ui/combat_kill_effect.yml");
-        mappings.put("arcartx/ui/combo_effect.yml", "ui/combo_effect.yml");
         mappings.put("arcartx/ui/death_buffer.yml", "ui/death_buffer.yml");
+        mappings.put("arcartx/ui/skill_effect_hud.yml", "ui/skill_effect_hud.yml");
         return new ModuleUiSpec(mappings, rawConfiguration != null && rawConfiguration.getBoolean("ui.overwrite-ui-files", false));
     }
 
@@ -130,34 +146,52 @@ public final class CombatEffectModule extends AbstractAXSModule implements Modul
 
         // 注册 UI（由基类根据 uiSpec() 自动导出并注册）
         registerModuleUi("ui/combat_kill_effect.yml", "AXS:combat_kill_effect", true);
-        registerModuleUi("ui/combo_effect.yml", "AXS:combo_effect", true);
-        registerModuleUi("ui/death_buffer.yml", "AXS:death_buffer", true);
+        registerModuleUi(COMBO_HUD_RESOURCE, COMBO_HUD_FILE, ComboTrackerService.HUD_ID, true);
+        registerModuleUi("ui/death_buffer.yml", DeathBufferService.BUFFER_UI_ID, true);
+        if (rawConfiguration.getBoolean("skill-effects.enabled", false)) {
+            registerModuleUi("ui/skill_effect_hud.yml", SkillEffectService.HUD_ID, true);
+        }
 
         // 导出 damage_display 资源到 ArcartX damage_display/ 目录
         exportDamageDisplayResources();
 
         packetService = new CombatEffectPacketService(plugin, packetConfiguration, packetBridge, logger);
-        packetService.setEventBusProvider(() -> getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
+        packetService.setEventBusProvider(() -> getCapability(EventBusCapability.class));
+        packetService.setDeferredKiller(player -> deathBufferService == null ? null : deathBufferService.settlingKiller(player));
         packetService.start();
 
         if (clientBridge != null && clientBridge.isAvailable()) {
+            if (!clientBridge.reloadDamageDisplayConfigurations()) {
+                logger.warning("伤害飘字样式未能同步，请执行 /arcartx reload。");
+            }
             displayService = new CombatDisplayService(plugin, logger, displayConfiguration, clientBridge, attributeBridge);
             displayService.start();
         }
 
         if (deathBufferConfiguration.enabled()) {
             deathBufferService = new DeathBufferService(
-                plugin, deathBufferConfiguration, packetConfiguration, packetBridge, logger
+                plugin, deathBufferConfiguration, packetConfiguration, packetBridge, logger,
+                () -> getCapability(AbyssQueryable.class)
             );
             deathBufferService.start();
+            subscribeToAbyssDeaths();
         }
 
-        if (comboTrackerConfiguration.enabled()) {
-            comboTrackerService = new ComboTrackerService(
-                plugin, comboTrackerConfiguration, packetConfiguration, packetBridge, clientBridge, logger
-            );
-            comboTrackerService.start();
-        }
+        refreshChronosListeners();
+        registerListener(new Listener() {
+            @EventHandler
+            public void onPluginEnable(PluginEnableEvent event) {
+                if (ChronosAccess.isChronos(event.getPlugin())) scheduleChronosRefresh();
+            }
+
+            @EventHandler
+            public void onPluginDisable(PluginDisableEvent event) {
+                if (ChronosAccess.isChronos(event.getPlugin())) {
+                    stopSkillEffects();
+                    scheduleChronosRefresh();
+                }
+            }
+        });
 
         // 按键触发器
         boolean keybindEnabled = rawConfiguration != null
@@ -166,15 +200,6 @@ public final class CombatEffectModule extends AbstractAXSModule implements Modul
         if (keybindEnabled) {
             keybindTriggerService = new KeybindTriggerService(plugin, packetConfiguration, packetBridge, logger);
             keybindTriggerService.start();
-        }
-
-        // 状态/控制器触发器
-        boolean stateEnabled = rawConfiguration != null
-            ? rawConfiguration.getBoolean("state-trigger.enabled", false)
-            : false;
-        if (stateEnabled) {
-            stateTriggerService = new StateTriggerService(plugin, packetConfiguration, packetBridge, logger);
-            stateTriggerService.start();
         }
 
         // 注册跨模块 capability
@@ -203,17 +228,19 @@ public final class CombatEffectModule extends AbstractAXSModule implements Modul
 
     @Override
     protected void stopService() {
-        if (stateTriggerService != null) {
-            stateTriggerService.shutdown();
-            stateTriggerService = null;
+        if (chronosRefreshTask != null) {
+            chronosRefreshTask.cancel();
+            chronosRefreshTask = null;
+        }
+        stopChronosListeners();
+        if (abyssDeathSubscription != null) {
+            abyssEventBus.unsubscribe(abyssDeathSubscription);
+            abyssDeathSubscription = null;
+            abyssEventBus = null;
         }
         if (keybindTriggerService != null) {
             keybindTriggerService.shutdown();
             keybindTriggerService = null;
-        }
-        if (comboTrackerService != null) {
-            comboTrackerService.shutdown();
-            comboTrackerService = null;
         }
         if (deathBufferService != null) {
             deathBufferService.shutdown();
@@ -232,6 +259,77 @@ public final class CombatEffectModule extends AbstractAXSModule implements Modul
         deathBufferConfiguration = null;
         displayConfiguration = null;
         packetConfiguration = null;
+    }
+
+    private void scheduleChronosRefresh() {
+        if (!plugin.isEnabled() || chronosRefreshTask != null) return;
+        chronosRefreshTask = Bukkit.getScheduler().runTask(plugin, () -> {
+            chronosRefreshTask = null;
+            refreshChronosListeners();
+        });
+    }
+
+    private void refreshChronosListeners() {
+        stopChronosListeners();
+        ChronosAccess.Probe probe = ChronosAccess.probe();
+        logger.info("Chronos 联动: " + probe.status() + " " + probe.detail());
+        if (comboTrackerConfiguration.enabled()) {
+            comboTrackerService = new ComboTrackerService(
+                plugin, comboTrackerConfiguration, packetConfiguration, packetBridge, logger);
+            comboTrackerService.start(probe.access(), attributeBridge != null && attributeBridge.symphonyDamageAvailable());
+        }
+        if (rawConfiguration != null && rawConfiguration.getBoolean("state-trigger.enabled", false)) {
+            StateTriggerService service = new StateTriggerService(plugin, packetConfiguration, packetBridge, logger);
+            if (service.start(probe.access())) stateTriggerService = service;
+        }
+        if (probe.access() != null && rawConfiguration != null) {
+            ConfigurationSection effects = rawConfiguration.getConfigurationSection("skill-effects");
+            if (effects != null && effects.getBoolean("enabled", false)) {
+                var service = new SkillEffectService(plugin, packetService, packetConfiguration, packetBridge, effects, logger);
+                if (service.start(probe.access())) skillEffectService = service;
+            }
+        }
+    }
+
+    private void stopChronosListeners() {
+        stopSkillEffects();
+        if (stateTriggerService != null) {
+            stateTriggerService.shutdown();
+            stateTriggerService = null;
+        }
+        if (comboTrackerService != null) {
+            comboTrackerService.shutdown();
+            comboTrackerService = null;
+        }
+    }
+
+    private void stopSkillEffects() {
+        if (skillEffectService != null) {
+            skillEffectService.shutdown();
+            skillEffectService = null;
+        }
+    }
+
+    private void subscribeToAbyssDeaths() {
+        String packetId = deathBufferConfiguration.abyssPacketId();
+        if (packetId.isEmpty()) return;
+        var definition = packetConfiguration.findPacketById(packetId);
+        if (definition == null || !definition.enabled()) {
+            logger.warning("Abyss 倒地特效包不存在或未启用: " + packetId);
+            return;
+        }
+        abyssEventBus = getCapability(EventBusCapability.class);
+        if (abyssEventBus == null) return;
+        abyssDeathSubscription = abyssEventBus.subscribe("axs.abyss.player_death", event -> {
+            Player player = event.player();
+            if (player == null || !player.isOnline() || !(event.typedPayload() instanceof Map<?, ?> data)) return;
+            Map<String, String> variables = new LinkedHashMap<>();
+            for (String key : List.of("dungeon", "instance", "deaths")) {
+                Object value = data.get(key);
+                if (value != null) variables.put(key, value.toString());
+            }
+            packetService.triggerConfiguredPacket(packetId, player, variables);
+        });
     }
 
     public CombatEffectPacketConfiguration getPacketConfiguration() {
@@ -315,6 +413,9 @@ public final class CombatEffectModule extends AbstractAXSModule implements Modul
         sender.sendMessage(msg("status.combo", enabledLabel(comboTrackerService != null)));
         sender.sendMessage(msg("status.keybind", enabledLabel(keybindTriggerService != null)));
         sender.sendMessage(msg("status.state", enabledLabel(stateTriggerService != null)));
+        sender.sendMessage(msg("status.skill-effects", enabledLabel(skillEffectService != null)));
+        ChronosAccess.Probe probe = ChronosAccess.probe();
+        sender.sendMessage(msg("status.chronos", probe.status(), probe.detail()));
     }
 
     // /axs combateffect send <packetId> <player> [k=v ...]

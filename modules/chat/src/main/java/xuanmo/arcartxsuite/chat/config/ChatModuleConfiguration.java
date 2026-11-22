@@ -119,7 +119,7 @@ public record ChatModuleConfiguration(
 
         Map<String, ChatChannelDefinition> channels = loadChannels(channelsDirectory, logger);
         if (!channels.containsKey(defaultChannelId)) {
-            defaultChannelId = channels.isEmpty() ? "normal" : channels.keySet().iterator().next();
+            logger.warning("Chat 默认频道不可用: " + defaultChannelId);
         }
 
         return new ChatModuleConfiguration(
@@ -159,20 +159,35 @@ public record ChatModuleConfiguration(
             return channels;
         }
 
-        File[] files = directory.listFiles(file -> file.isFile() && file.getName().toLowerCase(Locale.ROOT).endsWith(".yml"));
+        File[] files = directory.listFiles(file -> file.isFile()
+            && file.getName().toLowerCase(Locale.ROOT).matches(".+\\.ya?ml"));
         if (files == null) {
             return channels;
         }
 
         java.util.Arrays.sort(files, (left, right) -> left.getName().compareToIgnoreCase(right.getName()));
+        java.util.Set<String> known = new java.util.HashSet<>();
         for (File file : files) {
             String fileName = file.getName();
-            String id = normalizeId(fileName.substring(0, fileName.length() - 4));
-            ChatChannelDefinition definition = ChatChannelDefinition.load(id, YamlConfiguration.loadConfiguration(file));
-            if (!definition.enabled()) {
+            String id = normalizeId(fileName.substring(0, fileName.lastIndexOf('.')));
+            if (!id.matches("[a-z0-9_.-]{1,64}")) {
+                logger.warning("已停用 ID 无效的 Chat 频道 " + fileName);
                 continue;
             }
-            channels.put(definition.id(), definition);
+            if (!known.add(id)) {
+                channels.remove(id);
+                logger.warning("已停用重名 Chat 频道 " + id);
+                continue;
+            }
+            try {
+                YamlConfiguration yaml = new YamlConfiguration();
+                yaml.load(file);
+                if (yaml.getKeys(false).isEmpty()) throw new IllegalArgumentException("频道文件为空");
+                ChatChannelDefinition definition = ChatChannelDefinition.load(id, yaml);
+                if (definition.enabled()) channels.put(definition.id(), definition);
+            } catch (java.io.IOException | org.bukkit.configuration.InvalidConfigurationException | IllegalArgumentException exception) {
+                logger.warning("已停用 Chat 频道 " + fileName + ": " + exception.getMessage());
+            }
         }
         if (channels.isEmpty()) {
             logger.warning("ArcartXChat 未加载到任何频道定义。");

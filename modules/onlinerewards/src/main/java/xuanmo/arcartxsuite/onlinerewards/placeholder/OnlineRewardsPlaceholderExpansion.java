@@ -4,6 +4,7 @@ import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.Locale;
+import java.util.function.Function;
 import me.clip.placeholderapi.expansion.PlaceholderExpansion;
 import org.bukkit.OfflinePlayer;
 import org.jetbrains.annotations.NotNull;
@@ -12,8 +13,8 @@ import java.util.function.Supplier;
 import org.bukkit.plugin.java.JavaPlugin;
 import xuanmo.arcartxsuite.onlinerewards.model.OnlineRewardsLeaderboardEntry;
 import xuanmo.arcartxsuite.onlinerewards.model.OnlineRewardsLeaderboardScope;
-import xuanmo.arcartxsuite.onlinerewards.service.OnlineRewardsPlayerSnapshot;
 import xuanmo.arcartxsuite.onlinerewards.service.OnlineRewardsService;
+import xuanmo.arcartxsuite.onlinerewards.service.OnlineRewardsService.PlaceholderValues;
 import xuanmo.arcartxsuite.onlinerewards.service.OnlineRewardsTextFormats;
 
 /**
@@ -23,6 +24,7 @@ import xuanmo.arcartxsuite.onlinerewards.service.OnlineRewardsTextFormats;
  * 涵盖在线时长、签到状态、排行榜、签到历史与全服签到目标等查询。
  */
 public final class OnlineRewardsPlaceholderExpansion extends PlaceholderExpansion {
+    private static final DateTimeFormatter MONTH_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM");
 
     private final JavaPlugin plugin;
     private final Supplier<OnlineRewardsService> serviceProvider;
@@ -68,7 +70,7 @@ public final class OnlineRewardsPlaceholderExpansion extends PlaceholderExpansio
     @Override
     public @Nullable String onRequest(OfflinePlayer offlinePlayer, @NotNull String params) {
         OnlineRewardsService service = serviceProvider.get();
-        if (service == null) {
+        if (service == null || service.isStopping()) {
             return "";
         }
 
@@ -86,27 +88,25 @@ public final class OnlineRewardsPlaceholderExpansion extends PlaceholderExpansio
             return Integer.toString(service.nextServerSignInGoalRequired());
         }
 
-        if (offlinePlayer == null || offlinePlayer.getUniqueId() == null) {
-            return "";
-        }
-
-        OnlineRewardsPlayerSnapshot snapshot = service.loadSnapshot(offlinePlayer.getUniqueId(), offlinePlayer.getName());
-        return switch (normalized) {
-            case "daily_minutes" -> Integer.toString(snapshot.state().onlineMinutes());
-            case "weekly_minutes" -> Integer.toString(snapshot.state().weekMinutes());
-            case "monthly_minutes" -> Integer.toString(snapshot.state().monthMinutes());
-            case "total_minutes" -> Integer.toString(snapshot.state().totalMinutes());
-            case "daily_time" -> OnlineRewardsTextFormats.formatMinutes(snapshot.state().onlineMinutes());
-            case "weekly_time" -> OnlineRewardsTextFormats.formatMinutes(snapshot.state().weekMinutes());
-            case "monthly_time" -> OnlineRewardsTextFormats.formatMinutes(snapshot.state().monthMinutes());
-            case "total_time" -> OnlineRewardsTextFormats.formatMinutes(snapshot.state().totalMinutes());
-            case "offline_savings_minutes" -> Integer.toString(snapshot.state().offlineSavingsMinutes());
-            case "offline_savings_time" -> OnlineRewardsTextFormats.formatMinutes(snapshot.state().offlineSavingsMinutes());
-            case "signin_signed_today" -> Boolean.toString(snapshot.signedToday());
-            case "signin_streak" -> Integer.toString(snapshot.state().signInStreak());
-            case "signin_total" -> Integer.toString(snapshot.state().signInTotal());
+        Function<PlaceholderValues, String> display = switch (normalized) {
+            case "daily_minutes" -> state -> Integer.toString(state.today());
+            case "weekly_minutes" -> state -> Integer.toString(state.week());
+            case "monthly_minutes" -> state -> Integer.toString(state.month());
+            case "total_minutes" -> state -> Integer.toString(state.total());
+            case "daily_time" -> state -> OnlineRewardsTextFormats.formatMinutes(state.today());
+            case "weekly_time" -> state -> OnlineRewardsTextFormats.formatMinutes(state.week());
+            case "monthly_time" -> state -> OnlineRewardsTextFormats.formatMinutes(state.month());
+            case "total_time" -> state -> OnlineRewardsTextFormats.formatMinutes(state.total());
+            case "offline_savings_minutes" -> state -> Integer.toString(state.savings());
+            case "offline_savings_time" -> state -> OnlineRewardsTextFormats.formatMinutes(state.savings());
+            case "signin_signed_today" -> state -> Boolean.toString(state.signedToday());
+            case "signin_streak" -> state -> Integer.toString(state.streak());
+            case "signin_total" -> state -> Integer.toString(state.signIns());
             default -> null;
         };
+        if (offlinePlayer == null || offlinePlayer.getUniqueId() == null) return "";
+        return display == null ? null : display.apply(service.placeholderValues(
+            offlinePlayer.getUniqueId(), "signin_signed_today".equals(normalized)));
     }
 
     private String resolveSignInHistoryPlaceholder(OnlineRewardsService service, OfflinePlayer offlinePlayer, String normalized) {
@@ -127,7 +127,7 @@ public final class OnlineRewardsPlaceholderExpansion extends PlaceholderExpansio
 
     private YearMonth parseYearMonth(String value) {
         try {
-            return YearMonth.parse(value, DateTimeFormatter.ofPattern("yyyy-MM"));
+            return YearMonth.parse(value, MONTH_FORMAT);
         } catch (DateTimeParseException exception) {
             return null;
         }

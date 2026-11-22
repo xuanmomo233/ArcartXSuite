@@ -29,7 +29,7 @@ damage-ranking:
   rewards:
     # 只在 Boss 死亡结算时发奖；重载 / 消失 / 停机不会触发。
     enabled: false
-    # 物品奖励背包满时统一处理：放入背包→背包满转邮件→无邮件则掉落（由 ItemRewardDispatcher 统一处理）
+    # 背包无法完整放入时，整份物品先入待发队列，再尝试仓库或邮箱。
     ranks:
       1:
         actions:
@@ -65,7 +65,7 @@ damage-ranking:
   ranking-rewards:
     weekly:
       enabled: false
-      # 物品奖励背包满时统一处理：放入背包→背包满转邮件→无邮件则掉落（由 ItemRewardDispatcher 统一处理）
+      # 背包无法完整放入时，整份物品先入待发队列，再尝试仓库或邮箱。
       ranks:
         1:
           actions:

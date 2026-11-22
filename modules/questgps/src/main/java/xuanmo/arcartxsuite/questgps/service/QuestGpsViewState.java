@@ -1,5 +1,6 @@
 package xuanmo.arcartxsuite.questgps.service;
 
+import java.util.Map;
 import xuanmo.arcartxsuite.questgps.QuestGpsCategory;
 import xuanmo.arcartxsuite.questgps.QuestGpsPage;
 
@@ -11,6 +12,9 @@ final class QuestGpsViewState {
     private QuestGpsCategory category;
     private QuestGpsPage page = QuestGpsPage.AVAILABLE;
     private String selectedQuestId = "";
+    private Map<String, Object> lastMenu;
+    private Map<String, Object> lastGuide;
+    private boolean menuTokenConsumed;
 
     QuestGpsCategory category() {
         return category;
@@ -35,4 +39,25 @@ final class QuestGpsViewState {
     void setSelectedQuestId(String selectedQuestId) {
         this.selectedQuestId = selectedQuestId == null ? "" : selectedQuestId.trim();
     }
+
+    boolean hasMenuToken() { return lastMenu != null && !menuTokenConsumed; }
+
+    boolean menuTokenConsumed() { return menuTokenConsumed; }
+
+    void consumeMenuToken() { menuTokenConsumed = true; }
+
+    boolean sameMenu(Map<String, Object> payload) { return hasMenuToken() && lastMenu.equals(payload); }
+
+    void sentMenu(Map<String, Object> payload) {
+        lastMenu = payload;
+        menuTokenConsumed = false;
+    }
+
+    void invalidateMenu() { lastMenu = null; }
+
+    boolean sameGuide(Map<String, Object> payload) { return payload.equals(lastGuide); }
+
+    void sentGuide(Map<String, Object> payload) { lastGuide = payload; }
+
+    void invalidateGuide() { lastGuide = null; }
 }

@@ -14,6 +14,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.logging.Logger;
 import java.util.regex.Matcher;
@@ -26,12 +27,15 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerChangedWorldEvent;
+import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
 import org.jetbrains.annotations.NotNull;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
+import xuanmo.arcartxsuite.api.bridge.ClientBridgeAPI;
 import xuanmo.arcartxsuite.api.capability.EventBusCapability;
 import xuanmo.arcartxsuite.api.capability.VanillaBackpackAccess;
 import xuanmo.arcartxsuite.api.capability.SecondaryPasswordAccess;
@@ -40,8 +44,11 @@ import xuanmo.arcartxsuite.api.capability.WarehousePanelAccess;
 import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI;
 import xuanmo.arcartxsuite.api.currency.RondoBridge;
 import xuanmo.arcartxsuite.api.event.ModuleLifecycleEvent;
+import xuanmo.arcartxsuite.api.inventory.InventoryItems;
+import xuanmo.arcartxsuite.api.inventory.InventoryOperation;
 import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.vanilla.backpack.config.ExtraBackpackConfiguration;
+import xuanmo.arcartxsuite.vanilla.service.InventorySorter;
 
 /**
  * 额外槽位背包服务：默认关闭。启用后与玩家原版背包共存，
@@ -66,15 +73,21 @@ public final class ExtraBackpackService implements Listener, VanillaBackpackAcce
     private final MessageProvider messages;
     private final CurrencyBridgeAPI currencyManager;
     private final RondoBridge rondoBridge;
+    private final InventorySorter.Mode sortMode;
+    private final BackpackPresentation presentation;
+    private final Consumer<Player> presentationOpened = player -> onPresentationOpened(player);
+    private final Consumer<Player> uiClosed = this::onUiClosed;
     private final xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge;
 
     private static final String UI_RESOURCE_PATH = "arcartx/ui/vanilla_backpack.yml";
     private static final String UI_FILE_PATH = "ui/vanilla_backpack.yml";
     private static final Pattern LAYOUT_BOOTSTRAP = Pattern.compile(
         "(?m)^([\\t ]*)var\\.whLayoutEnabled = (?:true|false)[\\t ]*$");
+    private static final Pattern PRESENTATION_BOOTSTRAP = Pattern.compile(
+        "(?m)^([\\t ]*)var\\.backpackTransitionMs = [0-9]+[\\t ]*$");
     private File layoutUiFile;
     private BukkitTask layoutRefreshTask;
-    private boolean stopped;
+    private volatile boolean stopped;
     private String runtimeUiId = "";
     private String registeredUiId = "";
     private Supplier<EventBusCapability> eventBusProvider = () -> null;
@@ -97,12 +110,14 @@ public final class ExtraBackpackService implements Listener, VanillaBackpackAcce
         JavaPlugin plugin,
         Logger logger,
         PacketBridgeAPI packetBridge,
+        ClientBridgeAPI clientBridge,
         UiResourceExporter uiResourceExporter,
         ExtraBackpackConfiguration configuration,
         MessageProvider messages,
         xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge,
         CurrencyBridgeAPI currencyManager,
-        RondoBridge rondoBridge
+        RondoBridge rondoBridge,
+        InventorySorter.Mode sortMode
     ) {
         this.plugin = plugin;
         this.logger = logger;
@@ -113,6 +128,8 @@ public final class ExtraBackpackService implements Listener, VanillaBackpackAcce
         this.vanillaItemNameBridge = vanillaItemNameBridge;
         this.currencyManager = currencyManager;
         this.rondoBridge = rondoBridge;
+        this.sortMode = sortMode;
+        this.presentation = new BackpackPresentation(plugin, clientBridge, configuration.presentation(), this::isViewing);
     }
 
     @FunctionalInterface
@@ -140,7 +157,7 @@ public final class ExtraBackpackService implements Listener, VanillaBackpackAcce
     }
 
     public boolean enabled() {
-        return configuration.extraBackpack().enabled()
+        return configuration.enabled()
             && warehouse() != null && panelProvider.get() != null;
     }
 
@@ -298,7 +315,7 @@ public final class ExtraBackpackService implements Listener, VanillaBackpackAcce
     }
 
     public void start() throws Exception {
-        if (!configuration.extraBackpack().enabled()) {
+        if (!configuration.enabled()) {
             logger.warning("扩展背包功能未启用，跳过 UI 注册与事件监听。");
             return;
         }
@@ -306,11 +323,19 @@ public final class ExtraBackpackService implements Listener, VanillaBackpackAcce
             logger.warning("仓库访问能力不可用，扩展存储暂不可用；原版物品栏与随身工作台仍可使用。");
         }
         bindUi();
+        if (!registeredUiId.isBlank()) {
+            logger.info("Vanilla 随身背包 UI 已注册: " + runtimeUiId);
+        } else if (!configuration.ui().registerUiOnEnable()) {
+            logger.info("Vanilla 随身背包 UI 跳过自动注册（backpack.ui.register-ui-on-enable=false）");
+        } else {
+            logger.warning("Vanilla 随身背包 UI 跳过自动注册（ArcartX 桥接不可用）");
+        }
         Bukkit.getPluginManager().registerEvents(this, plugin);
     }
 
     public void shutdown() {
         stopped = true;
+        presentation.closeAll();
         if (layoutRefreshTask != null) {
             layoutRefreshTask.cancel();
             layoutRefreshTask = null;
@@ -325,6 +350,7 @@ public final class ExtraBackpackService implements Listener, VanillaBackpackAcce
         playerLocks.clear();
         workbenchRequests.clear();
         if (packetBridge != null) {
+            packetBridge.unregisterUiOpenCallback(runtimeUiId, presentationOpened);
             packetBridge.unregisterUiCloseCallback(runtimeUiId);
             if (!registeredUiId.isBlank()) {
                 packetBridge.unregisterUi(registeredUiId);
@@ -352,13 +378,22 @@ public final class ExtraBackpackService implements Listener, VanillaBackpackAcce
     private boolean prepareLayoutBootstrap(File uiFile) throws IOException {
         String source = Files.readString(uiFile.toPath(), StandardCharsets.UTF_8);
         Matcher marker = LAYOUT_BOOTSTRAP.matcher(source);
-        if (!marker.find()) {
+        String prepared = source;
+        if (marker.find()) {
+            boolean warehouseLayout = warehouse() != null && panelProvider.get() != null;
+            prepared = marker.replaceFirst(Matcher.quoteReplacement(
+                marker.group(1) + "var.whLayoutEnabled = " + warehouseLayout));
+        } else {
             logger.warning("额外背包 UI 缺少 whLayoutEnabled 初始化标记，保留自定义文件；请合并新版 UI 初始化段。");
-            return false;
         }
-        boolean warehouseLayout = warehouse() != null && panelProvider.get() != null;
-        String prepared = marker.replaceFirst(Matcher.quoteReplacement(
-            marker.group(1) + "var.whLayoutEnabled = " + warehouseLayout));
+        Matcher transition = PRESENTATION_BOOTSTRAP.matcher(prepared);
+        int transitionMs = configuration.presentation().activeTransitionMs();
+        if (transition.find()) {
+            prepared = transition.replaceFirst(Matcher.quoteReplacement(
+                transition.group(1) + "var.backpackTransitionMs = " + transitionMs));
+        } else if (transitionMs > 0) {
+            logger.warning("自定义背包 UI 未声明 backpackTransitionMs，请合并新版转场配置。");
+        }
         if (source.equals(prepared)) return false;
         Files.writeString(uiFile.toPath(), prepared, StandardCharsets.UTF_8);
         return true;
@@ -377,7 +412,10 @@ public final class ExtraBackpackService implements Listener, VanillaBackpackAcce
             layoutRefreshTask = null;
             if (stopped || layoutUiFile == null) return;
             try {
-                if (prepareLayoutBootstrap(layoutUiFile)) registerUiFile(layoutUiFile);
+                if (prepareLayoutBootstrap(layoutUiFile)) {
+                    presentation.closeAll();
+                    registerUiFile(layoutUiFile);
+                }
             } catch (Exception exception) {
                 logger.warning("更新额外背包仓库布局失败: " + exception.getMessage());
             }
@@ -385,6 +423,7 @@ public final class ExtraBackpackService implements Listener, VanillaBackpackAcce
     }
 
     private void registerUiFile(File uiFile) throws Exception {
+        String previousId = runtimeUiId;
         if (packetBridge == null || !configuration.ui().registerUiOnEnable()) {
             runtimeUiId = PacketBridgeAPI.normalizeUiId("AXS:vanilla_backpack", uiFile);
         } else {
@@ -396,14 +435,43 @@ public final class ExtraBackpackService implements Listener, VanillaBackpackAcce
             runtimeUiId = registration.runtimeUiId();
         }
         if (packetBridge != null && !runtimeUiId.isBlank()) {
+            if (!previousId.isBlank() && !previousId.equals(runtimeUiId)) {
+                packetBridge.unregisterUiOpenCallback(previousId, presentationOpened);
+                packetBridge.unregisterUiCloseCallback(previousId);
+            }
             // 即使不经桥接注册也尝试挂关闭回调：ArcartX 已自行注册该 UI 时，
             // 桥接能取到适配器并补上 OPEN/CLOSE 跟踪，isUiOpen 对 match 打开同样生效。
-            packetBridge.registerUiCloseCallback(runtimeUiId, this::handleUiClosed);
+            boolean tracksClose = packetBridge.registerUiCloseCallback(runtimeUiId, uiClosed);
+            if (presentation.enabled()
+                && (!tracksClose || !packetBridge.registerUiOpenCallback(runtimeUiId, presentationOpened))) {
+                packetBridge.unregisterUiOpenCallback(runtimeUiId, presentationOpened);
+                logger.warning("随身背包打开或关闭回调不可用，动作调度未启用。");
+            }
         }
+    }
+
+    private void onPresentationOpened(Player player) {
+        if (!stopped) presentation.open(player);
+    }
+
+    private void onUiClosed(Player player) {
+        presentation.close(player);
+        if (!stopped) handleUiClosed(player);
+    }
+
+    @EventHandler
+    public void onDeath(PlayerDeathEvent event) {
+        presentation.close(event.getEntity());
+    }
+
+    @EventHandler
+    public void onWorldChanged(PlayerChangedWorldEvent event) {
+        presentation.close(event.getPlayer());
     }
 
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
+        presentation.quit(event.getPlayer());
         UUID uuid = event.getPlayer().getUniqueId();
         synchronized (playerLock(uuid)) {
             passwordPanelModes.remove(uuid);
@@ -428,7 +496,7 @@ public final class ExtraBackpackService implements Listener, VanillaBackpackAcce
         List<String> data,
         SecondaryPasswordAccess passwordAccess
     ) {
-        if (stopped || !configuration.extraBackpack().enabled() || player == null || !player.isOnline() || packetId == null) {
+        if (stopped || !configuration.enabled() || player == null || !player.isOnline() || packetId == null) {
             return false;
         }
         if (!("AXS_VANILLA_BACKPACK".equalsIgnoreCase(packetId))) {
@@ -438,6 +506,10 @@ public final class ExtraBackpackService implements Listener, VanillaBackpackAcce
         // The inventory header and native workbench do not require Warehouse.
         if ("open_workbench".equals(action)) {
             openPortableWorkbench(player, value(data, 1, ""));
+            return true;
+        }
+        if ("sort_backpack".equals(action)) {
+            sortBackpack(player, value(data, 1, ""));
             return true;
         }
         if (!enabled() && !"open".equals(action) && !"refresh".equals(action) && !"close".equals(action)) return false;
@@ -495,11 +567,44 @@ public final class ExtraBackpackService implements Listener, VanillaBackpackAcce
 
     @Override
     public void open(Player player) throws Exception {
-        if (!enabled() || packetBridge == null) {
+        if (stopped || !configuration.enabled() || packetBridge == null || !packetBridge.isAvailable()) {
             return;
         }
         if (packetBridge.openUi(player, runtimeUiId)) {
             actionTokens.put(player.getUniqueId(), UUID.randomUUID().toString());
+        }
+    }
+
+    private void sortBackpack(Player player, String token) {
+        if (!isViewing(player) || player.isDead() || player.getGameMode() == org.bukkit.GameMode.SPECTATOR
+            || !player.hasPermission(InventorySorter.PERMISSION)) return;
+        var type = player.getOpenInventory().getType();
+        if (type != org.bukkit.event.inventory.InventoryType.CRAFTING
+            && type != org.bukkit.event.inventory.InventoryType.PLAYER) return;
+        UUID id = player.getUniqueId();
+        if (token.isBlank() || !token.equals(actionTokens.get(id))) {
+            sendMessage(player, false, message("extra-backpack.action-token-invalid"));
+            return;
+        }
+        if (!InventoryItems.empty(player.getItemOnCursor())) {
+            sendMessage(player, false, message("extra-backpack.sort-cursor"));
+            return;
+        }
+        if (pendingDestroyCursor.containsKey(id) || passwordPanelModes.containsKey(id)) {
+            sendMessage(player, false, message("extra-backpack.sort-pending"));
+            return;
+        }
+        try (var operation = InventoryOperation.tryAcquire(player)) {
+            if (operation == null) {
+                sendMessage(player, false, message("extra-backpack.sort-busy"));
+                return;
+            }
+            InventorySorter.sort(player.getInventory(), 9, sortMode);
+            player.updateInventory();
+            sendMessage(player, true, message("extra-backpack.sort-done"));
+        } catch (RuntimeException exception) {
+            logger.log(java.util.logging.Level.WARNING, "整理背包失败(" + player.getName() + ")", exception);
+            sendMessage(player, false, message("extra-backpack.operation-failed"));
         }
     }
 
@@ -508,7 +613,7 @@ public final class ExtraBackpackService implements Listener, VanillaBackpackAcce
             Bukkit.getScheduler().runTask(plugin, () -> openPortableWorkbench(player, token));
             return;
         }
-        if (stopped || !configuration.extraBackpack().enabled() || !player.isOnline() || !isViewing(player)) return;
+        if (stopped || !configuration.enabled() || !player.isOnline() || !isViewing(player)) return;
         var type = player.getOpenInventory().getType();
         if (type != org.bukkit.event.inventory.InventoryType.CRAFTING && type != org.bukkit.event.inventory.InventoryType.PLAYER) return;
         if (token.isBlank() || !token.equals(actionTokens.get(player.getUniqueId()))) {
@@ -582,19 +687,19 @@ public final class ExtraBackpackService implements Listener, VanillaBackpackAcce
             refresh(player);
             return;
         }
-        if (!passwordAccess.isPasswordSet(player)) {
-            passwordPanelModes.put(player.getUniqueId(), "set");
-            sendMessage(player, false, message("extra-backpack.password-set-required"));
-            refresh(player);
-            return;
-        }
-        if (!passwordAccess.isUnlocked(player)) {
-            passwordPanelModes.put(player.getUniqueId(), "unlock");
-            sendMessage(player, false, message("extra-backpack.destroy-password-required"));
-            refresh(player);
-            return;
-        }
-        destroyCursorNow(player);
+        afterPasswordRequest(player, passwordAccess.statusAsync(player), (status, failure) -> {
+            if (failure != null || status == null || !status.unlocked()) {
+                passwordPanelModes.put(player.getUniqueId(), "unlock");
+                sendMessage(player, false, message("extra-backpack.destroy-password-required"));
+                refresh(player);
+            } else if (!status.passwordSet()) {
+                passwordPanelModes.put(player.getUniqueId(), "set");
+                sendMessage(player, false, message("extra-backpack.password-set-required"));
+                refresh(player);
+            } else {
+                destroyCursorNow(player);
+            }
+        });
     }
 
     private void destroyCursorNow(Player player) throws Exception {
@@ -644,19 +749,18 @@ public final class ExtraBackpackService implements Listener, VanillaBackpackAcce
             refresh(player);
             return;
         }
-        if (!passwordAccess.set(player, oldPassword, trimmed)) {
-            sendMessage(player, false, message("extra-backpack.password-set-failed"));
-            refresh(player);
-            return;
-        }
-        sendMessage(player, true, message("extra-backpack.password-set-success"));
-        markActionCommitted(player);
-        passwordPanelModes.remove(player.getUniqueId());
-        if (pendingDestroyCursor.containsKey(player.getUniqueId())) {
-            destroyCursorNow(player);
-        } else {
-            refresh(player);
-        }
+        afterPasswordRequest(player, passwordAccess.setAsync(player, oldPassword, trimmed), (applied, failure) -> {
+            if (failure != null || !Boolean.TRUE.equals(applied)) {
+                sendMessage(player, false, message("extra-backpack.password-set-failed"));
+                refresh(player);
+                return;
+            }
+            sendMessage(player, true, message("extra-backpack.password-set-success"));
+            markActionCommitted(player);
+            passwordPanelModes.remove(player.getUniqueId());
+            if (pendingDestroyCursor.containsKey(player.getUniqueId())) confirmDestroy(player, passwordAccess);
+            else refresh(player);
+        });
     }
 
     private void passwordUnlock(
@@ -669,18 +773,46 @@ public final class ExtraBackpackService implements Listener, VanillaBackpackAcce
             refresh(player);
             return;
         }
-        if (!passwordAccess.verify(player, password)) {
-            sendMessage(player, false, message("extra-backpack.password-wrong"));
-            refresh(player);
-            return;
-        }
-        sendMessage(player, true, message("extra-backpack.password-unlocked"));
-        passwordPanelModes.remove(player.getUniqueId());
-        if (pendingDestroyCursor.containsKey(player.getUniqueId())) {
-            destroyCursorNow(player);
-        } else {
-            refresh(player);
-        }
+        afterPasswordRequest(player, passwordAccess.verifyAsync(player, password), (verified, failure) -> {
+            if (failure != null || !Boolean.TRUE.equals(verified)) {
+                sendMessage(player, false, message("extra-backpack.password-wrong"));
+                refresh(player);
+                return;
+            }
+            sendMessage(player, true, message("extra-backpack.password-unlocked"));
+            passwordPanelModes.remove(player.getUniqueId());
+            if (pendingDestroyCursor.containsKey(player.getUniqueId())) confirmDestroy(player, passwordAccess);
+            else refresh(player);
+        });
+    }
+
+    @FunctionalInterface
+    private interface PasswordResult<T> {
+        void apply(T value, Throwable failure) throws Exception;
+    }
+
+    private <T> void afterPasswordRequest(Player player, java.util.concurrent.CompletionStage<T> request, PasswordResult<T> result) {
+        UUID playerId = player.getUniqueId();
+        String panel = passwordPanelModes.get(playerId);
+        String token = actionTokens.get(playerId);
+        ItemStack expected = pendingDestroyCursor.get(playerId);
+        request.whenComplete((value, failure) -> {
+            if (stopped) return;
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                if (stopped || Bukkit.getPlayer(playerId) != player || !player.isOnline() || !isViewing(player)
+                    || !java.util.Objects.equals(panel, passwordPanelModes.get(playerId))
+                    || !java.util.Objects.equals(token, actionTokens.get(playerId))
+                    || expected != pendingDestroyCursor.get(playerId)) return;
+                try {
+                    result.apply(value, failure);
+                } catch (Exception exception) {
+                    logger.warning("应用额外背包密码操作结果失败: " + exception.getMessage());
+                    sendMessage(player, false, message("extra-backpack.operation-failed"));
+                } finally {
+                    committedActionTokens.get().remove(playerId);
+                }
+            });
+        });
     }
 
     private void passwordClear(
@@ -693,15 +825,17 @@ public final class ExtraBackpackService implements Listener, VanillaBackpackAcce
             refresh(player);
             return;
         }
-        if (!passwordAccess.clear(player, password)) {
-            sendMessage(player, false, message("extra-backpack.password-wrong"));
+        afterPasswordRequest(player, passwordAccess.clearAsync(player, password), (applied, failure) -> {
+            if (failure != null || !Boolean.TRUE.equals(applied)) {
+                sendMessage(player, false, message("extra-backpack.password-wrong"));
+                refresh(player);
+                return;
+            }
+            sendMessage(player, true, message("extra-backpack.password-cleared"));
+            markActionCommitted(player);
+            passwordPanelModes.remove(player.getUniqueId());
             refresh(player);
-            return;
-        }
-        sendMessage(player, true, message("extra-backpack.password-cleared"));
-        markActionCommitted(player);
-        passwordPanelModes.remove(player.getUniqueId());
-        refresh(player);
+        });
     }
 
     private void closePasswordPanel(Player player) throws Exception {
@@ -926,6 +1060,7 @@ public final class ExtraBackpackService implements Listener, VanillaBackpackAcce
         Map<String, Object> packet = new LinkedHashMap<>();
         packet.put("packetId", "AXS_VANILLA_BACKPACK");
         packet.put("action_token", token);
+        packet.put("canSortBackpack", player.hasPermission(InventorySorter.PERMISSION));
         packet.put("used", snapshot.usedSlots());
         packet.put("capacityText", snapshot.usedSlots() + "/" + snapshot.unlockedSlots());
 

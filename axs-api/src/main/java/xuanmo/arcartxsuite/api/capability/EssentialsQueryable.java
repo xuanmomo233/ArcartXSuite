@@ -1,6 +1,7 @@
 package xuanmo.arcartxsuite.api.capability;
 
 import java.util.UUID;
+import java.util.concurrent.CompletionStage;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
@@ -28,15 +29,15 @@ public interface EssentialsQueryable {
     boolean isVanished(@NotNull UUID playerUuid);
 
     /**
-     * 查询玩家是否被禁言（Essentials 侧）。
+     * 通过 Chat 异步查询玩家禁言状态。Chat 未启用时返回 false，读取失败时异步结果异常完成。
      */
-    boolean isMuted(@NotNull UUID playerUuid);
+    @NotNull CompletionStage<Boolean> isMuted(@NotNull UUID playerUuid);
 
     /**
      * 获取玩家自定义昵称，未设置时返回 null。
+     * 数据库读取在后台完成；不得在服务器线程 join/get，后续 Bukkit 操作需回到服务器线程。
      */
-    @Nullable
-    String getNickname(@NotNull UUID playerUuid);
+    CompletionStage<String> getNickname(@NotNull UUID playerUuid);
 
     /**
      * 查询玩家是否处于飞行模式。
@@ -54,9 +55,9 @@ public interface EssentialsQueryable {
      * <p>
      * 未设置或 Essentials 模块未启用时返回 null——不回退世界默认出生点，
      * 兜底策略由调用方决定。
+     * 返回异步完成结果；停用或查询失败会异常完成，不得在服务器线程 join/get。
      *
      * @param world 上下文世界（MV 后端按世界取 spawn；本地后端忽略该参数）
      */
-    @Nullable
-    Location getSpawn(@NotNull World world);
+    CompletionStage<Location> getSpawn(@NotNull World world);
 }

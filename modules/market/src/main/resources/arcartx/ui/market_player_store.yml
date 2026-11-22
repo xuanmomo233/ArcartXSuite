@@ -43,7 +43,7 @@ ui:
         var.followPending = false
         var.saving = false
         var.resultMsg = '会话已刷新，请重新确认后提交'
-      } else if(!var.followPending && !var.saving){
+      } elif(!var.followPending && !var.saving){
         var.actionBusy = false
       }
     store_result: |-
@@ -84,9 +84,28 @@ ui:
         var.created = packet['created']
         var.ownerOnline = packet['ownerOnline']
         var.descriptionLines = packet['descriptionLines']
+        var.简介行区Keys = var.descriptionLines != none ? var.descriptionLines.keys() : []
         var.announcementLines = packet['announcementLines']
+        var.公告行区Keys = var.announcementLines != none ? var.announcementLines.keys() : []
         var.listings = packet['listings']
         var.count = packet['count']
+        if(packet['sharedListingId'] != none && packet['sharedListingId'] != ''){
+          var.tradeId = packet['sharedListingId']
+          var.checkoutCanSubmit = false
+          var.checkoutBusy = true
+          var.checkoutSeconds = 0
+          var.checkoutPoll = 0
+          var.tradeConfirmText = '正在核对商品与当前价格'
+          if(var.isOwner){
+            var.tradeMode = 'cancel'
+            var.executeTrade = -> { Packet.send(var.packetId, 'pshop_cancel', var.tradeId, var.actionToken) }
+          } else {
+            var.tradeMode = 'buy'
+            var.executeTrade = -> { Packet.send(var.packetId, 'pshop_buy', var.tradeId, var.actionToken) }
+          }
+          var.showTradeConfirm = true
+          Packet.send(var.packetId, 'pshop_store_quote', var.tradeId)
+        }
         var.icons = {}
         if(var.count > 0){
           for(i in range(0, var.count - 1)){
@@ -106,38 +125,18 @@ ui:
             }
           })
         }
-        scheduler.delay(50, -> {
-          if(val.商品卡片区 != none){
-            if(var.count != var.renderedCount){
-              while(val.商品卡片区.childrenCount() > 1){val.商品卡片区.get(1).remove()}
-              if(var.count > 1){
-                for(i in range(1, var.count - 1)){
-                  e = val.商品卡片区['商品卡片'].copy('商品卡片' + i.round())
-                  e.entryKey = i.round()
-                }
-              }
-              var.renderedCount = var.count
-            }
-            if(var.count > 0){
-              for(i in range(0, var.count - 1)){
-                e = val.商品卡片区.get(i.round())
-                if(e != none && e['商品图标'] != none){e['商品图标'].seticon()}
-              }
+        if(var.商品卡片区Rows == none || var.商品卡片区Rows.size() != (var.count)){
+          网格数据 = []
+          if((var.count) > 0){
+            for(网格序号 in range(0, (var.count) - 1)){
+              网格数据.add(网格序号.round())
             }
           }
-        })
+          var.商品卡片区Rows = 网格数据
+        }
+        var.商品卡片区IconsDirty = true
         scheduler.delay(50, -> {
           if(val.店铺大图标 != none){val.店铺大图标.seticon()}
-          if(val.简介行区 != none){
-            while(val.简介行区.childrenCount() > 1){val.简介行区.get(1).remove()}
-            if(var.descriptionLines.keys().length > 1){for(i in range(1, var.descriptionLines.keys().length - 1)){e = val.简介行区['简介行'].copy('简介行' + i.round())
-            e.entryKey = i.round()}}
-          }
-          if(val.公告行区 != none){
-            while(val.公告行区.childrenCount() > 1){val.公告行区.get(1).remove()}
-            if(var.announcementLines.keys().length > 1){for(i in range(1, var.announcementLines.keys().length - 1)){e = val.公告行区['公告行'].copy('公告行' + i.round())
-            e.entryKey = i.round()}}
-          }
         })
       }
   action:
@@ -220,7 +219,7 @@ ui:
             var.checkoutCanSubmit = false
             var.tradeConfirmText = '核对超时，请手动重新核对；尚未扣款'
           }
-        } else if(var.checkoutPoll >= 5 && !var.actionBusy){
+        } elif(var.checkoutPoll >= 5 && !var.actionBusy){
           var.checkoutBusy = true
           var.checkoutSeconds = 0
           var.checkoutPoll = 0
@@ -232,6 +231,24 @@ ui:
         var.refreshSeconds = 0
         var.loading = true
         Packet.send(var.packetId, 'pshop_store_list', var.page, var.keyword)
+      }
+
+tasks:
+  refresh-repeat-grid-icons:
+    type: loop
+    time: 100
+    cycle: 100
+    run: |-
+      if(var.商品卡片区IconsDirty == true && var.商品卡片区Rows != none && val.商品卡片区 != none && val.商品卡片区.childrenCount() == var.商品卡片区Rows.size()){
+        var.商品卡片区IconsDirty = false
+        if(var.商品卡片区Rows.size() > 0){
+          for(i in range(0, var.商品卡片区Rows.size() - 1)){
+            row = val.商品卡片区.get(i.round())
+            if(row != none && row['商品图标'] != none){
+              row['商品图标'].seticon()
+            }
+          }
+        }
       }
 
 controls:
@@ -512,16 +529,20 @@ controls:
                     val.简介滑块.setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
                 children:
                   简介行区:
-                    type: VStack
+                    type: RepeatGrid
                     val: 简介行区
                     attribute:
+                      items: "var.简介行区Keys"
+                      flow: ~row
+                      column: 1
+                      spaceBetweenY: 8
+                      maxSize: "var.简介行区Keys == none ? 0 : var.简介行区Keys.size()"
                       width: 304
-                      spaceBetween: 8
                     children:
                       简介行:
                         type: Text
                         attribute:
-                          entryKey: 0.round()
+                          entryKey: self.item
                           visible: "var.descriptionLines[self.entryKey] != none"
                           texts: "'&7' + var.descriptionLines[self.entryKey]"
                           fontSize: 22
@@ -558,16 +579,20 @@ controls:
                     val.店铺公告滑块.setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
                 children:
                   公告行区:
-                    type: VStack
+                    type: RepeatGrid
                     val: 公告行区
                     attribute:
+                      items: "var.公告行区Keys"
+                      flow: ~row
+                      column: 1
+                      spaceBetweenY: 8
+                      maxSize: "var.公告行区Keys == none ? 0 : var.公告行区Keys.size()"
                       width: 304
-                      spaceBetween: 8
                     children:
                       公告行:
                         type: Text
                         attribute:
-                          entryKey: 0.round()
+                          entryKey: self.item
                           visible: "var.announcementLines[self.entryKey] != none"
                           texts: "'&7' + var.announcementLines[self.entryKey]"
                           fontSize: 22
@@ -682,9 +707,12 @@ controls:
                 val.商品滑块.setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
             children:
               商品卡片区:
-                type: HGrid
+                type: RepeatGrid
                 val: 商品卡片区
                 attribute:
+                  items: "var.商品卡片区Rows"
+                  flow: ~row
+                  maxSize: "var.商品卡片区Rows == none ? 0 : var.商品卡片区Rows.size()"
                   width: "var.storeGoodsW"
                   column: 3
                   spaceBetweenX: 16
@@ -693,7 +721,7 @@ controls:
                   商品卡片:
                     type: Canvas
                     attribute:
-                      entryKey: 0.round()
+                      entryKey: self.item
                       entry: var.listings[self.entryKey]
                       visible: "self.entry != none"
                       width: "var.goodsCardW"
@@ -921,94 +949,143 @@ controls:
         type: Texture
         attribute:
           point: ~stretch_all
-          normal: ~0,0,0,180
-      面板:
-        type: Canvas
+          normal: ~12,19,33,178
+      自适应弹窗:
+        type: Adaptive
         attribute:
           point: ~middle_center
-          width: 800
-          height: 320
+          width: 1920
+          height: 1080
         children:
-          背景:
-            type: Texture
-            attribute:
-              point: ~stretch_all
-              through: true
-              normal: ~36,38,48,245
-          标题:
-            type: Text
-            attribute:
-              point: ~top_center
-              y: 24
-              texts: "~&f确认交易"
-              fontSize: 36
-              through: true
-          内容:
-            type: Text
+          面板:
+            type: Canvas
             attribute:
               point: ~middle_center
-              texts: "var.checkoutBusy ? '&7正在核对商品、金额和状态...' : '&f' + var.tradeConfirmText"
-              fontSize: 28
-              through: true
-          重新核对:
-            type: Canvas
-            attribute:
-              point: ~top_center
-              y: 86
-              width: 220
-              height: 42
-              enable: "!var.checkoutBusy && !var.actionBusy"
-            action:
-              clickLeft: |-
-                var.checkoutBusy = true
-                var.checkoutSeconds = 0
-                Packet.send(var.packetId, 'pshop_store_quote', var.tradeId)
+              width: 800
+              height: 320
             children:
-              文字:
+              背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~32,43,62,250
+                  shape: ~round_rect
+                  radius: 12
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~86,145,225,200
+              标题:
+                type: Text
+                attribute:
+                  point: ~top_center
+                  y: 24
+                  texts: "~&f确认交易"
+                  fontSize: 36
+                  through: true
+              内容:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  texts: "~&b重新核对商品与余额"
-                  fontSize: 24
+                  texts: "var.checkoutBusy ? '&7正在核对商品、金额和状态...' : '&f' + var.tradeConfirmText"
+                  fontSize: 28
                   through: true
-          确认:
-            type: Canvas
-            attribute:
-              point: ~bottom_left
-              x: 90
-              y: -24
-              width: 240
-              height: 48
-              enable: "!var.actionBusy && !var.checkoutBusy && var.checkoutCanSubmit && var.actionToken != ''"
-            action:
-              clickLeft: |-
-                var.showTradeConfirm = false
-                var.actionBusy = true
-                var.executeTrade()
-            children:
-              文字:
-                type: Text
+              重新核对:
+                type: Canvas
                 attribute:
-                  point: ~middle_center
-                  texts: "~&a确认"
-                  fontSize: 32
-                  through: true
-          取消:
-            type: Canvas
-            attribute:
-              point: ~bottom_right
-              x: -90
-              y: -24
-              width: 240
-              height: 48
-            action:
-              clickLeft: |-
-                var.showTradeConfirm = false
-            children:
-              文字:
-                type: Text
+                  point: ~top_center
+                  y: 86
+                  width: 220
+                  height: 42
+                  enable: "!var.checkoutBusy && !var.actionBusy"
+                action:
+                  clickLeft: |-
+                    var.checkoutBusy = true
+                    var.checkoutSeconds = 0
+                    Packet.send(var.packetId, 'pshop_store_quote', var.tradeId)
+                children:
+                  按钮底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      shape: ~round_rect
+                      radius: 8
+                      normal: "self.parent.enable == false ? '44,56,75,225' : (self.parent.isHovered() ? '55,91,139,255' : '40,61,91,248')"
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~103,151,219,215
+                  文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: "~&f重新核对商品与余额"
+                      fontSize: 24
+                      through: true
+              确认:
+                type: Canvas
                 attribute:
-                  point: ~middle_center
-                  texts: "~&f取消"
-                  fontSize: 32
-                  through: true
+                  point: ~bottom_left
+                  x: 90
+                  y: -24
+                  width: 240
+                  height: 48
+                  enable: "!var.actionBusy && !var.checkoutBusy && var.checkoutCanSubmit && var.actionToken != ''"
+                action:
+                  clickLeft: |-
+                    var.showTradeConfirm = false
+                    var.actionBusy = true
+                    var.executeTrade()
+                children:
+                  按钮底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      shape: ~round_rect
+                      radius: 8
+                      normal: "self.parent.enable == false ? '44,56,75,225' : (self.parent.isHovered() ? '94,199,151,255' : '49,143,105,250')"
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~121,215,178,225
+                  文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: "~&f确认"
+                      fontSize: 32
+                      through: true
+              取消:
+                type: Canvas
+                attribute:
+                  point: ~bottom_right
+                  x: -90
+                  y: -24
+                  width: 240
+                  height: 48
+                action:
+                  clickLeft: |-
+                    var.showTradeConfirm = false
+                children:
+                  按钮底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      shape: ~round_rect
+                      radius: 8
+                      normal: "self.parent.enable == false ? '44,56,75,225' : (self.parent.isHovered() ? '55,91,139,255' : '40,61,91,248')"
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~103,151,219,215
+                  文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: "~&f取消"
+                      fontSize: 32
+                      through: true

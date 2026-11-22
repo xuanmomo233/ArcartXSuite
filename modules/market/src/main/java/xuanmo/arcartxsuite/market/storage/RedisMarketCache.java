@@ -1,25 +1,24 @@
 package xuanmo.arcartxsuite.market.storage;
 
-import java.util.HashSet;
-import java.util.Set;
+import java.util.UUID;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.jetbrains.annotations.Nullable;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
 import redis.clients.jedis.JedisPoolConfig;
-import redis.clients.jedis.params.ScanParams;
-import redis.clients.jedis.resps.ScanResult;
 import xuanmo.arcartxsuite.market.config.MarketModuleConfiguration.RedisConfiguration;
 
 /**
  * Redis 拍卖列表缓存（Pub/Sub 已迁移至统一 CrossServer SDK）。
  */
 public class RedisMarketCache {
+    private static final String AUCTION_PAGES = "market:listings:";
+    private static final String PLAYER_SHOP_PAGES = "market:pshop:";
 
     private final RedisConfiguration config;
     private final Logger logger;
-    private JedisPool pool;
+    private volatile JedisPool pool;
 
     public RedisMarketCache(RedisConfiguration config, Logger logger) {
         this.config = config;
@@ -79,23 +78,49 @@ public class RedisMarketCache {
         }
     }
 
-    public void invalidateByPrefix(String prefix) {
-        if (!isAvailable()) return;
+    /** An invalidated epoch is never reused, even if an old page is written back after its read. */
+    public @Nullable String versionedListPageKey(UUID viewer, String baseKey) {
+        String namespace = listNamespace(baseKey);
+        if (namespace == null || !isAvailable()) return null;
         try (Jedis jedis = pool.getResource()) {
-            // 使用 SCAN 代替 KEYS，避免在大数据量时阻塞 Redis
-            Set<String> keys = new HashSet<>();
-            ScanParams params = new ScanParams().match(prefix + "*").count(100);
-            String cursor = "0";
-            do {
-                ScanResult<String> scan = jedis.scan(cursor, params);
-                keys.addAll(scan.getResult());
-                cursor = scan.getCursor();
-            } while (!"0".equals(cursor));
-            if (!keys.isEmpty()) {
-                jedis.del(keys.toArray(new String[0]));
+            String global = pageEpoch(jedis, namespace + "epoch");
+            String personal = pageEpoch(jedis, namespace + "viewer-epoch:" + viewer);
+            return baseKey + ":" + global + ":" + personal;
+        } catch (Exception failure) {
+            logger.log(Level.FINE, "Redis 市场列表缓存版本读取失败", failure);
+            return null;
+        }
+    }
+
+    private String pageEpoch(Jedis jedis, String key) {
+        String found = jedis.get(key);
+        return found != null ? found : rotatePageEpoch(jedis, key);
+    }
+
+    private String rotatePageEpoch(Jedis jedis, String key) {
+        String next = UUID.randomUUID().toString();
+        jedis.setex(key, Math.max(600, config.cacheTtlSeconds()), next);
+        return next;
+    }
+
+    public void invalidateByPrefix(String prefix) {
+        String namespace = listNamespace(prefix);
+        if (namespace == null || !isAvailable()) return;
+        try (Jedis jedis = pool.getResource()) {
+            if (namespace.equals(prefix)) {
+                rotatePageEpoch(jedis, namespace + "epoch");
+            } else if (prefix.length() == namespace.length() + 37 && prefix.endsWith(":")) {
+                String viewer = prefix.substring(namespace.length(), prefix.length() - 1);
+                rotatePageEpoch(jedis, namespace + "viewer-epoch:" + viewer);
             }
         } catch (Exception e) {
             logger.log(Level.WARNING, "Redis 缓存失效失败", e);
         }
+    }
+
+    private @Nullable String listNamespace(String key) {
+        if (key.startsWith(AUCTION_PAGES)) return AUCTION_PAGES;
+        if (key.startsWith(PLAYER_SHOP_PAGES)) return PLAYER_SHOP_PAGES;
+        return null;
     }
 }

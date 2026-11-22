@@ -1,6 +1,7 @@
 """Fault checks using SQL extracted from current Java sources and disposable SQLite only.
 
 Does not compile/run Java, contact a server, or open application databases.
+EventPacket's journal is exercised by :modules:eventpacket:test.
 """
 from pathlib import Path
 import json
@@ -28,21 +29,16 @@ def statement(values, prefix):
     return next(value for value in values if value.startswith(prefix))
 
 
-def schema(connection, values):
-    tables = set()
-    for value in values:
-        match = re.match(r"CREATE TABLE IF NOT EXISTS\s+(\w+)", value)
-        if match and match.group(1) not in tables:
-            connection.execute(value)
-            tables.add(match.group(1))
+def schema(connection, values, *tables):
+    for table in tables:
+        connection.execute(statement(values, f"CREATE TABLE IF NOT EXISTS {table} ("))
 
 
 bp = sql_strings("modules/battlepass/src/main/java/xuanmo/arcartxsuite/battlepass/storage/JdbcBattlePassRepository.java")
-inbox = sql_strings("modules/eventpacket/src/main/java/xuanmo/arcartxsuite/eventpacket/storage/JdbcEventPacketRepository.java")
 engine = sql_strings("auth-engine/src/main/java/xuanmo/arcartxsuite/auth/engine/JdbcAuthStore.java")
 
 with sqlite3.connect(":memory:", isolation_level=None) as database:
-    schema(database, engine)
+    schema(database, engine, "axs_auth_presence_v1")
     insert = statement(engine, "INSERT INTO axs_auth_presence_v1 (realm_id,account_id,business_date) VALUES")
     pending = statement(engine, "SELECT business_date FROM axs_auth_presence_v1")
     ack = statement(engine, "UPDATE axs_auth_presence_v1 SET delivered=1")
@@ -53,7 +49,7 @@ with sqlite3.connect(":memory:", isolation_level=None) as database:
     assert database.execute(pending, ("realm", "account", "2026-11-08")).fetchone()[0] == "2026-11-08"
 
 with sqlite3.connect(":memory:", isolation_level=None) as database:
-    schema(database, bp)
+    schema(database, bp, "bp_auth_receipts", "bp_player_progress", "bp_player_tasks")
     progress = statement(bp, "INSERT INTO bp_player_progress")
     task = statement(bp, "INSERT INTO bp_player_tasks")
     receipt = statement(bp, "INSERT INTO bp_auth_receipts")
@@ -91,24 +87,4 @@ with sqlite3.connect(":memory:", isolation_level=None) as database:
     assert database.execute("SELECT current_xp FROM bp_player_progress").fetchone()[0] == 10
     assert database.execute("SELECT current_progress FROM bp_player_tasks").fetchone()[0] == 1
 
-with sqlite3.connect(":memory:", isolation_level=None) as database:
-    schema(database, inbox)
-    enqueue = statement(inbox, "INSERT INTO eventpacket_auth_inbox")
-    claim = statement(inbox, "UPDATE eventpacket_auth_inbox SET state='RUNNING'")
-    recover = statement(inbox, "UPDATE eventpacket_auth_inbox SET state='REVIEW'")
-    resolve = statement(inbox, "UPDATE eventpacket_auth_inbox SET state='PENDING',step=step+?")
-    finish = statement(inbox, "UPDATE eventpacket_auth_inbox SET state=?,step=?")
-    database.execute(enqueue, ("fact", "player", "original plan"))
-    database.execute(enqueue, ("fact", "player", "replacement plan"))
-    assert database.execute("SELECT plan FROM eventpacket_auth_inbox").fetchone()[0] == "original plan"
-    assert database.execute(claim, ("node-a", "fact", 0)).rowcount == 1
-    assert database.execute(recover, ("node-b",)).rowcount == 0, "Another node may still be running the action"
-    assert database.execute(finish, ("DONE", 0, "fact", 0, "node-b")).rowcount == 0
-    assert database.execute(recover, ("node-a",)).rowcount == 1
-    assert database.execute(claim, ("node-b", "fact", 0)).rowcount == 0, "Interrupted side effects must not replay automatically"
-    assert database.execute(resolve, (0, "fact")).rowcount == 1
-    assert database.execute(claim, ("node-b", "fact", 0)).rowcount == 1
-    assert database.execute(finish, ("DONE", 0, "fact", 0, "node-b")).rowcount == 1
-    assert database.execute(claim, ("node-b", "fact", 0)).rowcount == 0
-
-print("PASS SQL fault checks: transactional progress/XP/receipt, duplicate facts, backlog ordering, durable inbox and crash review; no Java execution")
+print("PASS SQL fault checks: transactional progress/XP/receipt, duplicate facts, backlog ordering; no Java execution")

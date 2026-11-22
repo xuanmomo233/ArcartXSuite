@@ -26,6 +26,29 @@ item:
   id: enchanted_golden_apple
   amount: 1                    # 物品数量
 difficulty: 90                 # 钓鱼难度（0-100，极高难度）
+line-tension:
+  enabled: true
+# 体型越小冲得越快，体型越大冲得越久、拉力越高。
+size-difficulty:
+  small: { rush-speed: 1.15, rush-duration: 0.90, pull: 0.85 }
+  large: { rush-speed: 0.85, rush-duration: 1.20, pull: 1.25 }
+stamina:
+  rush-drain-per-tick: 3.0
+  exhausted-ticks: 20
+  progress-gain-multiplier: 1.40
+personalities:
+  normal-weight: 7
+  variants:
+    alert: { display-name: "警觉", weight: 2, first-miss-rush: true }
+    resilient: { display-name: "顽强", weight: 1, stamina-drain-multiplier: 0.65 }
+hook-set:
+  tap-ticks: 12
+  window-ticks: 8
+  late-ticks: 12
+  good-recovery-bonus: 8
+  miss-recovery-penalty: 4
+active-treasure:
+  enabled: true
 behaviors:                     # 小游戏中鱼的行为模式及权重
   - type: dart                 # 突进型：鱼快速跳跃移动
     weight: 0.5                # 权重0.5（主要行为）
@@ -52,25 +75,36 @@ flee-params:
 # threshold = 进度百分比（0.0~1.0），达到后切换到对应阶段的行为
 behavior-stages:
   stage1:
-    threshold: 0.0             # 进度 0% 起：初始行为
+    threshold: 0.0
+    behavior-mode: sequence
     behaviors:
-      - type: smooth
-        weight: 0.7
-      - type: dart
-        weight: 0.3
+      - { type: sinker, duration-ticks: 17, tell-ticks: 12, recovery-ticks: 32 }
+      - { type: floater, duration-ticks: 17, tell-ticks: 12, recovery-ticks: 32 }
   stage2:
     threshold: 0.5             # 进度 50% 后：更激进
     behaviors:
       - type: dart
+        duration-ticks: 19
+        tell-ticks: 10
+        recovery-ticks: 32
         weight: 0.6
       - type: zigzag           # 之字型：规律性左右摆动
+        duration-ticks: 16
+        tell-ticks: 10
+        recovery-ticks: 32
         weight: 0.4
   stage3:
     threshold: 0.8             # 进度 80% 后：疯狂挣扎
     behaviors:
       - type: mixed            # 混合型：随机切换所有行为
+        duration-ticks: 16
+        tell-ticks: 10
+        recovery-ticks: 32
         weight: 0.5
       - type: idle             # 停滞型：长时间不动后突然突进
+        duration-ticks: 16
+        tell-ticks: 10
+        recovery-ticks: 32
         weight: 0.5
 
 # ─── 奖励（可选） ──────────────────────────────────────

@@ -23,6 +23,7 @@ help:
   list: "&7{0} list&f - 列出配置的世界"
   anchors: "&7{0} anchors [世界名]&f - 列出锚点"
   unlock: "&7{0} unlock <玩家> <锚点ID>&f - 免费强制解锁锚点"
+  unlock-review: "&7{0} unlock-review <预约编号> <inspect|confirm|cancel>&f - 查看或结案付费解锁"
   refresh: "&7{0} refresh <世界ID>&f - 刷新该世界预加载版本，客户端重拉地形"
 
 # ── status ────────────────────────────────────────────
@@ -47,10 +48,19 @@ anchors:
   item: "  &f{0}"
 unlock:
   usage: "&e用法: /axs map unlock <玩家> <锚点ID>"
+unlock-review:
+  usage: "&e用法: /axs map unlock-review <预约编号> <inspect|confirm|cancel>"
+  details: "预约 {0}，玩家 {1}，锚点 {2}，原服 {3}，创建时间 {4}。"
+  missing: "预约 {0} 不存在或已结案。"
+  wrong-server: "请在原服 {0} 执行结案。"
+  confirmed: "预约 {0} 已确认解锁。"
+  cancelled: "预约 {0} 已撤销。"
+  failed: "&c预约 {0} 的操作未能确认，请先查询状态。"
+  result: "{0}"
 refresh:
   usage: "&e用法: /axs map refresh <世界ID>"
   world-unknown: "&c世界不存在或未启用: {0}"
-  world-no-preload: "&c世界 {0} 未配置 preload，无需刷新。"
+  world-no-preload: "&c世界 {0} 未配置预加载或锚点点亮，无需刷新。"
   done: "&a世界 {0} 预加载版本已刷新（新版本号 {1}），客户端下次同步将重拉地形。"
 
 # ── player ────────────────────────────────────────────
@@ -78,6 +88,9 @@ player:
   anchor-too-far: "距离锚点还有 {0}m，需要靠近到 {1}m 内才能解锁。"
   anchor-wrong-world: "锚点 {0} 不在你当前所在的世界。"
   anchor-unlock-save-failed: "写入锚点解锁数据失败。"
+  anchor-unlock-pending: "该锚点已有未结算的解锁申请。若长时间未完成，请将预约 {0} 交给管理员核对。"
+  anchor-unlock-currency-unconfirmed: "货币 {0} 无法确认扣费，暂不能用于锚点解锁。"
+  anchor-unlock-items-changed: "背包物品已变化，解锁已取消。"
   anchor-unlocked: "已解锁锚点: {0}"
   anchor-locked: "该锚点尚未解锁。"
   anchor-world-unloaded: "目标世界当前未加载: {0}"

@@ -16,11 +16,36 @@ import xuanmo.arcartxsuite.api.placeholder.PlaceholderResolverAPI;
  */
 public interface RegistrationContext {
 
+    /** 基类启用模块时建立本轮定时任务集合。 */
+    default void beginScheduledTasks() { }
+
+    /** 取消本轮任务，返回已经开始的异步回调退出信号，不等待回调完成。 */
+    default java.util.concurrent.CompletionStage<Void> cancelScheduledTasks() {
+        return java.util.concurrent.CompletableFuture.completedFuture(null);
+    }
+
     void registerListener(Listener listener);
 
     void unregisterListeners();
 
     void registerCommand(String commandName, TabExecutor executor);
+
+    /**
+     * 动态注册模块命令。开启保护时保留已有的无前缀命令，否则优先使用模块命令。
+     * 本插件的其他命令始终保留。
+     */
+    void registerCommand(String commandName, TabExecutor executor, boolean protectExisting);
+
+    /** 为动态命令指定实际动作的权限。null 使用宿主元数据，空字符串清除该权限。 */
+    void registerCommand(String commandName, TabExecutor executor, boolean protectExisting, @Nullable String permission);
+
+    /** 注销通过带冲突保护选项的接口注册的命令，并恢复被覆盖的命令。 */
+    void unregisterDynamicCommands();
+
+    /** 查询当前注册表以及本模块覆盖的原始绑定。应在服务器主线程调用。 */
+    CommandRegistrationInfo inspectCommand(String label);
+
+    record CommandRegistrationInfo(String owner, String moduleAlias, String previousOwner) {}
 
     @ApiStability.Stable
     @NotNull PlaceholderResolverAPI placeholderResolver();
@@ -28,18 +53,7 @@ public interface RegistrationContext {
     @ApiStability.Stable
     @NotNull PlaceholderExpansionRegistry expansionRegistry();
 
-    void registerClientPacketHandler(ClientPacketHandler handler);
-
-    void registerClientPacketHandler(ClientPacketHandler handler, int priority);
-
-    default void registerClientPacketHandler(
-        ClientPacketHandler handler,
-        int priority,
-        String packetId,
-        String guardModule
-    ) {
-        registerClientPacketHandler(handler, priority);
-    }
+    void registerClientPacketHandler(PacketHandlerSpec spec);
 
     void registerClientInitializedHandler(ClientInitializedHandler handler);
 

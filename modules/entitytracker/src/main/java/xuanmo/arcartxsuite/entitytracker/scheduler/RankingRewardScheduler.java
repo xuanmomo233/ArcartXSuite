@@ -5,12 +5,12 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.configuration.ConfigurationSection;
 
 import java.time.DayOfWeek;
-import java.time.LocalDateTime;
+import java.time.YearMonth;
 import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.time.temporal.TemporalAdjusters;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
+import xuanmo.arcartxsuite.api.scheduler.ModuleScheduledExecutor;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
@@ -21,7 +21,8 @@ import java.util.logging.Logger;
 public class RankingRewardScheduler {
     private final Logger logger;
     private final RankingRewardService rewardService;
-    private final ScheduledExecutorService scheduler;
+    private final ModuleScheduledExecutor scheduler;
+    private volatile boolean closed;
     private final JavaPlugin plugin;
     
     private ScheduledFuture<?> weeklyTask;
@@ -41,7 +42,7 @@ public class RankingRewardScheduler {
 
     public RankingRewardScheduler(RankingRewardService rewardService, JavaPlugin plugin, Logger logger) {
         this.rewardService = rewardService;
-        this.scheduler = Executors.newScheduledThreadPool(2, runnable -> {
+        this.scheduler = new ModuleScheduledExecutor(2, runnable -> {
             Thread thread = new Thread(runnable, "AXS-EntityTracker-Reward");
             thread.setDaemon(true);
             return thread;
@@ -94,9 +95,9 @@ public class RankingRewardScheduler {
         ConfigurationSection monthlyConfig = scheduleConfig != null ? scheduleConfig.getConfigurationSection("monthly") : null;
         if (monthlyConfig != null) {
             monthlyEnabled = monthlyConfig.getBoolean("enabled", false);
-            monthlyDay = monthlyConfig.getInt("day-of-month", 1);
-            monthlyHour = monthlyConfig.getInt("hour", 0);
-            monthlyMinute = monthlyConfig.getInt("minute", 0);
+            monthlyDay = Math.max(1, Math.min(31, monthlyConfig.getInt("day-of-month", 1)));
+            monthlyHour = Math.max(0, Math.min(23, monthlyConfig.getInt("hour", 0)));
+            monthlyMinute = Math.max(0, Math.min(59, monthlyConfig.getInt("minute", 0)));
         }
 
         // 时区配置（在 ranking-rewards 根节点）
@@ -123,19 +124,20 @@ public class RankingRewardScheduler {
     /**
      * 调度周奖励
      */
-    private void scheduleWeeklyRewards() {
-        LocalDateTime nextExecution = calculateNextWeeklyExecution();
+    private synchronized void scheduleWeeklyRewards() {
+        if (closed) return;
+        ZonedDateTime nextExecution = calculateNextWeeklyExecution();
         long initialDelay = calculateDelayMillis(nextExecution);
         
         weeklyTask = scheduler.schedule(() -> {
             try {
                 logger.info("开始执行周奖励发放任务");
-                executeWeeklyRewards();
+                executeRewards("weekly", weeklyBoundary(nextExecution.minusWeeks(1)), nextExecution);
             } catch (Exception e) {
                 logger.severe("周奖励发放任务执行失败: " + e.getMessage());
             } finally {
                 // 动态重新调度下一次
-                if (weeklyEnabled) {
+                if (weeklyEnabled && !closed) {
                     scheduleWeeklyRewards();
                 }
             }
@@ -147,19 +149,20 @@ public class RankingRewardScheduler {
     /**
      * 调度月奖励
      */
-    private void scheduleMonthlyRewards() {
-        LocalDateTime nextExecution = calculateNextMonthlyExecution();
+    private synchronized void scheduleMonthlyRewards() {
+        if (closed) return;
+        ZonedDateTime nextExecution = calculateNextMonthlyExecution();
         long initialDelay = calculateDelayMillis(nextExecution);
         
         monthlyTask = scheduler.schedule(() -> {
             try {
                 logger.info("开始执行月奖励发放任务");
-                executeMonthlyRewards();
+                executeRewards("monthly", monthBoundary(YearMonth.from(nextExecution).minusMonths(1)), nextExecution);
             } catch (Exception e) {
                 logger.severe("月奖励发放任务执行失败: " + e.getMessage());
             } finally {
                 // 动态重新调度下一次（根据实际月份长度计算）
-                if (monthlyEnabled) {
+                if (monthlyEnabled && !closed) {
                     scheduleMonthlyRewards();
                 }
             }
@@ -168,203 +171,73 @@ public class RankingRewardScheduler {
         logger.info("月奖励任务已调度: 下次执行时间=" + nextExecution);
     }
 
-    /**
-     * 计算下一个周奖励执行时间
-     */
-    private LocalDateTime calculateNextWeeklyExecution() {
-        ZoneId zoneId = ZoneId.of(timeZone);
-        LocalDateTime now = LocalDateTime.now(zoneId);
-        
-        LocalDateTime nextExecution = now
-            .with(TemporalAdjusters.nextOrSame(weeklyDay))
-            .withHour(weeklyHour)
-            .withMinute(weeklyMinute)
-            .withSecond(0)
-            .withNano(0);
-        
-        // 如果当前时间已过，推迟到下周
-        if (nextExecution.isBefore(now) || nextExecution.isEqual(now)) {
-            nextExecution = nextExecution.plusWeeks(1);
-        }
-        
-        return nextExecution;
+    private ZonedDateTime calculateNextWeeklyExecution() {
+        ZonedDateTime now = ZonedDateTime.now(ZoneId.of(timeZone));
+        ZonedDateTime boundary = weeklyBoundary(now);
+        return boundary.isAfter(now) ? boundary : weeklyBoundary(now.plusWeeks(1));
     }
 
-    /**
-     * 计算下一个月奖励执行时间
-     */
-    private LocalDateTime calculateNextMonthlyExecution() {
-        ZoneId zoneId = ZoneId.of(timeZone);
-        LocalDateTime now = LocalDateTime.now(zoneId);
-        
-        // 计算本月的目标日期
-        int targetDay = Math.min(monthlyDay, now.toLocalDate().lengthOfMonth());
-        LocalDateTime nextExecution = now
-            .withDayOfMonth(targetDay)
-            .withHour(monthlyHour)
-            .withMinute(monthlyMinute)
-            .withSecond(0)
-            .withNano(0);
-        
-        // 如果当前时间已过，推迟到下月
-        if (nextExecution.isBefore(now) || nextExecution.isEqual(now)) {
-            nextExecution = nextExecution.plusMonths(1);
-            // 确保下月也有该日期
-            int nextMonthLength = nextExecution.toLocalDate().lengthOfMonth();
-            if (monthlyDay > nextMonthLength) {
-                nextExecution = nextExecution.withDayOfMonth(nextMonthLength);
+    private ZonedDateTime weeklyBoundary(ZonedDateTime date) {
+        return date.toLocalDate().with(TemporalAdjusters.previousOrSame(weeklyDay))
+            .atTime(weeklyHour, weeklyMinute).atZone(date.getZone());
+    }
+
+    private ZonedDateTime calculateNextMonthlyExecution() {
+        ZonedDateTime now = ZonedDateTime.now(ZoneId.of(timeZone));
+        YearMonth month = YearMonth.from(now);
+        ZonedDateTime boundary = monthBoundary(month);
+        return boundary.isAfter(now) ? boundary : monthBoundary(month.plusMonths(1));
+    }
+
+    private ZonedDateTime monthBoundary(YearMonth month) {
+        return month.atDay(Math.min(monthlyDay, month.lengthOfMonth()))
+            .atTime(monthlyHour, monthlyMinute).atZone(ZoneId.of(timeZone));
+    }
+
+    private long calculateDelayMillis(ZonedDateTime targetTime) {
+        return Math.max(1000L, java.time.Duration.between(java.time.Instant.now(), targetTime.toInstant()).toMillis());
+    }
+
+    private void executeRewards(String type, ZonedDateTime start, ZonedDateTime end) {
+        rewardService.distributeRewards(type, start, end).whenComplete((count, error) -> {
+            if (error != null) {
+                logger.warning("排行榜奖励发放失败: " + error.getMessage());
+            } else if (count > 0 && plugin.isEnabled() && !scheduler.isShutdown()) {
+                String period = "weekly".equals(type) ? "周" : "月";
+                rewardService.onMainIfActive(() -> {
+                    if (!scheduler.isShutdown()) {
+                        plugin.getServer().broadcastMessage("§6" + period + "排行榜奖励已发放 §a" + count + " §6份");
+                    }
+                });
             }
-        }
-        
-        return nextExecution;
+        });
     }
 
-    /**
-     * 计算延迟时间（毫秒）
-     */
-    private long calculateDelayMillis(LocalDateTime targetTime) {
-        ZoneId zoneId = ZoneId.of(timeZone);
-        LocalDateTime now = LocalDateTime.now(zoneId);
-        long millis = java.time.Duration.between(now, targetTime).toMillis();
-        // 保护：若延迟 <= 0 则至少等 1 秒，防止立即执行造成死循环
-        return Math.max(millis, 1000L);
-    }
-
-    /**
-     * 执行周奖励发放
-     */
-    private void executeWeeklyRewards() {
-        ZoneId zoneId = ZoneId.of(timeZone);
-        LocalDateTime now = LocalDateTime.now(zoneId);
-        
-        // 计算上周的时间范围
-        LocalDateTime periodStart = now.minusWeeks(1)
-            .with(TemporalAdjusters.previousOrSame(weeklyDay))
-            .withHour(weeklyHour)
-            .withMinute(weeklyMinute)
-            .withSecond(0)
-            .withNano(0);
-        
-        LocalDateTime periodEnd = now
-            .withHour(weeklyHour)
-            .withMinute(weeklyMinute)
-            .withSecond(0)
-            .withNano(0);
-        
-        logger.info("执行周奖励发放: 周期=" + periodStart + " - " + periodEnd);
-        
-        rewardService.distributeRewards("weekly", periodStart, periodEnd)
-            .thenAccept(totalRewards -> {
-                logger.info("周奖励发放完成: 总奖励数量=" + totalRewards);
-                broadcastRewardResult("周", totalRewards);
-            })
-            .exceptionally(throwable -> {
-                logger.severe("周奖励发放失败: " + throwable.getMessage());
-                return null;
-            });
-    }
-
-    /**
-     * 执行月奖励发放
-     */
-    private void executeMonthlyRewards() {
-        ZoneId zoneId = ZoneId.of(timeZone);
-        LocalDateTime now = LocalDateTime.now(zoneId);
-        
-        // 计算上月的时间范围
-        LocalDateTime periodStart = now.minusMonths(1)
-            .withDayOfMonth(monthlyDay)
-            .withHour(monthlyHour)
-            .withMinute(monthlyMinute)
-            .withSecond(0)
-            .withNano(0);
-        
-        LocalDateTime periodEnd = now
-            .withDayOfMonth(monthlyDay)
-            .withHour(monthlyHour)
-            .withMinute(monthlyMinute)
-            .withSecond(0)
-            .withNano(0);
-        
-        logger.info("执行月奖励发放: 周期=" + periodStart + " - " + periodEnd);
-        
-        rewardService.distributeRewards("monthly", periodStart, periodEnd)
-            .thenAccept(totalRewards -> {
-                logger.info("月奖励发放完成: 总奖励数量=" + totalRewards);
-                broadcastRewardResult("月", totalRewards);
-            })
-            .exceptionally(throwable -> {
-                logger.severe("月奖励发放失败: " + throwable.getMessage());
-                return null;
-            });
-    }
-
-    /**
-     * 广播奖励发放结果
-     */
-    private void broadcastRewardResult(String periodType, int totalRewards) {
-        String message = String.format("§6§l%s排行榜奖励发放完成！§e共发放 §a%d §e个奖励", periodType, totalRewards);
-        plugin.getServer().broadcastMessage(message);
-    }
-
-    /**
-     * 手动触发周奖励发放
-     */
     public CompletableFuture<Integer> manualTriggerWeeklyRewards() {
-        ZoneId zoneId = ZoneId.of(timeZone);
-        LocalDateTime now = LocalDateTime.now(zoneId);
-
-        // 与定时任务相同的对齐周期：periodStart 是幂等键（hasSuccessfulIssuance 精确匹配），
-        // 手动触发若用裸 now.minusWeeks(1) 会生成不同 periodStart 绕过幂等检查重复发奖
-        LocalDateTime periodStart = now.minusWeeks(1)
-            .with(TemporalAdjusters.previousOrSame(weeklyDay))
-            .withHour(weeklyHour)
-            .withMinute(weeklyMinute)
-            .withSecond(0)
-            .withNano(0);
-
-        LocalDateTime periodEnd = now
-            .withHour(weeklyHour)
-            .withMinute(weeklyMinute)
-            .withSecond(0)
-            .withNano(0);
-
-        logger.info("手动触发周奖励发放: 周期=" + periodStart + " - " + periodEnd);
-
-        return rewardService.distributeRewards("weekly", periodStart, periodEnd);
+        if(closed)return CompletableFuture.failedFuture(new IllegalStateException("Reward scheduler closed"));
+        ZonedDateTime now = ZonedDateTime.now(ZoneId.of(timeZone));
+        ZonedDateTime end = weeklyBoundary(now);
+        if (end.isAfter(now)) end = weeklyBoundary(end.minusWeeks(1));
+        return rewardService.distributeRewards("weekly", weeklyBoundary(end.minusWeeks(1)), end);
     }
 
-    /**
-     * 手动触发月奖励发放
-     */
     public CompletableFuture<Integer> manualTriggerMonthlyRewards() {
-        ZoneId zoneId = ZoneId.of(timeZone);
-        LocalDateTime now = LocalDateTime.now(zoneId);
-
-        // 与定时任务相同的对齐周期（同上，防止幂等键错位重复发奖）
-        LocalDateTime periodStart = now.minusMonths(1)
-            .withDayOfMonth(Math.min(monthlyDay, now.minusMonths(1).toLocalDate().lengthOfMonth()))
-            .withHour(monthlyHour)
-            .withMinute(monthlyMinute)
-            .withSecond(0)
-            .withNano(0);
-
-        LocalDateTime periodEnd = now
-            .withDayOfMonth(Math.min(monthlyDay, now.toLocalDate().lengthOfMonth()))
-            .withHour(monthlyHour)
-            .withMinute(monthlyMinute)
-            .withSecond(0)
-            .withNano(0);
-
-        logger.info("手动触发月奖励发放: 周期=" + periodStart + " - " + periodEnd);
-
-        return rewardService.distributeRewards("monthly", periodStart, periodEnd);
+        if(closed)return CompletableFuture.failedFuture(new IllegalStateException("Reward scheduler closed"));
+        ZonedDateTime now = ZonedDateTime.now(ZoneId.of(timeZone));
+        YearMonth month = YearMonth.from(now);
+        ZonedDateTime end = monthBoundary(month);
+        if (end.isAfter(now)) {
+            month = month.minusMonths(1);
+            end = monthBoundary(month);
+        }
+        return rewardService.distributeRewards("monthly", monthBoundary(month.minusMonths(1)), end);
     }
 
     /**
      * 更新调度配置
      */
-    public void updateSchedule(ConfigurationSection config) {
+    public synchronized void updateSchedule(ConfigurationSection config) {
+        if (closed) return;
         // 停止现有任务
         stopAllTasks();
         
@@ -407,12 +280,12 @@ public class RankingRewardScheduler {
         StringBuilder info = new StringBuilder();
         
         if (weeklyEnabled && weeklyTask != null) {
-            LocalDateTime nextWeekly = calculateNextWeeklyExecution();
+            ZonedDateTime nextWeekly = calculateNextWeeklyExecution();
             info.append(String.format("下次周奖励: %s\n", nextWeekly));
         }
         
         if (monthlyEnabled && monthlyTask != null) {
-            LocalDateTime nextMonthly = calculateNextMonthlyExecution();
+            ZonedDateTime nextMonthly = calculateNextMonthlyExecution();
             info.append(String.format("下次月奖励: %s\n", nextMonthly));
         }
         
@@ -437,21 +310,15 @@ public class RankingRewardScheduler {
     /**
      * 关闭调度器
      */
-    public void shutdown() {
+    public synchronized void shutdown() {
+        closed=true;
         stopAllTasks();
-        
         scheduler.shutdown();
-        try {
-            if (!scheduler.awaitTermination(30, TimeUnit.SECONDS)) {
-                scheduler.shutdownNow();
-            }
-        } catch (InterruptedException e) {
-            scheduler.shutdownNow();
-            Thread.currentThread().interrupt();
-        }
         
         logger.info("排行榜奖励调度器已关闭");
     }
+
+    public java.util.concurrent.CompletionStage<Void> databaseStopped(){return scheduler.stopped();}
 }
 
 

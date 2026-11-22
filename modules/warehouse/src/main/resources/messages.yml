@@ -76,12 +76,12 @@ player:
     title: "&6仓库 命令"
     open: "&7/warehouse open&f - 打开仓库"
     showcase: "&7/warehouse showcase&f - 展示仓库"
-    preview: "&7/warehouse preview <玩家名或UUID>&f - 预览他人仓库"
+    preview: "&7/warehouse preview <玩家名或UUID> [仓库ID]&f - 管理员只读预览"
     transfer: "&7/warehouse transfer <confirm|reject> <sharedId>&f - 确认/拒绝共享仓库转让"
   transfer:
     usage: "&e用法: /warehouse transfer <confirm|reject> <sharedId>"
   preview:
-    usage: "&e用法: /{0} preview <玩家名或UUID>"
+    usage: "&e用法: /{0} preview <玩家名或UUID> [仓库ID]"
     not-found: "&c找不到玩家: &f{0}&c，请检查拼写或使用 UUID。"
 
 # ── player operation feedback ─────────────────────────
@@ -100,6 +100,7 @@ player:
   showcase-success: "已展示仓库。"
   showcase-send-failed: "展示卡片发送失败，请检查卡片 ID 与 ArcartX 状态后重试。"
   preview-read-only: "预览模式下无法执行此操作。"
+  preview-unavailable: "该仓库预览已失效。"
   secondary-locked: "已锁定二级密码会话。"
   operation-failed: "操作失败，请查看控制台。"
   warehouse-not-found: "指定仓库不存在: {0}"
@@ -148,6 +149,11 @@ player:
   secondary-required-withdraw-bank: "提现前请先解锁二级密码。"
   bank-invalid-amount: "银行余额不足或金额无效。"
   bank-withdraw-success: "已从银行取出 {0}。"
+  bank-transfer-provider: "该货币无法确认钱包余额已保存，暂不支持银行存取。"
+  bank-transfer-amount-invalid: "金额无效，请检查货币精度和金额范围。"
+  bank-withdraw-review: "提现结果待核对，请向管理员提供凭证 {0}。"
+  bank-deposit-review: "存款结果待核对，请向管理员提供凭证 {0}。"
+  bank-deposit-refunded: "银行存款未入账，金额已退回钱包。"
   fixed-deposit-unavailable: "无法购买该定期产品。"
   fixed-deposit-range: "金额不在产品允许范围内。"
   fixed-deposit-tier: "该金额没有匹配的利率阶梯。"

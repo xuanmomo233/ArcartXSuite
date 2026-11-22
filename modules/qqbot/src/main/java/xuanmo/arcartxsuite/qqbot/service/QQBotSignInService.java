@@ -2,11 +2,11 @@ package xuanmo.arcartxsuite.qqbot.service;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.concurrent.CompletionStage;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 import java.util.logging.Logger;
-import xuanmo.arcartxsuite.api.capability.MailDispatchable;
-import xuanmo.arcartxsuite.api.capability.mail.MailPresetRequest;
-import xuanmo.arcartxsuite.api.capability.mail.MailSendResult;
+import xuanmo.arcartxsuite.api.mail.AxsMailService;
 import xuanmo.arcartxsuite.qqbot.config.QQBotConfiguration;
 import xuanmo.arcartxsuite.qqbot.config.QQBotPrizeConfig;
 import xuanmo.arcartxsuite.qqbot.config.QQBotSignInConfig;
@@ -23,25 +23,27 @@ import xuanmo.arcartxsuite.qqbot.storage.QQBotRepository.RedemptionState;
  * QQ 群签到打卡 + 积分 + 兑换商店服务。
  * <p>
  * 全部读写均通过 {@link QQBotRepository}，无 Bukkit 主线程依赖，可在 WS 异步线程安全调用。
- * 兑换奖品通过 {@link MailDispatchable} 邮件预设发放给绑定玩家。
+ * 兑换奖品通过 {@link AxsMailService} 按兑换凭证发放给绑定玩家。
  */
 public final class QQBotSignInService {
 
     private final QQBotConfiguration config;
     private final QQBotRepository repository;
-    private final Supplier<MailDispatchable> mailProvider;
+    private final Supplier<AxsMailService> mailProvider;
     private final Logger logger;
+    private final QQBotActivityRecorder activityRecorder;
 
     public QQBotSignInService(
         QQBotConfiguration config,
         QQBotRepository repository,
-        Supplier<MailDispatchable> mailProvider,
+        Supplier<AxsMailService> mailProvider,
         Logger logger
     ) {
         this.config = config;
         this.repository = repository;
         this.mailProvider = mailProvider;
         this.logger = logger;
+        this.activityRecorder = new QQBotActivityRecorder(repository, logger);
     }
 
     // ─── 签到 ────────────────────────────────────────────
@@ -116,7 +118,7 @@ public final class QQBotSignInService {
         QQBotBinding binding = repository.findByQq(qqId);
         if (binding == null) return config.messages().redeemNotBound();
         String playerName = binding.playerName();
-        MailDispatchable mail = mailProvider != null ? mailProvider.get() : null;
+        AxsMailService mail = mailProvider != null ? mailProvider.get() : null;
         if (mail == null) return "邮件系统暂不可用，本次未扣除积分";
         if (prize.mailPresets() == null || prize.mailPresets().isEmpty()) return "奖品尚未配置有效邮件，本次未扣除积分";
         int actualCost = prize.currentCost();
@@ -141,17 +143,28 @@ public final class QQBotSignInService {
             for (var item : redemption.items()) {
                 if (!repository.beginRedemptionItem(redemption.id(), item.ordinal())) return reviewMessage(redemption.id());
                 try {
-                    MailSendResult result = mail.dispatchPreset(MailPresetRequest.builder(item.presetId(), redemption.playerName())
-                        .sourceModule("qqbot")
-                        .sourceDetail("redeem:" + redemption.id() + ":" + item.ordinal())
-                        .build());
-                    repository.recordRedemptionItem(redemption.id(), item.ordinal(),
-                        result.success() ? RedemptionItemState.SENT : RedemptionItemState.FAILED, result.message());
-                } catch (Exception e) {
+                    var receipt = mail.sendPresetDurable(redemption.playerUuid(), item.presetId(), "qqbot",
+                        "redeem:" + redemption.id() + ":" + item.ordinal()).get(5, TimeUnit.SECONDS);
+                    if (receipt == null || (receipt.mailId() <= 0 && !receipt.isNoOp())) {
+                        throw new IllegalStateException("未收到有效的邮件回执");
+                    }
+                    if (receipt.mailId() > 0) {
+                        repository.recordRedemptionItem(redemption.id(), item.ordinal(), RedemptionItemState.SENT,
+                            "邮件已入库: " + receipt.mailId());
+                    } else {
+                        // This ordinal was just armed once, and a no-op guarantees this call did not insert a mail.
+                        repository.recordRedemptionItem(redemption.id(), item.ordinal(), RedemptionItemState.FAILED,
+                            "邮件服务未接收预设 " + item.presetId());
+                    }
+                } catch (Exception | LinkageError e) {
                     // The remote write may already have succeeded. Keep the debit and freeze this order.
-                    repository.recordRedemptionItem(redemption.id(), item.ordinal(), RedemptionItemState.UNKNOWN,
-                        "邮件结果未确认：" + e.getClass().getSimpleName());
-                    logger.warning("兑换 " + redemption.id() + " 发放待核对: " + e.getClass().getSimpleName());
+                    try {
+                        repository.recordRedemptionItem(redemption.id(), item.ordinal(), RedemptionItemState.UNKNOWN,
+                            "邮件结果未确认：" + e.getClass().getSimpleName());
+                        logger.warning("兑换 " + redemption.id() + " 发放待核对: " + e.getClass().getSimpleName());
+                    } finally {
+                        if (e instanceof InterruptedException) Thread.currentThread().interrupt();
+                    }
                     break;
                 }
             }
@@ -266,11 +279,13 @@ public final class QQBotSignInService {
     // ─── 群活跃度 ─────────────────────────────────────────
 
     public void recordActivity(long qqId, long groupId) {
-        String today = java.time.LocalDate.now().toString();
-        repository.recordActivity(qqId, groupId, today);
+        activityRecorder.record(qqId, groupId, LocalDate.now());
     }
 
+    public CompletionStage<Void> stopActivityRecording() { return activityRecorder.retire(); }
+
     public String buildActivityLeaderboard(String mode, int limit) {
+        activityRecorder.flush();
         java.time.LocalDate now = java.time.LocalDate.now();
         String start, end;
         if ("week".equalsIgnoreCase(mode) || "本周".equals(mode)) {

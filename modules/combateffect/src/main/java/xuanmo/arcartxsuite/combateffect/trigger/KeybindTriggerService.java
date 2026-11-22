@@ -90,6 +90,7 @@ public final class KeybindTriggerService implements Listener {
     }
 
     private void handleKeybind(Player player, String keyName, boolean isPress, String keyType) {
+        if (!xuanmo.arcartxsuite.api.auth.AuthAccess.admitted(player.getUniqueId())) return;
         if (packetBridge == null || !packetBridge.isAvailable()) return;
 
         long now = System.currentTimeMillis();

@@ -4,8 +4,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
+import java.util.UUID;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
@@ -14,227 +14,185 @@ import org.jetbrains.annotations.NotNull;
 import xuanmo.arcartxsuite.api.ClientPacketHandler;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.security.ActionTokenGuard;
-import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
-import xuanmo.arcartxsuite.regions.config.RegionsConfiguration;
 import xuanmo.arcartxsuite.regions.model.Region;
 import xuanmo.arcartxsuite.regions.model.RegionFlag;
-import xuanmo.arcartxsuite.regions.model.Selection;
+import xuanmo.arcartxsuite.regions.config.RegionsConfiguration;
 import xuanmo.arcartxsuite.regions.service.RegionManager;
+import xuanmo.arcartxsuite.regions.service.RegionMemberships;
 
-/**
- * Regions 玩家区域查看菜单的 Packet Handler。
- * <p>
- * 处理客户端 UI 回包：navigate / refresh
- */
 public final class RegionsMenuPacketHandler implements ClientPacketHandler {
-
     public static final String PACKET_ID = "AXS_REGIONS_MENU";
     public static final String UI_RESOURCE_PATH = "arcartx/ui/regions_menu.yml";
-    public static final String UI_FILE_PATH = "ui/regions_menu.yml";
+    public static final String UI_FILE_PATH = "ui/regions_view.yml";
 
     private final JavaPlugin plugin;
-    private final PacketBridgeAPI packetBridge;
-    private final PacketGuardAPI packetGuard;
-    private final RegionManager regionManager;
-    private final RegionsConfiguration config;
+    private final PacketBridgeAPI packets;
+    private final RegionManager manager;
+    private final RegionsConfiguration configuration;
     private final String uiId;
-    private final ActionTokenGuard tokenGuard = new ActionTokenGuard();
+    private final ActionTokenGuard tokens = new ActionTokenGuard();
+    private final Map<UUID, RegionMemberships.View> ownedViews = new HashMap<>();
 
-    public RegionsMenuPacketHandler(JavaPlugin plugin, PacketBridgeAPI packetBridge,
-                                    PacketGuardAPI packetGuard, RegionManager regionManager,
-                                    RegionsConfiguration config, String uiId) {
+    public RegionsMenuPacketHandler(JavaPlugin plugin, PacketBridgeAPI packets, RegionManager manager,
+                                    RegionsConfiguration configuration, String uiId) {
         this.plugin = plugin;
-        this.packetBridge = packetBridge;
-        this.packetGuard = packetGuard;
-        this.regionManager = regionManager;
-        this.config = config;
+        this.packets = packets;
+        this.manager = manager;
+        this.configuration = configuration;
         this.uiId = uiId;
+    }
+
+    public void openMenu(Player player) {
+        if (!canView(player) || !packets.openUi(player, uiId)) return;
+        ownedViews.remove(player.getUniqueId());
+        String token = tokens.issue(player.getUniqueId(), uiId);
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            if (isOpen(player) && tokens.verify(player.getUniqueId(), uiId, token)) showCurrent(player, 0);
+        }, 2L);
+    }
+
+    public void clearPlayer(UUID id) {
+        tokens.clear(id);
+        ownedViews.remove(id);
+    }
+
+    public void close() {
+        tokens.clearAll();
+        ownedViews.clear();
     }
 
     @Override
     public boolean handleClientPacket(@NotNull Player player, @NotNull String packetId, @NotNull List<String> data) {
         if (!PACKET_ID.equalsIgnoreCase(packetId)) return false;
-        // PacketGuard 已由 ClientPacketRouter 在路由层统一调用，此处不再重复检查。
-
-        String action = data.isEmpty() ? "refresh" : safe(data.get(0)).toLowerCase(Locale.ROOT);
-        switch (action) {
-            case "navigate" -> {
-                String page = hasValue(data, 1) ? data.get(1) : "current";
-                if ("selection".equals(page)) {
-                    pushSelectionData(player);
-                } else {
-                    pushData(player, page);
+        if (data.isEmpty() || !isOpen(player)) return true;
+        try {
+            switch (data.get(0)) {
+                case "current" -> showCurrent(player, page(data, 1));
+                case "owned" -> showOwned(player, page(data, 1));
+                case "detail" -> {
+                    if (data.size() < 2) return true;
+                    Region region = manager.getRegion(UUID.fromString(data.get(1)));
+                    Location location = player.getLocation();
+                    if (region != null && (manager.hasAccess(region, player)
+                            || region.kind() == Region.Kind.GLOBAL && region.world().equals(location.getWorld().getName())
+                            || region.contains(location.getWorld().getName(), location.getBlockX(), location.getBlockY(), location.getBlockZ()))) {
+                        showRegion(player, region, page(data, 2));
+                    }
                 }
+                case "selection" -> showSelection(player);
+                case "clear" -> {
+                    var id = player.getUniqueId();
+                    if (data.size() < 2 || !tokens.begin(id, uiId, data.get(1))) return true;
+                    try {
+                        manager.clearSelection(id);
+                        showSelection(player);
+                    } finally {
+                        tokens.finish(id);
+                    }
+                }
+                default -> { }
             }
-            case "refresh" -> pushData(player, hasValue(data, 1) ? data.get(1) : "current");
-            case "select_region" -> {
-                if (hasValue(data, 1)) {
-                    pushRegionDetail(player, data.get(1));
-                }
-            }
-            case "clear_selection" -> {
-                // data: [action, token] — 写操作需有效动作令牌
-                String supplied = hasValue(data, 1) ? data.get(1) : "";
-                if (packetBridge == null || !packetBridge.isUiOpen(player, uiId)
-                    || !tokenGuard.begin(player.getUniqueId(), uiId, supplied)) {
-                    return true;
-                }
-                try {
-                    regionManager.clearSelection(player.getUniqueId());
-                    pushSelectionData(player);
-                } finally {
-                    tokenGuard.finish(player.getUniqueId());
-                }
-            }
-            case "query_selection" -> pushSelectionData(player);
-            default -> pushData(player, "current");
+        } catch (IllegalArgumentException error) {
+            player.sendMessage("§c区域菜单参数无效。");
         }
         return true;
     }
 
-    /** 玩家退出时清理其 token 与在途标记（由模块 quit 监听调用）。 */
-    public void clearPlayer(java.util.UUID playerId) {
-        tokenGuard.clear(playerId);
+    private void showCurrent(Player player, int requested) {
+        Location location = player.getLocation();
+        var at = manager.rulesAt(location);
+        List<Map<String, String>> entries = new ArrayList<>();
+        for (RegionFlag flag : RegionFlag.values()) {
+            // 未配置的旗标无需展示，即使玩家具备绕过权限。
+            if (at.decide(flag, null).state() == RegionFlag.State.NONE) continue;
+            var decision = switch (flag) {
+                case ENDERPEARL, CHORUS_FRUIT -> at.travel(flag, player);
+                case TELEPORT -> at.travel(null, player);
+                default -> at.decide(flag, player);
+            };
+            String source = switch (decision.reason()) {
+                case BYPASS -> "权限绕过";
+                case MEMBER_EXEMPT -> "成员豁免";
+                default -> decision.source() == null ? "" : decision.source().kind() == Region.Kind.GLOBAL
+                    ? "世界默认" : decision.source().id();
+            };
+            entries.add(Map.of("title", flag.description(), "state", stateLabel(decision.state()), "source", source));
+        }
+        var regions = at.regions();
+        Region first = regions.isEmpty() ? null : regions.get(0);
+        String world = location.getWorld().getName();
+        String title = first == null ? world : world + " / " + first.id();
+        String subtitle = "当前位置的生效规则 · 操作还可能检查目标位置和材质";
+        sendRules(player, first, requested, "current", title, subtitle, entries);
     }
 
-    public void openMenu(Player player) {
-        if (packetBridge == null) return;
-        tokenGuard.issue(player.getUniqueId(), uiId);
-        packetBridge.openUi(player, uiId);
-        Bukkit.getScheduler().runTaskLater(plugin, () -> {
-            if (player.isOnline()) {
-                pushData(player, "current");
-            }
-        }, 2L);
+    private void showRegion(Player player, Region region, int requested) {
+        var entries = new ArrayList<Map<String, String>>();
+        for (RegionFlag flag : RegionFlag.values()) {
+            var state = region.getFlag(flag);
+            boolean inherited = state == RegionFlag.State.NONE;
+            if (inherited) state = manager.inheritedRule(region, flag);
+            if (state == RegionFlag.State.NONE) continue;
+            entries.add(Map.of("title", flag.description(), "state", stateLabel(state), "source", inherited ? "继承" : "本区域"));
+        }
+        String subtitle = "区域设置 · " + region.minX() + ", " + region.minY() + ", " + region.minZ()
+            + "  至  " + region.maxX() + ", " + region.maxY() + ", " + region.maxZ();
+        sendRules(player, region, requested, "detail", region.world() + " / " + region.id(), subtitle, entries);
     }
 
-    public void pushData(Player player, String page) {
-        if (packetBridge == null) return;
-        Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("page", page);
-        payload.put("packetId", PACKET_ID);
-
-        // 当前所在区域
-        Location loc = player.getLocation();
-        Region current = regionManager.getHighestPriorityRegion(
-            loc.getWorld().getName(), loc.getBlockX(), loc.getBlockY(), loc.getBlockZ());
-        if (current != null) {
-            payload.put("currentRegion", current.id());
-            payload.put("currentWorld", current.world());
-            payload.put("currentPriority", String.valueOf(current.priority()));
-            payload.put("currentOwners", String.valueOf(current.owners().size()));
-            payload.put("currentMembers", String.valueOf(current.members().size()));
-            // 当前区域的标志摘要
-            List<Map<String, String>> flagSummary = new ArrayList<>();
-            for (var entry : current.flags().entrySet()) {
-                Map<String, String> f = new HashMap<>();
-                f.put("name", entry.getKey().configKey());
-                f.put("desc", entry.getKey().description());
-                f.put("state", entry.getValue().name().toLowerCase(Locale.ROOT));
-                flagSummary.add(f);
-            }
-            payload.put("currentFlags", flagSummary);
-        } else {
-            payload.put("currentRegion", "");
-            payload.put("currentWorld", loc.getWorld().getName());
-            payload.put("currentPriority", "0");
-            payload.put("currentOwners", "0");
-            payload.put("currentMembers", "0");
-            payload.put("currentFlags", List.of());
-        }
-
-        // 玩家拥有/参与的区域列表
-        List<Map<String, String>> myRegions = new ArrayList<>();
-        for (Region region : regionManager.getAllRegions()) {
-            if (region.isMember(player.getUniqueId())) {
-                Map<String, String> info = new HashMap<>();
-                info.put("id", region.id());
-                info.put("world", region.world());
-                info.put("priority", String.valueOf(region.priority()));
-                info.put("isOwner", String.valueOf(region.isOwner(player.getUniqueId())));
-                myRegions.add(info);
-            }
-        }
-        payload.put("myRegions", myRegions);
-        payload.put("myRegionCount", String.valueOf(myRegions.size()));
-
-        packetBridge.sendPacket(player, uiId, "init", payload);
+    private static String stateLabel(RegionFlag.State state) {
+        return switch (state) {
+            case ALLOW -> "允许";
+            case DENY -> "禁止";
+            case NONE -> "默认";
+        };
     }
 
-    private void pushRegionDetail(Player player, String regionId) {
-        if (packetBridge == null) return;
-        Region region = regionManager.getRegion(regionId);
-        if (region == null) {
-            pushData(player, "current");
-            return;
-        }
-
-        Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("page", "detail");
-        payload.put("packetId", PACKET_ID);
-        payload.put("regionId", region.id());
-        payload.put("regionWorld", region.world());
-        payload.put("regionPriority", String.valueOf(region.priority()));
-        payload.put("regionMin", region.minX() + ", " + region.minY() + ", " + region.minZ());
-        payload.put("regionMax", region.maxX() + ", " + region.maxY() + ", " + region.maxZ());
-        payload.put("regionVolume", String.valueOf(region.volume()));
-        payload.put("regionParent", region.parentId() != null ? region.parentId() : "");
-
-        // 标志列表
-        List<Map<String, String>> flags = new ArrayList<>();
-        for (var entry : region.flags().entrySet()) {
-            Map<String, String> f = new HashMap<>();
-            f.put("name", entry.getKey().configKey());
-            f.put("desc", entry.getKey().description());
-            f.put("state", entry.getValue().name().toLowerCase(Locale.ROOT));
-            flags.add(f);
-        }
-        payload.put("flags", flags);
-
-        // 成员
-        List<String> owners = new ArrayList<>();
-        for (var uuid : region.owners()) {
-            var op = org.bukkit.Bukkit.getOfflinePlayer(uuid);
-            owners.add(op.getName() != null ? op.getName() : uuid.toString().substring(0, 8));
-        }
-        payload.put("owners", owners);
-        List<String> members = new ArrayList<>();
-        for (var uuid : region.members()) {
-            var op = org.bukkit.Bukkit.getOfflinePlayer(uuid);
-            members.add(op.getName() != null ? op.getName() : uuid.toString().substring(0, 8));
-        }
-        payload.put("members", members);
-
-        packetBridge.sendPacket(player, uiId, "init", payload);
+    private void sendRules(Player player, Region region, int requested, String view, String title, String subtitle,
+                           List<Map<String, String>> entries) {
+        var page = RegionsAdminPacketHandler.slice(entries, requested);
+        send(player, "region", Map.of("title", title, "subtitle", subtitle,
+            "id", region == null ? "" : region.uid().toString(), "page", page.page(), "pages", page.pages(),
+            "rows", page.items(), "view", view));
     }
 
-    /**
-     * 推送玩家当前选区会话数据（pos1/pos2/体积/世界/完成状态）。
-     */
-    public void pushSelectionData(Player player) {
-        if (packetBridge == null) return;
-        Selection sel = regionManager.getSelection(player.getUniqueId());
-        Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("page", "selection");
-        payload.put("packetId", PACKET_ID);
-        payload.put("selWorld", sel.world() != null ? sel.world() : player.getWorld().getName());
-        payload.put("pos1Set", String.valueOf(sel.isPos1Set()));
-        payload.put("pos2Set", String.valueOf(sel.isPos2Set()));
-        payload.put("pos1", sel.isPos1Set() ? sel.x1() + ", " + sel.y1() + ", " + sel.z1() : "未设置");
-        payload.put("pos2", sel.isPos2Set() ? sel.x2() + ", " + sel.y2() + ", " + sel.z2() : "未设置");
-        payload.put("selComplete", String.valueOf(sel.isComplete()));
-        payload.put("selVolume", String.valueOf(sel.volume()));
-        payload.put("maxVolume", String.valueOf(config != null ? config.selection().maxVolume() : 0));
-        // 每次推送轮换动作令牌：写操作回包必须携带最新 token（防重放/防外部注入）。
-        payload.put("action_token", tokenGuard.rotate(player.getUniqueId(), uiId));
-        packetBridge.sendPacket(player, uiId, "init", payload);
+    private void showOwned(Player player, int requested) {
+        UUID id = player.getUniqueId();
+        var view = manager.membershipIndex().view(player, ownedViews.get(id));
+        ownedViews.put(id, view);
+
+        var page = RegionsAdminPacketHandler.slice(view.memberships(), requested);
+        send(player, "owned", Map.of("page", page.page(), "pages", page.pages(), "rows",
+            page.items().stream().map(entry -> Map.of(
+                "id", entry.region().uid().toString(), "title", entry.region().id(), "subtitle", entry.region().world(),
+                "role", entry.owner() ? "所有者" : "成员")).toList()));
     }
 
-    private static boolean hasValue(List<String> data, int index) {
-        return data != null && data.size() > index && !safe(data.get(index)).isBlank();
+    private void showSelection(Player player) {
+        var selection = manager.getSelection(player.getUniqueId());
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("token", tokens.rotate(player.getUniqueId(), uiId));
+        data.put("world", selection.world() == null ? player.getWorld().getName() : selection.world());
+        data.put("first", selection.isPos1Set() ? selection.x1() + ", " + selection.y1() + ", " + selection.z1() : "未设置");
+        data.put("second", selection.isPos2Set() ? selection.x2() + ", " + selection.y2() + ", " + selection.z2() : "未设置");
+        data.put("volume", Long.toString(selection.volume()));
+        data.put("limit", Long.toString(configuration.selection().maxVolume()));
+        send(player, "selection", data);
     }
 
-    private static String safe(String value) {
-        return value == null ? "" : value.trim();
+    private void send(Player player, String channel, Map<String, Object> data) {
+        packets.sendPacket(player, uiId, channel, data);
+    }
+
+    private boolean isOpen(Player player) {
+        return player.isOnline() && canView(player) && packets.isUiOpen(player, uiId);
+    }
+
+    private static boolean canView(Player player) {
+        return player.hasPermission("axs.regions.select") || player.hasPermission("arcartxsuite.admin");
+    }
+
+    private static int page(List<String> data, int index) {
+        return data.size() > index ? Integer.parseInt(data.get(index)) : 0;
     }
 }

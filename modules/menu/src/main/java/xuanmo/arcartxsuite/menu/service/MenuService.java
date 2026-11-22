@@ -3,6 +3,7 @@ package xuanmo.arcartxsuite.menu.service;
 import java.io.File;
 import java.io.IOException;
 import java.util.Collection;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -13,6 +14,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
+import xuanmo.arcartxsuite.api.auth.AuthAccess;
 import xuanmo.arcartxsuite.api.bridge.ItemBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.icon.IconResolver;
@@ -21,6 +23,7 @@ import xuanmo.arcartxsuite.api.capability.SignalDispatchable;
 import xuanmo.arcartxsuite.api.security.ActionTokenGuard;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
 import xuanmo.arcartxsuite.api.message.MessageProvider;
+import xuanmo.arcartxsuite.menu.config.MenuActionDefinition;
 import xuanmo.arcartxsuite.menu.config.MenuButtonDefinition;
 import xuanmo.arcartxsuite.menu.config.MenuDefinition;
 import xuanmo.arcartxsuite.menu.config.MenuDefinitionLoader;
@@ -29,6 +32,7 @@ import xuanmo.arcartxsuite.menu.config.MenuMessagesConfiguration;
 import xuanmo.arcartxsuite.menu.config.MenuModuleConfiguration;
 import xuanmo.arcartxsuite.menu.config.MenuPageDefinition;
 import xuanmo.arcartxsuite.menu.config.MenuUiTarget;
+import xuanmo.arcartxsuite.menu.service.MenuPacketFactory.MenuView;
 import java.util.logging.Logger;
 
 /**
@@ -55,10 +59,15 @@ public final class MenuService {
     private final PacketGuardAPI packetGuard;
     private MenuModuleConfiguration configuration;
     private final Map<String, MenuDefinition> menus = new LinkedHashMap<>();
+    private final Map<MenuPageDefinition, PagePresentation> pagePresentations = new IdentityHashMap<>();
+    private final Map<String, List<MenuButtonDefinition>> orderedFooters = new LinkedHashMap<>();
     private final Map<UUID, MenuSession> sessions = new ConcurrentHashMap<>();
     private final ActionTokenGuard tokenGuard = new ActionTokenGuard();
+    private final java.util.Set<String> closeCallbackUiIds = ConcurrentHashMap.newKeySet();
+    private final Map<UUID, Player> pendingEscOpen = new ConcurrentHashMap<>();
+    private volatile boolean stopped;
     private final MenuActionExecutor actionExecutor;
-    private final IconResolver iconResolver;
+    private final MenuPresentation presentation;
     private final MessageProvider messageProvider;
     private final MenuBindingRegistry bindingRegistry = new MenuBindingRegistry();
     private String panelRuntimeUiId = "menu_panel";
@@ -81,8 +90,8 @@ public final class MenuService {
         this.packetGuard = packetGuard;
         this.configuration = configuration;
         this.actionExecutor = new MenuActionExecutor(plugin, this, logger, signalProvider);
-        this.iconResolver = new IconResolver(itemStackBridge, itemSourceRegistry,
-            MenuConditionEvaluator::applyPlaceholders);
+        this.presentation = new MenuPresentation(new IconResolver(itemStackBridge, itemSourceRegistry,
+            MenuConditionEvaluator::applyPlaceholders)::resolveItemJson);
         this.messageProvider = messageProvider;
     }
 
@@ -109,14 +118,31 @@ public final class MenuService {
      */
     public void reload(File dataFolder) throws IOException {
         File menusDirectory = configuration.menusDirectory(dataFolder);
-        menus.clear();
-        menus.putAll(MenuDefinitionLoader.loadDirectory(
+        var loaded = MenuDefinitionLoader.loadDirectory(
             menusDirectory,
             configuration.settings().defaultLayout(),
             configuration.settings().columns(),
             configuration.settings().buttonsPerPage(),
             this.logger
-        ));
+        );
+        actionExecutor.invalidatePending();
+        menus.clear();
+        menus.putAll(loaded);
+        pagePresentations.clear();
+        orderedFooters.clear();
+        presentation.clear();
+        for (MenuDefinition menu : menus.values()) {
+            List<MenuButtonDefinition> footers = MenuPacketFactory.orderedButtons(menu.footerButtons().values());
+            orderedFooters.put(menu.id(), footers);
+            boolean staticHeaderAndFooter = !MenuConditionEvaluator.hasPlaceholders(menu.title())
+                && footers.stream().allMatch(MenuPresentation::staticButton);
+            for (MenuPageDefinition page : menu.pages()) {
+                List<MenuButtonDefinition> buttons = MenuPacketFactory.orderedButtons(page.buttons().values());
+                boolean reusable = staticHeaderAndFooter && !MenuConditionEvaluator.hasPlaceholders(page.title())
+                    && buttons.stream().allMatch(MenuPresentation::staticButton);
+                pagePresentations.put(page, new PagePresentation(buttons, reusable));
+            }
+        }
         bindingRegistry.rebuild(
             menus.values(),
             configuration.settings().globalItemBinds(),
@@ -139,6 +165,8 @@ public final class MenuService {
      * @param configuration 新的模块配置
      */
     public void updateConfiguration(MenuModuleConfiguration configuration) {
+        actionExecutor.invalidatePending();
+        for (PagePresentation page : pagePresentations.values()) page.sharedView = null;
         this.configuration = configuration;
     }
 
@@ -210,6 +238,7 @@ public final class MenuService {
      * @param player 目标玩家
      */
     public void openEscMenu(Player player) {
+        if (!canUse(player) || packetBridge == null || !packetBridge.isAvailable()) return;
         String escMenuId = configuration.client().escMenuId();
         MenuDefinition escDefinition = findMenuIgnoreCase(escMenuId);
         if (escDefinition == null) {
@@ -223,7 +252,30 @@ public final class MenuService {
         if (escDefinition == null) {
             return;
         }
-        pushMenu(player, escDefinition, 0, false);
+        MenuDefinition definition = escDefinition;
+        String runtimeUiId = primaryRuntimeUiId(definition);
+        if (packetBridge.isUiOpen(player, runtimeUiId)) {
+            initializeEscSession(player, definition, runtimeUiId);
+        } else if (pendingEscOpen.putIfAbsent(player.getUniqueId(), player) == null) {
+            // 客户端的 OPEN 回调和 esc_open 可能在同一 tick 以任意顺序到达。
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                if (pendingEscOpen.remove(player.getUniqueId(), player) && !stopped && player.isOnline()
+                    && AuthAccess.admitted(player.getUniqueId())
+                    && packetBridge.isUiOpen(player, runtimeUiId)) {
+                    initializeEscSession(player, definition, runtimeUiId);
+                }
+            });
+        }
+    }
+
+    private void initializeEscSession(Player player, MenuDefinition definition, String runtimeUiId) {
+        MenuSession existing = sessions.get(player.getUniqueId());
+        if (existing == null || !existing.runtimeUiId().equals(runtimeUiId)
+            || !existing.menuId().equals(definition.id())) {
+            pushMenu(player, definition, 0, false);
+        } else if (!existing.isPublished(definition) || existing.tokenConsumed()) {
+            pushPayload(player, existing, definition, true, true);
+        }
     }
 
     /**
@@ -235,6 +287,7 @@ public final class MenuService {
      * @return {@code true} 表示打开成功
      */
     public boolean openMenu(Player player, String menuId, int pageIndex) {
+        if (!canUse(player)) return false;
         MenuDefinition definition = findMenuIgnoreCase(menuId);
         if (definition == null) {
             notifyOpenFailed(player, menuId, "not-found");
@@ -244,6 +297,7 @@ public final class MenuService {
     }
 
     private boolean pushMenu(Player player, MenuDefinition definition, int pageIndex, boolean openUi) {
+        if (stopped) return false;
         if (!MenuConditionEvaluator.hasPermission(player, definition.permission())) {
             player.sendMessage(messages().colorize(messages().noPermission()));
             return false;
@@ -253,24 +307,24 @@ public final class MenuService {
             return false;
         }
         String runtimeUiId = primaryRuntimeUiId(definition);
-        MenuSession session = new MenuSession(definition.id(), definition.layout(), runtimeUiId, Math.max(0, pageIndex));
-        sessions.put(player.getUniqueId(), session);
-        actionExecutor.executeAll(player, definition.openActions());
-
         if (packetBridge == null || !packetBridge.isAvailable()) {
             player.sendMessage(messageProvider.get("common.ui-unavailable"));
             return false;
         }
+        if (openUi ? !packetBridge.openUi(player, runtimeUiId) : !packetBridge.isUiOpen(player, runtimeUiId)) {
+            return false;
+        }
+        UUID playerId = player.getUniqueId();
+        tokenGuard.clear(playerId);
+        int selectedPage = Math.max(0, Math.min(pageIndex, definition.pages().size() - 1));
+        MenuSession session = new MenuSession(definition.id(), definition.layout(), runtimeUiId, selectedPage);
+        sessions.put(playerId, session);
+        actionExecutor.executeAll(player, session, definition, null, definition.openActions());
         if (openUi) {
-            packetBridge.openUi(player, runtimeUiId);
-            Bukkit.getScheduler().runTaskLater(plugin, () -> {
-                if (player.isOnline()) {
-                    pushPayload(player, session, definition, true);
-                }
-            }, 2L);
+            Bukkit.getScheduler().runTaskLater(plugin, () -> pushPayload(player, session, definition, true, true), 2L);
             return true;
         }
-        pushPayload(player, session, definition, true);
+        pushPayload(player, session, definition, true, true);
         return true;
     }
 
@@ -291,6 +345,15 @@ public final class MenuService {
      * @param player 目标玩家
      */
     public void refreshMenu(Player player) {
+        refreshMenu(player, false);
+    }
+
+    /** 客户端显式请求重传时，允许重发相同页面以恢复 UI 状态。 */
+    public void resyncMenu(Player player) {
+        refreshMenu(player, true);
+    }
+
+    private void refreshMenu(Player player, boolean force) {
         MenuSession session = sessions.get(player.getUniqueId());
         if (session == null) {
             return;
@@ -300,7 +363,7 @@ public final class MenuService {
             sessions.remove(player.getUniqueId());
             return;
         }
-        pushPayload(player, session, definition, false);
+        pushPayload(player, session, definition, false, force);
     }
 
     /**
@@ -313,12 +376,33 @@ public final class MenuService {
         if (session == null) {
             return;
         }
-        MenuDefinition definition = findMenuIgnoreCase(session.menuId());
-        if (definition != null) {
-            actionExecutor.executeAll(player, definition.closeActions());
-        }
+        tokenGuard.clear(player.getUniqueId());
         if (packetBridge != null && packetBridge.isAvailable()) {
             packetBridge.closeUi(player, session.runtimeUiId());
+        }
+        MenuDefinition definition = findMenuIgnoreCase(session.menuId());
+        if (definition != null) actionExecutor.executeAll(player, session, definition, null, definition.closeActions());
+    }
+
+    boolean isCurrentSession(Player player, MenuSession session) {
+        return sessions.get(player.getUniqueId()) == session;
+    }
+
+    public void trackUiClose(String runtimeUiId) {
+        if (closeCallbackUiIds.add(runtimeUiId) && !packetBridge.registerUiCloseCallback(runtimeUiId, player -> {
+            if (stopped) return;
+            UUID playerId = player.getUniqueId();
+            MenuSession session = sessions.get(playerId);
+            if (session == null || !runtimeUiId.equals(session.runtimeUiId())) return;
+            Runnable cleanup = () -> {
+                if (!packetBridge.isUiOpen(player, runtimeUiId) && sessions.remove(playerId, session)) {
+                    tokenGuard.clear(playerId);
+                }
+            };
+            if (Bukkit.isPrimaryThread()) cleanup.run();
+            else Bukkit.getScheduler().runTask(plugin, cleanup);
+        })) {
+            closeCallbackUiIds.remove(runtimeUiId);
         }
     }
 
@@ -346,7 +430,8 @@ public final class MenuService {
             case "next", "+", ">" -> session.setPageIndex(session.pageIndex() + 1);
             default -> session.setPageIndex(definition.pageIndexOf(pageToken));
         }
-        pushPayload(player, session, definition, false);
+        session.setPageIndex(Math.min(session.pageIndex(), Math.max(0, definition.pages().size() - 1)));
+        pushPayload(player, session, definition, false, false);
     }
 
     /**
@@ -358,8 +443,9 @@ public final class MenuService {
      * @return {@code true} 表示事件已处理
      */
     public boolean handleButtonClick(Player player, String buttonId, boolean footer) {
+        if (!canUse(player)) return true;
         MenuSession session = sessions.get(player.getUniqueId());
-        if (session == null || buttonId == null || buttonId.isBlank()) {
+        if (session == null || !session.tokenConsumed() || buttonId == null || buttonId.isBlank()) {
             return true;
         }
         long now = System.currentTimeMillis();
@@ -372,40 +458,48 @@ public final class MenuService {
         if (definition == null) {
             return true;
         }
-        MenuButtonDefinition button = footer
-            ? definition.footerButtons().get(buttonId)
-            : findPageButton(definition.pageAt(session.pageIndex()), buttonId);
+        MenuButtonDefinition button = session.displayedButton(definition, buttonId, footer);
+        MenuView authorizedView = session.publishedView();
         if (button == null) {
             player.sendMessage(messages().colorize(messages().buttonUnavailable()));
-            refreshMenu(player);
             return true;
         }
         if (!MenuConditionEvaluator.hasPermission(player, button.permission())) {
             player.sendMessage(messages().colorize(messages().buttonUnavailable()));
-            refreshMenu(player);
             return true;
         }
         if (!MenuConditionEvaluator.passes(player, button.viewConditions())) {
             player.sendMessage(messages().colorize(messages().buttonUnavailable()));
-            refreshMenu(player);
             return true;
         }
-        if (!MenuConditionEvaluator.passes(player, button.useConditions())) {
+        boolean allowed = MenuConditionEvaluator.passes(player, button.useConditions());
+        if (sessions.get(player.getUniqueId()) != session || !session.tokenConsumed() || !session.isPublished(definition)
+            || session.publishedView() != authorizedView || !canUse(player)
+            || !MenuConditionEvaluator.hasPermission(player, definition.permission())
+            || !MenuConditionEvaluator.hasPermission(player, button.permission())) return true;
+        if (!allowed) {
             String deny = button.denyMessage();
             if (deny != null && !deny.isBlank()) {
                 player.sendMessage(messages().colorize(MenuConditionEvaluator.applyPlaceholders(player, deny)));
             } else {
                 player.sendMessage(messages().colorize(messages().buttonUnavailable()));
             }
-            actionExecutor.executeAll(player, button.denyActions());
+            executeButtonActions(player, session, definition, button, button.denyActions());
             return true;
         }
         // PacketGuard 已由 ClientPacketRouter 在路由层统一调用，此处不再重复检查。
-        actionExecutor.executeAll(player, button.actions());
-        if (sessions.containsKey(player.getUniqueId())) {
-            refreshMenu(player);
-        }
+        executeButtonActions(player, session, definition, button, button.actions());
         return true;
+    }
+
+    private void executeButtonActions(Player player, MenuSession session, MenuDefinition definition, MenuButtonDefinition button,
+                                      List<MenuActionDefinition> actions) {
+        session.beginActions();
+        try {
+            actionExecutor.executeAll(player, session, definition, button, actions);
+        } finally {
+            session.endActions();
+        }
     }
 
     /**
@@ -425,8 +519,19 @@ public final class MenuService {
      * @param player 退出的玩家
      */
     public void handlePlayerQuit(Player player) {
-        sessions.remove(player.getUniqueId());
-        tokenGuard.clear(player.getUniqueId());
+        UUID id = player.getUniqueId();
+        pendingEscOpen.remove(id);
+        sessions.remove(id);
+        tokenGuard.clear(id);
+        actionExecutor.cancelPlayer(id);
+    }
+
+    public void handlePlayerRestriction(Player player) {
+        MenuSession session = sessions.get(player.getUniqueId());
+        handlePlayerQuit(player);
+        if (session != null && packetBridge != null && packetBridge.isAvailable()) {
+            packetBridge.closeUi(player, session.runtimeUiId());
+        }
     }
 
     /**
@@ -434,8 +539,16 @@ public final class MenuService {
      * 防止卸载后延迟动作仍引用旧 service 继续执行。
      */
     public void shutdown() {
+        stopped = true;
         actionExecutor.shutdown();
+        if (packetBridge != null) closeCallbackUiIds.forEach(packetBridge::unregisterUiCloseCallback);
+        closeCallbackUiIds.clear();
+        pendingEscOpen.clear();
+        tokenGuard.clearAll();
         sessions.clear();
+        pagePresentations.clear();
+        orderedFooters.clear();
+        presentation.clear();
     }
 
     /**
@@ -459,72 +572,132 @@ public final class MenuService {
         return null;
     }
 
-    private MenuButtonDefinition findPageButton(MenuPageDefinition page, String buttonId) {
-        MenuButtonDefinition direct = page.buttons().get(buttonId);
-        if (direct != null) {
-            return direct;
-        }
-        for (MenuButtonDefinition button : page.buttons().values()) {
-            if (button.id().equalsIgnoreCase(buttonId)) {
-                return button;
-            }
-        }
-        return null;
-    }
-
-    private void pushPayload(Player player, MenuSession session, MenuDefinition definition, boolean initPacket) {
-        if (packetBridge == null) {
+    private void pushPayload(Player player, MenuSession session, MenuDefinition definition, boolean initPacket, boolean force) {
+        if (!canUse(player) || packetBridge == null || session.actionsRunning()
+            || menus.get(definition.id()) != definition
+            || sessions.get(player.getUniqueId()) != session || !packetBridge.isUiOpen(player, session.runtimeUiId())) {
             return;
         }
-        Map<String, Object> payload = MenuPacketFactory.buildPayload(
-            configuration.ui().packetId(),
-            player,
-            definition,
-            session,
-            iconResolver
-        );
-        payload.put("action_token", tokenGuard.issue(player.getUniqueId(), session.runtimeUiId()));
+        if (!MenuConditionEvaluator.hasPermission(player, definition.permission())
+            || !MenuConditionEvaluator.passes(player, definition.openRequirements())) {
+            UUID playerId = player.getUniqueId();
+            if (sessions.remove(playerId, session)) {
+                tokenGuard.clear(playerId);
+                packetBridge.closeUi(player, session.runtimeUiId());
+            }
+            return;
+        }
+        int pageIndex = session.pageIndex();
+        PagePresentation page = pagePresentations.get(definition.pageAt(pageIndex));
+        if (page == null) return;
+        MenuView view = page.sharedView;
+        if (view == null) {
+            view = MenuPacketFactory.buildView(configuration.ui().packetId(), player, definition, pageIndex, presentation,
+                page.buttons, orderedFooters.get(definition.id()));
+            if (page.reusable && view.iconsReady()) page.sharedView = view;
+        }
+        UUID playerId = player.getUniqueId();
+        if (stopped || sessions.get(playerId) != session || session.pageIndex() != pageIndex
+            || menus.get(definition.id()) != definition) return;
         List<MenuUiTarget> targets = definition.uiTargets();
+        boolean standardTarget = targets.isEmpty() || targets.size() == 1 && !targets.get(0).hasPacketHandler();
+        if (!force && standardTarget && session.unchanged(definition, view)) return;
+        session.invalidatePublication();
+        Map<String, Object> payload = new LinkedHashMap<>(view.payload());
+        payload.put("action_token", tokenGuard.issue(playerId, session.runtimeUiId()));
         if (targets.isEmpty()) {
-            packetBridge.sendPacket(
+            boolean sent = packetBridge.sendPacket(
                 player,
                 session.runtimeUiId(),
                 initPacket ? "init" : "update",
                 payload
             );
+            if (sent) session.published(definition, pageIndex, view);
+            else tokenGuard.clear(playerId);
             return;
         }
+        boolean primarySent = false;
         for (MenuUiTarget target : targets) {
             String handler = target.hasPacketHandler()
                 ? target.packetHandler()
                 : (initPacket ? "init" : "update");
-            packetBridge.sendPacket(player, target.uiId(), handler, payload);
+            String targetUi = resolveRuntimeUiId(target.uiId());
+            boolean sent = packetBridge.sendPacket(player, targetUi, handler, payload);
+            if (targetUi.equals(session.runtimeUiId())) primarySent |= sent;
         }
+        if (primarySent) session.published(definition, pageIndex, view);
+        else tokenGuard.clear(playerId);
     }
 
     /**
      * 校验写操作令牌：要求会话 UI 已打开、data[1] 与当前签发 token 一致、且玩家无在途写操作。
      */
     public boolean beginWriteAction(Player player, List<String> data) {
-        MenuSession session = sessions.get(player.getUniqueId());
-        if (session == null) return false;
+        if (!canUse(player)) return false;
+        UUID playerId = player.getUniqueId();
+        MenuSession session = sessions.get(playerId);
+        if (session == null || session.tokenConsumed()) return false;
+        MenuDefinition definition = findMenuIgnoreCase(session.menuId());
+        if (definition == null || !session.isPublished(definition)) return false;
         String scope = session.runtimeUiId();
         String supplied = data != null && data.size() > 1 ? data.get(1) : "";
-        return scope != null && packetBridge != null && packetBridge.isUiOpen(player, scope)
-            && tokenGuard.begin(player.getUniqueId(), scope, supplied);
+        if (scope == null || packetBridge == null || !tokenGuard.begin(playerId, scope, supplied)) return false;
+        boolean accepted = false;
+        try {
+            if (!packetBridge.isUiOpen(player, scope) || !MenuConditionEvaluator.hasPermission(player, definition.permission())
+                || !MenuConditionEvaluator.passes(player, definition.openRequirements())) return false;
+            if (!canUse(player) || sessions.get(playerId) != session || !session.isPublished(definition)
+                || menus.get(definition.id()) != definition || !tokenGuard.verify(playerId, scope, supplied)
+                || !MenuConditionEvaluator.hasPermission(player, definition.permission())) return false;
+            session.consumeToken();
+            accepted = true;
+            return true;
+        } finally {
+            if (!accepted) tokenGuard.finish(playerId);
+        }
+    }
+
+    private boolean canUse(Player player) {
+        return !stopped && player != null && player.isOnline() && AuthAccess.admitted(player.getUniqueId());
+    }
+
+    private static final class PagePresentation {
+        private final List<MenuButtonDefinition> buttons;
+        private final boolean reusable;
+        private MenuView sharedView;
+
+        private PagePresentation(List<MenuButtonDefinition> buttons, boolean reusable) {
+            this.buttons = buttons;
+            this.reusable = reusable;
+        }
     }
 
     /** 释放玩家的在途写操作槽位。 */
     public void finishWriteAction(Player player) {
-        tokenGuard.finish(player.getUniqueId());
+        UUID playerId = player.getUniqueId();
+        try {
+            MenuSession session = sessions.get(playerId);
+            if (session != null && session.tokenConsumed()) refreshMenu(player);
+        } finally {
+            tokenGuard.finish(playerId);
+        }
     }
 
     private String primaryRuntimeUiId(MenuDefinition definition) {
         List<MenuUiTarget> targets = definition.uiTargets();
         if (!targets.isEmpty()) {
-            return targets.get(0).uiId();
+            return resolveRuntimeUiId(targets.get(0).uiId());
         }
         return runtimeUiId(definition.layout());
+    }
+
+    /** Resolve names used in menu definitions to the IDs registered for the built-in screens. */
+    public String resolveRuntimeUiId(String uiId) {
+        return switch (uiId) {
+            case "menu_panel", "AXS:menu_panel" -> panelRuntimeUiId;
+            case "menu_esc", "AXS:menu_esc" -> escRuntimeUiId;
+            default -> uiId;
+        };
     }
 
     private String runtimeUiId(MenuLayoutType layout) {

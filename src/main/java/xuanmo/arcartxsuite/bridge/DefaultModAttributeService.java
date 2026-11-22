@@ -5,6 +5,7 @@ import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -36,8 +37,7 @@ import xuanmo.arcartxsuite.module.AxsLog;
  *   <li>修饰器 UUID 由「来源 + 属性 ID」确定生成，重复登记为整体替换；</li>
  *   <li>不同来源对同一属性的修饰器独立共存，移除时互不影响；</li>
  *   <li>属性未注册（Mod 未安装）或该实体类型不持有该属性时记日志跳过；</li>
- *   <li>transient 修饰器不随实体持久化，玩家退出即自然失效，
- *       本服务同时解除追踪，重新上线需由模块侧重新登记。</li>
+ *   <li>玩家退出时精确移除本服务挂载的修饰器并解除追踪，重新上线需由模块侧重新登记。</li>
  * </ul>
  */
 public final class DefaultModAttributeService implements ModAttributeService, Listener {
@@ -56,8 +56,8 @@ public final class DefaultModAttributeService implements ModAttributeService, Li
         new ConcurrentHashMap<>();
     /** 已警告过的缺失属性 ID（避免日志刷屏） */
     private final ConcurrentMap<String, Boolean> warnedAttributes = new ConcurrentHashMap<>();
-    /** 已记过首次挂载成功日志的「玩家:来源」（避免重复 info） */
-    private final java.util.Set<String> appliedOnce = ConcurrentHashMap.newKeySet();
+    /** 本次登录已记过首次挂载成功日志的来源，按玩家分组。 */
+    private final ConcurrentMap<UUID, Set<String>> appliedOnce = new ConcurrentHashMap<>();
 
     private volatile boolean enabled = true;
     private volatile boolean forgeAvailable;
@@ -117,6 +117,27 @@ public final class DefaultModAttributeService implements ModAttributeService, Li
     }
 
     @Override
+    public boolean supportsAttribute(Player player, String attributeId) {
+        if (!available() || player == null || !player.isOnline() || attributeId == null || attributeId.isBlank()) {
+            return false;
+        }
+        Object attribute = resolveAttribute(attributeId);
+        if (attribute == null) {
+            return false;
+        }
+        Object handle = nmsHandle(player);
+        if (handle == null) {
+            return false;
+        }
+        try {
+            return livingGetAttribute.invoke(handle, attribute) != null;
+        } catch (ReflectiveOperationException exception) {
+            warnMissing(player, attributeId);
+            return false;
+        }
+    }
+
+    @Override
     public void setModifiers(Player player, String sourceId, Map<String, ModAttributeModifier> modifiers) {
         if (player == null || sourceId == null || sourceId.isBlank()) {
             return;
@@ -163,11 +184,12 @@ public final class DefaultModAttributeService implements ModAttributeService, Li
 
     @Override
     public void clearPlayer(Player player) {
-        if (player == null) {
-            return;
-        }
-        ConcurrentMap<String, Map<String, ModAttributeModifier>> removed = tracked.remove(player.getUniqueId());
-        if (removed == null || !player.isOnline() || !forgeAvailable) {
+        if (player != null) clearTrackedPlayer(player, player.isOnline());
+    }
+
+    private void clearTrackedPlayer(Player player, boolean entityAvailable) {
+        var removed = tracked.remove(player.getUniqueId());
+        if (removed == null || !entityAvailable || !forgeAvailable) {
             return;
         }
         for (Map.Entry<String, Map<String, ModAttributeModifier>> entry : removed.entrySet()) {
@@ -207,12 +229,12 @@ public final class DefaultModAttributeService implements ModAttributeService, Li
         tracked.clear();
     }
 
-    /** transient 修饰器随实体销毁自然失效，退出时仅解除追踪。 */
+    /** 在离服实体仍可访问时移除修饰器，兼容会保存或复用属性实例的混合核心。 */
     @EventHandler(priority = EventPriority.MONITOR)
     public void onQuit(PlayerQuitEvent event) {
-        UUID uuid = event.getPlayer().getUniqueId();
-        tracked.remove(uuid);
-        appliedOnce.removeIf(key -> key.startsWith(uuid + ":"));
+        Player player = event.getPlayer();
+        clearTrackedPlayer(player, true);
+        appliedOnce.remove(player.getUniqueId());
     }
 
     // ── Forge 反射解析 ──
@@ -236,8 +258,9 @@ public final class DefaultModAttributeService implements ModAttributeService, Li
             Class<?> modifierClass = Class.forName(ATTRIBUTE_MODIFIER_CLASS, true, loader);
             Class<?> instanceClass = Class.forName(ATTRIBUTE_INSTANCE_CLASS, true, loader);
             instanceGetModifier = resolveMethod(instanceClass, UUID.class, "m_22111_", "getModifier");
+            // Forge 1.20.1 的 m_22125_ 会将修饰器加入持久化集合。
             instanceAddTransientModifier = resolveMethod(
-                instanceClass, modifierClass, "m_22125_", "addTransientModifier");
+                instanceClass, modifierClass, "m_22118_", "addTransientModifier");
             instanceRemoveModifier = resolveMethod(instanceClass, UUID.class, "m_22120_", "removeModifier");
 
             Class<?> operationEnum = Class.forName(ATTRIBUTE_MODIFIER_CLASS + "$Operation", true, loader);
@@ -256,9 +279,14 @@ public final class DefaultModAttributeService implements ModAttributeService, Li
      */
     private static Method resolveMethod(Class<?> owner, Class<?> paramType, String... names)
         throws NoSuchMethodException {
+        return resolveMethod(owner, new Class<?>[]{paramType}, names);
+    }
+
+    private static Method resolveMethod(Class<?> owner, Class<?>[] parameters, String... names)
+        throws NoSuchMethodException {
         for (String name : names) {
             try {
-                return owner.getMethod(name, paramType);
+                return owner.getMethod(name, parameters);
             } catch (NoSuchMethodException ignored) {
             }
         }
@@ -295,7 +323,8 @@ public final class DefaultModAttributeService implements ModAttributeService, Li
                 applied++;
             }
         }
-        if (applied > 0 && appliedOnce.add(player.getUniqueId() + ":" + sourceId)) {
+        if (applied > 0 && appliedOnce.computeIfAbsent(player.getUniqueId(), ignored -> ConcurrentHashMap.newKeySet())
+            .add(sourceId)) {
             logger.info("[ModAttribute] 已为 " + player.getName() + " 挂载 " + applied
                 + " 个属性修饰器（来源 " + sourceId + "）");
         }

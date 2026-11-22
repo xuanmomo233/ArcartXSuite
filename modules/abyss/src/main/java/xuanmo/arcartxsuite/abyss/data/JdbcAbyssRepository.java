@@ -445,6 +445,14 @@ public final class JdbcAbyssRepository extends AbstractModuleRepository {
         return results;
     }
 
+    public long latestResultSequence() throws SQLException {
+        try (Connection connection = getConnection();
+             Statement statement = connection.createStatement();
+             ResultSet rows = statement.executeQuery("SELECT COALESCE(MAX(seq),0) FROM " + tResultFeed)) {
+            return rows.next() ? rows.getLong(1) : 0L;
+        }
+    }
+
     public @Nullable String loadRunResult(UUID run) throws SQLException {
         try (Connection c = getConnection(); PreparedStatement ps = c.prepareStatement(
                 "SELECT snapshot FROM " + tRunResults + " WHERE run_id=?")) {

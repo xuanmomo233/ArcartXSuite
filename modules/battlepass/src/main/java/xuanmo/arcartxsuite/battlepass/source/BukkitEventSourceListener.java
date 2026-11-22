@@ -40,6 +40,7 @@ import org.bukkit.event.player.PlayerShearEntityEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.projectiles.ProjectileSource;
 import org.bukkit.plugin.Plugin;
+import xuanmo.arcartxsuite.api.event.CombatDamageEvent;
 import xuanmo.arcartxsuite.api.event.TaczGunDamageEvent;
 import xuanmo.arcartxsuite.api.event.TaczGunKillEvent;
 
@@ -49,8 +50,7 @@ import xuanmo.arcartxsuite.api.event.TaczGunKillEvent;
  * 监听器通过规范化后的 Bukkit 事件全类名查找回调。所有事件回调均在 MONITOR
  * 阶段执行，异常只影响当前回调，不影响其他任务。
  * <p>
- * 除原版 Bukkit 事件外，还监听 TACZ 枪械事件（{@link TaczGunDamageEvent} / {@link TaczGunKillEvent}），
- * 作为 combateffect 模块未加载时的降级路径，确保枪械伤害和击杀也能被战令任务追踪。
+ * 伤害任务使用宿主归并后的有效伤害，保留 Bukkit 和 TaCZ 的配置类名。
  */
 public final class BukkitEventSourceListener implements Listener {
 
@@ -162,18 +162,13 @@ public final class BukkitEventSourceListener implements Listener {
         dispatch(ENTITY_DEATH, player, payload);
     }
 
-    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
-    public void onEntityDamageByEntity(EntityDamageByEntityEvent event) {
-        if (!(event.getDamager() instanceof Player player) || !player.isOnline()) return;
-        Entity target = event.getEntity();
-        if (!(target instanceof LivingEntity)) return;
-        Map<String, String> payload = new LinkedHashMap<>();
-        payload.put("attacker", player.getName());
-        payload.put("targetType", target.getType().name());
-        payload.put("targetName", target.getName());
-        payload.put("damage", String.valueOf(event.getFinalDamage()));
-        payload.put("world", player.getWorld().getName());
-        dispatch(ENTITY_DAMAGE, player, payload);
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onCombatDamage(CombatDamageEvent event) {
+        Player player = event.getAttacker();
+        if (!player.isOnline()) return;
+        String route = event.getGunHit() != null || event.getSource() == CombatDamageEvent.Source.TACZ
+            ? TACZ_DAMAGE : ENTITY_DAMAGE;
+        if (callbacks.containsKey(route)) dispatch(route, player, event.payload());
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
@@ -257,25 +252,6 @@ public final class BukkitEventSourceListener implements Listener {
         dispatch(PLAYER_DEATH, player, payload);
     }
 
-    /**
-     * 监听 TACZ 枪械伤害事件。
-     * <p>
-     * TACZ 伤害不触发 {@link EntityDamageByEntityEvent}，必须单独监听。
-     * payload 结构与 {@link #onEntityDamageByEntity} 一致，下游任务无需区分伤害来源。
-     */
-    @EventHandler(priority = EventPriority.MONITOR)
-    public void onTaczGunDamage(TaczGunDamageEvent event) {
-        Player player = event.getAttacker();
-        if (!player.isOnline()) return;
-        LivingEntity target = event.getTarget();
-        Map<String, String> payload = new LinkedHashMap<>();
-        payload.put("attacker", player.getName());
-        payload.put("targetType", target.getType().name());
-        payload.put("targetName", target.getName());
-        payload.put("damage", String.valueOf(event.getDamage()));
-        payload.put("world", player.getWorld().getName());
-        dispatch(TACZ_DAMAGE, player, payload);
-    }
 
     /**
      * 监听 TACZ 枪械击杀事件。

@@ -116,17 +116,24 @@ public record MarketModuleConfiguration(
         );
     }
 
+    private static Map<String, Double> readTaxDiscounts(ConfigurationSection config) {
+        Map<String, Double> discounts = new LinkedHashMap<>();
+        ConfigurationSection section = config.getConfigurationSection("tax-discount");
+        if (section != null) {
+            section.getValues(true).forEach((permission, value) -> {
+                if (value instanceof Number rate) {
+                    discounts.put(permission, rate.doubleValue());
+                }
+            });
+        }
+        return discounts;
+    }
+
     private static AuctionConfiguration loadAuction(FileConfiguration config, Logger logger) {
         ConfigurationSection sec = config.getConfigurationSection("auction");
         if (sec == null) return AuctionConfiguration.defaults();
 
-        Map<String, Double> taxDiscount = new LinkedHashMap<>();
-        ConfigurationSection tdSec = sec.getConfigurationSection("tax-discount");
-        if (tdSec != null) {
-            for (String key : tdSec.getKeys(false)) {
-                taxDiscount.put(key, tdSec.getDouble(key, 0.0));
-            }
-        }
+        Map<String, Double> taxDiscount = readTaxDiscounts(sec);
 
         ItemMatcher blacklist = ItemMatcherLoader.load(
             sec.getConfigurationSection("blacklist"), logger, "auction.blacklist");
@@ -195,13 +202,7 @@ public record MarketModuleConfiguration(
         ConfigurationSection sec = config.getConfigurationSection("player-shop");
         if (sec == null) return PlayerShopConfiguration.defaults();
 
-        Map<String, Double> taxDiscount = new LinkedHashMap<>();
-        ConfigurationSection tdSec = sec.getConfigurationSection("tax-discount");
-        if (tdSec != null) {
-            for (String key : tdSec.getKeys(false)) {
-                taxDiscount.put(key, tdSec.getDouble(key, 0.0));
-            }
-        }
+        Map<String, Double> taxDiscount = readTaxDiscounts(sec);
 
         ItemMatcher blacklist = ItemMatcherLoader.load(
             sec.getConfigurationSection("blacklist"), logger, "player-shop.blacklist");

@@ -27,6 +27,8 @@ public final class QQBotWeeklyRankService {
     private final Logger logger;
 
     private BukkitTask task;
+    private final xuanmo.arcartxsuite.api.scheduler.ModuleCallback rankTask =
+        new xuanmo.arcartxsuite.api.scheduler.ModuleCallback(this::runWeeklyRank);
     private volatile boolean running;
 
     public QQBotWeeklyRankService(
@@ -50,17 +52,20 @@ public final class QQBotWeeklyRankService {
         running = true;
         long delayTicks = calculateDelayToNextSunday();
         // 首次调度：等到下周日 23:59
-        task = plugin.getServer().getScheduler().runTaskLaterAsynchronously(plugin, this::runWeeklyRank, delayTicks);
+        task = plugin.getServer().getScheduler().runTaskLaterAsynchronously(plugin, rankTask, delayTicks);
         logger.info("周结算排行榜已调度，下次触发约 " + (delayTicks / 20 / 60) + " 分钟后");
     }
 
     public synchronized void stop() {
         running = false;
+        rankTask.close();
         if (task != null) {
             task.cancel();
             task = null;
         }
     }
+
+    public java.util.concurrent.CompletionStage<Void> stopped() { return rankTask.stopped(); }
 
     private void runWeeklyRank() {
         if (!running) return;
@@ -91,7 +96,7 @@ public final class QQBotWeeklyRankService {
 
     private synchronized void scheduleNext() {
         if (running) task = plugin.getServer().getScheduler().runTaskLaterAsynchronously(plugin,
-            this::runWeeklyRank, calculateDelayToNextSunday());
+            rankTask, calculateDelayToNextSunday());
     }
 
     /** 计算到下周日 23:59 的 tick 延迟 */

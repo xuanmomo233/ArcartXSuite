@@ -3,24 +3,33 @@ package xuanmo.arcartxsuite.map.service;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.lang.reflect.Method;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.logging.Logger;
 import org.bukkit.Bukkit;
+import org.bukkit.Chunk;
 import org.bukkit.ChunkSnapshot;
 import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
+import xuanmo.arcartxsuite.api.auth.AuthSnapshot;
 
 /**
  * 地形预加载推送服务：把服务端已生成区块的地形（每列 topY + 顶层方块材质）
@@ -29,21 +38,20 @@ import org.bukkit.plugin.Plugin;
  * 管线：
  * <ol>
  *   <li>{@link #submit} 入队 MapChunk（64² 方块）坐标集合</li>
- *   <li>每 tick 主线程分片收集快照，最多访问 4 个 MC chunk，访问后检查 2ms 预算；
- *       一个 MapChunk 完成后轮转到下一个任务（不触发世界生成）</li>
+ *   <li>异步加载已生成区块，主线程按 tick 分批抓取快照</li>
  *   <li>快照齐了 → 异步线程提取列数据（topY + 材质 key 色板）→ 组包</li>
  *   <li>回到主线程 {@code player.sendPluginMessage} 逐块下发</li>
  * </ol>
  * <p>
  * 包格式（{@code axsmap:terrain}，DataOutputStream 序）：
  * <pre>{@code
- * writeUTF(dimKey) | int cx | int cz | int sourceVersion
+ * writeUTF(dimKey) | int cx | int cz | int sourceVersion | unsigned short resolvedMask
  * | byte paletteSize | paletteSize × writeUTF(materialKey)
- * | 4096 × (short topY | byte paletteIdx)
+ * | resolved columns in row order × (short topY | byte paletteIdx)
  * }</pre>
  * 请求格式（{@code axsmap:request}，客户端→服务端）：
  * <pre>{@code
- * writeUTF(worldId) | int count | count × (int cx, int cz)
+ * writeUTF(worldId) | int count | count × (int cx, int cz, unsigned short missingMask)
  * }</pre>
  */
 public final class MapTerrainPushService {
@@ -59,97 +67,145 @@ public final class MapTerrainPushService {
     private static final int MAX_PENDING_CHUNKS = 4096;
     private static final int MAX_PLAYER_CHUNKS = 1024;
     private static final int MAX_IN_FLIGHT = 4;
+    private static final int ALL_SUBCHUNKS = 0xffff;
+    private static final Method LOAD_CHUNK_ASYNC = findAsyncChunkLoader();
 
     private final Plugin plugin;
     private final Logger logger;
+    private final Predicate<Player> canReceive;
+    private final Function<UUID, AuthSnapshot> admissionSnapshot;
 
-    /** 待推送任务队列，按 MapChunk 轮转。 */
-    private final Deque<PushJob> jobs = new ArrayDeque<>();
-    /** 待发送的成品包（异步线程生产，主线程消费）。 */
-    private final ConcurrentLinkedQueue<PendingPacket> outbox = new ConcurrentLinkedQueue<>();
-    private final Set<WorkKey> pending = new HashSet<>();
-    private final Map<UUID, Object> playerSessions = new HashMap<>();
+    /** 请求队列轮转，每个地图块在同一时间只采样一次。 */
+    private final Deque<Deque<TerrainWork>> jobs = new ArrayDeque<>();
+    private final Deque<Delivery> outbox = new ArrayDeque<>();
+    private final Map<ChunkKey, TerrainWork> terrain = new HashMap<>();
+    private final Map<UUID, PlayerQueue> players = new HashMap<>();
+    private int pendingRecipients;
     private final AtomicInteger inFlight = new AtomicInteger();
+    private final AtomicInteger loadingChunks = new AtomicInteger();
+    private final Deque<Capture> waitingCaptures = new ArrayDeque<>();
     private Capture capture;
 
-    private record WorkKey(UUID player, Object recipient, UUID world, int version, long coordinate) { }
+    public record ChunkRequest(long coordinate, int mask) {}
+    private record ChunkKey(UUID world, int version, ChunkRequest request) {}
 
-    private static final class Capture {
-        final PushJob job;
-        final long coordinate;
-        final ChunkSnapshot[] snapshots = new ChunkSnapshot[16];
-        int next;
+    private static final class PlayerQueue {
+        final UUID id;
+        final Player player;
+        final AuthSnapshot admission;
+        final Set<TerrainWork> pending = new HashSet<>();
 
-        Capture(PushJob job, long coordinate) {
-            this.job = job;
-            this.coordinate = coordinate;
+        PlayerQueue(UUID id, Player player, AuthSnapshot admission) {
+            this.id = id;
+            this.player = player;
+            this.admission = admission;
         }
     }
 
-    private WorkKey key(PushJob job, long coordinate) {
-        return new WorkKey(job.playerUuid, job.relaySink == null ? job.playerSession : job.relaySink,
-            job.worldUuid, job.sourceVersion, coordinate);
+    private record Recipient(PlayerQueue local, BiConsumer<ChunkRequest, byte[]> relay) {
+        Object key() { return local == null ? relay : local; }
     }
 
-    private void enqueue(PushJob job) {
+    private static final class TerrainWork {
+        final ChunkKey key;
+        final Map<Object, Recipient> recipients = new LinkedHashMap<>();
+        EncodedTerrain encoded;
+        boolean finished;
+
+        TerrainWork(ChunkKey key) {
+            this.key = key;
+        }
+    }
+
+    private record EncodedTerrain(byte[] packet, int bodyOffset) {}
+    private record Delivery(TerrainWork work, Recipient recipient) {}
+
+    private static final class Capture {
+        final TerrainWork work;
+        final ChunkSnapshot[] snapshots = new ChunkSnapshot[16];
+        final Map<Integer, CompletableFuture<Chunk>> pending = new LinkedHashMap<>();
+        int next;
+        int resolved;
+
+        Capture(TerrainWork work) {
+            this.work = work;
+        }
+
+        boolean hasReadyChunk() {
+            for (var load : pending.values()) {
+                if (load.isDone()) return true;
+            }
+            return false;
+        }
+    }
+
+    private int enqueue(Player player, UUID world, List<ChunkRequest> requests, int version,
+                        BiConsumer<ChunkRequest, byte[]> relay) {
         synchronized (jobs) {
-            if (stopped) return;
-            if (job.playerUuid != null) job.playerSession = playerSessions.computeIfAbsent(job.playerUuid, ignored -> new Object());
-            int[] playerPending = {(int) pending.stream()
-                .filter(k -> job.playerUuid != null && job.playerUuid.equals(k.player())).count()};
-            job.chunks.removeIf(coordinate -> {
-                if (pending.size() >= MAX_PENDING_CHUNKS
-                    || job.playerUuid != null && playerPending[0] >= MAX_PLAYER_CHUNKS) return true;
-                if (!pending.add(key(job, coordinate))) return true;
-                playerPending[0]++;
-                return false;
-            });
-            if (!job.chunks.isEmpty()) jobs.addLast(job);
+            if (stopped) return 0;
+            PlayerQueue local = null;
+            if (player != null) {
+                UUID id = player.getUniqueId();
+                AuthSnapshot admission = admissionSnapshot.apply(id);
+                if (!admission.admitted()) return 0;
+                local = players.get(id);
+                if (local != null && (local.player != player || !sameAdmission(local.admission, admission))) {
+                    cancelPlayer(id);
+                    local = null;
+                }
+                if (local == null) {
+                    local = new PlayerQueue(id, player, admission);
+                    players.put(id, local);
+                }
+            }
+            var recipient = new Recipient(local, relay);
+            var batch = new ArrayDeque<TerrainWork>();
+            int accepted = 0;
+            int processed = 0;
+            for (; processed < requests.size(); processed++) {
+                if (pendingRecipients >= MAX_PENDING_CHUNKS || accepted >= MAX_PLAYER_CHUNKS
+                        || (local != null && local.pending.size() >= MAX_PLAYER_CHUNKS)) break;
+                ChunkRequest request = requests.get(processed);
+                if (request.mask() == 0) continue;
+                var key = new ChunkKey(world, version, request);
+                TerrainWork work = terrain.get(key);
+                if (work == null) {
+                    work = new TerrainWork(key);
+                    terrain.put(key, work);
+                    batch.addLast(work);
+                }
+                if (work.recipients.putIfAbsent(recipient.key(), recipient) != null) continue;
+                pendingRecipients++;
+                accepted++;
+                if (local != null) local.pending.add(work);
+                if (work.finished) outbox.addLast(new Delivery(work, recipient));
+            }
+            if (!batch.isEmpty()) jobs.addLast(batch);
+            if (local != null && local.pending.isEmpty()) players.remove(local.id, local);
+            return processed;
         }
     }
 
     private org.bukkit.scheduler.BukkitTask pumpTask;
     private volatile boolean stopped;
 
-    private static final class PushJob {
-        final UUID playerUuid;
-        final UUID worldUuid;
-        final String dimKey;
-        final int sourceVersion;
-        Object playerSession;
-        final ArrayDeque<Long> chunks; // packed MapChunk 坐标
-        /** 非 null = 跨服中继模式：产出块体（不含 dimKey 前缀）交给 sink 而非发玩家。 */
-        final java.util.function.Consumer<byte[]> relaySink;
-
-        PushJob(UUID playerUuid, UUID worldUuid, String dimKey, int sourceVersion,
-                ArrayDeque<Long> chunks, java.util.function.Consumer<byte[]> relaySink) {
-            this.playerUuid = playerUuid;
-            this.worldUuid = worldUuid;
-            this.dimKey = dimKey;
-            this.sourceVersion = sourceVersion;
-            this.chunks = chunks;
-            this.relaySink = relaySink;
-        }
-    }
-
-    private static final class PendingPacket {
-        final WorkKey key;
-        final UUID playerUuid;
-        final byte[] bytes;
-        /** 中继模式：非 null 时 pump 直接回调（bytes = 块体，无 dimKey 前缀）。 */
-        final java.util.function.Consumer<byte[]> relaySink;
-
-        PendingPacket(WorkKey key, UUID playerUuid, byte[] bytes, java.util.function.Consumer<byte[]> relaySink) {
-            this.key = key;
-            this.playerUuid = playerUuid;
-            this.bytes = bytes;
-            this.relaySink = relaySink;
-        }
-    }
-
-    public MapTerrainPushService(Plugin plugin, Logger logger) {
+    public MapTerrainPushService(Plugin plugin, Logger logger, Predicate<Player> canReceive,
+                                 Function<UUID, AuthSnapshot> admissionSnapshot) {
         this.plugin = plugin;
         this.logger = logger;
+        this.canReceive = canReceive;
+        this.admissionSnapshot = admissionSnapshot;
+    }
+
+    /** Rechecks the original player session and its current permission at delivery time. */
+    public boolean canSendTerrain(Player player, AuthSnapshot admission) {
+        return !stopped && player.isOnline() && Bukkit.getPlayer(player.getUniqueId()) == player
+            && canReceive.test(player) && sameAdmission(admission, admissionSnapshot.apply(player.getUniqueId()));
+    }
+
+    private static boolean sameAdmission(AuthSnapshot started, AuthSnapshot current) {
+        return started.admitted() && current.admitted() && started.generation() == current.generation()
+            && Objects.equals(started.connectionId(), current.connectionId());
     }
 
     /** 启动每 tick 泵（主线程/global scheduler）。 */
@@ -167,21 +223,40 @@ public final class MapTerrainPushService {
         }
         synchronized (jobs) {
             jobs.clear();
-            pending.clear();
-            playerSessions.clear();
+            terrain.clear();
+            players.clear();
+            pendingRecipients = 0;
             outbox.clear();
+            waitingCaptures.clear();
             capture = null;
         }
     }
 
     public void cancelPlayer(UUID uuid) {
         synchronized (jobs) {
-            jobs.removeIf(job -> uuid.equals(job.playerUuid));
-            playerSessions.remove(uuid);
-            pending.removeIf(key -> uuid.equals(key.player()));
-            outbox.removeIf(packet -> uuid.equals(packet.playerUuid));
-            if (capture != null && uuid.equals(capture.job.playerUuid)) capture = null;
+            var local = players.remove(uuid);
+            if (local == null) return;
+            for (var work : List.copyOf(local.pending)) detach(work, local);
+            outbox.removeIf(delivery -> delivery.recipient().local() == local);
+            jobs.removeIf(batch -> {
+                batch.removeIf(work -> work.recipients.isEmpty());
+                return batch.isEmpty();
+            });
+            waitingCaptures.removeIf(waiting -> waiting.work.recipients.isEmpty());
+            if (capture != null && capture.work.recipients.isEmpty()) capture = null;
         }
+    }
+
+    private void detach(TerrainWork work, Object key) {
+        Recipient removed = work.recipients.remove(key);
+        if (removed == null) return;
+        pendingRecipients--;
+        if (removed.local() != null) {
+            var local = removed.local();
+            local.pending.remove(work);
+            if (local.pending.isEmpty()) players.remove(local.id, local);
+        }
+        if (work.recipients.isEmpty()) terrain.remove(work.key, work);
     }
 
     /**
@@ -196,19 +271,20 @@ public final class MapTerrainPushService {
         if (stopped || player == null || world == null || chunkCoords == null) {
             return;
         }
-        ArrayDeque<Long> deque = new ArrayDeque<>();
-        Set<Long> unique = new HashSet<>();
-        for (Long packed : chunkCoords) {
-            if (deque.size() >= MAX_PLAYER_CHUNKS) break;
-            if (packed != null && unique.add(packed)) {
-                deque.add(packed);
-            }
+        enqueue(player, world.getUID(), fullRequests(chunkCoords), sourceVersion, null);
+    }
+
+    public void submitRequests(Player player, World world, List<ChunkRequest> requests, int sourceVersion) {
+        enqueue(player, world.getUID(), requests, sourceVersion, null);
+    }
+
+    private static List<ChunkRequest> fullRequests(Iterable<Long> coordinates) {
+        List<ChunkRequest> requests = new ArrayList<>();
+        for (Long coordinate : coordinates) {
+            if (coordinate != null) requests.add(new ChunkRequest(coordinate, ALL_SUBCHUNKS));
+            if (requests.size() == MAX_PLAYER_CHUNKS) break;
         }
-        if (deque.isEmpty()) {
-            return;
-        }
-        enqueue(new PushJob(player.getUniqueId(), world.getUID(),
-            world.getKey().toString(), sourceVersion, deque, null));
+        return requests;
     }
 
     /**
@@ -222,158 +298,238 @@ public final class MapTerrainPushService {
      * @param chunkBodySink 块体回调（主线程触发，逐块一次）
      */
     public void submitForRelay(World world, Iterable<Long> chunkCoords, int sourceVersion,
-                               java.util.function.Consumer<byte[]> chunkBodySink) {
+                               Consumer<byte[]> chunkBodySink) {
         if (stopped || world == null || chunkCoords == null || chunkBodySink == null) {
             return;
         }
-        ArrayDeque<Long> deque = new ArrayDeque<>();
-        Set<Long> unique = new HashSet<>();
-        for (Long packed : chunkCoords) {
-            if (deque.size() >= MAX_PLAYER_CHUNKS) break;
-            if (packed != null && unique.add(packed)) {
-                deque.add(packed);
-            }
-        }
-        if (deque.isEmpty()) {
-            return;
-        }
-        enqueue(new PushJob(null, world.getUID(), "", sourceVersion, deque, chunkBodySink));
+        submitRequestsForRelay(world, fullRequests(chunkCoords), sourceVersion, (request, body) -> {
+            if (body != null) chunkBodySink.accept(body);
+        });
+    }
+
+    /** Returns the requests that did not fit in the queue. */
+    public List<ChunkRequest> submitRequestsForRelay(World world, List<ChunkRequest> requests, int sourceVersion,
+                                                    BiConsumer<ChunkRequest, byte[]> chunkBodySink) {
+        int processed = enqueue(null, world.getUID(), requests, sourceVersion, chunkBodySink);
+        return requests.subList(processed, requests.size());
     }
 
     /** 每 tick：发送成品包 + 派发新的 MapChunk 抓取任务。 */
     private void pump() {
-        if (stopped) {
-            return;
-        }
+        if (stopped) return;
         // 1. 先发成品（sendPluginMessage 走主线程）
-        // 先判 sent 再 poll：反序会在达到上限时白丢一个已出队的包
-        PendingPacket packet;
-        int sent = 0;
-        while (sent++ < 8 && (packet = outbox.poll()) != null) {
-            synchronized (jobs) { pending.remove(packet.key); }
-            if (packet.relaySink != null) {
-                try {
-                    packet.relaySink.accept(packet.bytes);
-                } catch (Exception e) {
-                    logger.fine("[Map] 中继地形包回调失败: " + e.getMessage());
-                }
-                continue;
-            }
-            Player player = Bukkit.getPlayer(packet.playerUuid);
-            if (player != null && player.isOnline()) {
-                try {
-                    player.sendPluginMessage(plugin, CHANNEL_TERRAIN, packet.bytes);
-                } catch (Exception e) {
-                    logger.fine("[Map] 地形包发送失败: " + e.getMessage());
-                }
-            }
-        }
-        // Split synchronous disk loads across ticks. One slow load cannot be preempted.
-        if (capture == null && inFlight.get() < MAX_IN_FLIGHT) {
+        for (int sent = 0; sent < 8; sent++) {
+            Delivery delivery;
             synchronized (jobs) {
-                PushJob job = jobs.pollFirst();
-                if (job != null) {
-                    capture = new Capture(job, job.chunks.removeFirst());
-                    if (!job.chunks.isEmpty()) jobs.addLast(job);
+                delivery = outbox.pollFirst();
+                if (delivery == null) break;
+                detach(delivery.work(), delivery.recipient().key());
+            }
+            deliver(delivery);
+        }
+        // Keep Bukkit snapshot access in this main-thread pump.
+        Capture current;
+        boolean canWait;
+        synchronized (jobs) {
+            if (capture == null && inFlight.get() < MAX_IN_FLIGHT) {
+                var waiting = waitingCaptures.iterator();
+                while (waiting.hasNext()) {
+                    var candidate = waiting.next();
+                    if (candidate.hasReadyChunk()
+                        || (candidate.next < 16 && loadingChunks.get() < SNAPSHOTS_PER_TICK)) {
+                        capture = candidate;
+                        waiting.remove();
+                        break;
+                    }
+                }
+                if (capture == null) {
+                    var batch = jobs.pollFirst();
+                    if (batch != null) {
+                        capture = new Capture(batch.removeFirst());
+                        if (!batch.isEmpty()) jobs.addLast(batch);
+                    }
                 }
             }
+            current = capture;
+            canWait = waitingCaptures.size() < MAX_IN_FLIGHT;
         }
-        if (capture != null) captureChunk();
+        if (current != null) captureChunk(current, canWait);
+    }
+
+    private void deliver(Delivery delivery) {
+        var encoded = delivery.work().encoded;
+        var recipient = delivery.recipient();
+        try {
+            if (recipient.relay() != null) {
+                // The relay sink owns its byte array and must not be able to modify the shared packet.
+                recipient.relay().accept(delivery.work().key.request(), encoded == null ? null : java.util.Arrays.copyOfRange(
+                    encoded.packet(), encoded.bodyOffset(), encoded.packet().length));
+            } else {
+                Player player = recipient.local().player;
+                if (encoded != null && canSendTerrain(player, recipient.local().admission)) {
+                    player.sendPluginMessage(plugin, CHANNEL_TERRAIN, encoded.packet());
+                }
+            }
+        } catch (RuntimeException failure) {
+            logger.fine("[Map] 地形数据投递失败: " + failure.getMessage());
+        }
     }
 
     /**
      * 主线程分 tick 抓取一个 MapChunk 的 16 个快照，完成后异步组包。
      */
-    private void captureChunk() {
-        Capture current = capture;
-        PushJob job = current.job;
-        long packed = current.coordinate;
+    private void captureChunk(Capture current, boolean canWait) {
+        var work = current.work;
+        long packed = work.key.request().coordinate();
+        int requested = work.key.request().mask();
         int cx = (int) (packed >> 32);
         int cz = (int) (packed);
-        World world = Bukkit.getWorld(job.worldUuid);
-        // 中继模式无玩家对象：只要求世界在线，块体产出后由 sink 回传请求节点
-        Player player = job.relaySink == null && job.playerUuid != null
-            ? Bukkit.getPlayer(job.playerUuid) : null;
-        if (world == null || (job.relaySink == null && (player == null || !player.isOnline()))) {
-            synchronized (jobs) { pending.remove(key(job, packed)); }
-            capture = null;
+        World world = Bukkit.getWorld(work.key.world());
+        if (world == null) {
+            synchronized (jobs) { if (capture == current) capture = null; }
+            publish(work, null);
             return;
         }
-        // gen=false only loads existing chunks; a single disk load is not preemptible.
         long deadline = System.nanoTime() + CAPTURE_BUDGET_NANOS;
         int captured = 0;
-        while (current.next < 16 && captured++ < SNAPSHOTS_PER_TICK) {
-            int i = current.next++;
+        var iterator = current.pending.entrySet().iterator();
+        while (iterator.hasNext() && captured < SNAPSHOTS_PER_TICK && System.nanoTime() < deadline) {
+            var entry = iterator.next();
+            if (!entry.getValue().isDone()) continue;
+            iterator.remove();
+            captured++;
+            try {
+                Chunk chunk = entry.getValue().getNow(null);
+                if (chunk != null && world.isChunkLoaded(chunk.getX(), chunk.getZ())) {
+                    current.snapshots[entry.getKey()] = chunk.getChunkSnapshot(true, false, false);
+                    current.resolved |= 1 << entry.getKey();
+                } else if (chunk == null) {
+                    // With generation disabled, a null result indicates that there is no saved chunk.
+                    current.resolved |= 1 << entry.getKey();
+                }
+            } catch (RuntimeException | LinkageError ignored) { }
+        }
+
+        boolean waitingForSlot = false;
+        while (current.next < 16 && captured < SNAPSHOTS_PER_TICK && System.nanoTime() < deadline) {
+            int i = current.next;
+            if ((requested & (1 << i)) == 0) {
+                current.next++;
+                continue;
+            }
             int mcx = cx * 4 + (i % 4);
             int mcz = cz * 4 + (i / 4);
             try {
-                if (world.loadChunk(mcx, mcz, false)) {
-                    // Height-map access requires includeMaxblocky=true.
+                boolean loaded = world.isChunkLoaded(mcx, mcz);
+                if (loaded) {
                     current.snapshots[i] = world.getChunkAt(mcx, mcz).getChunkSnapshot(true, false, false);
+                    current.resolved |= 1 << i;
+                } else if (canWait && LOAD_CHUNK_ASYNC != null) {
+                    if (loadingChunks.get() >= SNAPSHOTS_PER_TICK) {
+                        waitingForSlot = true;
+                        break;
+                    }
+                    current.pending.put(i, loadChunkAsync(world, mcx, mcz));
                 }
-            } catch (Exception ignored) {
-                // Leave the failed subchunk empty.
-            }
-            if (System.nanoTime() >= deadline) break;
+            } catch (ReflectiveOperationException | RuntimeException | LinkageError ignored) { }
+            current.next++;
+            captured++;
         }
-        if (current.next < 16) return;
-        capture = null;
-        inFlight.incrementAndGet();
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            try {
-                if (stopped) return;
-                byte[] bytes = job.relaySink != null
-                    ? buildChunkBody(cx, cz, job.sourceVersion, current.snapshots)
-                    : buildPacket(job.dimKey, cx, cz, job.sourceVersion, current.snapshots);
+        if (waitingForSlot || !current.pending.isEmpty()) {
+            if (waitingForSlot || current.next == 16 || loadingChunks.get() >= SNAPSHOTS_PER_TICK) {
                 synchronized (jobs) {
-                    if (!stopped && bytes != null && pending.contains(key(job, packed))) {
-                        outbox.offer(new PendingPacket(key(job, packed), job.playerUuid, bytes, job.relaySink));
-                    } else {
-                        pending.remove(key(job, packed));
+                    if (capture == current && waitingCaptures.size() < MAX_IN_FLIGHT) {
+                        waitingCaptures.addLast(current);
+                        capture = null;
                     }
                 }
-            } finally {
-                inFlight.decrementAndGet();
             }
-        });
-    }
-
-    /**
-     * 快照 → 完整地形包：{@code writeUTF(dimKey)} + {@link #buildChunkBody}。
-     */
-    private static byte[] buildPacket(String dimKey, int cx, int cz, int sourceVersion,
-                                      ChunkSnapshot[] snaps) {
-        byte[] body = buildChunkBody(cx, cz, sourceVersion, snaps);
-        if (body == null) {
-            return null;
+            return;
         }
+        if (current.next < 16) return;
+        synchronized (jobs) {
+            if (capture != current) return;
+            capture = null;
+        }
+        String dimension = world.getKey().toString();
+        if (current.resolved == 0) {
+            publish(work, null);
+            return;
+        }
+        inFlight.incrementAndGet();
         try {
-            ByteArrayOutputStream bos = new ByteArrayOutputStream(body.length + 32);
-            DataOutputStream out = new DataOutputStream(bos);
-            out.writeUTF(dimKey);
-            out.write(body);
-            out.flush();
-            return bos.toByteArray();
-        } catch (Exception e) {
+            Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+                try {
+                    if (!stopped) {
+                        var encoded = encode(dimension, cx, cz, work.key.version(), current.resolved, current.snapshots);
+                        publish(work, encoded);
+                    }
+                } finally {
+                    inFlight.decrementAndGet();
+                }
+            });
+        } catch (RuntimeException failure) {
+            inFlight.decrementAndGet();
+            publish(work, null);
+            logger.fine("[Map] 地形编码无法调度: " + failure.getMessage());
+        }
+    }
+
+    private static Method findAsyncChunkLoader() {
+        try {
+            return World.class.getMethod("getChunkAtAsync", int.class, int.class, boolean.class);
+        } catch (NoSuchMethodException | LinkageError ignored) {
             return null;
         }
     }
 
+    @SuppressWarnings("unchecked")
+    private CompletableFuture<Chunk> loadChunkAsync(World world, int x, int z) throws ReflectiveOperationException {
+        // Paper's generation flag keeps map reads from creating new chunks.
+        var future = (CompletableFuture<Chunk>) LOAD_CHUNK_ASYNC.invoke(world, x, z, false);
+        if (future == null) throw new IllegalStateException("Missing asynchronous chunk result");
+        loadingChunks.incrementAndGet();
+        return future.whenComplete((ignored, failure) -> loadingChunks.decrementAndGet());
+    }
+
+    private void publish(TerrainWork work, EncodedTerrain encoded) {
+        synchronized (jobs) {
+            if (stopped || terrain.get(work.key) != work) return;
+            if (encoded == null) {
+                for (var recipient : List.copyOf(work.recipients.values())) {
+                    if (recipient.relay() == null) detach(work, recipient.key());
+                }
+            }
+            work.encoded = encoded;
+            work.finished = true;
+            for (var recipient : work.recipients.values()) outbox.addLast(new Delivery(work, recipient));
+        }
+    }
+
     /**
-     * 快照 → 块体（不含 dimKey 前缀）：{@code int cx | int cz | int sourceVersion
-     * | byte paletteSize | palette | 4096 × (short topY | byte paletteIdx)}。
+     * 快照 → 块体（不含 dimKey 前缀）：{@code int cx | int cz | int sourceVersion | unsigned short resolvedMask
+     * | byte paletteSize | palette | resolved columns × (short topY | byte paletteIdx)}。
      * 中继链路复用——远端收到后自行补 writeUTF(dimKey) 前缀再发客户端。
      */
     public static byte[] buildChunkBody(int cx, int cz, int sourceVersion,
                                         ChunkSnapshot[] snaps) {
+        int resolved = 0;
+        for (int i = 0; i < snaps.length; i++) if (snaps[i] != null) resolved |= 1 << i;
+        var encoded = encode(null, cx, cz, sourceVersion, resolved, snaps);
+        return encoded == null ? null : encoded.packet();
+    }
+
+    private static EncodedTerrain encode(String dimension, int cx, int cz, int sourceVersion, int resolved,
+                                         ChunkSnapshot[] snaps) {
         try {
             short[] topY = new short[4096];
             byte[] paletteIdx = new byte[4096];
-            Map<String, Byte> palette = new HashMap<>();
+            Map<Material, Byte> palette = new HashMap<>();
             List<String> paletteList = new ArrayList<>();
             for (int i = 0; i < 4096; i++) {
                 int lx = i % 64, lz = i / 64;
                 int mcIdx = (lz / 16) * 4 + (lx / 16);
+                if ((resolved & (1 << mcIdx)) == 0) continue;
                 ChunkSnapshot snap = snaps[mcIdx];
                 if (snap == null) {
                     topY[i] = Short.MIN_VALUE;
@@ -392,8 +548,7 @@ public final class MapTerrainPushService {
                     continue;
                 }
                 topY[i] = (short) hy;
-                String key = mat == null || mat.isAir()
-                    ? "minecraft:air" : mat.getKey().toString();
+                Material key = mat == null || mat.isAir() ? Material.AIR : mat;
                 Byte idx = palette.get(key);
                 if (idx == null) {
                     if (paletteList.size() >= 255) {
@@ -402,25 +557,30 @@ public final class MapTerrainPushService {
                     }
                     idx = (byte) paletteList.size();
                     palette.put(key, idx);
-                    paletteList.add(key);
+                    paletteList.add(key.getKey().toString());
                 }
                 paletteIdx[i] = idx;
             }
             ByteArrayOutputStream bos = new ByteArrayOutputStream(12500);
             DataOutputStream out = new DataOutputStream(bos);
+            if (dimension != null) out.writeUTF(dimension);
+            int bodyOffset = bos.size();
             out.writeInt(cx);
             out.writeInt(cz);
             out.writeInt(sourceVersion);
+            out.writeShort(resolved);
             out.writeByte(paletteList.size());
             for (String key : paletteList) {
                 out.writeUTF(key);
             }
             for (int i = 0; i < 4096; i++) {
+                int subchunk = ((i / 64 / 16) * 4) + (i % 64 / 16);
+                if ((resolved & (1 << subchunk)) == 0) continue;
                 out.writeShort(topY[i]);
                 out.writeByte(paletteIdx[i]);
             }
             out.flush();
-            return bos.toByteArray();
+            return new EncodedTerrain(bos.toByteArray(), bodyOffset);
         } catch (Exception e) {
             // 单包构建失败（快照异常/IO 等）→ 丢包降级，不上抛炸调度器
             return null;
@@ -438,12 +598,15 @@ public final class MapTerrainPushService {
             DataInputStream in = new DataInputStream(new java.io.ByteArrayInputStream(message));
             String worldId = in.readUTF();
             int count = in.readInt();
-            if (worldId.isBlank() || count < 0 || count > 1024 || in.available() != count * 8) {
+            if (worldId.isBlank() || count < 0 || count > MAX_PLAYER_CHUNKS || in.available() != count * 10) {
                 return null;
             }
-            List<long[]> coords = new ArrayList<>(count);
+            List<ChunkRequest> coords = new ArrayList<>(count);
             for (int i = 0; i < count; i++) {
-                coords.add(new long[]{in.readInt(), in.readInt()});
+                long coordinate = ((long) in.readInt() << 32) | (in.readInt() & 0xffffffffL);
+                int mask = in.readUnsignedShort();
+                if (mask == 0) return null;
+                coords.add(new ChunkRequest(coordinate, mask));
             }
             return new RequestData(worldId, coords);
         } catch (Exception e) {
@@ -452,6 +615,6 @@ public final class MapTerrainPushService {
     }
 
     /** 解析后的请求数据。 */
-    public record RequestData(String worldId, List<long[]> chunks) {
+    public record RequestData(String worldId, List<ChunkRequest> chunks) {
     }
 }

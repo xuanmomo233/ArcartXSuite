@@ -2,6 +2,8 @@ package xuanmo.arcartxsuite.api.bridge;
 
 import java.util.Optional;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.entity.Player;
+import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -31,6 +33,15 @@ public interface ItemBridgeAPI {
      * @return JSON 字符串，不可用时返回 empty
      */
     @NotNull Optional<String> itemToJson(@NotNull ItemStack itemStack);
+
+    /**
+     * Updates the client display of an Extra slot owned by a module.
+     * The module retains the authoritative inventory and handles the real cursor transfer.
+     * This does not write ArcartX's persistent extra-slot database.
+     */
+    default boolean showExtraSlot(@NotNull Player player, @NotNull String id, @Nullable ItemStack item) {
+        return false;
+    }
 
     /** 虚拟 UI 图标使用数量为 1 的完整副本；不会修改用于发放或持久化的物品。 */
     @NotNull

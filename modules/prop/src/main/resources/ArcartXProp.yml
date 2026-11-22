@@ -2,10 +2,10 @@
 config-version: 1
 # AXS Prop
 # 作用: 管理快捷道具定义、玩家绑定、按键触发、冷却、消耗、提示文案和临时属性效果。
-# 依赖: ArcartX；AttributePlus、MythicLib、MMOItems 按功能选用。
-# 重载: /axs prop reload
+# 依赖: ArcartX；AttributePlus、CraneAttribute、MythicLib、Symphony 和 Forge 模组属性按功能选用。
+# 重载: /axs reload prop
 # PAPI 输出: 无独立 PlaceholderAPI 输出。
-# 可解析的 PAPI: 无；道具效果主要通过权限、物品、命令、属性和内部上下文执行。
+# 属性 amount 公式可绑定 Symphony 当前属性和 PAPI 数值，使用道具时读取。
 # 关联资源: prop/key.yml、prop/language.yml、prop/props/*.yml
 
 settings:
@@ -16,7 +16,7 @@ mythiclib:
   # 临时属性 modifier 前缀。
   # 是否生效由本体 config.yml 的 attribute-bridges.mythiclib 统一管理。
   # 最终会生成:
-  #   <前缀>_<PROP_ID>_<STAT>
+  #   <前缀>_<道具属性组的稳定标识>_<属性 ID>
   source-prefix: "AXS_PROP"
 
 auto-trigger:

@@ -2,12 +2,15 @@ id: eventpacket
 name: EventPacket
 version: 2.0.0
 main: xuanmo.arcartxsuite.eventpacket.EventPacketModule
-api-version: 3.0
+api-version: 3.9
 
 depends: []
-softdepends: []
+softdepends:
+  - abyss
+  - announcer
+  - fishing
+  - mail
+  - questgps
 external-depends:
-
 external-softdepends:
-  - PlaceholderAPI
 

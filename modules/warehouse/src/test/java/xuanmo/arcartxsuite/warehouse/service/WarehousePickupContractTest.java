@@ -21,6 +21,8 @@ import static org.mockito.Mockito.*;
 import xuanmo.arcartxsuite.api.util.ItemSerializer;
 import java.util.List;
 import java.util.HashMap;
+import java.util.function.BiPredicate;
+import xuanmo.arcartxsuite.api.capability.WarehouseAutoDepositable.GroundDepositResult;
 
 class WarehousePickupContractTest {
     WarehouseService service;
@@ -42,6 +44,11 @@ class WarehousePickupContractTest {
         repository = mock(WarehouseRepository.class);
         when(repository.loadPlayerSettings(id)).thenReturn(Optional.empty());
         matcher = mock(ItemMatcherAPI.class);
+        when(matcher.matchesAny(anyList(), any())).thenAnswer(call -> {
+            List<xuanmo.arcartxsuite.api.item.ItemMatcher> rules = call.getArgument(0);
+            ItemStack candidate = call.getArgument(1);
+            return rules.stream().anyMatch(rule -> matcher.matches(rule, candidate));
+        });
         when(matcher.matches(any(), eq(stack))).thenReturn(true);
         YamlConfiguration yaml = new YamlConfiguration();
         yaml.set("blacklist.name-contains",List.of("禁止存入"));
@@ -93,27 +100,49 @@ class WarehousePickupContractTest {
         }
         assertFalse(service.shouldNotifyAutoDeposit(player));
     }
-    @Test void nativePickupPreservesThePartVanillaCouldNotFit() throws Exception {
+    @Test void nativePickupQueuesTheWholeStackWithoutCallingTheRepositoryOrMutatingTheEntity() throws Exception {
         when(matcher.matches(any(),eq(stack))).thenReturn(false);
         when(player.getCanPickupItems()).thenReturn(true);
-        when(repository.loadPersonalWarehouses(id)).thenReturn(List.of(
-            new WarehouseRepository.WarehouseRecord(id,"personal",1,"",false,1,0)));
+        java.lang.reflect.Field active = WarehouseService.class.getDeclaredField("active");
+        active.setAccessible(true);
+        active.set(service, true);
         WarehouseService pickupService = spy(service);
-        doReturn(new WarehouseService.DepositResult(true,32,0,""))
-            .when(pickupService).depositStack(eq(player),eq("personal"),eq(id.toString()),eq("personal"),any(ItemStack.class));
         org.bukkit.entity.Item item=mock(org.bukkit.entity.Item.class);
-        when(item.getItemStack()).thenReturn(stack);
+        ItemStack visible = new ItemStack(Material.STONE, 16);
+        ItemStack original = new ItemStack(Material.STONE, 32);
+        when(item.getItemStack()).thenReturn(visible);
+        when(item.getPersistentDataContainer()).thenReturn(mock(org.bukkit.persistence.PersistentDataContainer.class));
         when(item.isValid()).thenReturn(true);
         when(item.getUniqueId()).thenReturn(UUID.randomUUID());
         var event=new org.bukkit.event.entity.EntityPickupItemEvent(player,item,16);
-        pickupService.onEntityPickupItem(event);
-        assertTrue(event.isCancelled());
-        verify(stack).setAmount(16);
-        verify(item).setItemStack(stack);
+        var scheduler = mock(org.bukkit.scheduler.BukkitScheduler.class);
+        var queued = org.mockito.ArgumentCaptor.forClass(Runnable.class);
+        doReturn(true).when(pickupService).depositFromGroundAsync(eq(player), eq(item), any(ItemStack.class), any(),
+            org.mockito.ArgumentMatchers.<BiPredicate<String, GroundDepositResult>>any());
+        var world = mock(org.bukkit.World.class);
+        when(player.getWorld()).thenReturn(world);
+        when(item.getWorld()).thenReturn(world);
+        when(player.getLocation()).thenReturn(new org.bukkit.Location(world, 0, 64, 0));
+        when(item.getLocation()).thenReturn(new org.bukkit.Location(world, 0, 64, 0));
+        try (var bukkit = mockStatic(org.bukkit.Bukkit.class)) {
+            bukkit.when(org.bukkit.Bukkit::getScheduler).thenReturn(scheduler);
+            var factory = mock(org.bukkit.inventory.ItemFactory.class);
+            when(factory.equals(null, null)).thenReturn(true);
+            bukkit.when(org.bukkit.Bukkit::getItemFactory).thenReturn(factory);
+            pickupService.onEntityPickupItem(event);
+            assertTrue(event.isCancelled());
+            verify(scheduler).runTask(any(JavaPlugin.class), queued.capture());
+            verifyNoInteractions(repository);
+            when(item.getItemStack()).thenReturn(original);
+            queued.getValue().run();
+        }
+        verify(pickupService).depositFromGroundAsync(eq(player), eq(item), argThat(value -> value.getAmount() == 32), any(),
+            org.mockito.ArgumentMatchers.<BiPredicate<String, GroundDepositResult>>any());
+        verify(item,never()).setItemStack(any());
         verify(item,never()).remove();
     }
     @Test void previewCannotMakePersonalWarehouseWritable() {
-        var state = WarehouseService.ViewState.preview(id, "personal", "personal", "time");
+        var state = WarehouseService.ViewState.preview(new WarehousePreview(id, false), "personal", "personal", "time");
         assertDoesNotThrow(() -> assertFalse(service.canModifyCurrent(player, state)));
     }
 

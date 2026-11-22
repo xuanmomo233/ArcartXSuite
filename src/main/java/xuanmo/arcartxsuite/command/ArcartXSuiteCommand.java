@@ -292,8 +292,8 @@ public final class ArcartXSuiteCommand implements CommandExecutor, TabCompleter 
                 return true;
             }
             String oldPassword = args.length >= 4 ? args[3] : "";
-            boolean ok = service.setPassword(player, oldPassword, args[2]);
-            sender.sendMessage(PREFIX + (ok ? ChatColor.GREEN + "二级密码设置成功。" : ChatColor.RED + "密码为空或旧密码验证失败。"));
+            sendPasswordResult(player, service.setAsync(player, oldPassword, args[2]),
+                "二级密码设置成功。", "二级密码设置失败，请检查密码或稍后重试。");
             return true;
         }
         if ("unlock".equals(action)) {
@@ -301,8 +301,8 @@ public final class ArcartXSuiteCommand implements CommandExecutor, TabCompleter 
                 sender.sendMessage(PREFIX + ChatColor.YELLOW + "用法: /axs password unlock <密码>");
                 return true;
             }
-            boolean ok = service.verify(player, args[2]);
-            sender.sendMessage(PREFIX + (ok ? ChatColor.GREEN + "二级密码解锁成功。" : ChatColor.RED + "二级密码错误。"));
+            sendPasswordResult(player, service.verifyAsync(player, args[2]),
+                "二级密码解锁成功。", "二级密码验证失败，请稍后重试。");
             return true;
         }
         if ("clear".equals(action)) {
@@ -318,22 +318,31 @@ public final class ArcartXSuiteCommand implements CommandExecutor, TabCompleter 
             if (sender.hasPermission("arcartxsuite.admin")) {
                 org.bukkit.OfflinePlayer target = Bukkit.getOfflinePlayer(args[2]);
                 if (target != null && (target.hasPlayedBefore() || target.isOnline())) {
-                    boolean ok = service.clearPasswordByUuid(target.getUniqueId());
-                    sender.sendMessage(PREFIX + (ok ? ChatColor.GREEN + "已清除玩家 " + args[2] + " 的二级密码。" : ChatColor.RED + "清除失败，请查看控制台。"));
+                    sendPasswordResult(player, service.clearPasswordByUuidAsync(player, target.getUniqueId()),
+                        "已清除玩家 " + args[2] + " 的二级密码。", "清除失败，请稍后重试。");
                     return true;
                 }
             }
             // 玩家模式：清除自己的密码，需验证
-            boolean ok = service.clearPassword(player, args[2]);
-            if (!service.isPasswordSet(player)) {
-                sender.sendMessage(PREFIX + ChatColor.RED + "你还未设置二级密码。");
-            } else {
-                sender.sendMessage(PREFIX + (ok ? ChatColor.GREEN + "二级密码已清除。" : ChatColor.RED + "当前密码验证失败。"));
-            }
+            sendPasswordResult(player, service.clearAsync(player, args[2]),
+                "二级密码已清除。", "二级密码清除失败，请确认已设置密码后重试。");
             return true;
         }
         sender.sendMessage(PREFIX + ChatColor.YELLOW + "用法: /axs password <set|unlock|clear> ...");
         return true;
+    }
+
+    private void sendPasswordResult(org.bukkit.entity.Player player, java.util.concurrent.CompletionStage<Boolean> result,
+                                    String success, String error) {
+        var playerId = player.getUniqueId();
+        result.whenComplete((applied, failure) -> {
+            if (!plugin.host().isEnabled()) return;
+            Bukkit.getScheduler().runTask(plugin.host(), () -> {
+                if (Bukkit.getPlayer(playerId) != player || !player.isOnline()) return;
+                player.sendMessage(PREFIX + (failure == null && Boolean.TRUE.equals(applied)
+                    ? ChatColor.GREEN + success : ChatColor.RED + error));
+            });
+        });
     }
 
     private void sendStatus(CommandSender sender) {
@@ -367,17 +376,52 @@ public final class ArcartXSuiteCommand implements CommandExecutor, TabCompleter 
         if (args.length < 2 || "all".equalsIgnoreCase(args[1])) {
             // 先热重载本体 config.yml + 可安全热重载的子系统，再重载全部模块
             plugin.reloadCoreConfig();
-            registry.reloadAll();
-            sender.sendMessage(PREFIX + ChatColor.GREEN + "已重载本体配置及全部模块。");
+            sender.sendMessage(PREFIX + ChatColor.YELLOW + "正在应用模块配置…");
+            registry.reloadAll().whenComplete((result, failure) -> reloadFeedback(() -> {
+            if (failure != null) {
+                sender.sendMessage(PREFIX + ChatColor.RED + "模块重载未完成: " + failure.getMessage());
+                return;
+            }
+            sender.sendMessage(PREFIX + ChatColor.GREEN + "已应用模块配置，启用 " + result.started().size()
+                + " 个，停止 " + result.stopped().size() + " 个。");
+            if (!result.failed().isEmpty()) {
+                sender.sendMessage(PREFIX + ChatColor.RED + "应用失败：" + String.join("、", result.failed()));
+            }
+            var cloud = plugin.getCloudModuleService();
+            if (!result.pendingCloud().isEmpty() && cloud != null) {
+                cloud.syncConfiguredModules(result.pendingCloud()).whenComplete((ignored, cloudFailure) -> {
+                    if (!plugin.host().isEnabled()) return;
+                    Bukkit.getScheduler().runTask(plugin.host(), () -> {
+                        java.util.concurrent.CompletionStage<?> localRetry = java.util.concurrent.CompletableFuture.completedFuture(null);
+                        if (cloudFailure == null && result.pendingCloud().stream().anyMatch(registry::isModuleLoaded)) {
+                            localRetry = registry.enableConfiguredLocalModules();
+                        }
+                        localRetry.whenComplete((summary, retryFailure) -> reloadFeedback(() -> {
+                            var missing = result.pendingCloud().stream().filter(id -> !registry.isModuleLoaded(id)).sorted().toList();
+                            if (!missing.isEmpty()) sender.sendMessage(PREFIX + ChatColor.YELLOW
+                                + "仍未启用（请核对本地文件、依赖或云端授权）：" + String.join("、", missing));
+                        }));
+                    });
+                });
+            }
             sender.sendMessage(PREFIX + ChatColor.YELLOW + "以下配置需重启服务器才能生效: "
                 + ChatColor.GRAY + "数据源切换(storage)、跨服后端(cross-server)、"
                 + "二级密码存储(secondary-password)、多方认证(auth)、ArcartX桥接(tacz-compat)、聊天签名绕过(chat-sign-bypass)");
+            }));
             return true;
         }
         String moduleId = args[1].toLowerCase(Locale.ROOT);
-        boolean ok = registry.reloadModule(moduleId);
-        sender.sendMessage(PREFIX + (ok ? ChatColor.GREEN + "已重载模块: " : ChatColor.RED + "重载失败: ") + moduleId);
+        sender.sendMessage(PREFIX + ChatColor.YELLOW + "正在重载模块: " + moduleId);
+        registry.reloadModule(moduleId).whenComplete((ok, failure) -> reloadFeedback(() ->
+            sender.sendMessage(PREFIX + (failure == null && Boolean.TRUE.equals(ok)
+                ? ChatColor.GREEN + "已重载模块: " : ChatColor.RED + "重载失败: ") + moduleId)));
         return true;
+    }
+
+    private void reloadFeedback(Runnable feedback) {
+        if (!plugin.host().isEnabled()) return;
+        if (Bukkit.isPrimaryThread()) feedback.run();
+        else Bukkit.getScheduler().runTask(plugin.host(), feedback);
     }
 
     private boolean handleLoad(CommandSender sender, String[] args) {
@@ -396,10 +440,9 @@ public final class ArcartXSuiteCommand implements CommandExecutor, TabCompleter 
         }
         String moduleId = args[1].toLowerCase(Locale.ROOT);
         sender.sendMessage(PREFIX + ChatColor.GRAY + "正在加载模块 " + ChatColor.WHITE + moduleId + ChatColor.GRAY + " ...");
-        boolean ok = registry.loadModuleById(moduleId);
-        sender.sendMessage(PREFIX + (ok
+        registry.loadModuleById(moduleId).whenComplete((ok, failure) -> reloadFeedback(() -> sender.sendMessage(PREFIX + (failure == null && Boolean.TRUE.equals(ok)
             ? ChatColor.GREEN + "已加载并启用模块: " + moduleId
-            : ChatColor.RED + "加载失败: " + moduleId + ChatColor.GRAY + "（详情见控制台）"));
+            : ChatColor.RED + "加载失败: " + moduleId + ChatColor.GRAY + "（详情见控制台）"))));
         return true;
     }
 

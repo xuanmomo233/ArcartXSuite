@@ -95,6 +95,7 @@ class RunTransactionsTest {
 
     @AfterEach void cleanup() throws Exception {
         database.shutdown();
+        await(database.stopped().toCompletableFuture());
         repository.shutdown();
         serverField.set(null, previousServer);
     }
@@ -240,6 +241,44 @@ class RunTransactionsTest {
         await(ledger.submit(runId, "batch", batch, entries));
         assertEquals(1, await(ledger.snapshot(runId, playerId, null, 10)).entries().size());
         verify(host, times(2)).savePendingBatchConfirmed("batch", batch);
+    }
+
+    @Test void anAcceptedRewardFinishesDuringRetirementAndRemainsDeduplicatedAfterRestart() throws Exception {
+        var host = mock(PendingRewardService.class);
+        ledger.rewards(host);
+        var entered = new java.util.concurrent.CountDownLatch(1);
+        var release = new java.util.concurrent.CountDownLatch(1);
+        when(host.savePendingBatchConfirmed(anyString(), anyList())).thenAnswer(call -> {
+            entered.countDown();
+            assertTrue(release.await(4, TimeUnit.SECONDS));
+            return true;
+        });
+        var batch = List.of(PendingRewardService.PendingReward.currency(playerId, "abyss", "money", 2, "loot"));
+        var entries = RunLedger.describe("stop-batch", "reward:test", batch);
+        var receipt = ledger.submit(runId, "stop-batch", batch, entries);
+        try {
+            assertTrue(entered.await(2, TimeUnit.SECONDS));
+            when(service.running()).thenReturn(false);
+            database.shutdown();
+            assertFalse(database.stopped().toCompletableFuture().isDone());
+            assertFalse(receipt.isDone());
+        } finally { release.countDown(); }
+        await(receipt);
+        await(database.stopped().toCompletableFuture());
+        verify(host, never()).flushPlayer(any());
+
+        var reopened = new PlayerDataManager(repository, Logger.getAnonymousLogger());
+        try {
+            var restarted = new RunLedger(service, repository, reopened);
+            restarted.rewards(host);
+            when(service.running()).thenReturn(true);
+            await(restarted.submit(runId, "stop-batch", batch, entries));
+            assertEquals(State.HOST_ACCEPTED, await(restarted.snapshot(runId, playerId, null, 10)).entries().get(0).state());
+            verify(host, times(1)).savePendingBatchConfirmed("stop-batch", batch);
+        } finally {
+            reopened.shutdown();
+            await(reopened.stopped().toCompletableFuture());
+        }
     }
 
     private UUID reserve() throws Exception {

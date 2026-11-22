@@ -3,6 +3,7 @@ package xuanmo.arcartxsuite.battlepass.condition;
 import java.util.Map;
 import java.util.logging.Logger;
 import org.bukkit.entity.Player;
+import xuanmo.arcartxsuite.api.bridge.ChronosAccess;
 
 /**
  * 基于玩家状态的任务条件。
@@ -78,14 +79,8 @@ public final class PlayerStateCondition implements TaskCondition {
     }
 
     private boolean testChronosState(Player player) {
-        try {
-            priv.seventeen.artist.arcartx.chronos.api.ChronosAPI api =
-                priv.seventeen.artist.arcartx.chronos.api.ChronosAPI.getInstanceAPI();
-            if (api == null) return false;
-            return stateId.equals(api.getPlayerStateId(player));
-        } catch (Exception | LinkageError e) {
-            return false;
-        }
+        ChronosAccess access = ChronosAccess.probe().access();
+        return access != null && stateId.equals(access.stateId(player));
     }
 
     private boolean testRegionState(Map<String, String> payload) {

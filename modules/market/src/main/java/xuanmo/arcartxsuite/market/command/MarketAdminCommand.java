@@ -28,7 +28,7 @@ public class MarketAdminCommand {
     }
 
     public List<String> actions() {
-        return List.of("help", "status", "clear-expired", "remove", "edit", "open", "ledger", "resolve","trades");
+        return List.of("help", "status", "clear-expired", "remove", "edit", "open", "ledger", "resolve", "shop-review", "pshop-review", "trades");
     }
 
     public boolean onCommand(@NotNull CommandSender sender, @NotNull String label, @NotNull String[] args) {
@@ -60,18 +60,38 @@ public class MarketAdminCommand {
                     for(var row:rows) {
                         sender.sendMessage("§e"+row.id()+" §f"+row.kind()+" §7"+row.state()+" §f"+row.player());
                         sender.sendMessage("§7父交易="+row.tradeId()+"；引用="+row.reference()+"；金额="+row.amount()+" "+row.currency()+"；"+row.note());
+                        if ("CURRENCY".equals(row.kind()) && "REVIEW".equals(row.state())) {
+                            sender.sendMessage("§7货币核对使用本次流水编号: "+row.id()+"@"+row.updatedAt());
+                        }
                     }
                     if(rows.isEmpty())sender.sendMessage("§7没有更多记录");
                 } catch(IllegalArgumentException exception) {sender.sendMessage("§c用法: /axs market ledger [页码，从0开始] [all|READY|RUNNING|REVIEW|DONE|FAILED] [玩家UUID]");}
             }
             case "resolve" -> {
                 if(args.length<5) {sender.sendMessage("§e用法: /axs market resolve <流水ID> <delivered|cancel|retry-confirmed> <核对说明>");return true;}
-                String note=String.join(" ",java.util.Arrays.copyOfRange(args,4,args.length));
-                if(note.length()>512) {sender.sendMessage("§c说明不能超过512字符");return true;}
+                String note=String.join(" ",java.util.Arrays.copyOfRange(args,4,args.length)).strip();
+                if(note.isEmpty() || note.length()>512) {sender.sendMessage("§c核对说明不能为空且不能超过512字符");return true;}
                 java.util.UUID actor=sender instanceof org.bukkit.entity.Player player?player.getUniqueId():new java.util.UUID(0,0);
                 boolean changed=service.getLedger().trade("ADMIN_RESOLVE",actor,args[2],
                     () -> service.getRepository().resolveOperation(args[2],args[3],sender.getName()+": "+note), result -> result);
-                sender.sendMessage(changed?"§a已记录核对结果；retry-confirmed 仅表示已确认未交付后重新入队":"§c操作未应用：只有 REVIEW 记录可核对；仅交付任务可重新入队");
+                sender.sendMessage(changed?"§a已记录核对结果；retry-confirmed 仅表示已确认未交付后重新入队"
+                    :"§c操作未应用：请用 ledger 核对当前 REVIEW 记录，货币核对须使用最新的流水ID@核对版本");
+            }
+            case "shop-review", "pshop-review" -> {
+                boolean playerShop = "pshop-review".equals(action);
+                if (args.length < 5) {
+                    String modes = playerShop ? "fulfill-paid|refund-paid|cancel-unpaid"
+                        : "fulfill-paid|refund-paid|cancel-unpaid|confirm-refunded|retry-refund-uncredited";
+                    sender.sendMessage("§e用法: /axs market " + action + " <订单ID> <" + modes + "> <核对依据>");
+                    return true;
+                }
+                String note = String.join(" ", java.util.Arrays.copyOfRange(args, 4, args.length)).strip();
+                if (note.isEmpty() || note.length() > 512) {
+                    sender.sendMessage("§c核对依据不能为空，且不能超过512字符");
+                    return true;
+                }
+                service.reviewShopOrder(args[2], args[3], sender.getName() + ": " + note, playerShop,
+                    result -> sender.sendMessage("§7" + result));
             }
             case "open" -> {
                 if (!(sender instanceof org.bukkit.entity.Player player)) {
@@ -106,8 +126,8 @@ public class MarketAdminCommand {
                         : fullMsg("status.cross-server-inactive")));
             }
             case "clear-expired" -> {
-                int cleared = service.clearExpired();
-                sender.sendMessage(fullMsg("admin.clear-expired-success", cleared));
+                service.clearExpired(cleared -> sender.sendMessage(cleared >= 0
+                    ? fullMsg("admin.clear-expired-success", cleared) : "§c到期挂单处理失败，请查看日志"));
             }
             case "edit" -> {
                 if (!(sender instanceof org.bukkit.entity.Player player)) {
@@ -130,9 +150,10 @@ public class MarketAdminCommand {
                         return true;
                     }
                     long id = Long.parseLong(args[typed ? 3 : 2]);
-                    java.util.UUID actor=sender instanceof org.bukkit.entity.Player player?player.getUniqueId():new java.util.UUID(0,0);
-                    boolean removed = playerShop ? service.adminRemovePlayerShopListing(actor,id) : service.adminRemoveListing(actor,id);
-                    sender.sendMessage(removed ? fullMsg("admin.remove-success") : fullMsg("admin.remove-not-found"));
+                    service.adminRemoveListing(sender, id, playerShop, (removed, failure) -> {
+                        if (failure != null) sender.sendMessage(ChatColor.RED + "下架结果未确认，请核对商品状态和交易流水。");
+                        else sender.sendMessage(removed ? fullMsg("admin.remove-success") : fullMsg("admin.remove-not-found"));
+                    });
                 } catch (NumberFormatException e) {
                     sender.sendMessage(fullMsg("admin.invalid-id"));
                 }
@@ -162,6 +183,12 @@ public class MarketAdminCommand {
                 .filter(s -> s.startsWith(args[2].toLowerCase())).toList();
         }
         if(args.length==4 && "resolve".equalsIgnoreCase(args[1])) return List.of("delivered","cancel","retry-confirmed");
+        if (args.length==4 && "shop-review".equalsIgnoreCase(args[1])) {
+            return List.of("fulfill-paid", "refund-paid", "cancel-unpaid", "confirm-refunded", "retry-refund-uncredited");
+        }
+        if (args.length == 4 && "pshop-review".equalsIgnoreCase(args[1])) {
+            return List.of("fulfill-paid", "refund-paid", "cancel-unpaid");
+        }
         if(args.length==4 && "ledger".equalsIgnoreCase(args[1])) return List.of("all","READY","RUNNING","REVIEW","DONE","FAILED");
         return List.of();
     }
@@ -181,6 +208,8 @@ public class MarketAdminCommand {
             sender.sendMessage("§7"+cmd+" exchange ledger [玩家UUID] §f- 查看待核对兑换");
         }
         sender.sendMessage("§7"+cmd+" ledger [页码] [状态] [玩家UUID] §f- 交易/交付流水");
-        sender.sendMessage("§7"+cmd+" resolve <ID> <delivered|cancel|retry-confirmed> <说明> §f- 人工核对不确定结果");
+        sender.sendMessage("§7"+cmd+" resolve <ID 或 ID@核对版本> <delivered|cancel|retry-confirmed> <说明> §f- 货币流水使用 ledger 显示的完整编号");
+        sender.sendMessage("§7"+cmd+" shop-review <订单ID> <处理方式> <核对依据> §f- 核对系统商店扣款或退款");
+        sender.sendMessage("§7" + cmd + " pshop-review <订单ID> <处理方式> <核对依据> §f- 核对玩家商店扣款");
     }
 }

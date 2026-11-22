@@ -1,7 +1,6 @@
 package xuanmo.arcartxsuite.tooltip.service;
 
 import java.util.List;
-import java.util.UUID;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
@@ -12,7 +11,7 @@ import xuanmo.arcartxsuite.tooltip.cache.TooltipDataCache;
 /**
  * {@link TooltipDataCapable} 能力实现。
  * <p>
- * 提供 tooltip 数据查询和 Lore 注入功能，供 Chat 等模块使用。
+ * 提供玩家自身的 tooltip 展示数据和 Lore 副本。
  */
 public final class TooltipDataCapability implements TooltipDataCapable {
 

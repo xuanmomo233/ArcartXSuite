@@ -31,6 +31,8 @@ status:
   combo: "&7连击追踪: {0}"
   keybind: "&7按键触发: {0}"
   state: "&7状态触发: {0}"
+  skill-effects: "&7Chronos 技能特效: {0}"
+  chronos: "&7Chronos: &f{0} {1}"
 
 # ── send ──────────────────────────────────────────────
 send:

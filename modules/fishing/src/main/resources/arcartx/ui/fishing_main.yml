@@ -79,29 +79,14 @@ ui:
         }
       }
       // 动态生成最近捕获条目（模板在索引0，复制 1~count-1）
-      while(val.最近列表.childrenCount() > 1){
-        val.最近列表.get(1).remove()
-      }
-      if(var.recentCount != none && var.recentCount > 1){
-        for(i in range(1, var.recentCount - 1)){
-          key = i.round()
-          if(val.最近列表['捕获条目'] != none) {
-            e = val.最近列表['捕获条目'].copy('捕获条目' + key)
-            e.entryKey = key
-          }
+      var.最近列表网格数据 = []
+      if((var.recentCount - 1) >= 0){
+        for(网格序号 in range(0, var.recentCount - 1)){
+          var.最近列表网格数据.add(网格序号.round())
         }
       }
       // 数据就绪后触发每个条目图标的 seticon()
-      if(val.最近列表['捕获条目'] != none && val.最近列表['捕获条目']['鱼图标'] != none){
-        val.最近列表['捕获条目']['鱼图标'].seticon()
-      }
-      for(i in range(1, var.recentCount - 1)){
-        key = i.round()
-        e = val.最近列表['捕获条目' + key]
-        if(e != none && e['鱼图标'] != none){
-          e['鱼图标'].seticon()
-        }
-      }
+      var.最近列表图标待刷新 = true
   action:
     load: |-
       var.packetId = 'AXS_FISHING'
@@ -129,6 +114,26 @@ ui:
       var.cardW = (var.contentW - 96) / 2
 
 # ─── 控件树 ────────────────────────────────────────────────────────
+tasks:
+  refresh-repeat-grid-icons:
+    type: loop
+    time: 100
+    cycle: 100
+    run: |-
+      if(var.最近列表图标待刷新 == true && var.最近列表网格数据 != none && val.最近列表 != none && val.最近列表.childrenCount() == var.最近列表网格数据.size()){
+        var.最近列表图标待刷新 = false
+        if(var.最近列表网格数据.size() > 0){
+          for(网格序号 in range(0, var.最近列表网格数据.size() - 1)){
+            网格项 = val.最近列表.get(网格序号.round())
+            if(网格项 != none){
+              if(网格项['鱼图标'] != none){
+                网格项['鱼图标'].seticon()
+              }
+            }
+          }
+        }
+      }
+
 controls:
   # 全屏毛玻璃底（真高斯模糊世界背景）；置于顶层以覆盖整块屏幕
   全屏玻璃底:
@@ -1056,16 +1061,20 @@ controls:
                 children:
                   最近列表:
                     val: 最近列表
-                    type: VStack
+                    type: RepeatGrid
                     attribute:
+                      items: "var.最近列表网格数据"
+                      flow: ~row
+                      column: 1
+                      spaceBetweenY: 8
+                      maxSize: "var.最近列表网格数据 == none ? 0 : var.最近列表网格数据.size()"
                       width: "var.contentW - 120"
-                      spaceBetween: 8
                     children:
                       # 捕获条目模板（索引0）
                       捕获条目:
                         type: Canvas
                         attribute:
-                          entryKey: 0.round()
+                          entryKey: self.item
                           entry: var.recentCatches[self.entryKey]
                           visible: self.entry != none
                           width: "var.contentW - 120"

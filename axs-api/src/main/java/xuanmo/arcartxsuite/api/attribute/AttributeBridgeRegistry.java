@@ -25,6 +25,9 @@ public interface AttributeBridgeRegistry {
     /** Symphony 桥接 */
     SymphonyBridge symphony();
 
+    /** Whether the host has attached to Symphony's confirmed damage and hit-check events. */
+    boolean symphonyDamageAvailable();
+
     // ─── 通用属性伤害事件分发 ──────────────────────────────────
 
     /**

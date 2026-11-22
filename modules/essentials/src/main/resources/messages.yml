@@ -56,12 +56,13 @@ reload:
 
 # ── admin ─────────────────────────────────────────────
 admin:
+  world-not-allowed: "&c世界 {0} 禁止使用时间和天气管理。"
   gamemode:
     usage: "&c用法: /axs essentials gamemode <模式> [玩家]"
     invalid: "&c无效的游戏模式: {0}"
     success: "&a已将 {0} 的游戏模式设置为 {1}"
   speed:
-    usage: "&c用法: /axs essentials speed <fly|walk> <速度 1-10>"
+    usage: "&c用法: /axs essentials speed <fly|walk> [速度 0-10|reset]"
     invalid: "&c无效的速度值: {0}"
   nick:
     usage: "&c用法: /axs essentials nick <昵称|off>"
@@ -97,10 +98,10 @@ admin:
   ban:
     usage: "&c用法: /axs essentials {0} <玩家> [原因] 或 tempban <玩家> <时间> [原因]"
     require-duration: "&c请指定封禁时长（如 1d, 2h, 30m）。"
-    failed: "&c封禁失败: {0}"
+    failed: "&c封禁失败，请查看服务端日志。"
   unban:
-    usage: "&c用法: /axs essentials unban <玩家>"
-    tip: "&e注: 离线玩家解封需要通过 UUID，当前仅支持在线玩家或缓存中的玩家。"
+    usage: "&c用法: /axs essentials unban <玩家名或 UUID>"
+    not-banned: "&c未找到 {0} 的封禁记录。"
     failed: "&c解封失败。"
   mute:
     usage: "&c用法: /axs essentials {0} <玩家> [原因] 或 tempmute <玩家> <时间> [原因]"
@@ -118,5 +119,7 @@ admin:
   sudo:
     usage: "&c用法: /axs essentials sudo <玩家> <命令>"
     success: "&a已强制 {0} 执行: /{1}"
+    failed: "&c{0} 未能执行 /{1}。"
   inv:
-    usage: "&c用法: /axs essentials inv <玩家>"
+    usage: "&c用法: /axs essentials inv <玩家> [edit]"
+    self-edit: "&c请直接打开自己的背包进行编辑。"

@@ -16,6 +16,10 @@ public enum AxsMailState {
     UNREAD,
     /** 已读 */
     READ,
+    /** 部分附件已发放，可从已保存的进度继续领取 */
+    CLAIM_PENDING,
+    /** 发放结果待核对，不会自动重发 */
+    CLAIM_REVIEW,
     /** 已领取 */
     CLAIMED,
     /** 已删除 */

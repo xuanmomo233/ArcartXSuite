@@ -30,6 +30,7 @@ status:
   xp: '&7经验: &f{0}/{1}'
   premium: '&7进阶版: {0}'
 tasks:
+  navigation-unavailable: '&c该任务的导航暂不可用。'
   title: '&6===== 任务进度 ====='
   daily: '&e每日任务'
   weekly: '&e每周任务'
@@ -38,6 +39,8 @@ tasks:
   progress: '&7进度: &f{0}/{1}'
 claim:
   success: '&a成功领取等级 &e{0} &a的奖励！'
+  partial: '&e等级 {0} 的部分奖励已入队，其余请稍后重试。'
+  retry: '&c奖励暂未确认，请稍后重试。'
   already-claimed: '&c该等级奖励已领取。'
   level-not-reached: '&c尚未达到该等级。'
   premium-required: '&c需要激活进阶版战令。'
@@ -45,6 +48,7 @@ claim:
   usage: '&c用法: /{0} claim <等级>'
 claim_all:
   success: '&a一键领取成功！共领取 &e{0} &a个奖励。'
+  partial: '&e已领取 {0} 份奖励，其余请稍后重试。'
   none: '&7当前没有可领取的奖励。'
 admin:
   season-unimplemented: "&6===== 战令模块状态 ===== 赛季管理暂未实现。"
@@ -61,9 +65,9 @@ admin:
     title: '&6===== 战令模块状态 ====='
     season: '&7当前赛季: &f{0}'
     players: '&7活跃玩家: &f{0}'
-    cross-server: '&7跨服同步: {0}'
     rewards: '&7奖励配置: &f{0} 条'
   reset-success: '&a已重置玩家 &e{0} &a的战令进度。'
+  reset-failed: '&c玩家 {0} 的战令进度重置失败，请查看服务端日志。'
   unlock-already: '&e玩家 &f{0} &e已经拥有 &f{1} &e战令。'
   unlock-success: '&a已为玩家 &e{0} &a解锁 &e{1} &a战令。'
   unlock:
@@ -82,7 +86,9 @@ admin:
   setlevel-success: '&a已将玩家 &e{0} &a的战令等级设为 &e{1}&a。'
   setlevel-exceed-max: '&c等级超过上限，最大等级为 {0}。'
   settle-start: '&e正在执行赛季结算，请稍候...'
-  settle-success: '&a赛季 &e{0} &a结算完成！所有玩家奖励已发放。'
+  settle-queued: '&a赛季 &e{0} &a结算完成，所有奖励已确认入队。'
+  settle-running: '&e赛季 {0} 正在结算。'
+  settle-retry: '&c赛季 {0} 的奖励尚未全部确认，稍后可重试。'
   settle-already: '&e赛季 &e{0} &e已结算过，如需重新结算请先清除结算记录。'
   season:
     title: '&6===== 赛季信息 ====='
@@ -102,6 +108,7 @@ player:
     tasks: "&7/bp tasks&f - 打开任务列表"
     rewards: "&7/bp rewards&f - 打开奖励面板"
     claim: "&7/bp claim <等级>&f - 领取指定等级奖励"
+    go: "&7/bp go <任务ID>&f - 前往当前战令任务"
     help: "&7/bp help&f - 显示帮助"
   help-title: "&6==== BattlePass 命令 ===="
   help-open: "&e/{0} &f— 打开战令主界面"

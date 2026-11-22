@@ -42,6 +42,7 @@ public final class ArcartXPacketBridge implements PacketBridgeAPI {
     private ArcartXUIRegistry uiRegistry;
     private ArcartXEntityManager entityManager;
     private final ConcurrentMap<String, ArcartXUI> uiAdapters = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, CopyOnWriteArrayList<Consumer<Player>>> openCallbacks = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, CopyOnWriteArrayList<Consumer<Player>>> closeCallbacks = new ConcurrentHashMap<>();
     private final ConcurrentMap<java.util.UUID, Set<String>> openUiIds = new ConcurrentHashMap<>();
     private final Set<String> closeCallbackRegisteredUiIds = ConcurrentHashMap.newKeySet();
@@ -63,6 +64,7 @@ public final class ArcartXPacketBridge implements PacketBridgeAPI {
         uiRegistry = null;
         entityManager = null;
         uiAdapters.clear();
+        openCallbacks.clear();
         closeCallbacks.clear();
         openUiIds.clear();
         closeCallbackRegisteredUiIds.clear();
@@ -105,6 +107,7 @@ public final class ArcartXPacketBridge implements PacketBridgeAPI {
         uiRegistry = null;
         entityManager = null;
         uiAdapters.clear();
+        openCallbacks.clear();
         closeCallbacks.clear();
         openUiIds.clear();
         closeCallbackRegisteredUiIds.clear();
@@ -177,6 +180,7 @@ public final class ArcartXPacketBridge implements PacketBridgeAPI {
         try {
             uiRegistry.unregister(uiId);
             uiAdapters.remove(uiId);
+            openCallbacks.remove(uiId);
             closeCallbacks.remove(uiId);
             openUiIds.values().forEach(openIds -> openIds.remove(uiId));
             closeCallbackRegisteredUiIds.remove(uiId);
@@ -337,6 +341,23 @@ public final class ArcartXPacketBridge implements PacketBridgeAPI {
         }
     }
 
+    @Override
+    public boolean registerUiOpenCallback(String uiId, Consumer<Player> callback) {
+        if (!available || uiId == null || uiId.isBlank() || callback == null) return false;
+        if (!ensureOpenCallback(uiId, uiAdapter(uiId))) return false;
+        openCallbacks.computeIfAbsent(uiId, ignored -> new CopyOnWriteArrayList<>()).addIfAbsent(callback);
+        return true;
+    }
+
+    @Override
+    public void unregisterUiOpenCallback(String uiId, Consumer<Player> callback) {
+        if (uiId == null || uiId.isBlank() || callback == null) return;
+        openCallbacks.computeIfPresent(uiId, (id, callbacks) -> {
+            callbacks.remove(callback);
+            return callbacks.isEmpty() ? null : callbacks;
+        });
+    }
+
     public boolean registerUiCloseCallback(String uiId, Consumer<Player> callback) {
         if (!available || uiId == null || uiId.isBlank() || callback == null) {
             return false;
@@ -375,6 +396,23 @@ public final class ArcartXPacketBridge implements PacketBridgeAPI {
                 if (player == null) return;
                 markUiOpen(player, uiId);
                 ensureCloseCallback(uiId);
+                var callbacks = openCallbacks.get(uiId);
+                if (callbacks != null && plugin.isEnabled()) {
+                    List<Consumer<Player>> snapshot = List.copyOf(callbacks);
+                    plugin.getServer().getScheduler().runTask(plugin, () -> {
+                        if (!isUiOpen(player, uiId)) return;
+                        for (var callback : snapshot) {
+                            var current = openCallbacks.get(uiId);
+                            if (current == null || !current.contains(callback)) continue;
+                            try {
+                                callback.accept(player);
+                            } catch (RuntimeException exception) {
+                                xuanmo.arcartxsuite.module.AxsLog.logger().warning(
+                                    "ArcartX UI 打开回调执行失败(" + uiId + "): " + exception.getMessage());
+                            }
+                        }
+                    });
+                }
             } catch (RuntimeException exception) {
                 xuanmo.arcartxsuite.module.AxsLog.logger().warning(
                     "ArcartX UI 打开回调处理失败(" + uiId + "): " + exception.getMessage()

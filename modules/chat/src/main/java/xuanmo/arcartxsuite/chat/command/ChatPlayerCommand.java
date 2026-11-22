@@ -24,7 +24,9 @@ import xuanmo.arcartxsuite.chat.service.RedPacketService;
  */
 public final class ChatPlayerCommand implements org.bukkit.command.TabExecutor {
 
-    private static final List<String> CHAT_ACTIONS = List.of("help", "channel", "toggle", "ignore", "unignore", "socialspy", "redpacket", "grab");
+    private static final List<String> CHAT_ACTIONS = List.of("help", "channel", "toggle", "ignore", "unignore",
+        "socialspy", "redpacket", "grab", "party", "share", "meeting", "ready",
+        "subscribe", "unsubscribe", "quiet", "mentions", "history", "report");
     private static final List<String> TOGGLE_ACTIONS = List.of("private", "mentions");
     private static final List<String> REDPACKET_TYPES = List.of("normal", "lucky");
     private final Supplier<ChatService> serviceProvider;
@@ -51,6 +53,10 @@ public final class ChatPlayerCommand implements org.bukkit.command.TabExecutor {
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, @NotNull String[] args) {
         if (!(sender instanceof Player player)) {
             sender.sendMessage(fullMsg("common.only-player"));
+            return true;
+        }
+        if (!xuanmo.arcartxsuite.api.auth.AuthAccess.admitted(player.getUniqueId())) {
+            player.sendMessage(fullMsg("result.login-required"));
             return true;
         }
         ChatService service = serviceProvider.get();
@@ -115,7 +121,11 @@ public final class ChatPlayerCommand implements org.bukkit.command.TabExecutor {
         }
 
         if (args.length == 0) {
-            ChatPlayerState state = service.getCachedState(player.getUniqueId());
+            ChatPlayerState state = service.readState(player.getUniqueId());
+            if (state == null) {
+                player.sendMessage(fullMsg("result.storage-unavailable"));
+                return true;
+            }
             player.sendMessage(fullMsg("player.current-channel", service.channelDisplayName(state.currentChannelId())));
             player.sendMessage(
                 fullMsg("player.toggle-status",
@@ -130,6 +140,52 @@ public final class ChatPlayerCommand implements org.bukkit.command.TabExecutor {
 
         ChatOperationResult result;
         switch (args[0].toLowerCase()) {
+            case "party" -> {
+                service.sendPartyMessage(player, joinTail(args, 1), reply -> sendResult(player, reply));
+                return true;
+            }
+            case "meeting" -> {
+                service.links().location(player, true, reply -> sendResult(player, reply));
+                return true;
+            }
+            case "ready" -> {
+                service.links().ready(player, reply -> sendResult(player, reply));
+                return true;
+            }
+            case "history" -> {
+                service.showHistory(player, args.length >= 2 ? args[1] : "");
+                return true;
+            }
+            case "report" -> {
+                if (args.length >= 3) service.reportMessage(player, args[1], joinTail(args, 2));
+                else player.sendMessage(fullMsg("moderation.report-usage"));
+                return true;
+            }
+            case "mentions" -> {
+                service.readMentions(player);
+                return true;
+            }
+            case "subscribe", "unsubscribe", "quiet" -> {
+                boolean quiet = "quiet".equalsIgnoreCase(args[0]);
+                Boolean value = quiet && args.length == 3 ? parseToggle(args[2])
+                    : quiet ? null : "subscribe".equalsIgnoreCase(args[0]);
+                if (args.length < 2 || value == null) {
+                    player.sendMessage(fullMsg("links.preferences-usage"));
+                    return true;
+                }
+                result = service.channelPreference(player, args[1], quiet, value);
+            }
+            case "open" -> {
+                if (args.length != 2) return true;
+                service.links().open(player, args[1], reply -> {
+                    if (!reply.success()) sendResult(player, reply);
+                });
+                return true;
+            }
+            case "share" -> {
+                if (!share(player, service, args)) player.sendMessage(fullMsg("links.usage"));
+                return true;
+            }
             case "channel" -> {
                 if (args.length < 2) {
                     player.sendMessage(fullMsg("player.channel-usage", label));
@@ -161,14 +217,16 @@ public final class ChatPlayerCommand implements org.bukkit.command.TabExecutor {
                     player.sendMessage(fullMsg("player.ignore-usage", label));
                     return true;
                 }
-                result = service.ignore(player, args[1]);
+                service.ignore(player, args[1], outcome -> sendResult(player, outcome));
+                return true;
             }
             case "unignore" -> {
                 if (args.length < 2) {
                     player.sendMessage(fullMsg("player.unignore-usage", label));
                     return true;
                 }
-                result = service.unignore(player, args[1]);
+                service.unignore(player, args[1], outcome -> sendResult(player, outcome));
+                return true;
             }
             case "socialspy" -> {
                 Boolean enabled = args.length >= 2 ? parseToggle(args[1]) : null;
@@ -213,7 +271,22 @@ public final class ChatPlayerCommand implements org.bukkit.command.TabExecutor {
             player.sendMessage(fullMsg("player.msg-usage", label));
             return true;
         }
-        sendResult(player, service.sendPrivateMessage(player, args[0], joinTail(args, 1)));
+        service.sendPrivateMessage(player, args[0], joinTail(args, 1), result -> sendResult(player, result));
+        return true;
+    }
+
+    private boolean share(Player player, ChatService service, String[] args) {
+        if (args.length == 2 && "location".equalsIgnoreCase(args[1])) {
+            service.links().location(player, false, reply -> sendResult(player, reply));
+            return true;
+        }
+        if (args.length != 3) return false;
+        String type = args[1].toLowerCase(java.util.Locale.ROOT);
+        switch (type) {
+            case "quest" -> service.links().quest(player, args[2], reply -> sendResult(player, reply));
+            case "auction", "listing", "shop", "store" -> service.links().market(player, type, args[2], reply -> sendResult(player, reply));
+            default -> { return false; }
+        }
         return true;
     }
 
@@ -226,7 +299,7 @@ public final class ChatPlayerCommand implements org.bukkit.command.TabExecutor {
             player.sendMessage(fullMsg("player.reply-usage", label));
             return true;
         }
-        sendResult(player, service.reply(player, joinTail(args, 0)));
+        service.reply(player, joinTail(args, 0), result -> sendResult(player, result));
         return true;
     }
 
@@ -239,6 +312,9 @@ public final class ChatPlayerCommand implements org.bukkit.command.TabExecutor {
         player.sendMessage(fullMsg("player.help.socialspy"));
         player.sendMessage(fullMsg("player.help.redpacket"));
         player.sendMessage(fullMsg("player.help.grab"));
+        player.sendMessage(fullMsg("player.help.links"));
+        player.sendMessage(fullMsg("player.help.preferences"));
+        player.sendMessage(fullMsg("player.help.reports"));
     }
 
     /** /chat redpacket normal|lucky <总金额> <个数> [祝福语]。 */
@@ -272,7 +348,7 @@ public final class ChatPlayerCommand implements org.bukkit.command.TabExecutor {
             return true;
         }
         String wish = args.length >= 5 ? joinTail(args, 4) : "";
-        sendResult(player, redPacketService.sendPlayerPacket(player, type, total, count, wish));
+        redPacketService.sendPlayerPacket(player, type, total, count, wish, reply -> sendResult(player, reply));
         return true;
     }
 

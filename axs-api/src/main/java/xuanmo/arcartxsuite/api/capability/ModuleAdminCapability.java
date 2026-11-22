@@ -39,7 +39,7 @@ public interface ModuleAdminCapability {
      * 重载指定模块（调用其 {@code onReload()}）。
      *
      * @param moduleId 模块 ID
-     * @throws Exception 重载失败时抛出
+     * @return 重载完成结果
      */
-    void reloadModule(@NotNull String moduleId) throws Exception;
+    java.util.concurrent.CompletionStage<Boolean> reloadModule(@NotNull String moduleId);
 }

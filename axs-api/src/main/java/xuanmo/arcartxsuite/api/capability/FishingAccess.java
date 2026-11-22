@@ -43,11 +43,11 @@ public interface FishingAccess {
     void setFatigue(@NotNull UUID playerUuid, int value);
 
     /**
-     * 为玩家领取指定赛季奖励。
+     * 在服务端主线程提交赛季奖励领取请求，完成结果确认宿主已持久接收奖励。
      *
-     * @return 是否成功领取
+     * @return 持久交接结果
      */
-    boolean claimReward(@NotNull Player player, @NotNull String rewardId);
+    @NotNull java.util.concurrent.CompletableFuture<Boolean> claimReward(@NotNull Player player, @NotNull String rewardId);
 
     /**
      * 卖出玩家背包内全部鱼获。

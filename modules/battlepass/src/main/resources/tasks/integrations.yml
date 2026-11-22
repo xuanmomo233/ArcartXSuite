@@ -1,0 +1,103 @@
+# 将所需任务设为 enabled: true，并换成服务器实际使用的副本、任务、地图目标或兑换 ID。
+# 每个分类合并到同周期的任务池。可按需要删去条件或 navigation。
+weekly:
+  weekly-pickup-amount:
+    enabled: false
+    display-name: "战利品收集"
+    description: "本周实际收取 250 件掉落物"
+    event-topic: axs.pickup.item_pickup
+    required-count: 250
+    base-xp-reward: 400
+    increment-strategy: { type: payload_value, payload-key: amount }
+
+  weekly-abyss-example:
+    enabled: false
+    display-name: "副本挑战"
+    description: "本周通关指定副本 3 次"
+    event-topic: axs.abyss.result_committed
+    required-count: 3
+    base-xp-reward: 400
+    conditions:
+      - { type: event_payload, key: dungeon, operator: equals, value: example }
+    navigation: { type: map, target: "dungeon:example" }
+
+  weekly-nearby-loot:
+    enabled: false
+    display-name: "收集附近掉落"
+    description: "从附近掉落列表实际收取 100 件物品"
+    event-topic: axs.pickup.item_pickup
+    required-count: 100
+    base-xp-reward: 350
+    conditions:
+      - { type: event_payload, key: source, operator: equals, value: nearby }
+    increment-strategy: { type: payload_value, payload-key: amount }
+
+  weekly-market-exchange:
+    enabled: false
+    display-name: "兑换委托"
+    description: "在指定兑换所完成 3 次兑换"
+    event-topic: axs.market.npc_exchange_completed
+    required-count: 3
+    base-xp-reward: 400
+    conditions:
+      - { type: event_payload, key: shop, operator: equals, value: example }
+
+  weekly-signin-7:
+    enabled: false
+    display-name: "坚持签到"
+    description: "本周完成 7 天当日签到"
+    event-topic: axs.onlinerewards.signin_completed
+    required-count: 7
+    base-xp-reward: 500
+
+season:
+  season-abyss-speed:
+    enabled: false
+    display-name: "限时通关"
+    description: "在 600 秒内通关指定副本"
+    event-topic: axs.abyss.result_committed
+    required-count: 1
+    base-xp-reward: 600
+    conditions:
+      - { type: event_payload, key: dungeon, operator: equals, value: example }
+      - { type: event_payload, key: time_seconds, operator: less_or_equal, value: "600" }
+    navigation: { type: map, target: "dungeon:example" }
+
+  season-fishing-rare-water:
+    enabled: false
+    display-name: "龙湖传说"
+    description: "在指定水域钓到 1 条传说鱼"
+    event-topic: axs.fishing.success
+    required-count: 1
+    base-xp-reward: 600
+    conditions:
+      - { type: event_payload, key: water_area, operator: equals, value: dragon_lake }
+      - { type: event_payload, key: fish_rarity, operator: equals, value: LEGENDARY }
+    # 可配置导航到实际的鱼群目标，例如 dragon_lake/鱼群ID。
+
+  season-fishing-collection:
+    enabled: false
+    display-name: "鱼类图鉴"
+    description: "本赛季首次解锁 5 种鱼"
+    event-topic: axs.fishing.collection_unlock
+    required-count: 5
+    base-xp-reward: 700
+
+  season-market-auction:
+    enabled: false
+    display-name: "竞拍买家"
+    description: "本赛季成功竞拍 5 件拍卖品"
+    event-topic: axs.market.auction_purchased
+    required-count: 5
+    base-xp-reward: 500
+
+  season-quest-navigation-example:
+    enabled: false
+    display-name: "主线委托"
+    description: "完成指定主线任务"
+    event-topic: axs.questgps.quest_completed
+    required-count: 1
+    base-xp-reward: 300
+    conditions:
+      - { type: event_payload, key: quest_id, operator: equals, value: example_mainline_quest }
+    navigation: { type: quest, target: example_mainline_quest }

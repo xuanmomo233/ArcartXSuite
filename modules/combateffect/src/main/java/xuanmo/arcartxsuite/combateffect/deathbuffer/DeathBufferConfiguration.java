@@ -9,7 +9,7 @@ import org.bukkit.configuration.ConfigurationSection;
  * <p>
  * 属于 combateffect 模块的 deathbuffer 子模块，负责定义玩家死亡后的
  * 缓冲时长、视觉特效（着色器、第三人称相机）、Chronos 状态切换、
- * 自动复活拦截及世界黑名单等参数。
+ * Abyss 倒地特效及世界黑名单等参数。
  *
  * @param enabled             是否启用死亡缓冲
  * @param durationMs          缓冲持续时间（毫秒）
@@ -18,7 +18,7 @@ import org.bukkit.configuration.ConfigurationSection;
  * @param cameraPreset        相机预设名称
  * @param chronosEnabled      是否启用 Chronos 状态切换
  * @param chronosStateId      Chronos 状态 ID
- * @param blockAutoRespawn    是否拦截自动复活
+ * @param abyssPacketId       Abyss 倒地时向玩家发送的特效包 ID，空值表示停用
  * @param worldBlacklist      不生效的世界名称集合
  * @param debug               是否开启调试日志
  */
@@ -30,7 +30,7 @@ public record DeathBufferConfiguration(
     String cameraPreset,
     boolean chronosEnabled,
     String chronosStateId,
-    boolean blockAutoRespawn,
+    String abyssPacketId,
     Set<String> worldBlacklist,
     boolean debug
 ) {
@@ -46,7 +46,7 @@ public record DeathBufferConfiguration(
     public static DeathBufferConfiguration load(ConfigurationSection section) {
         if (section == null) {
             return new DeathBufferConfiguration(
-                false, 3000L, "", false, "", false, "", false, Set.of(), false
+                false, 3000L, "", false, "", false, "", "", Set.of(), false
             );
         }
         boolean enabled = section.getBoolean("enabled", false);
@@ -56,12 +56,12 @@ public record DeathBufferConfiguration(
         String cameraPreset = section.getString("visuals.camera-preset", "");
         boolean chronosEnabled = section.getBoolean("visuals.chronos.enabled", false);
         String chronosStateId = section.getString("visuals.chronos.state-id", "死亡");
-        boolean blockAutoRespawn = section.getBoolean("block-auto-respawn", true);
+        String abyssPacketId = section.getString("abyss-packet-id", "").trim();
         boolean debug = section.getBoolean("debug", false);
         Set<String> worldBlacklist = new HashSet<>(section.getStringList("world-blacklist"));
         return new DeathBufferConfiguration(
             enabled, durationMs, shader, thirdPersonCamera, cameraPreset,
-            chronosEnabled, chronosStateId, blockAutoRespawn, worldBlacklist, debug
+            chronosEnabled, chronosStateId, abyssPacketId, worldBlacklist, debug
         );
     }
 
@@ -70,7 +70,7 @@ public record DeathBufferConfiguration(
      *
      * @return 持续时间（tick）
      */
-    public int durationTicks() {
-        return (int) Math.max(10, durationMs / 50);
+    public long durationTicks() {
+        return Math.max(10L, durationMs / 50 + (durationMs % 50 == 0 ? 0 : 1));
     }
 }

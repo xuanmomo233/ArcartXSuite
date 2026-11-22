@@ -49,7 +49,9 @@
 #   command:  以控制台身份执行命令列表（commands 字段），支持 {player} 占位符
 #   currency: 向玩家发放指定货币（需 Vault/PlayerPoints 等经济插件）
 #   mail:     通过 Mail 模块发送邮件（预设 ID 或带物品附件的邮件）
-#             Mail 模块不可用时降级为直接发放物品或执行命令
+#             邮件预设等待 Mail 模块可用；带附件邮件可降级为物品发放
+#   title:      授予永久称号，target-id 为 Title 配置中的称号 ID
+#   map-anchor: 免费解锁地图锚点，target-id 为 Map 配置中的锚点 ID
 #             配置字段：
 #               mail.presets:     邮件预设 ID 列表（使用 Mail 模块预设时配置）
 #               mail-subject:    邮件主题（直接配置带附件邮件时使用）

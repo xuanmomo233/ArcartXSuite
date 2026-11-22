@@ -56,33 +56,119 @@ public final class RecoveryManager {
         if (file.isFile() && !file.delete()) logger.warning("[abyss] 无法删除已处理的恢复标记 " + player);
     }
 
-    public void runIfMarked(Player player) {
-        if (!cfg.enabled()) return;
+    public void runIfMarked(Player player, Runnable finished) {
         File f = fileOf(player.getUniqueId());
-        if (!f.isFile()) return;
-        // 先删标记再执行（防动作失败导致重复执行）
-        String dungeon;
-        String gamemode;
-        try {
-            YamlConfiguration y = YamlConfiguration.loadConfiguration(f);
-            dungeon = y.getString("dungeon", "?");
-            gamemode = y.getString("gamemode", null);
-            f.delete();
-        } catch (Exception e) {
-            f.delete();
+        if (!cfg.enabled() || !f.isFile()) {
+            finished.run();
             return;
         }
-        // 先还原进本前模式：副本内死亡旁观（SPECTATOR）断线重连会卡旁观，
-        // 必须在传送/动作之前恢复，否则玩家在旁观态坠落还可能再触发异常路径
+        String dungeon;
+        String gamemode;
+        String content;
+        try {
+            content = java.nio.file.Files.readString(f.toPath(), java.nio.charset.StandardCharsets.UTF_8);
+            YamlConfiguration y = new YamlConfiguration();
+            y.loadFromString(content);
+            dungeon = y.getString("dungeon", "?");
+            gamemode = y.getString("gamemode", null);
+        } catch (Exception e) {
+            logger.warning("[abyss] 恢复标记无法读取，已保留: " + player.getUniqueId());
+            finished.run();
+            return;
+        }
+        int preparedIndex = preparedSpawnIndex();
+        if (links != null && preparedIndex >= 0) {
+            World context = player.getWorld();
+            links.essentialsSpawn(player).whenComplete((spawn, failure) -> links.onMain(() -> {
+                if (!sameConnection(player)) {
+                    finished.run();
+                    return;
+                }
+                // A world change invalidates this destination, but not the player's recovery marker.
+                Location destination = player.getWorld() == context ? spawnOrFallback(context, spawn, failure) : null;
+                claimAndRun(player, f, content, dungeon, gamemode, preparedIndex, context, destination, finished);
+            }));
+        } else claimAndRun(player, f, content, dungeon, gamemode, -1, null, null, finished);
+    }
+
+    /** Resolve a leading spawn operation before claiming the marker; no side effects have started yet. */
+    private int preparedSpawnIndex() {
+        for (int index = 0; index < cfg.actions().size(); index++) {
+            String action = cfg.actions().get(index).trim().toLowerCase(java.util.Locale.ROOT);
+            if (action.equals("teleport") || action.equals("teleport spawn")) return index;
+            if (!action.isEmpty() && !action.startsWith("message ") && !action.startsWith("title ")) return -1;
+        }
+        return -1;
+    }
+
+    private void claimAndRun(Player player, File file, String content, String dungeon, String gamemode,
+                             int preparedIndex, World context, Location destination, Runnable finished) {
+        if (!consumeMarker(player.getUniqueId(), file, content)) {
+            finished.run();
+            return;
+        }
+        // Restore before any configured action, even if the prepared teleport is obsolete.
         if (gamemode != null) {
             try {
                 org.bukkit.GameMode gm = org.bukkit.GameMode.valueOf(gamemode);
                 if (player.getGameMode() != gm) player.setGameMode(gm);
             } catch (Throwable ignored) { }
         }
-        for (String action : cfg.actions()) {
+        runActions(player, dungeon, 0, preparedIndex, context, destination, finished);
+    }
+
+    private boolean consumeMarker(UUID player, File file, String content) {
+        try {
+            // Do not consume a newer mark written while the asynchronous lookup was pending.
+            if (!file.isFile() || !java.nio.file.Files.readString(file.toPath(), java.nio.charset.StandardCharsets.UTF_8).equals(content)) return false;
+            if (file.delete()) return true;
+            logger.warning("[abyss] 恢复标记尚未确认删除: " + player);
+        } catch (java.io.IOException failure) {
+            logger.warning("[abyss] 恢复标记已保留: " + player);
+        }
+        return false;
+    }
+
+    private static boolean sameConnection(Player player) {
+        return player.isOnline() && Bukkit.getPlayer(player.getUniqueId()) == player;
+    }
+
+    private static Location spawnOrFallback(World context, Location spawn, Throwable failure) {
+        return failure == null && spawn != null ? spawn : context.getSpawnLocation();
+    }
+
+    private void teleportRecovery(Player player, Location destination) {
+        try { player.teleport(destination); }
+        catch (RuntimeException failure) {
+            logger.fine("[abyss] 恢复传送失败: " + failure.getMessage());
+        }
+    }
+
+    private void runActions(Player player, String dungeon, int first, int preparedIndex, World preparedWorld,
+                            Location prepared, Runnable finished) {
+        for (int index = first; index < cfg.actions().size(); index++) {
+            String action = cfg.actions().get(index);
+            String normalized = action == null ? "" : action.trim().toLowerCase(java.util.Locale.ROOT);
+            if (links != null && (normalized.equals("teleport") || normalized.equals("teleport spawn"))) {
+                if (index == preparedIndex) {
+                    if (prepared != null && player.getWorld() == preparedWorld) teleportRecovery(player, prepared);
+                    continue;
+                }
+                int next = index + 1;
+                World context = player.getWorld();
+                links.essentialsSpawn(player).whenComplete((spawn, failure) -> links.onMain(() -> {
+                    if (!sameConnection(player)) {
+                        finished.run();
+                        return;
+                    }
+                    if (player.getWorld() == context) teleportRecovery(player, spawnOrFallback(context, spawn, failure));
+                    runActions(player, dungeon, next, -1, null, null, finished);
+                }));
+                return;
+            }
             execute(player, action, dungeon);
         }
+        finished.run();
     }
 
     /**
@@ -125,11 +211,8 @@ public final class RecoveryManager {
                 p.performCommand(apply(a.substring(15), p, dungeon));
             } else if (lower.equals("teleport") || lower.equals("teleport spawn")) {
                 // 裸 teleport：Essentials spawn → 玩家世界 spawn 兜底
-                Location dest = links != null ? links.essentialsSpawn(p) : null;
-                if (dest == null) {
-                    World w = p.getWorld();
-                    dest = w != null ? w.getSpawnLocation() : null;
-                }
+                World w = p.getWorld();
+                Location dest = w != null ? w.getSpawnLocation() : null;
                 if (dest != null) p.teleport(dest);
             } else if (lower.startsWith("teleport ")) {
                 // teleport [世界名] <x,y,z[,yaw,pitch]>

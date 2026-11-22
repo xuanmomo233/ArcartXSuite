@@ -17,18 +17,23 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.function.BooleanSupplier;
 import java.util.logging.Logger;
 import org.bukkit.Bukkit;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
+import xuanmo.arcartxsuite.api.auth.AuthAccess;
+import xuanmo.arcartxsuite.api.auth.AuthSnapshot;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerAPI;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerChannel;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerDelivery;
 
 import xuanmo.arcartxsuite.map.config.MapModuleConfiguration.CrossServerConfiguration;
 import xuanmo.arcartxsuite.map.model.MapOperationResult;
+import xuanmo.arcartxsuite.map.model.MapTeleportSession;
 import xuanmo.arcartxsuite.map.service.MapTerrainPushService;
+import xuanmo.arcartxsuite.map.service.MapTerrainPushService.ChunkRequest;
 
 /**
  * Map 模块跨服服务：世界目录广播、远程目录缓存、远程地形中继与跨服传送握手。
@@ -44,7 +49,7 @@ import xuanmo.arcartxsuite.map.service.MapTerrainPushService;
  *   <li>{@code anchors {world,list:[{id,name,desc,x,y,z,sort,tp}]}} — 世界锚点摘要</li>
  *   <li>{@code catalog_request} — 请求其他节点立即重播目录</li>
  *   <li>{@code treq {dst,req,world,player,chunks}} — 远程地形请求（世界侧中继）</li>
- *   <li>{@code tchunk {dst,req,data}} — 远程地形块体回传（base64）</li>
+ *   <li>{@code tchunk {dst,req,cx,cz,data}} — 分块回传，未入队的坐标可用一个 {@code skipped} 列表回传</li>
  *   <li>{@code tpreq {dst,req,player,name,world,anchor}} — 跨服传送预握手</li>
  *   <li>{@code tprsp {dst,req,ok,reason}} — 传送握手应答</li>
  * </ul>
@@ -95,7 +100,7 @@ public final class MapCrossServerService {
     private final ConcurrentMap<String, PendingTeleport> pendingTeleports = new ConcurrentHashMap<>();
     /** requestId → 源服挂起的地形中继（等待 tchunk）。 */
     private final ConcurrentMap<String, PendingRelay> pendingRelays = new ConcurrentHashMap<>();
-    /** playerUuid → 目标服已批准的待落地传送（玩家 join 时消费）。 */
+    /** playerUuid → 目标服已批准的待落地传送（玩家准入且实际开始落地时消费）。 */
     private final ConcurrentMap<UUID, PendingArrival> pendingArrivals = new ConcurrentHashMap<>();
     /** playerUuid → 上次 tpreq 受理时间（限频，防伪造握手堆积）。 */
     private final ConcurrentMap<UUID, Long> lastTeleportRequestAt = new ConcurrentHashMap<>();
@@ -276,29 +281,33 @@ public final class MapCrossServerService {
      * @param compositeWorldId 复合世界 id（{@code nodeId/worldId}）
      * @param chunks           客户端请求的 MapChunk 坐标列表
      */
-    public void relayTerrainRequest(Player player, String compositeWorldId, List<long[]> chunks) {
+    public void relayTerrainRequest(Player player, String compositeWorldId, List<ChunkRequest> chunks) {
         if (!active() || player == null || chunks == null) {
             return;
         }
+        AuthSnapshot admission = AuthAccess.snapshot(player.getUniqueId());
+        if (!admission.admitted()) return;
         RemoteWorldView world = remoteWorld(compositeWorldId);
         if (world == null || world.preloadVersion() <= 0) {
             return;
         }
         int pending = 0;
+        long now = System.currentTimeMillis();
         for (PendingRelay relay : pendingRelays.values()) {
-            if (relay.playerUuid().equals(player.getUniqueId())) {
+            if (relay.expiresAt() >= now && relay.playerUuid().equals(player.getUniqueId())) {
                 pending++;
             }
         }
         if (pending >= MAX_PENDING_RELAYS_PER_PLAYER) {
             return;
         }
-        List<long[]> accepted = new ArrayList<>(Math.min(chunks.size(), MAX_RELAY_CHUNKS));
-        for (long[] c : chunks) {
-            if (c == null || c.length < 2 || !world.preloadChunkSet().contains(pack(c[0], c[1]))) {
+        List<ChunkRequest> accepted = new ArrayList<>(Math.min(chunks.size(), MAX_RELAY_CHUNKS));
+        Set<Long> coordinates = new HashSet<>();
+        for (var chunk : chunks) {
+            if (!world.preloadChunkSet().contains(chunk.coordinate()) || !coordinates.add(chunk.coordinate())) {
                 continue;
             }
-            accepted.add(c);
+            accepted.add(chunk);
             if (accepted.size() >= MAX_RELAY_CHUNKS) {
                 break;
             }
@@ -308,14 +317,20 @@ public final class MapCrossServerService {
         }
         String requestId = UUID.randomUUID().toString();
         pendingRelays.put(requestId, new PendingRelay(
-            player.getUniqueId(), world.dimensionKey(), world.nodeId(),
-            System.currentTimeMillis() + RELAY_TTL_MS));
+            player, admission, world.dimensionKey(), world.nodeId(),
+            now + RELAY_TTL_MS, coordinates));
         JsonObject msg = base("treq");
         msg.addProperty("dst", world.nodeId());
         msg.addProperty("req", requestId);
         msg.addProperty("world", world.worldId());
         msg.addProperty("player", player.getUniqueId().toString());
-        msg.addProperty("chunks", chunkCsv(accepted));
+        StringBuilder encoded = new StringBuilder();
+        for (var chunk : accepted) {
+            if (!encoded.isEmpty()) encoded.append(';');
+            encoded.append((int) (chunk.coordinate() >> 32)).append(',')
+                .append((int) chunk.coordinate()).append(',').append(chunk.mask());
+        }
+        msg.addProperty("chunks", encoded.toString());
         publish(msg);
     }
 
@@ -325,13 +340,18 @@ public final class MapCrossServerService {
      * 源服侧：发起跨服传送预握手。
      * 校验目标节点在线、世界允许落地、锚点存在；成功则挂起等待 tprsp。
      *
-     * @param player   发起玩家
+     * @param session  发起玩家及其准入
      * @param nodeId   目标节点 id
      * @param worldId  目标节点上的原始世界 id
      * @param anchorId 目标锚点 id（空 = 世界出生点落地）
+     * @param authorized 源服侧执行传送需要保留的权限
      * @return 受理结果（请求发出 = success，后续成败由 tprsp/超时通知）
      */
-    public MapOperationResult requestTeleport(Player player, String nodeId, String worldId, String anchorId) {
+    public MapOperationResult requestTeleport(MapTeleportSession session, String nodeId, String worldId,
+                                              String anchorId, BooleanSupplier authorized) {
+        if (!session.current() || !authorized.getAsBoolean()) {
+            return MapOperationResult.failure(handler.resolveMessage("player.no-permission"));
+        }
         if (!active()) {
             return MapOperationResult.failure(handler.resolveMessage("player.cross-server-unavailable"));
         }
@@ -349,9 +369,10 @@ public final class MapCrossServerService {
         if (!anchorId.isEmpty() && !world.anchors.containsKey(anchorId)) {
             return MapOperationResult.failure(handler.resolveMessage("player.cross-server-anchor-unknown"));
         }
+        Player player = session.player();
         String requestId = UUID.randomUUID().toString();
         pendingTeleports.put(requestId, new PendingTeleport(
-            requestId, player.getUniqueId(), nodeId,
+            session, authorized, nodeId,
             System.currentTimeMillis() + config.requestTimeoutSeconds() * 1000L));
         JsonObject msg = base("tpreq");
         msg.addProperty("dst", nodeId);
@@ -364,18 +385,17 @@ public final class MapCrossServerService {
         return MapOperationResult.success(handler.resolveMessage("player.cross-server-requesting"));
     }
 
-    /** 玩家进服（目标服侧）：消费该玩家的待落地传送。 */
-    public void onPlayerJoin(Player player) {
-        if (player == null) {
-            return;
-        }
-        PendingArrival arrival = pendingArrivals.remove(player.getUniqueId());
-        if (arrival == null || arrival.expiresAt() < System.currentTimeMillis()) {
+    /** 玩家完成准入（目标服侧）：在原连接仍有效时一次性执行落地。 */
+    public void onPlayerAdmitted(MapTeleportSession session) {
+        UUID playerUuid = session.admission().playerId();
+        PendingArrival arrival = pendingArrivals.get(playerUuid);
+        if (arrival == null || arrival.expiresAt() < System.currentTimeMillis() || !session.current()) {
             return;
         }
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
-            if (player.isOnline()) {
-                handler.executeArrival(player, arrival.worldId(), arrival.anchorId());
+            if (sweepTask != null && arrival.expiresAt() >= System.currentTimeMillis()
+                && session.current() && pendingArrivals.remove(playerUuid, arrival)) {
+                handler.executeArrival(session, arrival.worldId(), arrival.anchorId());
             }
         }, Math.max(0, config.arrivalDelayTicks()));
     }
@@ -387,7 +407,15 @@ public final class MapCrossServerService {
         }
         pendingArrivals.remove(playerUuid);
         lastTeleportRequestAt.remove(playerUuid);
+        cancelTeleportRequests(playerUuid);
+        cancelTerrainRelays(playerUuid);
+    }
+
+    public void cancelTeleportRequests(UUID playerUuid) {
         pendingTeleports.values().removeIf(p -> p.playerUuid().equals(playerUuid));
+    }
+
+    public void cancelTerrainRelays(UUID playerUuid) {
         pendingRelays.values().removeIf(r -> r.playerUuid().equals(playerUuid));
     }
 
@@ -654,21 +682,42 @@ public final class MapCrossServerService {
         }
         String requestId = optString(obj, "req");
         String worldId = normalizeId(optString(obj, "world"));
-        List<long[]> chunks = parseChunks(optString(obj, "chunks"));
+        List<ChunkRequest> chunks = parseTerrainChunks(optString(obj, "chunks"));
         if (requestId.isEmpty() || worldId.isEmpty() || chunks.isEmpty()) {
             return;
         }
         TerrainRelayTicket ticket = handler.prepareTerrainRelay(worldId, chunks);
-        if (ticket == null || ticket.chunks().isEmpty()) {
-            return;
+        var ready = ticket == null ? List.<ChunkRequest>of() : ticket.chunks();
+        var allowed = new HashSet<>(ready);
+        JsonArray skipped = new JsonArray();
+        for (var chunk : chunks) {
+            if (!allowed.contains(chunk)) skipped.add(chunk.coordinate());
         }
-        terrainPush.submitForRelay(ticket.world(), ticket.chunks(), ticket.sourceVersion(), body -> {
-            JsonObject out = base("tchunk");
-            out.addProperty("dst", source);
-            out.addProperty("req", requestId);
-            out.addProperty("data", Base64.getEncoder().encodeToString(body));
+        if (!ready.isEmpty()) {
+            var rejected = terrainPush.submitRequestsForRelay(ticket.world(), ready, ticket.sourceVersion(),
+                (chunk, body) -> sendTerrainReply(source, requestId, chunk, body));
+            rejected.forEach(chunk -> skipped.add(chunk.coordinate()));
+        }
+        if (skipped.size() != 0) {
+            JsonObject out = terrainReply(source, requestId);
+            out.add("skipped", skipped);
             publish(out);
-        });
+        }
+    }
+
+    private JsonObject terrainReply(String destination, String requestId) {
+        JsonObject out = base("tchunk");
+        out.addProperty("dst", destination);
+        out.addProperty("req", requestId);
+        return out;
+    }
+
+    private void sendTerrainReply(String destination, String requestId, ChunkRequest chunk, byte[] body) {
+        JsonObject out = terrainReply(destination, requestId);
+        out.addProperty("cx", (int) (chunk.coordinate() >> 32));
+        out.addProperty("cz", (int) chunk.coordinate());
+        if (body != null) out.addProperty("data", Base64.getEncoder().encodeToString(body));
+        publish(out);
     }
 
     private void onTerrainChunk(String source, JsonObject obj) {
@@ -681,8 +730,18 @@ public final class MapCrossServerService {
             pendingRelays.remove(requestId);
             return;
         }
+        if (obj.get("skipped") instanceof JsonArray skipped) {
+            if (skipped.size() > MAX_RELAY_CHUNKS) return;
+            for (JsonElement entry : skipped) relay.remaining().remove(entry.getAsLong());
+            if (relay.remaining().isEmpty()) pendingRelays.remove(requestId, relay);
+            return;
+        }
+        if (!obj.has("cx") || !obj.has("cz")) return;
+        long coordinate = pack(obj.get("cx").getAsInt(), obj.get("cz").getAsInt());
+        if (!relay.remaining().contains(coordinate)) return;
         String data = optString(obj, "data");
         if (data.isEmpty()) {
+            completeTerrainReply(requestId, relay, coordinate);
             return;
         }
         byte[] body;
@@ -691,8 +750,10 @@ public final class MapCrossServerService {
         } catch (Exception e) {
             return;
         }
-        Player player = Bukkit.getPlayer(relay.playerUuid());
-        if (player == null || !player.isOnline()) {
+        if (body.length < 15 || java.nio.ByteBuffer.wrap(body).getLong() != coordinate) return;
+        Player player = relay.player();
+        if (!terrainPush.canSendTerrain(player, relay.admission())) {
+            pendingRelays.remove(requestId, relay);
             return;
         }
         // 还原本地包格式：writeUTF(dimKey) + 块体（int cx | int cz | int ver | ...）
@@ -705,7 +766,13 @@ public final class MapCrossServerService {
             player.sendPluginMessage(plugin, MapTerrainPushService.CHANNEL_TERRAIN, bos.toByteArray());
         } catch (Exception e) {
             logger.fine("[Map] 远程地形包下发失败: " + e.getMessage());
+        } finally {
+            completeTerrainReply(requestId, relay, coordinate);
         }
+    }
+
+    private void completeTerrainReply(String requestId, PendingRelay relay, long coordinate) {
+        if (relay.remaining().remove(coordinate) && relay.remaining().isEmpty()) pendingRelays.remove(requestId, relay);
     }
 
     private void onTeleportRequest(String source, JsonObject obj, boolean signed) {
@@ -753,12 +820,16 @@ public final class MapCrossServerService {
 
     private void onTeleportResponse(String source, JsonObject obj) {
         String requestId = optString(obj, "req");
-        PendingTeleport pending = requestId.isEmpty() ? null : pendingTeleports.remove(requestId);
-        if (pending == null || !pending.nodeId().equals(source)) {
+        PendingTeleport pending = requestId.isEmpty() ? null : pendingTeleports.get(requestId);
+        if (pending == null || !pending.nodeId().equals(source) || !pendingTeleports.remove(requestId, pending)) {
             return;
         }
-        Player player = Bukkit.getPlayer(pending.playerUuid());
-        if (player == null || !player.isOnline()) {
+        if (!pending.current()) {
+            return;
+        }
+        if (pending.expiresAt() < System.currentTimeMillis()) {
+            handler.notifyPlayerResult(pending.playerUuid(), MapOperationResult.failure(
+                handler.resolveMessage("player.cross-server-timeout")));
             return;
         }
         if (!optBool(obj, "ok")) {
@@ -770,7 +841,7 @@ public final class MapCrossServerService {
         }
         RemoteNode node = nodes.get(pending.nodeId());
         String connectName = node == null ? pending.nodeId() : node.connectName;
-        if (!sendConnect(player, connectName)) {
+        if (!sendConnect(pending.session().player(), connectName)) {
             handler.notifyPlayerResult(pending.playerUuid(), MapOperationResult.failure(
                 handler.resolveMessage("player.cross-server-unavailable")));
             return;
@@ -824,8 +895,10 @@ public final class MapCrossServerService {
             if (p.expiresAt() >= now) {
                 return false;
             }
-            handler.notifyPlayerResult(p.playerUuid(), MapOperationResult.failure(
-                handler.resolveMessage("player.cross-server-timeout")));
+            if (p.current()) {
+                handler.notifyPlayerResult(p.playerUuid(), MapOperationResult.failure(
+                    handler.resolveMessage("player.cross-server-timeout")));
+            }
             return true;
         });
         pendingRelays.values().removeIf(r -> r.expiresAt() < now);
@@ -954,19 +1027,21 @@ public final class MapCrossServerService {
         return sb.toString();
     }
 
-    /** "cx,cz;cx,cz" → 长坐标列表（非法项跳过）。 */
-    public static List<long[]> parseChunks(String csv) {
-        List<long[]> out = new ArrayList<>();
+    /** Each terrain request coordinate carries the mask of subchunks still needed. */
+    private static List<ChunkRequest> parseTerrainChunks(String csv) {
+        List<ChunkRequest> out = new ArrayList<>();
         if (csv == null || csv.isEmpty()) {
             return out;
         }
         for (String pair : csv.split(";")) {
             String[] xy = pair.split(",");
-            if (xy.length != 2) {
+            if (xy.length != 3) {
                 continue;
             }
             try {
-                out.add(new long[]{Long.parseLong(xy[0].trim()), Long.parseLong(xy[1].trim())});
+                int mask = Integer.parseInt(xy[2]);
+                if (mask <= 0 || mask > 0xffff) continue;
+                out.add(new ChunkRequest(pack(Integer.parseInt(xy[0]), Integer.parseInt(xy[1])), mask));
             } catch (NumberFormatException ignored) {
             }
             if (out.size() >= MAX_RELAY_CHUNKS) {
@@ -1119,10 +1194,14 @@ public final class MapCrossServerService {
         }
     }
 
-    private record PendingTeleport(String requestId, UUID playerUuid, String nodeId, long expiresAt) {
+    private record PendingTeleport(MapTeleportSession session, BooleanSupplier authorized, String nodeId, long expiresAt) {
+        UUID playerUuid() { return session.admission().playerId(); }
+        boolean current() { return session.current() && authorized.getAsBoolean(); }
     }
 
-    private record PendingRelay(UUID playerUuid, String dimKey, String nodeId, long expiresAt) {
+    private record PendingRelay(Player player, AuthSnapshot admission, String dimKey, String nodeId,
+                                long expiresAt, Set<Long> remaining) {
+        UUID playerUuid() { return player.getUniqueId(); }
     }
 
     private record PendingArrival(String worldId, String anchorId, long expiresAt) {
@@ -1253,13 +1332,13 @@ public final class MapCrossServerService {
     }
 
     /**
-     * 目标服侧地形中继票据：世界校验通过后可直接交给 {@link MapTerrainPushService#submitForRelay}。
+     * 目标服侧地形中继票据：世界校验通过后可直接交给 {@link MapTerrainPushService#submitRequestsForRelay}。
      *
      * @param world          Bukkit 世界
      * @param chunks         接受的 MapChunk 坐标（packed long，已 ⊆ 预加载覆盖）
      * @param sourceVersion  写入包体的数据版本
      */
-    public record TerrainRelayTicket(World world, List<Long> chunks, int sourceVersion) {
+    public record TerrainRelayTicket(World world, List<ChunkRequest> chunks, int sourceVersion) {
     }
 
     /**
@@ -1280,7 +1359,7 @@ public final class MapCrossServerService {
          * @param chunks  请求的 MapChunk 坐标（[cx, cz]）
          * @return 可中继票据；拒绝（未共享/无预加载/世界卸载/全部越界）返回 {@code null}
          */
-        TerrainRelayTicket prepareTerrainRelay(String worldId, List<long[]> chunks);
+        TerrainRelayTicket prepareTerrainRelay(String worldId, List<ChunkRequest> chunks);
 
         /**
          * 目标服侧：玩家到达前校验落地目标（世界/锚点/可选解锁记录）。
@@ -1293,13 +1372,13 @@ public final class MapCrossServerService {
         java.util.concurrent.CompletableFuture<MapOperationResult> validateArrival(UUID playerUuid, String worldId, String anchorId);
 
         /**
-         * 目标服侧：玩家已加入本机，执行落地传送（含可选费用）。
+         * 目标服侧：玩家已完成本机准入，执行落地传送（含可选费用）。
          *
-         * @param player   已在线玩家
+         * @param session  已在线玩家的准入
          * @param worldId  原始世界 id
          * @param anchorId 锚点 id（空 = 世界出生点）
          */
-        void executeArrival(Player player, String worldId, String anchorId);
+        void executeArrival(MapTeleportSession session, String worldId, String anchorId);
 
         /** 给玩家发送操作结果（带前缀/颜色）；离线则静默丢弃。 */
         void notifyPlayerResult(UUID playerUuid, MapOperationResult result);

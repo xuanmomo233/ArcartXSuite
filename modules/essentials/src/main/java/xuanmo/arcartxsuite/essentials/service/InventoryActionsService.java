@@ -1,10 +1,7 @@
 package xuanmo.arcartxsuite.essentials.service;
 
-import java.util.Arrays;
-import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -14,7 +11,10 @@ import org.bukkit.ChatColor;
 import org.bukkit.Material;
 import org.bukkit.Tag;
 import org.bukkit.block.Block;
+import org.bukkit.block.BlockFace;
+import org.bukkit.block.BlockState;
 import org.bukkit.block.data.Ageable;
+import org.bukkit.block.data.BlockData;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -22,30 +22,30 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.block.Action;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.plugin.java.JavaPlugin;
 import java.util.logging.Logger;
 
 /**
- * 背包操作服务 — 自动补种、背包整理、自动工具切换。
+ * 背包操作服务 — 自动补种、自动工具切换。
  */
 public final class InventoryActionsService implements Listener {
 
     private final JavaPlugin plugin;
+    private boolean running;
+    private final xuanmo.arcartxsuite.api.scheduler.ModuleCallback callbacks =
+        new xuanmo.arcartxsuite.api.scheduler.ModuleCallback(()->{});
     private final Logger logger;
 
     // 补种
     private final boolean replantEnabled;
     private final String replantPermission;
     private final Set<Material> replantCrops;
-
-    // 整理
-    private final boolean sortEnabled;
-    private final String sortPermission;
-    private final String sortMode;
 
     // 自动工具
     private final boolean autoToolEnabled;
@@ -82,11 +82,6 @@ public final class InventoryActionsService implements Listener {
             }
         }
 
-        ConfigurationSection sort = section.getConfigurationSection("inventory-sort");
-        this.sortEnabled = sort != null && sort.getBoolean("enabled", true);
-        this.sortPermission = sort != null ? sort.getString("permission", "axs.essentials.sort") : "";
-        this.sortMode = sort != null ? sort.getString("sort-mode", "type") : "type";
-
         ConfigurationSection autoTool = section.getConfigurationSection("auto-tool");
         this.autoToolEnabled = autoTool != null && autoTool.getBoolean("enabled", true);
         this.autoToolPermission = autoTool != null ? autoTool.getString("permission", "axs.essentials.autotool") : "";
@@ -94,14 +89,20 @@ public final class InventoryActionsService implements Listener {
     }
 
     public void start() {
+        if(!replantEnabled&&!autoToolEnabled)return;
+        running = true;
         Bukkit.getPluginManager().registerEvents(this, plugin);
     }
 
     public void shutdown() {
+        running = false;
+        callbacks.close();
         HandlerList.unregisterAll(this);
         replantToggled.clear();
         autoToolToggled.clear();
     }
+
+    public java.util.concurrent.CompletionStage<Void> stopped(){return callbacks.stopped();}
 
     // ─── 开关状态 ───
 
@@ -147,13 +148,31 @@ public final class InventoryActionsService implements Listener {
         // 检查背包是否有种子
         if (!player.getInventory().containsAtLeast(new ItemStack(seed), 1)) return;
 
-        // 延迟 1 tick 补种（等方块被破坏后）
-        Bukkit.getScheduler().runTaskLater(plugin, () -> {
-            if (!block.getType().isAir()) return;
-            block.setType(cropType);
-            // 消耗种子
-            player.getInventory().removeItem(new ItemStack(seed, 1));
-        }, 1L);
+        Bukkit.getScheduler().runTask(plugin, () -> callbacks.call(() -> {
+            if (!running || event.isCancelled() || !player.isOnline() || !player.getWorld().equals(block.getWorld())
+                || !hasPermission(player, replantPermission) || !isReplantEnabled(player.getUniqueId())
+                || !block.getWorld().isChunkLoaded(block.getX() >> 4, block.getZ() >> 4)
+                || !block.getType().isAir()) return null;
+            replant(player, block, cropType, new ItemStack(seed));
+            return null;
+        }, null));
+    }
+
+    private void replant(Player player, Block block, Material cropType, ItemStack seed) {
+        BlockData crop = Bukkit.createBlockData(cropType);
+        if (!block.canPlace(crop) || !player.getInventory().containsAtLeast(seed, 1)) return;
+        BlockState previous = block.getState();
+        block.setBlockData(crop, false);
+        boolean planted = false;
+        try {
+            BlockPlaceEvent placement = new BlockPlaceEvent(block, previous, block.getRelative(BlockFace.DOWN),
+                seed.clone(), player, true, EquipmentSlot.HAND);
+            Bukkit.getPluginManager().callEvent(placement);
+            if (!running || placement.isCancelled() || !placement.canBuild() || !block.getBlockData().equals(crop)) return;
+            planted = player.getInventory().removeItem(seed).isEmpty();
+        } finally {
+            if (!planted && block.getBlockData().equals(crop)) previous.update(true, false);
+        }
     }
 
     // ─── 自动工具切换 ───
@@ -185,65 +204,6 @@ public final class InventoryActionsService implements Listener {
                 return;
             }
         }
-    }
-
-    // ─── 背包整理 ───
-
-    public void sortInventory(Player player) {
-        if (!sortEnabled) return;
-        if (!hasPermission(player, sortPermission)) return;
-
-        PlayerInventory inv = player.getInventory();
-        // 只整理 9-35 槽位（非快捷栏）
-        ItemStack[] contents = inv.getStorageContents();
-        ItemStack[] hotbar = Arrays.copyOfRange(contents, 0, 9);
-        ItemStack[] storage = Arrays.copyOfRange(contents, 9, contents.length);
-
-        // 合并同类物品
-        storage = mergeStacks(storage);
-
-        // 排序
-        Arrays.sort(storage, getComparator());
-
-        // 合并回
-        ItemStack[] newContents = new ItemStack[contents.length];
-        System.arraycopy(hotbar, 0, newContents, 0, 9);
-        System.arraycopy(storage, 0, newContents, 9, storage.length);
-        inv.setStorageContents(newContents);
-    }
-
-    private ItemStack[] mergeStacks(ItemStack[] items) {
-        List<ItemStack> merged = new java.util.ArrayList<>();
-        for (ItemStack item : items) {
-            if (item == null || item.getType().isAir()) { merged.add(null); continue; }
-            boolean found = false;
-            for (ItemStack existing : merged) {
-                if (existing != null && existing.isSimilar(item)) {
-                    int space = existing.getMaxStackSize() - existing.getAmount();
-                    if (space > 0) {
-                        int transfer = Math.min(space, item.getAmount());
-                        existing.setAmount(existing.getAmount() + transfer);
-                        item.setAmount(item.getAmount() - transfer);
-                        if (item.getAmount() <= 0) { found = true; break; }
-                    }
-                }
-            }
-            if (!found && item.getAmount() > 0) merged.add(item.clone());
-        }
-        return merged.toArray(new ItemStack[0]);
-    }
-
-    private Comparator<ItemStack> getComparator() {
-        return (a, b) -> {
-            if (a == null && b == null) return 0;
-            if (a == null) return 1;
-            if (b == null) return -1;
-            return switch (sortMode) {
-                case "name" -> a.getType().name().compareTo(b.getType().name());
-                case "amount" -> Integer.compare(b.getAmount(), a.getAmount());
-                default -> Integer.compare(a.getType().ordinal(), b.getType().ordinal());
-            };
-        };
     }
 
     // ─── 工具映射 ───

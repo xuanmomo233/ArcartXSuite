@@ -4,7 +4,6 @@ import java.util.Locale;
 import java.util.Optional;
 import me.clip.placeholderapi.expansion.PlaceholderExpansion;
 import org.bukkit.OfflinePlayer;
-import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -159,11 +158,7 @@ public final class EntityTrackerPlaceholderExpansion extends PlaceholderExpansio
         if (targetService == null || offlinePlayer == null) {
             return Optional.empty();
         }
-        Player player = offlinePlayer.getPlayer();
-        if (player == null || !player.isOnline()) {
-            return Optional.empty();
-        }
-        return targetService.resolveViewerTargetSnapshot(player);
+        return targetService.resolveViewerTargetSnapshotById(offlinePlayer.getUniqueId());
     }
 
     private PlayerBossViewSnapshot resolveSnapshot(OfflinePlayer offlinePlayer) {
@@ -174,11 +169,10 @@ public final class EntityTrackerPlaceholderExpansion extends PlaceholderExpansio
             sortMode = xuanmo.arcartxsuite.entitytracker.boss.config.BossSortMode.SPAWN_ORDER;
         }
         BossTrackerService trackerService = serviceProvider.get();
-        Player player = offlinePlayer == null ? null : offlinePlayer.getPlayer();
-        if (trackerService == null || player == null || !player.isOnline()) {
+        if (trackerService == null || offlinePlayer == null) {
             return PlayerBossViewSnapshot.empty(maxVisibleBars, sortMode);
         }
-        return trackerService.getViewerSnapshot(player);
+        return trackerService.getViewerSnapshotById(offlinePlayer.getUniqueId());
     }
 
     private String resolveDynamicPlaceholder(OfflinePlayer offlinePlayer, PlayerBossViewSnapshot snapshot, String normalized) {

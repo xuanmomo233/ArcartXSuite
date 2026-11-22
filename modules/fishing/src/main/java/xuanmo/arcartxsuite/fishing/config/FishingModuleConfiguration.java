@@ -9,6 +9,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.logging.Logger;
 import java.util.stream.Stream;
@@ -27,6 +28,9 @@ import xuanmo.arcartxsuite.api.icon.IconDefinition;
 import xuanmo.arcartxsuite.api.item.ItemMatcherLoader;
 import xuanmo.arcartxsuite.fishing.model.FishBehaviorType;
 import xuanmo.arcartxsuite.fishing.model.FishDefinition;
+import xuanmo.arcartxsuite.fishing.model.FishDefinition.BehaviorEntry;
+import xuanmo.arcartxsuite.fishing.model.FishDefinition.BehaviorMode;
+import xuanmo.arcartxsuite.fishing.model.FishDefinition.BehaviorPlan;
 import xuanmo.arcartxsuite.fishing.model.FishRarity;
 import xuanmo.arcartxsuite.fishing.model.RodDefinition;
 import xuanmo.arcartxsuite.fishing.model.TreasureDefinition;
@@ -133,11 +137,34 @@ public record FishingModuleConfiguration(
         List<BaitDefinition> baits = loadBaitsFromDir(new File(dataFolder, "baits"), logger);
         List<RodDefinition> rods = loadRodsFromDir(new File(dataFolder, "rods"), logger);
 
-        // 从 waters/ 目录加载水域文件
-        WaterArea[] waterAreas = loadWatersFromDir(new File(dataFolder, "waters"), logger);
+        WaterSettings waters = loadWaterSettings(dataFolder, logger);
+        return new FishingModuleConfiguration(
+            StorageConfiguration.load(yaml.getConfigurationSection("storage")),
+            SeasonConfiguration.load(yaml.getConfigurationSection("season"), ariaBridge),
+            FishingSettings.load(yaml.getConfigurationSection("fishing")),
+            Collections.unmodifiableList(fishes),
+            Collections.unmodifiableList(treasures),
+            Collections.unmodifiableList(baits),
+            Collections.unmodifiableList(rods),
+            waters.specifiedWaters(),
+            waters.defaultWater(),
+            UiConfiguration.load(yaml.getConfigurationSection("ui")),
+            CommandsConfiguration.load(yaml.getConfigurationSection("commands")),
+            CrossServerChannelConfigs.fromSection(yaml.getConfigurationSection("cross-server")),
+            yaml.getBoolean("debug", false)
+        );
+    }
+
+    public record WaterSettings(List<WaterArea> specifiedWaters, WaterArea defaultWater) {
+        public WaterSettings {
+            specifiedWaters = List.copyOf(specifiedWaters);
+        }
+    }
+
+    public static WaterSettings loadWaterSettings(File dataFolder, Logger logger) {
         List<WaterArea> specified = new ArrayList<>();
         WaterArea defaultWater = null;
-        for (WaterArea wa : waterAreas) {
+        for (WaterArea wa : loadWatersFromDir(new File(dataFolder, "waters"), logger)) {
             if (wa.isDefault()) {
                 defaultWater = wa;
             } else if (wa.enabled()) {
@@ -148,21 +175,7 @@ public record FishingModuleConfiguration(
             defaultWater = createFallbackDefaultWater();
         }
 
-        return new FishingModuleConfiguration(
-            StorageConfiguration.load(yaml.getConfigurationSection("storage")),
-            SeasonConfiguration.load(yaml.getConfigurationSection("season"), ariaBridge),
-            FishingSettings.load(yaml.getConfigurationSection("fishing")),
-            Collections.unmodifiableList(fishes),
-            Collections.unmodifiableList(treasures),
-            Collections.unmodifiableList(baits),
-            Collections.unmodifiableList(rods),
-            Collections.unmodifiableList(specified),
-            defaultWater,
-            UiConfiguration.load(yaml.getConfigurationSection("ui")),
-            CommandsConfiguration.load(yaml.getConfigurationSection("commands")),
-            CrossServerChannelConfigs.fromSection(yaml.getConfigurationSection("cross-server")),
-            yaml.getBoolean("debug", false)
-        );
+        return new WaterSettings(specified, defaultWater);
     }
 
     // ─── 从 fishes/ 目录加载 ─────────────────────────────────
@@ -223,9 +236,9 @@ public record FishingModuleConfiguration(
         IconDefinition itemRef = parseIcon(section, "item", "minecraft:cod");
         int difficulty = section.getInt("difficulty", 30);
 
-        List<FishDefinition.BehaviorEntry> behaviors = parseBehaviors(section);
-        if (behaviors.isEmpty()) {
-            behaviors.add(new FishDefinition.BehaviorEntry(FishBehaviorType.SMOOTH, 1.0));
+        BehaviorPlan behaviorPlan = parseBehaviorPlan(section);
+        if (behaviorPlan.entries().isEmpty()) {
+            behaviorPlan = new BehaviorPlan(BehaviorMode.RANDOM, List.of(new BehaviorEntry(FishBehaviorType.SMOOTH, 1.0)));
         }
 
         FishDefinition.CurrencyReward currencyReward = null;
@@ -276,9 +289,9 @@ public record FishingModuleConfiguration(
                 ConfigurationSection stage = stagesSection.getConfigurationSection(stageKey);
                 if (stage != null) {
                     double threshold = stage.getDouble("threshold", 0.0);
-                    List<FishDefinition.BehaviorEntry> stageBehaviors = parseBehaviors(stage);
-                    if (!stageBehaviors.isEmpty()) {
-                        behaviorStages.add(new FishDefinition.BehaviorStage(threshold, stageBehaviors));
+                    BehaviorPlan stagePlan = parseBehaviorPlan(stage);
+                    if (!stagePlan.entries().isEmpty()) {
+                        behaviorStages.add(new FishDefinition.BehaviorStage(threshold, stagePlan));
                     }
                 }
             }
@@ -380,10 +393,16 @@ public record FishingModuleConfiguration(
             .id(id).displayName(displayName).rarity(rarity)
             .minSize(minSize).maxSize(maxSize).basePrice(basePrice).baseXp(baseXp)
             .seasons(seasons).weathers(weathers)
-            .timeRanges(timeRanges).itemRef(itemRef).difficulty(difficulty).behaviors(behaviors)
+            .timeRanges(timeRanges).itemRef(itemRef).difficulty(difficulty).behaviorPlan(behaviorPlan)
             .currencyReward(currencyReward)
             .progressDrainRate(progressDrainRate).progressGainRate(progressGainRate)
             .fleeParams(fleeParams).behaviorStages(behaviorStages)
+            .lineTension(section.getBoolean("line-tension.enabled"))
+            .sizeDifficulty(parseSizeDifficulty(section))
+            .stamina(parseStamina(section))
+            .personalities(parsePersonalities(section))
+            .hookSet(parseHookSet(section))
+            .activeTreasure(section.getBoolean("active-treasure.enabled"))
             .drops(drops).commandRewards(commandRewards).currencyRewards(currencyRewards)
             .minPlayerLevel(minPlayerLevel).maxPlayerLevel(maxPlayerLevel).requirePermission(requirePermission)
             .baitPreferences(baitPreferences).biomes(biomes).depthRange(depthRange)
@@ -392,24 +411,117 @@ public record FishingModuleConfiguration(
             .build();
     }
 
-    private static List<FishDefinition.BehaviorEntry> parseBehaviors(ConfigurationSection section) {
-        List<FishDefinition.BehaviorEntry> behaviors = new ArrayList<>();
-        ConfigurationSection bhSection = section.getConfigurationSection("behaviors");
-        if (bhSection != null) {
-            for (String bhKey : bhSection.getKeys(false)) {
-                ConfigurationSection bh = bhSection.getConfigurationSection(bhKey);
-                if (bh != null) {
-                    FishBehaviorType type;
-                    try {
-                        type = FishBehaviorType.valueOf(bh.getString("type", "SMOOTH").toUpperCase());
-                    } catch (IllegalArgumentException e) {
-                        type = FishBehaviorType.SMOOTH;
+    private static FishDefinition.Personalities parsePersonalities(ConfigurationSection fish) {
+        ConfigurationSection personalities = fish.getConfigurationSection("personalities");
+        if (personalities == null) return FishDefinition.Personalities.DEFAULT;
+        var variants = new ArrayList<FishDefinition.Personality>();
+        ConfigurationSection entries = personalities.getConfigurationSection("variants");
+        if (entries != null) {
+            for (String id : entries.getKeys(false)) {
+                ConfigurationSection variant = entries.getConfigurationSection(id);
+                if (variant == null) throw new IllegalArgumentException("无效性格 " + id);
+                variants.add(new FishDefinition.Personality(id, variant.getString("display-name", id),
+                    variant.getDouble("weight", 1), variant.getBoolean("first-miss-rush"),
+                    variant.getDouble("stamina-drain-multiplier", 1)));
+            }
+        }
+        return new FishDefinition.Personalities(personalities.getDouble("normal-weight", 1), variants);
+    }
+
+    private static @Nullable FishDefinition.HookSet parseHookSet(ConfigurationSection fish) {
+        ConfigurationSection hook = fish.getConfigurationSection("hook-set");
+        if (hook == null) return null;
+        var defaults = FishDefinition.HookSet.DEFAULT;
+        return new FishDefinition.HookSet(hook.getInt("tap-ticks", defaults.tapTicks()),
+            hook.getInt("window-ticks", defaults.windowTicks()), hook.getInt("late-ticks", defaults.lateTicks()),
+            hook.getInt("good-recovery-bonus", defaults.goodRecoveryBonus()),
+            hook.getInt("miss-recovery-penalty", defaults.missRecoveryPenalty()));
+    }
+
+    private static @Nullable FishDefinition.Stamina parseStamina(ConfigurationSection fish) {
+        ConfigurationSection stamina = fish.getConfigurationSection("stamina");
+        return stamina == null ? null : new FishDefinition.Stamina(stamina.getDouble("rush-drain-per-tick", 3),
+            stamina.getInt("exhausted-ticks", 20), stamina.getDouble("progress-gain-multiplier", 1.4));
+    }
+
+    private static FishDefinition.SizeDifficulty parseSizeDifficulty(ConfigurationSection fish) {
+        ConfigurationSection size = fish.getConfigurationSection("size-difficulty");
+        if (size == null) return FishDefinition.SizeDifficulty.NEUTRAL;
+        return new FishDefinition.SizeDifficulty(parseSizeModifiers(size, "small"), parseSizeModifiers(size, "large"));
+    }
+
+    private static FishDefinition.SizeModifiers parseSizeModifiers(ConfigurationSection size, String endpoint) {
+        ConfigurationSection section = size.getConfigurationSection(endpoint);
+        if (section == null) return FishDefinition.SizeModifiers.NEUTRAL;
+        return new FishDefinition.SizeModifiers(section.getDouble("rush-speed", 1),
+            section.getDouble("rush-duration", 1), section.getDouble("pull", 1));
+    }
+
+    private static BehaviorPlan parseBehaviorPlan(ConfigurationSection section) {
+        String configuredMode = section.getString("behavior-mode", "random");
+        BehaviorMode mode;
+        try {
+            mode = BehaviorMode.valueOf(configuredMode.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("behavior-mode 必须为 random 或 sequence，实际为 " + configuredMode);
+        }
+
+        List<BehaviorEntry> entries = new ArrayList<>();
+        List<?> list = section.getList("behaviors");
+        if (list != null) {
+            for (Object entry : list) {
+                if (entry instanceof Map<?, ?> fields) {
+                    entries.add(parseBehaviorEntry(fields, mode));
+                } else if (mode == BehaviorMode.SEQUENCE) {
+                    throw new IllegalArgumentException("sequence 的 behaviors 列表项需要包含 type 和 duration-ticks");
+                }
+            }
+        } else {
+            ConfigurationSection namedEntries = section.getConfigurationSection("behaviors");
+            if (namedEntries != null) {
+                for (String key : namedEntries.getKeys(false)) {
+                    ConfigurationSection entry = namedEntries.getConfigurationSection(key);
+                    if (entry != null) {
+                        entries.add(parseBehaviorEntry(entry.getValues(false), mode));
+                    } else if (mode == BehaviorMode.SEQUENCE) {
+                        throw new IllegalArgumentException("sequence 的 behaviors." + key + " 需要包含 type 和 duration-ticks");
                     }
-                    behaviors.add(new FishDefinition.BehaviorEntry(type, bh.getDouble("weight", 1.0)));
                 }
             }
         }
-        return behaviors;
+        return new BehaviorPlan(mode, entries);
+    }
+
+    private static BehaviorEntry parseBehaviorEntry(Map<?, ?> fields, BehaviorMode mode) {
+        Object configuredType = fields.get("type");
+        FishBehaviorType type = FishBehaviorType.SMOOTH;
+        if (configuredType != null) {
+            try {
+                type = FishBehaviorType.valueOf(configuredType.toString().trim().toUpperCase(Locale.ROOT));
+            } catch (IllegalArgumentException e) {
+                if (mode == BehaviorMode.SEQUENCE) {
+                    throw new IllegalArgumentException("未知动作 type " + configuredType);
+                }
+            }
+        } else if (mode == BehaviorMode.SEQUENCE) {
+            throw new IllegalArgumentException("sequence 的动作缺少 type");
+        }
+
+        int duration = actionTicks(fields, "duration-ticks");
+        double weight = fields.get("weight") instanceof Number value ? value.doubleValue() : 1.0;
+        return new BehaviorEntry(type, weight, duration, actionTicks(fields, "tell-ticks"),
+            actionTicks(fields, "recovery-ticks"));
+    }
+
+    private static int actionTicks(Map<?, ?> fields, String key) {
+        Object configuredDuration = fields.get(key);
+        if (configuredDuration != null) {
+            if (!(configuredDuration instanceof Number value) || value.intValue() < 0 || value.intValue() != value.doubleValue()) {
+                throw new IllegalArgumentException(key + " 必须为非负整数，实际为 " + configuredDuration);
+            }
+            return value.intValue();
+        }
+        return 0;
     }
 
     // ─── 从 treasures/ 目录加载 ────────────────────────────────
@@ -464,7 +576,8 @@ public record FishingModuleConfiguration(
                         section.getBoolean("default", false),
                         Collections.unmodifiableMap(modifiers),
                         section.getDouble("treasure-chance-boost", 0.0),
-                        section.getInt("max-durability-bonus", 0)
+                        section.getInt("max-durability-bonus", 0),
+                        parseBaitEffects(section)
                     ));
                 } catch (Exception e) {
                     logger.warning("加载饵料文件失败: " + p + " — " + e.getMessage());
@@ -477,6 +590,28 @@ public record FishingModuleConfiguration(
     }
 
     // ─── 从 rods/ 目录加载 ─────────────────────────────────
+
+    private static List<BaitDefinition.FightEffect> parseBaitEffects(ConfigurationSection section) {
+        List<BaitDefinition.FightEffect> effects = new ArrayList<>();
+        for (Map<?, ?> entry : section.getMapList("fight-effects")) {
+            if (!(entry.get("fish") instanceof String fish) || fish.isBlank()
+                    || !(entry.get("action") instanceof String action)) {
+                throw new IllegalArgumentException("fight-effects 需要 fish 和 action");
+            }
+            int extra = actionTicks(entry, "recovery-extra-ticks");
+            if (extra <= 0) throw new IllegalArgumentException("recovery-extra-ticks 必须为正整数");
+            effects.add(new BaitDefinition.FightEffect(fish, FishBehaviorType.valueOf(action.toUpperCase(Locale.ROOT)), extra));
+        }
+        return List.copyOf(effects);
+    }
+
+    private static double positiveRodFactor(ConfigurationSection section, String key) {
+        double value = section.getDouble(key, 1.0);
+        if (!Double.isFinite(value) || value < 0.25 || value > 4.0) {
+            throw new IllegalArgumentException(key + " 必须在 0.25 到 4.0 之间");
+        }
+        return value;
+    }
 
     private static List<RodDefinition> loadRodsFromDir(File dir, Logger logger) {
         List<RodDefinition> result = new ArrayList<>();
@@ -494,7 +629,9 @@ public record FishingModuleConfiguration(
                         section.getDouble("exp-multiplier", 1.0),
                         section.getInt("min-player-level", 0),
                         section.getInt("max-player-level", 0),
-                        ItemMatcherLoader.load(section.getConfigurationSection("match"), logger, "rods/" + p.getFileName())
+                        ItemMatcherLoader.load(section.getConfigurationSection("match"), logger, "rods/" + p.getFileName()),
+                        positiveRodFactor(section, "line-strength"),
+                        positiveRodFactor(section, "turn-response")
                     ));
                 } catch (Exception e) {
                     logger.warning("加载钓竿文件失败: " + p + " — " + e.getMessage());
@@ -606,7 +743,71 @@ public record FishingModuleConfiguration(
             Collections.unmodifiableList(fishes),
             Collections.unmodifiableList(treasures),
             difficultyFormula, minPlayerLevel, maxPlayerLevel,
-            Collections.unmodifiableMap(baitMultipliers), requirePermission);
+            Collections.unmodifiableMap(baitMultipliers), requirePermission, parseSchools(yaml, id, world),
+            parseObstacleZones(yaml), parseCurrentZones(yaml));
+    }
+
+    private static List<WaterArea.ObstacleZone> parseObstacleZones(ConfigurationSection water) {
+        ConfigurationSection zones = water.getConfigurationSection("obstacle-zones");
+        if (zones == null) return List.of();
+        List<WaterArea.ObstacleZone> result = new ArrayList<>();
+        for (String key : zones.getKeys(false)) {
+            ConfigurationSection zone = zones.getConfigurationSection(key);
+            if (zone == null) throw new IllegalArgumentException("无效障碍区 " + key);
+            result.add(new WaterArea.ObstacleZone(key, zone.getString("display-name", key), parseZoneVertices(zone),
+                zone.getDouble("track-min", Double.NaN), zone.getDouble("track-max", Double.NaN),
+                zone.getInt("warning-ticks", 4), zone.getDouble("tension-per-tick", Double.NaN)));
+        }
+        return List.copyOf(result);
+    }
+
+    private static List<WaterArea.CurrentZone> parseCurrentZones(ConfigurationSection water) {
+        ConfigurationSection zones = water.getConfigurationSection("current-zones");
+        if (zones == null) return List.of();
+        List<WaterArea.CurrentZone> result = new ArrayList<>();
+        for (String key : zones.getKeys(false)) {
+            ConfigurationSection zone = zones.getConfigurationSection(key);
+            if (zone == null) throw new IllegalArgumentException("无效水流区 " + key);
+            result.add(new WaterArea.CurrentZone(key, zone.getString("display-name", key), parseZoneVertices(zone),
+                zone.getDouble("track-min", 0), zone.getDouble("track-max", 1),
+                zone.getDouble("drift-per-tick", Double.NaN), zone.getInt("carry-ticks", 8)));
+        }
+        return List.copyOf(result);
+    }
+
+    private static List<PointInPolygon.Vertex> parseZoneVertices(ConfigurationSection zone) {
+        List<PointInPolygon.Vertex> vertices = new ArrayList<>();
+        for (String pos : zone.getStringList("pos")) {
+            String[] parts = pos.split(",", -1);
+            if (parts.length != 2) throw new IllegalArgumentException("无效区域坐标 " + zone.getCurrentPath() + " " + pos);
+            vertices.add(new PointInPolygon.Vertex(Integer.parseInt(parts[0].trim()), Integer.parseInt(parts[1].trim())));
+        }
+        return vertices;
+    }
+
+    private static List<WaterArea.School> parseSchools(ConfigurationSection section, String areaId, @Nullable String world) {
+        ConfigurationSection schools = section.getConfigurationSection("fish-schools");
+        if (schools == null) return List.of();
+        if (world == null) throw new IllegalArgumentException("fish-schools 需要指定 world");
+        List<WaterArea.School> result = new ArrayList<>();
+        for (String key : schools.getKeys(false)) {
+            ConfigurationSection school = schools.getConfigurationSection(key);
+            if (school == null) throw new IllegalArgumentException("无效鱼讯 " + key);
+            ConfigurationSection weightsSection = school.getConfigurationSection("weights");
+            if (weightsSection == null || weightsSection.getKeys(false).isEmpty()) {
+                throw new IllegalArgumentException("鱼讯需要 weights " + key);
+            }
+            Map<String, Double> weights = new LinkedHashMap<>();
+            for (String fish : weightsSection.getKeys(false)) {
+                weights.put(fish, weightsSection.getDouble(fish, Double.NaN));
+            }
+            result.add(new WaterArea.School(areaId + "/" + key,
+                school.getDouble("x", Double.NaN), school.getDouble("y", Double.NaN), school.getDouble("z", Double.NaN),
+                school.getDouble("radius", 8), school.getLong("active-ticks", 2400), school.getLong("interval-ticks", 6000),
+                school.getBoolean("rain-only"), weights, school.getDouble("shore.x", Double.NaN),
+                school.getDouble("shore.y", Double.NaN), school.getDouble("shore.z", Double.NaN)));
+        }
+        return List.copyOf(result);
     }
 
     /**
@@ -614,7 +815,7 @@ public record FishingModuleConfiguration(
      */
     private static WaterArea createFallbackDefaultWater() {
         return new WaterArea("default", "&7普通水域", null, true,
-            List.of(), List.of(), List.of(), "1.0", 0, 0, Map.of(), null);
+            List.of(), List.of(), List.of(), "1.0", 0, 0, Map.of(), null, List.of(), List.of(), List.of());
     }
 
     /**

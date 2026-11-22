@@ -3,6 +3,7 @@ package xuanmo.arcartxsuite.prop.command;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.function.Supplier;
 import org.bukkit.ChatColor;
 import org.bukkit.command.CommandSender;
@@ -95,8 +96,12 @@ public final class PropAdminCommand implements ModuleCommandHandler {
         sender.sendMessage(fullMsg("status.title"));
         sender.sendMessage(fullMsg("status.props", svc.propCount()));
         sender.sendMessage(fullMsg("status.keys", svc.registeredKeyCount()));
-        sender.sendMessage(fullMsg("status.ap", svc.attributePlusHooked()));
-        sender.sendMessage(fullMsg("status.mythiclib", svc.mythicLibHooked()));
+        Map<String, Boolean> providers = svc.attributeProviders();
+        sender.sendMessage(fullMsg("status.ap", providers.get("AttributePlus")));
+        sender.sendMessage(fullMsg("status.mythiclib", providers.get("MythicLib")));
+        sender.sendMessage(fullMsg("status.craneattribute", providers.get("CraneAttribute")));
+        sender.sendMessage(fullMsg("status.symphony", providers.get("Symphony")));
+        sender.sendMessage(fullMsg("status.mod-attributes", providers.get("Mod Attributes")));
     }
 
     private void handleSet(CommandSender sender, String[] args) {

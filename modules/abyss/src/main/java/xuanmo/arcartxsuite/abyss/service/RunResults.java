@@ -209,6 +209,17 @@ final class RunResults implements AbyssRunResultAccess {
         });
     }
 
+    @Override public CompletableFuture<Long> latestCommittedSequence() {
+        var reader = database;
+        if (reader == null || !service.running()) return CompletableFuture.failedFuture(new IllegalStateException("Abyss unavailable"));
+        return reader.submitDatabase(repository::latestResultSequence);
+    }
+
+    @Override public boolean usesSharedHostStorage() {
+        var current = repository;
+        return current != null && current.getDescriptor().isMysql() && !service.config().storage().hasOverride();
+    }
+
     static String encode(Result value) {
         var yaml = new YamlConfiguration();
         yaml.set("run", value.runId().toString());

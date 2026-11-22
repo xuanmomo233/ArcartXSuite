@@ -1,306 +1,152 @@
 package xuanmo.arcartxsuite.regions.storage;
 
-import java.io.File;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Statement;
+import java.io.IOException;
+import java.nio.channels.FileChannel;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.EnumMap;
-import java.util.HashSet;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
-import java.util.logging.Logger;
-import javax.sql.DataSource;
-import xuanmo.arcartxsuite.api.storage.AbstractModuleRepository;
-import xuanmo.arcartxsuite.api.storage.StorageDescriptor;
+import java.util.Objects;
+import java.util.concurrent.CompletionStage;
+import org.bukkit.configuration.InvalidConfigurationException;
+import org.bukkit.configuration.file.YamlConfiguration;
+import xuanmo.arcartxsuite.api.util.ActiveFileReplacement;
 import xuanmo.arcartxsuite.regions.model.Region;
-import xuanmo.arcartxsuite.regions.model.RegionFlag;
 
-/**
- * Regions 模块的数据访问仓储，负责区域、标志与成员的持久化 CRUD。
- * <p>
- * 继承 {@link AbstractModuleRepository}，支持 SQLite 与 MySQL 两种方言，
- * 通过表名前缀隔离多模块数据。关联模块：{@code regions}。
- */
-public final class RegionsRepository extends AbstractModuleRepository implements AutoCloseable {
+/** 区域与变更记录共用一次原子文件替换。所有运行时写入由同一后台线程执行。 */
+public final class RegionsRepository {
+    private static final int HISTORY_LIMIT = 100;
 
-    public RegionsRepository(DataSource dataSource, StorageDescriptor descriptor,
-                             File dataFolder, Logger logger) {
-        super("AXS-Regions", dataSource, descriptor, dataFolder, logger);
+    private final Path file;
+    private String diskText;
+    private boolean retired;
+    private CompletionStage<Void> previousWrite;
+    private volatile Snapshot snapshot = new Snapshot(List.of(), List.of(), 1);
+
+    public RegionsRepository(Path file) {
+        this.file = file.toAbsolutePath();
     }
 
-    /**
-     * 初始化数据库表结构，创建区域、标志与成员表。
-     *
-     * @param conn 数据库连接
-     * @throws SQLException 建表失败时抛出
-     */
-    @Override
-    protected void onInitialize(Connection conn) throws SQLException {
-        try (Statement stmt = conn.createStatement()) {
-            initTables(stmt);
+    public List<Region> loadAllRegions() throws IOException, InvalidConfigurationException {
+        var replacement = ActiveFileReplacement.current(file);
+        if (replacement == null) return loadFromDisk();
+        previousWrite = replacement.finished();
+        return read(replacement.previousText());
+    }
+
+    public CompletionStage<Void> previousWrite() { return previousWrite; }
+
+    public List<Region> loadFromDisk() throws IOException, InvalidConfigurationException {
+        return read(Files.notExists(file) ? null : Files.readString(file));
+    }
+
+    private List<Region> read(String text) throws InvalidConfigurationException {
+        if (text == null) {
+            diskText = null;
+            snapshot = new Snapshot(List.of(), List.of(), 1);
+            return snapshot.regions();
+        }
+        YamlConfiguration yaml = new YamlConfiguration();
+        yaml.loadFromString(text);
+        List<Region> regions = RegionSnapshots.read(yaml);
+        List<AuditEntry> history = new ArrayList<>();
+        for (Map<?, ?> entry : yaml.getMapList("history")) {
+            if (!(entry.get("id") instanceof Number id) || !(entry.get("time") instanceof Number time)
+                    || !(entry.get("actor") instanceof String actor) || !(entry.get("action") instanceof String action)) {
+                throw new IllegalArgumentException("regions.yml 中的变更记录格式无效。");
+            }
+            history.add(new AuditEntry(new AuditSummary(id.longValue(), time.longValue(), actor, action),
+                RegionSnapshots.readEntries(entry.get("before")), RegionSnapshots.readEntries(entry.get("after"))));
+        }
+        long lastId = history.stream().mapToLong(entry -> entry.summary().id()).max().orElse(0);
+        diskText = text;
+        snapshot = new Snapshot(List.copyOf(regions), List.copyOf(history),
+            Math.max(lastId + 1, yaml.getLong("next-history-id", 1)));
+        return snapshot.regions();
+    }
+
+    public void applyChanges(String actor, String action, List<Region> before, List<Region> after) throws IOException {
+        Snapshot current = snapshot;
+        List<Region> regions = new ArrayList<>(current.regions());
+        regions.removeAll(before);
+        regions.addAll(after);
+        regions.sort(Comparator.comparing(Region::key));
+        List<AuditEntry> history = new ArrayList<>();
+        if ("purge-player".equals(action) || "purge-all-players".equals(action)) {
+            history.addAll(current.history().stream()
+                .filter(entry -> !actor.equals("*") && !mentions(entry, actor)).toList());
+        } else {
+            history.add(new AuditEntry(
+                new AuditSummary(current.nextId(), System.currentTimeMillis(), actor, action), before, after));
+            history.addAll(current.history().stream().limit(HISTORY_LIMIT - 1L).toList());
+        }
+        try (var replacement = beginReplacement()) {
+            save(new Snapshot(List.copyOf(regions), List.copyOf(history), current.nextId() + 1));
         }
     }
 
-    /**
-     * 返回包含玩家 UUID 列的表名列表。
-     * <p>
-     * Regions 以区域 id+world 为主键，无玩家 UUID 列，故返回空列表。
-     *
-     * @return 空列表
-     */
-    @Override
-    protected List<String> playerDataTables() {
-        // Regions 以区域 id+world 为主键，无玩家 UUID 列
-        return List.of();
+    private synchronized ActiveFileReplacement beginReplacement() {
+        if (retired) throw new IllegalStateException("区域模块已停用，本次变更未保存。");
+        return ActiveFileReplacement.begin(file, diskText);
     }
 
-    /**
-     * 返回本仓储管理的全部表名列表（含前缀）。
-     *
-     * @return 表名列表
-     */
-    @Override
-    protected List<String> allTables() {
-        return List.of(tablePrefix() + "regions", tablePrefix() + "flags", tablePrefix() + "members");
+    public synchronized void retire() {
+        retired = true;
     }
 
-    private void initTables(Statement stmt) throws SQLException {
-        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tablePrefix() + """
-            regions (
-                id VARCHAR(64) NOT NULL,
-                world VARCHAR(128) NOT NULL,
-                min_x INT NOT NULL, min_y INT NOT NULL, min_z INT NOT NULL,
-                max_x INT NOT NULL, max_y INT NOT NULL, max_z INT NOT NULL,
-                priority INT NOT NULL DEFAULT 0,
-                parent_id VARCHAR(64),
-                PRIMARY KEY (id, world)
-            )
-            """);
-
-        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tablePrefix() + """
-            flags (
-                region_id VARCHAR(64) NOT NULL,
-                world VARCHAR(128) NOT NULL,
-                flag VARCHAR(32) NOT NULL,
-                state VARCHAR(8) NOT NULL,
-                data TEXT,
-                PRIMARY KEY (region_id, world, flag)
-            )
-            """);
-
-        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tablePrefix() + """
-            members (
-                region_id VARCHAR(64) NOT NULL,
-                world VARCHAR(128) NOT NULL,
-                uuid VARCHAR(36),
-                group_name VARCHAR(64),
-                role VARCHAR(8) NOT NULL
-            )
-            """);
-
-        if (isMysql()) {
-            try {
-                stmt.executeUpdate("CREATE INDEX idx_rg_members ON " + tablePrefix() + "members (region_id, world)");
-            } catch (SQLException ignored) {}
-        }
+    private static boolean mentions(AuditEntry entry, String uuid) {
+        var player = java.util.UUID.fromString(uuid);
+        return entry.summary().actor().contains(uuid)
+            || java.util.stream.Stream.concat(entry.before().stream(), entry.after().stream())
+                .anyMatch(region -> region.isMember(player));
     }
 
-    // ─── 区域 CRUD ───
-
-    /**
-     * 保存或更新单个区域，包含其标志与成员，在单事务中提交。
-     *
-     * @param region 待保存的区域
-     * @throws SQLException 写入失败时抛出，事务会自动回滚
-     */
-    public void saveRegion(Region region) throws SQLException {
-        try (Connection conn = getConnection()) {
-            conn.setAutoCommit(false);
-            try {
-                String sql = "REPLACE INTO " + tablePrefix() + "regions (id, world, min_x, min_y, min_z, max_x, max_y, max_z, priority, parent_id) "
-                    + "VALUES (?,?,?,?,?,?,?,?,?,?)";
-                try (PreparedStatement ps = conn.prepareStatement(sql)) {
-                    ps.setString(1, region.id());
-                    ps.setString(2, region.world());
-                    ps.setInt(3, region.minX());
-                    ps.setInt(4, region.minY());
-                    ps.setInt(5, region.minZ());
-                    ps.setInt(6, region.maxX());
-                    ps.setInt(7, region.maxY());
-                    ps.setInt(8, region.maxZ());
-                    ps.setInt(9, region.priority());
-                    ps.setString(10, region.parentId());
-                    ps.executeUpdate();
-                }
-                saveFlags(conn, region);
-                saveMembers(conn, region);
-                conn.commit();
-            } catch (SQLException exception) {
-                conn.rollback();
-                throw exception;
-            } finally {
-                conn.setAutoCommit(true);
+    private void save(Snapshot next) throws IOException {
+        YamlConfiguration yaml = RegionSnapshots.document(next.regions());
+        yaml.options().setHeader(List.of(
+            "区域和世界默认规则。修改后执行 /axs reload regions。",
+            "type: global 表示整个世界。flags 中 true 为允许，false 为禁止，省略表示继承。",
+            "greeting 和 farewell 可使用 {state: true, text: '自定义消息'}。",
+            "世界默认规则的 blocked-interactions 可按 Bukkit 材质名禁用方块交互。"));
+        yaml.set("next-history-id", next.nextId());
+        yaml.set("history", next.history().stream().map(entry -> Map.of(
+            "id", entry.summary().id(), "time", entry.summary().createdAt(),
+            "actor", entry.summary().actor(), "action", entry.summary().action(),
+            "before", entry.before().stream().map(RegionSnapshots::fields).toList(),
+            "after", entry.after().stream().map(RegionSnapshots::fields).toList())).toList());
+        String text = yaml.saveToString();
+        Files.createDirectories(file.getParent());
+        Path temp = Files.createTempFile(file.getParent(), "regions-", ".tmp");
+        try {
+            Files.writeString(temp, text);
+            try (var channel = FileChannel.open(temp, StandardOpenOption.WRITE)) {
+                channel.force(true);
             }
+            String currentText = Files.notExists(file) ? null : Files.readString(file);
+            if (!Objects.equals(diskText, currentText)) {
+                throw new IllegalStateException("regions.yml 已被手动修改，请先执行 /axs reload regions。");
+            }
+            Files.move(temp, file, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+        } finally {
+            Files.deleteIfExists(temp);
         }
+        diskText = text;
+        snapshot = next;
     }
 
-    /**
-     * 删除指定区域及其关联的标志与成员记录。
-     *
-     * @param id    区域 ID
-     * @param world 区域所在世界名
-     * @throws SQLException 删除失败时抛出
-     */
-    public void deleteRegion(String id, String world) throws SQLException {
-        try (Connection conn = getConnection()) {
-            try (PreparedStatement ps = conn.prepareStatement("DELETE FROM " + tablePrefix() + "regions WHERE id=? AND world=?")) {
-                ps.setString(1, id); ps.setString(2, world); ps.executeUpdate();
-            }
-            try (PreparedStatement ps = conn.prepareStatement("DELETE FROM " + tablePrefix() + "flags WHERE region_id=? AND world=?")) {
-                ps.setString(1, id); ps.setString(2, world); ps.executeUpdate();
-            }
-            try (PreparedStatement ps = conn.prepareStatement("DELETE FROM " + tablePrefix() + "members WHERE region_id=? AND world=?")) {
-                ps.setString(1, id); ps.setString(2, world); ps.executeUpdate();
-            }
-        }
+    public List<AuditSummary> history(int limit) {
+        return snapshot.history().stream().limit(limit).map(AuditEntry::summary).toList();
     }
 
-    /**
-     * 从数据库加载全部区域，并回填各自的标志与成员数据。
-     *
-     * @return 全部区域列表
-     * @throws SQLException 查询失败时抛出
-     */
-    public List<Region> loadAllRegions() throws SQLException {
-        List<Region> regions = new ArrayList<>();
-        try (Connection conn = getConnection();
-             Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery("SELECT * FROM " + tablePrefix() + "regions")) {
-            while (rs.next()) {
-                Region region = new Region(
-                    rs.getString("id"), rs.getString("world"),
-                    rs.getInt("min_x"), rs.getInt("min_y"), rs.getInt("min_z"),
-                    rs.getInt("max_x"), rs.getInt("max_y"), rs.getInt("max_z")
-                );
-                region.setPriority(rs.getInt("priority"));
-                region.setParentId(rs.getString("parent_id"));
-                regions.add(region);
-            }
-        }
-        // 加载标志
-        try (Connection conn = getConnection();
-             Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery("SELECT * FROM " + tablePrefix() + "flags")) {
-            while (rs.next()) {
-                String id = rs.getString("region_id");
-                String world = rs.getString("world");
-                String flagKey = rs.getString("flag");
-                String stateStr = rs.getString("state");
-                String data = rs.getString("data");
-                RegionFlag flag = RegionFlag.fromKey(flagKey);
-                if (flag == null) continue;
-                for (Region region : regions) {
-                    if (region.id().equals(id) && region.world().equals(world)) {
-                        region.setFlag(flag, RegionFlag.State.fromString(stateStr));
-                        if (data != null && !data.isBlank()) {
-                            region.setFlagData(flag, data);
-                        }
-                        break;
-                    }
-                }
-            }
-        }
-        // 加载成员
-        try (Connection conn = getConnection();
-             Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery("SELECT * FROM " + tablePrefix() + "members")) {
-            while (rs.next()) {
-                String id = rs.getString("region_id");
-                String world = rs.getString("world");
-                String uuid = rs.getString("uuid");
-                String group = rs.getString("group_name");
-                String role = rs.getString("role");
-                for (Region region : regions) {
-                    if (region.id().equals(id) && region.world().equals(world)) {
-                        if (uuid != null && !uuid.isBlank()) {
-                            UUID u = UUID.fromString(uuid);
-                            if ("owner".equalsIgnoreCase(role)) region.addOwner(u);
-                            else region.addMember(u);
-                        }
-                        if (group != null && !group.isBlank()) {
-                            if ("owner".equalsIgnoreCase(role)) region.addOwnerGroup(group);
-                            else region.addMemberGroup(group);
-                        }
-                        break;
-                    }
-                }
-            }
-        }
-        return regions;
+    public AuditEntry audit(long id) {
+        return snapshot.history().stream().filter(entry -> entry.summary().id() == id).findFirst().orElse(null);
     }
 
-    private void saveFlags(Connection conn, Region region) throws SQLException {
-        try (PreparedStatement del = conn.prepareStatement(
-            "DELETE FROM " + tablePrefix() + "flags WHERE region_id=? AND world=?")) {
-            del.setString(1, region.id()); del.setString(2, region.world()); del.executeUpdate();
-        }
-        if (region.flags().isEmpty()) return;
-        String sql = "INSERT INTO " + tablePrefix() + "flags (region_id, world, flag, state, data) VALUES (?,?,?,?,?)";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            for (Map.Entry<RegionFlag, RegionFlag.State> entry : region.flags().entrySet()) {
-                ps.setString(1, region.id());
-                ps.setString(2, region.world());
-                ps.setString(3, entry.getKey().configKey());
-                ps.setString(4, entry.getValue().name().toLowerCase());
-                ps.setString(5, region.getFlagData(entry.getKey()));
-                ps.addBatch();
-            }
-            ps.executeBatch();
-        }
-    }
-
-    private void saveMembers(Connection conn, Region region) throws SQLException {
-        try (PreparedStatement del = conn.prepareStatement(
-            "DELETE FROM " + tablePrefix() + "members WHERE region_id=? AND world=?")) {
-            del.setString(1, region.id()); del.setString(2, region.world()); del.executeUpdate();
-        }
-        String sql = "INSERT INTO " + tablePrefix() + "members (region_id, world, uuid, group_name, role) VALUES (?,?,?,?,?)";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            for (UUID uuid : region.owners()) {
-                ps.setString(1, region.id()); ps.setString(2, region.world());
-                ps.setString(3, uuid.toString()); ps.setString(4, null); ps.setString(5, "owner");
-                ps.addBatch();
-            }
-            for (UUID uuid : region.members()) {
-                ps.setString(1, region.id()); ps.setString(2, region.world());
-                ps.setString(3, uuid.toString()); ps.setString(4, null); ps.setString(5, "member");
-                ps.addBatch();
-            }
-            for (String group : region.ownerGroups()) {
-                ps.setString(1, region.id()); ps.setString(2, region.world());
-                ps.setString(3, null); ps.setString(4, group); ps.setString(5, "owner");
-                ps.addBatch();
-            }
-            for (String group : region.memberGroups()) {
-                ps.setString(1, region.id()); ps.setString(2, region.world());
-                ps.setString(3, null); ps.setString(4, group); ps.setString(5, "member");
-                ps.addBatch();
-            }
-            ps.executeBatch();
-        }
-    }
-
-    /**
-     * 关闭仓储，释放底层连接池等资源。
-     */
-    @Override
-    public void close() {
-        shutdown();
-    }
+    private record Snapshot(List<Region> regions, List<AuditEntry> history, long nextId) {}
+    public record AuditSummary(long id, long createdAt, String actor, String action) {}
+    public record AuditEntry(AuditSummary summary, List<Region> before, List<Region> after) {}
 }

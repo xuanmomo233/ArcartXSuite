@@ -101,6 +101,10 @@ final class RunOperations {
                     complete(request, result, previous.receipt(), null);
                     return;
                 }
+                if (!service.running()) {
+                    complete(request, result, null, new java.util.concurrent.CancellationException("Abyss stopped"));
+                    return;
+                }
                 var run = service.instances().getInstance(request.runId());
                 if (previous != null && (run == null || !run.hasPlayer(request.playerId()))) {
                     query(request.owner(), request.runId(), request.operationId())

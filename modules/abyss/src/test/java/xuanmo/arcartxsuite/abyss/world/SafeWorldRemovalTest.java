@@ -30,7 +30,12 @@ class SafeWorldRemovalTest {
     @SuppressWarnings("unchecked") Map<UUID,Object> map(String name)throws Exception {
         var field=AbyssWorldPool.class.getDeclaredField(name);field.setAccessible(true);return (Map<UUID,Object>)field.get(pool);
     }
-    @AfterEach void cleanup()throws Exception {pool.shutdown();serverField.set(null,old);}
+    @AfterEach void cleanup()throws Exception {
+        try {
+            pool.shutdown();
+            pool.stopped().toCompletableFuture().get(3, java.util.concurrent.TimeUnit.SECONDS);
+        } finally { serverField.set(null,old); }
+    }
     @Test void occupiedWorldIsNeverUnloadedOrDeleted()throws Exception {
         when(world.getPlayers()).thenReturn(List.of(mock(Player.class)));
         pool.releaseWorld(id);
@@ -46,6 +51,34 @@ class SafeWorldRemovalTest {
         when(server.unloadWorld(world,false)).thenReturn(true);pool.releasePreload();
         var template=mock(xuanmo.arcartxsuite.abyss.template.AbyssTemplate.class,withSettings().mockMaker(org.mockito.MockMakers.INLINE));when(template.id()).thenReturn("test");
         pool.acceptPrepared(template,new AbyssWorldPool.Prepared("axs_abyss_test",dir.toFile(),world,null),0L);
-        pool.shutdown();assertEquals(0,pool.preparedCount("test"));assertFalse(Files.exists(dir.resolve("level.dat")));
+        pool.shutdown();pool.stopped().toCompletableFuture().get(3, java.util.concurrent.TimeUnit.SECONDS);
+        assertEquals(0,pool.preparedCount("test"));assertFalse(Files.exists(dir.resolve("level.dat")));
+    }
+
+    @Test void stoppingDoesNotWaitForSnapshotAndStillDeletesAfterTheCopyFinishes() throws Exception {
+        var entered = new java.util.concurrent.CountDownLatch(1);
+        var release = new java.util.concurrent.CountDownLatch(1);
+        when(server.unloadWorld(world, false)).thenReturn(true);
+        var write = pool.runIo(id, () -> {
+            entered.countDown();
+            try {
+                assertTrue(release.await(4, java.util.concurrent.TimeUnit.SECONDS));
+                assertTrue(Files.exists(dir.resolve("level.dat")));
+            } catch (InterruptedException failure) {
+                Thread.currentThread().interrupt();
+                throw new AssertionError(failure);
+            }
+        });
+        try {
+            assertTrue(entered.await(2, java.util.concurrent.TimeUnit.SECONDS));
+            pool.stopAdmission();
+            pool.releaseWorld(id);
+            pool.shutdown();
+            assertFalse(pool.stopped().toCompletableFuture().isDone());
+            assertTrue(Files.exists(dir.resolve("level.dat")));
+        } finally { release.countDown(); }
+        write.get(3, java.util.concurrent.TimeUnit.SECONDS);
+        pool.stopped().toCompletableFuture().get(3, java.util.concurrent.TimeUnit.SECONDS);
+        assertFalse(Files.exists(dir.resolve("level.dat")));
     }
 }

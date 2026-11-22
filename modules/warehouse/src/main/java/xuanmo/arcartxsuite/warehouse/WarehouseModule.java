@@ -69,6 +69,7 @@ public final class WarehouseModule extends AbstractAXSModule implements ModuleCo
     private WarehouseService service;
     private xuanmo.arcartxsuite.warehouse.service.WarehouseCursorPanel cursorPanel;
     private JdbcWarehouseRepository repository;
+    private xuanmo.arcartxsuite.api.storage.ModuleStorage storageScope;
 
     @Override
     public ModuleDescriptor descriptor() {
@@ -134,7 +135,7 @@ public final class WarehouseModule extends AbstractAXSModule implements ModuleCo
     protected @NotNull PacketHandlerSpec createPacketHandlerSpec() {
         return PacketHandlerSpec.of(
             (player, packetId, data) ->
-                    service != null && service.handleClientPacket(player, packetId, data), 0, configuration == null ? null : configuration.ui().packetId(), "warehouse");
+                    service != null && service.handleClientPacket(player, packetId, data), 0, configuration.ui().packetId(), "warehouse");
     }
 
     /**
@@ -167,30 +168,31 @@ public final class WarehouseModule extends AbstractAXSModule implements ModuleCo
     }
 
     @Override
-    protected void startService() throws Exception {
-
-        WarehouseService.UiResourceExporter uiExporter = (resourcePath, relativeUiPath, overwrite) -> {
-            try {
-                return exportUiResource(resourcePath, relativeUiPath, overwrite, moduleClassLoader());
-            } catch (IOException ex) {
-                throw ex;
-            }
-        };
-
+    protected java.util.concurrent.CompletionStage<Void> prepareService() throws Exception {
         // 共享模式：使用本体统一数据源，模块只需提供 SQLite 文件名
         // 若模块配置了独立 storage 节（mode=mysql 等），则走自建模式（向后兼容）
         xuanmo.arcartxsuite.api.storage.StorageDescriptor whDesc;
         javax.sql.DataSource whDs;
         if (configuration.storage().hasOverride()) {
             whDesc = configuration.storage().toDescriptor();
-            whDs = storageManager.resolveModuleDataSource("warehouse", null, dataFolder, whDesc);
+            storageScope = storageManager.openModuleStorage("warehouse", null, dataFolder, whDesc);
+            whDs = storageScope.dataSource();
         } else {
             whDesc = storageManager.getDescriptor().withTablePrefix("");
-            whDs = storageManager.resolveModuleDataSource("warehouse",
+            storageScope = storageManager.openModuleStorage("warehouse",
                 configuration.storage().sqliteFileName(), dataFolder, null);
+            whDs = storageScope.dataSource();
         }
-        JdbcWarehouseRepository warehouseRepo = new JdbcWarehouseRepository(whDs, whDesc, dataFolder, logger);
-        repository = warehouseRepo;
+        repository = new JdbcWarehouseRepository(whDs, whDesc, dataFolder, logger);
+        return storageScope.initialize(repository::initialize);
+    }
+
+    @Override
+    protected void startService() throws Exception {
+        WarehouseService.UiResourceExporter uiExporter = (resourcePath, relativeUiPath, overwrite) ->
+            exportUiResource(resourcePath, relativeUiPath, overwrite, moduleClassLoader());
+        var warehouseRepo = repository;
+        var whDesc = warehouseRepo.getDescriptor();
         var noticeBridge=xuanmo.arcartxsuite.api.message.UiNoticeBridge.wrap(packetBridge,messages(),dataFolder);
         service = new WarehouseService(
             plugin, logger, noticeBridge, itemStackBridge, packetGuard, uiExporter, configuration,
@@ -211,18 +213,39 @@ public final class WarehouseModule extends AbstractAXSModule implements ModuleCo
 
         adminCommand = new WarehouseAdminCommand(() -> service, messages());
 
+        boolean sharedHostStorage = whDesc.isMysql() && !configuration.storage().hasOverride();
+        var rewardWarehouse = service;
+        registerCapability(xuanmo.arcartxsuite.api.capability.WarehouseRewardDepositable.class,
+            new xuanmo.arcartxsuite.api.capability.WarehouseRewardDepositable() {
+                @Override public boolean usesSharedHostStorage() { return sharedHostStorage; }
+                @Override public java.util.concurrent.CompletionStage<Result> depositReward(java.util.UUID request,
+                        java.util.UUID recipient, java.util.List<org.bukkit.inventory.ItemStack> items) {
+                    return rewardWarehouse.depositReward(request, recipient, items);
+                }
+            });
+
         registerCapability(WarehouseAutoDepositable.class, new WarehouseAutoDepositable() {
+            private final WarehouseService warehouse = service;
             @Override public DepositResult depositToPersonalWarehouse(org.bukkit.entity.Player player, org.bukkit.inventory.ItemStack stack) {
-                return service.depositToPersonalWarehouse(player, stack);
+                return warehouse.depositToPersonalWarehouse(player, stack);
             }
             @Override public boolean shouldNotifyAutoDeposit(org.bukkit.entity.Player player) {
-                return service.shouldNotifyAutoDeposit(player);
+                return warehouse.shouldNotifyAutoDeposit(player);
+            }
+            @Override public boolean depositFromGroundAsync(org.bukkit.entity.Player player, org.bukkit.entity.Item source,
+                org.bukkit.inventory.ItemStack stack, java.util.function.BooleanSupplier authorize,
+                java.util.function.Predicate<GroundDepositResult> completion) {
+                return warehouse.depositFromGroundAsync(player, source, stack, authorize, completion);
+            }
+            @Override public boolean isGroundDepositReserved(org.bukkit.entity.Item item) {
+                return warehouse.isGroundDepositReserved(item);
             }
         });
 
         // 个人仓库直接访问能力：扩展背包等模块经此读写同一套仓库存储
         registerCapability(xuanmo.arcartxsuite.api.capability.WarehouseAccess.class, service);
         materialService = new xuanmo.arcartxsuite.warehouse.service.WarehouseMaterials(service, plugin, dataFolder, whDesc.isMysql());
+        service.setMaterialTransfers(materialService);
         org.bukkit.Bukkit.getPluginManager().registerEvents(materialService, plugin);
         registerCapability(xuanmo.arcartxsuite.api.capability.WarehouseMaterialAccess.class, materialService);
         cursorPanel = new xuanmo.arcartxsuite.warehouse.service.WarehouseCursorPanel(service, noticeBridge, logger);
@@ -235,6 +258,7 @@ public final class WarehouseModule extends AbstractAXSModule implements ModuleCo
             new xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable() {
                 @Override public @NotNull String moduleId() { return "warehouse"; }
                 @Override public int purgePlayerData(@NotNull java.util.UUID playerUuid) {
+                    if (registeredService.isStopping()) return -1;
                     try {
                         int changed = warehouseRepo.deletePlayerData(playerUuid);
                         registeredService.invalidatePlayerData(playerUuid);
@@ -243,6 +267,7 @@ public final class WarehouseModule extends AbstractAXSModule implements ModuleCo
                     catch (Exception e) { logger.warning("Warehouse purge 失败: " + e.getMessage()); return -1; }
                 }
                 @Override public int purgeAllPlayerData() {
+                    if (registeredService.isStopping()) return -1;
                     try {
                         int changed = warehouseRepo.deleteAllPlayerData();
                         registeredService.invalidatePlayerData(null);
@@ -257,6 +282,11 @@ public final class WarehouseModule extends AbstractAXSModule implements ModuleCo
                 @Override public @NotNull String moduleId() { return "warehouse"; }
                 @Override public @NotNull xuanmo.arcartxsuite.api.storage.MigrationResult migrateDatabase(
                         @NotNull xuanmo.arcartxsuite.api.storage.StorageDescriptor target, boolean overwrite) {
+                    if (registeredService.isStopping()) {
+                        var result = new xuanmo.arcartxsuite.api.storage.MigrationResult(false, 0, 0);
+                        result.addError("Warehouse 正在停用");
+                        return result;
+                    }
                     return warehouseRepo.migrateData(target, overwrite);
                 }
                 @Override public @NotNull xuanmo.arcartxsuite.api.storage.StorageDescriptor currentDescriptor() {
@@ -276,25 +306,40 @@ public final class WarehouseModule extends AbstractAXSModule implements ModuleCo
      */
     @Override
     protected void stopService() {
-        if (materialService != null) {
-            org.bukkit.event.HandlerList.unregisterAll(materialService);
-            materialService.close();
-            materialService = null;
+        var materials = materialService;
+        var panel = cursorPanel;
+        var current = service;
+        var repo = repository;
+        var scope = storageScope;
+        materialService = null;
+        cursorPanel = null;
+        service = null;
+        repository = null;
+        storageScope = null;
+        try {
+            if (materials != null) {
+                org.bukkit.event.HandlerList.unregisterAll(materials);
+                materials.close();
+            }
+            if (panel != null) {
+                panel.close();
+                org.bukkit.event.HandlerList.unregisterAll(panel);
+            }
+        } finally {
+            try { if (current != null) current.shutdown(); }
+            finally {
+                var stopped = java.util.concurrent.CompletableFuture.allOf(
+                    materials == null ? java.util.concurrent.CompletableFuture.completedFuture(null) : materials.stopped().toCompletableFuture(),
+                    current == null ? java.util.concurrent.CompletableFuture.completedFuture(null) : current.databaseStopped().toCompletableFuture())
+                    .thenRun(() -> { if (repo != null) repo.close(); });
+                trackShutdown(stopped);
+                if (scope != null) {
+                    scope.retireAfter(stopped);
+                    trackShutdown(scope.retired());
+                }
+                configuration = null;
+            }
         }
-        if (cursorPanel != null) {
-            cursorPanel.close();
-            org.bukkit.event.HandlerList.unregisterAll(cursorPanel);
-            cursorPanel = null;
-        }
-        if (service != null) {
-            service.shutdown();
-            service = null;
-        }
-        if (repository != null) {
-            storageManager.closeModuleDataSource("warehouse");
-            repository = null;
-        }
-        configuration = null;
     }
 
     /**

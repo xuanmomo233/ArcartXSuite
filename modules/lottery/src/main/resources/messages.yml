@@ -2,6 +2,11 @@
 prefix: "&3◆ &6ArcartXSuite &7| &r"
 
 common:
+  draw-item-queued: "&e奖励已进入持久待发队列: &f{0}"
+  gacha-review: "&e奖池操作尚未完成，请联系管理员核对。操作编号：{0}"
+  gacha-prize-pending: "&e奖品尚待交付。重新上线或执行 /lottery claim 可继续。"
+  gacha-prize-resumed: "&a已继续处理上次操作的奖品。"
+  exchange-review: "&e兑换奖励的发放结果需要核对，请联系管理员。"
   insufficient-point: "&c积分不足：{0}"
   resource-cost-failed: "&c资源扣除失败：{0}"
   exchange-not-found: "&c兑换商品不存在。"
@@ -21,6 +26,9 @@ common:
   pending-claim-enqueued: "&e奖励已暂存，请使用 /lottery claim 领取。"
   pending-claim-available: "&e你有 {0} 个待领取奖励，请使用 /lottery claim。"
   pending-claim-claimed: "&a已领取 {0} 个待领取奖励。"
+  pending-claim-transferred: "&a已提交 {0} 件抽奖物品发放，请留意发放提示。"
+  pending-claim-remaining: "&e还有 {0} 条待处理奖励，可使用 /lottery claim 重试；持续未完成时请联系管理员。"
+  pending-claim-retry: "&e抽奖奖励交接暂未完成，请稍后使用 /lottery claim 重试。"
   mail-sent: "&a奖励已通过邮件发放: &f{0}"
   pending-saved: "&e背包已满，奖励已暂存，将在你下次上线时补发: &f{0}"
   error: "&c操作失败: {0}"
@@ -76,6 +84,13 @@ pull:
   fate-point: "&7命定值: &f{0}"
 
 admin:
+  gacha-review:
+    empty: "&7玩家 {0} 没有待处理的抽卡记录。"
+    entry: "&e玩家 {0} · 抽卡凭证 {1} · 奖池 {2} · 状态 {3}"
+    console-only: "&c请在服务器控制台处理抽卡凭证。"
+    resolve-scope: "&e确认原抽卡任务已停止并核对扣费、退款和发奖后再关闭凭证。该命令只记录核对结论并解锁后续抽卡。"
+    resolved: "&a已归档抽卡凭证 {0}。"
+    changed: "&e抽卡凭证 {0} 当前无法关闭，请重新读取其状态。"
   help:
     - "&6Lottery 管理"
     - "&7/axs lottery status &f- 查看奖池状态"
@@ -107,6 +122,8 @@ help:
   reset: "&7{0} reset <玩家> <奖池ID>&f - 重置玩家抽奖状态"
   give-points: "&7{0} give-points <玩家> <积分ID> <数量>&f - 发放积分"
   simulate: "&7{0} simulate <奖池ID> <次数>&f - 概率模拟"
+  gacha-review: "&7{0} gacha-review <在线玩家或UUID> [操作ID]&f - 查看扣费、发奖与关联的待领退料"
+  gacha-resolve: "&7{0} gacha-resolve <玩家UUID> <操作ID> <当前状态> <核对结论>&f - 归档凭证并解锁"
 
 # ── 占位符文本 ──────────────────────────────────────
 placeholder:

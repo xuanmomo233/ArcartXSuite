@@ -1,5 +1,6 @@
 package xuanmo.arcartxsuite.prop.config;
 
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.bukkit.configuration.ConfigurationSection;
@@ -19,7 +20,7 @@ public record PropKeyMappingConfiguration(
 ) {
 
     public PropKeyMappingConfiguration {
-        bindings = Map.copyOf(bindings);
+        bindings = Collections.unmodifiableMap(new LinkedHashMap<>(bindings));
     }
 
     /**
@@ -38,12 +39,19 @@ public record PropKeyMappingConfiguration(
                 if (child == null) {
                     continue;
                 }
+                PropKeyBindingDefinition.Mode mode;
+                try {
+                    mode = PropKeyBindingDefinition.Mode.parse(readString(child, "mode", "prop"));
+                } catch (IllegalArgumentException exception) {
+                    throw new IllegalArgumentException("key.yml 的 keys." + bindingId + ".mode: " + exception.getMessage(), exception);
+                }
                 bindings.put(
                     bindingId,
                     new PropKeyBindingDefinition(
                         bindingId,
                         readString(child, "defaultKey", "X"),
-                        readString(child, "slot", "Slot1")
+                        readString(child, "slot", "Slot1"),
+                        mode
                     )
                 );
             }

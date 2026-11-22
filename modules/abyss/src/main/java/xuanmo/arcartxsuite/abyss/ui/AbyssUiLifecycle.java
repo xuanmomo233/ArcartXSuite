@@ -14,6 +14,7 @@ final class AbyssUiLifecycle {
         boolean mountConfirmed;
         String initialHandler;
         Object initialPayload;
+        Object initialSnapshot;
         final Map<String, Update> queued = new LinkedHashMap<>();
         final Map<String, Update> latest = new LinkedHashMap<>();
         boolean retryScheduled;
@@ -36,6 +37,7 @@ final class AbyssUiLifecycle {
             foreground.put(id, ui);
         }
         View view = new View();
+        if (hud) view.initialSnapshot = payload;
         if (payload instanceof Map<?, ?> map) {
             Map<String, Object> initial = new LinkedHashMap<>();
             map.forEach((key, value) -> initial.put(String.valueOf(key), value));
@@ -87,8 +89,22 @@ final class AbyssUiLifecycle {
     }
 
     boolean send(Player player, String ui, String handler, Object payload) {
+        return send(player, ui, handler, payload, false);
+    }
+
+    boolean sendChanged(Player player, String ui, String handler, Object payload) {
+        return send(player, ui, handler, payload, true);
+    }
+
+    private boolean send(Player player, String ui, String handler, Object payload, boolean changedOnly) {
         View view = current(player, ui);
         if (view == null || bridge == null || !player.isOnline()) return false;
+        if (changedOnly) {
+            Update latest = view.latest.get(handler);
+            boolean unchanged = latest != null ? Objects.equals(latest.payload(), payload)
+                : handler.equals(view.initialHandler) && Objects.equals(view.initialSnapshot, payload);
+            if (unchanged) return true;
+        }
         Update update=new Update(handler,payload);
         view.latest.put(handler,update);view.queued.put(handler,update);
         return !view.ready || flush(player,ui,view);

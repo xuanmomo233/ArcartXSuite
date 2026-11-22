@@ -1,0 +1,87 @@
+# Suite 原版在线名单 HUD（简略版）。
+ui:
+  isHud: true
+  hide:
+    - player_list
+  defaultOpen: true
+  escClose: false
+  action:
+    load: |-
+      var.名单显示 = false
+      var.在线名单 = []
+    keyPress: |-
+      if (self.currentKeyPress() == "TAB") {
+        var.名单显示 = true
+        var.在线名单 = Player.getTabPlayers()
+      }
+    keyRelease: |-
+      if (self.currentKeyReleased() == "TAB") {
+        var.名单显示 = false
+      }
+
+tasks:
+  refresh-player-list:
+    type: loop
+    time: 250
+    cycle: 250
+    run: |-
+      if (var.名单显示 && !Screen.isOpen()) {
+        var.在线名单 = Player.getTabPlayers()
+      }
+
+controls:
+  自适应布局:
+    type: Adaptive
+    attribute:
+      point: ~top_center
+      width: 1920
+      height: 1080
+    children:
+      名单面板:
+        type: Texture
+        attribute:
+          point: ~top_center
+          y: 40
+          width: 44 + 250 * Math.max(1, Math.ceil(var.在线名单.size() / 16))
+          height: 63 + 29 * Math.min(16, var.在线名单.size())
+          normal: ~14,22,28,226
+          shape: ~round_rect
+          radius: 14
+          visible: var.名单显示 && !Screen.isOpen()
+        children:
+          标题:
+            type: Text
+            attribute:
+              x: 22
+              y: 15
+              fontSize: 28
+              texts: "'§#CFEAF0在线玩家  ' + var.在线名单.size().round(0)"
+          玩家名单:
+            type: RepeatGrid
+            attribute:
+              x: 22
+              y: 51
+              items: var.在线名单
+              key: ~uuid
+              flow: ~column
+              row: 16
+              maxSize: 80
+              spaceBetweenX: 4
+              spaceBetweenY: 3
+            children:
+              玩家行:
+                type: Texture
+                attribute:
+                  width: 246
+                  height: 26
+                  shape: ~round_rect
+                  radius: 6
+                  normal: ~39,57,65,224
+                children:
+                  名称:
+                    type: Text
+                    attribute:
+                      x: 8
+                      y: 2
+                      fontSize: 24
+                      texts: "(self.parent().item['spectator'] ? '§7' : '§f') + self.parent().item['displayName']"

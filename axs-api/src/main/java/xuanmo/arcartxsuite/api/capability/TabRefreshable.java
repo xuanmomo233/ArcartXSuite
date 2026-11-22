@@ -1,5 +1,6 @@
 package xuanmo.arcartxsuite.api.capability;
 
+import java.util.concurrent.CompletionStage;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -13,6 +14,12 @@ import org.jetbrains.annotations.Nullable;
  */
 @PublicCapability
 public interface TabRefreshable {
+
+    /**
+     * 在服务端线程申请隐身。结果在服务端线程完成；
+     * 代理确认后才可对玩家启用隐身。
+     */
+    @NotNull CompletionStage<Boolean> requestVanish(@NotNull Player player);
 
     /**
      * 请求刷新指定玩家可见的 Tab。

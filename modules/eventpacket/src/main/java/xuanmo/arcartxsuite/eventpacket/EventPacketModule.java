@@ -1,368 +1,296 @@
 package xuanmo.arcartxsuite.eventpacket;
 
 import java.io.File;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Set;
+import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
 import org.bukkit.command.CommandSender;
-import org.bukkit.configuration.file.YamlConfiguration;
-import org.jetbrains.annotations.Nullable;
+import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.AbstractAXSModule;
-import xuanmo.arcartxsuite.api.config.SyncPolicy;
-import xuanmo.arcartxsuite.api.config.ValidationRule;
-import xuanmo.arcartxsuite.api.config.ValueType;
-import xuanmo.arcartxsuite.api.ClientPacketHandler;
 import xuanmo.arcartxsuite.api.ModuleCommandHandler;
 import xuanmo.arcartxsuite.api.ModuleDescriptor;
-import xuanmo.arcartxsuite.eventpacket.command.EventPacketAdminCommand;
-import xuanmo.arcartxsuite.api.capability.ChatCardSendable;
-import xuanmo.arcartxsuite.api.capability.MailDispatchable;
-import xuanmo.arcartxsuite.api.capability.QQBotBroadcastable;
+import xuanmo.arcartxsuite.api.auth.AuthAccess;
+import xuanmo.arcartxsuite.api.capability.AbyssRunResultAccess;
+import xuanmo.arcartxsuite.api.capability.EventBusCapability;
 import xuanmo.arcartxsuite.api.capability.QuestGpsNavigable;
 import xuanmo.arcartxsuite.api.capability.SignalDispatchable;
 import xuanmo.arcartxsuite.api.capability.SubtitlePlayable;
-import xuanmo.arcartxsuite.api.capability.TitleGrantable;
-import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.config.ModuleConfig;
-import xuanmo.arcartxsuite.api.PacketHandlerSpec;
-import xuanmo.arcartxsuite.eventpacket.config.EventPacketContext;
-
-import xuanmo.arcartxsuite.eventpacket.config.PluginConfiguration;
-import xuanmo.arcartxsuite.eventpacket.listener.ChemdahEventBridge;
-import xuanmo.arcartxsuite.eventpacket.listener.PlayerEventPacketListener;
-import xuanmo.arcartxsuite.eventpacket.service.EntityCleanupService;
-import xuanmo.arcartxsuite.eventpacket.service.EventPacketDispatchService;
-import xuanmo.arcartxsuite.eventpacket.service.PapiWatcherService;
-import xuanmo.arcartxsuite.eventpacket.service.ScheduledCommandService;
-import xuanmo.arcartxsuite.eventpacket.storage.EventPacketRepository;
-import xuanmo.arcartxsuite.eventpacket.storage.JdbcEventPacketRepository;
+import xuanmo.arcartxsuite.api.config.SyncPolicy;
+import xuanmo.arcartxsuite.api.mail.AxsMailService;
+import xuanmo.arcartxsuite.api.scheduler.ScheduledTask;
+import xuanmo.arcartxsuite.api.scheduler.ModuleCallback;
+import xuanmo.arcartxsuite.api.storage.ModuleStorage;
 
 public final class EventPacketModule extends AbstractAXSModule implements ModuleCommandHandler {
-
-    private EventPacketAdminCommand adminCommand;
-
-    private PluginConfiguration configuration;
-    private EventPacketRepository repository;
-    private EventPacketDispatchService dispatchService;
-    private PapiWatcherService watcherService;
-    private PlayerEventPacketListener listener;
-    private EntityCleanupService cleanupService;
-    private ScheduledCommandService scheduledCommandService;
-    private ChemdahEventBridge chemdahBridge;
-    private xuanmo.arcartxsuite.eventpacket.service.FirstAdmissionInbox authInbox;
-    private xuanmo.arcartxsuite.api.capability.EventBusCapability authBus;
+    private final RealtimeRules realtime = new RealtimeRules();
+    private final Map<String, String> subscriptions = new HashMap<>();
+    private volatile RuleConfiguration configuration;
+    private EventBusCapability bus;
+    private DurableRules durable;
+    private ModuleStorage storageScope;
+    private ModuleCallback runtimeCalls;
+    private File configurationFile;
+    private ScheduledTask pollTask;
+    private List<ScheduledTask> timers = List.of();
     private String authSubscription;
-    private String serverAdmissionSubscription;
-    private xuanmo.arcartxsuite.api.auth.AuthConsumerStore authStore;
+    private String auctionSubscription;
+    private String resultSubscription;
+    private long actionFailures;
 
-    @Override
-    public ModuleDescriptor descriptor() {
-        return ModuleDescriptor.builder("eventpacket")
-            .name("EventPacket")
-            .version("2.0.0")
-            .mainClass(getClass().getName())
-            .build();
+    @Override public ModuleDescriptor descriptor() {
+        return ModuleDescriptor.builder("eventpacket").name("EventPacket").version("2.0.0")
+            .mainClass(getClass().getName()).build();
     }
 
-    @Override
-    protected @NotNull ModuleConfig configSpec() {
-        return ModuleConfig.builder()
-            .configFileName("ArcartXEventPacket.yml")
-            .messagesFileName("messages.yml")
-            .syncPolicy(SyncPolicy.builder()
-                    .dynamicSection("scheduled-commands")
-                .build())
-            .currentVersion(2)
-            .validations(List.of(
-                    // storage.shared 必须是布尔值
-                    ValidationRule.required("storage.shared", ValueType.BOOLEAN),
-                    // pool-size 范围 1-100（仅在 shared=false 时需要）
-                    ValidationRule.of("storage.pool-size", ValueType.INT)
-                        .withRange(1, 100)
-            ))
-            .build();
+    @Override protected @NotNull ModuleConfig configSpec() {
+        return ModuleConfig.builder().configFileName("ArcartXEventPacket.yml").currentVersion(3)
+            .syncPolicy(SyncPolicy.builder().dynamicSection("rules").build()).build();
     }
 
-    @Override
-    protected @NotNull PacketHandlerSpec createPacketHandlerSpec() {
-        return PacketHandlerSpec.of((player, packetId, data) -> {
-            if (dispatchService == null || configuration == null) {
-                return false;
+    @Override protected void loadConfiguration(@Nullable File file) throws Exception {
+        if (file == null) throw new IllegalStateException("EventPacket 配置缺失");
+        configurationFile = file;
+        configuration = RuleConfiguration.load(file);
+    }
+
+    @Override protected void startService() throws Exception {
+        bus = getCapability(EventBusCapability.class);
+        if (bus == null) throw new IllegalStateException("Suite EventBus 不可用");
+        runtimeCalls = new ModuleCallback(() -> {});
+        storageScope = storageManager.openModuleStorage("eventpacket", "eventpacket.db", dataFolder, null);
+        durable = new DurableRules(new RuleJournal(storageScope.dataSource(), storageManager.getDescriptor().isMysql()),
+            () -> getCapability(AbyssRunResultAccess.class), () -> getCapability(AxsMailService.class),
+            () -> configuration, logger);
+        var worker = durable;
+        var calls = runtimeCalls;
+        authSubscription = bus.subscribeConfirmed("eventpacket/admission-rules", RuleConfiguration.FIRST_ADMITTED,
+            event -> confirmed(calls, () -> acceptAdmission(worker, event)));
+        auctionSubscription = bus.subscribeConfirmed(EventBusCapability.EVENTPACKET_AUCTION_CONSUMER,
+            RuleConfiguration.AUCTION_PURCHASED,
+            event -> confirmed(calls, () -> acceptAuctionPurchase(worker, event)));
+        resultSubscription = bus.subscribe(AbyssRunResultAccess.RESULT_COMMITTED_TOPIC,
+            event -> calls.call(() -> { worker.abyssCommitted(); return null; }, null));
+        registerCapability(SignalDispatchable.class,
+            (name, player, fields) -> calls.call(() -> signal(name, player, fields), false));
+        install(configuration);
+        pollTask = scheduler.scheduleAtFixedRate(plugin, worker::pollIfDue, 1L, 20L);
+    }
+
+    @Override public boolean reloadsInPlace() {
+        return true;
+    }
+
+    @Override public java.util.concurrent.CompletionStage<Void> onReload() {
+        try {
+            if (!Bukkit.isPrimaryThread()) throw new IllegalStateException("EventPacket 重载必须在服务器线程执行");
+            install(RuleConfiguration.load(configurationFile));
+            durable.wake();
+            return java.util.concurrent.CompletableFuture.completedFuture(null);
+        } catch (Exception | LinkageError failure) {
+            return java.util.concurrent.CompletableFuture.failedFuture(failure);
+        }
+    }
+
+    private void install(RuleConfiguration replacement) {
+        var added = new HashMap<String, String>();
+        var newTimers = new ArrayList<ScheduledTask>();
+        var calls = runtimeCalls;
+        try {
+            for (String topic : replacement.topics().keySet()) {
+                if (topic.startsWith("axs.") && !subscriptions.containsKey(topic)) {
+                    added.put(topic, bus.subscribe(topic,
+                        event -> calls.call(() -> { receive(event); return null; }, null)));
+                }
             }
-            String configuredPacketId = configuration.clientPacketId();
-            if (configuredPacketId.isBlank() || !configuredPacketId.equalsIgnoreCase(packetId)) {
-                return false;
+            for (var timer : replacement.timers()) {
+                Runnable fire = () -> {
+                    if (configuration == replacement) {
+                        realtime.offer(RuleConfiguration.timerTopic(timer.id()), null, Map.of());
+                    }
+                };
+                newTimers.add(scheduler.scheduleCalendar(plugin, fire, timer.spec()));
             }
-            String presetId = data == null || data.isEmpty() ? "" : data.get(0);
-            if (presetId.isBlank()) {
-                return false;
-            }
-            List<String> args = data == null || data.size() <= 1 ? List.of() : data.subList(1, data.size());
-            return dispatchService.dispatchClientPacket(packetId, presetId, player, args);
-        }, 100, null, null);
-    }
-
-    @Override
-    protected void loadConfiguration(@Nullable File configFile) throws Exception {
-        if (configFile == null) {
-            throw new IllegalStateException("ArcartXEventPacket.yml 配置文件缺失");
+        } catch (RuntimeException | LinkageError failure) {
+            added.values().forEach(bus::unsubscribe);
+            newTimers.forEach(ScheduledTask::cancel);
+            throw failure;
         }
-        var yaml = YamlConfiguration.loadConfiguration(configFile);
-        String rulesDirRelative = yaml.getString("rules-directory", "rules");
-        File rulesDirectory = new File(dataFolder, rulesDirRelative);
-        ensureRuleDefaults(rulesDirRelative);
-        File presetsDir = new File(dataFolder, "packet-command-presets");
-        if (yaml.getBoolean("packet-command.enabled", true)) {
-            ensurePacketPresetDefaults(presetsDir);
-        }
-        configuration = PluginConfiguration.load(yaml, logger, presetsDir, rulesDirectory);
-    }
-
-    private void ensureRuleDefaults(String rulesRelative) {
-        File rulesDir = new File(dataFolder, rulesRelative);
-        if (!rulesDir.exists()) {
-            rulesDir.mkdirs();
-        }
-        File[] existing = rulesDir.listFiles((dir, name) -> name.endsWith(".yml") || name.endsWith(".yaml"));
-        if (existing != null && existing.length > 0) {
-            return;
-        }
-        File target = new File(rulesDir, "examples.yml");
-        if (!target.exists()) {
-            exportResource("rules/examples.yml", target, false);
-        }
-    }
-
-    private void ensurePacketPresetDefaults(File presetsDirectory) {
-        if (!presetsDirectory.exists() && !presetsDirectory.mkdirs()) {
-            logger.warning("EventPacket 客户端回包预设目录创建失败: " + presetsDirectory);
-            return;
-        }
-        File target = new File(presetsDirectory, "example.yml");
-        if (!target.exists()) {
-            exportResource("eventpacket/packet-command-presets/example.yml", target, false);
-        }
-    }
-
-    @Override
-    protected void startService() throws Exception {
-        xuanmo.arcartxsuite.api.auth.AuthConsumerStore.requireReady("eventpacket");
-
-        // 共享模式：使用本体统一数据源，模块只需提供表前缀
-        // 若模块配置了独立 storage 节（mode=mysql 等），则走自建模式（向后兼容）
-        JdbcEventPacketRepository jdbcRepo;
-        xuanmo.arcartxsuite.api.storage.StorageDescriptor epDesc;
-        javax.sql.DataSource epDs;
-        if (configuration.storage().hasOverride()) {
-            epDesc = configuration.storage().toDescriptor();
-            epDs = storageManager.resolveModuleDataSource("eventpacket", null, dataFolder, epDesc);
-        } else {
-            epDesc = storageManager.getDescriptor().withTablePrefix("");
-            epDs = storageManager.resolveModuleDataSource("eventpacket",
-                configuration.storage().sqliteFileName(), dataFolder, null);
-        }
-        authStore=xuanmo.arcartxsuite.api.auth.AuthConsumerStore.open("eventpacket",epDs);
-        jdbcRepo = new JdbcEventPacketRepository(authStore, epDesc, dataFolder, logger);
-        jdbcRepo.initialize();
-        repository = jdbcRepo;
-
-        dispatchService = new EventPacketDispatchService(
-            logger,
-            packetGuard,
-            packetBridge,
-            () -> configuration,
-            () -> getCapability(QuestGpsNavigable.class),
-            () -> getCapability(TitleGrantable.class),
-            () -> getCapability(SubtitlePlayable.class),
-            () -> getCapability(ChatCardSendable.class),
-            () -> getCapability(MailDispatchable.class),
-            () -> getCapability(QQBotBroadcastable.class),
-            () -> "",
-            () -> repository
-        );
-        authInbox=new xuanmo.arcartxsuite.eventpacket.service.FirstAdmissionInbox(plugin,repository,dispatchService,logger);
-        dispatchService.authInbox(authInbox);
-        authBus=getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class);
-        if(authBus==null) throw new IllegalStateException("Authentication event bus unavailable");
-        authSubscription=authBus.subscribeConfirmed("eventpacket/first-admission","axs.auth.profile_first_admitted",authInbox::accept);
-        var inbox = authInbox;
-        serverAdmissionSubscription = authBus.subscribe("axs.auth.profile_first_admitted", event -> {
-            if ("server".equals(event.payload().get("provider"))) {
-                inbox.accept(event).exceptionally(error -> {
-                    logger.log(java.util.logging.Level.WARNING, "保存服务器首次进入动作失败", error);
-                    return null;
-                });
-            }
+        configuration = replacement;
+        realtime.install(replacement, task -> scheduler.scheduleAtFixedRate(plugin, task, 1L, 1L), this::execute);
+        subscriptions.putAll(added);
+        subscriptions.entrySet().removeIf(entry -> {
+            if (replacement.topics().containsKey(entry.getKey())) return false;
+            bus.unsubscribe(entry.getValue());
+            return true;
         });
-
-        // 注入账号类型解析器，使规则可使用 {account_type} / {account_type_display} / {account_premium}
-        EventPacketContext.setAccountInfoResolver((uuidStr, name) -> {
-            UUID uuid = null;
-            if (uuidStr != null && !uuidStr.isBlank()) {
-                try {
-                    uuid = UUID.fromString(uuidStr);
-                } catch (IllegalArgumentException ignored) {
-                    // uuid 字符串非法时仅按玩家名解析
-                }
-            }
-            var identity = uuid == null ? null : xuanmo.arcartxsuite.api.auth.AuthAccess.snapshot(uuid);
-            return identity == null ? new String[]{"unknown","未知","false"}
-                : new String[]{identity.provider(),identity.provider(),Boolean.toString(identity.identityVerified())};
-        });
-
-        boolean placeholderApiAvailable = Bukkit.getPluginManager().isPluginEnabled("PlaceholderAPI");
-        boolean hasMobKillRules = configuration.rules().stream()
-            .anyMatch(rule -> rule.enabled()
-                && rule.trigger() == xuanmo.arcartxsuite.eventpacket.config.EventPacketTrigger.MOB_KILL_COUNT);
-        boolean hasScriptTriggers = configuration.rules().stream()
-            .anyMatch(rule -> rule.enabled() && rule.isScriptTrigger());
-        int papiPacketCount = configuration.papiPacketCount();
-        if (papiPacketCount > 0 && !placeholderApiAvailable) {
-            logger.warning(
-                "EventPacket 模块检测到 " + papiPacketCount
-                    + " 个 PAPI 触发配置，但当前未安装 PlaceholderAPI，这部分触发器不会生效。"
-            );
-        }
-        if ((papiPacketCount > 0 && placeholderApiAvailable) || hasMobKillRules || hasScriptTriggers) {
-            watcherService = new PapiWatcherService(
-                plugin, logger, dispatchService, configuration, packetBridge, repository,
-                placeholderResolver, scriptConditionEvaluator
-            );
-            watcherService.start();
-        }
-
-        registerCapability(SignalDispatchable.class, (signal, subject, variables) ->
-            dispatchService.dispatchSignal(signal, subject, variables));
-
-        adminCommand = new EventPacketAdminCommand(() -> dispatchService, () -> cleanupService, () -> configuration, messages());
-        listener = new PlayerEventPacketListener(dispatchService, watcherService);
-        Bukkit.getPluginManager().registerEvents(listener, plugin);
-
-        // 启动实体清理服务
-        cleanupService = new EntityCleanupService(
-            plugin, logger, configuration.entityCleanup());
-        cleanupService.start();
-
-        // 启动定时命令服务
-        scheduledCommandService = new ScheduledCommandService(
-            plugin, logger, configuration.scheduledCommands(), scheduler);
-        scheduledCommandService.start();
-
-        JdbcEventPacketRepository epRepo = (JdbcEventPacketRepository) repository;
-        registerCapability(xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable.class,
-            new xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable() {
-                @Override public @NotNull String moduleId() { return "eventpacket"; }
-                @Override public int purgePlayerData(@NotNull java.util.UUID playerUuid) {
-                    try { return epRepo.deletePlayerData(playerUuid); }
-                    catch (Exception e) { logger.warning("EventPacket purge 失败: " + e.getMessage()); return -1; }
-                }
-                @Override public int purgeAllPlayerData() {
-                    try { return epRepo.deleteAllPlayerData(); }
-                    catch (Exception e) { logger.warning("EventPacket purgeAll 失败: " + e.getMessage()); return -1; }
-                }
-            });
-
-        registerCapability(xuanmo.arcartxsuite.api.capability.DatabaseMigratable.class,
-            new xuanmo.arcartxsuite.api.capability.DatabaseMigratable() {
-                @Override public @NotNull String moduleId() { return "eventpacket"; }
-                @Override public @NotNull xuanmo.arcartxsuite.api.storage.MigrationResult migrateDatabase(
-                        @NotNull xuanmo.arcartxsuite.api.storage.StorageDescriptor target, boolean overwrite) {
-                    return epRepo.migrateData(target, overwrite);
-                }
-                @Override public @NotNull xuanmo.arcartxsuite.api.storage.StorageDescriptor currentDescriptor() {
-                    return epRepo.getDescriptor();
-                }
-            });
-
-        // 注册 Chemdah 事件桥接
-        boolean chemdahAvailable = Bukkit.getPluginManager().isPluginEnabled("Chemdah");
-        boolean hasChemdahRules = configuration.rules().stream()
-            .anyMatch(rule -> rule.enabled() && rule.trigger() != null && rule.trigger().chemdahTrigger());
-        if (chemdahAvailable && hasChemdahRules) {
-            try {
-                chemdahBridge = new ChemdahEventBridge(plugin, logger, dispatchService);
-                chemdahBridge.register();
-            } catch (Exception e) {
-                logger.warning("EventPacket Chemdah 桥接初始化失败: " + e.getMessage());
-                chemdahBridge = null;
-            }
-        } else if (hasChemdahRules && !chemdahAvailable) {
-            logger.warning(
-                "EventPacket 模块检测到 Chemdah 触发配置，但当前未安装 Chemdah，这部分触发器不会生效。"
-            );
-        }
-
-        logger.fine(
-            "EventPacket 模块已载入，rules=" + configuration.enabledRuleCount()
-                + "/" + configuration.rules().size()
-                + " | client-presets=" + configuration.clientPacketPresetCount()
-        );
+        timers.forEach(ScheduledTask::cancel);
+        timers = List.copyOf(newTimers);
     }
 
-    @Override
-    protected void stopService() {
-        if (authBus != null) {
-            if (authSubscription != null) authBus.unsubscribe(authSubscription);
-            if (serverAdmissionSubscription != null) authBus.unsubscribe(serverAdmissionSubscription);
+    private static CompletableFuture<Void> confirmed(ModuleCallback calls,
+            java.util.function.Supplier<CompletableFuture<Void>> operation) {
+        var result = calls.call(operation, null);
+        return result == null ? CompletableFuture.failedFuture(new IllegalStateException("EventPacket runtime retired")) : result;
+    }
+
+    private void receive(EventBusCapability.BusEvent event) {
+        var session = event.player() == null ? null : AuthAccess.snapshot(event.player().getUniqueId());
+        realtime.offer(event.topic(), session, event.typedPayload());
+    }
+
+    private boolean signal(String name, Player player, Map<String, String> fields) {
+        if (name == null || name.length() > 64) return false;
+        var session = player == null ? null : AuthAccess.snapshot(player.getUniqueId());
+        return realtime.offer(RuleConfiguration.SIGNAL_PREFIX + name, session, fields);
+    }
+
+    private CompletableFuture<Void> acceptAdmission(DurableRules worker, EventBusCapability.BusEvent event) {
+        var fields = event.payload();
+        try {
+            String id = fields.get("event_id");
+            UUID player = UUID.fromString(fields.getOrDefault("profile_id", ""));
+            if (id == null || id.isBlank() || id.length() > 256) throw new IllegalArgumentException("Invalid admission event");
+            if (event.player() != null && !event.player().getUniqueId().equals(player)) {
+                throw new IllegalArgumentException("Admission player mismatch");
+            }
+            return worker.admit(id, player, Map.copyOf(fields));
+        } catch (RuntimeException failure) {
+            return CompletableFuture.failedFuture(failure);
         }
-        serverAdmissionSubscription = null;
-        authSubscription=null; authBus=null;
-        if(authInbox!=null) { authInbox.close(); authInbox=null; }
-        EventPacketContext.setAccountInfoResolver(null);
-        if (chemdahBridge != null) {
-            chemdahBridge.unregister();
-            chemdahBridge = null;
+    }
+
+    private CompletableFuture<Void> acceptAuctionPurchase(DurableRules worker, EventBusCapability.BusEvent event) {
+        try {
+            var fields = event.payload();
+            String listing = fields.getOrDefault("listing_id", "");
+            String id = fields.get("event_id");
+            UUID buyer = UUID.fromString(fields.getOrDefault("buyer_uuid", ""));
+            if (!listing.matches("[1-9][0-9]{0,18}") || !("auction-expiry:" + listing).equals(id)
+                || (event.player() != null && !event.player().getUniqueId().equals(buyer))) {
+                throw new IllegalArgumentException("Invalid auction purchase event");
+            }
+            return worker.auctionPurchased(id, buyer, Map.copyOf(fields));
+        } catch (RuntimeException failure) {
+            return CompletableFuture.failedFuture(failure);
         }
-        if (scheduledCommandService != null) {
-            scheduledCommandService.shutdown();
-            scheduledCommandService = null;
+    }
+
+    private void execute(RealtimeRules.Execution execution) {
+        try {
+            var event = execution.event();
+            Player player = event.player() == null ? null : Bukkit.getPlayer(event.player());
+            if (event.player() != null && (player == null || !player.isOnline()
+                    || !event.sameSession(AuthAccess.snapshot(event.player())))) return;
+            var questGps = getCapability(QuestGpsNavigable.class);
+            if (player != null && questGps != null && questGps.eventRuleLocked(player, execution.rule().id())) return;
+            var action = execution.action();
+            String value = action.value().render(event.fields());
+            if (value.isBlank() || (player == null && !action.console())) return;
+            switch (action.kind()) {
+                case SUBTITLE -> {
+                    var subtitle = getCapability(SubtitlePlayable.class);
+                    if (subtitle == null || !subtitle.playGroup(player, value)) actionFailures++;
+                }
+                case QUEST_OFFER -> {
+                    if (questGps != null) questGps.offerQuest(player, value, action.openMenu());
+                    else actionFailures++;
+                }
+                case QUEST_TRACK -> {
+                    if (questGps != null) questGps.trackQuest(player, value);
+                    else actionFailures++;
+                }
+                case MESSAGE -> player.sendMessage(ChatColor.translateAlternateColorCodes('&', value));
+                case COMMAND -> {
+                    if (!Bukkit.dispatchCommand(action.console() ? Bukkit.getConsoleSender() : player, value)) actionFailures++;
+                }
+            }
+        } catch (RuntimeException | LinkageError failure) {
+            if (++actionFailures == 1 || actionFailures % 100 == 0) {
+                logger.warning("EventPacket 规则动作失败 · " + execution.rule().id() + " · " + failure.getMessage());
+            }
         }
-        if (cleanupService != null) {
-            cleanupService.shutdown();
-            cleanupService = null;
-        }
-        if (listener != null) {
-            org.bukkit.event.HandlerList.unregisterAll(listener);
-            listener = null;
-        }
-        if (watcherService != null) {
-            watcherService.shutdown();
-            watcherService = null;
-        }
-        if (dispatchService != null) {
-            dispatchService.shutdown();
-            dispatchService = null;
-        }
-        if (repository != null) {
-            repository.close();
-            repository = null;
-        }
+    }
+
+    @Override protected void stopService() {
+        var scope = storageScope;
+        var worker = durable;
+        var calls = runtimeCalls;
+        storageScope = null;
+        durable = null;
+        runtimeCalls = null;
+        if (calls != null) calls.close();
+        if (worker != null) worker.close();
         configuration = null;
-        if(authStore!=null) {
-            authStore.retire(()->storageManager.closeModuleDataSource("eventpacket"))
-                .whenComplete((ignored,error)->{ if(error!=null) logger.warning("EventPacket 数据源释放失败，请重启后重试"); });
-            authStore=null;
+        cleanup(realtime::stop);
+        timers.forEach(task -> cleanup(task::cancel));
+        timers = List.of();
+        if (pollTask != null) cleanup(pollTask::cancel);
+        pollTask = null;
+        if (bus != null) {
+            subscriptions.values().forEach(id -> cleanup(() -> bus.unsubscribe(id)));
+            if (authSubscription != null) cleanup(() -> bus.unsubscribe(authSubscription));
+            if (auctionSubscription != null) cleanup(() -> bus.unsubscribe(auctionSubscription));
+            if (resultSubscription != null) cleanup(() -> bus.unsubscribe(resultSubscription));
         }
+        subscriptions.clear();
+        authSubscription = null;
+        auctionSubscription = null;
+        resultSubscription = null;
+        var stopped = CompletableFuture.allOf(
+            worker == null ? CompletableFuture.completedFuture(null) : worker.stopped().toCompletableFuture(),
+            calls == null ? CompletableFuture.completedFuture(null) : calls.stopped().toCompletableFuture());
+        trackShutdown(stopped);
+        if (scope != null) { scope.retireAfter(stopped); trackShutdown(scope.retired()); }
     }
 
-    @Nullable
-    public EventPacketDispatchService getDispatchService() {
-        return dispatchService;
-    }
-
-    public PluginConfiguration getConfiguration() {
-        return configuration;
+    private void cleanup(Runnable operation) {
+        try { operation.run(); }
+        catch (RuntimeException | LinkageError failure) { logger.warning("EventPacket 清理失败: " + failure.getMessage()); }
     }
 
     @Override public String commandId() { return "eventpacket"; }
-    @Override public List<String> actions() { return adminCommand != null ? adminCommand.actions() : List.of("help", "status"); }
+
+    @Override public List<String> actions() { return List.of("status", "topics", "fire"); }
+
     @Override public boolean onCommand(@NotNull CommandSender sender, @NotNull String label, @NotNull String[] args) {
-        return adminCommand != null ? adminCommand.onCommand(sender, label, args) : false;
+        if (!sender.hasPermission("arcartxsuite.admin")) {
+            sender.sendMessage("没有 EventPacket 管理权限。");
+            return true;
+        }
+        if (args.length > 1 && args[1].equalsIgnoreCase("status")) {
+            sender.sendMessage("实时规则 " + realtime.statistics() + " · 动作失败 " + actionFailures
+                + " · 持久规则 " + durable.status());
+        } else if (args.length > 1 && args[1].equalsIgnoreCase("topics")) {
+            sender.sendMessage("实时主题 " + configuration.topics().keySet().stream().sorted().toList()
+                + " · 副本规则 " + configuration.abyss().stream().map(RuleConfiguration.MailRule::id).toList());
+        } else if (args.length >= 4 && args[1].equalsIgnoreCase("fire")) {
+            Player player = Bukkit.getPlayerExact(args[3]);
+            if (player == null) {
+                sender.sendMessage("目标玩家不在线。");
+                return true;
+            }
+            var fields = new LinkedHashMap<String, String>();
+            for (int i = 4; i < args.length; i++) {
+                String[] pair = args[i].split("=", 2);
+                if (pair.length == 2) fields.put(pair[0], pair[1]);
+            }
+            sender.sendMessage(signal(args[2], player, fields) ? "信号已入队。" : "信号未入队，检查规则、玩家准入或队列容量。");
+        } else {
+            sender.sendMessage("/axs eventpacket status | topics | fire <信号> <玩家> [key=value...]");
+        }
+        return true;
     }
+
     @Override public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull String[] args) {
-        return adminCommand != null ? adminCommand.onTabComplete(sender, args) : null;
+        return sender.hasPermission("arcartxsuite.admin") && args.length == 2 ? actions() : List.of();
     }
 }
-

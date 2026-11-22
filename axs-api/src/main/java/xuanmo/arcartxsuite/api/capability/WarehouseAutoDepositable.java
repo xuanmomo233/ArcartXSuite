@@ -1,5 +1,8 @@
 package xuanmo.arcartxsuite.api.capability;
 
+import java.util.function.BooleanSupplier;
+import java.util.function.Predicate;
+import org.bukkit.entity.Item;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.NotNull;
@@ -26,6 +29,21 @@ public interface WarehouseAutoDepositable {
 
     /** 自动入库成功后是否需要聊天提示；HUD 提示由 Pickup 的个人开关控制。 */
     default boolean shouldNotifyAutoDeposit(@NotNull Player player) { return true; }
+
+    /**
+     * Transfers up to the requested amount from a ground entity. The source stays reserved
+     * until its durable amount is known. Unstored items remain on that entity.
+     * Both callbacks run on the server thread. The authorization callback must not remove
+     * or modify the source. A false return leaves it available to ordinary pickup.
+     */
+    boolean depositFromGroundAsync(Player player, Item source, ItemStack requested,
+                                   BooleanSupplier authorize, Predicate<GroundDepositResult> completion);
+
+    /** Whether a ground entity is reserved by an unresolved transfer. */
+    boolean isGroundDepositReserved(Item item);
+
+    record GroundDepositResult(boolean sourceTaken, boolean review, long storedAmount, boolean notifyPlayer,
+                               String operationId) {}
 
     /**
      * 自动入库结果。

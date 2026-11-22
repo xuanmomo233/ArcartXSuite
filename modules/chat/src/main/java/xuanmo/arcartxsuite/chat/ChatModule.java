@@ -54,6 +54,9 @@ public final class ChatModule extends AbstractAXSModule implements ModuleCommand
     private ChatService service;
     private RedPacketService redPacketService;
     private JdbcChatRepository repository;
+    private java.util.concurrent.CompletableFuture<String> networkIdentity;
+    private xuanmo.arcartxsuite.api.storage.ModuleStorage storageScope;
+    private volatile xuanmo.arcartxsuite.chat.service.ChatReloadGate reloadGate;
     private String completionUiId;
 
     @Override
@@ -110,9 +113,33 @@ public final class ChatModule extends AbstractAXSModule implements ModuleCommand
     }
 
     @Override
-    protected void startService() throws Exception {
+    protected java.util.concurrent.CompletionStage<Void> prepareService() throws Exception {
+        // 共享模式：使用本体统一数据源，模块只需提供 SQLite 文件名
+        // 若模块配置了独立 storage 节（mode=mysql 等），则走自建模式（向后兼容）
+        xuanmo.arcartxsuite.api.storage.StorageDescriptor chatDesc;
+        javax.sql.DataSource chatDs;
+        if (configuration.storage().hasOverride()) {
+            chatDesc = configuration.storage().toDescriptor();
+            storageScope = storageManager.openModuleStorage("chat", null, dataFolder, chatDesc);
+            chatDs = storageScope.dataSource();
+        } else {
+            chatDesc = storageManager.getDescriptor().withTablePrefix("");
+            storageScope = storageManager.openModuleStorage("chat",
+                configuration.storage().sqliteFileName(), dataFolder, null);
+            chatDs = storageScope.dataSource();
+        }
+        JdbcChatRepository chatRepo = new JdbcChatRepository(chatDs, chatDesc, dataFolder, logger);
+        repository = chatRepo;
+        var identity = new java.util.concurrent.CompletableFuture<String>();
+        networkIdentity = identity;
+        return storageScope.initialize(() -> {
+            chatRepo.initialize();
+            identity.complete(chatRepo.networkId().orElse(null));
+        });
+    }
 
-        // 绑定 @补全 overlay UI
+    @Override
+    protected void startService() throws Exception {
         completionUiId = null;
         if (configuration.functions().mentionEnabled()) {
             UiBinding completionBinding = registerModuleUi(
@@ -123,21 +150,7 @@ public final class ChatModule extends AbstractAXSModule implements ModuleCommand
                 logger.fine("Chat @补全 UI 已注册: " + completionUiId);
             }
         }
-
-        // 共享模式：使用本体统一数据源，模块只需提供 SQLite 文件名
-        // 若模块配置了独立 storage 节（mode=mysql 等），则走自建模式（向后兼容）
-        xuanmo.arcartxsuite.api.storage.StorageDescriptor chatDesc;
-        javax.sql.DataSource chatDs;
-        if (configuration.storage().hasOverride()) {
-            chatDesc = configuration.storage().toDescriptor();
-            chatDs = storageManager.resolveModuleDataSource("chat", null, dataFolder, chatDesc);
-        } else {
-            chatDesc = storageManager.getDescriptor().withTablePrefix("");
-            chatDs = storageManager.resolveModuleDataSource("chat",
-                configuration.storage().sqliteFileName(), dataFolder, null);
-        }
-        JdbcChatRepository chatRepo = new JdbcChatRepository(chatDs, chatDesc, dataFolder, logger);
-        repository = chatRepo;
+        var chatRepo = repository;
         service = new ChatService(
             plugin, logger,
             () -> getCapability(TabRefreshable.class),
@@ -152,17 +165,25 @@ public final class ChatModule extends AbstractAXSModule implements ModuleCommand
             contentModerator
         );
         service.setEventBusProvider(() -> getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
-        // 注入 Tooltip 数据提供者，用于聊天物品预览时注入动态 tooltip Lore
-        service.setTooltipDataProvider(() -> getCapability(xuanmo.arcartxsuite.api.capability.TooltipDataCapable.class));
-        service.start();
+        service.setPartyProvider(() -> getCapability(xuanmo.arcartxsuite.api.capability.AbyssPartyAccess.class));
+        service.setRegionChatProvider(() -> getCapability(xuanmo.arcartxsuite.api.capability.RegionChatAccess.class));
+        service.setLinks(new xuanmo.arcartxsuite.chat.service.ChatLinks(service, packetBridge,
+            () -> getCapability(xuanmo.arcartxsuite.api.capability.MapNavigable.class),
+            () -> getCapability(xuanmo.arcartxsuite.api.capability.QuestGpsNavigable.class),
+            () -> getCapability(xuanmo.arcartxsuite.api.capability.AxsMarketService.class),
+            () -> getCapability(xuanmo.arcartxsuite.api.capability.AbyssQueryable.class),
+            () -> getCapability(xuanmo.arcartxsuite.api.capability.RegionQueryable.class)));
+        service.setReloadGate(reloadGate);
+        service.start(networkIdentity.getNow(null));
+        networkIdentity = null;
 
         // 红包服务：仅在共享 MySQL 存储下启用跨服领取
         ensureRedPacketPresetDefaults();
         redPacketService = new RedPacketService(
             plugin, logger, configuration, chatRepo, service,
-            packetBridge, currencyManager, itemRewardDispatcher, pendingRewardService,
+            packetBridge, currencyManager, pendingRewardService,
             itemSourceRegistry, vanillaItemNameBridge, messages(),
-            dataFolder, itemStackBridge, chatDesc.isMysql()
+            dataFolder, itemStackBridge, chatRepo.getDescriptor().isMysql()
         );
         service.setRedPacketService(redPacketService);
         redPacketService.start();
@@ -172,60 +193,46 @@ public final class ChatModule extends AbstractAXSModule implements ModuleCommand
         PacketBridgeAPI cardBridge = packetBridge;
         registerCapability(ChatCardSendable.class, (player, cardId, data) ->
             cardBridge.sendChatCard(player, cardId, data));
+        registerCapability(xuanmo.arcartxsuite.api.capability.ChatExternalRelay.class, service::receiveExternal);
+        registerCapability(xuanmo.arcartxsuite.api.capability.ChatModerationAccess.class, service::inspectModeration);
 
         // 注册 ChatMutable capability，供 Essentials 等模块委托禁言操作
         ChatService muteService = service;
         registerCapability(ChatMutable.class, new ChatMutable() {
             @Override
-            public @NotNull String mutePlayer(@NotNull String playerName, @Nullable java.time.Instant expiresAt, @Nullable String reason, @Nullable String mutedBy) {
-                return muteService.mutePlayer(playerName, expiresAt, reason, mutedBy).message();
+            public @NotNull java.util.concurrent.CompletionStage<String> mutePlayer(@NotNull String playerName, @Nullable java.time.Instant expiresAt, @Nullable String reason, @Nullable String mutedBy) {
+                return muteService.mutePlayer(playerName, expiresAt, reason, mutedBy).thenApply(xuanmo.arcartxsuite.chat.model.ChatOperationResult::message);
             }
 
             @Override
-            public @NotNull String unmutePlayer(@NotNull String playerName) {
-                return muteService.unmutePlayer(playerName).message();
+            public @NotNull java.util.concurrent.CompletionStage<String> unmutePlayer(@NotNull String playerName, @NotNull String operator) {
+                return muteService.unmutePlayer(playerName, operator).thenApply(xuanmo.arcartxsuite.chat.model.ChatOperationResult::message);
             }
 
             @Override
-            public boolean isMuted(@NotNull java.util.UUID playerUuid) {
-                var record = muteService.getCachedMute(playerUuid);
-                return record != null && record.active(java.time.Instant.now());
+            public @NotNull java.util.concurrent.CompletionStage<Boolean> isMuted(@NotNull java.util.UUID playerUuid) {
+                return muteService.queryMute(playerUuid);
             }
 
             @Override
-            public @NotNull java.util.List<MuteInfo> listMutes() {
-                java.util.List<MuteInfo> result = new java.util.ArrayList<>();
-                java.time.Instant now = java.time.Instant.now();
-                for (var entry : muteService.getAllCachedMutes().entrySet()) {
-                    var record = entry.getValue();
-                    if (record == null || !record.active(now)) continue;
-                    // 尝试从在线玩家获取名称
-                    String name = null;
-                    org.bukkit.entity.Player online = org.bukkit.Bukkit.getPlayer(entry.getKey());
-                    if (online != null) name = online.getName();
-                    result.add(new MuteInfo(
-                        entry.getKey(),
-                        name,
-                        record.mutedBy(),
-                        record.reason(),
-                        record.createdAt(),
-                        record.expiresAt()
-                    ));
-                }
-                return result;
+            public @NotNull java.util.concurrent.CompletionStage<java.util.List<MuteInfo>> listMutes(int limit, int offset) {
+                return muteService.activeMutes(limit, offset);
             }
         });
 
         ensureChatCardDefaults();
 
+        ChatService startedService = service;
         registerCapability(xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable.class,
             new xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable() {
                 @Override public @NotNull String moduleId() { return "chat"; }
                 @Override public int purgePlayerData(@NotNull java.util.UUID playerUuid) {
+                    if (startedService.isStopping()) return -1;
                     try { return chatRepo.deletePlayerData(playerUuid); }
                     catch (Exception e) { logger.warning("Chat purge 失败: " + e.getMessage()); return -1; }
                 }
                 @Override public int purgeAllPlayerData() {
+                    if (startedService.isStopping()) return -1;
                     try { return chatRepo.deleteAllPlayerData(); }
                     catch (Exception e) { logger.warning("Chat purgeAll 失败: " + e.getMessage()); return -1; }
                 }
@@ -236,6 +243,11 @@ public final class ChatModule extends AbstractAXSModule implements ModuleCommand
                 @Override public @NotNull String moduleId() { return "chat"; }
                 @Override public @NotNull xuanmo.arcartxsuite.api.storage.MigrationResult migrateDatabase(
                         @NotNull xuanmo.arcartxsuite.api.storage.StorageDescriptor target, boolean overwrite) {
+                    if (startedService.isStopping()) {
+                        var result = new xuanmo.arcartxsuite.api.storage.MigrationResult(false, 0, 0);
+                        result.addError("Chat 正在停用");
+                        return result;
+                    }
                     return chatRepo.migrateData(target, overwrite);
                 }
                 @Override public @NotNull xuanmo.arcartxsuite.api.storage.StorageDescriptor currentDescriptor() {
@@ -251,21 +263,61 @@ public final class ChatModule extends AbstractAXSModule implements ModuleCommand
     }
 
     @Override
+    public java.util.concurrent.CompletionStage<Void> onReload() {
+        String text = messages() == null ? "聊天正在重载，刚才的消息未发送，请稍后重试。"
+            : messages().get("prefix") + messages().get("result.reloading");
+        var gate = new xuanmo.arcartxsuite.chat.service.ChatReloadGate(plugin, text);
+        reloadGate = gate;
+        if (service != null) service.setReloadGate(gate);
+        try {
+            gate.start();
+            var result = super.onReload();
+            result.whenComplete((ignored, failure) -> {
+                gate.close();
+                if (reloadGate == gate) {
+                    reloadGate = null;
+                    if (service != null) service.setReloadGate(null);
+                }
+            });
+            return result.toCompletableFuture().copy();
+        } catch (RuntimeException | LinkageError failure) {
+            gate.close();
+            reloadGate = null;
+            return java.util.concurrent.CompletableFuture.failedFuture(failure);
+        }
+    }
+
+    @Override
     protected void stopService() {
-        if (redPacketService != null) {
-            redPacketService.shutdown();
-            redPacketService = null;
+        var current = service;
+        var rewards = redPacketService;
+        var repo = repository;
+        var scope = storageScope;
+        service = null;
+        redPacketService = null;
+        repository = null;
+        networkIdentity = null;
+        storageScope = null;
+        try {
+            if (rewards != null) rewards.shutdown();
+            if (current != null) current.shutdown();
+        } finally {
+            var workers = java.util.concurrent.CompletableFuture.allOf(
+                rewards == null ? java.util.concurrent.CompletableFuture.completedFuture(null) : rewards.databaseStopped().toCompletableFuture(),
+                current == null ? java.util.concurrent.CompletableFuture.completedFuture(null) : current.databaseStopped().toCompletableFuture());
+            var stopped = workers.thenCompose(ignored -> {
+                if (repo == null) return java.util.concurrent.CompletableFuture.<Void>completedFuture(null);
+                repo.close();
+                return repo.closed();
+            });
+            trackShutdown(stopped);
+            if (scope != null) {
+                scope.retireAfter(stopped);
+                trackShutdown(scope.retired());
+            }
+            completionUiId = null;
+            configuration = null;
         }
-        if (service != null) {
-            service.shutdown();
-            service = null;
-        }
-        if (repository != null) {
-            storageManager.closeModuleDataSource("chat");
-            repository = null;
-        }
-        completionUiId = null;
-        configuration = null;
     }
 
     @Override
@@ -327,7 +379,9 @@ public final class ChatModule extends AbstractAXSModule implements ModuleCommand
             "axs_chat_mention",
             "axs_chat_private",
             "axs_chat_system",
-            "axs_chat_redpacket"
+            "axs_chat_redpacket",
+            "axs_chat_link",
+            "axs_chat_party_invite"
         };
         for (String card : cards) {
             File target = new File(chatCardDir, card + ".yml");
@@ -362,6 +416,11 @@ public final class ChatModule extends AbstractAXSModule implements ModuleCommand
             channelsDir.mkdirs();
         }
         File[] existing = channelsDir.listFiles((dir, name) -> name.endsWith(".yml") || name.endsWith(".yaml"));
+        File party = new File(channelsDir, "Party.yml");
+        if (existing == null || java.util.Arrays.stream(existing).noneMatch(file ->
+                file.getName().equalsIgnoreCase("Party.yml") || file.getName().equalsIgnoreCase("Party.yaml"))) {
+            exportResource("chat/channels/Party.yml", party, false);
+        }
         if (existing != null && existing.length > 0) {
             return;
         }

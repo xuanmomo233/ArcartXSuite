@@ -1,11 +1,13 @@
 package xuanmo.arcartxsuite.menu.service;
 
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
 import xuanmo.arcartxsuite.api.icon.IconResolver;
 import xuanmo.arcartxsuite.menu.config.MenuButtonDefinition;
@@ -44,43 +46,67 @@ public final class MenuPacketFactory {
         MenuSession session,
         IconResolver iconResolver
     ) {
+        return buildPayload(packetId, player, definition, session,
+            new MenuPresentation(iconResolver == null ? (viewer, icon) -> "" : iconResolver::resolveItemJson),
+            orderedButtons(definition.pageAt(session.pageIndex()).buttons().values()),
+            orderedButtons(definition.footerButtons().values()));
+    }
+
+    static List<MenuButtonDefinition> orderedButtons(Collection<MenuButtonDefinition> buttons) {
+        return buttons.stream().sorted(BUTTON_ORDER).toList();
+    }
+
+    static Map<String, Object> buildPayload(
+        String packetId,
+        Player player,
+        MenuDefinition definition,
+        MenuSession session,
+        MenuPresentation presentation,
+        List<MenuButtonDefinition> orderedButtons,
+        List<MenuButtonDefinition> orderedFooters
+    ) {
+        return buildView(packetId, player, definition, session.pageIndex(), presentation, orderedButtons, orderedFooters).payload();
+    }
+
+    static MenuView buildView(
+        String packetId,
+        Player player,
+        MenuDefinition definition,
+        int pageIndex,
+        MenuPresentation presentation,
+        List<MenuButtonDefinition> orderedButtons,
+        List<MenuButtonDefinition> orderedFooters
+    ) {
         LinkedHashMap<String, Object> payload = new LinkedHashMap<>();
-        MenuPageDefinition page = definition.pageAt(session.pageIndex());
+        MenuPageDefinition page = definition.pageAt(pageIndex);
         payload.put("packetId", packetId);
         payload.put("menuId", definition.id());
         payload.put("layout", definition.layout().configKey());
         payload.put("title", MenuConditionEvaluator.applyPlaceholders(player, definition.title()));
         payload.put("pageId", page.id());
         payload.put("pageTitle", MenuConditionEvaluator.applyPlaceholders(player, page.title()));
-        payload.put("pageIndex", session.pageIndex());
+        payload.put("pageIndex", pageIndex);
         payload.put("pageCount", definition.pages().size());
         payload.put("columns", definition.columns());
-        payload.put("hasPrev", session.pageIndex() > 0);
-        payload.put("hasNext", session.pageIndex() + 1 < definition.pages().size());
+        payload.put("hasPrev", pageIndex > 0);
+        payload.put("hasNext", pageIndex + 1 < definition.pages().size());
 
-        List<MenuButtonDefinition> visibleButtons = collectVisibleButtons(player, definition, page);
-        int pageSize = definition.buttonsPerPage();
-        int fromIndex = 0;
-        int toIndex = Math.min(pageSize, visibleButtons.size());
-        List<MenuButtonDefinition> pageButtons = visibleButtons.subList(fromIndex, toIndex);
+        List<MenuButtonDefinition> pageButtons =
+            collectVisibleButtons(player, orderedButtons, definition.buttonsPerPage());
 
         LinkedHashMap<String, Object> buttonRows = new LinkedHashMap<>();
+        boolean iconsReady = true;
         for (int index = 0; index < pageButtons.size(); index++) {
             MenuButtonDefinition button = pageButtons.get(index);
-            buttonRows.put(rowKey(index), buttonRow(player, button, index, definition.columns(), iconResolver));
+            Map<String, Object> row = buttonRow(player, button, index, definition.columns(), presentation);
+            iconsReady &= iconReady(button, row);
+            buttonRows.put(rowKey(index), row);
         }
-        payload.put("buttonRows", buttonRows);
+        payload.put("buttonRows", Collections.unmodifiableMap(buttonRows));
         payload.put("buttonCount", pageButtons.size());
 
-        List<MenuButtonDefinition> visibleFooters = new ArrayList<>();
-        for (MenuButtonDefinition footer : definition.footerButtons().values()) {
-            if (!MenuConditionEvaluator.hasPermission(player, footer.permission())
-                || !MenuConditionEvaluator.passes(player, footer.viewConditions())) {
-                continue;
-            }
-            visibleFooters.add(footer);
-        }
-        visibleFooters.sort(BUTTON_ORDER);
+        List<MenuButtonDefinition> visibleFooters =
+            collectVisibleButtons(player, orderedFooters, orderedFooters.size());
 
         LinkedHashMap<String, Object> footerRows = new LinkedHashMap<>();
         int footerIndex = 0;
@@ -92,26 +118,38 @@ public final class MenuPacketFactory {
             row.put("order", footer.order());
             row.put("clientAction", footer.clientAction());
             row.put("enabled", enabled);
-            String footerItemJson = iconResolver == null ? "" : iconResolver.resolveItemJson(player, footer.icon());
+            String footerItemJson = presentation.icon(player, footer.icon());
             row.put("itemJson", footerItemJson);
             row.put("hasIcon", footerItemJson != null && !footerItemJson.isBlank());
-            addDetails(player, footer, row, enabled);
-            footerRows.put(rowKey(footerIndex++), row);
+            addDetails(player, footer, row, enabled, presentation);
+            iconsReady &= iconReady(footer, row);
+            footerRows.put(rowKey(footerIndex++), Collections.unmodifiableMap(row));
         }
-        payload.put("footerRows", footerRows);
+        payload.put("footerRows", Collections.unmodifiableMap(footerRows));
         payload.put("footerCount", footerRows.size());
         payload.put("maxButtonCount", definition.buttonsPerPage());
         payload.put("maxFooterCount", definition.footerButtons().size());
-        return payload;
+        return new MenuView(Collections.unmodifiableMap(payload), indexButtons(pageButtons), indexButtons(visibleFooters), iconsReady);
+    }
+
+    private static boolean iconReady(MenuButtonDefinition button, Map<String, Object> row) {
+        return button.icon() == null || !button.icon().hasIcon() || Boolean.TRUE.equals(row.get("hasIcon"));
+    }
+
+    private static Map<String, MenuButtonDefinition> indexButtons(List<MenuButtonDefinition> buttons) {
+        Map<String, MenuButtonDefinition> index = new HashMap<>();
+        for (MenuButtonDefinition button : buttons) index.put(button.id(), button);
+        return Map.copyOf(index);
     }
 
     private static List<MenuButtonDefinition> collectVisibleButtons(
         Player player,
-        MenuDefinition definition,
-        MenuPageDefinition page
+        List<MenuButtonDefinition> ordered,
+        int limit
     ) {
         List<MenuButtonDefinition> result = new ArrayList<>();
-        for (MenuButtonDefinition button : page.buttons().values()) {
+        for (MenuButtonDefinition button : ordered) {
+            if (result.size() >= limit) break;
             if (!MenuConditionEvaluator.hasPermission(player, button.permission())) {
                 continue;
             }
@@ -120,7 +158,6 @@ public final class MenuPacketFactory {
             }
             result.add(button);
         }
-        result.sort(BUTTON_ORDER);
         return result;
     }
 
@@ -129,7 +166,7 @@ public final class MenuPacketFactory {
         MenuButtonDefinition button,
         int index,
         int columns,
-        IconResolver iconResolver
+        MenuPresentation presentation
     ) {
         LinkedHashMap<String, Object> row = new LinkedHashMap<>();
         row.put("id", button.id());
@@ -138,14 +175,15 @@ public final class MenuPacketFactory {
         row.put("column", index % columns);
         row.put("row", index / columns);
         row.put("enabled", MenuConditionEvaluator.passes(player, button.useConditions()));
-        String itemJson = iconResolver == null ? "" : iconResolver.resolveItemJson(player, button.icon());
+        String itemJson = presentation.icon(player, button.icon());
         row.put("itemJson", itemJson);
         row.put("hasIcon", itemJson != null && !itemJson.isBlank());
-        addDetails(player, button, row, Boolean.TRUE.equals(row.get("enabled")));
-        return row;
+        addDetails(player, button, row, Boolean.TRUE.equals(row.get("enabled")), presentation);
+        return Collections.unmodifiableMap(row);
     }
 
-    private static void addDetails(Player player, MenuButtonDefinition button, Map<String, Object> row, boolean enabled) {
+    private static void addDetails(Player player, MenuButtonDefinition button, Map<String, Object> row, boolean enabled,
+                                   MenuPresentation presentation) {
         MenuButtonDefinition.Details details = button.details();
         row.put("summary", MenuConditionEvaluator.applyPlaceholders(player, details.summary()));
         row.put("category", MenuConditionEvaluator.applyPlaceholders(player, details.category()));
@@ -156,46 +194,17 @@ public final class MenuPacketFactory {
         row.put("actionHint", enabled
             ? MenuConditionEvaluator.applyPlaceholders(player, details.actionHint()) : "查看上方使用说明");
         LinkedHashMap<String, Object> lines = new LinkedHashMap<>();
-        appendLines(player, lines, details.description(), "&7");
+        presentation.appendLines(player, lines, details.description(), "&7");
         if (!details.requirements().isEmpty()) {
-            appendLines(player, lines, List.of("", "使用说明"), "&f");
-            appendLines(player, lines, details.requirements(), "&7");
+            presentation.appendLines(player, lines, List.of("", "使用说明"), "&f");
+            presentation.appendLines(player, lines, details.requirements(), "&7");
         }
         if (!enabled) {
             String reason = details.disabledReason().isBlank() ? button.denyMessage() : details.disabledReason();
-            appendLines(player, lines, List.of("", reason.isBlank() ? "当前未满足使用条件" : reason), "&c");
+            presentation.appendLines(player, lines, List.of("", reason.isBlank() ? "当前未满足使用条件" : reason), "&c");
         }
-        row.put("detailRows", lines);
+        row.put("detailRows", Collections.unmodifiableMap(lines));
         row.put("detailCount", lines.size());
-    }
-
-    private static void appendLines(Player player, Map<String, Object> rows, List<String> paragraphs, String color) {
-        for (String paragraph : paragraphs) {
-            String resolved = MenuConditionEvaluator.applyPlaceholders(player, paragraph);
-            for (String line : resolved.split("\\R", -1)) {
-                String text = ChatColor.translateAlternateColorCodes('&', color + line);
-                StringBuilder wrapped = new StringBuilder();
-                int width = 0;
-                for (int offset = 0; offset < text.length();) {
-                    int cp = text.codePointAt(offset);
-                    offset += Character.charCount(cp);
-                    if (cp == ChatColor.COLOR_CHAR && offset < text.length()) {
-                        wrapped.appendCodePoint(cp).append(text.charAt(offset++));
-                        continue;
-                    }
-                    int units = cp > 255 ? 2 : 1;
-                    if (width + units > 44) {
-                        String completed = wrapped.toString();
-                        rows.put(rowKey(rows.size()), Map.of("text", completed));
-                        wrapped = new StringBuilder(ChatColor.getLastColors(completed));
-                        width = 0;
-                    }
-                    wrapped.appendCodePoint(cp);
-                    width += units;
-                }
-                rows.put(rowKey(rows.size()), Map.of("text", wrapped.toString()));
-            }
-        }
     }
 
     /**
@@ -219,4 +228,7 @@ public final class MenuPacketFactory {
     public static String runtimeUiId(MenuLayoutType layout, String panelUiId, String escUiId) {
         return layout == MenuLayoutType.ESC ? escUiId : panelUiId;
     }
+
+    record MenuView(Map<String, Object> payload, Map<String, MenuButtonDefinition> buttons,
+                    Map<String, MenuButtonDefinition> footers, boolean iconsReady) {}
 }

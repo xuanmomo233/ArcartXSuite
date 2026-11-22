@@ -1,6 +1,8 @@
 package xuanmo.arcartxsuite.api.bridge;
 
 import java.util.Optional;
+import java.util.Set;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
@@ -46,6 +48,11 @@ public interface PropBridgeAPI {
     /** 解析玩家句柄 */
     @NotNull Optional<PropPlayerHandle> resolvePlayerHandle(@NotNull Player player);
 
+    /** 将选定的 AX 槽位注册为 MMOItems 饰品装备来源，返回注销操作。 */
+    default @Nullable Runnable registerMmoItemsAccessories(@NotNull Set<String> slotIds) {
+        return null;
+    }
+
     /** 读取物品标签 */
     @NotNull String getItemTag(@Nullable ItemStack itemStack, @NotNull String key);
 
@@ -60,4 +67,23 @@ public interface PropBridgeAPI {
 
     /** 从物品 PDC 读取持久化 prop id */
     @NotNull String getPersistentPropId(@Nullable ItemStack itemStack);
+
+    /** 准备单瓶原版药水的饮用完成动作。准备期间不会修改玩家或物品。 */
+    default @NotNull Optional<PotionDrink> preparePotionDrink(@NotNull Player player, @NotNull ItemStack item) {
+        return Optional.empty();
+    }
+
+    @FunctionalInterface
+    interface PotionDrink {
+        /** 执行原版饮用完成逻辑，返回容器或其余物品。 */
+        @Nullable ItemStack finish();
+    }
+
+    enum MmoClickResult { USED, REJECTED, UNSUPPORTED, UNAVAILABLE, SLOT_UPDATE_FAILED }
+
+    /** 从额外槽位执行支持的 MMOItems 右键动作。消耗品使用前扣除一件，按插件结果决定是否退回。 */
+    default @NotNull MmoClickResult useMmoItem(@NotNull Player player, @NotNull ItemStack item,
+                                              @NotNull BooleanSupplier takeOne, @NotNull Runnable refundOne) {
+        return MmoClickResult.UNAVAILABLE;
+    }
 }

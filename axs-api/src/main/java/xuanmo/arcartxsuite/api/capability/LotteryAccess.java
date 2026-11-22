@@ -3,6 +3,7 @@ package xuanmo.arcartxsuite.api.capability;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletionStage;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -11,7 +12,8 @@ import org.jetbrains.annotations.Nullable;
  * 抽奖公开能力接口（公开 capability）。
  * <p>
  * 由 Lottery 模块实现，供外部插件查询/调整抽奖积分、
- * 执行兑换与开箱。所有方法请在 Bukkit 主线程调用。
+ * 执行兑换与开箱。兑换和开箱由 Bukkit 主线程提交，数据库工作在后台完成。
+ * 结果可能在后台线程完成，调用方不得在主线程阻塞等待。
  * <p>
  * 外部插件经 {@code AxsCapabilities.get(LotteryAccess.class)} 获取。
  */
@@ -19,33 +21,33 @@ import org.jetbrains.annotations.Nullable;
 public interface LotteryAccess {
 
     /** 查询玩家指定积分余额。 */
-    long getPoint(@NotNull UUID playerUuid, @NotNull String pointId);
+    @NotNull CompletionStage<Long> getPoint(@NotNull UUID playerUuid, @NotNull String pointId);
 
     /** 查询玩家全部积分余额（pointId -> 数量）。 */
-    @NotNull Map<String, Long> getPoints(@NotNull UUID playerUuid);
+    @NotNull CompletionStage<Map<String, Long>> getPoints(@NotNull UUID playerUuid);
 
     /**
      * 为玩家增加抽奖积分。
      *
      * @return 是否成功
      */
-    boolean givePoints(@NotNull UUID playerUuid, @NotNull String pointId, long amount);
+    @NotNull CompletionStage<Boolean> givePoints(@NotNull UUID playerUuid, @NotNull String pointId, long amount);
 
     /**
      * 为玩家执行一次兑换商店兑换。
      *
      * @return 是否成功
      */
-    boolean exchange(@NotNull Player player, @NotNull String itemId);
+    @NotNull CompletionStage<Boolean> exchange(@NotNull Player player, @NotNull String itemId);
 
     /**
-     * 为玩家批量开启 CASE 奖池（开箱动画照常播放）。
+     * 为玩家批量开启 CASE 奖池。界面会话由模块的客户端入口管理。
      *
      * @param poolId 奖池 id
-     * @param count  开启次数
+     * @param count  开启次数（1–10）
      * @return 每次开启的抽取结果
      */
-    @NotNull List<CaseDrawResult> openCase(@NotNull Player player, @NotNull String poolId, int count);
+    @NotNull CompletionStage<List<CaseDrawResult>> openCase(@NotNull Player player, @NotNull String poolId, int count);
 
     /**
      * CASE 单次开启结果视图。

@@ -2,6 +2,7 @@ package xuanmo.arcartxsuite.conversation.service;
 
 import ink.ptms.adyeshach.core.entity.EntityInstance;
 import ink.ptms.chemdah.api.ChemdahAPI;
+import ink.ptms.chemdah.api.event.collect.ConversationEvents;
 import ink.ptms.chemdah.api.event.collect.PluginReloadEvent;
 import ink.ptms.chemdah.core.conversation.Conversation;
 import ink.ptms.chemdah.core.conversation.Session;
@@ -11,15 +12,18 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
@@ -34,7 +38,9 @@ import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.plugin.java.JavaPlugin;
 import xuanmo.arcartxsuite.api.bridge.AdyeshachNpcBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.AdyeshachNearbyNpc;
+import xuanmo.arcartxsuite.api.bridge.AdyeshachNpcScanBridge;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
+import xuanmo.arcartxsuite.api.auth.AuthAccess;
 import xuanmo.arcartxsuite.conversation.config.ConversationModuleConfiguration;
 import xuanmo.arcartxsuite.conversation.config.NpcAppearanceEntry;
 import xuanmo.arcartxsuite.conversation.theme.ArcartXConversationTheme;
@@ -52,6 +58,7 @@ public final class ConversationService implements Listener {
     private static final DateTimeFormatter DEBUG_TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm:ss");
     private static final String NPC_SOURCE = "adyeshach";
     private static final String HANDLER_SYNC = "sync";
+    private static final String HANDLER_DISTANCES = "distances";
     private static final String HANDLER_CLOSE = "close";
     private static final String ACTION_SELECT_NPC = "select_npc";
     private static final String ACTION_CONFIRM_NPC = "confirm_npc";
@@ -62,6 +69,7 @@ public final class ConversationService implements Listener {
     private static final String TARGET_DIALOG = "dialog";
     private static final String TARGET_SELECTOR = "selector";
     private static final int SELECTOR_VISIBLE_ROWS = 5;
+    private static final long CONVERSATION_INDEX_REFRESH = TimeUnit.SECONDS.toNanos(5);
     private static final int NPC_APPEARANCE_MAX_ATTEMPTS = 30;
     private static final long NPC_APPEARANCE_RETRY_INTERVAL_TICKS = 10L;
 
@@ -75,8 +83,13 @@ public final class ConversationService implements Listener {
     private final ArcartXConversationTheme theme;
     private final AdyeshachNpcBridgeAPI npcBridge;
     private final ChemdahAxRenderer dialogRenderer;
+    private final NpcScanCycle<Player> npcScanCycle;
     private final ConcurrentMap<UUID, SelectorState> selectorStates = new ConcurrentHashMap<>();
     private final Set<UUID> selectorOpenedPlayers = ConcurrentHashMap.newKeySet();
+    private final AtomicLong conversationRevision = new AtomicLong();
+    private DisplayConversations displayConversations = new DisplayConversations(new NpcConversationIndex(List.of()),
+        List.of(), -1, -1, 0);
+    private DisplayConversations scanConversations = displayConversations;
 
     private volatile long generation = GENERATION_SEQUENCE.incrementAndGet();
     private volatile DebugSnapshot latestDebugSnapshot = DebugSnapshot.empty();
@@ -108,6 +121,7 @@ public final class ConversationService implements Listener {
         this.logger = logger;
         this.packetGuard = packetGuard;
         this.configuration = configuration;
+        this.npcScanCycle = new NpcScanCycle<>(configuration.interaction().scanPeriodTicks());
         this.bridge = bridge;
         this.dialogUiIds = dialogUiIds;
         this.selectorUiIds = selectorUiIds;
@@ -133,10 +147,7 @@ public final class ConversationService implements Listener {
         dialogRenderer.clear();
         selectorStates.clear();
         advanceGeneration();
-        Object existing = ChemdahAPI.INSTANCE.getConversationTheme().get(configuration.themeName());
-        if (existing == theme) {
-            ChemdahAPI.INSTANCE.getConversationTheme().remove(configuration.themeName());
-        }
+        ChemdahAPI.INSTANCE.getConversationTheme().remove(configuration.themeName(), theme);
     }
 
     public void display(Session session, List<String> lines, boolean canReply) {
@@ -159,6 +170,11 @@ public final class ConversationService implements Listener {
         boolean tokenValid = token.equals(currentToken());
         logInboundAction(player, action, token, targetId, tokenValid);
         if (!tokenValid) {
+            return true;
+        }
+        if ((ACTION_SELECT_NPC.equals(action) || ACTION_CONFIRM_NPC.equals(action)
+            || ACTION_NAVIGATE_NPC.equals(action) || (ACTION_CANCEL.equals(action) && TARGET_SELECTOR.equalsIgnoreCase(targetId)))
+            && !isSelectorOpen(player)) {
             return true;
         }
 
@@ -187,6 +203,14 @@ public final class ConversationService implements Listener {
             return true;
         }
         return true;
+    }
+
+    private boolean isSelectorOpen(Player player) {
+        if (!selectorOpenedPlayers.contains(player.getUniqueId())) return false;
+        for (String id : selectorUiIds) {
+            if (bridge.isUiOpen(player, id)) return true;
+        }
+        return false;
     }
 
     public String themeName() {
@@ -316,7 +340,10 @@ public final class ConversationService implements Listener {
             return false;
         }
         try {
-            return hasConversationForNpcId(npcId, new HashMap<>());
+            for (var conversation : ChemdahAPI.INSTANCE.getConversation().values()) {
+                if (conversation != null && conversation.isNPC(NPC_SOURCE, npcId)) return true;
+            }
+            return false;
         } catch (RuntimeException exception) {
             return false;
         }
@@ -339,7 +366,7 @@ public final class ConversationService implements Listener {
      * 仅处理选择器状态（对话 UI 为非 HUD 模式，不接收全局按键事件）。
      */
     public boolean handleConfirmKeyFromHost(Player player) {
-        if (player == null || !player.isOnline()) {
+        if (player == null || !player.isOnline() || !AuthAccess.admitted(player.getUniqueId())) {
             return false;
         }
         // 选择器有候选 → 打开对话并消费
@@ -356,7 +383,7 @@ public final class ConversationService implements Listener {
      * 仅处理选择器状态（对话 UI 为非 HUD 模式，不接收全局按键事件）。
      */
     public boolean handleNavigationKeyFromHost(Player player, int delta) {
-        if (player == null || !player.isOnline()) {
+        if (player == null || !player.isOnline() || !AuthAccess.admitted(player.getUniqueId())) {
             return false;
         }
         // 选择器中导航 → 消费
@@ -386,8 +413,20 @@ public final class ConversationService implements Listener {
 
     @EventHandler
     public void onChemdahConversationReload(PluginReloadEvent.Conversation event) {
-        resetRuntimeState("chemdah-reload");
-        registerTheme();
+        conversationRevision.incrementAndGet();
+        long previousGeneration = generation;
+        Runnable reload = () -> {
+            if (generation != previousGeneration) return;
+            resetRuntimeState("chemdah-reload");
+            registerTheme();
+        };
+        if (Bukkit.isPrimaryThread()) reload.run();
+        else runSyncIfEnabled("chemdah-reload", reload);
+    }
+
+    @EventHandler
+    public void onChemdahConversationLoad(ConversationEvents.Load event) {
+        conversationRevision.incrementAndGet();
     }
 
     @EventHandler
@@ -430,7 +469,7 @@ public final class ConversationService implements Listener {
             plugin,
             this::scanNearbyCandidates,
             1L,
-            configuration.interaction().scanPeriodTicks()
+            1L
         );
         interactionReady = true;
         this.logger.info(
@@ -444,6 +483,7 @@ public final class ConversationService implements Listener {
             scanTask.cancel();
             scanTask = null;
         }
+        npcScanCycle.reset();
         cancelNpcAppearanceRetry();
         appearanceMapByLowerName = Map.of();
         // 按键注册/监听由宿主管理，此处无需注销
@@ -520,14 +560,15 @@ public final class ConversationService implements Listener {
     }
 
     private void registerTheme() {
-        Object existing = ChemdahAPI.INSTANCE.getConversationTheme().get(configuration.themeName());
+        Object existing = ChemdahAPI.INSTANCE.getConversationTheme().putIfAbsent(configuration.themeName(), theme);
         if (existing == theme) {
             return;
         }
         if (existing != null) {
-            ChemdahAPI.INSTANCE.getConversationTheme().remove(configuration.themeName());
+            logger.warning("ArcartXConversation 未注册主题 '" + configuration.themeName()
+                + "'，该名称已被 " + existing.getClass().getName() + " 使用。请为本模块选择独立的主题名。");
+            return;
         }
-        theme.register(configuration.themeName());
         if (configuration.debug()) {
             this.logger.info("ArcartXConversation 已注册 Chemdah 主题: " + configuration.themeName());
         }
@@ -537,6 +578,7 @@ public final class ConversationService implements Listener {
         closeAllOpenViews(reason);
         dialogRenderer.clear();
         selectorStates.clear();
+        npcScanCycle.reset();
         advanceGeneration();
     }
 
@@ -578,10 +620,11 @@ public final class ConversationService implements Listener {
             return;
         }
         SelectorState state = selectorStates.get(player.getUniqueId());
-        if (state == null || !state.selectNpc(npcId)) {
-            return;
+        if (state == null) return;
+        int previousIndex = state.selectedIndex();
+        if (state.selectNpc(npcId) && (state.selectedIndex() != previousIndex || !selectorOpenedPlayers.contains(player.getUniqueId()))) {
+            syncSelectorView(player, state, "select-npc");
         }
-        syncSelectorView(player, state, "select-npc");
     }
 
     private void handleConfirmNpc(Player player, String npcId) {
@@ -592,9 +635,7 @@ public final class ConversationService implements Listener {
         if (state == null || !state.hasCandidates()) {
             return;
         }
-        if (!npcId.isBlank()) {
-            state.selectNpc(npcId);
-        }
+        if (!npcId.isBlank() && !state.selectNpc(npcId)) return;
         openSelectedConversation(player, state, "confirm-npc");
     }
 
@@ -632,7 +673,8 @@ public final class ConversationService implements Listener {
     }
 
     private void openSelectedConversation(Player player, SelectorState state, String source) {
-        if (!interactionReady || state == null || !state.hasCandidates()) {
+        if (!interactionReady || state == null || state.generation() != generation || !state.hasCandidates()
+            || !AuthAccess.admitted(player.getUniqueId()) || dialogRenderer.hasDialog(player.getUniqueId())) {
             return;
         }
 
@@ -650,6 +692,33 @@ public final class ConversationService implements Listener {
         }
 
         state.setLastOpenAt(now);
+        try {
+            double range = configuration.interaction().scanRange();
+            // The legacy Adyeshach manager may recreate its wrapper on each lookup.
+            boolean targetCurrent = npcBridge instanceof AdyeshachNpcScanBridge scan
+                ? scan.canInteract(player, range, candidate.npcId(), candidate.conversationEntity())
+                : npcBridge.findNearby(player, range).stream().anyMatch(npc ->
+                    candidate.conversationEntity() != null && npc.conversationEntity() == candidate.conversationEntity()
+                        && npc.npcId().equalsIgnoreCase(candidate.npcId()));
+            if (!targetCurrent || !hasLiveConversation(player, candidate.npcId())) {
+                if (targetCurrent) conversationRevision.incrementAndGet();
+                List<NpcCandidate> updated = findCandidates(player, displayConversations());
+                if (updated.isEmpty()) {
+                    state.clearCandidates(generation);
+                    closeSelectorView(player, true, source + "-stale");
+                } else {
+                    state.replaceCandidates(updated, now, generation);
+                    syncSelectorView(player, state, source + "-stale");
+                }
+                return;
+            }
+        } catch (RuntimeException exception) {
+            state.clearCandidates(generation);
+            closeSelectorView(player, true, source + "-lookup-failed");
+            logger.warning("ArcartXConversation 复核 NPC 交互失败: " + describeThrowable(exception));
+            return;
+        }
+        long openedGeneration = generation;
         closeSelectorView(player, true, source + "-open");
         CompletableFuture<?> future = invokeOpenConversation(candidate.conversationEntity(), player);
         if (future == null) {
@@ -659,6 +728,8 @@ public final class ConversationService implements Listener {
         UUID playerId = player.getUniqueId();
         future.whenComplete((result, throwable) ->
             runSyncIfEnabled(source + "-open-complete", () -> {
+                if (openedGeneration != generation || selectorStates.get(playerId) != state
+                    || !player.isOnline() || Bukkit.getPlayer(playerId) != player || state.lastOpenAt() != now) return;
                 if (throwable != null) {
                     this.logger.warning("ArcartXConversation 打开 NPC 对话失败: " + describeThrowable(throwable));
                     restoreSelectorIfEligible(player, source + "-failed");
@@ -672,67 +743,79 @@ public final class ConversationService implements Listener {
     }
 
     private void scanNearbyCandidates() {
-        if (!interactionReady) {
-            return;
-        }
-
+        if (!interactionReady) return;
+        var players = npcScanCycle.nextBatch(this::startNpcScanCycle);
+        if (players.isEmpty()) return;
         long now = System.currentTimeMillis();
-        Map<String, Boolean> conversationCache = new HashMap<>();
-        Set<UUID> onlinePlayerIds = ConcurrentHashMap.newKeySet();
-        for (Player player : Bukkit.getOnlinePlayers()) {
-            if (!player.isOnline()) {
-                continue;
-            }
-
-            UUID playerId = player.getUniqueId();
-            onlinePlayerIds.add(playerId);
-            try {
-                if (dialogRenderer.hasDialog(playerId)) {
-                    closeSelectorView(player, true, "dialog-active");
-                    continue;
-                }
-                SelectorState state = selectorStates.computeIfAbsent(playerId, ignored -> new SelectorState());
-                List<NpcCandidate> candidates = findCandidatesForPlayer(player, conversationCache);
-                boolean changed = refreshSelectorState(state, candidates, now);
-
-                if (!state.hasCandidates()) {
-                    closeSelectorView(player, true, "no-candidates");
-                    continue;
-                }
-                if (changed || !selectorOpenedPlayers.contains(playerId)) {
-                    syncSelectorView(player, state, changed ? "scan-refresh" : "scan-open");
-                }
-            } catch (RuntimeException exception) {
-                this.logger.warning(
-                    "ArcartXConversation 扫描玩家附近 NPC 失败，已跳过本轮: player="
-                        + player.getName()
-                        + " | "
-                        + describeThrowable(exception)
-                );
-            }
-        }
-        cleanupOfflineStates(onlinePlayerIds);
+        var conversations = scanConversations;
+        for (Player player : players) scanNearbyCandidates(player, conversations, now);
     }
 
-    private List<NpcCandidate> findCandidatesForPlayer(Player player, Map<String, Boolean> conversationCache) {
-        List<AdyeshachNearbyNpc> nearbyNpcs = npcBridge.findNearby(player, configuration.interaction().scanRange());
-        if (nearbyNpcs.isEmpty()) {
-            return List.of();
+    private Collection<? extends Player> startNpcScanCycle() {
+        cleanupOfflineStates();
+        scanConversations = displayConversations();
+        if (scanConversations.isEmpty() && selectorStates.isEmpty() && selectorOpenedPlayers.isEmpty()) return List.of();
+        return Bukkit.getOnlinePlayers();
+    }
+
+    private void scanNearbyCandidates(Player player, DisplayConversations conversations, long now) {
+        if (!player.isOnline()) return;
+        UUID playerId = player.getUniqueId();
+        if (Bukkit.getPlayer(playerId) != player) return;
+        try {
+            SelectorState state = selectorStates.get(playerId);
+            if (!AuthAccess.admitted(playerId)) {
+                if (state != null) state.clearCandidates(generation);
+                closeSelectorView(player, true, "not-admitted");
+                return;
+            }
+            if (dialogRenderer.hasDialog(playerId)) {
+                closeSelectorView(player, true, "dialog-active");
+                return;
+            }
+            List<NpcCandidate> candidates = findCandidates(player, conversations);
+            if (state == null) {
+                if (candidates.isEmpty()) {
+                    closeSelectorView(player, true, "no-candidates");
+                    return;
+                }
+                state = selectorStates.computeIfAbsent(playerId, ignored -> new SelectorState());
+            }
+            boolean changed = refreshSelectorState(state, candidates, now);
+            if (!state.hasCandidates()) {
+                closeSelectorView(player, true, "no-candidates");
+            } else if (changed || !selectorOpenedPlayers.contains(playerId)) {
+                syncSelectorView(player, state, changed ? "scan-refresh" : "scan-open");
+            }
+        } catch (RuntimeException exception) {
+            logger.warning("ArcartXConversation 扫描玩家附近 NPC 失败，已跳过本轮: player="
+                + player.getName() + " | " + describeThrowable(exception));
         }
+    }
+
+    private List<NpcCandidate> findCandidates(Player player, DisplayConversations conversations) {
+        if (conversations.isEmpty()) return List.of();
+        String world = player.getWorld().getName();
+        double range = configuration.interaction().scanRange();
+        List<AdyeshachNearbyNpc> nearbyNpcs = npcBridge instanceof AdyeshachNpcScanBridge scan
+            ? scan.findVisibleNearby(player, range, id -> conversations.mightContain(id, world))
+            : npcBridge.findNearby(player, range);
+        if (nearbyNpcs.isEmpty()) return List.of();
 
         List<NpcCandidate> result = new ArrayList<>();
+        Set<String> encounteredIds = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
         for (AdyeshachNearbyNpc npc : nearbyNpcs) {
             try {
-                if (!hasConversationForNpcId(npc.npcId(), conversationCache)) {
+                if (!Double.isFinite(npc.distanceSquared()) || !encounteredIds.add(npc.npcId())
+                    || !conversations.contains(npc.npcId(), world)) {
                     continue;
                 }
                 result.add(
                     new NpcCandidate(
                         npc.npcId(),
                         safeString(npc.label()),
-                        formatDistance(npc.distanceSquared()),
-                        npc.conversationEntity(),
-                        npc.distanceSquared()
+                        ConversationInteractionStateSupport.distanceTenths(npc.distanceSquared()),
+                        npc.conversationEntity()
                     )
                 );
             } catch (RuntimeException exception) {
@@ -757,23 +840,71 @@ public final class ConversationService implements Listener {
         return state.clearCandidates(generation);
     }
 
-    private boolean hasConversationForNpcId(String npcId, Map<String, Boolean> conversationCache) {
-        String cacheKey = safeString(npcId).toLowerCase(Locale.ROOT);
-        return conversationCache.computeIfAbsent(cacheKey, ignored -> {
+    private boolean hasLiveConversation(Player player, String npcId) {
+        try {
             for (Conversation conversation : ChemdahAPI.INSTANCE.getConversation().values()) {
-                if (conversation != null && conversation.isNPC(NPC_SOURCE, npcId)) {
-                    return true;
-                }
+                if (conversation != null && (conversation.getClass() == Conversation.class
+                        ? conversation.isNPC(NPC_SOURCE, npcId, player) : conversation.isNPC(NPC_SOURCE, npcId))) return true;
             }
-            return false;
-        });
+        } catch (RuntimeException failure) {
+            logger.fine("复核 NPC 对话绑定暂缓: " + failure.getMessage());
+        }
+        return false;
     }
 
-    private void cleanupOfflineStates(Set<UUID> onlinePlayerIds) {
-        for (UUID playerId : new ArrayList<>(selectorStates.keySet())) {
-            if (onlinePlayerIds.contains(playerId)) {
-                continue;
+    private DisplayConversations displayConversations() {
+        long now = System.nanoTime();
+        long revision = conversationRevision.get();
+        try {
+            var live = ChemdahAPI.INSTANCE.getConversation();
+            int count = live.size();
+            if (displayConversations.revision() == revision && displayConversations.count() == count
+                    && now - displayConversations.refreshAt() < 0) return displayConversations;
+            var list = new ArrayList<NpcConversationIndex.Binding>();
+            var custom = new ArrayList<Conversation>();
+            for (Conversation conversation : live.values()) {
+                if (conversation == null) continue;
+                if (conversation.getClass() != Conversation.class) {
+                    custom.add(conversation);
+                    continue;
+                }
+                for (var binding : conversation.getNpcId().getId()) {
+                    if (NPC_SOURCE.equalsIgnoreCase(binding.getNamespace())) {
+                        list.add(new NpcConversationIndex.Binding(binding.getValue(), binding.getWorlds()));
+                    }
+                }
             }
+            if (count == live.size() && revision == conversationRevision.get()) {
+                displayConversations = new DisplayConversations(new NpcConversationIndex(list), List.copyOf(custom),
+                    revision, count, now + CONVERSATION_INDEX_REFRESH);
+            }
+        } catch (RuntimeException failure) {
+            logger.fine("Chemdah 对话索引暂不可刷新: " + failure.getMessage());
+        }
+        return displayConversations;
+    }
+
+    private record DisplayConversations(NpcConversationIndex nativeBindings, List<Conversation> custom,
+                                        long revision, int count, long refreshAt) {
+        boolean isEmpty() { return nativeBindings.isEmpty() && custom.isEmpty(); }
+
+        boolean mightContain(String npc, String world) {
+            return !custom.isEmpty() || nativeBindings.contains(npc, world);
+        }
+
+        boolean contains(String npc, String world) {
+            if (nativeBindings.contains(npc, world)) return true;
+            for (var conversation : custom) {
+                if (conversation.isNPC(NPC_SOURCE, npc)) return true;
+            }
+            return false;
+        }
+    }
+
+    private void cleanupOfflineStates() {
+        for (UUID playerId : selectorStates.keySet()) {
+            Player player = Bukkit.getPlayer(playerId);
+            if (player != null && player.isOnline()) continue;
             selectorStates.remove(playerId);
             selectorOpenedPlayers.remove(playerId);
             dialogRenderer.removePlayer(playerId);
@@ -781,7 +912,8 @@ public final class ConversationService implements Listener {
     }
 
     private void syncSelectorView(Player player, SelectorState state, String source) {
-        if (!interactionReady || !selectorUiReady || !player.isOnline() || state == null || !state.hasCandidates()) {
+        if (!interactionReady || !selectorUiReady || !player.isOnline() || !AuthAccess.admitted(player.getUniqueId())
+                || state == null || !state.hasCandidates()) {
             return;
         }
 
@@ -791,10 +923,15 @@ public final class ConversationService implements Listener {
             return;
         }
 
-        Map<String, Object> payload = buildSelectorPayload(state);
-        boolean success = bridge.sendPacketToAll(player, selectorUiIds, HANDLER_SYNC, payload);
-        logOutboundPacket(player, selectorUiIds.isEmpty() ? "" : selectorUiIds.get(0), HANDLER_SYNC, payload, "npc", state.candidates().size(), state.selectedNpcId(), source, success);
-        if (!success) {
+        boolean distancesOnly = !justOpened && state.canSendDistances();
+        String handler = distancesOnly ? HANDLER_DISTANCES : HANDLER_SYNC;
+        Map<String, Object> payload = distancesOnly ? state.distancePayload() : buildSelectorPayload(state);
+        boolean success = bridge.sendPacketToAll(player, selectorUiIds, handler, payload);
+        logOutboundPacket(player, selectorUiIds.isEmpty() ? "" : selectorUiIds.get(0), handler, payload, "npc", state.candidates().size(), state.selectedNpcId(), source, success);
+        if (success) {
+            state.markSent();
+        } else {
+            state.clearSent();
             selectorOpenedPlayers.remove(player.getUniqueId());
             bridge.closeUiAll(player, selectorUiIds);
         }
@@ -808,6 +945,8 @@ public final class ConversationService implements Listener {
         if (!selectorOpenedPlayers.remove(playerId)) {
             return;
         }
+        SelectorState state = selectorStates.get(playerId);
+        if (state != null) state.clearSent();
         if (!player.isOnline()) {
             return;
         }
@@ -882,7 +1021,7 @@ public final class ConversationService implements Listener {
                 ConversationPayloadSupport.flatRow(
                     "id", candidate.npcId(),
                     "text", candidate.label(),
-                    "distanceText", candidate.distanceText(),
+                    "distanceText", ConversationInteractionStateSupport.distanceText(candidate.distanceTenths()),
                     "selected", candidate.npcId().equals(state.selectedNpcId()),
                     "index", index
                 )
@@ -1103,10 +1242,6 @@ public final class ConversationService implements Listener {
         return value == null ? "" : value.trim();
     }
 
-    private static String formatDistance(double distanceSquared) {
-        return String.format(Locale.ROOT, "%.1fm", Math.sqrt(Math.max(0.0D, distanceSquared)));
-    }
-
     private static String describeValue(Object value) {
         if (value == null) {
             return "null";
@@ -1149,13 +1284,19 @@ public final class ConversationService implements Listener {
         return session.getClass().getSimpleName() + "@" + Integer.toHexString(System.identityHashCode(session));
     }
 
-    private record NpcCandidate(
+    record NpcCandidate(
         String npcId,
         String label,
-        String distanceText,
-        Object conversationEntity,
-        double distanceSquared
+        long distanceTenths,
+        Object conversationEntity
     ) {
+        boolean sameRow(NpcCandidate other) {
+            return sameNpc(other) && distanceTenths == other.distanceTenths;
+        }
+
+        boolean sameNpc(NpcCandidate other) {
+            return npcId.equals(other.npcId) && label.equals(other.label);
+        }
     }
 
     private record DebugSnapshot(
@@ -1213,9 +1354,12 @@ public final class ConversationService implements Listener {
         }
     }
 
-    private static final class SelectorState {
+    static final class SelectorState {
 
         private List<NpcCandidate> candidates = List.of();
+        private List<NpcCandidate> sentCandidates = List.of();
+        private long sentGeneration;
+        private int sentSelectedIndex;
         private String selectedNpcId = "";
         private int selectedIndex = -1;
         private long lastVisibleAt;
@@ -1263,21 +1407,60 @@ public final class ConversationService implements Listener {
             return !candidates.isEmpty();
         }
 
-        private boolean replaceCandidates(List<NpcCandidate> updatedCandidates, long now, long generation) {
+        boolean replaceCandidates(List<NpcCandidate> updatedCandidates, long now, long generation) {
             List<NpcCandidate> normalized = List.copyOf(updatedCandidates);
-            boolean listChanged = !normalized.equals(candidates);
-            String previousSelectedNpcId = selectedNpcId;
+            boolean changed = this.generation != generation || !sameRows(normalized);
             this.candidates = normalized;
             this.lastVisibleAt = now;
             this.generation = generation;
-            ConversationInteractionStateSupport.SelectionState selectionState = ConversationInteractionStateSupport.preserveSelection(
-                normalized.stream().map(NpcCandidate::npcId).toList(),
-                previousSelectedNpcId
-            );
-            boolean selectionChanged = selectedIndex != selectionState.index() || !safeString(selectedNpcId).equals(selectionState.selectedId());
-            selectedIndex = selectionState.index();
-            selectedNpcId = selectionState.selectedId();
-            return listChanged || selectionChanged;
+            if (!changed) return false;
+            if (selectedIndex >= 0 && selectedIndex < normalized.size()
+                && normalized.get(selectedIndex).npcId().equals(selectedNpcId)) return true;
+            for (int index = 0; index < normalized.size(); index++) {
+                if (normalized.get(index).npcId().equals(selectedNpcId)) {
+                    selectedIndex = index;
+                    return true;
+                }
+            }
+            selectedIndex = normalized.isEmpty() ? -1 : 0;
+            selectedNpcId = normalized.isEmpty() ? "" : normalized.get(0).npcId();
+            return true;
+        }
+
+        private boolean sameRows(List<NpcCandidate> updated) {
+            if (updated.size() != candidates.size()) return false;
+            for (int index = 0; index < updated.size(); index++) {
+                if (!updated.get(index).sameRow(candidates.get(index))) return false;
+            }
+            return true;
+        }
+
+        boolean canSendDistances() {
+            if (sentCandidates.isEmpty() || sentCandidates.size() != candidates.size()
+                    || sentGeneration != generation || sentSelectedIndex != selectedIndex) return false;
+            for (int index = 0; index < candidates.size(); index++) {
+                if (!candidates.get(index).sameNpc(sentCandidates.get(index))) return false;
+            }
+            return true;
+        }
+
+        Map<String, Object> distancePayload() {
+            var values = new LinkedHashMap<String, String>();
+            for (int index = 0; index < candidates.size(); index++) {
+                values.put(ConversationPayloadSupport.rowKey(index),
+                    ConversationInteractionStateSupport.distanceText(candidates.get(index).distanceTenths()));
+            }
+            return Map.of("token", tokenFor(generation), "distances", values);
+        }
+
+        void markSent() {
+            sentCandidates = candidates;
+            sentGeneration = generation;
+            sentSelectedIndex = selectedIndex;
+        }
+
+        void clearSent() {
+            sentCandidates = List.of();
         }
 
         private boolean clearCandidates(long generation) {
@@ -1302,7 +1485,7 @@ public final class ConversationService implements Listener {
             return true;
         }
 
-        private boolean selectNpc(String npcId) {
+        boolean selectNpc(String npcId) {
             if (npcId == null || npcId.isBlank()) {
                 return false;
             }
@@ -1316,7 +1499,7 @@ public final class ConversationService implements Listener {
             return false;
         }
 
-        private NpcCandidate selectedCandidate() {
+        NpcCandidate selectedCandidate() {
             if (selectedIndex < 0 || selectedIndex >= candidates.size()) {
                 return candidates.isEmpty() ? null : candidates.get(0);
             }

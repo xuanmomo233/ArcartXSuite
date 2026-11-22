@@ -25,8 +25,7 @@ final class QuestGpsUiPacketHandler {
         if (player == null || !player.isOnline() || packetId == null || !this.packetId.equalsIgnoreCase(packetId)) {
             return false;
         }
-        // 客户端包入口与命令路径同权限——伪造包不能绕过 questgps.use 门控
-        if (!player.hasPermission("arcartxsuite.questgps.use")) {
+        if (!service.hasOpenMenu(player)) {
             return true;
         }
         String action = data == null || data.isEmpty() ? "refresh" : safe(data.get(0)).toLowerCase(Locale.ROOT);

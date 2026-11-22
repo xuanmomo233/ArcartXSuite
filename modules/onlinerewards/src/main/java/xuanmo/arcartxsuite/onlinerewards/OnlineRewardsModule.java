@@ -19,7 +19,6 @@ import xuanmo.arcartxsuite.api.ModuleCommandHandler;
 import xuanmo.arcartxsuite.api.ModuleDescriptor;
 import xuanmo.arcartxsuite.api.capability.ChatCardSendable;
 import xuanmo.arcartxsuite.api.capability.EventBusCapability;
-import xuanmo.arcartxsuite.api.capability.MailDispatchable;
 import xuanmo.arcartxsuite.api.capability.QQBotBroadcastable;
 import xuanmo.arcartxsuite.api.capability.SignalDispatchable;
 import xuanmo.arcartxsuite.api.capability.SubtitlePlayable;
@@ -27,6 +26,7 @@ import xuanmo.arcartxsuite.api.capability.TitleGrantable;
 import xuanmo.arcartxsuite.api.bridge.ClientBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.capability.OnlineRewardsQueryable;
+import xuanmo.arcartxsuite.api.mail.AxsMailService;
 import xuanmo.arcartxsuite.onlinerewards.command.OnlineRewardsAdminCommand;
 import xuanmo.arcartxsuite.onlinerewards.command.OnlineRewardsPlayerCommand;
 import xuanmo.arcartxsuite.onlinerewards.config.OnlineRewardsModuleConfiguration;
@@ -51,6 +51,8 @@ public final class OnlineRewardsModule extends AbstractAXSModule implements Modu
 
     private OnlineRewardsModuleConfiguration configuration;
     private OnlineRewardsService service;
+    private JdbcOnlineRewardsRepository repository;
+    private xuanmo.arcartxsuite.api.storage.ModuleStorage storageScope;
 
     @Override
     public ModuleDescriptor descriptor() {
@@ -98,7 +100,8 @@ public final class OnlineRewardsModule extends AbstractAXSModule implements Modu
     protected @NotNull PacketHandlerSpec createPacketHandlerSpec() {
         return PacketHandlerSpec.of(
             (player, packetId, data) ->
-                    service != null && service.handleClientPacket(player, packetId, data), 0, null, null);
+                    service != null && service.handleClientPacket(player, packetId, data),
+            0, configuration.ui().packetId(), "onlinerewards");
     }
 
     @Override
@@ -128,11 +131,11 @@ public final class OnlineRewardsModule extends AbstractAXSModule implements Modu
 
     @Override
     protected List<String> publishedTopics() {
-        return List.of("axs.onlinerewards.server_goal_reached");
+        return List.of("axs.onlinerewards.server_goal_reached", "axs.onlinerewards.signin_completed");
     }
 
     @Override
-    protected void startService() throws Exception {
+    protected java.util.concurrent.CompletionStage<Void> prepareService() throws Exception {
 
         if (clientBridge == null || !clientBridge.isAvailable()) {
             throw new IllegalStateException("OnlineRewards 模块需要 ArcartX 客户端桥接");
@@ -140,23 +143,29 @@ public final class OnlineRewardsModule extends AbstractAXSModule implements Modu
 
         // 共享模式：使用本体统一数据源，模块只需提供表前缀
         // 若模块配置了独立 storage 节（dialect=mysql 等），则走自建模式（向后兼容）
-        JdbcOnlineRewardsRepository rewardsRepo;
         xuanmo.arcartxsuite.api.storage.StorageDescriptor orDesc;
         javax.sql.DataSource orDs;
         if (configuration.storage().hasOverride()) {
             orDesc = configuration.storage().toDescriptor();
-            orDs = storageManager.resolveModuleDataSource("onlinerewards", null, dataFolder, orDesc);
+            storageScope = storageManager.openModuleStorage("onlinerewards", null, dataFolder, orDesc);
+            orDs = storageScope.dataSource();
         } else {
             orDesc = storageManager.getDescriptor().withTablePrefix("");
-            orDs = storageManager.resolveModuleDataSource("onlinerewards",
+            storageScope = storageManager.openModuleStorage("onlinerewards",
                 configuration.storage().sqliteFileName(), dataFolder, null);
+            orDs = storageScope.dataSource();
         }
-        rewardsRepo = new JdbcOnlineRewardsRepository(orDs, orDesc, dataFolder, logger);
+        repository = new JdbcOnlineRewardsRepository(orDs, orDesc, dataFolder, logger);
+        return storageScope.initialize(repository::initialize);
+    }
+
+    @Override
+    protected void startService() throws Exception {
+        var rewardsRepo = repository;
         service = new OnlineRewardsService(
             plugin, logger, configuration,
             rewardsRepo,
             clientBridge, packetBridge, packetGuard,
-            () -> getCapability(MailDispatchable.class),
             () -> getCapability(SignalDispatchable.class),
             () -> getCapability(ChatCardSendable.class),
             () -> getCapability(TitleGrantable.class),
@@ -177,7 +186,7 @@ public final class OnlineRewardsModule extends AbstractAXSModule implements Modu
             crossServer
         );
         service.setItemSourceRegistry(itemSourceRegistry);
-        service.setItemRewardDispatcher(itemRewardDispatcher);
+        service.setDurableMail(() -> getCapability(AxsMailService.class), rewardsRepo.getDescriptor().isMysql());
         service.setScheduler(scheduler);
         service.setIconResolver(new xuanmo.arcartxsuite.api.icon.IconResolver(itemStackBridge, itemSourceRegistry));
         service.start();
@@ -186,16 +195,35 @@ public final class OnlineRewardsModule extends AbstractAXSModule implements Modu
             recordExternalUi(uiId, uiId);
         }
 
+        OnlineRewardsService registeredService = service;
         registerCapability(OnlineRewardsQueryable.class, new OnlineRewardsQueryable() {
-            @Override public boolean hasSignedToday(@NotNull java.util.UUID playerUuid) { return service.hasSignedTodayPublic(playerUuid); }
-            @Override public int todayOnlineMinutes(@NotNull java.util.UUID playerUuid) { return service.todayOnlineMinutesPublic(playerUuid); }
-            @Override public int weeklyOnlineMinutes(@NotNull java.util.UUID playerUuid) { return service.weeklyOnlineMinutesPublic(playerUuid); }
-            @Override public int monthlyOnlineMinutes(@NotNull java.util.UUID playerUuid) { return service.monthlyOnlineMinutesPublic(playerUuid); }
-            @Override public boolean signIn(@NotNull Player player) { return service.signIn(player).success(); }
-            @Override public boolean makeupSignIn(@NotNull Player player, @NotNull String date) { return service.makeupSignIn(player, date).success(); }
-            @Override public boolean addMakeupCards(@NotNull Player player, int amount) { return service.addMakeupCardsPublic(player, amount); }
-            @Override public void grantDailyRewards(@NotNull Player player) { service.grantDailyRewardsPublic(player); }
-            @Override public boolean addOnlineMinutes(@NotNull Player player, int minutes) { return service.addOnlineMinutesPublic(player, minutes); }
+            @Override public @NotNull java.util.concurrent.CompletionStage<Boolean> hasSignedToday(@NotNull java.util.UUID playerUuid) {
+                return registeredService.hasSignedTodayPublic(playerUuid);
+            }
+            @Override public @NotNull java.util.concurrent.CompletionStage<Integer> todayOnlineMinutes(@NotNull java.util.UUID playerUuid) {
+                return registeredService.todayOnlineMinutesPublic(playerUuid);
+            }
+            @Override public @NotNull java.util.concurrent.CompletionStage<Integer> weeklyOnlineMinutes(@NotNull java.util.UUID playerUuid) {
+                return registeredService.weeklyOnlineMinutesPublic(playerUuid);
+            }
+            @Override public @NotNull java.util.concurrent.CompletionStage<Integer> monthlyOnlineMinutes(@NotNull java.util.UUID playerUuid) {
+                return registeredService.monthlyOnlineMinutesPublic(playerUuid);
+            }
+            @Override public @NotNull java.util.concurrent.CompletionStage<Boolean> signIn(@NotNull Player player) {
+                return registeredService.signIn(player).thenApply(xuanmo.arcartxsuite.onlinerewards.service.OnlineRewardsOperationResult::success);
+            }
+            @Override public @NotNull java.util.concurrent.CompletionStage<Boolean> makeupSignIn(@NotNull Player player, @NotNull String date) {
+                return registeredService.makeupSignIn(player, date).thenApply(xuanmo.arcartxsuite.onlinerewards.service.OnlineRewardsOperationResult::success);
+            }
+            @Override public @NotNull java.util.concurrent.CompletionStage<Boolean> addMakeupCards(@NotNull Player player, int amount) {
+                return registeredService.addMakeupCardsPublic(player, amount);
+            }
+            @Override public @NotNull java.util.concurrent.CompletionStage<Boolean> grantDailyRewards(@NotNull Player player) {
+                return registeredService.grantDailyRewardsPublic(player);
+            }
+            @Override public @NotNull java.util.concurrent.CompletionStage<Boolean> addOnlineMinutes(@NotNull Player player, int minutes) {
+                return registeredService.addOnlineMinutesPublic(player, minutes);
+            }
         });
         adminCommand = new OnlineRewardsAdminCommand(() -> service, messages());
 
@@ -203,10 +231,12 @@ public final class OnlineRewardsModule extends AbstractAXSModule implements Modu
             new xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable() {
                 @Override public @NotNull String moduleId() { return "onlinerewards"; }
                 @Override public int purgePlayerData(@NotNull java.util.UUID playerUuid) {
+                    if (registeredService.isStopping()) return -1;
                     try { return rewardsRepo.deletePlayerData(playerUuid); }
                     catch (Exception e) { logger.warning("OnlineRewards purge 失败: " + e.getMessage()); return -1; }
                 }
                 @Override public int purgeAllPlayerData() {
+                    if (registeredService.isStopping()) return -1;
                     try { return rewardsRepo.deleteAllPlayerData(); }
                     catch (Exception e) { logger.warning("OnlineRewards purgeAll 失败: " + e.getMessage()); return -1; }
                 }
@@ -217,6 +247,11 @@ public final class OnlineRewardsModule extends AbstractAXSModule implements Modu
                 @Override public @NotNull String moduleId() { return "onlinerewards"; }
                 @Override public @NotNull xuanmo.arcartxsuite.api.storage.MigrationResult migrateDatabase(
                         @NotNull xuanmo.arcartxsuite.api.storage.StorageDescriptor target, boolean overwrite) {
+                    if (registeredService.isStopping()) {
+                        var result = new xuanmo.arcartxsuite.api.storage.MigrationResult(false, 0, 0);
+                        result.addError("OnlineRewards 正在停用");
+                        return result;
+                    }
                     return rewardsRepo.migrateData(target, overwrite);
                 }
                 @Override public @NotNull xuanmo.arcartxsuite.api.storage.StorageDescriptor currentDescriptor() {
@@ -233,12 +268,23 @@ public final class OnlineRewardsModule extends AbstractAXSModule implements Modu
 
     @Override
     protected void stopService() {
-        if (service != null) {
-            service.shutdown();
-            service = null;
+        var current = service;
+        var scope = storageScope;
+        service = null;
+        repository = null;
+        storageScope = null;
+        try {
+            if (current != null) current.shutdown();
+        } finally {
+            var stopped = current == null ? java.util.concurrent.CompletableFuture.<Void>completedFuture(null)
+                : current.databaseStopped();
+            trackShutdown(stopped);
+            if (scope != null) {
+                scope.retireAfter(stopped);
+                trackShutdown(scope.retired());
+            }
+            configuration = null;
         }
-        storageManager.closeModuleDataSource("onlinerewards");
-        configuration = null;
     }
 
     @Override

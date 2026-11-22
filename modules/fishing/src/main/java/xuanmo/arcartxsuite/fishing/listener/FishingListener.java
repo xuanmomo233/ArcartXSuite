@@ -44,16 +44,15 @@ public final class FishingListener implements Listener {
             return;
         }
 
-        // 在 BITE 状态（鱼咬钩）时启动小游戏，而不是等 CAUGHT_FISH
-        // CAUGHT_FISH 需要玩家右键收杆才触发，而我们要在收杆前就启动小游戏
-        if (event.getState() == PlayerFishEvent.State.BITE) {
-            // 取消原版钓鱼（阻止后续 CAUGHT_FISH/FAILED_ATTEMPT），启动小游戏
-            boolean started = service.startMinigame(player);
-            if (started) {
-                // 小游戏启动成功后才消耗饵料——启动失败（packetBridge 不可用/冷却/权限）不吞饵
-                service.consumeBaitOnBite(player);
-                event.setCancelled(true);
+        var hook = event.getHook();
+        switch (event.getState()) {
+            case FISHING -> service.prepareCast(player, hook.getUniqueId());
+            case BITE -> {
+                if (service.startVanillaBite(player, hook.getUniqueId(), hook.getLocation())) event.setCancelled(true);
             }
+            case CAUGHT_FISH, CAUGHT_ENTITY, IN_GROUND, FAILED_ATTEMPT, REEL_IN ->
+                service.forgetCast(player.getUniqueId(), hook.getUniqueId());
+            default -> { }
         }
     }
 
@@ -64,6 +63,7 @@ public final class FishingListener implements Listener {
 
     @EventHandler
     public void onPlayerQuit(@NotNull PlayerQuitEvent event) {
+        service.forgetFishSchools(event.getPlayer());
         if (service.isPlayerInMinigame(event.getPlayer().getUniqueId())) {
             var minigame = service.getActiveMinigame(event.getPlayer().getUniqueId());
             if (minigame != null) {
@@ -76,6 +76,7 @@ public final class FishingListener implements Listener {
 
     @EventHandler
     public void onPlayerDeath(@NotNull PlayerDeathEvent event) {
+        service.forgetCast(event.getEntity().getUniqueId());
         if (service.isPlayerInMinigame(event.getEntity().getUniqueId())) {
             var minigame = service.getActiveMinigame(event.getEntity().getUniqueId());
             if (minigame != null) {
@@ -86,6 +87,7 @@ public final class FishingListener implements Listener {
 
     @EventHandler
     public void onPlayerTeleport(@NotNull PlayerTeleportEvent event) {
+        service.forgetCast(event.getPlayer().getUniqueId());
         if (service.isPlayerInMinigame(event.getPlayer().getUniqueId())) {
             var minigame = service.getActiveMinigame(event.getPlayer().getUniqueId());
             if (minigame != null) {

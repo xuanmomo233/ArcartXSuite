@@ -206,10 +206,26 @@ public final class RewardResolver {
     }
 
     public boolean refundMoney(Player player, double amount, String currencyId, String requestKey) {
+        boolean attempted = false;
         try {
-            var bridge=currencyManager.bridge(currencyId);
-            if(bridge!=null && bridge.available() && bridge.deposit(player,BigDecimal.valueOf(amount)).success()) return true;
-        } catch (RuntimeException error) { logger.warning("[abyss] 即时退款失败，转宿主待发: "+error.getMessage()); }
+            var bridge = currencyManager.bridge(currencyId);
+            if (bridge != null && bridge.available()) {
+                attempted = true;
+                var receipt = bridge.deposit(player, BigDecimal.valueOf(amount));
+                if (receipt == null || receipt.uncertain()
+                        || (receipt.success() && bridge.creditRequiresReconciliation())) {
+                    logger.warning("[abyss] 门票退款待核对: " + requestKey + " player=" + player.getUniqueId());
+                    return false;
+                }
+                if (receipt.success()) return true;
+            }
+        } catch (RuntimeException | LinkageError error) {
+            if (attempted) {
+                logger.warning("[abyss] 门票退款待核对: " + requestKey + " player=" + player.getUniqueId()
+                    + "，" + error.getMessage());
+                return false;
+            }
+        }
         return queue(player,requestKey,List.of(PendingReward.currency(player.getUniqueId(),"abyss",currencyId,amount,"entry-refund")));
     }
 

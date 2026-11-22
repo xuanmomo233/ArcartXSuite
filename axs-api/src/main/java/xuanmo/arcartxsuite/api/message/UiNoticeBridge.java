@@ -13,9 +13,9 @@ public final class UiNoticeBridge {
     private record Template(String key,Pattern pattern) { }
     private final MessageProvider messages;
     private final List<Template> templates=new ArrayList<>();
-    private UiNoticeBridge(MessageProvider messages,File folder){
+    private UiNoticeBridge(MessageProvider messages,File folder,String fileName){
         this.messages=messages;
-        var section=YamlConfiguration.loadConfiguration(new File(folder,"messages.yml")).getConfigurationSection("ui-notices");
+        var section=YamlConfiguration.loadConfiguration(new File(folder,fileName)).getConfigurationSection("ui-notices");
         if(section!=null)for(String source:section.getKeys(false))if(source.contains("{0}"))templates.add(new Template("ui-notices."+source,Pattern.compile("^"+Pattern.quote(source).replace("{0}","\\E(.*)\\Q")+"$",Pattern.DOTALL)));
         templates.sort(Comparator.comparingInt((Template t)->t.key.length()).reversed());
     }
@@ -27,8 +27,11 @@ public final class UiNoticeBridge {
         return raw;
     }
     public static PacketBridgeAPI wrap(PacketBridgeAPI delegate,MessageProvider messages,File folder){
+        return wrap(delegate,messages,folder,"messages.yml");
+    }
+    public static PacketBridgeAPI wrap(PacketBridgeAPI delegate,MessageProvider messages,File folder,String fileName){
         if(delegate==null)return null;
-        UiNoticeBridge notices=new UiNoticeBridge(messages,folder);
+        UiNoticeBridge notices=new UiNoticeBridge(messages,folder,fileName);
         return (PacketBridgeAPI)Proxy.newProxyInstance(PacketBridgeAPI.class.getClassLoader(),new Class<?>[]{PacketBridgeAPI.class},(proxy,method,args)->{
             if((method.getName().equals("sendPacket")||method.getName().equals("sendPacketToAll"))&&args!=null&&args.length==4&&args[3] instanceof Map<?,?> payload&&payload.get("message") instanceof String message){
                 var copy=new LinkedHashMap<Object,Object>(payload);copy.put("message",notices.translate(message));args=args.clone();args[3]=copy;

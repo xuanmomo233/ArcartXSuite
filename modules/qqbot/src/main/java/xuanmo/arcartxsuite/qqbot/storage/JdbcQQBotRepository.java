@@ -6,7 +6,9 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.logging.Logger;
 import javax.sql.DataSource;
@@ -22,6 +24,8 @@ import xuanmo.arcartxsuite.api.storage.StorageDescriptor;
  * 支持 SQLite 与 MySQL，自动建表与建索引，并提供玩家数据表的枚举以供数据清理。
  */
 public final class JdbcQQBotRepository extends AbstractModuleRepository implements QQBotRepository {
+
+    private static final int ACTIVITY_ROWS_PER_STATEMENT = 128;
 
     private volatile BindingIndex bindingIndex = new BindingIndex(List.of(), List.of(), java.util.Map.of(), java.util.Map.of(), java.util.Map.of());
 
@@ -213,6 +217,12 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
         try { economy.close(); }
         catch (StorageFailure e) { logger.warning("QQBot 节点关闭状态未能写入，遗留兑换将在租约过期后冻结"); }
         shutdown();
+    }
+
+    public java.util.concurrent.CompletionStage<Void> retire() {
+        return economy.retire().whenComplete((ignored, failure) -> {
+            if (failure != null) logger.warning("QQBot 节点关闭状态未能写入，遗留兑换将在租约过期后冻结");
+        });
     }
 
     public xuanmo.arcartxsuite.api.storage.MigrationResult migrateSafely(StorageDescriptor target, boolean overwrite) {
@@ -786,28 +796,63 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
 
     // ─── 活跃度实现 ──────────────────────────────────────
 
-    /**
-     * 记录一条群消息活跃度（upsert，消息计数 +1）。
-     *
-     * @param qqId    发言者 QQ 号
-     * @param groupId 群号
-     * @param date    日期字符串
-     */
     @Override
-    public void recordActivity(long qqId, long groupId, String date) {
-        String upsert = isMysql()
-            ? "INSERT INTO " + tableActivity + " (qq_id, group_id, activity_date, message_count) VALUES (?, ?, ?, 1)"
-                + " ON DUPLICATE KEY UPDATE message_count = message_count + 1"
-            : "INSERT INTO " + tableActivity + " (qq_id, group_id, activity_date, message_count) VALUES (?, ?, ?, 1)"
-                + " ON CONFLICT(qq_id, group_id, activity_date) DO UPDATE SET message_count = message_count + 1";
-        try (Connection conn = getConnection();
-             PreparedStatement ps = conn.prepareStatement(upsert)) {
-            ps.setLong(1, qqId);
-            ps.setLong(2, groupId);
-            ps.setString(3, date);
+    public void recordActivities(Map<ActivityKey, Integer> increments) {
+        if (increments.isEmpty()) return;
+        var rows = new ArrayList<>(increments.entrySet());
+        if (isMysql()) {
+            // Shared MySQL writers acquire row locks in the same order.
+            rows.sort(Map.Entry.comparingByKey(Comparator.comparingLong(ActivityKey::qqId)
+                .thenComparingLong(ActivityKey::groupId).thenComparing(ActivityKey::date)));
+        }
+        boolean uncommitted = true;
+        boolean commitStarted = false;
+        boolean committed = false;
+        try (Connection conn = getConnection()) {
+            conn.setAutoCommit(false);
+            uncommitted = false;
+            try {
+                for (int start = 0; start < rows.size(); start += ACTIVITY_ROWS_PER_STATEMENT) {
+                    int end = Math.min(start + ACTIVITY_ROWS_PER_STATEMENT, rows.size());
+                    writeActivityRows(conn, rows.subList(start, end));
+                }
+                commitStarted = true;
+                conn.commit();
+                committed = true;
+            } catch (SQLException | RuntimeException failure) {
+                try {
+                    conn.rollback();
+                    uncommitted = !commitStarted;
+                } catch (SQLException | RuntimeException rollback) {
+                    if (rollback != failure) failure.addSuppressed(rollback);
+                }
+                throw failure;
+            }
+        } catch (SQLException | RuntimeException e) {
+            if (committed) {
+                logger.warning("QQBot 活跃度已提交，关闭连接失败: " + e.getMessage());
+                return;
+            }
+            throw new StorageFailure("QQBot 批量记录活跃度失败", e, uncommitted);
+        }
+    }
+
+    private void writeActivityRows(Connection conn, List<Map.Entry<ActivityKey, Integer>> rows) throws SQLException {
+        String values = "(?, ?, ?, ?)".concat(", (?, ?, ?, ?)".repeat(rows.size() - 1));
+        String update = isMysql()
+            ? " ON DUPLICATE KEY UPDATE message_count = message_count + VALUES(message_count)"
+            : " ON CONFLICT(qq_id, group_id, activity_date) DO UPDATE SET message_count = message_count + excluded.message_count";
+        String sql = "INSERT INTO " + tableActivity + " (qq_id, group_id, activity_date, message_count) VALUES " + values + update;
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            int parameter = 1;
+            for (var entry : rows) {
+                ActivityKey key = entry.getKey();
+                ps.setLong(parameter++, key.qqId());
+                ps.setLong(parameter++, key.groupId());
+                ps.setString(parameter++, key.date().toString());
+                ps.setInt(parameter++, entry.getValue());
+            }
             ps.executeUpdate();
-        } catch (SQLException e) {
-            logger.warning("QQBot 记录活跃度失败: " + e.getMessage());
         }
     }
 

@@ -13,6 +13,7 @@
 #   npcCount, npcScrollRatio, npcRows, maxNpcCount
 # npcRows 单行字段:
 #   id, text, distanceText, selected, index
+# 候选与选中项稳定时，distances 包只携带 token 和按行索引的距离文本。
 # 客户端回包:
 #   navigate_npc / confirm_npc / select_npc
 # 回包格式:
@@ -47,19 +48,21 @@ ui:
       var.npcCount = packet['npcCount']
       var.npcScrollRatio = packet['npcScrollRatio']
       var.npcRows = packet['npcRows']
+      var.npcDistances = none
       var.maxNpcCount = packet['maxNpcCount']
 
-      if(val.selector_list.childrenCount() != var.maxNpcCount){
-        while(val.selector_list.childrenCount() > 1){
-          val.selector_list.get(1).remove()
-        }
-        for(i in range(1, var.maxNpcCount - 1)){
-          key = i.round()
-          if(val.selector_list['选择器模板'] != none) {
-            ni = val.selector_list['选择器模板'].copy('选择器模板' + key)
-            ni.entryKey = key
+      if(var.selector_listRows == none || var.selector_listRows.size() != (var.maxNpcCount)){
+        网格数据 = []
+        if((var.maxNpcCount) > 0){
+          for(网格序号 in range(0, (var.maxNpcCount) - 1)){
+            网格数据.add(网格序号.round())
           }
         }
+        var.selector_listRows = 网格数据
+      }
+    distances: |-
+      if(var.token != none && var.token == packet['token']){
+        var.npcDistances = packet['distances']
       }
     # packetHandler: close
     # 包字段:
@@ -81,14 +84,16 @@ ui:
         var.navNextKey = "↓"
       }
     tick: |-
-      mw = 0
-      for(i in range(0, val.selector_list.childrenCount())){
-        w = val.selector_list.get(i)['NPC名'].width
-        if(w > mw){
-          mw = w
+      if(val.selector_list != none && val.selector_list.childrenCount() > 0){
+        mw = 0
+        for(i in range(0, val.selector_list.childrenCount() - 1)){
+          row = val.selector_list.get(i.round())
+          if(row != none && row['NPC名'] != none){
+            mw = Math.max(mw, row['NPC名'].width)
+          }
         }
+        var.maxNpcWidth = mw + 120
       }
-      var.maxNpcWidth = mw + 120
 controls:
   自适应全局布局:
     type: Adaptive
@@ -147,15 +152,19 @@ controls:
             children:
               选择器列表:
                 val: selector_list
-                type: VStack
+                type: RepeatGrid
                 attribute:
+                  items: "var.selector_listRows"
+                  flow: ~row
+                  column: 1
+                  spaceBetweenY: 5
+                  maxSize: "var.selector_listRows == none ? 0 : var.selector_listRows.size()"
                   width: var.maxNpcWidth
-                  spaceBetween: 5
                 children:
                   选择器模板:
                     type: Canvas
                     attribute:
-                      entryKey: 0.round()
+                      entryKey: self.item
                       entry: var.npcRows[self.entryKey]
                       visible: self.entry != none
                       width: var.maxNpcWidth
@@ -195,6 +204,6 @@ controls:
                           point: ~middle_right
                           x: -14
                           y: 0
-                          texts: "self.parent.entry != none ? '&8' + self.parent.entry['distanceText'] : none"
+                          texts: "self.parent.entry == none ? none : '&8' + (var.npcDistances == none ? self.parent.entry['distanceText'] : var.npcDistances[self.parent.entryKey])"
                           fontSize: 36
                           through: true

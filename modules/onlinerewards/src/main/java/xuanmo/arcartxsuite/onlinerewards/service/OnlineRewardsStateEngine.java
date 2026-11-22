@@ -1,5 +1,7 @@
 package xuanmo.arcartxsuite.onlinerewards.service;
 
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -45,6 +47,8 @@ public final class OnlineRewardsStateEngine {
             state.setRewardDate(context.rewardDate());
             state.setOnlineMinutes(0);
             state.setRewardStage(0);
+            state.setOfflineSavingsEarnedMinutes(0);
+            state.setOfflineSavingsCreditedMinutes(0);
             changed = true;
         }
         if (!context.weekKey().equals(state.weekKey())) {
@@ -62,14 +66,64 @@ public final class OnlineRewardsStateEngine {
         return changed;
     }
 
+    void recordSavingsEarnings(OnlineRewardsPlayerState state, int gained) {
+        if (configuration.offlineSavings().enabled() && gained > 0) {
+            state.setOfflineSavingsEarnedMinutes((int) Math.min(Integer.MAX_VALUE,
+                (long) state.offlineSavingsEarnedMinutes() + gained));
+        }
+    }
+
+    boolean storeOfflineSavings(OnlineRewardsPlayerState state, OnlineRewardsPeriodContext context) {
+        var savings = configuration.offlineSavings();
+        if (!savings.enabled() || savings.maxMinutes() <= 0 || savings.storageRate() <= 0
+                || !context.rewardDate().equals(state.rewardDate())) return false;
+        if (state.offlineSavingsMinutes() > 0 && state.offlineSavingsDay().isBlank()) return false;
+        int earned = state.offlineSavingsEarnedMinutes();
+        int credited = state.offlineSavingsCreditedMinutes();
+        if (earned <= credited) return false;
+
+        int eligible = Math.min(savings.maxMinutes(), (int) Math.floor(earned * savings.storageRate()));
+        int accounted = Math.min(savings.maxMinutes(), (int) Math.floor(credited * savings.storageRate()));
+        int room = Math.max(0, savings.maxMinutes() - state.offlineSavingsMinutes());
+        int deposit = Math.min(room, Math.max(0, eligible - accounted));
+        // Mark the measured minutes even when the balance is full or rounded down.
+        state.setOfflineSavingsCreditedMinutes(earned);
+        if (deposit > 0) {
+            state.setOfflineSavingsMinutes(state.offlineSavingsMinutes() + deposit);
+            state.setOfflineSavingsDay(context.rewardDate());
+        }
+        return true;
+    }
+
+    boolean redeemOfflineSavings(OnlineRewardsPlayerState state, OnlineRewardsPeriodContext context) {
+        var savings = configuration.offlineSavings();
+        if (!savings.enabled() || savings.maxMinutes() <= 0 || state.offlineSavingsMinutes() <= 0) return false;
+        LocalDate deposited = dateOrNull(state.offlineSavingsDay());
+        if (deposited == null || !context.date().isAfter(deposited)) return false;
+        int bonus = Math.min(state.offlineSavingsMinutes(), savings.maxMinutes());
+        state.setOnlineMinutes((int) Math.min(Integer.MAX_VALUE, (long) state.onlineMinutes() + bonus));
+        state.setOfflineSavingsMinutes(0);
+        state.setOfflineSavingsDay("");
+        return true;
+    }
+
+    private static LocalDate dateOrNull(String date) {
+        if (date == null || date.isBlank()) return null;
+        try {
+            return LocalDate.parse(date);
+        } catch (DateTimeParseException invalid) {
+            return null;
+        }
+    }
+
     private Set<String> retainNonRepeatableIds(Set<String> claimedIds, List<OnlineRewardsPeriodicReward> rewards) {
-        Set<String> repeatableIds = new HashSet<>();
+        Set<String> retained = new HashSet<>();
         for (OnlineRewardsPeriodicReward reward : rewards) {
-            if (reward.repeat() && claimedIds.contains(reward.id())) {
-                repeatableIds.add(reward.id());
+            if (!reward.repeat() && claimedIds.contains(reward.id())) {
+                retained.add(reward.id());
             }
         }
-        return Set.copyOf(repeatableIds);
+        return Set.copyOf(retained);
     }
 
     /**

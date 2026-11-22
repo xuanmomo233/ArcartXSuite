@@ -37,6 +37,11 @@ public interface ModAttributeService {
     boolean available();
 
     /**
+     * 检查属性是否已注册且目标玩家拥有该属性实例。需在主线程调用。
+     */
+    boolean supportsAttribute(Player player, String attributeId);
+
+    /**
      * 登记某来源对玩家生效的属性修饰器集合（整体替换该来源的登记）。
      * <p>
      * 传入空集合等价于 {@link #clearSource(Player, String)}。

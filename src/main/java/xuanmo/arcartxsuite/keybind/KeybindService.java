@@ -197,7 +197,8 @@ public final class KeybindService implements Listener {
     public void onClientKeyPress(ClientKeyPressEvent event) {
         Player player = event.getPlayer();
         String keyName = event.getKeyName();
-        if (player != null && keyName != null) {
+        if (player != null && keyName != null && keyName.length() <= 128
+            && xuanmo.arcartxsuite.api.auth.AuthAccess.admitted(player.getUniqueId())) {
             dispatch(player, keyName);
         }
     }
@@ -256,7 +257,10 @@ public final class KeybindService implements Listener {
     }
 
     private void doDispatch(Player player, String keyName) {
-        CopyOnWriteArrayList<PrioritizedHandler> list = handlers.get(keyName.toUpperCase());
+        if (!player.isOnline() || !xuanmo.arcartxsuite.api.auth.AuthAccess.admitted(player.getUniqueId())) {
+            return;
+        }
+        CopyOnWriteArrayList<PrioritizedHandler> list = handlers.get(keyName.toUpperCase(Locale.ROOT));
         if (list == null || list.isEmpty()) {
             return;
         }

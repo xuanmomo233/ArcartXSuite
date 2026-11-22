@@ -1,5 +1,5 @@
 # ArcartXBattlePass 主配置文件
-# 定义战令系统的存储、赛季、任务、奖励、UI 及跨服同步等核心参数
+# 定义战令系统的存储、赛季、任务、奖励及 UI等核心参数
 
 config-version: 6  # 配置版本号，变更时触发迁移
 
@@ -99,11 +99,3 @@ ui:
   tasks-ui-id: "AXS:battlepass_tasks"  # 任务列表界面 UI 标识
   rewards-ui-id: "AXS:battlepass_rewards"  # 奖励界面 UI 标识
   settlement-ui-id: "AXS:battlepass_settlement"  # 赛季结算奖励界面 UI 标识
-
-# 跨服同步配置
-cross-server:
-  enabled: false  # 是否启用跨服数据同步
-  sync-fields:  # 需要同步的字段列表
-    - "progress"  # 战令等级与经验进度
-    - "task-progress"  # 任务完成进度
-    - "claimed-rewards"  # 已领取的奖励记录

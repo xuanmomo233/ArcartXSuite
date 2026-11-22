@@ -87,17 +87,15 @@ def wrap_seed_parts(a, b, c, d):
             list(cipher[16:24]), list(cipher[24:32]))
 
 
-def generate_seed_parts():
+def generate_seed_parts(require_fixed=False):
     """生成 4 个 8 字节 seed 分片。
 
-    优先复用固定 env AXS_SEED_PARTS_B64（32 字节的 Base64）——这样每次 CI 算出的
-    canonical root_seed 完全一致，已部署的本体 native 才能解密【单独重建的模块】的
-    逐类加密类（即支持“只构建变更的模块”而无需同时重建本体）。
-    缺省（未配置该 Secret）则随机生成，仅适合每次都同时重建并分发本体的场景。
+    生产构建使用固定的 AXS_SEED_PARTS_B64（32 字节的 Base64），
+    让宿主加密与各平台 Native 编译使用同一份种子。
     """
     fixed_b64 = os.environ.get("AXS_SEED_PARTS_B64", "").strip()
     if fixed_b64:
-        raw = base64.b64decode(fixed_b64)
+        raw = base64.b64decode(fixed_b64, validate=True)
         if len(raw) != 32:
             print(f"[!] AXS_SEED_PARTS_B64 解码后必须为 32 字节, 实际 {len(raw)}")
             sys.exit(1)
@@ -108,6 +106,8 @@ def generate_seed_parts():
             list(raw[16:24]),
             list(raw[24:32]),
         )
+    if require_fixed:
+        sys.exit("[!] 缺少 AXS_SEED_PARTS_B64")
     return (
         list(secrets.token_bytes(8)),
         list(secrets.token_bytes(8)),
@@ -128,7 +128,7 @@ def read_ed25519_public_key(keys_dir: Path) -> bytes:
             format=serialization.PublicFormat.Raw,
         )
     if bin_file.exists():
-        return bin_file.read_bytes()[:32]
+        return bin_file.read_bytes()
     print(f"[!] Ed25519 公钥未找到（需要 {pem_file} 或 {bin_file}）")
     print("[!] 请确认已安装 cryptography 库: pip install cryptography")
     sys.exit(1)
@@ -146,7 +146,7 @@ def read_response_ed25519_public_key(keys_dir: Path) -> bytes:
             format=serialization.PublicFormat.Raw,
         )
     if bin_file.exists():
-        return bin_file.read_bytes()[:32]
+        return bin_file.read_bytes()
     print(f"[!] 响应签名公钥未找到（需要 {pem_file} 或 {bin_file}）")
     print("[!] 请确认已安装 cryptography 库: pip install cryptography")
     sys.exit(1)
@@ -201,7 +201,9 @@ def replace_response_pubkey_in_source(source: str, pubkey: bytes) -> str:
 
 
 def resolve_keys_dir(keys_base: Path) -> Path:
-    if (keys_base / "ed25519_public.pem").exists() or (keys_base / "root_seed.bin").exists():
+    if any((keys_base / name).exists() for name in (
+        "ed25519_public.pem", "ed25519_public_raw.bin", "root_seed.bin",
+    )):
         return keys_base
     current_file = keys_base / "current_version.txt"
     if current_file.exists():
@@ -217,9 +219,19 @@ def main():
     parser = argparse.ArgumentParser(description="生成并嵌入 native 密钥材料")
     parser.add_argument("--keys-dir", required=True, help="密钥目录（generate-keys.py 的输出）")
     parser.add_argument("--native-dir", default="native/src", help="native 源码目录")
+    parser.add_argument("--require-fixed-seed", action="store_true", help="要求配置 AXS_SEED_PARTS_B64")
+    parser.add_argument("--derive-only", action="store_true", help="仅在宿主作业中生成 root_seed.bin")
+    parser.add_argument("--embed-only", action="store_true", help="仅在 Native 作业中注入分片和公钥")
     args = parser.parse_args()
+    if args.derive_only and args.embed_only:
+        parser.error("--derive-only 与 --embed-only 不能同时使用")
 
     keys_dir = resolve_keys_dir(Path(args.keys_dir))
+    a, b, c, d = generate_seed_parts(args.require_fixed_seed)
+    if args.derive_only:
+        (keys_dir / "root_seed.bin").write_bytes(assemble_root_seed(a, b, c, d))
+        return
+
     native_dir = Path(args.native_dir)
     print(f"[*] 密钥目录: {keys_dir}")
     print(f"[*] Native 源码目录: {native_dir}")
@@ -231,33 +243,24 @@ def main():
             print(f"[!] 文件不存在: {f}")
             sys.exit(1)
 
-    # 1. 生成分片并计算 canonical root_seed
-    print("\n[1/4] 生成 seed 分片并计算 canonical root_seed...")
-    a, b, c, d = generate_seed_parts()
-    root_seed = assemble_root_seed(a, b, c, d)
-    print(f"    root_seed (canonical) = {root_seed.hex()[:16]}...")
+    pubkey = read_ed25519_public_key(keys_dir)
+    response_pubkey = read_response_ed25519_public_key(keys_dir)
+    if len(pubkey) != 32 or len(response_pubkey) != 32:
+        sys.exit("[!] Ed25519 公钥必须为 32 字节")
 
-    # 2. 写回 root_seed.bin（Python 加密端的权威值）
-    print("\n[2/4] 写回 root_seed.bin（供 encrypt-jar.py 使用）...")
-    seed_out = keys_dir / "root_seed.bin"
-    seed_out.write_bytes(root_seed)
-    print(f"    已写入: {seed_out}")
-    print("    [!] 注意: 已覆盖 generate-keys.py 生成的随机 root_seed.bin，")
-    print("        因为 native XOR 重组要求 root_seed 必须由分片定义。")
+    if not args.embed_only:
+        (keys_dir / "root_seed.bin").write_bytes(assemble_root_seed(a, b, c, d))
 
     # 3. patch class_decrypt.cpp
     print("\n[3/4] 嵌入 seed 分片到 class_decrypt.cpp...")
     source = decrypt_file.read_text(encoding='utf-8')
     ca, cb, cc, cd = wrap_seed_parts(a, b, c, d)
-    print(f"    seed 分片已 HKDF-keystream 包裹（密文分片 a = {bytes(ca).hex()}）")
     source = replace_seed_in_source(source, ca, cb, cc, cd)
     decrypt_file.write_text(source, encoding='utf-8')
     print(f"    已更新: {decrypt_file}")
 
     # 4. patch integrity_check.cpp
     print("\n[4/4] 嵌入 Ed25519 公钥到 integrity_check.cpp...")
-    pubkey = read_ed25519_public_key(keys_dir)
-    response_pubkey = read_response_ed25519_public_key(keys_dir)
     print(f"    ed25519_public_key = {pubkey.hex()[:16]}...")
     print(f"    ed25519_response_public_key = {response_pubkey.hex()[:16]}...")
     source = integrity_file.read_text(encoding='utf-8')

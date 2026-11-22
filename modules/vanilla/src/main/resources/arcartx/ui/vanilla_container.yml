@@ -2,6 +2,15 @@ ui:
   isHud: false
   match:
   - 容器界面
+  # 部分客户端按容器标题匹配箱柜，保留原版中英文标题。
+  - Chest
+  - Large Chest
+  - Barrel
+  - Ender Chest
+  - 箱子
+  - 大型箱子
+  - 木桶
+  - 末影箱
   defaultOpen: true
   background: true
   escClose: true
@@ -97,6 +106,8 @@ ui:
       var.storageSource = ''
       var.utilityTitle = '储物容器'
     open: |-
+      var.canSortContainer = false
+      var.containerSortToken = ''
       var.noticeActive = false
       var.noticePeaked = false
       var.noticeText = ''
@@ -198,6 +209,8 @@ ui:
         var.noticeActive = true
       }
     utility_state: |-
+      var.canSortContainer = packet['canSortContainer'] == true
+      var.containerSortToken = packet['sortToken']
       var.utilityStatus = packet['status']
       var.utilityTitle = packet['title']
       var.utilityOccupancy = packet['occupancy']
@@ -304,6 +317,40 @@ controls:
               texts: ~&7CONTAINER / NATIVE
               fontSize: 28
               through: true
+          整理容器:
+            type: Canvas
+            attribute:
+              x: 1294
+              y: 32
+              width: 130
+              height: 44
+              visible: var.canSortContainer == true
+              enable: '!var.carrying && var.containerSortToken != none && var.containerSortToken != '''''
+              alpha: 'var.carrying ? 0.5 : 1'
+              tip: ~只整理当前打开的容器
+            action:
+              clickLeft: Packet.send('AXS:vanilla_container', 'sort_container', var.containerSortToken)
+            children:
+              底色:
+                type: Texture
+                attribute:
+                  width: 130
+                  height: 44
+                  normal: 'self.parent.isHovered() ? ''80,94,63,255'' : ''46,58,41,255'''
+                  through: true
+                  shape: ~round_rect
+                  radius: 6
+                effect:
+                  stroke:
+                    width: 3
+                    color: ~109,124,98,255
+              文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: ~&f整理容器
+                  fontSize: 28
+                  through: true
           关闭:
             type: Canvas
             attribute:
@@ -749,7 +796,7 @@ controls:
                         attribute:
                           width: self.parent.width
                           height: self.parent.height
-                          slotType: ~Inventory
+                          slotType: ~Container
                           id: (var.nativeTop + self.parent.index).round()
                           normal: ~0,0,0,0
                           itemScale: 0.8
@@ -833,7 +880,7 @@ controls:
                         attribute:
                           width: self.parent.width
                           height: self.parent.height
-                          slotType: ~Inventory
+                          slotType: ~Container
                           id: (var.nativeTop + 27 + self.parent.index).round()
                           normal: ~0,0,0,0
                           itemScale: 0.8
@@ -1388,7 +1435,7 @@ controls:
                     attribute:
                       x: 0
                       y: 42
-                      texts: ~&7点击存入光标物品，同类物品自动合并
+                      texts: ~&7先放回背包，再打开随身背包存入
                       fontSize: 32
                       through: true
                       point: ~middle_center
@@ -1429,7 +1476,7 @@ controls:
                     attribute:
                       x: 0
                       y: 24
-                      texts: ~&7更换分类或搜索词，亦可拿起物品存入
+                      texts: ~&7更换分类或搜索词
                       fontSize: 28
                       through: true
                       point: ~middle_center
@@ -1438,7 +1485,7 @@ controls:
                 attribute:
                   x: 34
                   y: 622
-                  texts: ~&7左键取一组 · 右键取半组
+                  texts: ~&7左键一组 · 右键半组 · 到背包
                   fontSize: 28
                   through: true
               页码:
@@ -1633,8 +1680,11 @@ controls:
                     action:
                       clickLeft: var.whMenu = ''
                   选项网格:
-                    type: HGrid
+                    type: RepeatGrid
                     attribute:
+                      items: "[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]"
+                      flow: ~row
+                      maxSize: 12
                       x: 16
                       y: 56
                       width: 600
@@ -1642,12 +1692,6 @@ controls:
                       column: 3
                       spaceBetweenX: 12
                       spaceBetweenY: 8
-                    action:
-                      create: |-
-                        for(i in range(1, 11)){
-                          choice = self['选项'].copy('选项' + i.round())
-                          choice.index = i.round()
-                        }
                     children:
                       选项:
                         type: Canvas
@@ -1656,7 +1700,7 @@ controls:
                           y: 0
                           width: 192
                           height: 36
-                          index: 0.round()
+                          index: self.item
                           entry: 'var.whMenu == ''category'' ? var.whCategories[(var.whMenuPage * 12 + self.index).round()] : var.whSortOptions[(var.whMenuPage
                             * 12 + self.index).round()]'
                           visible: self.entry != none

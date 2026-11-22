@@ -199,10 +199,10 @@ public final class QQBotAdminCommand {
     }
 
     private void io(CommandSender sender, QQBotService expected, Supplier<String> work) {
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+        expected.submitIo(work).whenComplete((result, error) -> {
             if (serviceProvider.get() != expected) return;
-            try { reply(sender, expected, work.get()); }
-            catch (RuntimeException error) {
+            if (error == null) reply(sender, expected, result);
+            else {
                 plugin.getLogger().warning("QQBot 管理操作失败: " + error.getMessage());
                 reply(sender, expected, msg("common.operation-failed"));
             }

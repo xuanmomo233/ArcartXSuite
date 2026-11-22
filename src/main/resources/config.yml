@@ -40,7 +40,8 @@ cloud:
 
 # ========== 安全设置 ==========
 # 模块签名验证公钥列表（Ed25519，Base64 编码）。
-# 作用：验证 modules/ 目录下所有 .jar 模块的数字签名，防止加载被篡改的模块。
+# 本地模块需同时放置同名 .jar.sig，使用 scripts/sign-module-jar.py 对整个 JAR 签名。
+# 已启用验签的旧本地模块需要补签，module.yml 中的旧签名只用于云端描述符校验。
 # 是否必填：否。留空表示关闭签名验证，不影响任何功能。
 # 何时需要填写：如果你使用的是第三方/私人定制模块，且对方提供了 Ed25519 公钥，
 #   填入后即可强制校验模块签名，签名无效或缺失的模块将被拒绝加载。
@@ -169,21 +170,34 @@ security:
 # Redis 与 BungeeCord/Velocity Forward 可同时启用（双发 + 入站去重）。
 cross-server:
   node-id: "default"
+  # 入站消息允许的最大年龄，同时用于去重窗口。节点时钟允许最多 5 秒超前。
   dedupe-ttl-ms: 60000
+  # 完整跨服信封的字符上限，包含 payload 和签名。
   max-payload-chars: 524288
   redis:
     enabled: false
     host: "127.0.0.1"
     port: 6379
+    # ACL 服务账号。留空时沿用默认 Redis 用户的认证方式。
+    username: ""
     password: ""
     database: 0
     channel: "AXS:CROSS"
     connect-timeout-ms: 5000
+    # Redis 6.2+。同一频道的节点 ID 必须唯一，留存设置须一致。
+    # 空间不足时暂停写入，直到仍在租约内的节点提交收件箱游标。
+    stream-max-bytes: 268435456
+    stream-reader-lease-ms: 120000
+    # 发件箱落盘后才确认本地受理，仍按 dedupe-ttl-ms 限制签名帧有效期。
+    outbox-max-bytes: 268435456
+    # 0 时 Redis 写入成功即出箱。大于 0 时，等待指定数量的副本确认复制。
+    outbox-replica-acks: 0
   proxy:
     enabled: false
     messenger-channel: "AXS_CROSS"
     forward-target: "ALL"
   signature:
+    # enabled 负责出站签名，verify 负责入站验签。任一开启时必须填写 secret。
     enabled: false
     secret: ""
     verify: true
@@ -231,7 +245,7 @@ mod-attributes:
 # 供 chat / market / mail 等模块统一调用。
 # 启用后，玩家在聊天、留言、邮件等场景输入的文本会先经过此过滤器。
 #   - cancel-on-match: true  命中敏感词时直接取消操作（消息不发送 / 留言不提交）
-#   - cancel-on-match: false 命中敏感词时替换为 replacement 字符后继续
+#   - cancel-on-match: false 将原文中命中的区间替换为 replacement 后继续
 # 标点穿透防护：匹配前先剥离 ignored-punctuations 中的标点，
 #   防止玩家用 f.u.c.k 等方式绕过过滤。
 moderation:
@@ -241,7 +255,7 @@ moderation:
   cancel-on-match: false
   # 替换字符或文本。
   replacement: "*"
-  # 本地屏蔽词列表（不区分大小写）。
+  # 本地屏蔽词列表（不区分大小写，全角 ASCII 与半角等效）。
   blocked-words:
     - "NMSL"
     - "fuck"
@@ -299,9 +313,17 @@ moderation:
     - "《"
     - "》"
     - "`"
-  # 敏感词白名单：命中白名单的文本跳过过滤（不区分大小写）。
+  # 额外忽略 Unicode 空白和标点，作用于 Suite 词库与白名单的匹配。
+  # 正则匹配仍只剥离 ignored-punctuations 中指定的字符或序列。
+  ignore-separators: false
+  # 只有完全位于白名单词组内的命中才放行。
   whitelist:
     - "has been"
+
+  # 可选接入 Redact 插件的本地审核服务，并复用其已同步的词库和精确结果缓存。
+  # 命中后使用 Suite 的拦截或替换规则。Redact 不可用时继续使用 Suite 规则。
+  redact:
+    enabled: false
 
   # ── 云端词库 ───────────────────────────────────────
   cloud:
@@ -725,10 +747,8 @@ modules:
 
   eventpacket:
     enabled: true
-    # EventPacket 事件引擎
-    # 功能：将服务器事件（击杀、登录、完成任务等）封装为结构化数据包，通过 ArcartX 通道推送到客户端，
-    #      供 title（称号授予）、chat（聊天卡片）、mail（邮件派发）、questgps（任务导航）等模块消费。
-    # 关键配置：监听事件列表与字段映射在模块内部 ArcartXEventPacket.yml 中定义。
+    # EventPacket 规则引擎，在 data/eventpacket/config.yml 订阅事件并配置动作。
+    # 跨服副本奖励要求参与节点使用同一套共享 MySQL、Abyss 和 Mail 存储。
 
   tab:
     enabled: true
@@ -763,12 +783,6 @@ modules:
     # Prop 快捷道具
     # 功能：将物品绑定为快捷技能道具，右键 / 按键触发，支持冷却、消耗、PlaceholderAPI 条件判断。
     # 依赖：需 MythicMobs（技能来源）或 AttributePlus / MythicLib（属性道具）。
-
-  rgb:
-    enabled: true
-    # RGB 渐变文本
-    # 功能：动态彩虹 / 自定义渐变色文本，支持聊天、称号、公告等场景。
-    # 配置文件：ArcartXRGB.yml（渐变模板与速度），修改后执行 /axs rgb reload。
 
   onlinerewards:
     enabled: true

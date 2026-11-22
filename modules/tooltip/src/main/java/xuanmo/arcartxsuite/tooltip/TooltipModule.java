@@ -4,6 +4,7 @@ import java.io.File;
 import java.util.List;
 import org.bukkit.command.CommandSender;
 import org.bukkit.event.Listener;
+import org.bukkit.scheduler.BukkitTask;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.AbstractAXSModule;
@@ -31,13 +32,12 @@ import java.util.Map;
  * Tooltip 模块主类。
  * <p>
  * 接收客户端 Forge mod（ArcartX-Suite-Mod）采集的 tooltip 数据，
- * 缓存并提供给其他模块使用。
+ * 缓存供发送者本人的展示使用。
  * <p>
  * 核心功能：
  * <ul>
  *   <li>接收客户端 {@code AXS_TOOLTIP_DATA} 网络包，缓存 tooltip 文本行和结构化数据</li>
- *   <li>提供 {@link TooltipDataCapable} 能力，供 Chat 等模块查询</li>
- *   <li>支持将 tooltip 文本行注入物品 NBT Lore，用于聊天物品预览</li>
+ *   <li>提供 {@link TooltipDataCapable} 能力，客户端数据不用于公开聊天物品预览</li>
  * </ul>
  */
 public final class TooltipModule extends AbstractAXSModule implements ModuleCommandHandler {
@@ -46,7 +46,8 @@ public final class TooltipModule extends AbstractAXSModule implements ModuleComm
     private static final String GUN_LIST_UI_FILE_PATH = "ui/gun_list.yml";
 
     private TooltipDataCache cache;
-    private TooltipJsonParser parser;
+    private BukkitTask cacheCleanup;
+    private TooltipPacketHandler packetHandler;
     private TooltipDataCapability capability;
     private TooltipAdminCommand adminCommand;
     private GunListService gunListService;
@@ -93,7 +94,7 @@ public final class TooltipModule extends AbstractAXSModule implements ModuleComm
     @Override
     protected void startService() throws Exception {
         cache = new TooltipDataCache();
-        parser = new TooltipJsonParser();
+        cacheCleanup = plugin.getServer().getScheduler().runTaskTimerAsynchronously(plugin, cache::cleanup, 20L, 20L);
         capability = new TooltipDataCapability(cache);
         // 枪械浏览 UI：gun_list 为 ax 模式界面；模式通过 plugin message
         // 通道 axstooltip:gunui 下发（客户端初始化完成后推送，与 map 模块同机制）
@@ -101,11 +102,14 @@ public final class TooltipModule extends AbstractAXSModule implements ModuleComm
         gunListService.setMode(gunUiMode);
         gunListService.registerChannels();
         UiBinding gunListBinding = registerModuleUi(GUN_LIST_UI_FILE_PATH, null, true);
-        gunListService.bindUi(gunListBinding.runtimeUiId());
+        if (gunListBinding.registeredUiId() != null) gunListService.bindUi(gunListBinding.runtimeUiId());
         // reload 后给在线玩家补推模式（init 回调只在进服时触发）
         gunListService.pushModeToAll();
 
         adminCommand = new TooltipAdminCommand(cache, messages(), gunListService);
+        packetHandler = new TooltipPacketHandler(cache, new TooltipJsonParser(), gunListService);
+        registerClientPacketHandler(PacketHandlerSpec.of(
+            packetHandler::handleGunList, 50, TooltipPacketHandler.GUN_LIST_PACKET_ID, "tooltip"));
 
         // 注册跨模块能力
         registerCapability(TooltipDataCapable.class, capability);
@@ -115,11 +119,11 @@ public final class TooltipModule extends AbstractAXSModule implements ModuleComm
 
     @Override
     protected void stopService() {
-        if (cache != null) {
-            cache.cleanup();
-        }
+        if (cacheCleanup != null) cacheCleanup.cancel();
+        cacheCleanup = null;
+        if (cache != null) cache.close();
         cache = null;
-        parser = null;
+        packetHandler = null;
         capability = null;
         adminCommand = null;
         if (gunListService != null) {
@@ -137,7 +141,7 @@ public final class TooltipModule extends AbstractAXSModule implements ModuleComm
     protected @NotNull PacketHandlerSpec createPacketHandlerSpec() {
         // 高优先级（数值小先执行），tooltip 数据需要尽快缓存
         return PacketHandlerSpec.of(
-            new TooltipPacketHandler(cache, parser, gunListService),
+            packetHandler,
             50,
             TooltipPacketHandler.PACKET_ID,
             "tooltip"

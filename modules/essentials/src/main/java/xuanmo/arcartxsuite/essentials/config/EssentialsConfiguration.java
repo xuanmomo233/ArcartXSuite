@@ -16,6 +16,7 @@ import org.bukkit.configuration.ConfigurationSection;
  * 各子配置均为独立 record，通过静态 {@code load} 方法从对应节点解析。
  *
  * @param debug       是否启用调试日志
+ * @param commandConflictProtection 是否保留同名的服务器或插件命令
  * @param commandAliases 命令简写别名映射（别名 → action）
  * @param player      玩家管理配置（飞行速度、AFK 超时、隐身消息隐藏等）
  * @param teleport    传送配置（TPA 超时、传送延迟、家上限、安全传送等）
@@ -28,6 +29,8 @@ import org.bukkit.configuration.ConfigurationSection;
  */
 public record EssentialsConfiguration(
     boolean debug,
+    boolean commandConflictProtection,
+    EssentialsFeatures features,
     Map<String, String> commandAliases,
     PlayerConfiguration player,
     TeleportConfiguration teleport,
@@ -49,6 +52,8 @@ public record EssentialsConfiguration(
     public static EssentialsConfiguration load(ConfigurationSection root, Logger logger) {
         return new EssentialsConfiguration(
             root.getBoolean("debug", false),
+            root.getBoolean("command-conflict-protection", false),
+            EssentialsFeatures.load(root),
             loadCommandAliases(root),
             PlayerConfiguration.load(section(root, "player")),
             TeleportConfiguration.load(section(root, "teleport")),
@@ -322,11 +327,10 @@ public record EssentialsConfiguration(
         String playerNotFound, String noPermission,
         String banBroadcast, String muteBroadcast, String kickBroadcast, String warnBroadcast,
         String unbanSuccess, String unmuteSuccess,
-        String sortDone, String treeFelled,
+        String treeFelled,
         String replantEnabled, String replantDisabled,
         String autotoolEnabled, String autotoolDisabled
     ) {
-        public String sortDone() { return sortDone; }
         public String treeFelled() { return treeFelled; }
         public String replantEnabled() { return replantEnabled; }
         public String replantDisabled() { return replantDisabled; }
@@ -387,7 +391,6 @@ public record EssentialsConfiguration(
                 msg(s, "warn-broadcast", "&e{player} 收到来自 {operator} 的警告。原因: {reason}"),
                 msg(s, "unban-success", "&a已解封 &f{player}&a。"),
                 msg(s, "unmute-success", "&a已解除 &f{player} &a的禁言。"),
-                msg(s, "sort-done", "&a背包已整理。"),
                 msg(s, "tree-felled", "&a一键砍树! 共砍落 {count} 个原木方块。"),
                 msg(s, "replant-enabled", "&a自动补种已开启。"),
                 msg(s, "replant-disabled", "&c自动补种已关闭。"),
@@ -414,7 +417,8 @@ public record EssentialsConfiguration(
         if (section != null) {
             for (String alias : section.getKeys(false)) {
                 String action = section.getString(alias);
-                if (action != null && !action.isBlank() && !alias.isBlank()) {
+                if (action != null && !action.isBlank() && !alias.isBlank()
+                    && !"sort".equalsIgnoreCase(alias.trim()) && !"sort".equalsIgnoreCase(action.trim())) {
                     aliases.put(alias.toLowerCase(Locale.ROOT), action.trim().toLowerCase(Locale.ROOT));
                 }
             }

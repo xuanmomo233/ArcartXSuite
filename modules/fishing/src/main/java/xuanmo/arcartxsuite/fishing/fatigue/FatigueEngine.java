@@ -2,8 +2,13 @@ package xuanmo.arcartxsuite.fishing.fatigue;
 
 import java.math.BigDecimal;
 import java.util.UUID;
+import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicBoolean;
+import xuanmo.arcartxsuite.api.scheduler.ModuleCallback;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
+import java.util.function.ToDoubleFunction;
 import java.util.logging.Logger;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
@@ -39,8 +44,11 @@ public final class FatigueEngine {
     private final IconResolver iconResolver;
     private final Supplier<CurrencyBridgeAPI> currencyProvider;
     @Nullable
-    private java.util.function.Function<UUID, Double> restBoostProvider;
+    private ToDoubleFunction<FishingSeasonData> restBoostProvider;
     private BukkitTask restTask;
+    private final AtomicBoolean recoveryRunning = new AtomicBoolean();
+    private volatile boolean restEnabled;
+    private final ModuleCallback callbacks = new ModuleCallback(() -> {});
 
     public FatigueEngine(@NotNull JavaPlugin plugin, @NotNull FatigueConfig config,
                          @NotNull FishingRepository repository, @NotNull Logger logger,
@@ -56,22 +64,29 @@ public final class FatigueEngine {
     }
 
     /**
-     * 设置休息恢复加速查询函数：传入玩家 UUID，返回该玩家的 rest_boost 天赋加成（0-1）。
+     * 设置休息恢复加速计算函数，使用已经读出的赛季数据。
      * 由 FishingService 在初始化后调用，将天赋系统与疲惫引擎关联。
      *
      * @param provider 查询函数，返回 rest_boost 加成值（无天赋时返回 0）
      */
-    public void setRestBoostProvider(@NotNull java.util.function.Function<UUID, Double> provider) {
+    public void setRestBoostProvider(@NotNull ToDoubleFunction<FishingSeasonData> provider) {
         this.restBoostProvider = provider;
     }
 
     /**
      * 启动定时恢复任务：每隔 rest-check-interval-ticks 对所有在线玩家减少疲惫值。
      */
-    public void start() {
+    public void start(Predicate<UUID> isFishing) {
         if (!config.enabled() || config.restDecreasePerMinute() <= 0) return;
         long interval = Math.max(20L, config.restCheckIntervalTicks());
-        restTask = Bukkit.getScheduler().runTaskTimer(plugin, this::tickRest, interval, interval);
+        restEnabled = true;
+        restTask = Bukkit.getScheduler().runTaskTimer(plugin, guard(() -> {
+            if (recoveryRunning.get()) return;
+            List<UUID> resting = Bukkit.getOnlinePlayers().stream()
+                .map(Player::getUniqueId).filter(uuid -> !isFishing.test(uuid)).toList();
+            if (resting.isEmpty() || !recoveryRunning.compareAndSet(false, true)) return;
+            Bukkit.getScheduler().runTaskAsynchronously(plugin, guard(() -> tickRest(resting)));
+        }), interval, interval);
         logger.fine("疲惫值定时恢复任务已启动，间隔=" + interval + " ticks");
     }
 
@@ -79,11 +94,16 @@ public final class FatigueEngine {
      * 停止定时恢复任务。
      */
     public void shutdown() {
+        restEnabled = false;
+        callbacks.close();
         if (restTask != null && !restTask.isCancelled()) {
             restTask.cancel();
             restTask = null;
         }
     }
+
+    public java.util.concurrent.CompletionStage<Void> databaseStopped() { return callbacks.stopped(); }
+    private Runnable guard(Runnable action) { return () -> callbacks.call(() -> { if(restEnabled)action.run();return null; },null); }
 
     /**
      * 定时恢复：对所有在线玩家减少疲惫值。
@@ -91,69 +111,52 @@ public final class FatigueEngine {
      * M7 优化：先检查玩家是否在钓鱼中（钓鱼中的玩家不恢复），再查 DB。
      * fatigue=0 的玩家跳过保存，减少 DB 写入。
      */
-    private void tickRest() {
+    private void tickRest(List<UUID> resting) {
         try {
             int baseDecrease = config.restDecreasePerMinute();
-            for (Player player : Bukkit.getOnlinePlayers()) {
+            for (UUID uuid : resting) {
+                if (!restEnabled) return;
                 try {
-                    UUID uuid = player.getUniqueId();
                     FishingSeasonData data = repository.loadSeasonData(uuid, seasonId);
                     if (data.fatigue() <= 0) continue; // 已为 0，无需减少也无需保存
                     // 天赋 rest_boost：提高休息恢复速度
                     int decrease = baseDecrease;
                     if (restBoostProvider != null) {
-                        double boost = restBoostProvider.apply(uuid);
+                        double boost = restBoostProvider.applyAsDouble(data);
                         if (boost > 0) {
                             decrease = (int) Math.round(baseDecrease * (1.0 + boost));
                         }
                     }
                     FishingSeasonData updated = data.withFatigueReduced(decrease);
                     // 仅当疲惫值实际变化时才保存
-                    if (updated.fatigue() != data.fatigue()) {
-                        repository.saveSeasonData(updated);
+                    if (restEnabled && updated.fatigue() != data.fatigue()) {
+                        repository.recoverFatigue(uuid, seasonId, data.fatigue(), updated.fatigue());
                     }
                 } catch (Exception e) {
-                    logger.warning("疲惫值恢复失败 [" + player.getName() + "]: " + e.getMessage());
+                    logger.warning("疲惫值恢复失败 [" + uuid + "]: " + e.getMessage());
                 }
             }
-        } catch (Exception e) {
-            logger.warning("疲惫值定时恢复任务异常: " + e.getMessage());
+        } finally {
+            recoveryRunning.set(false);
         }
     }
 
-    /**
-     * 钓鱼成功后增加疲惫值，并检查是否首次达到 100。
-     * <p>
-     * 仅计算并返回更新后的赛季数据，不自行保存到数据库（由调用方统一保存，避免重复写入）。
-     * 若首次达到 100 且奖励配置启用，会尝试发放奖励；仅当奖励全部发放成功时才标记为已领取。
-     *
-     * @param player          玩家
-     * @param seasonData      钓鱼前的赛季数据
-     * @param fatigueReduction 疲惫值增长降低（0-1，来自天赋），实际增加量 = fatiguePerCatch × (1 - reduction)
-     * @return 更新后的赛季数据（含疲惫值增加和可能的奖励标记）
-     */
-    public @NotNull FishingSeasonData onFishCaught(@NotNull Player player, @NotNull FishingSeasonData seasonData,
-                                                    double fatigueReduction) {
+    /** 计算本次捕获产生的疲惫值变化，供赛季事务使用。 */
+    public @NotNull FishingSeasonData addCatchFatigue(@NotNull FishingSeasonData seasonData, double fatigueReduction) {
         if (!config.enabled()) return seasonData;
-        int addAmount = (int) Math.round(config.fatiguePerCatch() * (1.0 - Math.max(0.0, Math.min(0.9, fatigueReduction))));
+        int addAmount = fatigueAdded(fatigueReduction);
         if (addAmount <= 0) return seasonData;
+        return seasonData.withFatigueAdded(addAmount, config.maxFatigue());
+    }
 
-        int oldFatigue = seasonData.fatigue();
-        FishingSeasonData updated = seasonData.withFatigueAdded(addAmount, config.maxFatigue());
+    private int fatigueAdded(double reduction) {
+        return (int) Math.round(config.fatiguePerCatch() * (1.0 - Math.max(0.0, Math.min(0.9, reduction))));
+    }
 
-        // 首次达到 maxFatigue 且未领取过奖励
-        if (updated.fatigue() >= config.maxFatigue() && !updated.claimedMaxFatigueReward()) {
-            if (config.firstMaxFatigueReward() != null && config.firstMaxFatigueReward().enabled()) {
-                // C6: 仅当奖励全部发放成功时才标记为已领取，防止玩家永远拿不到奖励
-                boolean allSuccess = dispatchFirstMaxFatigueReward(player);
-                if (allSuccess) {
-                    updated = updated.withMaxFatigueRewardClaimed();
-                }
-            }
-        }
-
-        logger.fine("玩家 " + player.getName() + " 疲惫值 " + oldFatigue + " → " + updated.fatigue());
-        return updated;
+    public boolean rewardMaxFatigue(@NotNull Player player, @NotNull FishingSeasonData season, double reduction) {
+        return config.enabled() && fatigueAdded(reduction) > 0 && season.fatigue() >= config.maxFatigue()
+            && !season.claimedMaxFatigueReward() && config.firstMaxFatigueReward() != null
+            && config.firstMaxFatigueReward().enabled() && dispatchFirstMaxFatigueReward(player);
     }
 
     /**
@@ -176,10 +179,12 @@ public final class FatigueEngine {
      * @param fatigue      疲惫值
      * @param normalFish   正常选出的鱼
      * @param fishLookup   鱼 ID → FishDefinition 查找函数
+     * @param eligible     鱼种是否符合玩家的等级和权限要求
      * @return 最终使用的鱼（可能是特殊鱼或正常鱼）
      */
     public @NotNull FishDefinition applySpecialFish(int fatigue, @NotNull FishDefinition normalFish,
-                                                     @NotNull java.util.function.Function<String, FishDefinition> fishLookup) {
+                                                     @NotNull java.util.function.Function<String, FishDefinition> fishLookup,
+                                                     @NotNull Predicate<FishDefinition> eligible) {
         if (!config.enabled() || !config.isInSpecialFishRange(fatigue)) return normalFish;
         if (config.specialFishes().isEmpty()) return normalFish;
         if (ThreadLocalRandom.current().nextDouble() >= config.specialFishChance()) return normalFish;
@@ -187,12 +192,13 @@ public final class FatigueEngine {
         String specialFishId = config.rollSpecialFish();
         if (specialFishId == null) return normalFish;
         FishDefinition special = fishLookup.apply(specialFishId);
-        if (special != null) {
-            logger.fine("玩家疲惫值=" + fatigue + "，触发特殊鱼: " + specialFishId);
-            return special;
+        if (special == null) {
+            logger.warning("特殊鱼未找到: " + specialFishId + "，使用正常鱼");
+            return normalFish;
         }
-        logger.warning("特殊鱼未找到: " + specialFishId + "，使用正常鱼");
-        return normalFish;
+        if (!eligible.test(special)) return normalFish;
+        logger.fine("玩家疲惫值=" + fatigue + "，触发特殊鱼: " + specialFishId);
+        return special;
     }
 
     /**
@@ -250,8 +256,8 @@ public final class FatigueEngine {
                     if (itemStack != null) {
                         // M9: 优先直接放入玩家背包，背包满时才掉落地面
                         var leftover = player.getInventory().addItem(itemStack);
-                        if (!leftover.isEmpty()) {
-                            player.getWorld().dropItemNaturally(player.getLocation(), itemStack);
+                        for (var remaining : leftover.values()) {
+                            player.getWorld().dropItemNaturally(player.getLocation(), remaining);
                         }
                     }
                 }

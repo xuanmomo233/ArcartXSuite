@@ -45,7 +45,7 @@ public interface AfkRewardDispatchable {
      *
      * @param player   目标玩家
      * @param areaName 区域名
-     * @return {@code true} 表示成功启动
+     * @return {@code true} 表示启动请求已受理，服务将确认会话写入后开始挂机
      */
     boolean startManualAfk(@NotNull Player player, @NotNull String areaName);
 }

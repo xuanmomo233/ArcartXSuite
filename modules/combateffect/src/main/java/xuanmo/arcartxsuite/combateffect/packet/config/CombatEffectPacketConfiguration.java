@@ -117,6 +117,12 @@ public final class CombatEffectPacketConfiguration {
      */
     public List<PacketDefinition> packetDefinitions() { return packetDefinitions; }
 
+    public List<PacketDefinition> enabledPackets(PacketTrigger trigger) {
+        return packetDefinitions.stream()
+            .filter(definition -> definition.enabled() && definition.triggers().contains(trigger))
+            .toList();
+    }
+
     /**
      * 返回是否启用实体战斗数据包。
      *

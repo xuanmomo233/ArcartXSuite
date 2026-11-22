@@ -32,6 +32,7 @@ public final class PickupService implements Listener {
     private static final long OPENED_PACKET_DELAY_TICKS = 1L;
     /** 等待 UI 打开回调的超时；超时只解除 opening，不把未确认界面当成已打开。 */
     private static final long OPEN_CONFIRM_DELAY_TICKS = 40L;
+    private static final long UNCONFIRMED_OPEN_RETRY_TICKS = 200L;
 
     private final JavaPlugin plugin;
     private final Logger logger;
@@ -41,6 +42,7 @@ public final class PickupService implements Listener {
     private final String uiId;
     private final Set<UUID> openedPlayers = ConcurrentHashMap.newKeySet();
     private final Set<UUID> openingPlayers = ConcurrentHashMap.newKeySet();
+    private final Set<UUID> attemptedOpen = ConcurrentHashMap.newKeySet();
     private final Map<UUID, Object> sessions = new ConcurrentHashMap<>();
     private org.bukkit.scheduler.BukkitTask initialOpenTask, retryOpenTask;
     private final Map<UUID, Deque<Map<String, Object>>> pendingPickups = new ConcurrentHashMap<>();
@@ -77,6 +79,7 @@ public final class PickupService implements Listener {
         bridge.registerUiCloseCallback(uiId, player -> {
             openedPlayers.remove(player.getUniqueId());
             openingPlayers.remove(player.getUniqueId());
+            attemptedOpen.remove(player.getUniqueId());
             sessions.remove(player.getUniqueId());
         });
         initialOpenTask = Bukkit.getScheduler().runTaskLater(plugin, this::openForOnlinePlayers, PREOPEN_DELAY_TICKS);
@@ -108,6 +111,7 @@ public final class PickupService implements Listener {
         }
         openedPlayers.clear();
         openingPlayers.clear();
+        attemptedOpen.clear();
         sessions.clear();
         pendingPickups.clear();
         disabledPlayers.clear();
@@ -132,6 +136,7 @@ public final class PickupService implements Listener {
             disabledPlayers.add(playerId);
             sessions.remove(playerId);
             openingPlayers.remove(playerId);
+            attemptedOpen.remove(playerId);
             // 立即关闭 HUD 并清理该玩家的打开状态与待发队列
             Player player = Bukkit.getPlayer(playerId);
             if (player != null && player.isOnline() && bridge.isAvailable()) {
@@ -170,6 +175,7 @@ public final class PickupService implements Listener {
         UUID id = player.getUniqueId();
         openedPlayers.remove(id);
         openingPlayers.remove(id);
+        attemptedOpen.remove(id);
         sessions.remove(id);
         ensureUiOpen(player);
     }
@@ -186,6 +192,10 @@ public final class PickupService implements Listener {
      * @return true 表示已排入推送流程
      */
     public boolean notifyPickup(Player player, ItemStack itemStack, int amount) {
+        return notifyPickupPrepared(player, itemStack, amount, "");
+    }
+
+    public boolean notifyPickupPrepared(Player player, ItemStack itemStack, int amount, String previewJson) {
         if (!active || player == null || !player.isOnline() || itemStack == null) {
             if (configuration.debug()) {
                 logger.info("[PickupDiag] notifyPickup early-return-1 active=" + active
@@ -211,7 +221,7 @@ public final class PickupService implements Listener {
             return false;
         }
 
-        Map<String, Object> payload = notificationPayload(itemStack, amount);
+        Map<String, Object> payload = notificationPayload(itemStack, amount, previewJson);
 
         if (openedPlayers.contains(playerId)) {
             if (configuration.debug()) {
@@ -247,10 +257,12 @@ public final class PickupService implements Listener {
         notifyPickup(player, stack, stack.getAmount());
     }
 
-    private Map<String, Object> notificationPayload(ItemStack itemStack, int amount) {
+    private Map<String, Object> notificationPayload(ItemStack itemStack, int amount, String previewJson) {
         Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("itemJson", itemStackBridge.itemToPreviewJson(itemStack).filter(json -> !json.isBlank())
-            .orElse("{\"id\":\"minecraft:air\",\"Count\":1b}"));
+        payload.put("itemJson", previewJson == null || previewJson.isBlank()
+            ? itemStackBridge.itemToPreviewJson(itemStack).filter(json -> !json.isBlank())
+                .orElse("{\"id\":\"minecraft:air\",\"Count\":1b}")
+            : previewJson);
         if (itemNameResolver != null) {
             payload.put("name", itemNameResolver.apply(itemStack));
         } else {
@@ -282,6 +294,7 @@ public final class PickupService implements Listener {
         openedPlayers.remove(playerId);
         pendingPickups.remove(playerId);
         openingPlayers.remove(playerId);
+        attemptedOpen.remove(playerId);
         sessions.remove(playerId);
         disabledPlayers.remove(playerId);
     }
@@ -311,10 +324,15 @@ public final class PickupService implements Listener {
         }
         if (opened) {
             logOpenMode(player, "open");
-            scheduleForSession(player, () -> openingPlayers.remove(playerId), OPEN_CONFIRM_DELAY_TICKS);
+            // Give a newly initialized client the usual fast retry. With no ACK, avoid
+            // reopening the same HUD in a burst on every subsequent pickup wave.
+            long retry = attemptedOpen.add(playerId) ? OPEN_CONFIRM_DELAY_TICKS
+                : UNCONFIRMED_OPEN_RETRY_TICKS + Math.floorMod(playerId.hashCode(), 20);
+            scheduleForSession(player, () -> openingPlayers.remove(playerId), retry);
             return true;
         }
         openingPlayers.remove(playerId);
+        attemptedOpen.remove(playerId);
         return false;
     }
 

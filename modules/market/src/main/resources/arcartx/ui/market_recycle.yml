@@ -121,12 +121,14 @@ ui:
             }
             var.recycleCopies = {}
             var.recycleGeneration = var.recycleGeneration + 1
-            if(var.maxRecycleCount > 1){
-              for(i in range(1, var.maxRecycleCount - 1)){
-                e = val.回收列表.get(0).copy('回收卡片_' + var.recycleGeneration.round() + '_' + i.round())
-                e.entryKey = i.round()
-                var.recycleCopies[i.round()] = e
+            if(var.回收列表Rows == none || var.回收列表Rows.size() != (var.maxRecycleCount)){
+              网格数据 = []
+              if((var.maxRecycleCount) > 0){
+                for(网格序号 in range(0, (var.maxRecycleCount) - 1)){
+                  网格数据.add(网格序号.round())
+                }
               }
+              var.回收列表Rows = 网格数据
             }
             var.renderedRecycleCount = var.maxRecycleCount
           }
@@ -138,44 +140,30 @@ ui:
         }
       }
       var.applyRecycleIcons = -> {
-        if(val.回收列表 != none){
-          var.allRecycleIconsReady = true
-          if(var.maxRecycleCount > 0){
-            row = val.回收列表.get(0)
-            if(row['物品图标'] != none){
-              row['物品图标'].seticon()
-            }
-            else{
-              var.allRecycleIconsReady = false
-            }
-            for(key in var.recycleCopies.keys()){
-              row = var.recycleCopies[key]
-              if(row['物品图标'] != none){
+        if(var.回收列表Rows != none && val.回收列表 != none && val.回收列表.childrenCount() == var.回收列表Rows.size()){
+          var.recycleIconsPending = false
+          if(var.回收列表Rows.size() > 0){
+            for(i in range(0, var.回收列表Rows.size() - 1)){
+              row = val.回收列表.get(i.round())
+              if(row != none && row['物品图标'] != none){
                 row['物品图标'].seticon()
-              }
-              else{
-                var.allRecycleIconsReady = false
+              }else{
+                var.recycleIconsPending = true
               }
             }
           }
-          var.recycleIconsPending = !var.allRecycleIconsReady
         }
       }
       var.renderEarnings = -> {
         if(val.收益列表 != none){
-          if(var.maxEarningsCount != var.renderedEarningsCount){
-            for(key in var.earningCopies.keys()){
-              var.earningCopies[key].remove()
-            }
-            var.earningCopies = {}
-            var.earningGeneration = var.earningGeneration + 1
-            if(var.maxEarningsCount > 1){
-              for(i in range(1, var.maxEarningsCount - 1)){
-                e = val.收益列表.get(0).copy('收益项_' + var.earningGeneration.round() + '_' + i.round())
-                e.entryKey = i.round()
-                var.earningCopies[i.round()] = e
+          if(var.收益列表GridRows == none || var.收益列表GridRows.size() != (var.maxEarningsCount)){
+            网格数据 = []
+            if((var.maxEarningsCount) > 0){
+              for(网格序号 in range(0, (var.maxEarningsCount) - 1)){
+                网格数据.add(网格序号.round())
               }
             }
+            var.收益列表GridRows = 网格数据
             var.renderedEarningsCount = var.maxEarningsCount
             val.收益滑块.setDragYRatio(0)
           }
@@ -606,16 +594,20 @@ controls:
                 val.收益滑块.setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
             children:
               收益列表:
-                type: VStack
+                type: RepeatGrid
                 val: 收益列表
                 attribute:
+                  items: "var.收益列表GridRows"
+                  flow: ~row
+                  column: 1
+                  spaceBetweenY: 6
+                  maxSize: "var.收益列表GridRows == none ? 0 : var.收益列表GridRows.size()"
                   width: 244
-                  spaceBetween: 6
                 children:
                   收益项:
                     type: Scroll
                     attribute:
-                      entryKey: 0.round()
+                      entryKey: self.item
                       width: 244
                       height: 38
                       visible: "var.earningsTexts[self.entryKey] != none"
@@ -638,7 +630,7 @@ controls:
             type: Canvas
             attribute:
               x: "14"
-              y: "var.viewH - 196"
+              y: "self.parent.height - 112"
               width: "272"
               height: 44
               enable: "!var.actionBusy"
@@ -665,7 +657,7 @@ controls:
             type: Text
             attribute:
               x: 14
-              y: "var.viewH - 272"
+              y: "self.parent.height - 186"
               texts: "var.autoEffective ? '&a个人自动回收生效中' : '&7个人自动回收未生效'"
               fontSize: 22
               through: true
@@ -673,7 +665,7 @@ controls:
             type: Text
             attribute:
               x: "14"
-              y: "var.viewH - 242"
+              y: "self.parent.height - 156"
               texts: "'&7已保留受保护物品 ' + var.protectedItems.round() + ' 件'"
               fontSize: 22
               through: true
@@ -682,7 +674,7 @@ controls:
             attribute:
               point: ~top_left
               x: 14
-              y: "var.viewH - 132"
+              y: "self.parent.height - 56"
               width: 272
               height: 48
               enable: "!var.actionBusy && var.actionToken != '' && var.eligibleCount > 0 && var.batchEnabled"
@@ -837,8 +829,11 @@ controls:
             children:
               回收列表:
                 val: 回收列表
-                type: HGrid
+                type: RepeatGrid
                 attribute:
+                  items: "var.回收列表Rows"
+                  flow: ~row
+                  maxSize: "var.回收列表Rows == none ? 0 : var.回收列表Rows.size()"
                   width: "var.scrollW"
                   column: 3
                   spaceBetweenX: 16
@@ -847,7 +842,7 @@ controls:
                   回收卡片:
                     type: Canvas
                     attribute:
-                      entryKey: 0.round()
+                      entryKey: self.item
                       entry: var.recyclables[self.entryKey]
                       visible: self.entry != none
                       width: "var.cardW"
@@ -1032,7 +1027,7 @@ controls:
         type: Texture
         attribute:
           point: ~stretch_all
-          normal: ~0,0,0,180
+          normal: ~12,19,33,178
       面板:
         type: Adaptive
         attribute:
@@ -1045,7 +1040,13 @@ controls:
             attribute:
               point: ~stretch_all
               through: true
-              normal: ~36,38,48,245
+              normal: ~32,43,62,250
+              shape: ~round_rect
+              radius: 12
+            effect:
+              stroke:
+                width: 2
+                color: ~86,145,225,200
           标题:
             type: Text
             attribute:

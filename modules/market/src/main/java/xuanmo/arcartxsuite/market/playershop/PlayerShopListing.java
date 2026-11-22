@@ -69,6 +69,6 @@ public class PlayerShopListing {
     }
 
     public enum ListingStatus {
-        ACTIVE, SOLD, EXPIRED, CANCELLED
+        PREPARING, ACTIVE, RESERVED, SOLD, EXPIRED, CANCELLED
     }
 }

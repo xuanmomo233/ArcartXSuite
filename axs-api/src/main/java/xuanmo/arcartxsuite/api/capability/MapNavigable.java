@@ -11,6 +11,7 @@ import xuanmo.arcartxsuite.api.bridge.ApiStability;
  * <p>
  * 由 Map 模块实现。地图是展示层与事件源：其他模块/外部插件推送外部目标点、
  * 接收导航点击回调、监测导航事件。外部目标的坐标与导航执行由来源全权负责。
+ * 外部目标在主线程更新，普通变更合并到下一 tick 刷新已打开的视图。
  * <p>
  * 获取方式：
  * <ul>
@@ -24,8 +25,8 @@ import xuanmo.arcartxsuite.api.bridge.ApiStability;
  *   <li>{@code axs.map.nav_cleared} —— 玩家停止导航</li>
  *   <li>{@code axs.map.external_navigate} —— 面板点击外部目标"导航"</li>
  *   <li>{@code axs.map.external_nav_cancel} —— 面板点击外部目标"取消"</li>
- *   <li>{@code axs.map.ready} —— 地图模块（重）载完成，按在线玩家逐个发布；
- *       外部目标/导航回调/委托已由地图自动续传恢复，来源可订阅此事件
+ *   <li>{@code axs.map.ready} —— 地图模块启用后，能力和客户端处理器注册完成时，
+ *       在主线程按在线玩家发布。热重载时已恢复仍在运行的来源，来源可订阅此事件
  *       决定是否重推最新数据（如目标坐标已变化）</li>
  * </ul>
  * <p>
@@ -59,6 +60,9 @@ public interface MapNavigable {
      * @param specs  目标规格列表
      */
     void upsertExternalTargets(@NotNull Player player, @NotNull List<MapExternalTargetSpec> specs);
+
+    /** 删除指定来源的一个外部目标。目标不存在或归属其他来源时返回 false。 */
+    boolean removeExternalTarget(@NotNull Player player, @NotNull String source, @NotNull String targetId);
 
     /**
      * 用给定集合原子替换某来源的全部外部目标（reconcile）。

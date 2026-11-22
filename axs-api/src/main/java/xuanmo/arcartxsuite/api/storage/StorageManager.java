@@ -36,6 +36,9 @@ import xuanmo.arcartxsuite.api.bridge.ApiStability;
  */
 @ApiStability.Stable
 public interface StorageManager {
+    /** 在后台打开模块数据源，并等待同名模块前一实例完成退役。 */
+    ModuleStorage openModuleStorage(String moduleId, String sqliteFileName, File moduleDataFolder,
+                                    StorageDescriptor overrideDescriptor) throws SQLException;
 
     /**
      * 获取本体共享数据源。

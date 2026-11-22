@@ -33,7 +33,7 @@ def _load_ed25519_keypair_from_env(env_name: str, label: str):
     fixed_b64 = os.environ.get(env_name, "").strip()
     if HAS_CRYPTO:
         if fixed_b64:
-            seed = base64.b64decode(fixed_b64)
+            seed = base64.b64decode(fixed_b64, validate=True)
             if len(seed) != 32:
                 raise ValueError(f"{env_name} 解码后必须为 32 字节, 实际 {len(seed)}")
             private_key = Ed25519PrivateKey.from_private_bytes(seed)
@@ -170,9 +170,34 @@ def main():
     parser.add_argument("--output", required=True, help="输出目录路径")
     parser.add_argument("--version", default=None, help="密钥版本号（默认自动生成）")
     parser.add_argument("--class-count", type=int, default=100, help="预生成类密钥参数数量")
+    parser.add_argument("--require-fixed-seeds", action="store_true", help="要求提供两套有效的签名种子")
+    parser.add_argument("--public-only", action="store_true", help="仅输出 Native 作业需要的两份公钥")
     args = parser.parse_args()
 
     output_dir = Path(args.output)
+    if args.require_fixed_seeds or args.public_only:
+        if not HAS_CRYPTO:
+            parser.error("必须安装 cryptography 才能生成生产密钥材料")
+        for name in ("AXB_SIGN_SEED_B64", "AXB_RESP_SIGN_SEED_B64"):
+            try:
+                seed = base64.b64decode(os.environ.get(name, "").strip(), validate=True)
+            except ValueError:
+                parser.error(f"{name} 必须为有效的 Base64")
+            if len(seed) != 32:
+                parser.error(f"{name} 解码后必须为 32 字节")
+
+    if args.public_only:
+        output_dir.mkdir(parents=True, exist_ok=True)
+        for name, label, file_name in (
+            ("AXB_SIGN_SEED_B64", "AXB 签名", "ed25519_public_raw.bin"),
+            ("AXB_RESP_SIGN_SEED_B64", "响应签名", "response_ed25519_public_raw.bin"),
+        ):
+            public = _load_ed25519_keypair_from_env(name, label).public_key()
+            (output_dir / file_name).write_bytes(public.public_bytes(
+                encoding=serialization.Encoding.Raw, format=serialization.PublicFormat.Raw,
+            ))
+        return
+
     version = args.version or f"v{datetime.now().strftime('%Y%m%d')}"
 
     version_dir = output_dir / version

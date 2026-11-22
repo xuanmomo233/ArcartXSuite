@@ -6,7 +6,7 @@
 # 事件源说明：
 #   event-topic: ArcartX EventBus 主题（仅用于业务语义事件，需对应模块已加载）
 #   bukkit-event: 原版 Bukkit 事件（用于有直接对应 Bukkit 事件的场景）
-#   两个源不会同时生效，引擎启动时检测模块存在性自动选择。
+#   EventBus 会提前订阅，发布者注册后由 EventBus 计数，之前使用配置的 Bukkit 降级事件。
 #
 #   选择原则：
 #   - 如果事件有直接对应的 Bukkit 事件（如击杀→EntityDeathEvent、拾取→EntityPickupItemEvent），
@@ -42,8 +42,7 @@
 # =============================================================================
 
 # -------- 每日登录 --------
-# event-topic 优先（loginview 模块发布"登录成功"事件，仅密码验证通过后触发）
-# bukkit-event 降级（PlayerJoinEvent 每次进服都触发，需配合 limits.max-per-day 防止重复计数）
+# 宿主在玩家获准进服后发布业务日在线事件。战令按玩家、赛季、任务和业务日持久去重。
 daily-login:
   display-name: "每日登录"
   description: "每天登录游戏即可获得奖励"
@@ -55,11 +54,6 @@ daily-login:
   increment-strategy:
     type: fixed
     value: 1
-  # 限制每天最多计入 1 次，防止玩家反复进服刷进度
-  # loginview 模块存在时走 EventBus（登录成功才触发），此限制是双重保险
-  # loginview 不存在时走 PlayerJoinEvent，此限制确保每天只算一次
-  limits:
-    max-per-day: 1
   weight: 5
 
 # -------- 击杀任意生物 --------

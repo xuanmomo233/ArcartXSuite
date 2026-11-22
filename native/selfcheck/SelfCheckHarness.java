@@ -7,7 +7,7 @@ import xuanmo.arcartxsuite.security.NativeBridge;
  * 流程：System.load 真实构建 + 已注入自哈希的 native 库 → 调用
  * NativeBridge.n5()（initProtection，内部先执行 verify_native_self_integrity）。
  *   - initProtection 返回 -1  ⇔ 自校验判定库被篡改（fail-closed 生效）
- *   - 返回 !=-1（0 或 -2）      ⇔ 自校验通过（-2 只是后续密钥初始化未就绪，与自校验无关）
+ *   - 返回 -3                  ⇔ 自校验通过，发布库拒绝未签名的 harness 类目录
  *
  * 用法：java SelfCheckHarness <libpath> <expect_pass|expect_tamper>
  */
@@ -17,7 +17,12 @@ public class SelfCheckHarness {
             System.err.println("usage: SelfCheckHarness <libpath> <expect_pass|expect_tamper>");
             System.exit(2);
         }
-        String lib = new File(args[0]).getAbsolutePath();
+        File library = new File(args[0]).getAbsoluteFile();
+        if (!library.isFile()) {
+            System.err.println("Native library path does not identify a file");
+            System.exit(2);
+        }
+        String lib = library.getPath();
         String mode = args[1];
 
         // 确保 NativeBridge 已被应用类加载器定义，供 JNI_OnLoad 的 FindClass 命中。
@@ -29,10 +34,6 @@ public class SelfCheckHarness {
         try {
             System.load(lib);
         } catch (Throwable t) {
-            if ("expect_tamper".equals(mode)) {
-                System.out.println("PASS(load-rejected): tampered library refused at load: " + t);
-                System.exit(0);
-            }
             System.err.println("FAIL: could not load library: " + t);
             System.exit(1);
             return;
@@ -42,11 +43,11 @@ public class SelfCheckHarness {
         System.out.println("n5(initProtection) returned " + r);
 
         if ("expect_pass".equals(mode)) {
-            if (r == -1) {
-                System.err.println("FAIL: self-check REJECTED an untampered, correctly-injected library (r=-1)");
+            if (r != -3) {
+                System.err.println("FAIL: expected a clean native library to reject the unsigned class directory (r=" + r + ")");
                 System.exit(1);
             }
-            System.out.println("PASS: untampered library accepted by self-check (r=" + r + "; -1 would mean tamper)");
+            System.out.println("PASS: native self-check passed and unsigned class directory was rejected (r=-3)");
         } else if ("expect_tamper".equals(mode)) {
             if (r != -1) {
                 System.err.println("FAIL: self-check did NOT reject tampered library (r=" + r + ", expected -1)");

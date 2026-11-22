@@ -82,4 +82,26 @@ class PickupNotificationLifecycleTest {
         for(Runnable task:new ArrayList<>(tasks))task.run();
         verify(bridge).sendPacket(eq(player),eq("CUSTOM:hud"),eq("pick"),any());
     }
+
+    @Test void preparedIconIsSentWithActualCountAfterHudConfirmation() {
+        String preview = "{id:\"minecraft:diamond\",Count:1b,tag:{CustomModelData:23}}";
+        assertTrue(service.notifyPickupPrepared(player, stack, 6, preview));
+        var callback = org.mockito.ArgumentCaptor.forClass(Runnable.class);
+        verify(bridge).openUiWithCallback(eq(player), eq("CUSTOM:hud"), callback.capture());
+        verify(bridge, never()).sendPacket(any(), any(), any(), any());
+        callback.getValue().run();
+        for (Runnable task : new ArrayList<>(tasks)) task.run();
+        verify(bridge).sendPacket(eq(player), eq("CUSTOM:hud"), eq("pick"),
+            eq(Map.of("itemJson", preview, "name", "钻石", "amount", 6)));
+    }
+
+    @Test void absentConfirmationKeepsFastFirstRetryAndBacksOffNextRetry() {
+        tasks.get(0).run();
+        tasks.get(2).run();
+        tasks.get(1).run();
+        verify(bridge, times(2)).openUiWithCallback(eq(player), eq("CUSTOM:hud"), any());
+        assertTrue(service.notifyPickup(player, stack, 1));
+        verify(bridge, times(2)).openUiWithCallback(eq(player), eq("CUSTOM:hud"), any());
+        verify(Bukkit.getScheduler()).runTaskLater(any(), any(Runnable.class), longThat(ticks -> ticks >= 200));
+    }
 }

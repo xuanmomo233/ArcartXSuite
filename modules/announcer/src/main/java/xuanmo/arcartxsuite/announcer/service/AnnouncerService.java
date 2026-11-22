@@ -1,19 +1,19 @@
 package xuanmo.arcartxsuite.announcer.service;
 
+import java.util.ArrayDeque;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.logging.Logger;
 import org.bukkit.Bukkit;
-import xuanmo.arcartxsuite.api.placeholder.PlaceholderResolverAPI;
 import org.bukkit.command.ConsoleCommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -29,61 +29,66 @@ import xuanmo.arcartxsuite.announcer.transport.AnnouncerEnvelopeCodec;
 import xuanmo.arcartxsuite.api.capability.QQBotBroadcastable;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerAPI;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerChannel;
-import xuanmo.arcartxsuite.api.bridge.ClientBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
-import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
-import java.util.logging.Logger;
+import xuanmo.arcartxsuite.api.auth.AuthAccess;
+import xuanmo.arcartxsuite.api.auth.AuthSnapshot;
+import xuanmo.arcartxsuite.api.placeholder.PlaceholderResolverAPI;
 
 public final class AnnouncerService implements Listener {
 
     public static final String CLICK_PACKET_ID = "AXS_announcer_click";
-    private static final String TEXT_VARIABLE_NAME = "AXS_announcer_text";
-    private static final String ID_VARIABLE_NAME = "AXS_announcer_id";
-    private static final String CLICKABLE_VARIABLE_NAME = "AXS_announcer_clickable";
-    private static final String REVISION_VARIABLE_NAME = "AXS_announcer_revision";
 
     private static final int DEDUPE_MAX_SIZE = 128;
+    private static final int MAX_PENDING_BROADCASTS = 128;
+    private static final int DISPLAY_PLAYERS_PER_TICK = 32;
 
     private final JavaPlugin plugin;
     private final Logger logger;
     private final AnnouncerModuleConfiguration configuration;
+    private final List<AnnouncerEntry> activeEntries;
     private final PacketBridgeAPI bridge;
-    private final ClientBridgeAPI clientBridge;
-    private final PacketGuardAPI packetGuard;
     private final java.util.List<String> uiIds;
     private final CrossServerAPI crossServer;
     private final PlaceholderResolverAPI placeholderResolver;
 
-    private CrossServerChannel crossServerChannel;
+    private volatile CrossServerChannel crossServerChannel;
     private final Set<UUID> initializedPlayers = ConcurrentHashMap.newKeySet();
     private final Set<UUID> openedPlayers = ConcurrentHashMap.newKeySet();
-    private final AtomicLong revisionSequence = new AtomicLong();
+    private final Map<UUID, DisplayClick> displayClicks = new HashMap<>();
+    private final Map<UUID, PendingDisplay> pendingDisplays = new LinkedHashMap<>();
+    private long revisionSequence;
     private final Set<String> recentDedupeKeys = Collections.newSetFromMap(
-        Collections.synchronizedMap(new LinkedHashMap<String, Boolean>() {
+        new LinkedHashMap<String, Boolean>() {
             @Override
             protected boolean removeEldestEntry(Map.Entry<String, Boolean> eldest) {
                 return size() > DEDUPE_MAX_SIZE;
             }
-        })
+        }
     );
 
     private volatile java.util.function.Supplier<QQBotBroadcastable> qqBotProvider;
 
     private BukkitTask broadcastTask;
+    private BukkitTask displayTask;
     private int currentEntryIndex;
     private long nextBroadcastAtMs;
     private AnnouncerDisplay currentDisplay;
+    private DisplayRender displayRender;
+    private AnnouncerEntry currentEntry;
+    private volatile boolean closed;
 
     /** 手动广播队列，在当前广播结束后立即播报，不受冷却限制 */
-    private final Queue<String> manualBroadcastQueue = new ConcurrentLinkedQueue<>();
+    private final Queue<String> manualBroadcastQueue = new ArrayBlockingQueue<>(MAX_PENDING_BROADCASTS);
+    private final Queue<ImmediateBroadcast> immediateBroadcasts = new ArrayDeque<>();
+    private final Object immediateLock = new Object();
+    private BukkitTask immediateTask;
+    private final AtomicLong droppedManualBroadcasts = new AtomicLong();
 
     public AnnouncerService(
         JavaPlugin plugin,
         Logger logger,
         AnnouncerModuleConfiguration configuration,
         PacketBridgeAPI bridge,
-        ClientBridgeAPI clientBridge,
-        PacketGuardAPI packetGuard,
         java.util.List<String> uiIds,
         CrossServerAPI crossServer,
         PlaceholderResolverAPI placeholderResolver
@@ -91,9 +96,8 @@ public final class AnnouncerService implements Listener {
         this.plugin = plugin;
         this.logger = logger;
         this.configuration = configuration;
+        this.activeEntries = configuration.activeEntries();
         this.bridge = bridge;
-        this.clientBridge = clientBridge;
-        this.packetGuard = packetGuard;
         this.uiIds = uiIds;
         this.crossServer = crossServer;
         this.placeholderResolver = placeholderResolver;
@@ -120,6 +124,12 @@ public final class AnnouncerService implements Listener {
     }
 
     public void shutdown() {
+        synchronized (immediateLock) {
+            closed = true;
+            if (immediateTask != null) immediateTask.cancel();
+            immediateTask = null;
+            immediateBroadcasts.clear();
+        }
         if (crossServerChannel != null) {
             crossServerChannel.close();
             crossServerChannel = null;
@@ -128,13 +138,21 @@ public final class AnnouncerService implements Listener {
             broadcastTask.cancel();
             broadcastTask = null;
         }
+        if (displayTask != null) {
+            displayTask.cancel();
+            displayTask = null;
+        }
         initializedPlayers.clear();
         openedPlayers.clear();
+        displayClicks.clear();
+        displayRender = null;
+        pendingDisplays.clear();
+        manualBroadcastQueue.clear();
         HandlerList.unregisterAll(this);
     }
 
     public void markClientInitialized(Player player) {
-        if (player == null) {
+        if (closed || player == null) {
             return;
         }
         initializedPlayers.add(player.getUniqueId());
@@ -164,15 +182,22 @@ public final class AnnouncerService implements Listener {
         if (player == null || packetId == null || !CLICK_PACKET_ID.equalsIgnoreCase(packetId)) {
             return false;
         }
-        // PacketGuard 已由 ClientPacketRouter 在路由层统一调用，此处不再重复检查。
-
-        AnnouncerEntry entry = data == null || data.isEmpty()
-            ? null
-            : findEntryById(configuration.activeEntries(), data.get(0));
+        UUID playerId = player.getUniqueId();
+        DisplayClick click = displayClicks.get(playerId);
+        AnnouncerDisplay display = currentDisplay;
+        if (closed || !display.clickable() || click == null || click.player() != player || click.used()
+            || !click.revision().equals(display.revision())
+            || data == null || data.size() != 1 || !click.handle().equals(data.get(0))
+            || !player.isOnline() || Bukkit.getPlayer(playerId) != player
+            || !click.matchesAdmission(AuthAccess.snapshot(playerId))) {
+            return true;
+        }
+        AnnouncerEntry entry = currentEntry;
         if (entry == null || entry.clickCommand().isBlank()) {
             return true;
         }
 
+        displayClicks.put(playerId, click.consumed());
         String playerName = xuanmo.arcartxsuite.api.command.CommandSanitizer.validatePlayerName(player.getName());
         String command = entry.clickCommand().replace("{player}", playerName).replace("<player>", playerName);
         ConsoleCommandSender console = Bukkit.getConsoleSender();
@@ -193,7 +218,7 @@ public final class AnnouncerService implements Listener {
     }
 
     public int activeEntryCount() {
-        return configuration.activeEntries().size();
+        return activeEntries.size();
     }
 
     public int initializedPlayerCount() {
@@ -205,23 +230,14 @@ public final class AnnouncerService implements Listener {
         UUID playerId = event.getPlayer().getUniqueId();
         initializedPlayers.remove(playerId);
         openedPlayers.remove(playerId);
+        displayClicks.remove(playerId);
+        pendingDisplays.remove(playerId);
     }
 
     private void tickBroadcast() {
         long now = System.currentTimeMillis();
 
-        // 每个检查周期尝试为尚未打开 UI 的已初始化玩家打开 HUD 并同步当前内容
-        // 覆盖 reload 后 UI 重新注册的延迟场景
-        for (Player player : Bukkit.getOnlinePlayers()) {
-            UUID playerId = player.getUniqueId();
-            if (initializedPlayers.contains(playerId) && !openedPlayers.contains(playerId)) {
-                if (ensureUiOpen(player)) {
-                    sendDisplay(player, currentDisplay, "late-open");
-                }
-            }
-        }
-
-        if (now >= nextBroadcastAtMs) {
+        if (now >= nextBroadcastAtMs || (nextBroadcastAtMs == Long.MAX_VALUE && !manualBroadcastQueue.isEmpty())) {
             // 优先消费手动广播队列
             String manualText = manualBroadcastQueue.poll();
             if (manualText != null) {
@@ -236,6 +252,7 @@ public final class AnnouncerService implements Listener {
         currentEntryIndex = 0;
         nextBroadcastAtMs = 0L;
         currentDisplay = AnnouncerDisplay.hidden(nextRevision());
+        currentEntry = null;
     }
 
     /**
@@ -254,13 +271,14 @@ public final class AnnouncerService implements Listener {
      * @param text    广播文本
      * @param forward 是否跨服转发
      */
-    public void enqueueManualBroadcast(String text, boolean forward) {
-        if (text != null && !text.isBlank()) {
-            manualBroadcastQueue.offer(text);
-            if (forward) {
-                forwardCrossServer(text, false);
-            }
+    public boolean enqueueManualBroadcast(String text, boolean forward) {
+        if (closed || text == null || text.isBlank()) return false;
+        if (!manualBroadcastQueue.offer(text)) {
+            droppedManualBroadcasts.incrementAndGet();
+            return false;
         }
+        if (forward) forwardCrossServer(text, false);
+        return true;
     }
 
     /**
@@ -279,28 +297,42 @@ public final class AnnouncerService implements Listener {
      * @param forward 是否跨服转发
      */
     public void broadcastNow(String text, boolean forward) {
-        if (text == null || text.isBlank()) return;
+        if (closed || text == null || text.isBlank()) return;
+        if (!Bukkit.isPrimaryThread()) {
+            enqueueImmediate(new ImmediateBroadcast(text, forward));
+            return;
+        }
+        broadcastImmediately(new ImmediateBroadcast(text, forward));
+    }
+
+    private void broadcastImmediately(ImmediateBroadcast broadcast) {
+        String text = broadcast.text();
         broadcastManualDisplay(text);
-        if (forward) {
+        if (broadcast.forward()) {
             forwardCrossServer(text, true);
         }
     }
 
     public int pendingManualBroadcasts() {
-        return manualBroadcastQueue.size();
+        synchronized (immediateLock) {
+            return manualBroadcastQueue.size() + immediateBroadcasts.size();
+        }
+    }
+
+    public long droppedManualBroadcasts() {
+        return droppedManualBroadcasts.get();
     }
 
     private void broadcastManualDisplay(String text) {
         AnnouncerDisplay display = AnnouncerDisplay.visible(
             "manual", text, false, nextRevision()
         );
+        currentEntry = null;
         currentDisplay = display;
         // 手动广播后使用普通间隔时间作为展示时长，不走冷却
         nextBroadcastAtMs = System.currentTimeMillis() + configuration.betweenEntryIntervalMs();
         for (Player player : Bukkit.getOnlinePlayers()) {
-            ensureUiOpen(player);
-            AnnouncerDisplay rendered = renderDisplayFor(player, display);
-            sendDisplay(player, rendered, "manual");
+            sendDisplay(player, display, "manual");
         }
         forwardToQQBot(text);
     }
@@ -327,32 +359,64 @@ public final class AnnouncerService implements Listener {
      * 在主线程中调度本地展示，跳过自身节点和重复消息。
      */
     public void handleRemoteEnvelope(AnnouncerEnvelope envelope) {
-        if (envelope == null) return;
+        if (closed || envelope == null || envelope.text().isBlank()) return;
         if (crossServer.nodeId().equals(envelope.originNode())) return;
-        if (!recentDedupeKeys.add(envelope.dedupeKey())) return;
-        Bukkit.getScheduler().runTask(plugin, () -> {
-            if (envelope.immediate()) {
-                broadcastManualDisplay(envelope.text());
-            } else {
-                enqueueManualBroadcast(envelope.text(), false);
+        String key = envelope.dedupeKey();
+        synchronized (recentDedupeKeys) {
+            if (recentDedupeKeys.contains(key)) return;
+            boolean accepted = envelope.immediate()
+                ? enqueueImmediate(new ImmediateBroadcast(envelope.text(), false))
+                : enqueueManualBroadcast(envelope.text(), false);
+            if (accepted) recentDedupeKeys.add(key);
+        }
+    }
+
+    private boolean enqueueImmediate(ImmediateBroadcast broadcast) {
+        synchronized (immediateLock) {
+            if (closed) return false;
+            if (immediateBroadcasts.size() >= MAX_PENDING_BROADCASTS) {
+                droppedManualBroadcasts.incrementAndGet();
+                return false;
             }
-        });
+            immediateBroadcasts.add(broadcast);
+            if (immediateTask == null) scheduleImmediate();
+            return true;
+        }
+    }
+
+    private void scheduleImmediate() {
+        immediateTask = Bukkit.getScheduler().runTask(plugin, this::drainImmediate);
+    }
+
+    private void drainImmediate() {
+        ImmediateBroadcast broadcast;
+        synchronized (immediateLock) {
+            if (closed) return;
+            broadcast = immediateBroadcasts.poll();
+        }
+        try {
+            if (broadcast != null) broadcastImmediately(broadcast);
+        } finally {
+            synchronized (immediateLock) {
+                immediateTask = null;
+                if (!closed && !immediateBroadcasts.isEmpty()) scheduleImmediate();
+            }
+        }
     }
 
     private void forwardCrossServer(String text, boolean immediate) {
-        if (crossServerChannel == null || !crossServerChannel.isActive()) return;
+        CrossServerChannel channel = crossServerChannel;
+        if (channel == null || !channel.isActive()) return;
         AnnouncerEnvelope envelope = new AnnouncerEnvelope(
             UUID.randomUUID().toString(), crossServer.nodeId(), text, immediate
         );
-        recentDedupeKeys.add(envelope.dedupeKey());
-        crossServerChannel.publish(AnnouncerEnvelopeCodec.encode(envelope));
+        channel.publish(AnnouncerEnvelopeCodec.encode(envelope));
     }
 
     private void broadcastNextDisplay(long now, String reason) {
         AnnouncerDisplay display = nextDisplay(now);
         currentDisplay = display;
         for (Player player : Bukkit.getOnlinePlayers()) {
-            ensureUiOpen(player);
             sendDisplay(player, display, reason);
         }
         if (display.isShow() && configuration.forwardToQQ()) {
@@ -373,35 +437,28 @@ public final class AnnouncerService implements Listener {
     }
 
     private AnnouncerDisplay nextDisplay(long now) {
-        List<AnnouncerEntry> activeEntries = configuration.activeEntries();
         if (!configuration.autoPlay() || activeEntries.isEmpty()) {
+            currentEntry = null;
             nextBroadcastAtMs = Long.MAX_VALUE;
             return AnnouncerDisplay.hidden(nextRevision());
         }
 
         int entryIndex = Math.max(0, Math.min(currentEntryIndex, activeEntries.size() - 1));
         AnnouncerEntry entry = activeEntries.get(entryIndex);
+        currentEntry = entry;
         boolean lastEntry = entryIndex >= activeEntries.size() - 1;
         long nextDelayMs = nextDelayMs(configuration, lastEntry);
         currentEntryIndex = nextEntryIndex(entryIndex, activeEntries.size());
         nextBroadcastAtMs = now + nextDelayMs;
         return AnnouncerDisplay.visible(
             entry.id(),
-            renderText(null, entry.text()),
+            entry.text(),
             !entry.clickCommand().isBlank(),
             nextRevision()
         );
     }
 
-    private boolean ensureUiOpen(Player player) {
-        if(player==null || !xuanmo.arcartxsuite.api.auth.AuthAccess.admitted(player.getUniqueId())) return false;
-        if (player == null || !player.isOnline() || !bridge.isAvailable()) {
-            return false;
-        }
-        UUID playerId = player.getUniqueId();
-        if (openedPlayers.contains(playerId)) {
-            return true;
-        }
+    private boolean ensureUiOpen(Player player, UUID playerId) {
         if (!bridge.openUiAll(player, uiIds)) {
             return false;
         }
@@ -410,32 +467,99 @@ public final class AnnouncerService implements Listener {
     }
 
     private void sendDisplay(Player player, AnnouncerDisplay display, String reason) {
-        if(player==null || !xuanmo.arcartxsuite.api.auth.AuthAccess.admitted(player.getUniqueId())) return;
-        if (player == null || !player.isOnline() || !bridge.isAvailable()) {
-            return;
-        }
-        if (!openedPlayers.contains(player.getUniqueId()) && !ensureUiOpen(player)) {
-            return;
-        }
-        AnnouncerDisplay renderedDisplay = renderDisplayFor(player, display);
-        boolean variablesSent = sendDisplayVariables(player, renderedDisplay);
-        scheduleDisplayPacket(player, renderedDisplay, reason, variablesSent);
+        if (closed || player == null || !player.isOnline()) return;
+        // Updating an existing entry preserves its place in the queue when a newer announcement arrives.
+        pendingDisplays.put(player.getUniqueId(), new PendingDisplay(player, display, reason));
+        scheduleDisplayPackets();
     }
 
-    private void scheduleDisplayPacket(Player player, AnnouncerDisplay display, String reason, boolean variablesSent) {
-        Bukkit.getScheduler().runTask(plugin, () -> {
-            if (!player.isOnline() || !bridge.isAvailable() || !openedPlayers.contains(player.getUniqueId())) {
+    private void scheduleDisplayPackets() {
+        if (displayTask == null) displayTask = Bukkit.getScheduler().runTask(plugin, this::flushDisplayPackets);
+    }
+
+    private void flushDisplayPackets() {
+        try {
+            if (closed || !bridge.isAvailable()) {
+                pendingDisplays.clear();
                 return;
             }
-            boolean packetSent = bridge.sendPacketToAll(player, uiIds, "display", display.toPayload(configuration.textWidthFontSize()));
-            logDisplaySync(player, reason, variablesSent, packetSent, display);
-        });
+            if (pendingDisplays.isEmpty()) return;
+            AnnouncerDisplay display = currentDisplay;
+            DisplayRender render = renderFor(display);
+            boolean expandPlaceholders = false;
+            try {
+                expandPlaceholders = render.hasPlaceholders() && placeholderResolver != null && placeholderResolver.available();
+            } catch (RuntimeException | LinkageError failure) {
+                logger.fine("无法检查公告占位符桥接，使用原文: " + failure.getMessage());
+            }
+            for (int processed = 0; processed < DISPLAY_PLAYERS_PER_TICK
+                && !closed && currentDisplay == display && !pendingDisplays.isEmpty(); processed++) {
+                var waiting = pendingDisplays.values().iterator();
+                var pending = waiting.next();
+                waiting.remove();
+                try {
+                    deliverDisplay(pending, render, expandPlaceholders);
+                } catch (RuntimeException | LinkageError failure) {
+                    logger.fine("公告显示同步失败: " + failure.getMessage());
+                }
+            }
+        } finally {
+            displayTask = null;
+            if (!closed && !pendingDisplays.isEmpty()) scheduleDisplayPackets();
+        }
+    }
+
+    private DisplayRender renderFor(AnnouncerDisplay display) {
+        if (displayRender == null || displayRender.display() != display) {
+            int width = estimateTextWidth(display.text(), configuration.textWidthFontSize());
+            boolean hasPlaceholders = display.isShow() && display.text().indexOf('%') >= 0;
+            displayRender = new DisplayRender(display, hasPlaceholders, width, display.toPayload(display.text(), width, display.id(), false));
+        }
+        return displayRender;
+    }
+
+    private boolean canReceive(Player player, UUID playerId) {
+        return player.isOnline() && Bukkit.getPlayer(playerId) == player && AuthAccess.admitted(playerId);
+    }
+
+    private void deliverDisplay(PendingDisplay pending, DisplayRender render, boolean expandPlaceholders) {
+        AnnouncerDisplay display = render.display();
+        if (pending.display() != display) return;
+        Player player = pending.player();
+        UUID playerId = player.getUniqueId();
+        if (!canReceive(player, playerId)) return;
+        if (!openedPlayers.contains(playerId) && (!ensureUiOpen(player, playerId) || !canReceive(player, playerId))) return;
+        if (closed || currentDisplay != display) return;
+
+        String text = expandPlaceholders ? placeholderResolver.applyPlaceholders(player, display.text()) : display.text();
+        if (closed || currentDisplay != display
+            || (expandPlaceholders && !canReceive(player, playerId))) return;
+        boolean plainText = display.text().equals(text);
+        DisplayClick click = display.clickable() ? displayClicks.get(playerId) : null;
+        if (display.clickable()) {
+            AuthSnapshot admission = AuthAccess.snapshot(playerId);
+            if (!admission.admitted()) return;
+            if (click == null || click.player() != player || !display.revision().equals(click.revision())
+                || (!click.used() && !click.matchesAdmission(admission))) {
+                click = new DisplayClick(player, display.revision(), UUID.randomUUID().toString(), false,
+                    admission.connectionId(), admission.generation());
+            }
+        }
+        boolean clickable = click != null && !click.used();
+        Map<String, Object> payload = !clickable && plainText ? render.plainPayload()
+            : display.toPayload(text, plainText ? render.plainWidth() : estimateTextWidth(text, configuration.textWidthFontSize()),
+                clickable ? click.handle() : display.id(), clickable);
+        boolean packetSent = bridge.sendPacketToAll(player, uiIds, "display", payload);
+        if (!closed && currentDisplay == display) {
+            if (click == null) displayClicks.remove(playerId);
+            else if (packetSent) displayClicks.put(playerId, click);
+        }
+        logDisplaySync(player, pending.reason(), packetSent, display);
     }
 
     private void logDisplaySync(
         Player player,
         String reason,
-        boolean variablesSent,
         boolean packetSent,
         AnnouncerDisplay display
     ) {
@@ -445,56 +569,18 @@ public final class AnnouncerService implements Listener {
                     + player.getName()
                     + " | reason="
                     + reason
-                    + " | variables="
-                    + variablesSent
                     + " | packet="
                     + packetSent
-                    + " | payload="
-                    + display.toPayload(configuration.textWidthFontSize())
+                    + " | entry="
+                    + display.id()
+                    + " | revision="
+                    + display.revision()
             );
         }
     }
 
-    private boolean sendDisplayVariables(Player player, AnnouncerDisplay display) {
-        if (clientBridge == null || !clientBridge.isAvailable()) {
-            return false;
-        }
-
-        boolean textSent = clientBridge.sendServerVariable(player, TEXT_VARIABLE_NAME, display.text());
-        boolean idSent = clientBridge.sendServerVariable(player, ID_VARIABLE_NAME, display.id());
-        boolean clickableSent = clientBridge.sendServerVariable(player, CLICKABLE_VARIABLE_NAME, display.clickable());
-        boolean revisionSent = clientBridge.sendServerVariable(player, REVISION_VARIABLE_NAME, display.revision());
-        return textSent && idSent && clickableSent && revisionSent;
-    }
-
-    private AnnouncerDisplay renderDisplayFor(Player player, AnnouncerDisplay display) {
-        if (!display.isShow() || !placeholderResolver.available()) {
-            return display;
-        }
-        return new AnnouncerDisplay(
-            true,
-            display.id(),
-            renderText(player, display.text()),
-            display.clickable(),
-            display.revision()
-        );
-    }
-
     private String nextRevision() {
-        return System.currentTimeMillis() + "-" + revisionSequence.incrementAndGet();
-    }
-
-    AnnouncerDisplay buildDisplayPayload(
-        AnnouncerEntry entry,
-        String revision,
-        Player player
-    ) {
-        return AnnouncerDisplay.visible(
-            entry.id(),
-            renderText(player, entry.text()),
-            !entry.clickCommand().isBlank(),
-            revision
-        );
+        return System.currentTimeMillis() + "-" + ++revisionSequence;
     }
 
     static long nextDelayMs(AnnouncerModuleConfiguration configuration, boolean lastEntry) {
@@ -509,25 +595,21 @@ public final class AnnouncerService implements Listener {
         return currentEntryIndex + 1;
     }
 
-    static AnnouncerEntry findEntryById(List<AnnouncerEntry> activeEntries, String entryId) {
-        if (entryId == null || entryId.isBlank()) {
-            return null;
+    private record DisplayClick(Player player, String revision, String handle, boolean used, UUID connectionId,
+                                long admissionGeneration) {
+        boolean matchesAdmission(AuthSnapshot admission) {
+            return admission.admitted() && admission.generation() == admissionGeneration
+                && java.util.Objects.equals(connectionId, admission.connectionId());
         }
-        for (AnnouncerEntry entry : activeEntries) {
-            if (entry.id().equals(entryId)) {
-                return entry;
-            }
-        }
-        return null;
-    }
 
-    private String renderText(Player player, String text) {
-        String rendered = text == null ? "" : text;
-        if (player != null) {
-            rendered = placeholderResolver.applyPlaceholders(player, rendered);
+        DisplayClick consumed() {
+            return new DisplayClick(player, revision, handle, true, connectionId, admissionGeneration);
         }
-        return rendered;
     }
+    private record DisplayRender(AnnouncerDisplay display, boolean hasPlaceholders, int plainWidth,
+                                 Map<String, Object> plainPayload) {}
+    private record ImmediateBroadcast(String text, boolean forward) {}
+    private record PendingDisplay(Player player, AnnouncerDisplay display, String reason) {}
 
     record AnnouncerDisplay(
         boolean isShow,
@@ -550,15 +632,9 @@ public final class AnnouncerService implements Listener {
             return new AnnouncerDisplay(false, "", "", false, revision);
         }
 
-        Map<String, Object> toPayload(int fontSize) {
-            Map<String, Object> payload = new LinkedHashMap<>();
-            payload.put("isShow", isShow);
-            payload.put("id", id);
-            payload.put("text", text);
-            payload.put("clickable", clickable);
-            payload.put("revision", revision);
-            payload.put("textWidth", estimateTextWidth(text, fontSize));
-            return payload;
+        Map<String, Object> toPayload(String renderedText, int width, String callbackId, boolean canClick) {
+            return Map.of("isShow", isShow, "entryId", id, "id", callbackId, "text", renderedText,
+                "clickable", canClick, "revision", revision, "textWidth", width);
         }
     }
 

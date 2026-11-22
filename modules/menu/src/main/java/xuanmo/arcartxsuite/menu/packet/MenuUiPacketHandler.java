@@ -37,12 +37,12 @@ public final class MenuUiPacketHandler {
         }
         String action = data == null || data.isEmpty() ? "refresh" : safe(data.get(0)).toLowerCase(Locale.ROOT);
         // PacketGuard 已由 ClientPacketRouter 在路由层统一调用，此处不再重复检查。
-        // click / footer 为写操作（可触发命令/传送/消费）：data[1] 为 token，按钮 id 从 data[2] 起
-        boolean writeAction = "click".equals(action) || "footer".equals(action);
+        // close 也能执行菜单配置中的动作，须使用当前会话令牌。
+        boolean writeAction = "click".equals(action) || "footer".equals(action) || "close".equals(action);
         if (writeAction && !service.beginWriteAction(player, data)) return true;
         try {
             switch (action) {
-                case "refresh" -> service.refreshMenu(player);
+                case "refresh" -> service.resyncMenu(player);
                 case "esc_open" -> service.openEscMenu(player);
                 case "close" -> service.closeMenu(player);
                 case "page" -> {
@@ -57,7 +57,7 @@ public final class MenuUiPacketHandler {
                     String buttonId = data.size() > 2 ? data.get(2) : "";
                     service.handleButtonClick(player, buttonId, true);
                 }
-                default -> service.refreshMenu(player);
+                default -> service.resyncMenu(player);
             }
         } finally {
             if (writeAction) service.finishWriteAction(player);

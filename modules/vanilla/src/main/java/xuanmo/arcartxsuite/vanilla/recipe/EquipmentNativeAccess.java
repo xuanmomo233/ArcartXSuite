@@ -47,9 +47,21 @@ public final class EquipmentNativeAccess {
         if(seed==null||button==null)throw new NoSuchMethodException("enchanting menu methods");
         cached=new EnchantAccess(field(menu.getClass(),"costs","k"),field(menu.getClass(),"enchantClue","l"),field(menu.getClass(),"levelClue","m"),seed,button);enchanting.put(menu.getClass(),cached);return cached;
     }
-    public Offers offers(Player player){
-        try{Object menu=menu(player.getOpenInventory());EnchantAccess a=access(menu,player);return new Offers(Arrays.copyOf((int[])a.costs().get(menu),3),Arrays.copyOf((int[])a.clues().get(menu),3),Arrays.copyOf((int[])a.levels().get(menu),3),(int)a.seed().invoke(menu));}
-        catch(ReflectiveOperationException|RuntimeException e){return null;}
+    public Offers offers(Player player, Offers previous) {
+        try {
+            Object menu = menu(player.getOpenInventory());
+            EnchantAccess access = access(menu, player);
+            return snapshotOffers((int[]) access.costs().get(menu), (int[]) access.clues().get(menu),
+                (int[]) access.levels().get(menu), (int) access.seed().invoke(menu), previous);
+        } catch (ReflectiveOperationException | RuntimeException failure) {
+            return null;
+        }
+    }
+
+    static Offers snapshotOffers(int[] costs, int[] clues, int[] levels, int seed, Offers previous) {
+        if (previous != null && seed == previous.seed() && Arrays.equals(costs, previous.costs())
+                && Arrays.equals(clues, previous.clues()) && Arrays.equals(levels, previous.levels())) return previous;
+        return new Offers(Arrays.copyOf(costs, 3), Arrays.copyOf(clues, 3), Arrays.copyOf(levels, 3), seed);
     }
     public boolean enchant(Player player,int index){
         if(index<0||index>2)return false;

@@ -9,6 +9,38 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class DatabaseQueueTest {
+    @Test void closeReturnsWhileSqlIsBlockedAndDrainsAcceptedWrites() throws Exception {
+        var queue = new DatabaseQueue(4, 2, 2);
+        var entered = new CountDownLatch(2);
+        var release = new CountDownLatch(1);
+        try {
+            java.util.concurrent.Callable<Integer> slow = () -> {
+                entered.countDown();
+                assertTrue(release.await(4, TimeUnit.SECONDS));
+                return 1;
+            };
+            var writer = queue.write(slow);
+            var reader = queue.read(slow);
+            assertTrue(entered.await(2, TimeUnit.SECONDS));
+            var trailingWrite = queue.write(() -> 2);
+            var obsoleteRead = queue.read(() -> fail("obsolete read executed"));
+            queue.close();
+            assertFalse(queue.stopped().toCompletableFuture().isDone());
+            assertFalse(trailingWrite.isDone());
+            assertTrue(queue.write(() -> 3).isCompletedExceptionally());
+            release.countDown();
+            queue.stopped().toCompletableFuture().get(3, TimeUnit.SECONDS);
+            assertEquals(1, writer.get());
+            assertEquals(1, reader.get());
+            assertEquals(2, trailingWrite.get());
+            var cancellation = assertThrows(ExecutionException.class, obsoleteRead::get);
+            assertInstanceOf(java.util.concurrent.RejectedExecutionException.class, cancellation.getCause());
+        } finally {
+            release.countDown();
+            queue.close();
+        }
+    }
+
     @Test void slowReadDoesNotHoldTheWriteQueueAndOverflowNeverRunsOnTheCaller() throws Exception {
         var queue = new DatabaseQueue(2, 2, 1);
         var entered = new CountDownLatch(1);

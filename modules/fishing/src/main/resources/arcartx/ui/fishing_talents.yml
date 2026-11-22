@@ -54,6 +54,7 @@ ui:
       var.resetArmed = false
       var.allNodes = []
       var.allNodeById = {}
+      var.iconDirtyIds = {}
       layoutKey = ''
       for(treeKey in var.treeIds){
         treeData = var.trees[treeKey]
@@ -63,6 +64,7 @@ ui:
             node = nodes[key]
             var.allNodes.add(node)
             var.allNodeById[node['id']] = node
+            var.queueTalentIcon(node)
             layoutKey = layoutKey + '|' + node['id'] + ':' + node['tier'] + ':' + node['branch'] + ':' + node['treeId'] + ':' + node['prerequisites']
           }
         }
@@ -72,19 +74,22 @@ ui:
           node = var.links[i.round()]
           var.allNodes.add(node)
           var.allNodeById[node['id']] = node
+          var.queueTalentIcon(node)
           layoutKey = layoutKey + '|' + node['id'] + ':' + node['prerequisites']
         }
       }
-      var.needRebuild = var.layoutKey != layoutKey
+      var.needRebuild = var.needRebuild || var.layoutKey != layoutKey
       var.layoutKey = layoutKey
-      var.iconDelay = 2
+      if(var.iconDirtyIds.size() > 0){ var.iconDelay = 2 }
   action:
     # load: 初始化变量 + 视口换算 + 中心发散布局参数
     load: |-
       var.dragStartMX = 0
       var.dragStartMY = 0
-      var.dragStartSX = 0
-      var.dragStartSY = 0
+      var.dragSpanX = 0
+      var.dragSpanY = 0
+      var.panX = 0.5
+      var.panY = 0.5
       var.iconDelay = 0
       var.linkCount = 0
       var.packetId = 'AXS_FISHING_TALENTS'
@@ -96,15 +101,22 @@ ui:
       var.nodeRefs = {}
       var.lineRefs = []
       var.iconJsonCache = {}
+      var.iconDirtyIds = {}
       var.generation = 0
       var.actionBusy = false
       var.busySeconds = 0
       var.resetArmed = false
       var.resetSeconds = 0
-      var.lastMouseX = 0
-      var.lastMouseY = 0
-      var.viewReady = false
       var.emptyItemJson = '{"id":"minecraft:air","Count":1b}'
+      var.queueTalentIcon = -> {
+        node = args[0]
+        id = node['id']
+        icon = node['iconJson']
+        icon = icon != none && icon != '' ? icon : var.emptyItemJson
+        if(var.iconJsonCache[id] != icon){
+          var.iconDirtyIds[id] = icon
+        }
+      }
       // 中心发散布局参数
       var.nodeSize = 48
       var.lineW = 5
@@ -193,40 +205,44 @@ ui:
       var.contentW = var.viewW - 420
       var.s = s
       var.isDragging = false
+      var.pressedNode = none
     resetView: |-
       var.zoomScale = 1.0
-      val.横向滑块.setDragXRatio(0.5)
-      val.竖向滑块.setDragYRatio(0.5)
+      var.panX = 0.5
+      var.panY = 0.5
       var.isDragging = false
+      var.pressedNode = none
     keyPress: |-
       // R 键重置缩放和滚动位置
       if(self.currentKeyPress == 'R' || self.currentKeyPress == 'r'){
         self.actions['resetView']()
       }
     releaseLeft: |-
-      // 兜底：确保拖拽状态在鼠标移出滚动区后释放时也能重置
-      dx = (Mouse.x() - var.dragStartMX) / var.s
-      dy = (Mouse.y() - var.dragStartMY) / var.s
-      if(var.isDragging && !var.dragMoved && dx * dx + dy * dy <= 25 && val.天赋视口.isHovered()){
-        node = var.allNodeById[var.pressedNode]
-        if(node != none && node['canLevelUp'] == true && !var.actionBusy && var.actionToken != none){
-          var.actionBusy = true
-          var.busySeconds = 0
-          Packet.send(var.packetId, 'level_up_talent', var.actionToken, var.pressedNode)
+      if(var.isDragging){
+        // 即使松手发生在视口外，也保存当时的位置。
+        var.panX = val.天赋视口.moveX
+        var.panY = val.天赋视口.moveY
+        var.isDragging = false
+        dx = (Mouse.x() - var.dragStartMX) / var.s
+        dy = (Mouse.y() - var.dragStartMY) / var.s
+        if(!var.dragMoved && dx * dx + dy * dy <= 25 && val.天赋视口.isHovered()){
+          node = var.allNodeById[var.pressedNode]
+          if(node != none && node['canLevelUp'] == true && !var.actionBusy && var.actionToken != none){
+            var.actionBusy = true
+            var.busySeconds = 0
+            Packet.send(var.packetId, 'level_up_talent', var.actionToken, var.pressedNode)
+          }
         }
       }
       var.pressedNode = none
-      var.isDragging = false
     clickLeft: |-
-      // UI 级点击：记录拖拽起点（不依赖 Scroll 子控件事件）
+      // 按下时换算滚动范围，布局阶段只读光标位移和已保存的位置。
       var.isDragging = val.天赋视口.isHovered()
       if(var.isDragging){
         var.dragStartMX = Mouse.x()
         var.dragStartMY = Mouse.y()
-        var.lastMouseX = var.dragStartMX
-        var.lastMouseY = var.dragStartMY
-        var.dragStartSX = val.横向滑块.getDragXRatio()
-        var.dragStartSY = val.竖向滑块.getDragYRatio()
+        var.dragSpanX = (var.canvasW * var.zoomScale - (var.contentW - 48)) * var.s
+        var.dragSpanY = (var.canvasH * var.zoomScale - (var.viewH - 176)) * var.s
         var.dragMoved = false
       }
     seconds: |-
@@ -245,42 +261,12 @@ ui:
       }
     # tick: 数据变化时重建中心发散天赋网络
     tick: |-
-      // 拖拽中：位移超过阈值才滚动
-      if(!var.viewReady && val.横向滑块 != none && val.竖向滑块 != none){
-        var.viewReady = true
-        self.actions['resetView']()
-      }
-      mx = Mouse.x()
-      my = Mouse.y()
-      if(var.isDragging && (mx != var.lastMouseX || my != var.lastMouseY)){
-        var.lastMouseX = mx
-        var.lastMouseY = my
-        dx = (mx - var.dragStartMX) / var.s
-        dy = (my - var.dragStartMY) / var.s
-        if(!var.dragMoved && dx * dx + dy * dy > 25){
+      // 记录手势曾越过阈值，防止拖离节点再拖回时误升级。
+      if(var.isDragging && !var.dragMoved){
+        dx = (Mouse.x() - var.dragStartMX) / var.s
+        dy = (Mouse.y() - var.dragStartMY) / var.s
+        if(dx * dx + dy * dy > 25){
           var.dragMoved = true
-        }
-        scrollRangeX = var.canvasW * var.zoomScale - (var.contentW - 48)
-        scrollRangeY = var.canvasH * var.zoomScale - (var.viewH - 176)
-        if(scrollRangeX > 0){
-          newSX = var.dragStartSX - dx / scrollRangeX
-          if(newSX < 0) {
-            newSX = 0
-          }
-          if(newSX > 1) {
-            newSX = 1
-          }
-          val.横向滑块.setDragXRatio(newSX)
-        }
-        if(scrollRangeY > 0){
-          newSY = var.dragStartSY - dy / scrollRangeY
-          if(newSY < 0) {
-            newSY = 0
-          }
-          if(newSY > 1) {
-            newSY = 1
-          }
-          val.竖向滑块.setDragYRatio(newSY)
         }
       }
       if(var.needRebuild){
@@ -296,6 +282,7 @@ ui:
         var.nodeRefs = {}
         var.lineRefs = []
         var.iconJsonCache = {}
+        var.iconDirtyIds = {}
         var.generation = (var.generation + 1).round()
         // 辅助：根据 tree 和 branch 计算节点角度
         var.nodePositions = {}
@@ -449,18 +436,11 @@ ui:
             midX = (x1 + x2) / 2
             midY = (y1 + y2) / 2
             // 颜色：子节点点亮用亮色，否则用较亮的中性色（保证可见）
-            childUnlocked = node['unlocked'] == true
             treeId = node['treeId']
             if(treeId == '') {
               treeId = 'meta'
             }
-            dimColor = var.treeColors[treeId][0]
             brightColor = var.treeColors[treeId][1]
-            // 未点亮统一用半透明亮灰，点亮用树亮色
-            lineColor = childUnlocked ? brightColor : '160,160,170,200'
-            if(treeId == 'meta'){
-              lineColor = childUnlocked ? '220,220,230,255' : '160,160,170,200'
-            }
             line = val.联动连线段.copy('线_' + var.generation + '_' + childId + '_' + prereq)
             line.worldX = midX - len / 2
             line.worldY = midY - var.lineW / 2
@@ -493,23 +473,22 @@ ui:
           n.brightColor = var.treeColors[treeId][1]
           n.dimColor = var.treeColors[treeId][0]
           var.nodeRefs[id] = n
+          var.queueTalentIcon(node)
         }
+        if(var.iconDirtyIds.size() > 0){ var.iconDelay = 2 }
       }
       if(var.iconDelay > 0){
         var.iconDelay = var.iconDelay - 1
         if(var.iconDelay == 0){
-          for(id in var.nodeRefs.keys()){
+          for(id in var.iconDirtyIds.keys()){
             ctrl = var.nodeRefs[id]
-            node = var.allNodeById[id]
-            json = node['iconJson']
-            if(json == none || json == ''){
-              json = var.emptyItemJson
-            }
-            if(var.iconJsonCache[id] != json && ctrl['节点图标'] != none){
+            json = var.iconDirtyIds[id]
+            if(ctrl != none && ctrl['节点图标'] != none){
               ctrl['节点图标'].setItemIcon(json)
               var.iconJsonCache[id] = json
             }
           }
+          var.iconDirtyIds = {}
         }
       }
 
@@ -978,8 +957,8 @@ controls:
               y: 16
               width: "var.contentW - 48"
               height: "var.viewH - 176"
-              moveX: "self.parent['横向滑块'].getDragXRatio()"
-              moveY: "self.parent['竖向滑块'].getDragYRatio()"
+              moveX: "var.isDragging && var.dragSpanX > 0 ? math.max(0, math.min(1, var.panX - (Mouse.x() - var.dragStartMX) / var.dragSpanX)) : var.panX"
+              moveY: "var.isDragging && var.dragSpanY > 0 ? math.max(0, math.min(1, var.panY - (Mouse.y() - var.dragStartMY) / var.dragSpanY)) : var.panY"
             action:
               wheel: |-
                 // 滚轮缩放：wheelValue > 0 放大，< 0 缩小
@@ -993,44 +972,28 @@ controls:
                   newZoom = 2.0
                 }
                 if(newZoom != oldZoom){
-                  // 保持滚动位置：通过滑块 ratio 换算
+                  // 保持视口中心，缩放时使用当前显示的位置。
                   viewW = var.contentW - 48
                   viewH = var.viewH - 176
                   oldRangeX = var.canvasW * oldZoom - viewW
                   newRangeX = var.canvasW * newZoom - viewW
                   oldRangeY = var.canvasH * oldZoom - viewH
                   newRangeY = var.canvasH * newZoom - viewH
-                  oldSX = val.横向滑块.getDragXRatio()
-                  oldSY = val.竖向滑块.getDragYRatio()
+                  oldSX = self.moveX
+                  oldSY = self.moveY
                   newSX = 0
                   newSY = 0
                   if(newRangeX > 0){
                     newSX = ((math.max(0, oldRangeX) * oldSX + viewW / 2) * newZoom / oldZoom - viewW / 2) / newRangeX
-                    if(newSX < 0) {
-                      newSX = 0
-                    }
-                    if(newSX > 1) {
-                      newSX = 1
-                    }
-                  } else {
-                    newSX = 0
                   }
                   if(newRangeY > 0){
                     newSY = ((math.max(0, oldRangeY) * oldSY + viewH / 2) * newZoom / oldZoom - viewH / 2) / newRangeY
-                    if(newSY < 0) {
-                      newSY = 0
-                    }
-                    if(newSY > 1) {
-                      newSY = 1
-                    }
-                  } else {
-                    newSY = 0
                   }
                   var.zoomScale = newZoom
                   var.isDragging = false
-                  // 重建后设置滑块位置
-                  val.横向滑块.setDragXRatio(newSX)
-                  val.竖向滑块.setDragYRatio(newSY)
+                  var.pressedNode = none
+                  var.panX = math.max(0, math.min(1, newSX))
+                  var.panY = math.max(0, math.min(1, newSY))
                 }
             children:
               树画布:
@@ -1093,7 +1056,8 @@ controls:
                           height: "46 * var.zoomScale"
                           slotType: ~Icon
                           itemScale: 0.75
-                          normal: ~Frosted:100;150,150,150,255
+                          # 节点底色随画布平移，统一由外层面板提供毛玻璃。
+                          normal: ~73,84,102,230
                           shape: ~round_rect
                           radius: "(10 * var.zoomScale).round()"
                         effect:
@@ -1164,26 +1128,3 @@ controls:
               y: -16
               texts: "var.actionBusy ? '&e正在保存天赋...' : '&f拖拽滚动 | 滚轮缩放 | R重置缩放'"
               fontSize: 36
-          # 隐藏滑块：驱动 Scroll 的 moveX/moveY（不可见但保留拖拽功能）
-          竖向滑块:
-            type: Texture
-            val: 竖向滑块
-            attribute:
-              point: ~top_right
-              x: -2
-              y: 0
-              width: 8
-              height: 80
-              normal: ~50,170,200,0
-              maxDragY: "math.max(0, var.canvasH * var.zoomScale - (var.viewH - 176))"
-          横向滑块:
-            type: Texture
-            val: 横向滑块
-            attribute:
-              point: ~bottom_left
-              x: 0
-              y: -2
-              width: 80
-              height: 8
-              normal: ~50,170,200,0
-              maxDragX: "math.max(0, var.canvasW * var.zoomScale - (var.contentW - 48))"

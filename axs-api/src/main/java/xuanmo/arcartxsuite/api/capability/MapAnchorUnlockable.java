@@ -39,6 +39,9 @@ public interface MapAnchorUnlockable {
      */
     @NotNull CompletableFuture<Boolean> unlock(@NotNull Player player, @NotNull String anchorId);
 
+    /** Completes true when the anchor is already owned or the free unlock is saved. */
+    @NotNull CompletableFuture<Boolean> ensureUnlocked(@NotNull Player player, @NotNull String anchorId);
+
     /**
      * 走完整正常解锁流程（等价玩家在地图菜单点击"解锁"）。
      * <p>

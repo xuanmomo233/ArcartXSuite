@@ -7,6 +7,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Supplier;
+import java.util.function.Function;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.GameMode;
@@ -17,6 +18,7 @@ import org.bukkit.scheduler.BukkitTask;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.capability.ChatMutable;
+import xuanmo.arcartxsuite.api.RegistrationContext.CommandRegistrationInfo;
 import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.essentials.config.EssentialsConfiguration;
 import xuanmo.arcartxsuite.essentials.packet.EssentialsAdminPacketHandler;
@@ -24,7 +26,11 @@ import xuanmo.arcartxsuite.essentials.packet.EssentialsMenuPacketHandler;
 import xuanmo.arcartxsuite.essentials.service.InventoryActionsService;
 import xuanmo.arcartxsuite.essentials.service.PlayerManagementService;
 import xuanmo.arcartxsuite.essentials.service.TeleportService;
+import xuanmo.arcartxsuite.essentials.service.EssentialsWork;
 import xuanmo.arcartxsuite.essentials.storage.EssentialsRepository;
+import xuanmo.arcartxsuite.essentials.service.InventoryInspection;
+import xuanmo.arcartxsuite.essentials.service.ModerationService;
+import xuanmo.arcartxsuite.essentials.service.WarpDirectory;
 
 /**
  * Essentials 模块的命令委派器。
@@ -35,31 +41,47 @@ import xuanmo.arcartxsuite.essentials.storage.EssentialsRepository;
  * （{@link PlayerManagementService}、{@link TeleportService} 等）。
  */
 public final class EssentialsCommandDelegate {
+    private final xuanmo.arcartxsuite.api.scheduler.ModuleCallback poseCallbacks =
+        new xuanmo.arcartxsuite.api.scheduler.ModuleCallback(() -> {});
+    private boolean closed;
+
+    public void shutdown() { closed = true; poseCallbacks.close(); }
+
+    public java.util.concurrent.CompletionStage<Void> stopped() { return poseCallbacks.stopped(); }
+
+    private Runnable poseCallback(Runnable operation) {
+        Supplier<Void> invocation = () -> { operation.run(); return null; };
+        return () -> poseCallbacks.call(invocation, null);
+    }
 
     private static final List<String> ACTIONS = List.of(
-        "help", "status", "reload", "menu", "admin",
+        "help", "status", "reload", "menu", "admin", "conflicts",
         "fly", "god", "heal", "feed", "gamemode", "speed", "vanish", "afk", "back",
         "repair", "hat", "enderchest", "workbench", "anvil", "trash", "nick", "seen",
-        "home", "sethome", "delhome", "warp", "setwarp", "delwarp",
-        "spawn", "setspawn", "tpa", "tpahere", "tpaccept", "tpdeny", "tp", "top", "tppos",
+        "home", "sethome", "delhome", "warp", "warps", "warpfavorite", "setwarp", "delwarp",
+        "spawn", "setspawn", "tpa", "tpahere", "tpaccept", "tpdeny", "tptoggle", "tpcancel", "tp", "top", "tppos", "unstuck",
         "time", "weather",
-        "ban", "tempban", "unban", "mute", "tempmute", "unmute",
+        "ban", "tempban", "unban", "banhistory", "mute", "tempmute", "unmute", "chatreview",
         "kick", "warn", "sudo", "inv",
         "sit", "lay",
-        "sort", "replant", "autotool"
+        "replant", "autotool"
     );
 
     private final EssentialsConfiguration configuration;
     private final PlayerManagementService playerService;
     private final TeleportService teleportService;
     private final EssentialsRepository repository;
+    private final EssentialsWork work;
     private final InventoryActionsService inventoryActionsService;
     private final Supplier<ChatMutable> chatMutableSupplier;
-    private final EssentialsMenuPacketHandler menuPacketHandler;
-    private final EssentialsAdminPacketHandler adminPacketHandler;
+    private final Supplier<EssentialsMenuPacketHandler> menuPacketHandler;
+    private final Supplier<EssentialsAdminPacketHandler> adminPacketHandler;
+    private final ModerationService moderation;
+    private final InventoryInspection inventoryInspection;
+    private final Function<String, CommandRegistrationInfo> commandInspector;
     private final org.bukkit.plugin.Plugin plugin;
     private final Supplier<MessageProvider> messagesSupplier;
-    private final Runnable reloadAction;
+    private final Supplier<java.util.concurrent.CompletionStage<Void>> reloadAction;
     private final Map<UUID, BukkitTask> poseMonitorTasks;
     /** 坐下姿势生成的坐垫实体（玩家 UUID → ArmorStand），用于退出/重坐/卸载时清理，防实体泄漏 */
     private final Map<UUID, org.bukkit.entity.Entity> seatEntities;
@@ -87,22 +109,30 @@ public final class EssentialsCommandDelegate {
         EssentialsRepository repository,
         InventoryActionsService inventoryActionsService,
         Supplier<ChatMutable> chatMutableSupplier,
-        EssentialsMenuPacketHandler menuPacketHandler,
-        EssentialsAdminPacketHandler adminPacketHandler,
+        Supplier<EssentialsMenuPacketHandler> menuPacketHandler,
+        Supplier<EssentialsAdminPacketHandler> adminPacketHandler,
+        ModerationService moderation,
+        InventoryInspection inventoryInspection,
+        Function<String, CommandRegistrationInfo> commandInspector,
         org.bukkit.plugin.Plugin plugin,
         Supplier<MessageProvider> messagesSupplier,
-        Runnable reloadAction,
+        Supplier<java.util.concurrent.CompletionStage<Void>> reloadAction,
         Map<UUID, BukkitTask> poseMonitorTasks,
-        Map<UUID, org.bukkit.entity.Entity> seatEntities
+        Map<UUID, org.bukkit.entity.Entity> seatEntities,
+        EssentialsWork work
     ) {
         this.configuration = configuration;
         this.playerService = playerService;
         this.teleportService = teleportService;
         this.repository = repository;
+        this.work = work;
         this.inventoryActionsService = inventoryActionsService;
         this.chatMutableSupplier = chatMutableSupplier;
         this.menuPacketHandler = menuPacketHandler;
         this.adminPacketHandler = adminPacketHandler;
+        this.moderation = moderation;
+        this.inventoryInspection = inventoryInspection;
+        this.commandInspector = commandInspector;
         this.plugin = plugin;
         this.messagesSupplier = messagesSupplier;
         this.reloadAction = reloadAction;
@@ -119,116 +149,106 @@ public final class EssentialsCommandDelegate {
      * @return {@code true} 表示命令已处理
      */
     public boolean onCommand(@NotNull CommandSender sender, @NotNull String label, @NotNull String[] args) {
+        if (closed) return true;
         String action = args.length < 2 ? "help" : args[1].toLowerCase(Locale.ROOT);
+        if (!hasActionPermission(sender, action)) {
+            sender.sendMessage(prefix() + configuration.messages().noPermission());
+            return true;
+        }
+        if (!actionEnabled(action)) {
+            sender.sendMessage(prefix() + ChatColor.RED + "此功能已在 Essentials 配置中停用。");
+            return true;
+        }
         switch (action) {
-            case "help" -> sendHelp(sender, label, args[0]);
+            case "help" -> sendHelp(sender, label, args.length == 0 ? "essentials" : args[0]);
             case "status" -> sendStatus(sender);
-            case "reload" -> requirePermission(sender, "axs.essentials.admin", () -> reload(sender));
+            case "reload" -> reload(sender);
+            case "conflicts" -> showCommandBindings(sender, arg(args, 2, ""));
             case "menu" -> requirePlayer(sender, p -> {
-                if (menuPacketHandler != null) menuPacketHandler.openMenu(p);
+                EssentialsMenuPacketHandler handler = menuPacketHandler.get();
+                if (handler != null) handler.openMenu(p);
                 else p.sendMessage(fullMsg("admin.ui.offline"));
             });
             case "admin" -> requirePlayer(sender, p -> {
-                if (!p.hasPermission("axs.essentials.admin")) {
-                    p.sendMessage(fullMsg("admin.ui.no-permission"));
-                    return;
-                }
-                if (adminPacketHandler != null) adminPacketHandler.openMenu(p);
+                EssentialsAdminPacketHandler handler = adminPacketHandler.get();
+                if (handler != null) handler.openMenu(p);
                 else p.sendMessage(fullMsg("admin.ui.offline"));
             });
-            case "fly" -> requirePermission(sender, "axs.essentials.fly", () ->
-                requirePlayer(sender, p -> playerService.toggleFly(p, resolveTarget(sender, args, 2, p))));
-            case "god" -> requirePermission(sender, "axs.essentials.god", () ->
-                requirePlayer(sender, p -> playerService.toggleGod(resolveTarget(sender, args, 2, p))));
-            case "heal" -> requirePermission(sender, "axs.essentials.heal", () ->
-                requirePlayer(sender, p -> playerService.heal(resolveTarget(sender, args, 2, p))));
-            case "feed" -> requirePermission(sender, "axs.essentials.feed", () ->
-                requirePlayer(sender, p -> playerService.feed(resolveTarget(sender, args, 2, p))));
-            case "gamemode" -> requirePermission(sender, "axs.essentials.gamemode", () -> handleGameMode(sender, args));
-            case "speed" -> requirePermission(sender, "axs.essentials.speed", () -> handleSpeed(sender, args));
-            case "vanish" -> requirePermission(sender, "axs.essentials.vanish", () ->
-                requirePlayer(sender, p -> playerService.toggleVanish(p)));
-            case "afk" -> requirePermission(sender, "axs.essentials.afk", () ->
-                requirePlayer(sender, p -> playerService.toggleAfk(p)));
-            case "back" -> requirePermission(sender, "axs.essentials.back", () ->
-                requirePlayer(sender, p -> teleportService.back(p)));
-            case "repair" -> requirePermission(sender, "axs.essentials.repair", () ->
-                requirePlayer(sender, p -> playerService.repair(p)));
-            case "hat" -> requirePermission(sender, "axs.essentials.hat", () ->
-                requirePlayer(sender, p -> playerService.hat(p)));
-            case "enderchest" -> requirePermission(sender, "axs.essentials.enderchest", () ->
-                requirePlayer(sender, p -> playerService.openEnderChest(p, resolveTarget(sender, args, 2, p))));
-            case "workbench" -> requirePermission(sender, "axs.essentials.workbench", () ->
-                requirePlayer(sender, p -> playerService.openWorkbench(p)));
-            case "anvil" -> requirePermission(sender, "axs.essentials.anvil", () ->
-                requirePlayer(sender, p -> playerService.openAnvil(p)));
-            case "trash" -> requirePermission(sender, "axs.essentials.trash", () ->
-                requirePlayer(sender, p -> playerService.openTrash(p)));
-            case "nick" -> requirePermission(sender, "axs.essentials.nick", () -> handleNick(sender, args));
-            case "seen" -> requirePermission(sender, "axs.essentials.seen", () -> handleSeen(sender, args));
-            case "home" -> requirePermission(sender, "axs.essentials.home", () ->
-                requirePlayer(sender, p -> teleportService.teleportHome(p, arg(args, 2, "home"))));
-            case "sethome" -> requirePermission(sender, "axs.essentials.sethome", () ->
-                requirePlayer(sender, p -> teleportService.setHome(p, arg(args, 2, "home"))));
-            case "delhome" -> requirePermission(sender, "axs.essentials.delhome", () ->
-                requirePlayer(sender, p -> teleportService.deleteHome(p, arg(args, 2, "home"))));
-            case "warp" -> requirePermission(sender, "axs.essentials.warp", () ->
-                requirePlayer(sender, p -> teleportService.teleportWarp(p, arg(args, 2, ""))));
-            case "setwarp" -> requirePermission(sender, "axs.essentials.setwarp", () ->
-                handleRequireArg(sender, args, 2, "name", name ->
-                    requirePlayer(sender, p -> teleportService.setWarp(p, name))));
-            case "delwarp" -> requirePermission(sender, "axs.essentials.delwarp", () ->
-                handleRequireArg(sender, args, 2, "name", name ->
-                    requirePlayer(sender, p -> teleportService.deleteWarp(p, name))));
-            case "spawn" -> requirePermission(sender, "axs.essentials.spawn", () ->
-                requirePlayer(sender, p -> teleportService.teleportSpawn(p)));
-            case "setspawn" -> requirePermission(sender, "axs.essentials.setspawn", () ->
-                requirePlayer(sender, p -> teleportService.setSpawn(p)));
-            case "tpa" -> requirePermission(sender, "axs.essentials.tpa", () -> handleTpa(sender, args, false));
-            case "tpahere" -> requirePermission(sender, "axs.essentials.tpa", () -> handleTpa(sender, args, true));
-            case "tpaccept" -> requirePermission(sender, "axs.essentials.tpa", () ->
-                requirePlayer(sender, p -> teleportService.acceptTpa(p)));
-            case "tpdeny" -> requirePermission(sender, "axs.essentials.tpa", () ->
-                requirePlayer(sender, p -> teleportService.denyTpa(p)));
-            case "tp" -> requirePermission(sender, "axs.essentials.teleport", () -> handleTp(sender, args));
-            case "top" -> requirePermission(sender, "axs.essentials.teleport", () ->
-                requirePlayer(sender, p -> teleportService.teleportTop(p)));
-            case "tppos" -> requirePermission(sender, "axs.essentials.teleport", () -> handleTpPos(sender, args));
-            case "time" -> requirePermission(sender, "axs.essentials.time", () -> handleTime(sender, args));
-            case "weather" -> requirePermission(sender, "axs.essentials.weather", () -> handleWeather(sender, args));
-            case "ban" -> requirePermission(sender, "axs.essentials.ban", () -> handleBan(sender, args, false));
-            case "tempban" -> requirePermission(sender, "axs.essentials.ban", () -> handleBan(sender, args, true));
-            case "unban" -> requirePermission(sender, "axs.essentials.unban", () -> handleUnban(sender, args));
-            case "mute" -> requirePermission(sender, "axs.essentials.mute", () -> handleMute(sender, args, false));
-            case "tempmute" -> requirePermission(sender, "axs.essentials.mute", () -> handleMute(sender, args, true));
-            case "unmute" -> requirePermission(sender, "axs.essentials.unmute", () -> handleUnmute(sender, args));
-            case "kick" -> requirePermission(sender, "axs.essentials.kick", () -> handleKick(sender, args));
-            case "warn" -> requirePermission(sender, "axs.essentials.warn", () -> handleWarn(sender, args));
-            case "sudo" -> requirePermission(sender, "axs.essentials.sudo", () -> handleSudo(sender, args));
-            case "inv" -> requirePermission(sender, "axs.essentials.inv", () -> handleInv(sender, args));
-            case "sit" -> requirePermission(sender, "axs.essentials.sit", () -> requirePlayer(sender, this::handleSit));
-            case "lay" -> requirePermission(sender, "axs.essentials.lay", () -> requirePlayer(sender, this::handleLay));
-            case "sort" -> requirePermission(sender, "axs.essentials.sort", () -> requirePlayer(sender, p -> {
-                if (inventoryActionsService != null) {
-                    inventoryActionsService.sortInventory(p);
-                    p.sendMessage(prefix() + configuration.messages().sortDone());
-                }
-            }));
-            case "replant" -> requirePermission(sender, "axs.essentials.replant", () -> requirePlayer(sender, p -> {
+            case "fly" -> requirePlayer(sender, p -> withTarget(sender, args, p, target -> playerService.toggleFly(p, target)));
+            case "god" -> requirePlayer(sender, p -> withTarget(sender, args, p, target -> playerService.toggleGod(target)));
+            case "heal" -> requirePlayer(sender, p -> withTarget(sender, args, p, target -> playerService.heal(target)));
+            case "feed" -> requirePlayer(sender, p -> withTarget(sender, args, p, target -> playerService.feed(target)));
+            case "gamemode" -> handleGameMode(sender, args);
+            case "speed" -> handleSpeed(sender, args);
+            case "vanish" -> requirePlayer(sender, p -> playerService.toggleVanish(p));
+            case "afk" -> requirePlayer(sender, p -> playerService.toggleAfk(p));
+            case "back" -> requirePlayer(sender, p -> teleportService.back(p));
+            case "repair" -> requirePlayer(sender, p -> playerService.repair(p));
+            case "hat" -> requirePlayer(sender, p -> playerService.hat(p));
+            case "enderchest" -> requirePlayer(sender, p -> withTarget(sender, args, p, target -> playerService.openEnderChest(p, target)));
+            case "workbench" -> requirePlayer(sender, p -> playerService.openWorkbench(p));
+            case "anvil" -> requirePlayer(sender, p -> playerService.openAnvil(p));
+            case "trash" -> requirePlayer(sender, p -> playerService.openTrash(p));
+            case "nick" -> handleNick(sender, args);
+            case "seen" -> handleSeen(sender, args);
+            case "home" -> requirePlayer(sender, p -> teleportService.teleportHome(p, arg(args, 2, "home")));
+            case "sethome" -> requirePlayer(sender, p -> teleportService.setHome(p, arg(args, 2, "home")));
+            case "delhome" -> requirePlayer(sender, p -> teleportService.deleteHome(p, arg(args, 2, "home")));
+            case "warp" -> requirePlayer(sender, p -> teleportService.teleportWarp(p, joinArgs(args, 2, "")));
+            case "warps" -> requirePlayer(sender, p -> showWarps(p, arg(args, 2, ""), page(args, 3)));
+            case "warpfavorite" -> requirePlayer(sender, p -> toggleWarpFavorite(p, joinArgs(args, 2, "")));
+            case "setwarp" -> handleRequireArg(sender, args, 2, "name", name ->
+                    requirePlayer(sender, p -> teleportService.setWarp(p, name)));
+            case "delwarp" -> handleRequireArg(sender, args, 2, "name", name ->
+                    requirePlayer(sender, p -> teleportService.deleteWarp(p, name)));
+            case "spawn" -> requirePlayer(sender, p -> teleportService.teleportSpawn(p));
+            case "setspawn" -> requirePlayer(sender, p -> teleportService.setSpawn(p));
+            case "tpa" -> handleTpa(sender, args, false);
+            case "tpahere" -> handleTpa(sender, args, true);
+            case "tpaccept" -> requirePlayer(sender, p -> teleportService.respondTpa(p, arg(args, 2, ""), true));
+            case "tpdeny" -> requirePlayer(sender, p -> teleportService.respondTpa(p, arg(args, 2, ""), false));
+            case "tptoggle" -> requirePlayer(sender, teleportService::toggleTpa);
+            case "tpcancel" -> requirePlayer(sender, p -> teleportService.cancelTpa(p, arg(args, 2, "")));
+            case "unstuck" -> requirePlayer(sender, teleportService::unstuck);
+            case "tp" -> handleTp(sender, args);
+            case "top" -> requirePlayer(sender, p -> teleportService.teleportTop(p));
+            case "tppos" -> handleTpPos(sender, args);
+            case "time" -> handleTime(sender, args);
+            case "weather" -> handleWeather(sender, args);
+            case "ban" -> handleBan(sender, args, false);
+            case "tempban" -> handleBan(sender, args, true);
+            case "unban" -> handleUnban(sender, args);
+            case "banhistory" -> showBanHistory(sender, arg(args, 2, ""), page(args, 3));
+            case "mute" -> handleMute(sender, args, false);
+            case "tempmute" -> handleMute(sender, args, true);
+            case "unmute" -> handleUnmute(sender, args);
+            case "chatreview" -> {
+                var chat = xuanmo.arcartxsuite.api.AxsCapabilities.get(
+                    xuanmo.arcartxsuite.api.capability.ChatModerationAccess.class);
+                if (chat == null) sender.sendMessage(fullMsg("admin.mute.offline-warn"));
+                else chat.inspect(sender, arg(args, 2, "").toLowerCase(Locale.ROOT), arg(args, 3, ""));
+            }
+            case "kick" -> handleKick(sender, args);
+            case "warn" -> handleWarn(sender, args);
+            case "sudo" -> handleSudo(sender, args);
+            case "inv" -> handleInv(sender, args);
+            case "sit" -> requirePlayer(sender, this::handleSit);
+            case "lay" -> requirePlayer(sender, this::handleLay);
+            case "replant" -> requirePlayer(sender, p -> {
                 if (inventoryActionsService != null) {
                     boolean on = inventoryActionsService.toggleReplant(p.getUniqueId());
                     p.sendMessage(prefix() + (on ? configuration.messages().replantDisabled() : configuration.messages().replantEnabled()));
                 }
-            }));
-            case "autotool" -> requirePermission(sender, "axs.essentials.autotool", () -> requirePlayer(sender, p -> {
+            });
+            case "autotool" -> requirePlayer(sender, p -> {
                 if (inventoryActionsService != null) {
                     boolean on = inventoryActionsService.toggleAutoTool(p.getUniqueId());
                     p.sendMessage(prefix() + (on ? configuration.messages().autotoolDisabled() : configuration.messages().autotoolEnabled()));
                 }
-            }));
+            });
             default -> {
                 sender.sendMessage(fullMsg("common.unknown", action));
-                sendHelp(sender, label, args[0]);
+                sendHelp(sender, label, args.length == 0 ? "essentials" : args[0]);
             }
         }
         return true;
@@ -242,19 +262,35 @@ public final class EssentialsCommandDelegate {
      * @return 补全候选列表，无补全时返回空列表
      */
     public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull String[] args) {
-        if (args.length == 2) return filter(ACTIONS, args[1]);
+        if (closed) return List.of();
+        if (args.length == 2) return filter(ACTIONS.stream().filter(this::actionEnabled)
+            .filter(action -> hasActionPermission(sender, action)).toList(), args[1]);
+        if (args.length >= 3) {
+            String action = args[1].toLowerCase(Locale.ROOT);
+            if (!actionEnabled(action) || !hasActionPermission(sender, action)) return List.of();
+        }
         if (args.length == 3) {
             String action = args[1].toLowerCase(Locale.ROOT);
             switch (action) {
                 case "fly", "god", "heal", "feed", "enderchest", "tp", "sudo", "inv",
                      "ban", "tempban", "unban", "mute", "tempmute", "unmute", "kick", "warn" -> {
-                    return filterOnline(args[2]);
+                    return filterOnline(sender, args[2]);
                 }
                 case "home", "delhome" -> {
                     if (sender instanceof Player p) return filter(teleportService.getHomeNames(p), args[2]);
                 }
-                case "warp", "delwarp" -> {
-                    return filter(teleportService.getWarpNames(), args[2]);
+                case "warp", "warpfavorite", "delwarp" -> {
+                    if (sender instanceof Player p) return filter(teleportService.warps().names(p, action.equals("delwarp")), args[2]);
+                }
+                case "warps" -> {
+                    return filter(List.of("favorites"), args[2]);
+                }
+                case "tpaccept", "tpdeny" -> {
+                    if (sender instanceof Player p) return filter(teleportService.tpaRequests(p).stream()
+                        .map(TeleportService.TpaView::sender).toList(), args[2]);
+                }
+                case "conflicts" -> {
+                    return filter(new ArrayList<>(commandLabels().keySet()), args[2]);
                 }
                 case "gamemode" -> {
                     return filter(List.of("survival", "creative", "adventure", "spectator"), args[2]);
@@ -268,26 +304,199 @@ public final class EssentialsCommandDelegate {
                 case "weather" -> {
                     return filter(List.of("clear", "rain", "thunder"), args[2]);
                 }
-                case "tpa", "tpahere" -> {
-                    return filterOnline(args[2]);
+                case "tpa", "tpahere", "tpcancel", "banhistory" -> {
+                    return filterOnline(sender, args[2]);
                 }
             }
         }
         if (args.length == 4) {
             String action = args[1].toLowerCase(Locale.ROOT);
-            if ("gamemode".equals(action)) return filterOnline(args[3]);
-            if ("speed".equals(action)) return filter(List.of("1", "2", "3", "5", "10"), args[3]);
+            if ("gamemode".equals(action)) return filterOnline(sender, args[3]);
+            if ("speed".equals(action)) return filter(List.of("reset", "1", "2", "3", "5", "10"), args[3]);
+            if ("inv".equals(action) && sender.hasPermission(InventoryInspection.EDIT_PERMISSION)) {
+                return filter(List.of("edit"), args[3]);
+            }
         }
         return List.of();
     }
 
     // --- Command Handlers ---
 
+    private boolean active(CommandSender sender, String action) {
+        return !closed && actionEnabled(action) && hasActionPermission(sender, action)
+            && (!(sender instanceof Player player) || (player.isOnline() && Bukkit.getPlayer(player.getUniqueId()) == player));
+    }
+
+    private <T> void background(CommandSender sender, String action, java.util.concurrent.Callable<T> operation,
+                                java.util.function.Consumer<T> reply) {
+        if (!active(sender, action)) return;
+        complete(sender, action, work.submit(operation), reply);
+    }
+
+    private <T> void query(CommandSender sender, String action, java.util.concurrent.Callable<T> operation,
+                           java.util.function.Consumer<T> reply) {
+        if (!active(sender, action)) return;
+        complete(sender, action, work.read(operation), reply);
+    }
+
+    private <T> void complete(CommandSender sender, String action, java.util.concurrent.CompletionStage<T> pending,
+                              java.util.function.Consumer<T> reply) {
+        complete(sender, action, pending, null, reply);
+    }
+
+    private <T> void complete(CommandSender sender, String action, java.util.concurrent.CompletionStage<T> pending,
+                              java.util.function.Consumer<T> committedEffect, java.util.function.Consumer<T> reply) {
+        pending.whenComplete((value, failure) -> work.onMain(() -> {
+            if (closed) return;
+            if (failure != null) {
+                if (!active(sender, action)) return;
+                Throwable cause = failure;
+                while (cause instanceof java.util.concurrent.CompletionException && cause.getCause() != null) cause = cause.getCause();
+                if (cause instanceof ModerationService.IdentityException) { sender.sendMessage(prefix() + ChatColor.RED + cause.getMessage()); return; }
+                plugin.getLogger().log(java.util.logging.Level.WARNING, "Essentials " + action + "失败", cause);
+                sender.sendMessage(prefix() + ChatColor.RED + "操作未完成，请稍后重试或查看服务端日志。");
+            } else {
+                if (committedEffect != null) committedEffect.accept(value);
+                if (reply != null && active(sender, action)) reply.accept(value);
+            }
+        }));
+    }
+
+    public static List<String> actions() {
+        return ACTIONS;
+    }
+
+    public boolean actionEnabled(String action) {
+        return configuration.features().actionEnabled(action);
+    }
+
+    private void showWarps(Player player, String query, int page) {
+        if (page < 1) {
+            player.sendMessage(prefix() + ChatColor.RED + "用法 /ess warps [搜索词或 favorites] [页码]");
+            return;
+        }
+        WarpDirectory warps = teleportService.warps();
+        boolean favorites = "favorites".equalsIgnoreCase(query);
+        UUID id = player.getUniqueId();
+        var visible = warps.visible(player);
+        query(player, "warps", () -> warps.list(id, visible, favorites ? "" : query, favorites), loaded -> {
+            var allowed = warps.visible(player).stream().map(warp -> warp.name().toLowerCase(Locale.ROOT)).collect(java.util.stream.Collectors.toSet());
+            var entries = loaded.stream().filter(entry -> allowed.contains(entry.name().toLowerCase(Locale.ROOT))).toList();
+            int start = (int)Math.min(entries.size(), (page - 1L) * 10);
+            int end = Math.min(entries.size(), start + 10);
+            player.sendMessage(prefix() + "传送点 · 第 " + page + " 页 · 共 " + entries.size() + " 个");
+            for (var warp : entries.subList(start, end)) {
+                player.sendMessage(ChatColor.GRAY + "[" + warp.group() + "] " + (warp.favorite() ? "★ " : "") + warp.name());
+            }
+            if (start == end) player.sendMessage(ChatColor.GRAY + "本页没有匹配的传送点。");
+        });
+    }
+
+    private void toggleWarpFavorite(Player player, String name) {
+        if (name.isBlank()) {
+            player.sendMessage(prefix() + ChatColor.RED + "用法 /ess warpfavorite <传送点>");
+            return;
+        }
+        try {
+            var warps = teleportService.warps();
+            String key = warps.favoriteKey(player, name);
+            UUID id = player.getUniqueId();
+            background(player, "warpfavorite", () -> warps.toggleFavorite(id, key), favorite ->
+                player.sendMessage(prefix() + (favorite ? "已收藏传送点 " : "已取消收藏 ") + name));
+        } catch (IllegalArgumentException e) {
+            player.sendMessage(prefix() + ChatColor.RED + e.getMessage());
+        }
+    }
+
+    private Map<String, String> commandLabels() {
+        Map<String, String> labels = new java.util.LinkedHashMap<>(configuration.commandAliases());
+        labels.put("ess", "essentials");
+        labels.put("axsess", "essentials");
+        return labels;
+    }
+
+    private void showCommandBindings(CommandSender sender, String filter) {
+        String term = filter.startsWith("/") ? filter.substring(1) : filter;
+        int page = term.matches("[0-9]+") ? page(new String[]{term}, 0) : 1;
+        if (page < 1) {
+            sender.sendMessage(prefix() + ChatColor.RED + "无效页码。");
+            return;
+        }
+        String search = term.matches("[0-9]+") ? "" : term.toLowerCase(Locale.ROOT);
+        List<String> issues = new ArrayList<>();
+        List<String> registered = new ArrayList<>();
+        commandLabels().forEach((label, action) -> {
+            if (!label.contains(search)) return;
+            var binding = commandInspector.apply(label);
+            boolean root = action.equals("essentials");
+            boolean valid = root || ACTIONS.contains(action);
+            boolean enabled = root || actionEnabled(action);
+            String detail = !valid ? "动作无效" : !enabled ? "已由配置停用"
+                : binding.moduleAlias() == null ? "Essentials 前缀未注册" : "/" + binding.moduleAlias();
+            String line = "/" + label + " → " + binding.owner() + " | " + action + " | " + detail;
+            if (binding.previousOwner() != null) line += " | 原来源 " + binding.previousOwner();
+            if (!valid || !enabled || !binding.owner().equals("essentials") || binding.previousOwner() != null) issues.add(line);
+            else registered.add(line);
+        });
+        issues.addAll(registered);
+        int start = Math.min(issues.size(), (page - 1) * 12);
+        sender.sendMessage(prefix() + "命令归属 · 第 " + page + " 页 · 共 " + issues.size() + " 项");
+        issues.subList(start, Math.min(issues.size(), start + 12)).forEach(sender::sendMessage);
+        if (issues.size() > start + 12) sender.sendMessage(ChatColor.GRAY + "下一页 /ess conflicts " + (page + 1));
+    }
+
+    private void showBanHistory(CommandSender sender, String target, int page) {
+        if (target.isBlank() || page < 1) {
+            sender.sendMessage(prefix() + ChatColor.RED + "用法 /ess banhistory <玩家名或 UUID> [页码]");
+            return;
+        }
+        int size = configuration.features().historyPageSize();
+        long offset = (page - 1L) * size;
+        if (offset > Integer.MAX_VALUE) { sender.sendMessage(prefix() + "页码过大。"); return; }
+        var pending = moderation.resolve(target).thenCompose(identity -> {
+            if (identity == null) return java.util.concurrent.CompletableFuture.<HistoryPage>failedFuture(new ModerationService.IdentityException("找不到已知玩家 " + target));
+            return work.read(() -> new HistoryPage(identity, repository.history(identity.id(), size + 1, (int)offset)));
+        });
+        complete(sender, "banhistory", pending, result -> {
+            var identity = result.identity();
+            var history = result.entries();
+            sender.sendMessage(prefix() + identity.name() + " 的处罚记录 · 第 " + page + " 页");
+            for (var entry : history.subList(0, Math.min(size, history.size()))) {
+                String action = switch (entry.action()) {
+                    case "BAN" -> "永久封禁";
+                    case "TEMPBAN" -> "临时封禁";
+                    case "AUTO_BAN" -> "自动封禁";
+                    case "UNBAN" -> "解封";
+                    case "EXPIRE" -> "封禁到期";
+                    case "WARN" -> "警告";
+                    default -> entry.action();
+                };
+                sender.sendMessage(ChatColor.GRAY + ModerationService.formatDate(entry.createdAt()) + " · " + action
+                    + " · " + entry.operator() + " · " + (entry.reason() == null ? "无" : entry.reason())
+                    + ("TEMPBAN".equals(entry.action()) ? " · 到期 " + ModerationService.formatDate(entry.expiresAt()) : ""));
+            }
+            if (history.isEmpty()) sender.sendMessage(ChatColor.GRAY + "本页没有处罚记录。");
+            if (history.size() > size) sender.sendMessage(ChatColor.GRAY + "下一页 /ess banhistory " + identity.id() + " " + (page + 1));
+        });
+    }
+
+    private record HistoryPage(ModerationService.Identity identity, List<EssentialsRepository.ModerationEntry> entries) {}
+
+    private static int page(String[] args, int index) {
+        if (args.length <= index) return 1;
+        try {
+            int page = Integer.parseInt(args[index]);
+            return page >= 1 && page <= 100_000 ? page : -1;
+        } catch (NumberFormatException e) {
+            return -1;
+        }
+    }
+
     private void handleGameMode(CommandSender sender, String[] args) {
         if (args.length < 3) { sender.sendMessage(fullMsg("admin.gamemode.usage")); return; }
         GameMode mode = parseGameMode(args[2]);
         if (mode == null) { sender.sendMessage(fullMsg("admin.gamemode.invalid", args[2])); return; }
-        Player target = args.length >= 4 ? Bukkit.getPlayerExact(args[3]) : (sender instanceof Player p ? p : null);
+        Player target = args.length >= 4 ? visibleTarget(sender, args[3]) : (sender instanceof Player p ? p : null);
         if (target == null) {
             sender.sendMessage(prefix() + configuration.messages().playerNotFound().replace("{player}", args.length >= 4 ? args[3] : ""));
             return;
@@ -299,33 +508,47 @@ public final class EssentialsCommandDelegate {
     }
 
     private void handleSpeed(CommandSender sender, String[] args) {
-        if (args.length < 4) { sender.sendMessage(fullMsg("admin.speed.usage")); return; }
-        boolean isFly = "fly".equalsIgnoreCase(args[2]);
+        String mode = arg(args, 2, "").toLowerCase(Locale.ROOT);
+        if (!mode.equals("fly") && !mode.equals("walk")) {
+            sender.sendMessage(fullMsg("admin.speed.usage"));
+            return;
+        }
+        boolean isFly = mode.equals("fly");
+        String value = arg(args, 3, "reset");
         try {
-            float speed = Float.parseFloat(args[3]);
+            float speed = value.equalsIgnoreCase("reset")
+                ? (isFly ? configuration.player().defaultFlySpeed() : configuration.player().defaultWalkSpeed())
+                : Float.parseFloat(value);
+            if (!Float.isFinite(speed)) throw new NumberFormatException();
             requirePlayer(sender, p -> playerService.setSpeed(p, speed, isFly));
-        } catch (NumberFormatException e) { sender.sendMessage(fullMsg("admin.speed.invalid", args[3])); }
+        } catch (NumberFormatException e) {
+            sender.sendMessage(fullMsg("admin.speed.invalid", value));
+        }
     }
 
     private void handleNick(CommandSender sender, String[] args) {
         if (args.length < 3) { sender.sendMessage(fullMsg("admin.nick.usage")); return; }
         requirePlayer(sender, p -> {
-            if ("off".equalsIgnoreCase(args[2]) || "reset".equalsIgnoreCase(args[2])) {
-                p.setDisplayName(p.getName());
-                try { repository.removeNickname(p.getUniqueId()); } catch (Exception ignored) {}
-                p.sendMessage(prefix() + configuration.messages().nickReset());
-            } else {
-                String nick = ChatColor.translateAlternateColorCodes('&', args[2]);
-                p.setDisplayName(nick);
-                try { repository.setNickname(p.getUniqueId(), args[2]); } catch (Exception ignored) {}
-                p.sendMessage(prefix() + configuration.messages().nickSet().replace("{nick}", nick));
+            String raw = args[2];
+            if (raw.length() > 128 || raw.chars().anyMatch(Character::isISOControl)) {
+                p.sendMessage(prefix() + ChatColor.RED + "昵称须不超过 128 个字符，且不能包含控制字符。"); return;
             }
+            boolean reset = "off".equalsIgnoreCase(raw) || "reset".equalsIgnoreCase(raw);
+            UUID id = p.getUniqueId();
+            String display = reset ? p.getName() : ChatColor.translateAlternateColorCodes('&', raw);
+            background(p, "nick", () -> {
+                if (reset) repository.removeNickname(id); else repository.setNickname(id, raw);
+                return true;
+            }, ignored -> {
+                p.setDisplayName(display);
+                p.sendMessage(prefix() + (reset ? configuration.messages().nickReset() : configuration.messages().nickSet().replace("{nick}", display)));
+            });
         });
     }
 
     private void handleSeen(CommandSender sender, String[] args) {
         if (args.length < 3) { sender.sendMessage(fullMsg("admin.seen.usage")); return; }
-        Player target = Bukkit.getPlayerExact(args[2]);
+        Player target = visibleTarget(sender, args[2]);
         if (target != null) {
             sender.sendMessage(fullMsg("admin.seen.online", args[2]));
             sender.sendMessage(fullMsg("admin.seen.ip", (target.getAddress() != null ? target.getAddress().getHostString() : "\u672a\u77e5")));
@@ -338,7 +561,7 @@ public final class EssentialsCommandDelegate {
             return;
         }
         requirePlayer(sender, p -> {
-            Player target = Bukkit.getPlayerExact(args[2]);
+            Player target = visibleTarget(sender, args[2]);
             if (target == null || !target.isOnline()) {
                 p.sendMessage(prefix() + configuration.messages().playerNotFound().replace("{player}", args[2]));
                 return;
@@ -349,23 +572,27 @@ public final class EssentialsCommandDelegate {
 
     private void handleTp(CommandSender sender, String[] args) {
         if (args.length < 3) { sender.sendMessage(fullMsg("admin.tp.usage")); return; }
-        Player target = Bukkit.getPlayerExact(args[2]);
+        Player target = visibleTarget(sender, args[2]);
         if (target == null) {
             sender.sendMessage(prefix() + configuration.messages().playerNotFound().replace("{player}", args[2]));
             return;
         }
         if (args.length >= 4) {
-            Player dest = Bukkit.getPlayerExact(args[3]);
+            Player dest = visibleTarget(sender, args[3]);
             if (dest == null) {
                 sender.sendMessage(prefix() + configuration.messages().playerNotFound().replace("{player}", args[3]));
                 return;
             }
-            target.teleport(dest.getLocation());
-            sender.sendMessage(fullMsg("admin.tp.success-other", target.getName(), dest.getName()));
+            if (teleportService.teleportNow(target, dest.getLocation())) {
+                sender.sendMessage(fullMsg("admin.tp.success-other", target.getName(), dest.getName()));
+            } else if (!sender.equals(target)) {
+                sender.sendMessage(prefix() + configuration.messages().teleportCancelled());
+            }
         } else {
             requirePlayer(sender, p -> {
-                p.teleport(target.getLocation());
-                p.sendMessage(fullMsg("admin.tp.success-self", target.getName()));
+                if (teleportService.teleportNow(p, target.getLocation())) {
+                    p.sendMessage(fullMsg("admin.tp.success-self", target.getName()));
+                }
             });
         }
     }
@@ -377,6 +604,9 @@ public final class EssentialsCommandDelegate {
                 double x = Double.parseDouble(args[2]);
                 double y = Double.parseDouble(args[3]);
                 double z = Double.parseDouble(args[4]);
+                if (!Double.isFinite(x) || !Double.isFinite(y) || !Double.isFinite(z)) {
+                    throw new NumberFormatException();
+                }
                 teleportService.delayedTeleport(p, new org.bukkit.Location(p.getWorld(), x, y, z, p.getLocation().getYaw(), p.getLocation().getPitch()),
                     messages().get("admin.tppos.success", x, y, z));
             } catch (NumberFormatException e) { p.sendMessage(fullMsg("admin.tppos.invalid")); }
@@ -387,6 +617,11 @@ public final class EssentialsCommandDelegate {
         if (args.length < 3) { sender.sendMessage(fullMsg("admin.time.usage")); return; }
         requirePlayer(sender, p -> {
             World world = p.getWorld();
+            if (!configuration.world().allowedWorlds().isEmpty()
+                && configuration.world().allowedWorlds().stream().noneMatch(world.getName()::equalsIgnoreCase)) {
+                p.sendMessage(fullMsg("admin.world-not-allowed", world.getName()));
+                return;
+            }
             String timeArg = args[2].toLowerCase(Locale.ROOT);
             long ticks = switch (timeArg) {
                 case "day" -> 1000L;
@@ -411,6 +646,11 @@ public final class EssentialsCommandDelegate {
         if (args.length < 3) { sender.sendMessage(fullMsg("admin.weather.usage")); return; }
         requirePlayer(sender, p -> {
             World world = p.getWorld();
+            if (!configuration.world().allowedWorlds().isEmpty()
+                && configuration.world().allowedWorlds().stream().noneMatch(world.getName()::equalsIgnoreCase)) {
+                p.sendMessage(fullMsg("admin.world-not-allowed", world.getName()));
+                return;
+            }
             String w = args[2].toLowerCase(Locale.ROOT);
             switch (w) {
                 case "clear" -> { world.setStorm(false); world.setThundering(false); }
@@ -430,45 +670,62 @@ public final class EssentialsCommandDelegate {
             sender.sendMessage(fullMsg("admin.ban.usage", temp ? "tempban" : "ban"));
             return;
         }
-        Player target = Bukkit.getPlayerExact(args[2]);
+        Player target = visibleTarget(sender, args[2]);
         String operator = sender.getName();
         long expiresAt = -1;
         int reasonStart = 3;
         if (temp) {
             if (args.length < 4) { sender.sendMessage(fullMsg("admin.ban.require-duration")); return; }
-            expiresAt = System.currentTimeMillis() + parseDuration(args[3]);
+            try {
+                expiresAt = ModerationService.expiryAt(args[3], System.currentTimeMillis());
+            } catch (IllegalArgumentException | ArithmeticException e) {
+                sender.sendMessage(fullMsg("admin.ban.require-duration"));
+                return;
+            }
             reasonStart = 4;
         }
         String reason = joinArgs(args, reasonStart, "\u65e0");
-        if (target != null) {
-            try {
-                String ip = configuration.moderation().recordBanIp() && target.getAddress() != null
-                    ? target.getAddress().getHostString() : null;
-                repository.ban(target.getUniqueId(), target.getName(), reason, operator, expiresAt, ip);
-                String banMsg = configuration.moderation().banMessage()
-                    .replace("{reason}", reason)
-                    .replace("{expiry}", expiresAt > 0 ? formatTime(expiresAt) : "\u6c38\u4e45");
-                target.kickPlayer(banMsg);
-                Bukkit.broadcastMessage(prefix() + configuration.messages().banBroadcast()
-                    .replace("{player}", target.getName()).replace("{operator}", operator).replace("{reason}", reason));
-            } catch (Exception e) { sender.sendMessage(fullMsg("admin.ban.failed", e.getMessage())); }
-        } else {
-            sender.sendMessage(prefix() + configuration.messages().playerNotFound().replace("{player}", args[2]));
-        }
+        String requested = args[2];
+        String action = temp ? "tempban" : "ban";
+        long expiry = expiresAt;
+        if (target == null) try { target = Bukkit.getPlayer(UUID.fromString(requested)); } catch (IllegalArgumentException ignored) {}
+        var online = target != null && playerService.canSee(sender, target) ? new ModerationService.Identity(target.getUniqueId(), target.getName()) : null;
+        java.util.concurrent.CompletionStage<ModerationService.Identity> resolution = configuration.features().offlineBans()
+            ? moderation.resolve(requested) : java.util.concurrent.CompletableFuture.completedFuture(online);
+        var pending = resolution.thenCompose(identity -> work.main(() -> {
+            if (!active(sender, action)) throw new java.util.concurrent.CancellationException("Command sender unavailable");
+            if (identity == null) throw new ModerationService.IdentityException("找不到已知玩家 " + requested);
+            Player current = Bukkit.getPlayer(identity.id());
+            String ip = configuration.moderation().recordBanIp() && current != null && current.getAddress() != null ? current.getAddress().getHostString() : null;
+            return new BanIntent(identity, ip);
+        })).thenCompose(intent -> work.submit(() -> moderation.ban(intent.identity(), operator, reason, expiry, intent.ip())));
+        complete(sender, action, pending, record -> {
+            moderation.enforce(record, Bukkit.getPlayer(record.uuid()));
+            Bukkit.broadcastMessage(prefix() + configuration.messages().banBroadcast()
+                .replace("{player}", record.playerName()).replace("{operator}", operator).replace("{reason}", reason));
+        }, null);
     }
+
+    private record BanIntent(ModerationService.Identity identity, String ip) {}
 
     private void handleUnban(CommandSender sender, String[] args) {
         if (args.length < 3) { sender.sendMessage(fullMsg("admin.unban.usage")); return; }
-        sender.sendMessage(fullMsg("admin.unban.tip"));
-        Player target = Bukkit.getPlayerExact(args[2]);
-        if (target != null) {
-            try {
-                repository.unban(target.getUniqueId());
+        String requested = args[2]; String operator = sender.getName();
+        java.util.concurrent.CompletionStage<ModerationService.Identity> resolution;
+        try { resolution = java.util.concurrent.CompletableFuture.completedFuture(new ModerationService.Identity(UUID.fromString(requested), requested)); }
+        catch (IllegalArgumentException name) { resolution = moderation.resolve(requested); }
+        var pending = resolution.thenCompose(identity -> work.main(() -> {
+            if (!active(sender, "unban")) throw new java.util.concurrent.CancellationException("Command sender unavailable");
+            return identity;
+        })).thenCompose(identity -> identity == null ? java.util.concurrent.CompletableFuture.completedFuture(false)
+            : work.submit(() -> moderation.unban(identity.id(), operator)));
+        complete(sender, "unban", pending, removed -> {
+            if (removed) {
                 sender.sendMessage(prefix() + configuration.messages().unbanSuccess().replace("{player}", args[2]));
-            } catch (Exception e) { sender.sendMessage(fullMsg("admin.unban.failed")); }
-        } else {
-            sender.sendMessage(prefix() + configuration.messages().playerNotFound().replace("{player}", args[2]));
-        }
+            } else {
+                sender.sendMessage(fullMsg("admin.unban.not-banned", args[2]));
+            }
+        });
     }
 
     private void handleMute(CommandSender sender, String[] args, boolean temp) {
@@ -483,25 +740,29 @@ public final class EssentialsCommandDelegate {
         int reasonStart = 3;
         if (temp) {
             if (args.length < 4) { sender.sendMessage(fullMsg("admin.mute.require-duration")); return; }
-            expiresAt = Instant.ofEpochMilli(System.currentTimeMillis() + parseDuration(args[3]));
+            try {
+                expiresAt = Instant.ofEpochMilli(ModerationService.expiryAt(args[3], System.currentTimeMillis()));
+            } catch (IllegalArgumentException | ArithmeticException e) {
+                sender.sendMessage(fullMsg("admin.mute.require-duration"));
+                return;
+            }
             reasonStart = 4;
         }
         String reason = joinArgs(args, reasonStart, "\u65e0");
-        String result = chatMutable.mutePlayer(playerName, expiresAt, reason, sender.getName());
-        sender.sendMessage(prefix() + result);
+        complete(sender, temp ? "tempmute" : "mute", chatMutable.mutePlayer(playerName, expiresAt, reason, sender.getName()),
+            result -> sender.sendMessage(prefix() + result));
     }
 
     private void handleUnmute(CommandSender sender, String[] args) {
         if (args.length < 3) { sender.sendMessage(fullMsg("admin.unmute.usage")); return; }
         ChatMutable chatMutable = chatMutableSupplier.get();
         if (chatMutable == null) { sender.sendMessage(fullMsg("admin.unmute.offline-warn")); return; }
-        String result = chatMutable.unmutePlayer(args[2]);
-        sender.sendMessage(prefix() + result);
+        complete(sender, "unmute", chatMutable.unmutePlayer(args[2], sender.getName()), result -> sender.sendMessage(prefix() + result));
     }
 
     private void handleKick(CommandSender sender, String[] args) {
         if (args.length < 3) { sender.sendMessage(fullMsg("admin.kick.usage")); return; }
-        Player target = Bukkit.getPlayerExact(args[2]);
+        Player target = visibleTarget(sender, args[2]);
         if (target == null) {
             sender.sendMessage(prefix() + configuration.messages().playerNotFound().replace("{player}", args[2]));
             return;
@@ -515,76 +776,102 @@ public final class EssentialsCommandDelegate {
 
     private void handleWarn(CommandSender sender, String[] args) {
         if (args.length < 3) { sender.sendMessage(fullMsg("admin.warn.usage")); return; }
-        Player target = Bukkit.getPlayerExact(args[2]);
+        Player target = visibleTarget(sender, args[2]);
         if (target == null) {
             sender.sendMessage(prefix() + configuration.messages().playerNotFound().replace("{player}", args[2]));
             return;
         }
         String reason = joinArgs(args, 3, "\u65e0");
-        try {
-            repository.addWarning(target.getUniqueId(), target.getName(), reason, sender.getName());
+        var identity = new ModerationService.Identity(target.getUniqueId(), target.getName());
+        String operator = sender.getName();
+        int maximum = configuration.moderation().maxWarningsBeforeBan();
+        long since = configuration.moderation().warningExpireDays() > 0
+            ? System.currentTimeMillis() - configuration.moderation().warningExpireDays() * 86400000L : 0;
+        var pending = work.submit(() -> moderation.warn(identity, reason, operator, maximum, since));
+        complete(sender, "warn", pending, result -> {
+            if (result.ban() != null) moderation.enforce(result.ban(), Bukkit.getPlayer(identity.id()));
             Bukkit.broadcastMessage(prefix() + configuration.messages().warnBroadcast()
-                .replace("{player}", target.getName()).replace("{operator}", sender.getName()).replace("{reason}", reason));
-            int maxWarns = configuration.moderation().maxWarningsBeforeBan();
-            if (maxWarns > 0) {
-                long since = configuration.moderation().warningExpireDays() > 0
-                    ? System.currentTimeMillis() - (configuration.moderation().warningExpireDays() * 86400000L)
-                    : 0;
-                int count = repository.getWarningCount(target.getUniqueId(), since);
-                if (count >= maxWarns) {
-                    repository.ban(target.getUniqueId(), target.getName(), "\u8b66\u544a\u6b21\u6570\u8fbe\u5230\u4e0a\u9650 (" + count + ")", "\u7cfb\u7edf", -1, null);
-                    target.kickPlayer(configuration.moderation().banMessage()
-                        .replace("{reason}", "\u8b66\u544a\u6b21\u6570\u8fbe\u5230\u4e0a\u9650").replace("{expiry}", "\u6c38\u4e45"));
-                    sender.sendMessage(fullMsg("admin.warn.ban-tip", target.getName(), count));
-                }
-            }
-        } catch (Exception e) { sender.sendMessage(fullMsg("admin.warn.failed")); }
+                .replace("{player}", identity.name()).replace("{operator}", operator).replace("{reason}", reason));
+        }, result -> { if (result.ban() != null) sender.sendMessage(fullMsg("admin.warn.ban-tip", identity.name(), result.count())); });
     }
 
     private void handleSudo(CommandSender sender, String[] args) {
         if (args.length < 4) { sender.sendMessage(fullMsg("admin.sudo.usage")); return; }
-        Player target = Bukkit.getPlayerExact(args[2]);
+        Player target = visibleTarget(sender, args[2]);
         if (target == null) {
             sender.sendMessage(prefix() + configuration.messages().playerNotFound().replace("{player}", args[2]));
             return;
         }
         String cmd = joinArgs(args, 3, "");
         if (cmd.startsWith("/")) cmd = cmd.substring(1);
-        target.performCommand(cmd);
-        sender.sendMessage(fullMsg("admin.sudo.success", target.getName(), cmd));
+        if (cmd.isBlank()) {
+            sender.sendMessage(fullMsg("admin.sudo.usage"));
+            return;
+        }
+        if (!(sender instanceof org.bukkit.command.ConsoleCommandSender)
+            && !sender.equals(target) && !sender.hasPermission("axs.essentials.sudo.others")) {
+            sender.sendMessage(prefix() + configuration.messages().noPermission());
+            return;
+        }
+        boolean handled = target.performCommand(cmd);
+        plugin.getLogger().info("Essentials sudo: " + sender.getName() + " -> " + target.getName()
+            + " /" + cmd.split("\\s+", 2)[0] + " (handled=" + handled + ")");
+        sender.sendMessage(fullMsg(handled ? "admin.sudo.success" : "admin.sudo.failed", target.getName(), cmd));
     }
 
     private void handleInv(CommandSender sender, String[] args) {
         if (!(sender instanceof Player p)) { sender.sendMessage(fullMsg("common.only-player")); return; }
         if (args.length < 3) { sender.sendMessage(fullMsg("admin.inv.usage")); return; }
-        Player target = Bukkit.getPlayerExact(args[2]);
+        Player target = visibleTarget(sender, args[2]);
         if (target == null) {
             sender.sendMessage(prefix() + configuration.messages().playerNotFound().replace("{player}", args[2]));
             return;
         }
-        playerService.openPlayerInventory(p, target);
+        boolean editing = args.length > 3 && args[3].equalsIgnoreCase("edit");
+        if (args.length > 3 && !editing) {
+            sender.sendMessage(fullMsg("admin.inv.usage"));
+            return;
+        }
+        if (editing && !p.hasPermission(InventoryInspection.EDIT_PERMISSION)) {
+            sender.sendMessage(prefix() + configuration.messages().noPermission());
+            return;
+        }
+        if (editing && p.equals(target)) {
+            sender.sendMessage(fullMsg("admin.inv.self-edit"));
+            return;
+        }
+        inventoryInspection.open(p, target, editing);
     }
 
     // --- Sit / Lay ---
 
     private void handleSit(Player player) {
+        sitAt(player, player.getLocation());
+    }
+
+    public boolean sitAt(Player player, org.bukkit.Location location) {
+        if (!actionEnabled("sit") || !hasActionPermission(player, "sit") || player.isInsideVehicle() || player.isSleeping()) return false;
         cancelPoseTask(player.getUniqueId());
         org.bukkit.entity.ArmorStand seat = player.getWorld().spawn(
-            player.getLocation().subtract(0, 0.2, 0), org.bukkit.entity.ArmorStand.class, stand -> {
+            location.clone().subtract(0, 0.2, 0), org.bukkit.entity.ArmorStand.class, stand -> {
                 stand.setVisible(false); stand.setGravity(false); stand.setSmall(true);
                 stand.setMarker(true); stand.setInvulnerable(true);
             });
-        seat.addPassenger(player);
+        if (closed || !seat.addPassenger(player) || closed) {
+            seat.remove();
+            return false;
+        }
         seatEntities.put(player.getUniqueId(), seat);
         player.sendMessage(prefix() + configuration.messages().sitDown());
-        BukkitTask monitorTask = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
+        BukkitTask monitorTask = Bukkit.getScheduler().runTaskTimer(plugin, poseCallback(() -> {
             if (!seat.isValid() || seat.getPassengers().isEmpty()) {
                 seat.remove();
                 seatEntities.remove(player.getUniqueId(), seat);
                 cancelPoseTask(player.getUniqueId());
             }
-        }, 20L, 20L);
+        }), 20L, 20L);
         poseMonitorTasks.put(player.getUniqueId(), monitorTask);
+        return true;
     }
 
     private void handleLay(Player player) {
@@ -598,17 +885,21 @@ public final class EssentialsCommandDelegate {
         // 用 sleep API 让玩家进入躺床姿势（身体水平），force=true 不需要真实床
         org.bukkit.Location sleepLoc = player.getLocation();
         boolean success = player.sleep(sleepLoc, true);
+        if (closed) {
+            if (success && player.isSleeping()) player.wakeup(true);
+            return;
+        }
         if (!success) {
             player.sendMessage(prefix() + ChatColor.RED + "当前无法躺下。");
             return;
         }
         player.sendMessage(prefix() + configuration.messages().layDown());
         // 定时检查玩家是否还处于睡觉状态，脱离后清理任务
-        BukkitTask monitorTask = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
+        BukkitTask monitorTask = Bukkit.getScheduler().runTaskTimer(plugin, poseCallback(() -> {
             if (!player.isOnline() || !player.isSleeping()) {
                 cancelPoseTask(player.getUniqueId());
             }
-        }, 20L, 20L);
+        }), 20L, 20L);
         poseMonitorTasks.put(player.getUniqueId(), monitorTask);
     }
 
@@ -662,20 +953,30 @@ public final class EssentialsCommandDelegate {
 
     private void reload(CommandSender sender) {
         try {
-            reloadAction.run();
-            sender.sendMessage(fullMsg("reload.success"));
+            reloadAction.get().whenComplete((ignored,failure)->{
+                String message=failure==null?fullMsg("reload.success"):fullMsg("reload.failed",failure.getMessage());
+                Runnable reply=()->{if(!(sender instanceof Player player)||player.isOnline())sender.sendMessage(message);};
+                if(Bukkit.isPrimaryThread())reply.run();else if(plugin.isEnabled())Bukkit.getScheduler().runTask(plugin,reply);
+            });
         } catch (Exception e) { sender.sendMessage(fullMsg("reload.failed", e.getMessage())); }
     }
 
     // --- Utilities ---
 
-    private Player resolveTarget(CommandSender sender, String[] args, int index, Player fallback) {
-        if (args.length > index) {
-            Player target = Bukkit.getPlayerExact(args[index]);
-            if (target != null) return target;
-            sender.sendMessage(prefix() + configuration.messages().playerNotFound().replace("{player}", args[index]));
+    private void withTarget(CommandSender sender, String[] args, Player fallback,
+                            java.util.function.Consumer<Player> action) {
+        if (args.length <= 2) {
+            action.accept(fallback);
+            return;
         }
-        return fallback;
+        Player target = visibleTarget(sender, args[2]);
+        if (target != null) action.accept(target);
+        else sender.sendMessage(prefix() + configuration.messages().playerNotFound().replace("{player}", args[2]));
+    }
+
+    private Player visibleTarget(CommandSender sender, String name) {
+        Player target = Bukkit.getPlayerExact(name);
+        return target != null && playerService.canSee(sender, target) ? target : null;
     }
 
     private void requirePlayer(CommandSender sender, java.util.function.Consumer<Player> action) {
@@ -683,17 +984,41 @@ public final class EssentialsCommandDelegate {
         else { sender.sendMessage(fullMsg("common.only-player")); }
     }
 
-    private void requirePermission(CommandSender sender, String permission, Runnable action) {
-        if (sender.hasPermission(permission)) { action.run(); return; }
-        sender.sendMessage(prefix() + configuration.messages().noPermission());
+    public static boolean hasActionPermission(CommandSender sender, String action) {
+        String permission = permissionForAction(action);
+        return permission.isEmpty() || sender.hasPermission(permission);
+    }
+
+    public static String permissionForAction(String action) {
+        String permission = switch (action) {
+            case "help", "status" -> null;
+            case "reload" -> "admin";
+            case "tp", "top", "tppos" -> "teleport";
+            case "tpahere", "tpaccept", "tpdeny", "tptoggle", "tpcancel" -> "tpa";
+            case "warps", "warpfavorite" -> "warp";
+            case "tempban" -> "ban";
+            case "tempmute" -> "mute";
+            case "chatreview" -> "mute";
+            default -> ACTIONS.contains(action) ? action : null;
+        };
+        return permission == null ? "" : "axs.essentials." + permission;
+    }
+
+    public void executePanelAction(Player player, String action, String... arguments) {
+        String[] args = new String[arguments.length + 2];
+        args[0] = "essentials";
+        args[1] = action;
+        System.arraycopy(arguments, 0, args, 2, arguments.length);
+        onCommand(player, "ess", args);
     }
 
     private void handleRequireArg(CommandSender sender, String[] args, int index, String name,
                                    java.util.function.Consumer<String> action) {
-        if (args.length <= index || args[index].isBlank()) {
+        String value = joinArgs(args, index, "").trim();
+        if (value.isEmpty()) {
             sender.sendMessage(fullMsg("admin.require-arg", name)); return;
         }
-        action.accept(args[index]);
+        action.accept(value);
     }
 
     private static String arg(String[] args, int index, String def) {
@@ -717,26 +1042,11 @@ public final class EssentialsCommandDelegate {
         };
     }
 
-    private static long parseDuration(String s) {
-        try {
-            String lower = s.toLowerCase(Locale.ROOT);
-            if (lower.endsWith("d")) return Long.parseLong(lower.replace("d", "")) * 86400000L;
-            if (lower.endsWith("h")) return Long.parseLong(lower.replace("h", "")) * 3600000L;
-            if (lower.endsWith("m")) return Long.parseLong(lower.replace("m", "")) * 60000L;
-            if (lower.endsWith("s")) return Long.parseLong(lower.replace("s", "")) * 1000L;
-            return Long.parseLong(lower) * 1000L;
-        } catch (NumberFormatException e) { return 3600000L; }
-    }
-
-    private static String formatTime(long timestamp) {
-        java.time.Instant instant = java.time.Instant.ofEpochMilli(timestamp);
-        return java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
-            .withZone(java.time.ZoneId.systemDefault()).format(instant);
-    }
-
-    private List<String> filterOnline(String prefix) {
+    private List<String> filterOnline(CommandSender sender, String prefix) {
         List<String> names = new ArrayList<>();
-        for (Player p : Bukkit.getOnlinePlayers()) names.add(p.getName());
+        for (Player p : Bukkit.getOnlinePlayers()) {
+            if (playerService.canSee(sender, p)) names.add(p.getName());
+        }
         return filter(names, prefix);
     }
 

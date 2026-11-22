@@ -28,11 +28,16 @@ import xuanmo.arcartxsuite.api.capability.PublicCapability;
 @PublicCapability
 public interface AxsMailService {
 
+    /** 邮件是否写入 Suite 宿主共享 MySQL，供跨服持久规则检查存储一致性。 */
+    boolean usesSharedHostStorage();
+
     /**
      * 发送一封系统邮件。
      * <p>
      * 收件人无需在线，邮件存入收件箱，玩家上线后查看领取附件。
-     * 使用 {@link AxsMailRequest#idempotencyKey()} 作为去重标识。
+     * 按来源插件、{@link AxsMailRequest#idempotencyKey()} 和收件人去重。
+     * 同一收件人的邮件、附件和幂等回执在同一事务内提交，重复请求返回原邮件 ID。
+     * 多收件人分别提交，部分失败时可使用原请求重试，仅补发尚未成功的收件人。
      *
      * @param request 邮件发送请求
      * @return 异步回执，{@link AxsDeliveryReceipt#isNoOp()} 为 true 表示模块未就绪
@@ -43,15 +48,19 @@ public interface AxsMailService {
     /**
      * 恢复持久化的邮件发送意图。
      * <p>
-     * 语义与 {@link #send} 相同，区别在于允许更早的 {@code deliverAt}
-     * （用于调用方从自己的持久化记录恢复发送）。
-     * AXS mail 模块当前实现中与 {@link #send} 行为一致。
+     * 与 {@link #send} 使用相同的事务和去重语义，直接尝试入库。
+     * 定时触发由调用方安排，{@code deliverAt} 不会延迟本次调用。
+     * 回执确认邮件入库，不代表玩家已领取附件。
      *
      * @param request 邮件发送请求
      * @return 异步回执
      */
     @ApiStability.Stable
     @NotNull CompletableFuture<AxsDeliveryReceipt> sendDurable(@NotNull AxsMailRequest request);
+
+    /** 按收件人 UUID 投递预设邮件，沿用普通邮件的事务和去重回执。 */
+    @NotNull CompletableFuture<AxsDeliveryReceipt> sendPresetDurable(@NotNull UUID recipient, @NotNull String presetId,
+        @NotNull String sourcePlugin, @NotNull String idempotencyKey);
 
     /**
      * 查询玩家自己的单封邮件。

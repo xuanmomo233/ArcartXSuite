@@ -14,6 +14,7 @@ import xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -30,6 +31,7 @@ public final class RecipeCollector {
     public RecipeMaterialPlanner materialPlanner() { return planner; }
 
     private final VanillaItemNameBridge nameBridge;
+    private final Map<Material, String> itemIcons = new EnumMap<>(Material.class);
 
     public RecipeCollector(VanillaItemNameBridge nameBridge) {
         this.nameBridge = nameBridge;
@@ -37,6 +39,7 @@ public final class RecipeCollector {
 
     public Map<String, Object> collectRecipes(Player player, WorkshopType type, MaterialStock stock) {
         if (type == WorkshopType.CRAFTING) return collectCraftingRecipes(player, stock);
+        var availability = planner.availability(player, type, stock);
         Map<String, Object> recipes = new LinkedHashMap<>();
         Iterator<Recipe> iterator = Bukkit.recipeIterator();
         while (iterator.hasNext()) {
@@ -50,7 +53,7 @@ public final class RecipeCollector {
             } else if (recipe instanceof org.bukkit.inventory.SmithingRecipe smith) {
                 org.bukkit.inventory.RecipeChoice template = recipe instanceof org.bukkit.inventory.SmithingTransformRecipe transform
                     ? transform.getTemplate() : ((org.bukkit.inventory.SmithingTrimRecipe) recipe).getTemplate();
-                ItemStack equipment = player.getOpenInventory().getTopInventory().getItem(1);
+                ItemStack equipment = availability.station()[1];
                 ItemStack base = equipment != null && smith.getBase().test(equipment) ? equipment.clone() : sample(smith.getBase());
                 base.setAmount(1);
                 ItemStack result = recipe instanceof org.bukkit.inventory.SmithingTrimRecipe ? sample(template) : smith.getResult();
@@ -62,7 +65,7 @@ public final class RecipeCollector {
                     entry.put("resultName", "armor trim " + result.getType().name().toLowerCase());
                 }
             } else continue;
-            entry.put("canCraft", planner.canMake(player, recipe, stock) ? 1 : 0);
+            entry.put("canCraft", availability.canMake(recipe) ? 1 : 0);
             recipes.put(((org.bukkit.Keyed) recipe).getKey().toString(), entry);
         }
         return recipes;
@@ -82,6 +85,8 @@ public final class RecipeCollector {
     public Map<String, Object> collectCraftingRecipes(Player player, MaterialStock stock) {
         Map<String, Object> recipes = new LinkedHashMap<>();
         Set<NamespacedKey> discovered = player.getDiscoveredRecipes();
+        if (discovered.isEmpty()) return recipes;
+        var availability = planner.availability(player, WorkshopType.CRAFTING, stock);
         Iterator<Recipe> it = Bukkit.recipeIterator();
         while (it.hasNext()) {
             Recipe recipe = it.next();
@@ -89,13 +94,13 @@ public final class RecipeCollector {
                 ShapedRecipe shaped = (ShapedRecipe) recipe;
                 if (!discovered.contains(shaped.getKey())) continue;
                 Map<String, Object> entry = buildShapedEntry(shaped);
-                entry.put("canCraft", planner.canMake(player, shaped, stock) ? 1 : 0);
+                entry.put("canCraft", availability.canMake(shaped) ? 1 : 0);
                 recipes.put(shaped.getKey().toString(), entry);
             } else if (recipe instanceof ShapelessRecipe) {
                 ShapelessRecipe shapeless = (ShapelessRecipe) recipe;
                 if (!discovered.contains(shapeless.getKey())) continue;
                 Map<String, Object> entry = buildShapelessEntry(shapeless);
-                entry.put("canCraft", planner.canMake(player, shapeless, stock) ? 1 : 0);
+                entry.put("canCraft", availability.canMake(shapeless) ? 1 : 0);
                 recipes.put(shapeless.getKey().toString(), entry);
             }
         }
@@ -110,6 +115,8 @@ public final class RecipeCollector {
         // SmokingRecipe / BlastingRecipe 留给将来烟熏炉/高炉 UI 替换使用。
         Map<String, Object> recipes = new LinkedHashMap<>();
         Set<NamespacedKey> discovered = player.getDiscoveredRecipes();
+        if (discovered.isEmpty()) return recipes;
+        var availability = planner.availability(player, WorkshopType.FURNACE, stock);
         Iterator<Recipe> it = Bukkit.recipeIterator();
         while (it.hasNext()) {
             Recipe recipe = it.next();
@@ -117,7 +124,7 @@ public final class RecipeCollector {
                 FurnaceRecipe furnace = (FurnaceRecipe) recipe;
                 if (!discovered.contains(furnace.getKey())) continue;
                 Map<String, Object> entry = buildCookingEntry(furnace.getResult(), furnace.getInput(), "furnace");
-                entry.put("canCraft", planner.canMake(player, furnace, stock) ? 1 : 0);
+                entry.put("canCraft", availability.canMake(furnace) ? 1 : 0);
                 recipes.put(furnace.getKey().toString(), entry);
             }
         }
@@ -126,18 +133,14 @@ public final class RecipeCollector {
 
     private Map<String, Object> buildShapedEntry(ShapedRecipe recipe) {
         Map<String, Object> entry = new LinkedHashMap<>();
-        entry.put("resultJson", serializeItemWithLore(recipe.getResult()));
-        entry.put("resultAmount", recipe.getResult().getAmount());
-        entry.put("resultItemId", recipe.getResult().getType().getKey().toString());
-        entry.put("resultName", recipe.getResult().getType().name().toLowerCase().replace('_', ' '));
-        entry.put("resultZhName", translate(recipe.getResult().getType()));
-        entry.put("category", categorizeItem(recipe.getResult()));
+        addResult(entry, recipe.getResult());
         entry.put("shaped", true);
         String[] shape = recipe.getShape();
         entry.put("width", shape.length > 0 ? shape[0].length() : 0);
         entry.put("height", shape.length);
         Map<String, String> ingredientMap = new LinkedHashMap<>();
-        for (Map.Entry<Character, ItemStack> e : recipe.getIngredientMap().entrySet()) {
+        Map<Character, ItemStack> rawIngredients = recipe.getIngredientMap();
+        for (Map.Entry<Character, ItemStack> e : rawIngredients.entrySet()) {
             if (e.getKey() != null) {
                 ingredientMap.put(e.getKey().toString(), serializeItem(e.getValue()));
             }
@@ -146,9 +149,8 @@ public final class RecipeCollector {
         List<String> shapeList = new ArrayList<>();
         for (String row : shape) shapeList.add(row);
         entry.put("shape", shapeList);
-        entry.put("previewGrid", buildShapedPreviewGrid(shape, recipe.getIngredientMap()));
+        entry.put("previewGrid", buildShapedPreviewGrid(shape, rawIngredients));
         List<Integer> amounts = new ArrayList<>(Collections.nCopies(9, 0));
-        Map<Character, ItemStack> rawIngredients = recipe.getIngredientMap();
         for (int row = 0; row < shape.length; row++) {
             for (int col = 0; col < shape[row].length(); col++) {
                 ItemStack ingredient = rawIngredients.get(shape[row].charAt(col));
@@ -161,23 +163,18 @@ public final class RecipeCollector {
 
     private Map<String, Object> buildShapelessEntry(ShapelessRecipe recipe) {
         Map<String, Object> entry = new LinkedHashMap<>();
-        entry.put("resultJson", serializeItemWithLore(recipe.getResult()));
-        entry.put("resultAmount", recipe.getResult().getAmount());
-        entry.put("resultItemId", recipe.getResult().getType().getKey().toString());
-        entry.put("resultName", recipe.getResult().getType().name().toLowerCase().replace('_', ' '));
-        entry.put("resultZhName", translate(recipe.getResult().getType()));
-        entry.put("category", categorizeItem(recipe.getResult()));
+        addResult(entry, recipe.getResult());
         entry.put("shaped", false);
         entry.put("width", 3);
         entry.put("height", 3);
         List<String> ingredientList = new ArrayList<>();
-        for (ItemStack item : recipe.getIngredientList()) {
+        List<ItemStack> ingredients = recipe.getIngredientList();
+        for (ItemStack item : ingredients) {
             ingredientList.add(serializeItem(item));
         }
         entry.put("ingredients", ingredientList);
-        entry.put("previewGrid", buildShapelessPreviewGrid(recipe.getIngredientList()));
+        entry.put("previewGrid", buildShapelessPreviewGrid(ingredients));
         List<Integer> amounts = new ArrayList<>(Collections.nCopies(9, 0));
-        List<ItemStack> ingredients = recipe.getIngredientList();
         for (int i = 0; i < Math.min(ingredients.size(), 9); i++) amounts.set(i, ingredients.get(i).getAmount());
         entry.put("previewAmounts", amounts);
         return entry;
@@ -185,18 +182,22 @@ public final class RecipeCollector {
 
     private Map<String, Object> buildCookingEntry(ItemStack result, ItemStack input, String type) {
         Map<String, Object> entry = new LinkedHashMap<>();
+        addResult(entry, result);
+        String inputIcon = serializeItem(input);
+        entry.put("inputJson", inputIcon);
+        entry.put("type", type);
+        entry.put("previewGrid", List.of(inputIcon));
+        entry.put("previewAmounts", List.of(input.getAmount()));
+        return entry;
+    }
+
+    private void addResult(Map<String, Object> entry, ItemStack result) {
         entry.put("resultJson", serializeItemWithLore(result));
         entry.put("resultAmount", result.getAmount());
         entry.put("resultItemId", result.getType().getKey().toString());
         entry.put("resultName", result.getType().name().toLowerCase().replace('_', ' '));
         entry.put("resultZhName", translate(result.getType()));
         entry.put("category", categorizeItem(result));
-        entry.put("inputJson", serializeItem(input));
-        entry.put("type", type);
-        List<String> previewGrid = new ArrayList<>(Collections.nCopies(1, serializeItemWithLore(input)));
-        entry.put("previewGrid", previewGrid);
-        entry.put("previewAmounts", List.of(input.getAmount()));
-        return entry;
     }
 
     private List<String> buildShapedPreviewGrid(String[] shape, Map<Character, ItemStack> ingredientMap) {
@@ -223,8 +224,8 @@ public final class RecipeCollector {
     }
 
     public String serializeItem(ItemStack item) {
-        if (item == null) return "{\"id\":\"minecraft:air\",\"Count\":1b}";
-        return "{\"id\":\"" + item.getType().getKey().toString() + "\",\"Count\":1b}";
+        Material material = item == null ? Material.AIR : item.getType();
+        return itemIcons.computeIfAbsent(material, type -> "{\"id\":\"" + type.getKey() + "\",\"Count\":1b}");
     }
 
     public String serializeIconWithLore(Material material, String displayName, String lore) {
@@ -296,8 +297,6 @@ public final class RecipeCollector {
     }
 
     public String serializeItemWithLore(ItemStack item) {
-        if (item == null) return "{\"id\":\"minecraft:air\",\"Count\":1b}";
-        // TODO: lore 暂未实现，先确保图标正常显示
         return serializeItem(item);
     }
 

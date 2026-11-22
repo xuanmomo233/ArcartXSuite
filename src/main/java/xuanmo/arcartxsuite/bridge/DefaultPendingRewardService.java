@@ -7,7 +7,13 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BooleanSupplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.bukkit.Bukkit;
@@ -15,11 +21,16 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
-import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.inventory.InventoryCloseEvent;
+import org.bukkit.event.player.PlayerDropItemEvent;
+import org.bukkit.event.player.PlayerItemConsumeEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import xuanmo.arcartxsuite.api.capability.MailDispatchable;
+import xuanmo.arcartxsuite.api.auth.AuthAccess;
+import xuanmo.arcartxsuite.api.auth.AuthSnapshot;
 import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI;
 import xuanmo.arcartxsuite.api.item.ItemRewardDispatcher;
 import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
@@ -28,6 +39,7 @@ import xuanmo.arcartxsuite.api.storage.StorageDescriptor;
 import xuanmo.arcartxsuite.api.storage.StorageManager;
 import xuanmo.arcartxsuite.module.ModuleRegistry;
 import xuanmo.arcartxsuite.api.command.ThrottledCommandExecutor;
+import xuanmo.arcartxsuite.api.command.CommandSanitizer;
 
 /**
  * 统一待发放奖励服务的宿主默认实现。
@@ -36,25 +48,36 @@ import xuanmo.arcartxsuite.api.command.ThrottledCommandExecutor;
  * payload 字段以 JSON 格式存储奖励详情。
  * <p>
  * 玩家上线时自动加载并补发：物品通过 ItemRewardDispatcher、货币通过 CurrencyBridge、
- * 命令通过控制台执行、邮件预设通过 MailDispatchable。
+ * 命令通过控制台执行、邮件预设通过 Mail 的持久投递接口。
  * <p>
- * 补发失败时递增尝试次数，达到 {@link #MAX_ATTEMPTS} 后自动丢弃避免无限重试。
+ * 明确失败的奖励可再次认领。战令和命令奖励结果不明时保留记录供核对。
  * <p>
  * 补发物品时设置 {@code skipPendingOverflow(true)}，避免背包满+邮件不可用时
  * 物品再次存入 pending 形成循环。
  */
 public final class DefaultPendingRewardService implements PendingRewardService, Listener {
 
-    /** 最大补发尝试次数，超过后自动丢弃 */
-    private static final int MAX_ATTEMPTS = 10;
-
     /** 认领 TTL：节点崩溃后其 claimed 行在该时长后被其他节点回收补发 */
     private static final long CLAIM_TTL_MS = 600_000L;
+    private static final int CLAIM_PAGE_SIZE = 32;
+    private static final String CLAIMABLE = "player_uuid=? AND (claimed_at IS NULL OR claimed_at<?)"
+        + " AND (reward_type<>'COMMAND' OR attempts=0) AND attempts>=0";
+    private static final String CLAIM_PAGE = "UPDATE axs_pending_rewards SET claimed_at=?,claimed_by=? WHERE "
+        + CLAIMABLE + " AND id IN (SELECT id FROM (SELECT id FROM axs_pending_rewards WHERE " + CLAIMABLE
+        + " AND (created_at>? OR (created_at=? AND id>?)) ORDER BY created_at,id LIMIT ?) AS candidates)";
+    // 通用奖励开始执行后，只有明确失败才允许自动重试。
+    private static final int STARTED_UNCONFIRMED = -1;
+    // Real request keys are hex digests. This reserved key identifies their shared receipt store.
+    private static final String STORE_IDENTITY_KEY = "receipt-store:v1";
 
     private final JavaPlugin plugin;
     private final Logger logger;
     private final StorageManager storageManager;
     private final ModuleRegistry registry;
+    private final PendingItemSaveStore itemSaveStore;
+    private final PendingCommandReceipts commandReceipts;
+    private final ConcurrentHashMap<UUID, Flush> flushes = new ConcurrentHashMap<>();
+    private PendingItemDelivery pendingItems;
 
     /**
      * 本节点认领标识（claimed_by 写入值）。
@@ -63,14 +86,24 @@ public final class DefaultPendingRewardService implements PendingRewardService, 
     private volatile String claimOwner = UUID.randomUUID().toString();
     private final java.nio.file.Path outbox;
     private final Object outboxLock=new Object();
-    private record RewardBatch(String key,String fingerprint,List<PendingReward> rewards) { }
+    private final AtomicBoolean outboxStoreWarning = new AtomicBoolean();
+    private volatile boolean schemaInitialized;
+    private volatile UUID rewardReceiptStoreId;
+    private record RewardBatch(String key, String fingerprint, List<PendingReward> rewards, UUID receiptStoreId) { }
 
     public DefaultPendingRewardService(JavaPlugin plugin, Logger logger,
                                        StorageManager storageManager, ModuleRegistry registry) {
+        this(plugin, logger, storageManager, registry, new PendingCommandReceipts(storageManager, logger));
+    }
+
+    public DefaultPendingRewardService(JavaPlugin plugin, Logger logger, StorageManager storageManager,
+                                       ModuleRegistry registry, PendingCommandReceipts commandReceipts) {
         this.plugin = plugin;
         this.logger = logger;
         this.storageManager = storageManager;
         this.registry = registry;
+        this.commandReceipts = commandReceipts;
+        this.itemSaveStore = new PendingItemSaveStore(storageManager);
         this.outbox=plugin!=null?plugin.getDataFolder().toPath().resolve("pending-reward-outbox"):null;
     }
 
@@ -86,7 +119,8 @@ public final class DefaultPendingRewardService implements PendingRewardService, 
      * 区分 SQLite/MySQL 方言：SQLite 使用 AUTOINCREMENT，MySQL 使用 AUTO_INCREMENT。
      * SQLite 不支持内联 INDEX 语法，索引单独创建。
      */
-    public void initialize() {
+    public synchronized void initialize() {
+        if (schemaInitialized) return;
         StorageDescriptor descriptor = storageManager.getDescriptor();
         boolean isMysql = descriptor != null && descriptor.isMysql();
         try (Connection conn = storageManager.getHostConnection();
@@ -103,6 +137,7 @@ public final class DefaultPendingRewardService implements PendingRewardService, 
                     + "created_at BIGINT NOT NULL, "
                     + "attempts INT NOT NULL DEFAULT 0, "
                     + "INDEX idx_player (player_uuid), "
+                    + "INDEX idx_pending_player_chrono (player_uuid, created_at, id), "
                     + "INDEX idx_module_player (source_module, player_uuid)"
                     + ")"
                 );
@@ -121,21 +156,89 @@ public final class DefaultPendingRewardService implements PendingRewardService, 
                     + ")"
                 );
                 // SQLite 索引单独创建（IF NOT EXISTS 避免重复创建报错）
-                tryExecute(stmt, "CREATE INDEX IF NOT EXISTS idx_pending_player ON axs_pending_rewards(player_uuid)");
-                tryExecute(stmt, "CREATE INDEX IF NOT EXISTS idx_pending_module_player ON axs_pending_rewards(source_module, player_uuid)");
+                stmt.executeUpdate("CREATE INDEX IF NOT EXISTS idx_pending_player ON axs_pending_rewards(player_uuid)");
+                stmt.executeUpdate("CREATE INDEX IF NOT EXISTS idx_pending_module_player ON axs_pending_rewards(source_module, player_uuid)");
+                stmt.executeUpdate("CREATE INDEX IF NOT EXISTS idx_pending_player_chrono ON axs_pending_rewards(player_uuid, created_at, id)");
             }
+            if (isMysql) ensureClaimIndex(stmt);
             // 认领列：老表无此列则 ALTER 补齐（重复执行被 tryExecute 吞掉）
             stmt.executeUpdate("CREATE TABLE IF NOT EXISTS axs_reward_receipts ("
                 + "request_key VARCHAR(128) PRIMARY KEY, fingerprint VARCHAR(64) NOT NULL, created_at BIGINT NOT NULL)");
             tryExecute(stmt, "ALTER TABLE axs_pending_rewards ADD COLUMN claimed_at " + (isMysql ? "BIGINT" : "INTEGER"));
             tryExecute(stmt, "ALTER TABLE axs_pending_rewards ADD COLUMN claimed_by " + (isMysql ? "VARCHAR(64)" : "TEXT"));
-        } catch (SQLException e) {
+            // Only cache success after ignored duplicate-column errors have been distinguished
+            // from an incomplete upgrade caused by a transient storage failure.
+            try (ResultSet ignored = stmt.executeQuery("SELECT claimed_at, claimed_by FROM axs_pending_rewards WHERE 1=0")) {
+                // Probe the existing columns before creating the additive item checkpoint table.
+            }
+            itemSaveStore.initialize(stmt, isMysql);
+            rewardReceiptStoreId = identifyReceiptStore(conn, isMysql);
+            schemaInitialized = true;
+        } catch (SQLException | IllegalArgumentException e) {
             logger.log(Level.SEVERE, "初始化 axs_pending_rewards 表失败", e);
+        }
+    }
+
+    private static UUID identifyReceiptStore(Connection conn, boolean mysql) throws SQLException {
+        String insert = mysql
+            ? "INSERT IGNORE INTO axs_reward_receipts (request_key,fingerprint,created_at) VALUES (?,?,?)"
+            : "INSERT OR IGNORE INTO axs_reward_receipts (request_key,fingerprint,created_at) VALUES (?,?,?)";
+        try (var statement = conn.prepareStatement(insert)) {
+            statement.setString(1, STORE_IDENTITY_KEY);
+            statement.setString(2, UUID.randomUUID().toString());
+            statement.setLong(3, System.currentTimeMillis());
+            statement.executeUpdate();
+        }
+        try (var statement = conn.prepareStatement("SELECT fingerprint FROM axs_reward_receipts WHERE request_key=?")) {
+            statement.setString(1, STORE_IDENTITY_KEY);
+            try (var rows = statement.executeQuery()) {
+                if (!rows.next()) throw new SQLException("待发放奖励存储标识不可用");
+                return UUID.fromString(rows.getString(1));
+            }
         }
     }
 
     private static void tryExecute(Statement stmt, String sql) {
         try { stmt.executeUpdate(sql); } catch (SQLException ignored) {}
+    }
+
+    private static void ensureClaimIndex(Statement stmt) throws SQLException {
+        try (var rows = stmt.executeQuery("SHOW INDEX FROM axs_pending_rewards WHERE Key_name='idx_pending_player_chrono'")) {
+            if (rows.next()) return;
+        }
+        try {
+            stmt.executeUpdate("CREATE INDEX idx_pending_player_chrono ON axs_pending_rewards(player_uuid, created_at, id)");
+        } catch (SQLException failure) {
+            // Another node may have upgraded the shared table after the preceding check.
+            if (failure.getErrorCode() != 1061) throw failure;
+        }
+    }
+
+    public boolean storageReady() { return schemaInitialized; }
+
+    @Override
+    public @Nullable UUID rewardReceiptStoreId() {
+        return rewardReceiptStoreId;
+    }
+
+    public void startPendingItemDelivery() {
+        var worlds = Bukkit.getWorlds();
+        if (pendingItems != null || worlds.isEmpty() || !schemaInitialized) return;
+        var playerData = worlds.get(0).getWorldFolder().toPath().resolve("playerdata");
+        pendingItems = new PendingItemDelivery(plugin, logger, playerData, itemSaveStore, this::flushPlayer,
+            () -> registry.getCapability(xuanmo.arcartxsuite.api.mail.AxsMailService.class),
+            () -> registry.getCapability(xuanmo.arcartxsuite.api.capability.WarehouseRewardDepositable.class),
+            (player, reward) -> switch (reward.type()) {
+                case ITEM_SERIALIZED, ITEM_NATURAL -> readSerializedItem(reward, true);
+                case ITEM_SPEC -> resolveItemSpec(player, readItemSpec(reward));
+                default -> generatePendingItem(player, reward);
+            });
+    }
+
+    public java.util.concurrent.CompletionStage<Void> stopPendingItemDelivery() {
+        var active = pendingItems;
+        pendingItems = null;
+        return active == null ? java.util.concurrent.CompletableFuture.completedFuture(null) : active.shutdown();
     }
 
     // ─── PendingRewardService 接口实现 ──────────────────────────
@@ -193,7 +296,7 @@ public final class DefaultPendingRewardService implements PendingRewardService, 
     public void incrementAttempts(long id) {
         try (Connection conn = storageManager.getHostConnection();
              PreparedStatement ps = conn.prepareStatement(
-                 "UPDATE axs_pending_rewards SET attempts = attempts + 1 WHERE id = ?")) {
+                 "UPDATE axs_pending_rewards SET attempts = attempts + 1 WHERE id = ? AND attempts >= 0")) {
             ps.setLong(1, id);
             ps.executeUpdate();
         } catch (SQLException e) {
@@ -205,35 +308,151 @@ public final class DefaultPendingRewardService implements PendingRewardService, 
 
     @EventHandler(priority = EventPriority.NORMAL)
     public void onAdmission(xuanmo.arcartxsuite.api.auth.AuthAdmissionEvent event) {
+        if (!schemaInitialized) return;
         Player player = Bukkit.getPlayer(event.snapshot().playerId());
         if (player != null) flushPlayer(player);
     }
 
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onInventoryClose(InventoryCloseEvent event) {
+        if (pendingItems != null && event.getPlayer() instanceof Player player) pendingItems.inventoryChanged(player);
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onDrop(PlayerDropItemEvent event) {
+        if (pendingItems != null) pendingItems.inventoryChanged(event.getPlayer());
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onConsume(PlayerItemConsumeEvent event) {
+        if (pendingItems != null) pendingItems.inventoryChanged(event.getPlayer());
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onFishingRewardQuit(PlayerQuitEvent event) {
+        Player player = event.getPlayer();
+        flushes.computeIfPresent(player.getUniqueId(), (id, flush) -> flush.player == player ? null : flush);
+        if (pendingItems != null) pendingItems.quit(event.getPlayer().getUniqueId());
+    }
+
     @Override
     public void flushPlayer(Player player) {
-        if (!xuanmo.arcartxsuite.api.auth.AuthAccess.admitted(player.getUniqueId())) return;
-        UUID uuid = player.getUniqueId();
-        var admission=xuanmo.arcartxsuite.api.auth.AuthAccess.snapshot(uuid);
-        // 延迟 40 tick 补发，确保玩家数据加载完成
-        Bukkit.getScheduler().runTaskLater(plugin, () -> {
-            if (!player.isOnline() || !xuanmo.arcartxsuite.api.auth.AuthAccess.admitted(uuid)) return;
-            // 异步认领+加载 pending 数据，避免主线程 DB 查询；
-            // 原子认领保证多节点部署下同一条目只被一个节点补发
-            Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-                importOutbox(uuid);
-                ClaimedBatch batch = claimAndLoadPending(uuid);
-                if (batch.rewards().isEmpty()) return;
-                // 物品发放等操作需在主线程执行
-                Bukkit.getScheduler().runTask(plugin, () -> {
-                    if (!player.isOnline() || !xuanmo.arcartxsuite.api.auth.AuthAccess.admitted(uuid)) {
-                        // 玩家在主线程切换前离线：释放认领，等待下次上线重试
-                        releaseClaimsAsync(batch);
-                        return;
-                    }
-                    flushPending(player, batch, admission);
-                });
-            });
-        }, 40L);
+        UUID id = player.getUniqueId();
+        var admission = AuthAccess.snapshot(id);
+        if (!admission.admitted()) return;
+        Flush request = new Flush(player, admission);
+        var selected = flushes.compute(id, (ignored, current) -> {
+            if (current != null && current.player == player && sameConnection(current.admission, admission)) {
+                if (current.started) current.recheck = true;
+                return current;
+            }
+            return request;
+        });
+        if (selected == request) schedulePage(request, null, 40L);
+    }
+
+    private static final class Flush {
+        private final Player player;
+        private final AuthSnapshot admission;
+        // Mutated only in a flushes.compute operation for this player's UUID.
+        private boolean started;
+        private boolean recheck;
+
+        private Flush(Player player, AuthSnapshot admission) {
+            this.player = player;
+            this.admission = admission;
+        }
+    }
+
+    private void schedulePage(Flush request, ClaimCursor cursor, long delay) {
+        try {
+            Bukkit.getScheduler().runTaskLater(plugin, () -> claimPage(request, cursor), delay);
+        } catch (RuntimeException failure) {
+            flushes.remove(request.admission.playerId(), request);
+            logger.log(Level.FINE, "待发奖励调度未受理", failure);
+        }
+    }
+
+    private void claimPage(Flush request, ClaimCursor cursor) {
+        UUID id = request.admission.playerId();
+        if (!current(request)) {
+            flushes.remove(id, request);
+            return;
+        }
+        var selected = flushes.computeIfPresent(id, (ignored, active) -> {
+            if (active == request) request.started = true;
+            return active;
+        });
+        if (selected != request) return;
+        try {
+            Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> loadPage(request, cursor));
+        } catch (RuntimeException failure) {
+            flushes.remove(id, request);
+            logger.log(Level.FINE, "待发奖励认领任务未受理", failure);
+        }
+    }
+
+    private void loadPage(Flush request, ClaimCursor cursor) {
+        UUID id = request.admission.playerId();
+        if (flushes.get(id) != request) return;
+        if (cursor == null) importOutbox(id);
+        ClaimedBatch batch = cursor == null ? claimAndLoadPending(id) : claimAndLoadPending(id, cursor);
+        if (batch.rewards().isEmpty()) {
+            finishFlush(request);
+        } else if (flushes.get(id) != request) {
+            releaseClaims(batch);
+        } else {
+            try {
+                Bukkit.getScheduler().runTask(plugin, () -> deliverPage(request, batch));
+            } catch (RuntimeException failure) {
+                flushes.remove(id, request);
+                releaseClaims(batch);
+                logger.log(Level.FINE, "待发奖励交付任务未受理", failure);
+            }
+        }
+    }
+
+    private void deliverPage(Flush request, ClaimedBatch batch) {
+        if (!current(request)) {
+            flushes.remove(request.admission.playerId(), request);
+            releaseClaimsAsync(batch);
+            return;
+        }
+        flushPending(request.player, batch, request.admission).whenComplete((ignored, failure) -> {
+            if (failure != null) {
+                logger.log(Level.WARNING, "待发奖励交付中断", failure);
+                finishFlush(request);
+                return;
+            }
+            if (current(request) && batch.rewards().size() == CLAIM_PAGE_SIZE) {
+                var last = batch.rewards().get(CLAIM_PAGE_SIZE - 1);
+                schedulePage(request, new ClaimCursor(last.createdAt(), last.id()), 1L);
+            } else {
+                finishFlush(request);
+            }
+        });
+    }
+
+    private boolean current(Flush request) {
+        UUID id = request.admission.playerId();
+        return flushes.get(id) == request && request.player.isOnline()
+            && sameConnection(request.admission, AuthAccess.snapshot(id));
+    }
+
+    private void finishFlush(Flush request) {
+        var next = flushes.computeIfPresent(request.admission.playerId(), (ignored, active) -> {
+            if (active != request) return active;
+            if (!request.recheck) return null;
+            request.started = false;
+            request.recheck = false;
+            return request;
+        });
+        if (next == request) schedulePage(request, null, 1L);
+    }
+
+    private static boolean sameConnection(AuthSnapshot first, AuthSnapshot current) {
+        return current.admitted() && Objects.equals(first.connectionId(), current.connectionId())
+            && first.generation() == current.generation();
     }
 
     @Override
@@ -251,11 +470,12 @@ public final class DefaultPendingRewardService implements PendingRewardService, 
         String key = digest(scope + ":" + requestKey);
         String fingerprint = digest(rewards.stream().map(r -> r.playerUuid() + ":" + r.type() + ":" + r.payload())
             .collect(java.util.stream.Collectors.joining("\n")));
+        UUID storeId = rewardReceiptStoreId;
         if(allowOutbox && outbox!=null) {
             var existing=outbox.resolve(player.toString()).resolve(key+".json");
             if(java.nio.file.Files.exists(existing))try {
                 RewardBatch accepted=new com.google.gson.Gson().fromJson(java.nio.file.Files.readString(existing,java.nio.charset.StandardCharsets.UTF_8),RewardBatch.class);
-                if(!fingerprint.equals(accepted.fingerprint()))return false;
+                if (!ownsOutbox(accepted, storeId, existing) || !fingerprint.equals(accepted.fingerprint())) return false;
             } catch(Exception invalid){logger.log(Level.SEVERE,"奖励恢复日志无法核对，拒绝覆盖",invalid);return false;}
         }
         boolean mysql = storageManager.getDescriptor() != null && storageManager.getDescriptor().isMysql();
@@ -293,7 +513,8 @@ public final class DefaultPendingRewardService implements PendingRewardService, 
             finally { conn.setAutoCommit(previous); }
         } catch (Exception error) {
             logger.log(Level.WARNING, "确认奖励批次持久化失败: module=" + scope + " player=" + player, error);
-            return allowOutbox && writeOutbox(new RewardBatch(requestKey,fingerprint,List.copyOf(rewards)),key);
+            return allowOutbox && storeId != null
+                && writeOutbox(new RewardBatch(requestKey, fingerprint, List.copyOf(rewards), storeId), key);
         }
     }
 
@@ -306,8 +527,12 @@ public final class DefaultPendingRewardService implements PendingRewardService, 
                 java.nio.file.Files.createDirectories(folder);
                 var target=folder.resolve(key+".json");
                 var gson=new com.google.gson.Gson();
-                if(java.nio.file.Files.exists(target))return batch.fingerprint().equals(gson.fromJson(
-                    java.nio.file.Files.readString(target,java.nio.charset.StandardCharsets.UTF_8),RewardBatch.class).fingerprint());
+                if (java.nio.file.Files.exists(target)) {
+                    var existing = gson.fromJson(java.nio.file.Files.readString(target, java.nio.charset.StandardCharsets.UTF_8),
+                        RewardBatch.class);
+                    return ownsOutbox(existing, batch.receiptStoreId(), target)
+                        && batch.fingerprint().equals(existing.fingerprint());
+                }
                 temp=java.nio.file.Files.createTempFile(folder,".pending-",".tmp");
                 java.nio.file.Files.writeString(temp,gson.toJson(batch),java.nio.charset.StandardCharsets.UTF_8);
                 try(var channel=java.nio.channels.FileChannel.open(temp,java.nio.file.StandardOpenOption.WRITE)){channel.force(true);}
@@ -322,7 +547,8 @@ public final class DefaultPendingRewardService implements PendingRewardService, 
     }
 
     private void importOutbox(UUID player) {
-        if(outbox==null)return;
+        UUID storeId = rewardReceiptStoreId;
+        if (outbox == null || storeId == null) return;
         synchronized(outboxLock) {
             var folder=outbox.resolve(player.toString());
             if(!java.nio.file.Files.isDirectory(folder))return;
@@ -330,10 +556,19 @@ public final class DefaultPendingRewardService implements PendingRewardService, 
                 for(var file:files.filter(p->p.getFileName().toString().endsWith(".json")).toList())try {
                     RewardBatch batch=new com.google.gson.Gson().fromJson(java.nio.file.Files.readString(file,java.nio.charset.StandardCharsets.UTF_8),RewardBatch.class);
                     if(batch.rewards().isEmpty() || !batch.rewards().get(0).playerUuid().equals(player))continue;
+                    if (!ownsOutbox(batch, storeId, file)) continue;
                     if(saveConfirmed(batch.key(),batch.rewards(),false))java.nio.file.Files.delete(file);
                 } catch(Exception invalid){logger.log(Level.WARNING,"宿主奖励恢复日志尚未导入: "+file.getFileName(),invalid);}
             } catch(java.io.IOException failure){logger.log(Level.WARNING,"读取宿主奖励恢复日志失败",failure);}
         }
+    }
+
+    private boolean ownsOutbox(RewardBatch batch, UUID storeId, java.nio.file.Path file) {
+        if (storeId != null && storeId.equals(batch.receiptStoreId())) return true;
+        if (outboxStoreWarning.compareAndSet(false, true)) {
+            logger.warning("宿主奖励恢复日志的原奖励库无法确认，保留待核对: " + file);
+        }
+        return false;
     }
 
     private static String digest(String text) {
@@ -350,63 +585,96 @@ public final class DefaultPendingRewardService implements PendingRewardService, 
      * 后到者的 UPDATE 不影响已被认领且未过期的行。
      * 节点崩溃时其 claimed 行在 {@link #CLAIM_TTL_MS} 后被其他节点回收。
      */
-    private record ClaimedBatch(String owner,long stamp,List<PendingReward> rewards,java.util.Set<Long> preparedCommands) {
-        ClaimedBatch subset(List<PendingReward> remaining) { return new ClaimedBatch(owner,stamp,List.copyOf(remaining),preparedCommands); }
+    private record ClaimedBatch(String owner,long stamp,List<PendingReward> rewards) {
+        ClaimedBatch subset(List<PendingReward> remaining) { return new ClaimedBatch(owner,stamp,List.copyOf(remaining)); }
     }
+    private record ClaimCursor(long createdAt, long id) {}
+
     private ClaimedBatch claimAndLoadPending(@NotNull UUID playerUuid) {
+        return claimAndLoadPending(playerUuid, new ClaimCursor(Long.MIN_VALUE, 0L));
+    }
+
+    private ClaimedBatch claimAndLoadPending(UUID playerUuid, ClaimCursor cursor) {
         long stamp=System.currentTimeMillis();
         String owner=UUID.randomUUID().toString();
         try(Connection conn=storageManager.getHostConnection()) {
             boolean auto=conn.getAutoCommit(); conn.setAutoCommit(false);
             try {
-                try(PreparedStatement s=conn.prepareStatement(
-                    "UPDATE axs_pending_rewards SET claimed_at=?,claimed_by=? WHERE player_uuid=?"
-                    +" AND (claimed_at IS NULL OR claimed_at<?) AND (reward_type<>'COMMAND' OR attempts=0)")) {
-                    s.setLong(1,stamp); s.setString(2,owner); s.setString(3,playerUuid.toString()); s.setLong(4,stamp-CLAIM_TTL_MS);
-                    s.executeUpdate();
+                String player = playerUuid.toString();
+                long expiry = stamp - CLAIM_TTL_MS;
+                int claimed;
+                try (PreparedStatement s = conn.prepareStatement(CLAIM_PAGE)) {
+                    s.setLong(1, stamp);
+                    s.setString(2, owner);
+                    s.setString(3, player);
+                    s.setLong(4, expiry);
+                    s.setString(5, player);
+                    s.setLong(6, expiry);
+                    s.setLong(7, cursor.createdAt());
+                    s.setLong(8, cursor.createdAt());
+                    s.setLong(9, cursor.id());
+                    s.setInt(10, CLAIM_PAGE_SIZE);
+                    claimed = s.executeUpdate();
                 }
-                List<PendingReward> rewards=new ArrayList<>();
+                if (claimed == 0) {
+                    conn.commit();
+                    return new ClaimedBatch(owner, stamp, List.of());
+                }
+                List<PendingReward> rewards=new ArrayList<>(claimed);
                 try(PreparedStatement s=conn.prepareStatement(
-                    "SELECT * FROM axs_pending_rewards WHERE player_uuid=? AND claimed_by=? AND claimed_at=? ORDER BY created_at ASC")) {
-                    s.setString(1,playerUuid.toString()); s.setString(2,owner); s.setLong(3,stamp);
+                    "SELECT * FROM axs_pending_rewards WHERE player_uuid=? AND claimed_by=? AND claimed_at=? ORDER BY created_at,id")) {
+                    s.setString(1,player); s.setString(2,owner); s.setLong(3,stamp);
                     try(ResultSet r=s.executeQuery()) {
                         while(r.next()) rewards.add(new PendingReward(r.getLong("id"),UUID.fromString(r.getString("player_uuid")),
                             r.getString("source_module"),PendingReward.Type.valueOf(r.getString("reward_type")),r.getString("payload"),
                             r.getString("description"),r.getLong("created_at"),r.getInt("attempts")));
                     }
                 }
-                java.util.Set<Long> prepared=new java.util.HashSet<>();
-                try(PreparedStatement s=conn.prepareStatement(
-                    "UPDATE axs_pending_rewards SET attempts=1 WHERE id=? AND claimed_by=? AND claimed_at=? AND attempts=0 AND reward_type='COMMAND'")) {
-                    for(PendingReward reward:rewards) {
-                        if(reward.type()!=PendingReward.Type.COMMAND) continue;
-                        s.setLong(1,reward.id()); s.setString(2,owner); s.setLong(3,stamp);
-                        if(s.executeUpdate()==1) prepared.add(reward.id());
-                    }
-                }
+                if (rewards.size() != claimed) throw new SQLException("待发奖励页与认领行数不一致");
                 conn.commit();
-                return new ClaimedBatch(owner,stamp,List.copyOf(rewards),java.util.Set.copyOf(prepared));
-            } catch(SQLException e) { conn.rollback(); throw e; }
+                return new ClaimedBatch(owner,stamp,List.copyOf(rewards));
+            } catch (SQLException | RuntimeException failure) {
+                try { conn.rollback(); } catch (SQLException rollback) { failure.addSuppressed(rollback); }
+                throw failure;
+            }
             finally { conn.setAutoCommit(auto); }
-        } catch(SQLException e) {
+        } catch (SQLException | RuntimeException e) {
             logger.log(Level.WARNING,"认领奖励失败: "+playerUuid,e);
-            return new ClaimedBatch(owner,stamp,List.of(),java.util.Set.of());
+            return new ClaimedBatch(owner,stamp,List.of());
+        }
+    }
+
+    private boolean beginDispatch(ClaimedBatch batch, PendingReward reward) throws SQLException {
+        long age = System.currentTimeMillis() - batch.stamp();
+        if (age < 0 || age >= CLAIM_TTL_MS) return false;
+        try (Connection conn = storageManager.getHostConnection(); PreparedStatement statement = conn.prepareStatement("""
+                UPDATE axs_pending_rewards SET attempts=?
+                WHERE id=? AND claimed_by=? AND claimed_at=? AND attempts=?
+                """)) {
+            statement.setInt(1, reward.type() == PendingReward.Type.COMMAND ? 1 : STARTED_UNCONFIRMED);
+            statement.setLong(2, reward.id());
+            statement.setString(3, batch.owner());
+            statement.setLong(4, batch.stamp());
+            statement.setInt(5, reward.attempts());
+            return statement.executeUpdate() == 1;
         }
     }
 
     /** 释放一组奖励的认领（玩家离线/不补发时调用，使其可被后续认领）。 */
     private void releaseClaimsAsync(ClaimedBatch batch) {
-        if(batch.rewards().isEmpty()) return;
-        Bukkit.getScheduler().runTaskAsynchronously(plugin,()->{
-            try(Connection c=storageManager.getHostConnection(); PreparedStatement s=c.prepareStatement(
-                "UPDATE axs_pending_rewards SET claimed_at=NULL,claimed_by=NULL,"
-                +"attempts=CASE WHEN reward_type='COMMAND' THEN 0 ELSE attempts END WHERE id=? AND claimed_by=? AND claimed_at=?")) {
-                for(PendingReward reward:batch.rewards()) {
-                    s.setLong(1,reward.id()); s.setString(2,batch.owner()); s.setLong(3,batch.stamp()); s.addBatch();
-                }
-                s.executeBatch();
-            } catch(SQLException e) { logger.log(Level.WARNING,"释放奖励认领失败",e); }
-        });
+        if (!batch.rewards().isEmpty()) Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> releaseClaims(batch));
+    }
+
+    private void releaseClaims(ClaimedBatch batch) {
+        try (Connection c = storageManager.getHostConnection(); PreparedStatement s = c.prepareStatement(
+            "UPDATE axs_pending_rewards SET claimed_at=NULL,claimed_by=NULL,"
+                + "attempts=? WHERE id=? AND claimed_by=? AND claimed_at=? AND attempts<>-2")) {
+            for (PendingReward reward : batch.rewards()) {
+                s.setInt(1, reward.attempts()); s.setLong(2, reward.id());
+                s.setString(3, batch.owner()); s.setLong(4, batch.stamp()); s.addBatch();
+            }
+            s.executeBatch();
+        } catch (SQLException e) { logger.log(Level.WARNING, "释放奖励认领失败", e); }
     }
 
     /**
@@ -419,35 +687,116 @@ public final class DefaultPendingRewardService implements PendingRewardService, 
      * @param player      在线玩家
      * @param pendingList 已加载的待发放奖励列表
      */
-    private void flushPending(Player player,ClaimedBatch batch,xuanmo.arcartxsuite.api.auth.AuthSnapshot admission) {
-        List<Long> success=new ArrayList<>(),failed=new ArrayList<>();
-        List<PendingReward> rewards=batch.rewards();
-        for(int index=0;index<rewards.size();index++) {
-            var current=xuanmo.arcartxsuite.api.auth.AuthAccess.snapshot(player.getUniqueId());
-            long age=System.currentTimeMillis()-batch.stamp();
-            if(!player.isOnline() || !current.admitted() || !java.util.Objects.equals(current.connectionId(),admission.connectionId())
-                    || current.generation()!=admission.generation() || age<0 || age>=CLAIM_TTL_MS) {
-                releaseClaimsAsync(batch.subset(rewards.subList(index,rewards.size())));
-                break;
-            }
-            PendingReward reward=rewards.get(index);
-            if(reward.type()==PendingReward.Type.COMMAND && !batch.preparedCommands().contains(reward.id())) continue;
-            try {
-                if(dispatchPending(player,reward)) success.add(reward.id()); else failed.add(reward.id());
-            } catch(Exception e) {
-                failed.add(reward.id());
-                logger.log(Level.WARNING,"奖励发放结果不明: id="+reward.id(),e);
-            }
-            if(failed.contains(reward.id()) && reward.type()==PendingReward.Type.COMMAND)
-                logger.warning("命令奖励保留待核对，禁止自动重放: id="+reward.id());
+    private CompletionStage<Void> flushPending(Player player, ClaimedBatch batch, AuthSnapshot admission) {
+        var done = new CompletableFuture<Void>();
+        if (!canDeliver(player, batch, admission)) {
+            releaseClaimsAsync(batch);
+            done.complete(null);
+            return done;
         }
-        Bukkit.getScheduler().runTaskAsynchronously(plugin,()->batchUpdate(batch,success,failed));
+        List<PendingReward> itemBatch = new ArrayList<>();
+        List<PendingReward> deferredItems = new ArrayList<>();
+        List<PendingReward> generic = new ArrayList<>();
+        for (PendingReward reward : batch.rewards()) {
+            if (PendingItemSaveStore.tracks(reward)) {
+                if (itemBatch.size() < PendingItemDelivery.MAX_ITEMS && (itemBatch.isEmpty()
+                        || itemBatch.get(0).sourceModule().equals(reward.sourceModule())
+                            && PendingItemSaveStore.requiresCheckpoint(itemBatch.get(0)) == PendingItemSaveStore.requiresCheckpoint(reward))) {
+                    itemBatch.add(reward);
+                } else deferredItems.add(reward);
+            } else {
+                generic.add(reward);
+            }
+        }
+        if (!deferredItems.isEmpty()) releaseClaimsAsync(batch.subset(deferredItems));
+        if (!itemBatch.isEmpty()) {
+            if (pendingItems == null) releaseClaimsAsync(batch.subset(itemBatch));
+            else pendingItems.stage(player, admission, batch.owner(), batch.stamp(), itemBatch,
+                released -> releaseClaimsAsync(batch.subset(released)));
+        }
+        dispatchNext(player, batch.subset(generic), admission, 0, done);
+        return done;
+    }
+
+    private void dispatchNext(Player player, ClaimedBatch batch, AuthSnapshot admission, int index,
+                              CompletableFuture<Void> done) {
+        try {
+            var rewards = batch.rewards();
+            for (; index < rewards.size(); index++) {
+                if (!canDeliver(player, batch, admission)) {
+                    releaseClaimsAsync(batch.subset(rewards.subList(index, rewards.size())));
+                    break;
+                }
+                var reward = rewards.get(index);
+                if (reward.type() == PendingReward.Type.MAIL_PRESET) {
+                    // Durable mail can retry under its original key after the claim expires.
+                    dispatchOne(player, batch, admission, reward);
+                    continue;
+                }
+                int next = index + 1;
+                Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+                    boolean armed = false;
+                    try {
+                        armed = beginDispatch(batch, reward);
+                        final boolean mayRun = armed;
+                        Bukkit.getScheduler().runTask(plugin, () -> {
+                            try {
+                                if (mayRun && canDeliver(player, batch, admission)) {
+                                    if (reward.type() == PendingReward.Type.COMMAND) {
+                                        // Never arm the next command reward while this one is queued or executing.
+                                        dispatchCommand(player, reward, batch, admission).whenComplete((unused, failure) -> {
+                                            if (failure != null) logger.log(Level.WARNING, "命令奖励回执未确认: id=" + reward.id(), failure);
+                                            dispatchNext(player, batch, admission, next, done);
+                                        });
+                                        return;
+                                    }
+                                    dispatchOne(player, batch, admission, reward);
+                                } else if (mayRun) {
+                                    releaseClaimsAsync(batch.subset(List.of(reward)));
+                                }
+                            } catch (RuntimeException | LinkageError failure) {
+                                logger.log(Level.WARNING, "奖励交付未确认: id=" + reward.id(), failure);
+                            }
+                            dispatchNext(player, batch, admission, next, done);
+                        });
+                    } catch (SQLException | RuntimeException | LinkageError failure) {
+                        if (armed) releaseClaims(batch.subset(List.of(reward)));
+                        done.completeExceptionally(failure);
+                    }
+                });
+                return;
+            }
+            done.complete(null);
+        } catch (RuntimeException | LinkageError failure) {
+            done.completeExceptionally(failure);
+        }
+    }
+
+    private void dispatchOne(Player player, ClaimedBatch batch, AuthSnapshot admission, PendingReward reward) {
+        try {
+            switch (dispatchPending(player, reward, batch, admission)) {
+                case DELIVERED -> Bukkit.getScheduler().runTaskAsynchronously(plugin,
+                    () -> batchUpdate(batch, List.of(reward.id()), List.of()));
+                case RETRY -> Bukkit.getScheduler().runTaskAsynchronously(plugin,
+                    () -> batchUpdate(batch, List.of(), List.of(reward)));
+                case DEFERRED -> { }
+            }
+        } catch (RuntimeException | LinkageError failure) {
+            logger.log(Level.WARNING, "奖励发放结果不明: id=" + reward.id(), failure);
+        }
+    }
+
+    private static boolean canDeliver(Player player, ClaimedBatch batch, AuthSnapshot admission) {
+        if (!player.isOnline()) return false;
+        var current = AuthAccess.snapshot(admission.playerId());
+        long age = System.currentTimeMillis() - batch.stamp();
+        return sameConnection(admission, current) && age >= 0 && age < CLAIM_TTL_MS;
     }
 
     /**
      * 批量执行删除和递增操作，在单个事务中提交以减少 DB 往返。
      */
-    private void batchUpdate(ClaimedBatch batch,List<Long> success,List<Long> failed) {
+    private void batchUpdate(ClaimedBatch batch,List<Long> success,List<PendingReward> failed) {
         if(success.isEmpty() && failed.isEmpty()) return;
         try(Connection c=storageManager.getHostConnection()) {
             boolean auto=c.getAutoCommit(); c.setAutoCommit(false);
@@ -456,30 +805,85 @@ public final class DefaultPendingRewardService implements PendingRewardService, 
                     for(Long id:success) { s.setLong(1,id); s.setString(2,batch.owner()); s.setLong(3,batch.stamp()); s.addBatch(); }
                     s.executeBatch();
                 }
-                try(PreparedStatement s=c.prepareStatement("UPDATE axs_pending_rewards SET attempts=attempts+1,claimed_at=NULL,claimed_by=NULL"
+                try(PreparedStatement s=c.prepareStatement("UPDATE axs_pending_rewards SET attempts=?,claimed_at=NULL,claimed_by=NULL"
                     +" WHERE id=? AND claimed_by=? AND claimed_at=?")) {
-                    for(Long id:failed) { s.setLong(1,id); s.setString(2,batch.owner()); s.setLong(3,batch.stamp()); s.addBatch(); }
+                    for (PendingReward reward : failed) {
+                        s.setInt(1, reward.attempts() + 1);
+                        s.setLong(2, reward.id()); s.setString(3, batch.owner()); s.setLong(4, batch.stamp()); s.addBatch();
+                    }
                     s.executeBatch();
                 }
                 c.commit();
             } catch(SQLException e) { c.rollback(); throw e; }
             finally { c.setAutoCommit(auto); }
-        } catch(SQLException e) { logger.log(Level.WARNING,"奖励结果回写失败；命令项保持待核对",e); }
+        } catch(SQLException e) { logger.log(Level.WARNING,"奖励结果回写失败，已开始的奖励保留待核对",e); }
     }
 
-    /**
-     * 根据奖励类型分发补发。
-     *
-     * @return true 表示补发成功
-     */
-    private boolean dispatchPending(Player player, PendingReward pending) {
+    private enum Delivery {
+        DELIVERED, RETRY, DEFERRED;
+
+        static Delivery from(boolean success) { return success ? DELIVERED : RETRY; }
+    }
+
+    private Delivery dispatchPending(Player player, PendingReward pending, ClaimedBatch batch, AuthSnapshot admission) {
         return switch (pending.type()) {
-            case ITEM -> dispatchItem(player, pending);
-            case ITEM_SERIALIZED -> dispatchItemSerialized(player, pending);
-            case CURRENCY -> dispatchCurrency(player, pending);
-            case COMMAND -> dispatchCommand(player, pending);
-            case MAIL_PRESET -> dispatchMailPreset(player, pending);
+            case ITEM -> Delivery.from(dispatchItem(player, pending));
+            case ITEM_SERIALIZED -> Delivery.from(dispatchItemSerialized(player, pending));
+            case ITEM_NATURAL -> Delivery.RETRY;
+            case ITEM_SPEC -> dispatchItemSpec(player, pending, batch);
+            case CURRENCY -> Delivery.from(dispatchCurrency(player, pending));
+            case COMMAND -> throw new IllegalStateException("命令奖励需要等待命令回执");
+            case TITLE -> dispatchTitle(player, pending, batch);
+            case MAP_ANCHOR -> dispatchAnchor(player, pending, batch);
+            case MAIL_PRESET -> dispatchMailPreset(batch, pending);
         };
+    }
+
+    private Delivery dispatchTitle(Player player, PendingReward pending, ClaimedBatch batch) {
+        var title = registry.getCapability(xuanmo.arcartxsuite.api.capability.TitleGrantable.class);
+        String target = extractJsonField(pending.payload(), "targetId");
+        if (title == null || target == null || target.isBlank()) return Delivery.RETRY;
+        return awaitGrant(batch, pending, title.grantPermanent(player.getUniqueId(), target, pending.sourceModule()));
+    }
+
+    private Delivery dispatchAnchor(Player player, PendingReward pending, ClaimedBatch batch) {
+        var map = registry.getCapability(xuanmo.arcartxsuite.api.capability.MapAnchorUnlockable.class);
+        String target = extractJsonField(pending.payload(), "targetId");
+        if (map == null || target == null || target.isBlank()) return Delivery.RETRY;
+        return awaitGrant(batch, pending, map.ensureUnlocked(player, target));
+    }
+
+    private Delivery awaitGrant(ClaimedBatch batch, PendingReward pending,
+                                java.util.concurrent.CompletionStage<Boolean> grant) {
+        grant.whenComplete((accepted, error) -> {
+            if (error != null) {
+                logger.log(Level.WARNING, "联动奖励发放结果不明: id=" + pending.id(), error);
+            } else {
+                Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+                    if (Boolean.TRUE.equals(accepted)) batchUpdate(batch, List.of(pending.id()), List.of());
+                    else batchUpdate(batch, List.of(), List.of(pending));
+                });
+            }
+        });
+        return Delivery.DEFERRED;
+    }
+
+    private Delivery awaitMail(ClaimedBatch batch, PendingReward pending, CompletionStage<Boolean> delivery) {
+        delivery.whenComplete((delivered, failure) -> {
+            if (failure != null) {
+                logger.log(Level.WARNING, "奖励邮件结果不明: id=" + pending.id(), failure);
+                return;
+            }
+            try {
+                Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+                    if (Boolean.TRUE.equals(delivered)) batchUpdate(batch, List.of(pending.id()), List.of());
+                    else batchUpdate(batch, List.of(), List.of(pending));
+                });
+            } catch (RuntimeException | LinkageError error) {
+                logger.log(Level.WARNING, "奖励邮件回执未保存: id=" + pending.id(), error);
+            }
+        });
+        return Delivery.DEFERRED;
     }
 
     /**
@@ -501,34 +905,79 @@ public final class DefaultPendingRewardService implements PendingRewardService, 
     private boolean dispatchItemSerialized(Player player, PendingReward pending) {
         ItemRewardDispatcher dispatcher = registry.itemRewardDispatcher();
         if (dispatcher == null) return false;
+        ItemStack item = readSerializedItem(pending, false);
+        return item != null && confirmItemDispatch(dispatcher.dispatchItem(player, item, buildPendingDispatchOptions(pending)));
+    }
+
+    private @Nullable ItemStack readSerializedItem(PendingReward pending, boolean strict) {
         String base64Data = extractJsonField(pending.payload(), "data");
-        if (base64Data == null || base64Data.isBlank()) return false;
+        if (base64Data == null || base64Data.isBlank()) return null;
         try {
-            org.bukkit.inventory.ItemStack item = xuanmo.arcartxsuite.api.util.ItemSerializer.deserialize(
-                java.util.Base64.getDecoder().decode(base64Data));
-            if (item == null) return false;
-            ItemRewardDispatcher.DispatchResult result = dispatcher.dispatchItem(player, item, buildPendingDispatchOptions(pending));
-            return result.success();
+            byte[] serialized = java.util.Base64.getDecoder().decode(base64Data);
+            return strict ? xuanmo.arcartxsuite.api.util.ItemSerializer.deserializeStrict(serialized) :
+                xuanmo.arcartxsuite.api.util.ItemSerializer.deserialize(serialized);
         } catch (Exception e) {
             logger.warning("反序列化待发放物品失败: id=" + pending.id() + " | " + e.getMessage());
-            return false;
+            return null;
         }
     }
 
+    private Delivery dispatchItemSpec(Player player, PendingReward pending, ClaimedBatch batch) {
+        var spec = readItemSpec(pending);
+        var item = resolveItemSpec(player, spec);
+        if (item == null) return Delivery.RETRY;
+        var mail = spec.mailSubject() == null ? null : registry.getCapability(xuanmo.arcartxsuite.api.mail.AxsMailService.class);
+        if (mail != null) {
+            if (!durableMailOnSameStore(mail)) return Delivery.RETRY;
+            var request = xuanmo.arcartxsuite.api.mail.AxsMailRequest
+                .builder(pendingMailKey(pending) + ":item", spec.mailSubject())
+                .recipient(player.getUniqueId())
+                .content(spec.mailBody() == null ? "" : spec.mailBody())
+                .item(item)
+                .senderName("战令")
+                .sourcePlugin(pending.sourceModule())
+                .build();
+            return awaitMail(batch, pending, mail.sendDurable(request).thenApply(receipt -> receipt.mailId() > 0));
+        }
+        ItemRewardDispatcher dispatcher = registry.itemRewardDispatcher();
+        if (dispatcher == null) return Delivery.RETRY;
+        return Delivery.from(confirmItemDispatch(dispatcher.dispatchItem(player, item, buildPendingDispatchOptions(pending))));
+    }
+
+    private static @Nullable PendingReward.ItemSpec readItemSpec(PendingReward reward) {
+        return new com.google.gson.Gson().fromJson(reward.payload(), PendingReward.ItemSpec.class);
+    }
+
+    private @Nullable ItemStack resolveItemSpec(@Nullable Player player, @Nullable PendingReward.ItemSpec spec) {
+        if (player == null || spec == null || spec.item() == null) return null;
+        var resolver = new xuanmo.arcartxsuite.api.icon.IconResolver(registry.itemStackBridge(), registry.itemSourceRegistry());
+        return resolver.resolveItemStack(player, spec.item());
+    }
+
     private boolean dispatchItem(Player player, PendingReward pending) {
-        ItemSourceRegistry registry = this.registry.itemSourceRegistry();
-        ItemRewardDispatcher dispatcher = this.registry.itemRewardDispatcher();
-        if (registry == null || dispatcher == null) return false;
-        // 解析 JSON payload
+        ItemRewardDispatcher dispatcher = registry.itemRewardDispatcher();
+        if (dispatcher == null) return false;
+        ItemStack item = generatePendingItem(player, pending);
+        return item != null && confirmItemDispatch(dispatcher.dispatchItem(player, item, buildPendingDispatchOptions(pending)));
+    }
+
+    private @Nullable ItemStack generatePendingItem(Player player, PendingReward pending) {
+        ItemSourceRegistry sources = registry.itemSourceRegistry();
+        if (sources == null || player == null) return null;
         String source = extractJsonField(pending.payload(), "source");
         String id = extractJsonField(pending.payload(), "id");
         int amount = extractJsonInt(pending.payload(), "amount", 1);
         String nbt = extractJsonField(pending.payload(), "nbt");
-        if (source == null || id == null) return false;
-        org.bukkit.inventory.ItemStack item = registry.generateItem(source, id, amount,
+        if (source == null || id == null) return null;
+        return sources.generateItem(source, id, amount,
             (nbt != null && !nbt.isEmpty()) ? nbt : null, player);
-        if (item == null) return false;
-        ItemRewardDispatcher.DispatchResult result = dispatcher.dispatchItem(player, item, buildPendingDispatchOptions(pending));
+    }
+
+    private static boolean confirmItemDispatch(ItemRewardDispatcher.DispatchResult result) {
+        if (!result.success() && (result.deliveredCount() > 0 || result.warehousedCount() > 0
+                || result.mailedCount() > 0 || result.droppedCount() > 0 || result.pendingCount() > 0)) {
+            throw new IllegalStateException("物品奖励已部分交付");
+        }
         return result.success();
     }
 
@@ -537,45 +986,118 @@ public final class DefaultPendingRewardService implements PendingRewardService, 
         if (currencyManager == null) return false;
         String currencyId = extractJsonField(pending.payload(), "currencyId");
         double amount = extractJsonDouble(pending.payload(), "amount", 0);
-        if (currencyId == null || amount <= 0) return false;
+        if (currencyId == null || !Double.isFinite(amount) || amount <= 0) return false;
         var bridge = currencyManager.bridge(currencyId);
         if (bridge == null || !bridge.available()) return false;
+        if ("fishing".equals(pending.sourceModule()) && bridge.creditRequiresReconciliation()) return false;
         var result = bridge.deposit(player, java.math.BigDecimal.valueOf(amount));
+        if (result.uncertain() || result.success() && bridge.creditRequiresReconciliation()) {
+            throw new IllegalStateException("货币奖励入账待核对");
+        }
         return result.success();
     }
 
-    private boolean dispatchCommand(Player player, PendingReward pending) {
-        List<String> commands = extractJsonArray(pending.payload(), "commands");
-        if (commands.isEmpty()) return false;
-        for (String cmd : commands) {
-            String parsed = cmd.replace("{player}", player.getName());
+    private CompletionStage<Void> dispatchCommand(Player player, PendingReward pending, ClaimedBatch batch, AuthSnapshot admission) {
+        List<String> templates = extractJsonArray(pending.payload(), "commands");
+        if (templates.isEmpty()) {
+            logger.warning("命令奖励缺少命令，保留待核对: id=" + pending.id());
+            return CompletableFuture.completedFuture(null);
+        }
+        boolean battlePass = "battlepass".equals(pending.sourceModule());
+        String name = player.getName();
+        if (battlePass || "fishing".equals(pending.sourceModule())) name = CommandSanitizer.validatePlayerName(name);
+        var commands = new ArrayList<String>(templates.size());
+        for (String template : templates) {
+            String parsed = template.replace("{player}", name).trim();
             // strip 前导 / ，Bukkit.dispatchCommand 期望不带 / 的命令
             if (parsed.startsWith("/")) parsed = parsed.substring(1);
-            ThrottledCommandExecutor.dispatch( parsed);
+            if (battlePass) parsed = parsed.replace("{uuid}", admission.playerId().toString());
+            if (parsed.isBlank()) {
+                logger.warning("命令奖励包含空命令，保留待核对: id=" + pending.id());
+                return CompletableFuture.completedFuture(null);
+            }
+            commands.add(parsed);
         }
-        return true;
+
+        BooleanSupplier allowed = () -> canDeliver(player, batch, admission);
+        if (commands.size() == 1) {
+            var completed = new CompletableFuture<Void>();
+            ThrottledCommandExecutor.dispatchWithResult(commands.get(0), allowed, result -> {
+                try {
+                    finishCommandReward(pending, batch, 1, confirmedCount(result), result);
+                } finally {
+                    completed.complete(null);
+                }
+            });
+            return completed;
+        }
+        CompletionStage<CommandProgress> chain = CompletableFuture.completedFuture(
+            new CommandProgress(0, ThrottledCommandExecutor.Result.SUCCESS));
+        for (String command : commands) {
+            chain = chain.thenCompose(progress -> {
+                if (progress.result() != ThrottledCommandExecutor.Result.SUCCESS) {
+                    return CompletableFuture.completedFuture(progress);
+                }
+                var step = new CompletableFuture<CommandProgress>();
+                ThrottledCommandExecutor.dispatchWithResult(command, allowed, result -> step.complete(
+                    new CommandProgress(progress.confirmed() + confirmedCount(result), result)));
+                return step;
+            });
+        }
+        return chain.handle((progress, failure) -> {
+            if (failure != null) {
+                logger.log(Level.WARNING, "命令奖励结果不明，保留待核对: id=" + pending.id(), failure);
+            } else {
+                finishCommandReward(pending, batch, commands.size(), progress.confirmed(), progress.result());
+            }
+            return null;
+        });
     }
 
-    private boolean dispatchMailPreset(Player player, PendingReward pending) {
+    private record CommandProgress(int confirmed, ThrottledCommandExecutor.Result result) {}
+
+    private static int confirmedCount(ThrottledCommandExecutor.Result result) {
+        return result == ThrottledCommandExecutor.Result.SUCCESS ? 1 : 0;
+    }
+
+    private void finishCommandReward(PendingReward pending, ClaimedBatch batch, int total, int confirmed,
+                                     ThrottledCommandExecutor.Result result) {
+        boolean delivered = confirmed == total;
+        boolean notRun = confirmed == 0 && result == ThrottledCommandExecutor.Result.NOT_EXECUTED;
+        if (!delivered && !notRun) {
+            logger.warning("命令奖励保留待核对: id=" + pending.id() + "，已确认 " + confirmed + "/" + total
+                + "，末次结果 " + result);
+        } else if (!commandReceipts.record(pending.id(), batch.owner(), batch.stamp(), delivered)) {
+            logger.warning("命令奖励回执未入队，保留待核对: id=" + pending.id());
+        }
+    }
+
+    private Delivery dispatchMailPreset(ClaimedBatch batch, PendingReward pending) {
         List<String> presetIds = extractJsonArray(pending.payload(), "presetIds");
-        if (presetIds.isEmpty()) return false;
-        return xuanmo.arcartxsuite.api.capability.mail.MailPresetHelper.dispatchPresets(
-            () -> registry.getCapability(MailDispatchable.class),
-            player.getName(),
-            presetIds,
-            pending.sourceModule(),
-            "pending:" + pending.id(),
-            logger
-        );
+        var mail = registry.getCapability(xuanmo.arcartxsuite.api.mail.AxsMailService.class);
+        if (presetIds.isEmpty() || mail == null || !durableMailOnSameStore(mail)) return Delivery.RETRY;
+        String key = pendingMailKey(pending);
+        CompletableFuture<Boolean> delivery = CompletableFuture.completedFuture(true);
+        for (int index = 0; index < presetIds.size(); index++) {
+            String preset = presetIds.get(index);
+            String presetKey = key + ":preset:" + index;
+            delivery = delivery.thenCompose(allDelivered ->
+                mail.sendPresetDurable(pending.playerUuid(), preset, pending.sourceModule(), presetKey)
+                    .thenApply(receipt -> allDelivered && receipt.mailId() > 0));
+        }
+        return awaitMail(batch, pending, delivery);
     }
 
-    // ─── JSON payload 简易解析 ──────────────────────────────────
-    // payload 由 PendingReward record 的便捷构造生成，格式固定，
-    // 这里用简易正则解析避免引入完整 JSON 库依赖。
-    // Pattern 缓存为 static final，避免每次调用重新编译。
+    private boolean durableMailOnSameStore(xuanmo.arcartxsuite.api.mail.AxsMailService mail) {
+        StorageDescriptor descriptor = storageManager.getDescriptor();
+        return descriptor == null || !descriptor.isMysql() || mail.usesSharedHostStorage();
+    }
 
-    private static final java.util.regex.Pattern ITEM_STR_PATTERN =
-        java.util.regex.Pattern.compile("\"((?:[^\"\\\\]|\\\\.)*)\"");
+    private static String pendingMailKey(PendingReward pending) {
+        return "pending:" + pending.playerUuid() + ":" + pending.createdAt() + ":" + pending.id();
+    }
+
+    // ─── JSON payload 读取 ─────────────────────────────────────
 
     // 缓存常用字段的 Pattern，避免每次调用重新编译
     private static final java.util.regex.Pattern FIELD_SOURCE =
@@ -640,39 +1162,22 @@ public final class DefaultPendingRewardService implements PendingRewardService, 
     }
 
     private static @NotNull List<String> extractJsonArray(@NotNull String json, @NotNull String field) {
-        List<String> result = new ArrayList<>();
-        // 用平衡的引号感知解析，避免 ] 出现在字符串内部时被误判为数组结束
-        String fieldKey = "\"" + java.util.regex.Pattern.quote(field) + "\"";
-        int keyIdx = json.indexOf(fieldKey);
-        if (keyIdx < 0) return result;
-        int colonIdx = json.indexOf(':', keyIdx + fieldKey.length());
-        if (colonIdx < 0) return result;
-        int bracketStart = json.indexOf('[', colonIdx);
-        if (bracketStart < 0) return result;
-        // 逐字符扫描，跟踪引号内的内容，找到匹配的 ]
-        int depth = 0;
-        int i = bracketStart;
-        boolean inString = false;
-        int arrayEnd = -1;
-        while (i < json.length()) {
-            char c = json.charAt(i);
-            if (inString) {
-                if (c == '\\') { i += 2; continue; }
-                if (c == '"') inString = false;
-            } else {
-                if (c == '"') inString = true;
-                else if (c == '[') depth++;
-                else if (c == ']') { depth--; if (depth == 0) { arrayEnd = i; break; } }
+        try {
+            var root = com.google.gson.JsonParser.parseString(json);
+            if (!root.isJsonObject()) return List.of();
+            var value = root.getAsJsonObject().get(field);
+            if (value == null || !value.isJsonArray()) return List.of();
+
+            List<String> result = new ArrayList<>();
+            for (var item : value.getAsJsonArray()) {
+                if (item.isJsonPrimitive() && item.getAsJsonPrimitive().isString()) {
+                    result.add(item.getAsString());
+                }
             }
-            i++;
+            return result;
+        } catch (com.google.gson.JsonParseException invalid) {
+            return List.of();
         }
-        if (arrayEnd < 0) return result;
-        String arrayContent = json.substring(bracketStart + 1, arrayEnd);
-        java.util.regex.Matcher itemMatcher = ITEM_STR_PATTERN.matcher(arrayContent);
-        while (itemMatcher.find()) {
-            result.add(unescapeJson(itemMatcher.group(1)));
-        }
-        return result;
     }
 
     private static @NotNull String unescapeJson(@NotNull String value) {

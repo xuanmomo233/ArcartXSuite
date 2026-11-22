@@ -3,11 +3,10 @@ package xuanmo.arcartxsuite.questgps.service;
 import ink.ptms.chemdah.api.ChemdahAPI;
 import ink.ptms.chemdah.core.PlayerProfile;
 import ink.ptms.chemdah.core.quest.Template;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import org.bukkit.entity.Player;
-import xuanmo.arcartxsuite.questgps.QuestGpsPage;
 import xuanmo.arcartxsuite.questgps.config.QuestGpsModuleConfiguration;
 
 /**
@@ -23,6 +22,8 @@ public final class QuestGpsGuidePacketFactory {
 
     /** HUD 最多展示的追踪任务卡片数。 */
     private static final int DISPLAY_QUEST_LIMIT = 3;
+    private static final QuestGpsPresentationService.GuideProgress NO_PROGRESS =
+        new QuestGpsPresentationService.GuideProgress(0, 0, "", "");
 
     private QuestGpsGuidePacketFactory() {
     }
@@ -59,41 +60,21 @@ public final class QuestGpsGuidePacketFactory {
 
         Map<String, Object> quests = new LinkedHashMap<>();
         if (trackStates != null) {
+            var progressByQuest = new HashMap<String, QuestGpsPresentationService.GuideProgress>();
             int index = 0;
             for (QuestGpsNavigationService.TrackingState state : trackStates.values()) {
                 if (index >= DISPLAY_QUEST_LIMIT) {
                     break;
                 }
-                quests.put(String.valueOf(index), buildQuestEntry(configuration, player, profile, state, presentationService, navigationService));
+                quests.put(String.valueOf(index), buildQuestEntry(configuration, player, profile, state, presentationService,
+                    navigationService, progressByQuest));
                 index++;
             }
         }
         payload.put("quests", quests);
         payload.put("questCount", quests.size());
 
-        // 兼容字段：主追踪（最近激活）单卡数据，旧版 UI/调试用
-        QuestGpsNavigationService.TrackingState primary = primaryState(trackStates);
-        payload.put("questName", primary == null ? "" : primary.label());
-        QuestGpsNavigationService.NavigationPoint point = primary == null || player == null
-            ? null
-            : navigationService.trackingPoint(player, primary.trackKey()).orElse(null);
-        payload.put("hasNav", point != null);
-        payload.put("navWorld", point != null ? point.world() : "");
-        payload.put("navX", point != null ? (int) point.x() : 0);
-        payload.put("navY", point != null ? (int) point.y() : 0);
-        payload.put("navZ", point != null ? (int) point.z() : 0);
         return payload;
-    }
-
-    private static QuestGpsNavigationService.TrackingState primaryState(Map<String, QuestGpsNavigationService.TrackingState> trackStates) {
-        if (trackStates == null || trackStates.isEmpty()) {
-            return null;
-        }
-        QuestGpsNavigationService.TrackingState last = null;
-        for (QuestGpsNavigationService.TrackingState state : trackStates.values()) {
-            last = state;
-        }
-        return last;
     }
 
     private static Map<String, Object> buildQuestEntry(
@@ -102,7 +83,8 @@ public final class QuestGpsGuidePacketFactory {
         PlayerProfile profile,
         QuestGpsNavigationService.TrackingState state,
         QuestGpsPresentationService presentationService,
-        QuestGpsNavigationService navigationService
+        QuestGpsNavigationService navigationService,
+        Map<String, QuestGpsPresentationService.GuideProgress> progressByQuest
     ) {
         Map<String, Object> entry = new LinkedHashMap<>();
         entry.put("questId", state.questId());
@@ -111,42 +93,11 @@ public final class QuestGpsGuidePacketFactory {
         entry.put("name", state.questName().isBlank() ? state.label() : state.questName());
         entry.put("label", state.label());
 
-        int completedCount = 0;
-        int totalCount = 0;
-        String taskText = "";
-        String taskDesc = "";
-        if (profile != null) {
-            QuestGpsModuleConfiguration.QuestDefinition definition = configuration.quest(state.questId());
-            if (definition != null) {
-                Template template = ChemdahAPI.INSTANCE.getQuestTemplate(definition.id());
-                if (template != null) {
-                    List<QuestGpsSnapshotBuilder.TaskDescriptor> taskDescriptors = presentationService.buildTaskDescriptors(
-                        profile,
-                        template,
-                        definition,
-                        QuestGpsPage.ACTIVE
-                    );
-                    totalCount = taskDescriptors.size();
-                    QuestGpsSnapshotBuilder.TaskDescriptor firstPending = null;
-                    for (QuestGpsSnapshotBuilder.TaskDescriptor task : taskDescriptors) {
-                        if (task.completed()) {
-                            completedCount++;
-                        } else if (firstPending == null) {
-                            firstPending = task;
-                        }
-                    }
-                    if (firstPending != null) {
-                        taskText = firstPending.text();
-                        taskDesc = firstPending.descriptionText();
-                    } else if (totalCount > 0) {
-                        taskText = "全部完成";
-                    }
-                }
-            }
-        }
-        entry.put("progressText", completedCount + "/" + totalCount);
-        entry.put("taskText", taskText);
-        entry.put("taskDesc", taskDesc);
+        var progress = progressByQuest.computeIfAbsent(state.questId(), quest ->
+            loadProgress(configuration, profile, presentationService, quest));
+        entry.put("progressText", progress.completed() + "/" + progress.total());
+        entry.put("taskText", progress.taskText());
+        entry.put("taskDesc", progress.taskDescription());
 
         QuestGpsNavigationService.NavigationPoint point = player == null
             ? null
@@ -155,5 +106,14 @@ public final class QuestGpsGuidePacketFactory {
         entry.put("navWorld", point != null ? point.world() : "");
         entry.put("navText", point == null ? "" : point.world() + " " + (int) point.x() + ", " + (int) point.y() + ", " + (int) point.z());
         return entry;
+    }
+
+    private static QuestGpsPresentationService.GuideProgress loadProgress(QuestGpsModuleConfiguration configuration,
+            PlayerProfile profile, QuestGpsPresentationService presentationService, String questId) {
+        if (profile == null) return NO_PROGRESS;
+        var definition = configuration.quest(questId);
+        if (definition == null) return NO_PROGRESS;
+        Template template = ChemdahAPI.INSTANCE.getQuestTemplate(definition.id());
+        return template == null ? NO_PROGRESS : presentationService.guideProgress(profile, template, definition);
     }
 }

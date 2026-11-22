@@ -121,6 +121,14 @@ final class ConversationInteractionStateSupport {
         return Math.max(0.0D, Math.min(1.0D, (double) start / (double) maxStart));
     }
 
+    static long distanceTenths(double distanceSquared) {
+        return Math.round(Math.sqrt(Math.max(0.0D, distanceSquared)) * 10.0D);
+    }
+
+    static String distanceText(long tenths) {
+        return (tenths / 10) + "." + (tenths % 10) + "m";
+    }
+
     record SelectionState(int index, String selectedId) {
     }
 }

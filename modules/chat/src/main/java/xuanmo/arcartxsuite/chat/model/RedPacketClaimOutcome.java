@@ -37,7 +37,9 @@ public record RedPacketClaimOutcome(
         /** 该玩家已领取过。 */
         ALREADY_CLAIMED,
         /** 发送者不允许抢自己的红包。 */
-        SENDER_DENIED
+        SENDER_DENIED,
+        /** 频道、来源节点或受众校验未通过。 */
+        NOT_ELIGIBLE
     }
 
     public static RedPacketClaimOutcome success(RedPacket packet, RedPacketReward reward, int slotIndex, BigDecimal currencyAmount) {

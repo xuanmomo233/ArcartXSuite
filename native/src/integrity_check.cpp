@@ -3,6 +3,7 @@
 #include <openssl/sha.h>
 #include <algorithm>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <string>
 #include <vector>
@@ -188,7 +189,7 @@ bool is_all_ff_placeholder(const uint8_t hash[kSelfHashSlotSize]) {
     }
     return true;
 }
-bool read_file_bytes(const std::string& path, std::vector<uint8_t>& out) {
+bool read_file_bytes(const std::filesystem::path& path, std::vector<uint8_t>& out) {
     std::ifstream file(path, std::ios::binary | std::ios::ate);
     if (!file) {
         return false;
@@ -228,7 +229,7 @@ bool compute_slot_excluded_hash(const std::vector<uint8_t>& file_bytes,
     SHA256(hashed.data(), hashed.size(), out);
     return true;
 }
-bool verify_self_integrity_file(const std::string& path) {
+bool verify_self_integrity_file(const std::filesystem::path& path) {
     uint8_t magic[kSelfHashMagicSize];
     uint8_t expected[kSelfHashSlotSize];
     load_self_hash_block(magic, expected);
@@ -254,16 +255,17 @@ bool verify_native_self_integrity() {
     return true;
 #else
     HMODULE hSelf = nullptr;
-    if (!GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
-                            reinterpret_cast<LPCSTR>(&verify_native_self_integrity),
+    if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                            reinterpret_cast<LPCWSTR>(&verify_native_self_integrity),
                             &hSelf)) {
         return false;
     }
-    char path[MAX_PATH * 4] = {0};
-    DWORD len = GetModuleFileNameA(hSelf, path, static_cast<DWORD>(sizeof(path)));
-    if (len == 0 || len >= sizeof(path)) {
+    std::wstring path(32768, L'\0');
+    DWORD len = GetModuleFileNameW(hSelf, path.data(), static_cast<DWORD>(path.size()));
+    if (len == 0 || len >= path.size()) {
         return false;
     }
+    path.resize(len);
     return verify_self_integrity_file(path);
 #endif
 }

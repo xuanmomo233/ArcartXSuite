@@ -7,6 +7,8 @@
 # match: 块用于识别玩家手持的鱼竿物品（ItemMatcher 标准格式，与 market/menu 一致）。
 
 id: "wooden_rod"               # 鱼竿唯一标识符
+line-strength: 1.25
+turn-response: 0.9
 # match: 物品匹配规则（用于识别玩家手持的鱼竿物品）
 #   neige-item-ids: NeigeItems 物品 ID 列表（匹配其中任一即视为该鱼竿）
 #   mythic-item-ids: MythicMobs 物品 ID 列表

@@ -15,6 +15,7 @@ public final class NativeBridge {
 
     private static volatile boolean available = false;
     private static volatile String loadError = null;
+    private static volatile String runtimeTargetError = null;
 
     // V2 DLL 加密密钥片段：占位 0，由 scripts/encrypt-native.py gen-key 在 CI 构建时 patch。
     // ═══ V2_KEY_FRAGMENTS_START ═══
@@ -56,15 +57,19 @@ public final class NativeBridge {
         return loadError;
     }
 
+    public static String getRuntimeTargetError() {
+        return runtimeTargetError;
+    }
+
     private static void loadNativeFromClasspath() throws IOException {
-        String osName = System.getProperty("os.name").toLowerCase();
+        runtimeTargetError = RuntimeTarget.check(NativeBridge.class.getClassLoader());
+        if (runtimeTargetError != null) throw new IOException(runtimeTargetError);
+        String osName = System.getProperty("os.name").toLowerCase(java.util.Locale.ROOT);
         String libName;
         if (osName.contains("win")) {
             libName = "axs-native.dll";
         } else if (osName.contains("linux")) {
             libName = "libaxs-native.so";
-        } else if (osName.contains("mac")) {
-            libName = "libaxs-native.dylib";
         } else {
             throw new UnsupportedOperationException("Unsupported OS: " + osName);
         }
@@ -206,16 +211,7 @@ public final class NativeBridge {
         return aesKey;
     }
 
-    /**
-     * V2: 解密 .enc 格式 [AXNE][ver:4][iv:12][ct+tag]（AES-256-GCM，128-bit tag）。
-     * <p>
-     * <b>安全限制</b>：IV 从文件头读取（CI 加密时固定生成一次），同一 DLL 每次加密的 IV 相同。
-     * GCM 模式下 IV 重复在密钥不变时不会泄露明文（因为密文也只有一个），
-     * 但攻击者若能诱导重新加密（篡改 .enc 触发重新解密），IV 复用 + 密钥不变会破坏 GCM 安全性。
-     * <p>
-     * 彻底修复需要 native 层在每次加密时生成随机 IV 并写入文件头，
-     * 当前 Java 层无法独立完成此改造（加密在 CI 的 encrypt-native.py 中执行）。
-     */
+    /** AXNE v3: AES-GCM 校验解密后，再解压 XZ；构建脚本为每次加密生成随机 IV。 */
     private static byte[] decryptNativeLib(byte[] encData) throws Exception {
         if (encData.length < 4 + 4 + 12 + 16) {
             throw new IOException("encrypted native too short");
@@ -227,7 +223,7 @@ public final class NativeBridge {
         }
         int ver = ((encData[4] & 0xFF) << 24) | ((encData[5] & 0xFF) << 16)
                 | ((encData[6] & 0xFF) << 8) | (encData[7] & 0xFF);
-        if (ver != 1) {
+        if (ver != 3) {
             throw new IOException("unsupported native enc version: " + ver);
         }
         byte[] iv = java.util.Arrays.copyOfRange(encData, 8, 20);
@@ -238,13 +234,60 @@ public final class NativeBridge {
             javax.crypto.spec.SecretKeySpec ks = new javax.crypto.spec.SecretKeySpec(aesKey, "AES");
             javax.crypto.spec.GCMParameterSpec gcm = new javax.crypto.spec.GCMParameterSpec(128, iv);
             cipher.init(javax.crypto.Cipher.DECRYPT_MODE, ks, gcm);
-            return cipher.doFinal(ct);
+            byte[] compressed = cipher.doFinal(ct);
+            try (InputStream xz = new org.tukaani.xz.XZInputStream(
+                    new java.io.ByteArrayInputStream(compressed), 32 * 1024)) {
+                return readAll(xz);
+            } finally {
+                java.util.Arrays.fill(compressed, (byte) 0);
+            }
         } finally {
             java.util.Arrays.fill(aesKey, (byte) 0);
         }
     }
 
     private NativeBridge() {}
+
+    /** Bootstrap-only metadata check: stays with NativeBridge and its captured inner classes. */
+    static final class RuntimeTarget {
+        static String check(ClassLoader loader) {
+            try (InputStream input = loader.getResourceAsStream("META-INF/axs-runtime.properties")) {
+                if (input == null) return null; // Unpackaged development classpath.
+                var properties = new java.util.Properties();
+                properties.load(input);
+                return validate(properties, System.getProperty("os.name", ""), System.getProperty("os.arch", ""));
+            } catch (IOException e) {
+                return "无法读取 Suite 平台清单，请重新下载构件。";
+            }
+        }
+
+        static String validate(java.util.Properties properties, String osName, String architecture) {
+            String target = properties.getProperty("target", "");
+            String expectedOs;
+            String expectedArch;
+            switch (target) {
+                case "universal" -> { expectedOs = "windows,linux"; expectedArch = "any"; }
+                case "windows-x86_64" -> { expectedOs = "windows"; expectedArch = "x86_64"; }
+                case "linux-x86_64" -> { expectedOs = "linux"; expectedArch = "x86_64"; }
+                default -> { return "Suite 平台清单无效，请重新下载构件。"; }
+            }
+            if (!"1".equals(properties.getProperty("format"))
+                    || !expectedOs.equals(properties.getProperty("os"))
+                    || !expectedArch.equals(properties.getProperty("arch"))) {
+                return "Suite 平台清单无效，请重新下载构件。";
+            }
+            String lowerOs = osName.toLowerCase(java.util.Locale.ROOT);
+            String os = lowerOs.startsWith("windows") ? "windows" : lowerOs.equals("linux") ? "linux" : "unsupported";
+            String arch = architecture.toLowerCase(java.util.Locale.ROOT);
+            if (java.util.Set.of("amd64", "x86_64", "x64").contains(arch)) arch = "x86_64";
+            if (!java.util.Arrays.asList(expectedOs.split(",")).contains(os)
+                    || (!expectedArch.equals("any") && !expectedArch.equals(arch))) {
+                return "Suite 构件 " + target + " 与当前平台 " + osName + " / " + architecture
+                        + " 不匹配，请更换匹配的平台构件或 universal 通用包。";
+            }
+            return null;
+        }
+    }
 
     // Native 层双向校验入口
     @SuppressWarnings("unused")

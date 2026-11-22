@@ -8,6 +8,18 @@
 
 prefix: "&3◆ &6ArcartXSuite &7| &r"
 
+use:
+  effect-provider-unavailable: "&c道具效果依赖的 {0} 当前不可用，道具未消耗。"
+  attribute-unavailable: "&c当前角色的属性 {0} 不可用，道具未消耗。"
+  amount-unavailable: "&c道具的属性数值无法计算，道具未消耗。"
+  slot-update-failed: "&c无法确认道具槽位已更新，道具效果未触发。"
+  potion-required: "&c该快捷槽需要放入原版药水。"
+  potion-unavailable: "&c当前服务端无法从额外槽位饮用这瓶药水。"
+  mmoitems-unavailable: "&cMMOItems 快捷使用接口当前不可用。"
+  mmoitems-unsupported: "&c这件物品没有受支持的 MMOItems 快捷动作。"
+  mmoitems-rejected: "&c物品当前无法使用，请检查 MMOItems 的要求和冷却。"
+  quick-use-failed: "&c槽位物品使用失败，请查看服务端日志。"
+
 # ── 通用 ──────────────────────────────────────────────
 common:
   service-down: "&c服务未启动。"
@@ -26,11 +38,15 @@ status:
   keys: "&7Key: &f{0}"
   ap: "&7AP: &f{0}"
   mythiclib: "&7MythicLib: &f{0}"
+  craneattribute: "&7CraneAttribute: &f{0}"
+  symphony: "&7Symphony: &f{0}"
+  mod-attributes: "&7Mod Attributes: &f{0}"
 
 # ── set ───────────────────────────────────────────────
 set:
   no-item: "请先手持一个物品。"
   invalid-id: "道具 ID 不存在: {0}"
+  bind-failed: "无法把道具 ID 写入手中物品。"
   success: "已将手中物品设置为道具 {0}。"
   only-player: "&c此命令只能由玩家执行。"
   usage: "&e用法: /axs prop set <道具ID>"

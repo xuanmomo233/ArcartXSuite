@@ -1,14 +1,12 @@
 package xuanmo.arcartxsuite.battlepass.model;
 
 import java.time.LocalDate;
-import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
 /**
- * 玩家战令进度 record，记录玩家在某赛季中的等级、经验、档位、任务进度及奖励领取状态。
+ * 玩家战令进度 record，记录玩家在某赛季中的等级、经验、档位及奖励领取状态。
  * <p>
  * 提供多个 {@code withXxx} 方法以不可变方式更新单个字段，适用于函数式更新场景。
  *
@@ -17,7 +15,6 @@ import java.util.UUID;
  * @param currentLevel        当前等级
  * @param currentXp           当前经验值（当前等级内已积累量）
  * @param passTier            战令档位（FREE/PREMIUM/DELUXE）
- * @param taskProgresses      任务进度映射（任务 ID → 完成次数）
  * @param claimedRewards      已领取奖励 ID 集合
  * @param lastDailyResetDate  上次每日重置日期
  * @param lastWeeklyResetDate 上次每周重置日期
@@ -29,7 +26,6 @@ public record BattlePassPlayerProgress(
     int currentLevel,
     int currentXp,
     PassTier passTier,
-    Map<String, Integer> taskProgresses,
     Set<String> claimedRewards,
     LocalDate lastDailyResetDate,
     LocalDate lastWeeklyResetDate,
@@ -38,7 +34,6 @@ public record BattlePassPlayerProgress(
 
     public BattlePassPlayerProgress {
         if (passTier == null) passTier = PassTier.FREE;
-        if (taskProgresses == null) taskProgresses = new HashMap<>();
         if (claimedRewards == null) claimedRewards = new HashSet<>();
         if (lastDailyResetDate == null) lastDailyResetDate = LocalDate.now();
         if (lastWeeklyResetDate == null) lastWeeklyResetDate = LocalDate.now();
@@ -46,7 +41,7 @@ public record BattlePassPlayerProgress(
     }
 
     public BattlePassPlayerProgress(UUID playerUuid, String seasonId) {
-        this(playerUuid, seasonId, 1, 0, PassTier.FREE, new HashMap<>(), new HashSet<>(),
+        this(playerUuid, seasonId, 1, 0, PassTier.FREE, new HashSet<>(),
             LocalDate.now(), LocalDate.now(), 1);
     }
 
@@ -89,7 +84,7 @@ public record BattlePassPlayerProgress(
      */
     public BattlePassPlayerProgress withLevel(int level) {
         return new BattlePassPlayerProgress(playerUuid, seasonId, level, currentXp, passTier,
-            taskProgresses, claimedRewards, lastDailyResetDate, lastWeeklyResetDate, currentWeekNumber);
+            claimedRewards, lastDailyResetDate, lastWeeklyResetDate, currentWeekNumber);
     }
 
     /**
@@ -100,7 +95,7 @@ public record BattlePassPlayerProgress(
      */
     public BattlePassPlayerProgress withXp(int xp) {
         return new BattlePassPlayerProgress(playerUuid, seasonId, currentLevel, xp, passTier,
-            taskProgresses, claimedRewards, lastDailyResetDate, lastWeeklyResetDate, currentWeekNumber);
+            claimedRewards, lastDailyResetDate, lastWeeklyResetDate, currentWeekNumber);
     }
 
     /**
@@ -111,21 +106,7 @@ public record BattlePassPlayerProgress(
      */
     public BattlePassPlayerProgress withPassTier(PassTier tier) {
         return new BattlePassPlayerProgress(playerUuid, seasonId, currentLevel, currentXp, tier,
-            taskProgresses, claimedRewards, lastDailyResetDate, lastWeeklyResetDate, currentWeekNumber);
-    }
-
-    /**
-     * 返回更新指定任务进度后的新进度实例。
-     *
-     * @param taskId 任务 ID
-     * @param count  完成次数
-     * @return 更新后的进度实例
-     */
-    public BattlePassPlayerProgress withTaskProgress(String taskId, int count) {
-        Map<String, Integer> newProgresses = new HashMap<>(taskProgresses);
-        newProgresses.put(taskId, count);
-        return new BattlePassPlayerProgress(playerUuid, seasonId, currentLevel, currentXp, passTier,
-            newProgresses, claimedRewards, lastDailyResetDate, lastWeeklyResetDate, currentWeekNumber);
+            claimedRewards, lastDailyResetDate, lastWeeklyResetDate, currentWeekNumber);
     }
 
     /**
@@ -137,19 +118,23 @@ public record BattlePassPlayerProgress(
     public BattlePassPlayerProgress withClaimedReward(String rewardId) {
         Set<String> newClaimed = new HashSet<>(claimedRewards);
         newClaimed.add(rewardId);
+        return withClaimedRewards(newClaimed);
+    }
+
+    public BattlePassPlayerProgress withClaimedRewards(Set<String> newClaimed) {
         return new BattlePassPlayerProgress(playerUuid, seasonId, currentLevel, currentXp, passTier,
-            taskProgresses, newClaimed, lastDailyResetDate, lastWeeklyResetDate, currentWeekNumber);
+            newClaimed, lastDailyResetDate, lastWeeklyResetDate, currentWeekNumber);
     }
 
     /**
-     * 返回执行每日重置后的新进度实例（清空任务进度，更新重置日期）。
+     * 返回更新每日重置日期后的新进度实例。
      *
      * @param date 重置日期
      * @return 更新后的进度实例
      */
     public BattlePassPlayerProgress withDailyReset(LocalDate date) {
         return new BattlePassPlayerProgress(playerUuid, seasonId, currentLevel, currentXp, passTier,
-            new HashMap<>(), claimedRewards, date, lastWeeklyResetDate, currentWeekNumber);
+            claimedRewards, date, lastWeeklyResetDate, currentWeekNumber);
     }
 
     /**
@@ -161,7 +146,7 @@ public record BattlePassPlayerProgress(
      */
     public BattlePassPlayerProgress withWeeklyReset(LocalDate date, int weekNumber) {
         return new BattlePassPlayerProgress(playerUuid, seasonId, currentLevel, currentXp, passTier,
-            taskProgresses, claimedRewards, lastDailyResetDate, date, weekNumber);
+            claimedRewards, lastDailyResetDate, date, weekNumber);
     }
 
     /**

@@ -3,13 +3,15 @@
 # 前置依赖: ArcartX；Prop 模块启用后生效。
 # 启用开关: config.yml -> modules.prop.enabled + modules.prop.password
 # 关联文件: ArcartXProp.yml、prop/props/*.yml
-# 重载命令: /axs prop reload
+# 重载命令: /axs reload prop
 # 最小使用路径: category + keys.<显示名>.defaultKey + slot
 
 # 客户端按键分类名。
 category: "ArcartX 快捷道具按键"
 
 keys:
+  # mode: prop（默认，执行 Prop 道具定义）、vanilla-potion（使用槽位药水）、
+  #       mmoitems（触发槽位中受支持的 MMOItems 右键动作）。
   # 顶层键是显示给玩家的按键名称。
   快捷道具1:
     # 默认按键（客户端按键名）
@@ -26,3 +28,13 @@ keys:
     defaultKey: "C"
     # 绑定的道具槽位
     slot: Slot3
+
+  # 先在 ArcartX 配置对应额外槽位，再取消需要的示例注释。
+  # 快捷药水:
+  #   defaultKey: "V"
+  #   slot: PotionSlot
+  #   mode: vanilla-potion
+  # MMOItems 快捷使用:
+  #   defaultKey: "B"
+  #   slot: MmoItemSlot
+  #   mode: mmoitems

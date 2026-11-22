@@ -1,0 +1,9 @@
+enabled: true
+display-name: "小队"
+mode: "party"
+send-permission: ""
+receive-permission: ""
+cross-server: false
+range: 0
+format: "&a[小队] &f{player_name}&7: &r{message}"
+console-format: "[小队] {player_name}: {message}"

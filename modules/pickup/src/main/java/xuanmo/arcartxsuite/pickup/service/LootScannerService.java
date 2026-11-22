@@ -1,5 +1,6 @@
 package xuanmo.arcartxsuite.pickup.service;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -7,11 +8,13 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.NamespacedKey;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Item;
 import xuanmo.arcartxsuite.api.security.ActionTokenGuard;
@@ -24,6 +27,7 @@ import org.bukkit.event.entity.EntityPickupItemEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.scheduler.BukkitTask;
 import xuanmo.arcartxsuite.api.capability.WarehouseAutoDepositable;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
@@ -49,6 +53,12 @@ public final class LootScannerService implements Listener {
 
     /** UI 打开前的初始延迟（ticks） */
     private static final long PREOPEN_DELAY_TICKS = 5L;
+    private static final int MAX_SHARED_SCAN_ITEMS = 4096;
+    private static final int MAX_OVERLAP_CHECK_PLAYERS = 32;
+    private static final NamespacedKey WAREHOUSE_SOURCE = new NamespacedKey("arcartxsuite", "warehouse_ground_transfer");
+    private static final Comparator<NearbyLoot> NEAREST_FIRST = Comparator.comparingDouble(NearbyLoot::distanceSquared)
+        .thenComparingInt(NearbyLoot::sequence);
+    private static final Comparator<NearbyLoot> FARTHEST_FIRST = NEAREST_FIRST.reversed();
 
     private final JavaPlugin plugin;
     private final Logger logger;
@@ -79,8 +89,7 @@ public final class LootScannerService implements Listener {
     private final Set<UUID> disabledPlayers = new HashSet<>();
     private final Set<UUID> manualPickups = new HashSet<>();
 
-    private final Map<UUID, ItemStack> previewStacks = new HashMap<>();
-    private final Map<UUID, String> previewJsons = new HashMap<>();
+    private final Map<UUID, ItemPreview> previews = new HashMap<>();
     private BukkitTask reopenTask;
     private BukkitTask collectionTask;
     private final Map<UUID, CollectionJob> collectionJobs = new LinkedHashMap<>();
@@ -93,6 +102,10 @@ public final class LootScannerService implements Listener {
 
     /** 周期扫描定时任务 */
     private BukkitTask scanTask;
+    private final ArrayDeque<Player> scanQueue = new ArrayDeque<>();
+    private final Location[] overlapLocations = new Location[MAX_OVERLAP_CHECK_PLAYERS];
+    private long ticksUntilScan;
+    private int playersPerScanTick;
     /** 服务是否处于活跃状态 */
     private boolean active;
 
@@ -123,6 +136,7 @@ public final class LootScannerService implements Listener {
         this.filterEngine = new LootFilterEngine(configuration.filter(), itemMatcher);
         this.uiId = uiId;
         this.interactUiId = interactUiId;
+        for (int i = 0; i < overlapLocations.length; i++) overlapLocations[i] = new Location(null, 0, 0, 0);
     }
 
     /** 启动服务：注册事件监听器、启动周期扫描任务、为所有在线玩家打开常驻 HUD。 */
@@ -130,9 +144,8 @@ public final class LootScannerService implements Listener {
         active = true;
         Bukkit.getPluginManager().registerEvents(this, plugin);
         collectionTask = Bukkit.getScheduler().runTaskTimer(plugin, this::collectionTick, 1L, 1L);
-        ScannerConfig scannerConfig = configuration.scanner();
         scanTask = Bukkit.getScheduler().runTaskTimer(
-            plugin, this::scanTick, PREOPEN_DELAY_TICKS, scannerConfig.scanIntervalTicks()
+            plugin, this::scanTick, PREOPEN_DELAY_TICKS, 1L
         );
         // reload 场景：为已在线玩家重新打开 HUD
         packetBridge.registerUiCloseCallback(interactUiId, this::closeInteraction);
@@ -148,6 +161,8 @@ public final class LootScannerService implements Listener {
     /** 关闭服务：取消定时任务、注销事件监听、关闭所有玩家的 HUD、清理状态。 */
     public void shutdown() {
         active = false;
+        scanQueue.clear();
+        ticksUntilScan = 0;
         if (collectionTask != null) collectionTask.cancel();
         collectionJobs.clear();
         if (reopenTask != null) reopenTask.cancel();
@@ -175,8 +190,7 @@ public final class LootScannerService implements Listener {
         disabledPlayers.clear();
         tokenGuard.clearAll();
         sessionTokens.clear();
-        previewStacks.clear();
-        previewJsons.clear();
+        previews.clear();
     }
 
     /**
@@ -468,19 +482,75 @@ public final class LootScannerService implements Listener {
                 collectionJobs.remove(job.player.getUniqueId());
                 continue;
             }
+            if (job.pendingDeposit) continue;
             PickRequest request = job.requests.pollFirst();
             if (request != null) {
                 try {
-                    PickResult result = pickEntity(job.player, request);
-                    job.warehouse += result.warehouse;
-                    job.inventory += result.inventory;
-                    job.notifyWarehouse &= result.notifyWarehouse;
+                    if (startGroundDeposit(job, request)) continue;
+                    recordCollection(job, pickEntity(job.player, request));
                 } catch (RuntimeException exception) {
                     logger.warning("收取掉落物失败，未处理部分保留: " + exception.getMessage());
                 }
             }
             if (job.requests.isEmpty()) finishCollection(job);
         }
+    }
+
+    private static void recordCollection(CollectionJob job, PickResult result) {
+        job.warehouse += result.warehouse;
+        job.inventory += result.inventory;
+        job.notifyWarehouse &= result.notifyWarehouse;
+    }
+
+    private boolean startGroundDeposit(CollectionJob job, PickRequest request) {
+        if (!configuration.scanner().warehouseAutoDeposit()) return false;
+        WarehouseAutoDepositable warehouse = warehouseAutoDepositableSupplier.get();
+        Player player = job.player;
+        Item item = request.item;
+        if (warehouse == null || !eligible(player, item) || !request.prototype.isSimilar(item.getItemStack())) return false;
+        ItemStack original = item.getItemStack().clone();
+        ItemStack escrow = original.clone();
+        int amount = Math.min(request.amount, original.getAmount());
+        escrow.setAmount(amount);
+        job.pendingDeposit = true;
+        boolean accepted;
+        try {
+            accepted = warehouse.depositFromGroundAsync(player, item, escrow,
+                () -> collectionJobs.get(player.getUniqueId()) == job && usable(player) && !player.isDead()
+                    && job.world.equals(player.getWorld()) && eligible(player, item)
+                    && original.equals(item.getItemStack()) && allowPickup(player, request)
+                    && original.equals(item.getItemStack()),
+                result -> {
+                    try {
+                        boolean currentJob = collectionJobs.get(player.getUniqueId()) == job && usable(player)
+                            && !player.isDead() && job.world.equals(player.getWorld());
+                        if (result.review()) {
+                            logger.warning("掉落物收取待核对: " + result.operationId() + " 玩家=" + player.getUniqueId());
+                            if (currentJob) player.sendMessage(messages.get("hints.collection-review", result.operationId()));
+                        } else if (result.sourceTaken()) {
+                            int stored = (int) Math.min(amount, Math.max(0, result.storedAmount()));
+                            if (currentJob) {
+                                publishPickup(player, escrow, stored);
+                                recordCollection(job, new PickResult(stored, 0, result.notifyPlayer()));
+                            }
+                        } else if (currentJob) {
+                            recordCollection(job, pickEntity(player, request));
+                        }
+                        return !result.review();
+                    } catch (RuntimeException failure) {
+                        logger.warning("收取掉落物结果待核对: " + result.operationId() + " " + failure.getMessage());
+                        return false;
+                    } finally {
+                        job.pendingDeposit = false;
+                        if (collectionJobs.get(player.getUniqueId()) == job && job.requests.isEmpty()) finishCollection(job);
+                    }
+                });
+        } catch (RuntimeException failure) {
+            job.pendingDeposit = false;
+            throw failure;
+        }
+        if (!accepted) job.pendingDeposit = false;
+        return accepted;
     }
 
     private void finishCollection(CollectionJob job) {
@@ -505,44 +575,35 @@ public final class LootScannerService implements Listener {
         if (state != null) sendUpdate(job.player, state);
     }
 
-    private PickResult pickEntity(Player player, PickRequest request) {
+    private boolean allowPickup(Player player, PickRequest request) {
         Item item = request.item;
-        if (!eligible(player, item) || !request.prototype.isSimilar(item.getItemStack())) return PickResult.EMPTY;
+        if (!eligible(player, item) || !request.prototype.isSimilar(item.getItemStack())) return false;
         EntityPickupItemEvent event = new EntityPickupItemEvent(player, item,
             Math.max(0, item.getItemStack().getAmount() - request.amount));
         manualPickups.add(player.getUniqueId());
         try { Bukkit.getPluginManager().callEvent(event); }
         finally { manualPickups.remove(player.getUniqueId()); }
-        if (!usable(player) || event.isCancelled() || !eligible(player, item)
-            || !request.prototype.isSimilar(item.getItemStack())) return PickResult.EMPTY;
+        return usable(player) && !event.isCancelled() && eligible(player, item)
+            && request.prototype.isSimilar(item.getItemStack());
+    }
 
+    private PickResult pickEntity(Player player, PickRequest request) {
+        if (!allowPickup(player, request)) return PickResult.EMPTY;
+        Item item = request.item;
         ItemStack original = item.getItemStack().clone();
         int amount = Math.min(request.amount, original.getAmount());
         ItemStack requested = original.clone();
         requested.setAmount(amount);
-        long stored = 0;
-        boolean notify = true;
-        if (configuration.scanner().warehouseAutoDeposit()) {
-            WarehouseAutoDepositable warehouse = warehouseAutoDepositableSupplier.get();
-            if (warehouse != null) {
-                notify = warehouse.shouldNotifyAutoDeposit(player);
-                var result = warehouse.depositToPersonalWarehouse(player, requested);
-                stored = Math.min(amount, Math.max(0L, result.storedAmount()));
-            }
-        }
-        // 已持久化的部分先从来源扣除，背包操作失败时不能再次存入。
-        if (stored > 0) setGroundAmount(item, original, original.getAmount() - (int) stored);
-        int forInventory = amount - (int) stored;
-        int delivered = 0;
-        if (forInventory > 0) {
-            ItemStack inventoryStack = requested.clone();
-            inventoryStack.setAmount(forInventory);
-            Map<Integer, ItemStack> leftovers = player.getInventory().addItem(inventoryStack);
-            delivered = forInventory - leftovers.values().stream().mapToInt(ItemStack::getAmount).sum();
-            setGroundAmount(item, original, original.getAmount() - (int) stored - delivered);
-        }
-        publishPickup(player, requested, (int) stored + delivered);
-        return new PickResult(stored, delivered, notify);
+        int delivered = giveInventory(player, requested);
+        setGroundAmount(item, original, original.getAmount() - delivered);
+        publishPickup(player, requested, delivered);
+        return new PickResult(0, delivered, true);
+    }
+
+    private int giveInventory(Player player, ItemStack requested) {
+        int amount = requested.getAmount();
+        Map<Integer, ItemStack> leftovers = player.getInventory().addItem(requested.clone());
+        return amount - leftovers.values().stream().mapToInt(ItemStack::getAmount).sum();
     }
 
     private void setGroundAmount(Item item, ItemStack prototype, int amount) {
@@ -559,7 +620,7 @@ public final class LootScannerService implements Listener {
         try {
             var bus = eventBusProvider.get();
             if (bus != null) bus.publish("axs.pickup.item_pickup", player,
-                Map.of("material", stack.getType().name(), "amount", String.valueOf(amount)));
+                Map.of("material", stack.getType().name(), "amount", String.valueOf(amount), "source", "nearby"));
         } catch (RuntimeException exception) {
             logger.warning("拾取事件通知失败: " + exception.getMessage());
         }
@@ -567,12 +628,18 @@ public final class LootScannerService implements Listener {
 
     private boolean eligible(Player player, Item item) {
         if (!player.getCanPickupItems() || player.getGameMode() == org.bukkit.GameMode.SPECTATOR) return false;
-        if (item == null || item.isDead() || !item.isValid() || item.getPickupDelay() > 0
-            || item.getTicksLived() < configuration.scanner().pickupDelayTicks()
-            || (item.getOwner() != null && !item.getOwner().equals(player.getUniqueId()))) return false;
+        if (item == null || !canSeeDrop(item, player.getUniqueId(), configuration.scanner().pickupDelayTicks())) return false;
+        var data = item.getPersistentDataContainer();
+        if (data != null && data.has(WAREHOUSE_SOURCE, PersistentDataType.STRING)) return false;
         return item.getWorld().equals(player.getWorld())
             && item.getLocation().distanceSquared(player.getLocation()) <= Math.pow(configuration.scanner().scanRadius(), 2)
             && filterEngine.shouldDisplay(item.getItemStack());
+    }
+
+    private static boolean canSeeDrop(Item item, UUID playerId, int pickupDelayTicks) {
+        if (item.isDead() || !item.isValid() || item.getPickupDelay() > 0 || item.getTicksLived() < pickupDelayTicks) return false;
+        UUID owner = item.getOwner();
+        return owner == null || owner.equals(playerId);
     }
 
     /** 处理选中切换：循环移动选中索引（到顶/底时环绕）。 */
@@ -595,23 +662,66 @@ public final class LootScannerService implements Listener {
         sendUpdate(player, state);
     }
 
-    /** 周期扫描 tick：遍历所有在线玩家，对每位玩家执行掉落物扫描。 */
+    /** 将一轮在线玩家扫描分摊到多 tick，超出预算的玩家继续排队。 */
     private void scanTick() {
         if (!active || !packetBridge.isAvailable()) {
             return;
         }
-        for (Player player : Bukkit.getOnlinePlayers()) {
-            if (!hudOpenPlayers.contains(player.getUniqueId()) || !packetBridge.isUiOpen(player, uiId)) openHudForPlayer(player);
-            scanForPlayer(player);
+        ScannerConfig config = configuration.scanner();
+        if (ticksUntilScan > 0) ticksUntilScan--;
+        if (scanQueue.isEmpty()) {
+            if (ticksUntilScan > 0) return;
+            scanQueue.addAll(Bukkit.getOnlinePlayers());
+            ticksUntilScan = config.scanIntervalTicks();
+            playersPerScanTick = (int) Math.max(1, (scanQueue.size() + ticksUntilScan - 1) / ticksUntilScan);
         }
+        long deadline = System.nanoTime() + config.timeBudgetMs() * 1_000_000L;
+        int limit = Math.min(playersPerScanTick, scanQueue.size());
+        long overlap = overlappingScans(limit, config.scanRadius());
+        Map<UUID, ScannedDrop> shared = overlap != 0 ? new HashMap<>() : null;
+        for (int scanned = 0; scanned < limit && !scanQueue.isEmpty(); scanned++) {
+            if (scanned > 0 && System.nanoTime() >= deadline) break;
+            Player player = scanQueue.removeFirst();
+            if (!usable(player)) continue;
+            if (!hudOpenPlayers.contains(player.getUniqueId()) || !packetBridge.isUiOpen(player, uiId)) openHudForPlayer(player);
+            scanForPlayer(player, overlap == -1L || (overlap & (1L << scanned)) != 0 ? shared : null);
+        }
+        if (!scanQueue.isEmpty()) return;
         Set<UUID> visible = new HashSet<>();
         for (PlayerLootState state : playerStates.values()) for (LootEntry entry : state.visibleItems) visible.addAll(entry.entityUuids);
-        previewStacks.keySet().retainAll(visible);
-        previewJsons.keySet().retainAll(visible);
+        previews.keySet().retainAll(visible);
+    }
+
+    private long overlappingScans(int limit, double radius) {
+        if (limit < 2) return 0;
+        // 限制位置比较成本。超大型扫描批次继续使用原来有界的共享表。
+        if (limit > overlapLocations.length) return -1L;
+        double reachSquared = 4 * radius * radius;
+        long overlap = 0;
+        int i = 0;
+        for (Player player : scanQueue) {
+            Location position = overlapLocations[i];
+            player.getLocation(position);
+            for (int j = 0; j < i; j++) {
+                Location other = overlapLocations[j];
+                if (position.getWorld() == other.getWorld() && position.getWorld() != null
+                    && position.distanceSquared(other) <= reachSquared) {
+                    overlap |= (1L << i) | (1L << j);
+                }
+            }
+            if (++i == limit) break;
+        }
+        // 这些位置仅供本 tick 的共享判断，实际扫描仍重新读取位置。
+        for (int j = 0; j < limit; j++) overlapLocations[j].setWorld(null);
+        return overlap;
     }
 
     /** 为指定玩家扫描附近掉落物，过滤后对比变化并推送到客户端。 */
     private void scanForPlayer(Player player) {
+        scanForPlayer(player, null);
+    }
+
+    private void scanForPlayer(Player player, Map<UUID, ScannedDrop> shared) {
         if (!active || !player.isOnline() || disabledPlayers.contains(player.getUniqueId())) {
             return;
         }
@@ -620,45 +730,78 @@ public final class LootScannerService implements Listener {
         ScannerConfig scannerConfig = configuration.scanner();
         Location playerLocation = player.getLocation();
         double radius = scannerConfig.scanRadius();
-        int candidateCount = 0;
+        double radiusSquared = radius * radius;
         boolean limited = false;
 
         List<LootEntry> entries = new ArrayList<>();
         Map<ItemStack, Integer> groupIndexes = new HashMap<>();
-        List<Entity> nearby = new ArrayList<>(player.getNearbyEntities(radius, radius, radius).stream()
-            .filter(entity -> entity instanceof Item).toList());
-        nearby.sort(Comparator.comparingDouble(entity -> entity.getLocation().distanceSquared(playerLocation)));
-        for (Entity entity : nearby) {
-            if (!(entity instanceof Item itemEntity) || itemEntity.isDead() || !itemEntity.isValid()) {
-                continue;
+        PriorityQueue<NearbyLoot> candidates = new PriorityQueue<>(FARTHEST_FIRST);
+        int sequence = 0;
+        if (player.getCanPickupItems() && player.getGameMode() != org.bukkit.GameMode.SPECTATOR) {
+            for (Entity entity : player.getNearbyEntities(radius, radius, radius)) {
+                if (!(entity instanceof Item item) || !canSeeDrop(item, playerId, scannerConfig.pickupDelayTicks())) continue;
+                Location location = item.getLocation();
+                if (!playerLocation.getWorld().equals(location.getWorld())) continue;
+                double distanceSquared = location.distanceSquared(playerLocation);
+                if (distanceSquared > radiusSquared) continue;
+                UUID itemId = item.getUniqueId();
+                ScannedDrop drop = shared == null ? null : shared.get(itemId);
+                ItemStack stack;
+                if (drop == null) {
+                    stack = item.getItemStack();
+                    boolean visible = filterEngine.shouldDisplay(stack);
+                    if (shared != null && shared.size() < MAX_SHARED_SCAN_ITEMS) {
+                        drop = new ScannedDrop(stack, visible);
+                        shared.put(itemId, drop);
+                    }
+                    if (!visible) continue;
+                } else {
+                    if (!drop.visible) continue;
+                    stack = drop.stack;
+                }
+                int order = sequence++;
+                if (candidates.size() == scannerConfig.maxCandidates()) {
+                    limited = true;
+                    if (distanceSquared >= candidates.element().distanceSquared) continue;
+                    candidates.remove();
+                }
+                candidates.add(new NearbyLoot(itemId, stack, drop, distanceSquared, order));
             }
-            if (!eligible(player, itemEntity)) continue;
-            if (candidateCount >= scannerConfig.maxCandidates()) { limited = true; break; }
-            candidateCount++;
-            ItemStack stack = itemEntity.getItemStack();
-            if (!filterEngine.shouldDisplay(stack)) {
-                continue;
+        }
+        List<NearbyLoot> nearby = new ArrayList<>(candidates);
+        nearby.sort(NEAREST_FIRST);
+        for (NearbyLoot candidate : nearby) {
+            UUID itemId = candidate.id;
+            ScannedDrop drop = candidate.drop;
+            ItemStack stack = candidate.stack;
+            ItemPreview preview = drop == null ? null : drop.preview;
+            if (preview == null) {
+                preview = previewFor(itemId, stack);
+                if (drop != null) drop.preview = preview;
             }
-            ItemStack prototype = prototypeFor(itemEntity, stack);
+            ItemStack prototype = preview.prototype;
             if (scannerConfig.mergeSameItems()) {
                 int match = groupIndexes.getOrDefault(prototype, -1);
                 if (match >= 0) {
                     LootEntry existing = entries.get(match);
-                    List<UUID> members = new ArrayList<>(existing.entityUuids);
-                    members.add(itemEntity.getUniqueId());
+                    existing.entityUuids.add(itemId);
                     entries.set(match, new LootEntry(existing.entityUuid, existing.material, existing.displayName,
-                        existing.amount + stack.getAmount(), existing.itemJson, List.copyOf(members), existing.prototype));
+                        existing.amount + stack.getAmount(), existing.itemJson, existing.entityUuids, existing.prototype));
                     continue;
                 }
                 groupIndexes.put(prototype, entries.size());
             }
+            if (preview.displayName == null) preview.displayName = resolveDisplayName(stack);
+            if (preview.json == null) preview.json = itemStackBridge.itemToPreviewJson(prototype).filter(json -> !json.isBlank())
+                .orElse("{\"id\":\"minecraft:air\",\"Count\":1b}");
             entries.add(new LootEntry(
-                entity.getUniqueId(),
+                itemId,
                 stack.getType().name(),
-                resolveDisplayName(stack),
+                preview.displayName,
                 stack.getAmount(),
-                previewJson(itemEntity, stack),
-                List.of(entity.getUniqueId()), prototype
+                preview.json,
+                scannerConfig.mergeSameItems() ? new ArrayList<>(List.of(itemId)) : List.of(itemId),
+                prototype
             ));
         }
 
@@ -675,7 +818,14 @@ public final class LootScannerService implements Listener {
         UUID selectedId = state.visibleItems.isEmpty() ? null : state.visibleItems.get(state.selectedIndex).entityUuid;
         List<LootEntry> ordered = new ArrayList<>();
         Map<Object, LootEntry> added = new LinkedHashMap<>();
-        for (LootEntry entry : entries) added.put(scannerConfig.mergeSameItems() ? entry.prototype : entry.entityUuids.get(0), entry);
+        for (LootEntry entry : entries) {
+            if (scannerConfig.mergeSameItems()) {
+                added.put(entry.prototype, new LootEntry(entry.entityUuid, entry.material, entry.displayName,
+                    entry.amount, entry.itemJson, List.copyOf(entry.entityUuids), entry.prototype));
+            } else {
+                added.put(entry.entityUuid, entry);
+            }
+        }
         for (LootEntry previous : state.visibleItems) {
             LootEntry current = added.remove(scannerConfig.mergeSameItems() ? previous.prototype : previous.entityUuids.get(0));
             if (current != null) {
@@ -795,26 +945,15 @@ public final class LootScannerService implements Listener {
         }
     }
 
-    private String previewJson(Item item, ItemStack stack) {
-        UUID id = item.getUniqueId();
-        ItemStack prototype = prototypeFor(item, stack);
-        if (!previewJsons.containsKey(id)) {
-            previewJsons.put(id, itemStackBridge.itemToPreviewJson(prototype).filter(json -> !json.isBlank())
-                .orElse("{\"id\":\"minecraft:air\",\"Count\":1b}"));
-        }
-        return previewJsons.getOrDefault(id, "");
-    }
-
-    private ItemStack prototypeFor(Item item, ItemStack stack) {
-        UUID id = item.getUniqueId();
-        ItemStack prototype = previewStacks.get(id);
-        if (prototype == null || !prototype.isSimilar(stack)) {
-            prototype = stack.clone();
+    private ItemPreview previewFor(UUID id, ItemStack stack) {
+        ItemPreview preview = previews.get(id);
+        if (preview == null || !preview.prototype.isSimilar(stack)) {
+            ItemStack prototype = stack.clone();
             prototype.setAmount(1);
-            previewStacks.put(id, prototype);
-            previewJsons.remove(id);
+            preview = new ItemPreview(prototype);
+            previews.put(id, preview);
         }
-        return prototype;
+        return preview;
     }
 
     /** 解析物品显示名：优先取自定义名，其次通过桥接翻译原版物品中文名。 */
@@ -837,6 +976,7 @@ public final class LootScannerService implements Listener {
         static final PickResult EMPTY = new PickResult(0, 0, true);
     }
     private static final class CollectionJob {
+        private boolean pendingDeposit;
         final Player player;
         final org.bukkit.World world;
         final java.util.Deque<PickRequest> requests = new java.util.ArrayDeque<>();
@@ -864,6 +1004,29 @@ public final class LootScannerService implements Listener {
         ItemStack prototype
     ) {
     }
+
+    private static final class ScannedDrop {
+        final ItemStack stack;
+        final boolean visible;
+        ItemPreview preview;
+
+        ScannedDrop(ItemStack stack, boolean visible) {
+            this.stack = stack;
+            this.visible = visible;
+        }
+    }
+
+    private static final class ItemPreview {
+        final ItemStack prototype;
+        String displayName;
+        String json;
+
+        ItemPreview(ItemStack prototype) {
+            this.prototype = prototype;
+        }
+    }
+
+    private record NearbyLoot(UUID id, ItemStack stack, ScannedDrop drop, double distanceSquared, int sequence) {}
 }
 
 

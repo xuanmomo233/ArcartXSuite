@@ -87,38 +87,8 @@ ui:
       var.taskCount = packet['taskCount']
       var.rewardCount = packet['rewardCount']
       var.catKeys = var.categories.keys()
-      while(val.cat_list.childrenCount() > 1){
-        val.cat_list.get(1).remove()
-      }
-      for(key in var.catKeys){
-        if(val.cat_list['分类模板'] != none) {
-          item = val.cat_list['分类模板'].copy('分类项' + var.catIndex.round())
-          item.entryKey = key
-        }
-        var.catIndex = var.catIndex + 1
-      }
       var.qKeys = var.quests.keys()
-      while(val.quest_list.childrenCount() > 1){
-        val.quest_list.get(1).remove()
-      }
-      for(key in var.qKeys){
-        if(val.quest_list['任务模板'] != none) {
-          item = val.quest_list['任务模板'].copy('任务项' + var.qIndex.round())
-          item.entryKey = key
-        }
-        var.qIndex = var.qIndex + 1
-      }
       var.tKeys = var.tasks.keys()
-      while(val.task_list.childrenCount() > 1){
-        val.task_list.get(1).remove()
-      }
-      for(key in var.tKeys){
-        if(val.task_list['目标模板'] != none) {
-          item = val.task_list['目标模板'].copy('目标项' + var.tIndex.round())
-          item.entryKey = key
-        }
-        var.tIndex = var.tIndex + 1
-      }
       var.rKeys = var.rewards.keys()
       for(key in var.rKeys){
         rewardEntry = var.rewards[key]
@@ -126,24 +96,7 @@ ui:
           var.rewardItemJsons[key] = rewardEntry['itemJson']
         }
       }
-      while(val.reward_list.childrenCount() > 1){
-        val.reward_list.get(1).remove()
-      }
-      for(key in var.rKeys){
-        if(val.reward_list['奖励模板'] != none) {
-          item = val.reward_list['奖励模板'].copy('奖励项' + var.rIndex.round())
-          item.entryKey = key
-        }
-        var.rIndex = var.rIndex + 1
-      }
-      for(i in range(1, var.rIndex)){
-        if(val.reward_list != none) {
-          item = val.reward_list.get(i.round())
-          if(item != none && item['奖励图标'] != none){
-            item['奖励图标'].seticon()
-          }
-        }
-      }
+      var.rewardIconsDirty = true
     # packetHandler: update
     # 包字段: 与 init 相同，用于增量更新菜单数据
     # 优化: 只更新数据变量，仅在数量变化时才 remove+copy，避免每次刷新全量重建导致闪烁
@@ -187,47 +140,17 @@ ui:
       var.catKeys = var.categories.keys()
       // ── 分类列表：仅在数量变化时重建 ──
       if(var.catKeys.size() != oldCatCount){
-        while(val.cat_list.childrenCount() > 1){
-          val.cat_list.get(1).remove()
-        }
         var.catIndex = 0
-        for(key in var.catKeys){
-          if(val.cat_list['分类模板'] != none) {
-            item = val.cat_list['分类模板'].copy('分类项' + var.catIndex.round())
-            item.entryKey = key
-          }
-          var.catIndex = var.catIndex + 1
-        }
       }
       var.qKeys = var.quests.keys()
       // ── 任务列表：仅在数量变化时重建 ──
       if(var.qKeys.size() != oldQuestCount){
-        while(val.quest_list.childrenCount() > 1){
-          val.quest_list.get(1).remove()
-        }
         var.qIndex = 0
-        for(key in var.qKeys){
-          if(val.quest_list['任务模板'] != none) {
-            item = val.quest_list['任务模板'].copy('任务项' + var.qIndex.round())
-            item.entryKey = key
-          }
-          var.qIndex = var.qIndex + 1
-        }
       }
       var.tKeys = var.tasks.keys()
       // ── 目标列表：仅在数量变化时重建 ──
       if(var.tKeys.size() != oldTaskCount){
-        while(val.task_list.childrenCount() > 1){
-          val.task_list.get(1).remove()
-        }
         var.tIndex = 0
-        for(key in var.tKeys){
-          if(val.task_list['目标模板'] != none) {
-            item = val.task_list['目标模板'].copy('目标项' + var.tIndex.round())
-            item.entryKey = key
-          }
-          var.tIndex = var.tIndex + 1
-        }
       }
       var.rKeys = var.rewards.keys()
       var.rewardItemJsons = {}
@@ -239,27 +162,10 @@ ui:
       }
       // ── 奖励列表：仅在数量变化时重建 ──
       if(var.rKeys.size() != oldRewardCount){
-        while(val.reward_list.childrenCount() > 1){
-          val.reward_list.get(1).remove()
-        }
         var.rIndex = 0
-        for(key in var.rKeys){
-          if(val.reward_list['奖励模板'] != none) {
-            item = val.reward_list['奖励模板'].copy('奖励项' + var.rIndex.round())
-            item.entryKey = key
-          }
-          var.rIndex = var.rIndex + 1
-        }
       }
       // 重新触发奖励图标 seticon（数据变了但 seticon 不会自动刷新）
-      for(i in range(1, val.reward_list.childrenCount())){
-        if(val.reward_list != none) {
-          item = val.reward_list.get(i.round())
-          if(item != none && item['奖励图标'] != none){
-            item['奖励图标'].seticon()
-          }
-        }
-      }
+      var.rewardIconsDirty = true
   action:
     load: |-
       var.activeCount = 0
@@ -302,6 +208,24 @@ ui:
       var.taskScrollH = (var.viewH - 620) / 2
 
 # ─── 控件树 ────────────────────────────────────────────────────────
+tasks:
+  refresh-repeat-grid-icons:
+    type: loop
+    time: 100
+    cycle: 100
+    run: |-
+      if(var.rewardIconsDirty == true && var.rKeys != none && val.reward_list != none && val.reward_list.childrenCount() == var.rKeys.size()){
+        var.rewardIconsDirty = false
+        if(var.rKeys.size() > 0){
+          for(i in range(0, var.rKeys.size() - 1)){
+            row = val.reward_list.get(i.round())
+            if(row != none && row['奖励图标'] != none){
+              row['奖励图标'].seticon()
+            }
+          }
+        }
+      }
+
 controls:
   # 全屏毛玻璃底（真高斯模糊世界背景）；置于顶层以覆盖整块屏幕
   全屏玻璃底:
@@ -633,15 +557,19 @@ controls:
             children:
               分类列表:
                 val: cat_list
-                type: VStack
+                type: RepeatGrid
                 attribute:
+                  items: "var.catKeys"
+                  flow: ~row
+                  column: 1
+                  spaceBetweenY: 8
+                  maxSize: 512
                   width: 244
-                  spaceBetween: 8
                 children:
                   分类模板:
                     type: Canvas
                     attribute:
-                      entryKey: none
+                      entryKey: self.item
                       entry: var.categories[self.entryKey]
                       visible: self.entryKey != none && self.entry != none
                       width: 244
@@ -769,15 +697,19 @@ controls:
             children:
               任务列表:
                 val: quest_list
-                type: VStack
+                type: RepeatGrid
                 attribute:
+                  items: "var.qKeys"
+                  flow: ~row
+                  column: 1
+                  spaceBetweenY: 8
+                  maxSize: 512
                   width: 416
-                  spaceBetween: 8
                 children:
                   任务模板:
                     type: Canvas
                     attribute:
-                      entryKey: none
+                      entryKey: self.item
                       entry: var.quests[self.entryKey]
                       visible: self.entryKey != none && self.entry != none
                       width: 416
@@ -967,15 +899,19 @@ controls:
                 children:
                   目标列表:
                     val: task_list
-                    type: VStack
+                    type: RepeatGrid
                     attribute:
+                      items: "var.tKeys"
+                      flow: ~row
+                      column: 1
+                      spaceBetweenY: 8
+                      maxSize: 512
                       width: "var.detailScrollW"
-                      spaceBetween: 8
                     children:
                       目标模板:
                         type: Canvas
                         attribute:
-                          entryKey: none
+                          entryKey: self.item
                           entry: var.tasks[self.entryKey]
                           visible: self.entryKey != none && self.entry != none
                           width: "var.detailScrollW"
@@ -985,7 +921,7 @@ controls:
                             if(self.entry != none){
                               if(self.entry['tracked']){
                                 Packet.send(var.packetId, 'untrack_task', var.actionToken, var.selectedQuestId, self.entry['id'])
-                              } else if(self.entry['trackable']){
+                              } elif(self.entry['trackable']){
                                 Packet.send(var.packetId, 'track_task', var.actionToken, var.selectedQuestId, self.entry['id'])
                               }
                             }
@@ -1087,15 +1023,19 @@ controls:
                 children:
                   奖励列表:
                     val: reward_list
-                    type: VStack
+                    type: RepeatGrid
                     attribute:
+                      items: "var.rKeys"
+                      flow: ~row
+                      column: 1
+                      spaceBetweenY: 8
+                      maxSize: "var.rKeys == none ? 0 : var.rKeys.size()"
                       width: "var.detailScrollW"
-                      spaceBetween: 8
                     children:
                       奖励模板:
                         type: Canvas
                         attribute:
-                          entryKey: none
+                          entryKey: self.item
                           entry: var.rewards[self.entryKey]
                           visible: self.entryKey != none && self.entry != none
                           width: "var.detailScrollW"

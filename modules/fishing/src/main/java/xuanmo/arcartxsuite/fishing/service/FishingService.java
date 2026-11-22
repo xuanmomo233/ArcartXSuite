@@ -1,18 +1,32 @@
 package xuanmo.arcartxsuite.fishing.service;
 
 import java.math.BigDecimal;
-import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Deque;
+import java.util.Base64;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
+import org.bukkit.scheduler.BukkitTask;
+import xuanmo.arcartxsuite.api.scheduler.ModuleCallback;
+import xuanmo.arcartxsuite.api.scheduler.ModuleExecutor;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
+import java.util.function.UnaryOperator;
 import java.util.logging.Logger;
 import org.bukkit.Bukkit;
+import org.bukkit.Location;
 import org.bukkit.ChatColor;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
@@ -20,6 +34,7 @@ import org.bukkit.World;
 import org.bukkit.block.Biome;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
@@ -27,21 +42,27 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
+import xuanmo.arcartxsuite.api.auth.AuthAccess;
+import xuanmo.arcartxsuite.api.auth.AuthSnapshot;
 import xuanmo.arcartxsuite.api.capability.EventBusCapability;
+import xuanmo.arcartxsuite.api.capability.MapNavigable;
 import xuanmo.arcartxsuite.api.capability.MailDispatchable;
 import xuanmo.arcartxsuite.api.capability.mail.MailPresetRequest;
-import xuanmo.arcartxsuite.api.capability.SignalDispatchable;
 import xuanmo.arcartxsuite.api.capability.TitleGrantable;
 import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI;
 import xuanmo.arcartxsuite.api.currency.CurrencyDefinition;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerAPI;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerChannel;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerChannelConfig;
-import xuanmo.arcartxsuite.api.crossserver.CrossServerDelivery;
 import xuanmo.arcartxsuite.api.message.MessageProvider;
+import xuanmo.arcartxsuite.api.item.PendingRewardService;
+import xuanmo.arcartxsuite.api.item.PendingRewardService.PendingReward;
+import xuanmo.arcartxsuite.api.storage.StorageDescriptor;
+import xuanmo.arcartxsuite.api.util.ItemSerializer;
 import xuanmo.arcartxsuite.api.script.XpCurve;
 import xuanmo.arcartxsuite.fishing.config.FishingModuleConfiguration;
 import xuanmo.arcartxsuite.fishing.minigame.FishingMinigame;
+import xuanmo.arcartxsuite.fishing.minigame.FishingFight;
 import xuanmo.arcartxsuite.fishing.minigame.FishingSession;
 import xuanmo.arcartxsuite.fishing.model.BaitDefinition;
 import xuanmo.arcartxsuite.fishing.model.BaitQueueEntry;
@@ -57,6 +78,10 @@ import xuanmo.arcartxsuite.fishing.model.WaterArea;
 import xuanmo.arcartxsuite.api.icon.IconDefinition;
 import xuanmo.arcartxsuite.api.icon.IconResolver;
 import xuanmo.arcartxsuite.fishing.storage.FishingRepository;
+import xuanmo.arcartxsuite.fishing.storage.FishingRepository.BaitEdit;
+import xuanmo.arcartxsuite.fishing.storage.FishingRepository.BaitDeposit;
+import xuanmo.arcartxsuite.fishing.storage.FishingRepository.BiteProfile;
+import xuanmo.arcartxsuite.fishing.storage.FishingRepository.ConditionalReward;
 import xuanmo.arcartxsuite.fishing.talent.TalentBonuses;
 import xuanmo.arcartxsuite.fishing.talent.TalentEngine;
 import xuanmo.arcartxsuite.fishing.talent.TalentNode;
@@ -65,12 +90,12 @@ import xuanmo.arcartxsuite.fishing.reward.RewardDispatcher;
 import xuanmo.arcartxsuite.fishing.reward.SeasonRewardDefinition;
 import xuanmo.arcartxsuite.fishing.settlement.SettlementEngine;
 import xuanmo.arcartxsuite.fishing.task.TaskEngine;
-import xuanmo.arcartxsuite.api.command.ThrottledCommandExecutor;
+import xuanmo.arcartxsuite.fishing.task.PlayerTaskInstance;
 import xuanmo.arcartxsuite.api.security.ActionTokenGuard;
 
 public final class FishingService {
 
-    /** 最近捕获记录条目（内存缓存，重启后清空，仅用于主界面展示）。 */
+    /** 最近捕获记录条目，仅用于主界面展示。 */
     public record RecentCatch(
         @NotNull String fishId,
         @NotNull String fishName,
@@ -81,17 +106,60 @@ public final class FishingService {
     ) {}
 
     private static final int MAX_RECENT_CATCHES = 10;
+    private static final long CAST_PROFILE_TTL = TimeUnit.MINUTES.toNanos(2);
+    private static final int MAX_RECENT_CATCH_PLAYERS = 512;
 
     private final JavaPlugin plugin;
     private final FishingModuleConfiguration configuration;
+    private FishingModuleConfiguration.WaterSettings waters;
     private final FishingRepository repository;
+    private final FishingPlaceholderStats placeholderStats;
+    private final FishingUiQueries uiQueries;
+    private final Set<UUID> pendingTalents = new HashSet<>();
+    private final Set<UUID> pendingBaitEdits = new HashSet<>();
+    private FishingBaitDeposits baitDeposits;
+    private final ModuleExecutor playerWrites = new ModuleExecutor(0, 1, 30, TimeUnit.SECONDS,
+        new ArrayBlockingQueue<>(64), work -> {
+            var thread = new Thread(work, "AXS-Fishing-PlayerWrites");
+            thread.setDaemon(true);
+            return thread;
+        });
     private final PacketBridgeAPI packetBridge;
     private final IconResolver iconResolver;
     private final Logger logger;
     private final String minigameUiId;
     private final Map<UUID, FishingMinigame> activeMinigames = new HashMap<>();
+    private final Map<UUID, CastProfile> castProfiles = new LinkedHashMap<>();
+    private final ModuleExecutor biteWork = new ModuleExecutor(2, 2, 30, TimeUnit.SECONDS,
+        new ArrayBlockingQueue<>(64), work -> {
+            var thread = new Thread(work, "AXS-Fishing-Bite");
+            thread.setDaemon(true);
+            return thread;
+        });
+    private final Set<UUID> settlingCaptures = new HashSet<>();
+    private FishingCatchWork catchWork;
+    private FishingSales fishSales;
+    private BukkitTask catchDeliverySweep;
+    private Supplier<MapNavigable> mapProvider = () -> null;
+    private final FishSchoolTracker schools = new FishSchoolTracker(() -> mapProvider.get());
+    private EventBusCapability schoolEventBus;
+    private String mapReadySubscription;
     private final Map<UUID, Long> fishingCooldowns = new HashMap<>(); // 玩家UUID → 冷却到期时间戳(System.currentTimeMillis)
-    private final Map<UUID, Deque<RecentCatch>> recentCatches = new HashMap<>();
+    private final Map<UUID, CatchHistory> recentCatches = Collections.synchronizedMap(
+        new LinkedHashMap<>(16, 0.75f, true) {
+            @Override
+            protected boolean removeEldestEntry(Map.Entry<UUID, CatchHistory> eldest) {
+                return size() > MAX_RECENT_CATCH_PLAYERS;
+            }
+        });
+    private volatile boolean stopping;
+    private BukkitTask cooldownTask;
+    private boolean minigameCloseRegistered;
+    private final ModuleCallback callbacks = new ModuleCallback(() -> {});
+    private final CompletableFuture<Void> stopped = new CompletableFuture<>();
+    private final ModuleExecutor catchInbox = new ModuleExecutor(1,1,30,TimeUnit.SECONDS,new ArrayBlockingQueue<>(128),work->{
+        var thread=new Thread(work,"AXS-Fishing-CatchInbox");thread.setDaemon(true);return thread;
+    });
     private final TalentEngine talentEngine;
     private final @Nullable FatigueEngine fatigueEngine;
     private final @Nullable CrossServerAPI crossServer;
@@ -113,7 +181,6 @@ public final class FishingService {
 
     // 跨模块能力提供者（懒加载，避免循环依赖）
     private Supplier<EventBusCapability> eventBusProvider;
-    private Supplier<SignalDispatchable> signalProvider;
     private Supplier<CurrencyBridgeAPI> currencyProvider;
     private Supplier<TitleGrantable> titleProvider;
     private Supplier<MailDispatchable> mailProvider;
@@ -139,8 +206,13 @@ public final class FishingService {
                           @Nullable CrossServerAPI crossServer,
                           @Nullable xuanmo.arcartxsuite.api.script.AriaBridge ariaBridge) {
         this.plugin = plugin;
+        biteWork.allowCoreThreadTimeOut(true);
+        catchInbox.allowCoreThreadTimeOut(true);
         this.configuration = configuration;
+        this.waters = new FishingModuleConfiguration.WaterSettings(configuration.specifiedWaters(), configuration.defaultWater());
         this.repository = repository;
+        this.placeholderStats = new FishingPlaceholderStats(repository, configuration, fatigueEngine, logger);
+        this.uiQueries = new FishingUiQueries(plugin, packetBridge, logger);
         this.packetBridge = packetBridge;
         this.iconResolver = iconResolver;
         this.logger = logger;
@@ -156,15 +228,7 @@ public final class FishingService {
         this.ariaBridge = ariaBridge;
         // 将天赋系统的 rest_boost 查询关联到疲惫引擎
         if (fatigueEngine != null) {
-            fatigueEngine.setRestBoostProvider(uuid -> {
-                try {
-                    FishingSeasonData data = repository.loadSeasonData(uuid, configuration.season().seasonId());
-                    Map<String, Double> bonuses = talentEngine.computeBonuses(data);
-                    return bonuses.getOrDefault("rest_boost", 0.0);
-                } catch (Exception e) {
-                    return 0.0;
-                }
-            });
+            fatigueEngine.setRestBoostProvider(data -> talentEngine.computeBonuses(data).getOrDefault("rest_boost", 0.0));
         }
     }
 
@@ -186,9 +250,6 @@ public final class FishingService {
         this.eventBusProvider = provider;
     }
 
-    public void setSignalProvider(@Nullable Supplier<SignalDispatchable> provider) {
-        this.signalProvider = provider;
-    }
 
     public void setCurrencyProvider(@Nullable Supplier<CurrencyBridgeAPI> provider) {
         this.currencyProvider = provider;
@@ -202,29 +263,122 @@ public final class FishingService {
         this.itemMatcher = itemMatcher;
     }
 
+    public void configureCatchDelivery(PendingRewardService host, @Nullable StorageDescriptor sharedHostStorage,
+                                       java.nio.file.Path dataFolder) {
+        catchWork = new FishingCatchWork(repository, host, sharedHostStorage, dataFolder, logger, players -> onMain(() -> {
+            for (UUID uuid : players) {
+                Player player = Bukkit.getPlayer(uuid);
+                if (player != null && player.isOnline()) catchWork.flush(player);
+            }
+        }));
+        rewardDispatcher.configureDeliveryOwner(catchWork::owner);
+    }
+
+    public void configureFishSales(java.nio.file.Path playerData) {
+        if (catchWork == null) return;
+        fishSales = new FishingSales(repository, catchWork, logger, playerData);
+        catchWork.setSaleRecovery(fishSales);
+    }
+
     public void start() throws Exception {
-        repository.initialize();
+        if (baitDeposits != null) baitDeposits.start(plugin);
+        if (packetBridge != null && !minigameUiId.isBlank()) {
+            minigameCloseRegistered = packetBridge.registerUiCloseCallback(minigameUiId, player -> {
+                if (stopping || packetBridge.isUiOpen(player, minigameUiId)) return;
+                var game = activeMinigames.get(player.getUniqueId());
+                if (game != null && !game.isReady()) game.cleanup();
+            });
+        }
+        if (catchWork != null) {
+            catchDeliverySweep = plugin.getServer().getScheduler().runTaskTimer(plugin, catchWork::requestSweep, 1L, 100L);
+        }
         startCrossServer();
+        schools.start(plugin, () -> waters.specifiedWaters());
+        schoolEventBus = eventBusProvider == null ? null : eventBusProvider.get();
+        if (schoolEventBus != null) {
+            mapReadySubscription = schoolEventBus.subscribe("axs.map.ready", event -> {
+                if (event.player() != null) onMain(() -> schools.refreshMap(event.player()));
+            });
+        }
         // M6: 定期清理过期的钓鱼冷却条目（每5分钟清理一次）
-        plugin.getServer().getScheduler().runTaskTimerAsynchronously(plugin, () -> {
+        cooldownTask = plugin.getServer().getScheduler().runTaskTimer(plugin, guard(() -> {
             long now = System.currentTimeMillis();
             fishingCooldowns.entrySet().removeIf(e -> e.getValue() < now);
-        }, 6000L, 6000L); // 6000 ticks = 5分钟
+        }), 6000L, 6000L); // 主线程维护的 HashMap 不交给异步定时器遍历。
     }
 
     public void shutdown() {
-        for (FishingMinigame minigame : activeMinigames.values()) {
-            try {
-                minigame.cleanup();
-            } catch (Exception ignored) {}
+        if(stopping)return;
+        stopping=true;callbacks.close();
+        var failures=new ArrayList<Throwable>();
+        var stages=new ArrayList<CompletableFuture<?>>();
+        shutdownStep(()->{if(schoolEventBus!=null && mapReadySubscription!=null)schoolEventBus.unsubscribe(mapReadySubscription);},failures);
+        shutdownStep(schools::shutdown,failures);
+        shutdownStep(()->{if(cooldownTask!=null){cooldownTask.cancel();cooldownTask=null;}},failures);
+        if (minigameCloseRegistered) {
+            shutdownStep(() -> packetBridge.unregisterUiCloseCallback(minigameUiId), failures);
+            minigameCloseRegistered = false;
+        }
+        for (FishingMinigame minigame : List.copyOf(activeMinigames.values())) {
+            shutdownStep(minigame::cleanup,failures);
+            stages.add(minigame.stopped().toCompletableFuture());
         }
         activeMinigames.clear();
+        castProfiles.clear();
+        callbacks.stopped().whenComplete((ignored, error) -> biteWork.shutdown());
+        stages.add(biteWork.stopped().toCompletableFuture());
+        settlingCaptures.clear();
+        if (catchDeliverySweep != null) shutdownStep(catchDeliverySweep::cancel, failures);
+        if (catchWork != null) {
+            callbacks.stopped().whenComplete((ignored, error) -> catchWork.shutdown());
+            stages.add(catchWork.stopped());
+        }
         fishingCooldowns.clear();
         recentCatches.clear();
-        taskEngine.shutdown();
-        shutdownCrossServer();
-        repository.shutdown();
+        tokenGuard.clearAll();
+        pendingTalents.clear();
+        pendingBaitEdits.clear();
+        if (baitDeposits != null) shutdownStep(baitDeposits::close, failures);
+        playerWrites.shutdown();
+        stages.add(playerWrites.stopped().toCompletableFuture());
+        shutdownStep(uiQueries::shutdown, failures);
+        stages.add(uiQueries.stopped().toCompletableFuture());
+        shutdownStep(placeholderStats::shutdown, failures);
+        stages.add(placeholderStats.stopped().toCompletableFuture());
+        if(fatigueEngine!=null){shutdownStep(fatigueEngine::shutdown,failures);stages.add(fatigueEngine.databaseStopped().toCompletableFuture());}
+        if(taskEngine!=null){shutdownStep(taskEngine::shutdown,failures);stages.add(taskEngine.databaseStopped().toCompletableFuture());}
+        shutdownStep(this::shutdownCrossServer,failures);
+        callbacks.stopped().whenComplete((ignored,failure)->catchInbox.shutdown());
+        stages.add(catchInbox.stopped().toCompletableFuture());
+        stages.add(callbacks.stopped().toCompletableFuture());
+        stages.add(schools.stopped().toCompletableFuture());
+        CompletableFuture.allOf(stages.toArray(CompletableFuture[]::new)).whenComplete((ignored,failure)->{
+            Throwable result=failure;
+            for(Throwable cleanup:failures){if(result==null)result=cleanup;else result.addSuppressed(cleanup);}
+            if(result==null)stopped.complete(null);else stopped.completeExceptionally(result);
+        });
     }
+
+    private static void shutdownStep(Runnable action,List<Throwable> failures) {
+        try{action.run();}catch(RuntimeException | LinkageError failure){failures.add(failure);}
+    }
+    public boolean isStopping(){return stopping;}
+
+    public void configureBaitDeposits(java.nio.file.Path playerData, java.nio.file.Path dataFolder, String uiId) {
+        baitDeposits = new FishingBaitDeposits(repository, playerWrites, playerData, dataFolder, logger, deposit ->
+            onMain(() -> {
+                Player player = Bukkit.getPlayer(deposit.player());
+                if (player == null || !player.isOnline() || !AuthAccess.admitted(deposit.player())) return;
+                player.sendMessage("§a已放入 §e" + deposit.amount() + " §a个饵料到槽位 §e" + (deposit.slot() + 1));
+                pushBaitsData(player, uiId);
+            }));
+    }
+
+    public CompletionStage<Void> databaseStopped(){return stopped.copy();}
+    public <T> T callApi(Supplier<T> operation,T unavailable){return callbacks.call(operation,unavailable);}
+    public Runnable guard(Runnable action){return ()->callbacks.call(()->{if(!stopping)action.run();return null;},null);}
+    private void readAsync(Runnable action){if(!stopping)Bukkit.getScheduler().runTaskAsynchronously(plugin,guard(action));}
+    public void onMain(Runnable action){if(!stopping)plugin.getServer().getScheduler().runTask(plugin,guard(action));}
 
     // ─── 跨服同步 ────────────────────────────────────────────────
 
@@ -232,10 +386,10 @@ public final class FishingService {
         if (crossServer == null) return;
         CrossServerChannelConfig channelConfig = configuration.crossServer();
         if (!channelConfig.enabled()) return;
-        crossServerChannel = crossServer.openChannel(
+        crossServerChannel = crossServer.openChannelCompleting(
             "fishing",
             channelConfig,
-            delivery -> handleCrossServerMessage(delivery.payload())
+            delivery -> admitCrossServerMessage(delivery.payload())
         );
         if (crossServerChannel.isActive()) {
             logger.info("钓鱼跨服同步已启用");
@@ -260,41 +414,25 @@ public final class FishingService {
         }
     }
 
-    private void handleCrossServerMessage(String message) {
-        if (message == null || message.isBlank()) return;
-        // CATCH:<uuid>:<fishId>:<fishName>:<rarity>:<size>:<perfect>:<timestamp>
-        if (message.startsWith("CATCH:")) {
-            String[] parts = message.split(":", -1);
-            if (parts.length == 8) {
-                try {
-                    UUID uuid = UUID.fromString(parts[1]);
-                    String fishId = parts[2];
-                    String fishName = parts[3];
-                    String rarity = parts[4];
-                    int size = Integer.parseInt(parts[5]);
-                    // M11: 输入验证 — size 非负、timestamp 合理
-                    if (size < 0) {
-                        logger.warning("跨服捕获记录 size 异常: " + size + " (玩家=" + uuid + ")");
-                        return;
-                    }
-                    boolean perfect = "1".equals(parts[6]);
-                    long timestamp = Long.parseLong(parts[7]);
-                    if (timestamp < 0 || timestamp > System.currentTimeMillis() + 86_400_000L) {
-                        logger.warning("跨服捕获记录 timestamp 异常: " + timestamp + " (玩家=" + uuid + ")");
-                        return;
-                    }
-                    // 持久化到本地数据库
-                    repository.saveCatchRecord(new FishingCatchRecord(
-                        uuid, fishId, fishName, rarity, size, perfect, timestamp
-                    ));
-                    // 清除该玩家的内存缓存，下次打开 UI 时从数据库重新加载
-                    recentCatches.remove(uuid);
-                    debug("跨服同步捕获记录: " + fishName + " (玩家=" + uuid + ")");
-                } catch (Exception e) {
-                    logger.warning("解析跨服捕获记录失败: " + e.getMessage());
-                }
-            }
+    private CompletionStage<Boolean> admitCrossServerMessage(String message) {
+        if(stopping)return null;
+        if (message == null || !message.startsWith("CATCH2:")) return CompletableFuture.completedFuture(true);
+        FishingCatchRecord record;
+        try {
+            record = FishingCatchRecord.decodeCrossServer(message, System.currentTimeMillis());
+        } catch (IllegalArgumentException e) {
+            logger.warning("解析跨服捕获记录失败: " + e.getMessage());
+            return CompletableFuture.completedFuture(true);
         }
+        var receipt=new CompletableFuture<Boolean>();
+        try{catchInbox.execute(()->{
+            try{
+                boolean saved=repository.saveCatchRecordConfirmed(record);
+                if (saved) recentCatches.remove(record.playerUuid());
+                receipt.complete(saved);
+            }catch(RuntimeException | LinkageError failure){receipt.completeExceptionally(failure);}
+        });}catch(java.util.concurrent.RejectedExecutionException full){return null;}
+        return receipt.copy();
     }
 
     public boolean isReplaceVanilla() {
@@ -305,8 +443,8 @@ public final class FishingService {
         return activeMinigames.containsKey(uuid);
     }
 
-    public void removeMinigame(@NotNull UUID uuid) {
-        activeMinigames.remove(uuid);
+    public void removeMinigame(@NotNull UUID uuid, @NotNull FishingMinigame minigame) {
+        activeMinigames.remove(uuid, minigame);
     }
 
     public xuanmo.arcartxsuite.fishing.minigame.FishingMinigame getActiveMinigame(@NotNull UUID uuid) {
@@ -314,6 +452,79 @@ public final class FishingService {
     }
 
     public boolean startMinigame(@NotNull Player player) {
+        return startMinigame(player, player.getLocation(), false, null);
+    }
+
+    public void setMapProvider(Supplier<MapNavigable> provider) {
+        mapProvider = provider;
+    }
+
+    public void forgetFishSchools(Player player) {
+        schools.forget(player);
+    }
+
+    private static final class CastProfile {
+        private UUID hook;
+        private final long expiresAt = System.nanoTime() + CAST_PROFILE_TTL;
+        private BiteProfile loaded;
+
+        private CastProfile(UUID hook) { this.hook = hook; }
+    }
+
+    public void prepareCast(Player player, UUID hook) {
+        if (stopping) return;
+        UUID uuid = player.getUniqueId();
+        var existing = castProfiles.get(uuid);
+        if (existing != null && existing.loaded == null && System.nanoTime() - existing.expiresAt < 0) {
+            existing.hook = hook;
+            return;
+        }
+        if (existing == null && castProfiles.size() >= FishingCatchWork.MAX_CAPTURES) {
+            castProfiles.remove(castProfiles.keySet().iterator().next());
+        }
+        var cast = new CastProfile(hook);
+        castProfiles.put(uuid, cast);
+        try {
+            biteWork.execute(() -> {
+                if (stopping) return;
+                try {
+                    BiteProfile loaded = repository.loadBiteProfile(uuid, configuration.season().seasonId());
+                    onMain(() -> {
+                        if (castProfiles.get(uuid) == cast) cast.loaded = loaded;
+                    });
+                } catch (java.sql.SQLException | RuntimeException failure) {
+                    logger.fine("钓鱼抛竿预读失败: " + failure.getMessage());
+                    onMain(() -> castProfiles.remove(uuid, cast));
+                }
+            });
+        } catch (RejectedExecutionException busy) {
+            castProfiles.remove(uuid, cast);
+        }
+    }
+
+    public void forgetCast(UUID player) {
+        castProfiles.remove(player);
+    }
+
+    public void forgetCast(UUID player, UUID hook) {
+        var cast = castProfiles.get(player);
+        if (cast != null && hook.equals(cast.hook)) castProfiles.remove(player);
+    }
+
+    public boolean startVanillaBite(Player player, UUID hook, Location location) {
+        var cast = castProfiles.get(player.getUniqueId());
+        if (cast == null || !hook.equals(cast.hook) || cast.loaded == null || System.nanoTime() - cast.expiresAt >= 0) {
+            prepareCast(player, hook);
+            return false;
+        }
+        if (!startMinigame(player, location, true, cast.loaded)) return false;
+        castProfiles.remove(player.getUniqueId(), cast);
+        return true;
+    }
+
+    private boolean startMinigame(Player player, Location hook, boolean hasHook, @Nullable BiteProfile prefetched) {
+        if (stopping || catchWork == null || settlingCaptures.contains(player.getUniqueId())
+            || activeMinigames.size() + settlingCaptures.size() >= FishingCatchWork.MAX_CAPTURES) return false;
         if (packetBridge == null || !packetBridge.isAvailable()) {
             logger.warning("startMinigame 失败: packetBridge 不可用");
             return false;
@@ -330,8 +541,8 @@ public final class FishingService {
         }
 
         // 解析水域
-        WaterArea water = resolveWater(player);
-        if (water == null) water = configuration.defaultWater();
+        WaterArea water = resolveWater(hook);
+        if (water == null) water = waters.defaultWater();
         // L4: 默认水域仍为 null 时无法继续
         if (water == null) {
             logger.warning("startMinigame 失败: 无法解析水域且默认水域为空");
@@ -344,9 +555,16 @@ public final class FishingService {
             return false;
         }
 
-        // 一次性加载赛季数据，后续复用（避免重复 DB 查询）
-        FishingSeasonData seasonData = repository.loadSeasonData(player.getUniqueId(),
-            configuration.season().seasonId());
+        BiteProfile profile = prefetched;
+        if (profile == null) {
+            try {
+                profile = repository.loadBiteProfile(player.getUniqueId(), configuration.season().seasonId());
+            } catch (java.sql.SQLException failure) {
+                logger.fine("钓鱼开局读取失败: " + failure.getMessage());
+                return false;
+            }
+        }
+        FishingSeasonData seasonData = profile.season();
         int playerLevel = seasonData.level();
 
         // 水域等级限制
@@ -366,7 +584,12 @@ public final class FishingService {
         }
 
         // 检测饵料
-        BaitDefinition bait = detectBait(player);
+        BaitQueueEntry baitHead = profile.baitHead();
+        BaitDefinition bait = baitHead == null ? null : findBait(baitHead.baitId());
+        if (bait == null) {
+            baitHead = null;
+            bait = defaultBait();
+        }
         String baitId = bait != null ? bait.id() : null;
 
         // 检测钓竿
@@ -398,16 +621,18 @@ public final class FishingService {
             return false;
         }
 
-        FishDefinition fish = selectFishFromPool(player, water, pool, baitId);
+        WaterArea.School school = schools.atHook(water, hook);
+        FishDefinition fish = selectFishFromPool(player, water, pool, baitId, playerLevel, hook, school);
         if (fish == null) {
-            logger.warning("startMinigame 失败: selectFishFromPool 返回 null");
+            debug("startMinigame 跳过: 无符合条件的鱼, water=" + water.id());
             return false;
         }
 
         // 疲惫值特殊鱼替换：疲惫值 > 90 时有概率出现特殊鱼
         int fatigue = seasonData.fatigue();
         if (fatigueEngine != null) {
-            fish = fatigueEngine.applySpecialFish(fatigue, fish, configuration::findFish);
+            fish = fatigueEngine.applySpecialFish(fatigue, fish, this::findFish,
+                special -> canCatch(special, playerLevel, player::hasPermission));
         }
 
         debug("startMinigame: player=" + player.getName() + " water=" + water.id()
@@ -415,52 +640,208 @@ public final class FishingService {
             + " bait=" + (baitId != null ? baitId : "none")
             + " fatigue=" + fatigue);
 
-        // 应用水域难度公式（ARIA 求值，变量 global.level = 玩家钓鱼等级）
-        double waterDifficultyModifier = evaluateDifficultyFormula(water.difficultyFormula(), playerLevel);
-        int adjustedDifficulty = (int) (fish.difficulty() * waterDifficultyModifier);
-        adjustedDifficulty = Math.max(1, Math.min(100, adjustedDifficulty));
-
-        int caughtSize = fish.randomSize();
-
-        // 计算天赋加成（开局一次性计算，catch_duration 需要在创建 session 前应用）
-        TalentBonuses bonuses = new TalentBonuses(talentEngine.computeBonuses(seasonData));
-
-        // 动态超时：基础超时 × (1 + 难度/100 × 难度系数) + 鱼竿加成 + 天赋超时加成
-        // 低难度鱼超时短（要求快速完成），高难度鱼超时长（给更多尝试机会）
-        xuanmo.arcartxsuite.fishing.config.FishingModuleConfiguration.FishingSettings cfg = configuration.fishing();
-        double difficultyFactor = 1.0 + (adjustedDifficulty / 100.0) * cfg.catchDurationDifficultyScale();
-        long durationTicks = (long) (cfg.catchDurationTicks() * difficultyFactor * (1.0 + bonuses.catchDurationBonus())) + rod.catchDurationBonus();
-
-        FishingSession session = new FishingSession(
-            player, fish, caughtSize, playerLevel,
-            durationTicks, water, adjustedDifficulty,
-            baitId, rod.greenBarHeightBonus(), rod.expMultiplier(), rod.treasureChanceBonus()
-        );
-
-        // 计算疲惫效率系数（开局一次性计算）
-        double fatigueMultiplier = fatigueEngine != null ? fatigueEngine.efficiencyMultiplier(fatigue) : 1.0;
-        // 天赋：疲惫效率惩罚缓解 — 将效率系数向 1.0 拉近
-        double fatigueEffBonus = bonuses.fatigueEfficiencyBonus();
-        if (fatigueEffBonus > 0 && fatigueMultiplier < 1.0) {
-            fatigueMultiplier = fatigueMultiplier + (1.0 - fatigueMultiplier) * fatigueEffBonus;
+        boolean waitForConfirmation = prefetched != null;
+        AuthSnapshot auth = waitForConfirmation ? AuthAccess.snapshot(player.getUniqueId()) : null;
+        if (auth != null && (!auth.admitted() || biteWork.getQueue().remainingCapacity() == 0)) return false;
+        FishingMinigame minigame = openMinigame(player, fish, fish.randomSize(), water, seasonData, rod, bait,
+            school == null ? null : school.id(), hasHook ? water.obstacleAt(hook) : null,
+            hasHook ? water.currentAt(hook) : null, false, waitForConfirmation, new FishingSession.Opening(
+                fish.personalities().roll(ThreadLocalRandom.current()), hasHook ? fish.hookSet() : null));
+        if (minigame == null) return false;
+        if (auth != null) return confirmVanillaBite(player, auth, minigame, profile, baitHead != null);
+        if (baitHead != null && !repository.replaceBaitSlot(baitHead, new BaitQueueEntry(
+                baitHead.playerUuid(), baitHead.slotIndex(), baitHead.baitId(), baitHead.amount() - 1))) {
+            minigame.cleanup();
+            player.sendMessage("§c饵料扣除失败，请稍后重试。");
+            return false;
         }
 
-        FishingMinigame minigame = new FishingMinigame(
-            plugin, packetBridge, configuration.fishing(), this, iconResolver, session, minigameUiId, bonuses,
-            fatigueMultiplier, ariaBridge
-        );
-        activeMinigames.put(player.getUniqueId(), minigame);
-        minigame.start();
-
-        String msg = getMessage("fishing_start");
-        if (msg != null && !msg.isEmpty()) {
-            player.sendMessage(msg.replace("{water}", water.displayName()));
-        }
+        sendFishingStart(player, water);
         return true;
     }
 
+    private boolean confirmVanillaBite(Player player, AuthSnapshot auth, FishingMinigame minigame,
+                                       BiteProfile profile, boolean consumeBait) {
+        try {
+            biteWork.execute(() -> {
+                if (stopping || !minigame.getSession().isActive()) return;
+                boolean confirmed;
+                try {
+                    confirmed = repository.confirmBite(profile, consumeBait, () -> !stopping && minigame.getSession().isActive());
+                } catch (java.sql.SQLException | RuntimeException failure) {
+                    logger.fine("咬钩开局存储复核失败: " + failure.getMessage());
+                    confirmed = false;
+                }
+                boolean accepted = confirmed;
+                onMain(() -> finishVanillaBite(player, auth, minigame, accepted));
+            });
+            return true;
+        } catch (RejectedExecutionException busy) {
+            minigame.cleanup();
+            return false;
+        }
+    }
+
+    private void finishVanillaBite(Player player, AuthSnapshot auth, FishingMinigame minigame, boolean accepted) {
+        UUID uuid = auth.playerId();
+        if (activeMinigames.get(uuid) != minigame) return;
+        var current = AuthAccess.snapshot(uuid);
+        if (Bukkit.getPlayer(uuid) != player || !player.isOnline() || !current.admitted()
+            || packetBridge == null || !packetBridge.isUiOpen(player, minigameUiId)
+            || current.generation() != auth.generation() || !java.util.Objects.equals(auth.connectionId(), current.connectionId())) {
+            minigame.cleanup();
+        } else if (accepted && minigame.beginFight()) {
+            sendFishingStart(player, minigame.getSession().water());
+        } else {
+            minigame.cleanup();
+            player.sendMessage("§c钓鱼状态已变化或未能确认，请重新抛竿。");
+        }
+    }
+
+    private void sendFishingStart(Player player, WaterArea water) {
+        String msg = getMessage("fishing_start");
+        if (msg != null && !msg.isEmpty()) player.sendMessage(msg.replace("{water}", water.displayName()));
+    }
+
+    public List<String> trialFishIds() {
+        return configuration.fishes().stream().map(FishDefinition::id).distinct().sorted().toList();
+    }
+
+    public List<String> trialSizes(String fishId) {
+        FishDefinition fish = findFish(fishId);
+        if (fish == null) return List.of();
+        String min = Integer.toString(fish.minSize());
+        return fish.minSize() >= fish.maxSize() ? List.of(min) : List.of(min, Integer.toString(fish.maxSize()));
+    }
+
+    public List<String> trialCurrentIds() {
+        WaterArea water = trialWater();
+        return water == null ? List.of() : water.currentZones().stream().map(WaterArea.CurrentZone::id).toList();
+    }
+
+    public List<String> trialPersonalityIds(String fishId) {
+        FishDefinition fish = findFish(fishId);
+        if (fish == null) return List.of();
+        var ids = new ArrayList<String>();
+        ids.add("normal");
+        fish.personalities().variants().forEach(personality -> ids.add(personality.id()));
+        return ids;
+    }
+
+    private @Nullable WaterArea trialWater() {
+        return waters.specifiedWaters().stream().filter(area -> area.id().equals("dragon_lake")).findFirst().orElse(null);
+    }
+
+    public enum TrialHook { NONE, SINGLE, LOOP }
+
+    public void startTrial(Player player, String fishId, int size, boolean reeds, @Nullable String currentId,
+                           String personalityId, TrialHook trialHook) {
+        if(stopping)return;
+        if (isPlayerInMinigame(player.getUniqueId())) {
+            player.sendMessage("§c请先结束当前钓鱼小游戏。");
+            return;
+        }
+        if (packetBridge == null || !packetBridge.isAvailable()) {
+            player.sendMessage("§c钓鱼小游戏界面暂不可用。");
+            return;
+        }
+        FishDefinition fish = findFish(fishId);
+        if (fish == null) {
+            player.sendMessage("§c找不到鱼种 " + fishId + "。");
+            return;
+        }
+        int maxSize = Math.max(fish.minSize(), fish.maxSize());
+        if (size < fish.minSize() || size > maxSize) {
+            player.sendMessage("§c" + fish.displayName() + "的体型范围是 " + fish.minSize() + "～" + maxSize + " cm。");
+            return;
+        }
+        FishDefinition.Personality personality = fish.personalities().find(personalityId);
+        if (personality == null) {
+            player.sendMessage("§c" + fish.displayName() + "没有性格 " + personalityId + "。");
+            return;
+        }
+        WaterArea water = trialWater();
+        if (water == null) {
+            player.sendMessage("§c请先加载龙泉湖配置 waters/water-dragon_lake.yml。");
+            return;
+        }
+        WaterArea.ObstacleZone obstacle = null;
+        if (reeds) {
+            obstacle = water.obstacleZones().stream().filter(zone -> zone.id().equals("reeds")).findFirst().orElse(null);
+            if (obstacle == null) {
+                player.sendMessage("§c龙泉湖缺少 obstacle-zones.reeds 配置。");
+                return;
+            }
+        }
+        WaterArea.CurrentZone current = null;
+        if (currentId != null) {
+            current = water.currentZones().stream().filter(zone -> zone.id().equals(currentId)).findFirst().orElse(null);
+            if (current == null) {
+                player.sendMessage("§c龙泉湖没有水流区 " + currentId + "。");
+                return;
+            }
+        }
+
+        var seasonData = getSeasonData(player.getUniqueId());
+        List<BaitQueueEntry> queue = loadBaitQueue(player);
+        BaitDefinition bait = queue.isEmpty() ? null : findBait(queue.get(0).baitId());
+        if (bait == null) bait = defaultBait();
+        boolean practiceHook = trialHook != TrialHook.NONE;
+        FishDefinition.HookSet hookSet = fish.hookSet();
+        if (practiceHook && hookSet == null) hookSet = FishDefinition.HookSet.DEFAULT;
+        var opening = new FishingSession.Opening(personality, practiceHook ? hookSet : null, trialHook == TrialHook.LOOP);
+        if (openMinigame(player, fish, size, water, seasonData, detectRod(player), bait,
+                null, obstacle, current, true, false, opening) == null) {
+            player.sendMessage("§c无法打开钓鱼小游戏界面。");
+            return;
+        }
+        player.sendMessage("§e试钓 §f" + fish.displayName() + " " + size + " cm · "
+            + personality.displayName() + " · "
+            + (obstacle == null ? "无障碍" : obstacle.displayName())
+            + (current == null ? "" : " · " + current.displayName())
+            + (trialHook == TrialHook.LOOP ? " · [F] 连续提竿 [Q] 退出" : (practiceHook ? " · [F] 练提竿" : ""))
+            + " §7（本局无奖励）");
+    }
+
+    private @Nullable FishingMinigame openMinigame(Player player, FishDefinition fish, int size, WaterArea water,
+                                                 FishingSeasonData seasonData, RodDefinition rod, @Nullable BaitDefinition bait,
+                                                 @Nullable String schoolId, @Nullable WaterArea.ObstacleZone obstacle,
+                                                 @Nullable WaterArea.CurrentZone current, boolean trial, boolean waitForConfirmation,
+                                                 FishingSession.Opening opening) {
+        TalentBonuses bonuses = new TalentBonuses(talentEngine.computeBonuses(seasonData));
+        double fatigueMultiplier = fatigueEngine != null ? fatigueEngine.efficiencyMultiplier(seasonData.fatigue()) : 1.0;
+        var settings = configuration.fishing();
+        FishingFight.Setup setup = FishingFight.setup(settings, fish, water.difficultyFormula(), seasonData.level(),
+            rod, bonuses, fatigueMultiplier, ariaBridge, logger);
+        // 对抗试钓复用种子以便比较，连续练习的沉漂时机每轮随机。
+        var random = trial && !opening.repeatHook() ? new Random(0x46495348L) : ThreadLocalRandom.current();
+        TreasureDefinition offer = fish.activeTreasure()
+            ? rollTreasure(configuration, water, bait, rod.treasureChanceBonus(), random) : null;
+        FishingSession session = new FishingSession(player.getUniqueId(), fish, size, seasonData.level(),
+            setup.durationTicks(), water, setup.difficulty(), bait == null ? null : bait.id(),
+            rod.greenBarHeightBonus(), rod.expMultiplier(), rod.treasureChanceBonus(),
+            FishingSession.Gear.resolve(rod, bait, fish), offer, schoolId, obstacle, current, trial, opening);
+        FishingMinigame minigame = new FishingMinigame(plugin, packetBridge, settings, this, iconResolver, session,
+            minigameUiId, bonuses, setup.fatigueMultiplier(), ariaBridge, random);
+        if (activeMinigames.putIfAbsent(player.getUniqueId(), minigame) != null) return null;
+        boolean opened = waitForConfirmation ? minigame.open() : minigame.start();
+        if (opened) return minigame;
+        activeMinigames.remove(player.getUniqueId(), minigame);
+        return null;
+    }
+
     public void onMinigameComplete(@NotNull FishingSession session, boolean success, boolean perfect) {
-        activeMinigames.remove(session.playerUuid());
+        onMinigameComplete(session, success, perfect, false);
+    }
+
+    public void onMinigameComplete(@NotNull FishingSession session, boolean success, boolean perfect, boolean treasureClaimed) {
+        callApi(()->{completeMinigame(session,success,perfect,treasureClaimed);return null;},null);
+    }
+
+    private void completeMinigame(FishingSession session,boolean success,boolean perfect,boolean treasureClaimed) {
+        var current = activeMinigames.get(session.playerUuid());
+        if (current == null || current.getSession() != session || !session.trySettle()) return;
+        if (!activeMinigames.remove(session.playerUuid(), current) || session.trial()) return;
         // 设置钓鱼冷却
         int cooldownTicks = configuration.fishing().fishingCooldownTicks();
         if (cooldownTicks > 0) {
@@ -474,7 +855,7 @@ public final class FishingService {
             + " fish=" + session.fish().id());
 
         if (success) {
-            handleSuccess(player, session, perfect);
+            handleSuccess(player, session, perfect, treasureClaimed);
         } else {
             String msg = getMessage("fishing_failed");
             if (msg != null && !msg.isEmpty()) {
@@ -483,170 +864,152 @@ public final class FishingService {
         }
     }
 
-    private void handleSuccess(@NotNull Player player, @NotNull FishingSession session, boolean perfect) {
+    private void handleSuccess(@NotNull Player player, @NotNull FishingSession session, boolean perfect, boolean treasureClaimed) {
+        UUID uuid = player.getUniqueId();
+        var admission = AuthAccess.snapshot(uuid);
+        if (catchWork == null || !admission.admitted() || !settlingCaptures.add(uuid)) return;
         FishDefinition fish = session.fish();
         int size = session.caughtSize();
-        String seasonId = configuration.season().seasonId();
-        FishingSeasonData seasonData = repository.loadSeasonData(player.getUniqueId(), seasonId);
-        FishingPermanentData permData = repository.loadPermanentData(player.getUniqueId());
+        var record = new FishingCatchRecord(UUID.fromString(session.id()), uuid, fish.id(), fish.displayName(),
+            fish.rarity().name().toLowerCase(java.util.Locale.ROOT), size, perfect, System.currentTimeMillis());
+        try {
+            TreasureDefinition treasure = fish.activeTreasure()
+                ? (treasureClaimed ? session.treasureOffer() : null)
+                : rollTreasure(session.water(), session.baitId() == null ? null : findBait(session.baitId()),
+                    session.rodTreasureChanceBonus());
+            var plan = buildCaptureRewards(player, record, fish, treasure);
+            var season = configuration.season();
+            catchWork.settle(record, season.seasonId(), data -> {
+                var bonuses = new TalentBonuses(talentEngine.computeBonuses(data));
+                var updated = data.withXpAdded(catchXp(session, perfect, bonuses), season.xpCurve(), season.maxLevel());
+                return fatigueEngine == null ? updated : fatigueEngine.addCatchFatigue(updated, bonuses.fatigueReduction());
+            }, plan.treasureId() != null, plan.rewards()).whenComplete((result, error) -> {
+                if (result != null) recentCatches.remove(uuid);
+                onMain(() -> finishCapture(player, admission, session, record, plan, result, error));
+            });
+        } catch (RuntimeException error) {
+            settlingCaptures.remove(uuid);
+            reportCaptureFailure(record, error, player);
+        }
+    }
 
-        // 计算经验（应用钓竿经验倍率 + 天赋经验加成）
-        TalentBonuses bonuses = new TalentBonuses(talentEngine.computeBonuses(seasonData));
-        double xpMultiplier = session.expMultiplier() * (1.0 + bonuses.xpMultiplierBonus());
-        if (perfect) xpMultiplier *= (1.0 + bonuses.perfectXpBonus());
-        int xp = (int) (fish.calculateXp(size, perfect) * xpMultiplier);
-        xp = Math.max(1, xp);
-        // 更新图鉴
-        FishCollectionEntry existing = repository.loadCollectionEntry(player.getUniqueId(), fish.id());
-        boolean isFirstCatch = existing == null || existing.caughtCount() == 0;
-        FishCollectionEntry entry = existing != null ? existing : FishCollectionEntry.empty(player.getUniqueId(), fish.id());
-        entry = entry.withNewCatch(size);
-        repository.saveCollectionEntry(entry);
+    private void finishCapture(Player player, AuthSnapshot admission, FishingSession session, FishingCatchRecord record,
+                               CapturePlan plan, @Nullable FishingRepository.CatchSettlement result, @Nullable Throwable error) {
+        UUID uuid = record.playerUuid();
+        settlingCaptures.remove(uuid);
+        var current = AuthAccess.snapshot(uuid);
+        boolean online = Bukkit.getPlayer(uuid) == player && player.isOnline() && current.admitted()
+            && current.generation() == admission.generation()
+            && java.util.Objects.equals(current.connectionId(), admission.connectionId());
+        if (error != null) {
+            reportCaptureFailure(record, error, online ? player : null);
+            return;
+        }
+        publishCrossServer(record.encodeCrossServer());
+        if (!online) return;
 
-        // 给予物品
-        giveFishItem(player, fish, size, perfect);
+        var fish = session.fish();
+        var before = result.season().before();
+        var after = result.season().after();
+        var bonuses = new TalentBonuses(talentEngine.computeBonuses(before));
+        if (fatigueEngine != null && fatigueEngine.rewardMaxFatigue(player, after, bonuses.fatigueReduction())) {
+            updateSeason(uuid, FishingSeasonData::withMaxFatigueRewardClaimed);
+        }
+        emitFishingEvent(player, fish, record.size(), session.water(), session.baitId(), record.perfect(), result.firstCatch(),
+            plan.treasureId(), session.schoolId(), after, result.permanent());
+        checkMilestones(player, result.permanent(), fish, result.firstCatch());
 
-        // 检查宝藏（从水域对应的宝藏池中选择）
-        boolean gotTreasure = false;
-        WaterArea water = session.water();
-        double treasureChance = configuration.fishing().treasureChance();
-        // 应用饵料宝藏加成
-        if (session.baitId() != null) {
-            BaitDefinition bait = findBait(session.baitId());
-            if (bait != null) {
-                treasureChance += bait.treasureChanceBoost();
+        String quality = record.perfect() ? "完美" : "普通";
+        String displayName = ChatColor.translateAlternateColorCodes('&', fish.displayName());
+        String success = getMessage("fishing_success", displayName, String.valueOf(record.size()), quality,
+            String.valueOf(catchXp(session, record.perfect(), bonuses)));
+        if (success != null) player.sendMessage(success);
+        if (result.firstCatch()) {
+            String first = getMessage("fishing_first_catch", displayName);
+            if (first != null) player.sendMessage(first);
+        }
+        if (plan.treasureId() != null) {
+            String treasure = getMessage("fishing_treasure_found", "??");
+            if (treasure != null) player.sendMessage(treasure);
+        }
+        if (after.level() > before.level()) onLevelUp(player, before.level(), after.level());
+    }
+
+    private void reportCaptureFailure(FishingCatchRecord record, Throwable error, @Nullable Player player) {
+        logger.log(java.util.logging.Level.WARNING, "钓鱼捕获提交未确认: player=" + record.playerUuid()
+            + " event=" + record.eventId(), error);
+        if (player != null) player.sendMessage("§c钓鱼捕获提交未确认，请联系管理员核对。");
+    }
+
+    private record CapturePlan(List<ConditionalReward> rewards, @Nullable String treasureId) {}
+
+    private CapturePlan buildCaptureRewards(Player player, FishingCatchRecord record, FishDefinition fish,
+                                            @Nullable TreasureDefinition treasure) {
+        var rewards = new ArrayList<ConditionalReward>();
+        UUID uuid = record.playerUuid();
+        var item = buildFishItem(player, fish, record.size(), record.perfect());
+        rewards.add(new ConditionalReward(pendingCaptureItem(uuid, item, "钓鱼捕获"), false));
+        String treasureId = null;
+        if (treasure != null) {
+            var prize = iconResolver.resolveItemStack(player, treasure.itemRef());
+            if (prize != null && !prize.getType().isAir() && prize.getAmount() > 0) {
+                rewards.add(new ConditionalReward(pendingCaptureItem(uuid, prize, "钓鱼宝藏"), false));
+                treasureId = treasure.id();
             }
         }
-        // 应用钓竿宝藏加成（使用 session 创建时记录的值，避免玩家中途换竿导致不一致）
-        treasureChance += session.rodTreasureChanceBonus();
-        treasureChance = Math.min(1.0, Math.max(0.0, treasureChance));
-        if (water != null && ThreadLocalRandom.current().nextDouble() < treasureChance) {
-            TreasureDefinition treasure = selectTreasureFromPool(water);
-            if (treasure != null) {
-                giveTreasureItem(player, treasure);
-                gotTreasure = true;
+        double bonus = record.perfect() ? configuration.fishing().perfectBonusMultiplier() : 1.0;
+        if (fish.currencyReward() != null) appendCaptureCurrency(uuid, rewards, fish.currencyReward(), bonus);
+        for (var currency : fish.currencyRewards()) appendCaptureCurrency(uuid, rewards, currency, bonus);
+
+        for (var drop : fish.drops()) {
+            if (!checkDropCondition(drop.condition(), record.perfect(), record.size(), true)) continue;
+            ItemStack stack = iconResolver.resolveItemStack(player, drop.itemRef());
+            if (stack == null || stack.getType().isAir() || stack.getAmount() <= 0) continue;
+            ItemMeta meta = stack.getItemMeta();
+            if (meta != null) {
+                tagCatchItem(meta, fish.id(), record.size(), record.perfect());
+                stack.setItemMeta(meta);
             }
+            rewards.add(new ConditionalReward(pendingCaptureItem(uuid, stack, "钓鱼掉落"), firstCatchOnly(drop.condition())));
         }
-
-        FishingSeasonData updatedSeason = seasonData.withXpAdded(xp,
-            configuration.season().xpCurve(), configuration.season().maxLevel());
-        FishingPermanentData updatedPerm = permData.withCaught(perfect, gotTreasure);
-
-        // 疲惫值增加（钓鱼成功后 +fatiguePerCatch），并检查首次达到100奖励
-        // C5: FatigueEngine.onFishCaught 仅计算不保存，统一由此处保存，避免重复写入
-        // 天赋 fatigue_reduction：降低每次钓鱼增加的疲惫值
-        if (fatigueEngine != null) {
-            updatedSeason = fatigueEngine.onFishCaught(player, updatedSeason, bonuses.fatigueReduction());
+        for (var command : fish.commandRewards()) {
+            if (!checkDropCondition(command.condition(), record.perfect(), record.size(), true)) continue;
+            String executed = command.command()
+                .replace("{player}", xuanmo.arcartxsuite.api.command.CommandSanitizer.validatePlayerName(player.getName()))
+                .replace("{fish}", fish.id())
+                .replace("{size}", String.valueOf(record.size()));
+            if (executed.isBlank()) continue;
+            rewards.add(new ConditionalReward(PendingReward.command(uuid, "fishing", List.of(executed), "钓鱼命令奖励"),
+                firstCatchOnly(command.condition())));
         }
-        repository.saveSeasonData(updatedSeason);
-        repository.savePermanentData(updatedPerm);
+        return new CapturePlan(List.copyOf(rewards), treasureId);
+    }
 
-        // ─── 货币奖励（单个 + 多货币列表） ───────────────────────
-        CurrencyBridgeAPI currencyApi = currencyApi();
-        if (fish.currencyReward() != null && currencyApi != null) {
-            try {
-                var reward = fish.currencyReward();
-                double amount = perfect ? reward.amount() * configuration.fishing().perfectBonusMultiplier() : reward.amount();
-                var bridge = currencyApi.bridge(reward.currencyId());
-                if (bridge != null && bridge.available()) {
-                    bridge.deposit(player, BigDecimal.valueOf(amount));
-                }
-            } catch (Exception e) {
-                logger.warning("给予货币奖励失败: " + e.getMessage());
-            }
+    private static boolean firstCatchOnly(String condition) {
+        for (String part : condition.split(",")) {
+            if (part.trim().equalsIgnoreCase("first_catch")) return true;
         }
-        if (!fish.currencyRewards().isEmpty() && currencyApi != null) {
-            for (FishDefinition.CurrencyReward cr : fish.currencyRewards()) {
-                try {
-                    double amount = perfect ? cr.amount() * configuration.fishing().perfectBonusMultiplier() : cr.amount();
-                    var bridge = currencyApi.bridge(cr.currencyId());
-                    if (bridge != null && bridge.available()) {
-                        bridge.deposit(player, BigDecimal.valueOf(amount));
-                    }
-                } catch (Exception e) {
-                    logger.warning("给予多货币奖励失败 [currency=" + cr.currencyId() + "]: " + e.getMessage());
-                }
-            }
+        return false;
+    }
+
+    private static PendingReward pendingCaptureItem(UUID uuid, ItemStack item, String description) {
+        byte[] raw = ItemSerializer.serialize(item);
+        if (raw.length == 0 || item.getAmount() <= 0) throw new IllegalArgumentException("无可交付的钓鱼物品");
+        return PendingReward.itemSerialized(uuid, "fishing", Base64.getEncoder().encodeToString(raw), description);
+    }
+
+    private static void appendCaptureCurrency(UUID uuid, List<ConditionalReward> rewards,
+                                               FishDefinition.CurrencyReward currency, double multiplier) {
+        double amount = currency.amount() * multiplier;
+        if (currency.currencyId() != null && !currency.currencyId().isBlank() && Double.isFinite(amount) && amount > 0) {
+            rewards.add(new ConditionalReward(PendingReward.currency(uuid, "fishing", currency.currencyId(), amount, "钓鱼货币奖励"), false));
         }
+    }
 
-        // ─── 多物品掉落（条件掉落） ─────────────────────────────
-        for (FishDefinition.DropEntry drop : fish.drops()) {
-            if (checkDropCondition(drop.condition(), perfect, size, isFirstCatch)) {
-                try {
-                    ItemStack dropStack = iconResolver.resolveItemStack(player, drop.itemRef());
-                    if (dropStack != null) {
-                        // 给掉落物设置 PDC 标签，使其可被 /fishing sell 识别出售
-                        ItemMeta dropMeta = dropStack.getItemMeta();
-                        if (dropMeta != null) {
-                            PersistentDataContainer pdc = dropMeta.getPersistentDataContainer();
-                            pdc.set(new NamespacedKey(plugin, PDC_FISH_ID), PersistentDataType.STRING, fish.id());
-                            pdc.set(new NamespacedKey(plugin, PDC_FISH_SIZE), PersistentDataType.INTEGER, size);
-                            pdc.set(new NamespacedKey(plugin, PDC_IS_PERFECT), PersistentDataType.BYTE, (byte) (perfect ? 1 : 0));
-                            dropStack.setItemMeta(dropMeta);
-                        }
-                        dropOrGive(player, dropStack);
-                    }
-                } catch (Exception e) {
-                    logger.warning("给予额外掉落物品失败: " + e.getMessage());
-                }
-            }
-        }
-
-        // ─── 命令奖励 ──────────────────────────────────────────
-        for (FishDefinition.CommandReward cmd : fish.commandRewards()) {
-            if (checkDropCondition(cmd.condition(), perfect, size, isFirstCatch)) {
-                String executed = cmd.command()
-                    .replace("{player}", xuanmo.arcartxsuite.api.command.CommandSanitizer.validatePlayerName(player.getName()))
-                    .replace("{fish}", fish.id())
-                    .replace("{size}", String.valueOf(size));
-                try {
-                    ThrottledCommandExecutor.dispatch( executed);
-                } catch (Exception e) {
-                    logger.warning("执行鱼命令奖励失败: " + executed + " — " + e.getMessage());
-                }
-            }
-        }
-
-        // ─── 记录最近捕获（持久化到数据库，用于主界面展示） ──────
-        recordRecentCatch(player.getUniqueId(), new RecentCatch(
-            fish.id(), fish.displayName(), fish.rarity().name().toLowerCase(), size, perfect, System.currentTimeMillis()
-        ));
-
-        // ─── 跨服同步捕获事件 ────────────────────────────────────
-        publishCrossServer("CATCH:" + player.getUniqueId() + ":" + fish.id() + ":"
-            + fish.displayName() + ":" + fish.rarity().name().toLowerCase() + ":"
-            + size + ":" + (perfect ? 1 : 0) + ":" + System.currentTimeMillis());
-
-        // ─── 跨模块事件发射 ──────────────────────────────────────
-        emitFishingEvent(player, fish, size, water, session.baitId(), perfect, isFirstCatch, gotTreasure, updatedSeason, updatedPerm);
-
-        // ─── 里程碑检测 ──────────────────────────────────────────
-        checkMilestones(player, updatedPerm, fish, isFirstCatch);
-
-        // 发送消息
-        String quality = perfect ? "完美" : "普通";
-        String successMsg = getMessage("fishing_success", ChatColor.translateAlternateColorCodes('&', fish.displayName()), String.valueOf(size), quality, String.valueOf(xp));
-        if (successMsg != null) {
-            player.sendMessage(successMsg);
-        }
-
-        if (isFirstCatch) {
-            String firstMsg = getMessage("fishing_first_catch", ChatColor.translateAlternateColorCodes('&', fish.displayName()));
-            if (firstMsg != null) {
-                player.sendMessage(firstMsg);
-            }
-        }
-
-        if (gotTreasure) {
-            String treasureMsg = getMessage("fishing_treasure_found", "??");
-            if (treasureMsg != null) {
-                player.sendMessage(treasureMsg);
-            }
-        }
-
-        if (updatedSeason.level() > seasonData.level()) {
-            onLevelUp(player, seasonData.level(), updatedSeason.level());
-        }
+    private int catchXp(FishingSession session, boolean perfect, TalentBonuses bonuses) {
+        double multiplier = session.expMultiplier() * (1.0 + bonuses.xpMultiplierBonus());
+        if (perfect) multiplier *= 1.0 + bonuses.perfectXpBonus();
+        return Math.max(1, (int) (session.fish().calculateXp(session.caughtSize(), perfect) * multiplier));
     }
 
     /**
@@ -687,6 +1050,10 @@ public final class FishingService {
         return configuration.findBait(id);
     }
 
+    private @Nullable BaitDefinition defaultBait() {
+        return configuration.baits().stream().filter(BaitDefinition::isDefault).findFirst().orElse(null);
+    }
+
     /** 按 ID 查找鱼竿定义（O(1) 索引）。 */
     private @Nullable RodDefinition findRod(@NotNull String id) {
         return configuration.findRod(id);
@@ -697,39 +1064,17 @@ public final class FishingService {
         return configuration.findFish(id);
     }
 
-    private @Nullable WaterArea resolveWater(@NotNull Player player) {
-        for (WaterArea area : configuration.specifiedWaters()) {
-            if (area.contains(player.getLocation())) {
+    private @Nullable WaterArea resolveWater(@NotNull Location hook) {
+        for (WaterArea area : waters.specifiedWaters()) {
+            if (area.contains(hook)) {
                 return area;
             }
         }
         return null;
     }
 
-    /**
-     * 求值水域难度公式。
-     * <p>
-     * 使用 ARIA 表达式求值，变量 {@code global.level} 绑定为玩家钓鱼等级。
-     * Aria 不可用时回退为固定 1.0 系数。
-     *
-     * @param formula 难度公式（ARIA 表达式）
-     * @param level   玩家钓鱼等级
-     * @return 难度修正系数
-     */
-    private double evaluateDifficultyFormula(@NotNull String formula, int level) {
-        if (formula == null || formula.isBlank() || "1.0".equals(formula.trim())) return 1.0;
-        if (ariaBridge == null || !ariaBridge.available()) {
-            logger.warning("Aria 桥不可用，水域难度公式无法求值，回退为 1.0: " + formula);
-            return 1.0;
-        }
-        try {
-            Object result = ariaBridge.eval(formula, Map.of("level", level));
-            if (result instanceof Number n) return n.doubleValue();
-            return 1.0;
-        } catch (Exception e) {
-            logger.warning("水域难度公式求值失败，回退为 1.0: " + formula + " - " + e.getMessage());
-            return 1.0;
-        }
+    public void reloadWaters(FishingModuleConfiguration.WaterSettings waters) {
+        this.waters = waters;
     }
 
     private @NotNull List<FishDefinition> getFishPool(@NotNull WaterArea water) {
@@ -746,58 +1091,20 @@ public final class FishingService {
     private @Nullable FishDefinition selectFishFromPool(@NotNull Player player,
                                                            @NotNull WaterArea water,
                                                            @NotNull List<FishDefinition> pool,
-                                                           @Nullable String baitId) {
-        if (pool.isEmpty()) return null;
+                                                           @Nullable String baitId,
+                                                            int playerLevel, @NotNull Location hook,
+                                                            @Nullable WaterArea.School school) {
+        List<FishDefinition> candidates = selectCandidates(pool, playerLevel, player::hasPermission,
+            getCurrentSeason(), getCurrentWeather(player.getWorld()), getCurrentTimeString(player.getWorld()),
+            getBiome(hook).toLowerCase(java.util.Locale.ROOT));
+        if (candidates.isEmpty()) return null;
 
-        String currentSeason = getCurrentSeason();
-        String currentWeather = getCurrentWeather(player.getWorld());
-        String currentTime = getCurrentTimeString(player.getWorld());
-        // 提前提取，避免在 stream filter 中对每条鱼重复查 DB / 调用 Bukkit API
-        int playerLevel = getPlayerSeasonLevel(player);
-        String playerBiome = getPlayerBiome(player).toLowerCase();
-
-        List<FishDefinition> candidates = pool.stream()
-            .filter(f -> f.seasons().contains(currentSeason))
-            .filter(f -> f.weathers().contains(currentWeather))
-            .filter(f -> isInTimeRange(currentTime, f.timeRanges()))
-            .filter(f -> f.minPlayerLevel() <= playerLevel)
-            .filter(f -> f.maxPlayerLevel() <= 0 || playerLevel <= f.maxPlayerLevel())
-            .filter(f -> f.requirePermission() == null || player.hasPermission(f.requirePermission()))
-            .filter(f -> f.biomes().isEmpty() || f.biomes().contains(playerBiome))
-            .toList();
-
-        if (candidates.isEmpty()) {
-            candidates = pool.stream()
-                .filter(f -> f.seasons().contains(currentSeason))
-                .toList();
-        }
-        if (candidates.isEmpty()) {
-            candidates = pool;
-        }
-
-        // 应用饵料吸引权重
         double totalWeight = 0;
         Map<FishDefinition, Double> weights = new java.util.LinkedHashMap<>();
         BaitDefinition bait = baitId != null ? findBait(baitId) : null;
-        // 水域级饵料倍率
-        Map<String, Double> waterBaitMultipliers = water.baitMultipliers();
         for (FishDefinition fish : candidates) {
-            double weight = fish.rarity().weightMultiplier();
-            if (bait != null) {
-                weight *= bait.attractModifier(fish.id());
-                // 鱼的饵料偏好覆盖
-                for (FishDefinition.BaitPreference pref : fish.baitPreferences()) {
-                    if (pref.baitId().equals(bait.id())) {
-                        weight *= pref.multiplier();
-                        break;
-                    }
-                }
-                // 水域级饵料倍率（管理员可针对特定水域配置特定饵料的额外倍率）
-                Double waterMul = waterBaitMultipliers.get(bait.id());
-                if (waterMul != null) {
-                    weight *= waterMul;
-                }
-            }
+            double weight = fishWeight(fish, water, bait);
+            if (school != null) weight *= school.weights().getOrDefault(fish.id(), 1.0);
             weights.put(fish, weight);
             totalWeight += weight;
         }
@@ -818,7 +1125,43 @@ public final class FishingService {
         return candidates.get(candidates.size() - 1);
     }
 
-    private @Nullable TreasureDefinition selectTreasureFromPool(@NotNull WaterArea water) {
+    static double fishWeight(FishDefinition fish, WaterArea water, @Nullable BaitDefinition bait) {
+        double weight = fish.rarity().weightMultiplier();
+        if (bait == null) return weight;
+
+        weight *= bait.attractModifier(fish.id());
+        for (FishDefinition.BaitPreference preference : fish.baitPreferences()) {
+            if (preference.baitId().equals(bait.id())) {
+                weight *= preference.multiplier();
+                break;
+            }
+        }
+        Double waterMultiplier = water.baitMultipliers().get(bait.id());
+        return waterMultiplier == null ? weight : weight * waterMultiplier;
+    }
+
+    static List<FishDefinition> selectCandidates(List<FishDefinition> pool, int level, Predicate<String> hasPermission,
+                                                 String season, String weather, String time, String biome) {
+        List<FishDefinition> eligible = pool.stream().filter(fish -> canCatch(fish, level, hasPermission)).toList();
+        List<FishDefinition> seasonal = eligible.stream().filter(fish -> fish.seasons().contains(season)).toList();
+        List<FishDefinition> matching = seasonal.stream()
+            .filter(fish -> fish.weathers().contains(weather))
+            .filter(fish -> isInTimeRange(time, fish.timeRanges()))
+            .filter(fish -> fish.biomes().isEmpty() || fish.biomes().contains(biome))
+            .toList();
+        if (!matching.isEmpty()) return matching;
+        return seasonal.isEmpty() ? eligible : seasonal;
+    }
+
+    static boolean canCatch(FishDefinition fish, int level, Predicate<String> hasPermission) {
+        return level >= fish.minPlayerLevel()
+            && (fish.maxPlayerLevel() <= 0 || level <= fish.maxPlayerLevel())
+            && (fish.requirePermission() == null || hasPermission.test(fish.requirePermission()));
+    }
+
+    private static @Nullable TreasureDefinition selectTreasureFromPool(FishingModuleConfiguration configuration,
+                                                                        @NotNull WaterArea water,
+                                                                        java.util.random.RandomGenerator random) {
         List<String> ids = water.treasures();
         if (ids == null || ids.isEmpty()) return null;
         List<TreasureDefinition> pool = new ArrayList<>();
@@ -830,31 +1173,13 @@ public final class FishingService {
         // 加权随机选择：chance 作为权重，归一化后按概率抽取
         double totalWeight = pool.stream().mapToDouble(TreasureDefinition::chance).sum();
         if (totalWeight <= 0) return null;
-        double roll = ThreadLocalRandom.current().nextDouble() * totalWeight;
+        double roll = random.nextDouble() * totalWeight;
         double cumulative = 0;
         for (TreasureDefinition t : pool) {
             cumulative += t.chance();
             if (roll < cumulative) return t;
         }
         return pool.get(pool.size() - 1);
-    }
-
-    /**
-     * 检测玩家当前生效的饵料。
-     * 从数据库饵料队列头部（slot_index 最小）读取，未配置饵料时返回默认饵料。
-     */
-    private @Nullable BaitDefinition detectBait(@NotNull Player player) {
-        List<BaitQueueEntry> queue = repository.loadBaitQueue(player.getUniqueId());
-        if (!queue.isEmpty()) {
-            BaitQueueEntry head = queue.get(0);
-            BaitDefinition bait = findBait(head.baitId());
-            if (bait != null) return bait;
-        }
-        // 回退：默认饵料
-        for (BaitDefinition bait : configuration.baits()) {
-            if (bait.isDefault()) return bait;
-        }
-        return null;
     }
 
     @Nullable
@@ -905,43 +1230,31 @@ public final class FishingService {
         return def != null ? def : RodDefinition.DEFAULT;
     }
 
-    private void giveFishItem(@NotNull Player player, @NotNull FishDefinition fish, int size, boolean perfect) {
-        try {
-            ItemStack stack = iconResolver.resolveItemStack(player, fish.itemRef());
-            if (stack == null) {
-                stack = new ItemStack(Material.COD);
-            }
-            ItemMeta meta = stack.getItemMeta();
-            if (meta != null) {
-                // 设置显示名称和 lore
-                meta.setDisplayName(org.bukkit.ChatColor.translateAlternateColorCodes('&',
-                    "&7[" + fish.rarity().name() + "] &f" + fish.displayName()));
-                List<String> lore = new ArrayList<>();
-                lore.add(org.bukkit.ChatColor.translateAlternateColorCodes('&',
-                    "&7尺寸: &f" + size + "cm"));
-                lore.add(org.bukkit.ChatColor.translateAlternateColorCodes('&',
-                    "&7售价: &6" + fish.calculatePrice(size) + " &7" + getDefaultCurrency()));
-                if (perfect) {
-                    lore.add(org.bukkit.ChatColor.translateAlternateColorCodes('&',
-                        "&a✦ 完美捕获"));
-                }
-                meta.setLore(lore);
+    private ItemStack buildFishItem(Player player, FishDefinition fish, int size, boolean perfect) {
+        ItemStack stack = iconResolver.resolveItemStack(player, fish.itemRef());
+        if (stack == null) stack = new ItemStack(Material.COD);
+        ItemMeta meta = stack.getItemMeta();
+        if (meta == null) return stack;
 
-                // PDC 标记，供 Market 等模块识别
-                PersistentDataContainer pdc = meta.getPersistentDataContainer();
-                NamespacedKey keyId = new NamespacedKey(plugin, PDC_FISH_ID);
-                NamespacedKey keySize = new NamespacedKey(plugin, PDC_FISH_SIZE);
-                NamespacedKey keyPerfect = new NamespacedKey(plugin, PDC_IS_PERFECT);
-                pdc.set(keyId, PersistentDataType.STRING, fish.id());
-                pdc.set(keySize, PersistentDataType.INTEGER, size);
-                pdc.set(keyPerfect, PersistentDataType.BYTE, (byte) (perfect ? 1 : 0));
+        meta.setDisplayName(ChatColor.translateAlternateColorCodes('&',
+            "&7[" + fish.rarity().name() + "] &f" + fish.displayName()));
+        List<String> lore = new ArrayList<>();
+        lore.add(ChatColor.translateAlternateColorCodes('&', "&7尺寸: &f" + size + "cm"));
+        lore.add(ChatColor.translateAlternateColorCodes('&',
+            "&7售价: &6" + fish.calculatePrice(size) + " &7" + getDefaultCurrency()));
+        if (perfect) lore.add(ChatColor.translateAlternateColorCodes('&', "&a✦ 完美捕获"));
+        meta.setLore(lore);
+        tagCatchItem(meta, fish.id(), size, perfect);
+        stack.setItemMeta(meta);
+        return stack;
+    }
 
-                stack.setItemMeta(meta);
-            }
-            dropOrGive(player, stack);
-        } catch (Exception e) {
-            logger.warning("给予鱼物品失败: " + e.getMessage());
-        }
+    /** PDC 字段供鱼类识别、出售和市场展示使用。 */
+    private void tagCatchItem(ItemMeta meta, String fishId, int size, boolean perfect) {
+        PersistentDataContainer pdc = meta.getPersistentDataContainer();
+        pdc.set(new NamespacedKey(plugin, PDC_FISH_ID), PersistentDataType.STRING, fishId);
+        pdc.set(new NamespacedKey(plugin, PDC_FISH_SIZE), PersistentDataType.INTEGER, size);
+        pdc.set(new NamespacedKey(plugin, PDC_IS_PERFECT), PersistentDataType.BYTE, (byte) (perfect ? 1 : 0));
     }
 
     /** 获取货币桥接 API，未配置时返回 null。 */
@@ -967,8 +1280,13 @@ public final class FishingService {
      * @return {@code true} 表示校验通过且已占用在途槽位（须配对 {@link #finishWriteAction}）
      */
     public boolean beginWriteAction(@NotNull Player player, @NotNull String uiId, @Nullable String supplied) {
-        return packetBridge != null && packetBridge.isUiOpen(player, uiId)
-            && tokenGuard.begin(player.getUniqueId(), uiId, supplied);
+        UUID uuid = player.getUniqueId();
+        if (pendingBaitEdits.contains(uuid) || !uiQueries.canView(player, uiId) || !AuthAccess.admitted(uuid)
+            || !tokenGuard.begin(uuid, uiId, supplied)) return false;
+        // Consume the old token now. The replacement is sent when the refreshed view is ready.
+        tokenGuard.rotate(uuid, uiId);
+        uiQueries.invalidate(uuid, uiId);
+        return true;
     }
 
     /** 释放玩家的在途写操作槽位。 */
@@ -993,39 +1311,24 @@ public final class FishingService {
         return "money";
     }
 
-    private void giveTreasureItem(@NotNull Player player, @NotNull TreasureDefinition treasure) {
-        try {
-            ItemStack stack = iconResolver.resolveItemStack(player, treasure.itemRef());
-            if (stack == null) return;
-            dropOrGive(player, stack);
-        } catch (Exception e) {
-            logger.warning("给予宝箱物品失败: " + e.getMessage());
-        }
+    private @Nullable TreasureDefinition rollTreasure(@Nullable WaterArea water, @Nullable BaitDefinition bait, double rodBonus) {
+        return rollTreasure(configuration, water, bait, rodBonus, ThreadLocalRandom.current());
     }
 
-    private void dropOrGive(@NotNull Player player, @NotNull ItemStack item) {
-        rewardDispatcher.dispatchItem(player, item, "fishing-drop");
+    static @Nullable TreasureDefinition rollTreasure(FishingModuleConfiguration configuration, @Nullable WaterArea water,
+                                                   @Nullable BaitDefinition bait, double rodBonus,
+                                                   java.util.random.RandomGenerator random) {
+        if (water == null) return null;
+        double chance = configuration.fishing().treasureChance() + rodBonus;
+        if (bait != null) chance += bait.treasureChanceBoost();
+        return random.nextDouble() < Math.max(0, Math.min(1, chance))
+            ? selectTreasureFromPool(configuration, water, random) : null;
     }
 
     // ─── 饵料队列管理 ────────────────────────────────────────────
 
-    /** 获取玩家当前饵料槽数量（固定基础1 + 天赋加成）。 */
-    public int getBaitSlots(@NotNull Player player) {
-        int base = 1;
-        // 天赋加成：bait_slot_bonus effect-type
-        FishingSeasonData seasonData = repository.loadSeasonData(player.getUniqueId(), configuration.season().seasonId());
-        Map<String, Double> bonuses = talentEngine.computeBonuses(seasonData);
-        int bonus = (int) TalentEngine.getBonus(bonuses, "bait_slot_bonus");
-        return base + bonus;
-    }
-
-    /** 获取玩家饵料槽位的基础数量和天赋加成数量（供 UI 显示来源）。 */
-    public int[] getBaitSlotsBreakdown(@NotNull Player player) {
-        int base = 1;
-        FishingSeasonData seasonData = repository.loadSeasonData(player.getUniqueId(), configuration.season().seasonId());
-        Map<String, Double> bonuses = talentEngine.computeBonuses(seasonData);
-        int bonus = (int) TalentEngine.getBonus(bonuses, "bait_slot_bonus");
-        return new int[]{base, bonus};
+    private int baitSlotBonus(FishingSeasonData seasonData) {
+        return (int) TalentEngine.getBonus(talentEngine.computeBonuses(seasonData), "bait_slot_bonus");
     }
 
     /** 加载玩家饵料队列（按 slot_index 升序）。 */
@@ -1033,67 +1336,138 @@ public final class FishingService {
         return repository.loadBaitQueue(player.getUniqueId());
     }
 
-    /**
-     * 将玩家背包指定槽位的饵料物品放入饵料队列的指定槽位。
-     * 从背包扣除物品，写入数据库队列。
-     *
-     * @param player      玩家
-     * @param invSlot     背包槽位号
-     * @param queueSlot   饵料队列目标槽位号
-     * @param amount      放入数量
-     * @return 操作结果消息（成功/失败原因）
-     */
-    public @NotNull String putBait(@NotNull Player player, int invSlot, int queueSlot, int amount) {
-        if (itemMatcher == null) return "&c物品匹配系统不可用。";
-        if (queueSlot < 0 || queueSlot >= getBaitSlots(player)) return "&c槽位号无效。";
+    public void submitBaitDeposit(Player player, String uiId, String token, int invSlot, int queueSlot, int amount) {
+        var action = beginBaitEdit(player, uiId, token);
+        if (action == null) return;
+        try {
+            snapshotBaitDeposit(action, invSlot, queueSlot, amount);
+        } catch (RuntimeException failure) {
+            logger.fine("读取待放入饵料失败: " + failure.getMessage());
+            finishBaitEdit(action, "&c饵料暂未受理，请稍后重试。");
+        }
+    }
 
-        // ARIA UI ~Backpack 槽位 id → Bukkit inventory slot index 转换
-        // ARIA 9-35 → Bukkit 9-35（主背包27格，相同）
-        // ARIA 36-44 → Bukkit 0-8（快捷栏9格，差36）
-        int bukkitSlot = toBukkitBackpackSlot(invSlot);
-        ItemStack item = player.getInventory().getItem(bukkitSlot);
-        if (item == null || item.getType().isAir()) return "&c背包槽位为空。";
+    private void snapshotBaitDeposit(BaitUiAction action, int invSlot, int queueSlot, int amount) {
+        if (baitDeposits == null || itemMatcher == null) {
+            finishBaitEdit(action, "&c饵料放入暂不可用。");
+            return;
+        }
+        if (invSlot < 9 || invSlot > 44 || queueSlot < 0) {
+            finishBaitEdit(action, "&c槽位号无效。");
+            return;
+        }
+        int slot = toBukkitBackpackSlot(invSlot);
+        ItemStack item = action.player().getInventory().getItem(slot);
+        if (item == null || item.getType().isAir()) {
+            finishBaitEdit(action, "&c背包槽位为空。");
+            return;
+        }
+        BaitDefinition bait = matchingBait(item);
+        if (bait == null) {
+            finishBaitEdit(action, "&c该物品不是饵料。");
+            return;
+        }
+        int count = amount <= 0 ? item.getAmount() : Math.min(amount, item.getAmount());
+        if (count <= 0) {
+            finishBaitEdit(action, "&c数量无效。");
+            return;
+        }
+        ItemStack source = item.clone();
+        try {
+            playerWrites.execute(() -> prepareBaitDeposit(action, source, slot, queueSlot, bait.id(), count));
+        } catch (RejectedExecutionException busy) {
+            finishBaitEdit(action, "&e钓鱼数据繁忙，请稍后重试。");
+        }
+    }
 
-        // 用 ItemMatcher 识别物品对应的饵料定义
-        BaitDefinition matchedBait = null;
-        for (BaitDefinition bait : configuration.baits()) {
-            if (bait.matcher() == null || bait.matcher().emptyMatcher()) continue;
-            if (itemMatcher.matches(bait.matcher(), item)) {
-                matchedBait = bait;
-                break;
+    private @Nullable BaitDefinition matchingBait(ItemStack item) {
+        for (var bait : configuration.baits()) {
+            if (bait.matcher() != null && !bait.matcher().emptyMatcher() && itemMatcher.matches(bait.matcher(), item)) {
+                return bait;
             }
         }
-        if (matchedBait == null) return "&c该物品不是饵料。";
+        return null;
+    }
 
-        int available = item.getAmount();
-        // amount <= 0 表示放入全部数量
-        int toTake = amount <= 0 ? available : Math.min(amount, available);
-        if (toTake <= 0) return "&c数量无效。";
-
-        // 检查目标槽位是否已有不同饵料
-        List<BaitQueueEntry> queue = repository.loadBaitQueue(player.getUniqueId());
-        for (BaitQueueEntry entry : queue) {
-            if (entry.slotIndex() == queueSlot && !entry.baitId().equals(matchedBait.id())) {
-                return "&c槽位 " + (queueSlot + 1) + " 已有其他饵料，请先取出。";
+    private void prepareBaitDeposit(BaitUiAction action, ItemStack source, int inventorySlot, int slot, String bait, int count) {
+        if (stopping) return;
+        try {
+            BaitEdit edit = repository.loadBaitEdit(action.auth().playerId(), configuration.season().seasonId(), slot, slot);
+            if (slot >= 1 + baitSlotBonus(edit.season())) {
+                onMain(() -> finishBaitEdit(action, "&c槽位号无效。"));
+                return;
             }
-        }
-
-        // 计算新数量（同饵料叠加）
-        int newAmount = toTake;
-        for (BaitQueueEntry entry : queue) {
-            if (entry.slotIndex() == queueSlot && entry.baitId().equals(matchedBait.id())) {
-                newAmount = entry.amount() + toTake;
-                break;
+            if (edit.first().amount() > 0 && !edit.first().baitId().equals(bait)) {
+                onMain(() -> finishBaitEdit(action, "&c目标槽位已有其他饵料，请先取出。"));
+                return;
             }
+            if ((long) edit.first().amount() + count > Integer.MAX_VALUE) {
+                onMain(() -> finishBaitEdit(action, "&c槽位饵料数量已达上限。"));
+                return;
+            }
+            BaitDeposit deposit = baitDeposits.reserve(edit, action.request(), bait, count);
+            if (deposit == null) {
+                onMain(() -> finishBaitEdit(action, "&e饵料队列已变化，或上次放入正在等待存档。"));
+            } else {
+                onMain(() -> removeDepositedBait(action, source, inventorySlot, deposit));
+            }
+        } catch (java.io.IOException | java.sql.SQLException | RuntimeException failure) {
+            logger.fine("暂存钓鱼饵料未确认: " + failure.getMessage());
+            onMain(() -> finishBaitEdit(action, "&c饵料暂存未确认，请刷新后重试。"));
         }
+    }
 
-        // 从背包扣除物品
-        item.setAmount(available - toTake);
-        player.getInventory().setItem(bukkitSlot, item.getAmount() == 0 ? null : item);
-
-        // 写入数据库
-        repository.saveBaitSlot(new BaitQueueEntry(player.getUniqueId(), queueSlot, matchedBait.id(), newAmount));
-        return "&a成功放入 &e" + toTake + " &a个 &f" + matchedBait.displayName() + " &a到槽位 &e" + (queueSlot + 1);
+    private void removeDepositedBait(BaitUiAction action, ItemStack source, int slot, BaitDeposit deposit) {
+        PlayerInventory inventory;
+        PersistentDataContainer pdc;
+        String previous;
+        ItemStack remainder;
+        var key = FishingBaitDeposits.RECEIPT;
+        try {
+            if (!currentBaitView(action)) {
+                baitDeposits.cancel(deposit);
+                finishBaitEdit(action, null);
+                return;
+            }
+            inventory = action.player().getInventory();
+            if (!source.equals(inventory.getItem(slot))) {
+                baitDeposits.cancel(deposit);
+                finishBaitEdit(action, "&c背包槽位已变化，放入未执行。");
+                return;
+            }
+            pdc = action.player().getPersistentDataContainer();
+            previous = pdc.get(key, PersistentDataType.STRING);
+            remainder = source.clone();
+            remainder.setAmount(source.getAmount() - deposit.amount());
+        } catch (RuntimeException failure) {
+            baitDeposits.cancel(deposit);
+            logger.fine("核对待扣饵料失败: " + failure.getMessage());
+            finishBaitEdit(action, "&c未能核对背包，放入未执行。");
+            return;
+        }
+        if (!baitDeposits.beginRemoval(deposit)) {
+            finishBaitEdit(action, "&c饵料暂存已关闭，放入未执行。");
+            return;
+        }
+        try {
+            inventory.setItem(slot, remainder.getAmount() == 0 ? null : remainder);
+            pdc.set(key, PersistentDataType.STRING, deposit.request().toString());
+        } catch (RuntimeException failure) {
+            try {
+                inventory.setItem(slot, source);
+                if (previous == null) pdc.remove(key);
+                else pdc.set(key, PersistentDataType.STRING, previous);
+                baitDeposits.cancel(deposit);
+            } catch (RuntimeException rollback) {
+                failure.addSuppressed(rollback);
+            }
+            logger.log(java.util.logging.Level.WARNING, "钓鱼饵料扣除未确认: " + deposit.request(), failure);
+            finishBaitEdit(action, "&c饵料扣除未确认，请刷新队列。");
+            return;
+        }
+        // The scheduled scan also covers this removal if the immediate request cannot run.
+        baitDeposits.requestScan();
+        finishBaitEdit(action, "&e已从背包扣除，饵料将在玩家存档确认后进入队列。");
     }
 
     /**
@@ -1108,92 +1482,127 @@ public final class FishingService {
         return rawSlot;
     }
 
-    /**
-     * 交换饵料队列中两个槽位的饵料（用于调整优先级）。
-     *
-     * @param player  玩家
-     * @param slotA   槽位A
-     * @param slotB   槽位B
-     * @return 操作结果消息
-     */
-    public @NotNull String swapBaitQueue(@NotNull Player player, int slotA, int slotB) {
-        int maxSlots = getBaitSlots(player);
-        if (slotA < 0 || slotA >= maxSlots || slotB < 0 || slotB >= maxSlots) return "&c槽位号无效。";
-        if (slotA == slotB) return "&c不能与自身交换。";
-
-        List<BaitQueueEntry> queue = repository.loadBaitQueue(player.getUniqueId());
-        BaitQueueEntry entryA = null, entryB = null;
-        for (BaitQueueEntry entry : queue) {
-            if (entry.slotIndex() == slotA) entryA = entry;
-            if (entry.slotIndex() == slotB) entryB = entry;
-        }
-
-        // 交换：A的位置放B的内容，B的位置放A的内容（amount=0 自动删除）
-        if (entryB != null) {
-            repository.saveBaitSlot(new BaitQueueEntry(player.getUniqueId(), slotA, entryB.baitId(), entryB.amount()));
-        } else {
-            repository.saveBaitSlot(new BaitQueueEntry(player.getUniqueId(), slotA, "", 0));
-        }
-        if (entryA != null) {
-            repository.saveBaitSlot(new BaitQueueEntry(player.getUniqueId(), slotB, entryA.baitId(), entryA.amount()));
-        } else {
-            repository.saveBaitSlot(new BaitQueueEntry(player.getUniqueId(), slotB, "", 0));
-        }
-        return "&a已交换槽位 &e" + (slotA + 1) + " &a和 &e" + (slotB + 1) + " &a的饵料";
+    public void submitBaitSwap(Player player, String uiId, String token, int first, int second) {
+        submitBaitEdit(player, uiId, token, first, second, 0, true);
     }
 
-    /**
-     * 从饵料队列指定槽位取出饵料返还到玩家背包。
-     *
-     * @param player    玩家
-     * @param queueSlot 饵料队列槽位号
-     * @param amount    取出数量（<=0 表示全部取出）
-     * @return 操作结果消息
-     */
-    public @NotNull String takeBait(@NotNull Player player, int queueSlot, int amount) {
-        if (queueSlot < 0 || queueSlot >= getBaitSlots(player)) return "&c槽位号无效。";
+    public void submitBaitWithdrawal(Player player, String uiId, String token, int slot, int amount) {
+        submitBaitEdit(player, uiId, token, slot, slot, amount, false);
+    }
 
-        List<BaitQueueEntry> queue = repository.loadBaitQueue(player.getUniqueId());
-        BaitQueueEntry target = null;
-        for (BaitQueueEntry entry : queue) {
-            if (entry.slotIndex() == queueSlot) { target = entry; break; }
+    private record BaitUiAction(Player player, AuthSnapshot auth, String uiId, UUID request) {}
+
+    private @Nullable BaitUiAction beginBaitEdit(Player player, String uiId, String token) {
+        if (!beginWriteAction(player, uiId, token)) return null;
+        UUID uuid = player.getUniqueId();
+        var action = new BaitUiAction(player, AuthAccess.snapshot(uuid), uiId, UUID.randomUUID());
+        pendingBaitEdits.add(uuid);
+        return action;
+    }
+
+    private void submitBaitEdit(Player player, String uiId, String token, int first, int second,
+                                int amount, boolean swap) {
+        var action = beginBaitEdit(player, uiId, token);
+        if (action == null) return;
+        if (first < 0 || second < 0 || swap && first == second) {
+            finishBaitEdit(action, swap && first == second ? "&c不能与自身交换。" : "&c槽位号无效。");
+            return;
         }
-        if (target == null) return "&c该槽位为空。";
+        try {
+            playerWrites.execute(() -> prepareBaitEdit(action, first, second, amount, swap));
+        } catch (RejectedExecutionException busy) {
+            finishBaitEdit(action, "&e钓鱼数据繁忙，请稍后重试。");
+        }
+    }
 
-        BaitDefinition bait = findBait(target.baitId());
-        if (bait == null) return "&c未知饵料类型。";
-
-        int toReturn = amount <= 0 ? target.amount() : Math.min(amount, target.amount());
-
-        // 生成饵料物品返还玩家
-        ItemStack baitItem = iconResolver.resolveItemStack(player, bait.itemRef());
-        if (baitItem != null) {
-            baitItem.setAmount(toReturn);
-            Map<Integer, ItemStack> overflow = player.getInventory().addItem(baitItem);
-            // 背包满则掉落
-            for (ItemStack leftover : overflow.values()) {
-                player.getWorld().dropItemNaturally(player.getLocation(), leftover);
+    private void prepareBaitEdit(BaitUiAction action, int first, int second, int amount, boolean swap) {
+        if (stopping) return;
+        try {
+            BaitEdit view = repository.loadBaitEdit(action.auth().playerId(), configuration.season().seasonId(), first, second);
+            int limit = 1 + baitSlotBonus(view.season());
+            if (first >= limit || second >= limit) {
+                onMain(() -> finishBaitEdit(action, "&c槽位号无效。"));
+                return;
             }
+            if (swap) {
+                boolean changed = repository.swapBaitEdit(view);
+                onMain(() -> finishBaitEdit(action, changed
+                    ? "&a已交换槽位 &e" + (first + 1) + " &a和 &e" + (second + 1) + " &a的饵料"
+                    : "&c交换失败或队列已变化，请刷新后重试。"));
+            } else {
+                onMain(() -> prepareBaitWithdrawal(action, view, amount));
+            }
+        } catch (java.sql.SQLException | RuntimeException error) {
+            logger.fine("饵料操作未确认: " + error.getMessage());
+            onMain(() -> finishBaitEdit(action, "&c饵料队列未能确认，请刷新状态。"));
         }
-
-        // 更新数据库
-        int remaining = target.amount() - toReturn;
-        repository.saveBaitSlot(new BaitQueueEntry(player.getUniqueId(), queueSlot, target.baitId(), remaining));
-        return "&a成功取出 &e" + toReturn + " &a个 &f" + bait.displayName();
     }
 
-    /**
-     * 鱼咬钩时消耗队列头部1个饵料。
-     * 队列头部 = slot_index 最小的条目，amount-1，为0则删除。
-     */
-    public void consumeBaitOnBite(@NotNull Player player) {
-        List<BaitQueueEntry> queue = repository.loadBaitQueue(player.getUniqueId());
-        if (queue.isEmpty()) return;
-        BaitQueueEntry head = queue.get(0);
-        int newAmount = head.amount() - 1;
-        repository.saveBaitSlot(new BaitQueueEntry(player.getUniqueId(), head.slotIndex(), head.baitId(), newAmount));
-        debug("consumeBaitOnBite: player=" + player.getName() + " bait=" + head.baitId()
-            + " slot=" + head.slotIndex() + " remaining=" + newAmount);
+    private void prepareBaitWithdrawal(BaitUiAction action, BaitEdit view, int requested) {
+        if (!currentBaitView(action)) {
+            finishBaitEdit(action, null);
+            return;
+        }
+        var target = view.first();
+        if (target.amount() <= 0) {
+            finishBaitEdit(action, "&c该槽位为空。");
+            return;
+        }
+        BaitDefinition bait = findBait(target.baitId());
+        if (bait == null) {
+            finishBaitEdit(action, "&c未知饵料类型。");
+            return;
+        }
+        try {
+            Player player = action.player();
+            ItemStack item = iconResolver.resolveItemStack(player, bait.itemRef());
+            if (item == null || item.getType().isAir() || catchWork == null) {
+                finishBaitEdit(action, "&c饵料物品暂不可用。");
+                return;
+            }
+            // An attachment must fit in an empty backpack even when Warehouse and Mail handle overflow.
+            int portable = (int) Math.min(Integer.MAX_VALUE,
+                (long) item.getMaxStackSize() * player.getInventory().getStorageContents().length);
+            int requestedAmount = requested <= 0 ? target.amount() : Math.min(requested, target.amount());
+            int count = Math.min(portable, requestedAmount);
+            if (count <= 0) {
+                finishBaitEdit(action, "&c饵料无法装入玩家背包。");
+                return;
+            }
+            item = item.clone();
+            item.setAmount(count);
+            var reward = pendingCaptureItem(action.auth().playerId(), item, "钓鱼饵料取回");
+            catchWork.withdrawBait(view, count, action.request(), reward).whenComplete((changed, error) -> onMain(() -> {
+                if (error != null) {
+                    logger.log(java.util.logging.Level.WARNING, "取回饵料未确认: " + action.request(), error);
+                    finishBaitEdit(action, "&c取回结果未确认，请刷新队列。");
+                } else if (Boolean.TRUE.equals(changed)) {
+                    String suffix = count < requestedAmount ? "。剩余饵料仍在队列，可分次取回。" : "。";
+                    finishBaitEdit(action, "&a已登记取回 &e" + count + " &a个 &f" + bait.displayName() + suffix);
+                } else {
+                    finishBaitEdit(action, "&c饵料队列已变化，请刷新后重试。");
+                }
+            }));
+        } catch (RuntimeException failure) {
+            logger.fine("准备取回饵料失败: " + failure.getMessage());
+            finishBaitEdit(action, "&c饵料暂未受理，请稍后重试。");
+        }
+    }
+
+    private boolean currentBaitView(BaitUiAction action) {
+        if (!uiQueries.canView(action.player(), action.uiId())) return false;
+        var current = AuthAccess.snapshot(action.auth().playerId());
+        return current.admitted() && current.generation() == action.auth().generation()
+            && java.util.Objects.equals(current.connectionId(), action.auth().connectionId());
+    }
+
+    private void finishBaitEdit(BaitUiAction action, @Nullable String message) {
+        UUID uuid = action.auth().playerId();
+        if (!pendingBaitEdits.remove(uuid) || Bukkit.getPlayer(uuid) != action.player()) return;
+        finishWriteAction(action.player());
+        if (!currentBaitView(action)) return;
+        if (message != null) action.player().sendMessage(ChatColor.translateAlternateColorCodes('&', message));
+        pushBaitsData(action.player(), action.uiId());
     }
 
     /**
@@ -1216,14 +1625,9 @@ public final class FishingService {
         };
     }
 
-    private int getPlayerSeasonLevel(@NotNull Player player) {
-        FishingSeasonData data = repository.loadSeasonData(player.getUniqueId(), configuration.season().seasonId());
-        return data != null ? data.level() : 0;
-    }
-
-    private String getPlayerBiome(@NotNull Player player) {
+    private String getBiome(@NotNull Location hook) {
         try {
-            return player.getLocation().getBlock().getBiome().name();
+            return hook.getBlock().getBiome().name();
         } catch (Exception e) {
             return "";
         }
@@ -1263,7 +1667,7 @@ public final class FishingService {
         return String.format("%02d:%02d", hour, minute);
     }
 
-    private boolean isInTimeRange(@NotNull String time, @NotNull List<FishDefinition.TimeRange> ranges) {
+    private static boolean isInTimeRange(@NotNull String time, @NotNull List<FishDefinition.TimeRange> ranges) {
         for (FishDefinition.TimeRange range : ranges) {
             if (isBetweenTimes(time, range.start(), range.end())) {
                 return true;
@@ -1272,7 +1676,7 @@ public final class FishingService {
         return false;
     }
 
-    private boolean isBetweenTimes(@NotNull String current, @NotNull String start, @NotNull String end) {
+    private static boolean isBetweenTimes(@NotNull String current, @NotNull String start, @NotNull String end) {
         int currentMins = parseTimeToMinutes(current);
         int startMins = parseTimeToMinutes(start);
         int endMins = parseTimeToMinutes(end);
@@ -1283,7 +1687,7 @@ public final class FishingService {
         return currentMins >= startMins && currentMins <= endMins;
     }
 
-    private int parseTimeToMinutes(@NotNull String time) {
+    private static int parseTimeToMinutes(@NotNull String time) {
         String[] parts = time.split(":");
         int hour = Integer.parseInt(parts[0]);
         int minute = parts.length > 1 ? Integer.parseInt(parts[1]) : 0;
@@ -1330,18 +1734,35 @@ public final class FishingService {
     }
 
     public void giveXp(@NotNull UUID uuid, int amount) {
-        FishingSeasonData data = repository.loadSeasonData(uuid, configuration.season().seasonId());
-        int oldLevel = data.level();
-        FishingSeasonData updated = data.withXpAdded(amount,
-            configuration.season().xpCurve(), configuration.season().maxLevel());
-        repository.saveSeasonData(updated);
-        // 升级回调
-        if (updated.level() > oldLevel) {
+        var season = configuration.season();
+        var change = updateSeason(uuid, state -> state.withXpAdded(amount, season.xpCurve(), season.maxLevel()));
+        if (change != null && change.after().level() > change.before().level()) {
             Player player = plugin.getServer().getPlayer(uuid);
             if (player != null && player.isOnline()) {
-                onLevelUp(player, oldLevel, updated.level());
+                onLevelUp(player, change.before().level(), change.after().level());
             }
         }
+    }
+
+    private @Nullable FishingRepository.SeasonChange updateSeason(UUID uuid, UnaryOperator<FishingSeasonData> change) {
+        try {
+            return repository.updateSeason(uuid, configuration.season().seasonId(), change);
+        } catch (java.sql.SQLException | RuntimeException failure) {
+            logger.log(java.util.logging.Level.WARNING, "钓鱼赛季写入未确认: " + uuid, failure);
+            return null;
+        }
+    }
+
+    public @Nullable FishingRepository.TaskRewardResult completeTask(PlayerTaskInstance instance, int xp) {
+        var season = configuration.season();
+        var result = repository.completeTask(instance, season.seasonId(), xp, season.xpCurve(), season.maxLevel());
+        if (result != null && result.awarded() && result.level() > result.previousLevel()) {
+            Player player = plugin.getServer().getPlayer(instance.playerUuid());
+            if (player != null && player.isOnline()) {
+                onLevelUp(player, result.previousLevel(), result.level());
+            }
+        }
+        return result;
     }
 
     // ─── 天赋树操作 ────────────────────────────────────────────
@@ -1350,30 +1771,48 @@ public final class FishingService {
         return talentEngine;
     }
 
-    /**
-     * 升级一个天赋节点（点亮或提升等级）。
-     *
-     * @param uuid   玩家 UUID
-     * @param nodeId 节点 ID
-     * @return {@code true} 表示升级成功
-     */
-    public boolean levelUpTalent(@NotNull UUID uuid, @NotNull String nodeId) {
-        FishingSeasonData data = repository.loadSeasonData(uuid, configuration.season().seasonId());
-        if (!talentEngine.canLevelUp(data, nodeId)) return false;
-        FishingSeasonData updated = talentEngine.levelUp(data, nodeId);
-        repository.saveSeasonData(updated);
-        return true;
+    public void submitTalentWrite(Player player, String uiId, String token, boolean reset, @Nullable String nodeId) {
+        UUID uuid = player.getUniqueId();
+        if ((!reset && nodeId == null) || pendingTalents.contains(uuid) || !beginWriteAction(player, uiId, token)) return;
+        AuthSnapshot auth = AuthAccess.snapshot(uuid);
+        pendingTalents.add(uuid);
+        try {
+            playerWrites.execute(() -> {
+                var change = updateSeason(uuid, state -> reset ? talentEngine.reset(state) : talentEngine.levelUp(state, nodeId));
+                if (!stopping) plugin.getServer().getScheduler().runTask(plugin,
+                    guard(() -> completeTalentWrite(player, uiId, auth, reset, nodeId, change)));
+            });
+        } catch (RejectedExecutionException busy) {
+            pendingTalents.remove(uuid);
+            finishWriteAction(player);
+            player.sendMessage("§e天赋写入繁忙，请稍后刷新重试。");
+            pushTalentsData(player, uiId);
+        }
     }
 
-    /**
-     * 重置玩家天赋树（退还所有天赋点）。
-     *
-     * @param uuid 玩家 UUID
-     */
-    public void resetTalents(@NotNull UUID uuid) {
-        FishingSeasonData data = repository.loadSeasonData(uuid, configuration.season().seasonId());
-        FishingSeasonData updated = talentEngine.reset(data);
-        repository.saveSeasonData(updated);
+    private void completeTalentWrite(Player player, String uiId, AuthSnapshot before, boolean reset,
+                                     @Nullable String nodeId, @Nullable FishingRepository.SeasonChange change) {
+        UUID uuid = player.getUniqueId();
+        if (!pendingTalents.remove(uuid) || Bukkit.getPlayer(uuid) != player) return;
+        finishWriteAction(player);
+        if (!uiQueries.canView(player, uiId)) return;
+        AuthSnapshot current = AuthAccess.snapshot(uuid);
+        if (!current.admitted() || current.generation() != before.generation()
+            || !java.util.Objects.equals(current.connectionId(), before.connectionId())) return;
+        if (change == null) {
+            player.sendMessage("§c未确认天赋写入，请刷新状态。");
+            pushTalentsData(player, uiId);
+            return;
+        }
+        if (reset) {
+            player.sendMessage("§a天赋树已重置，所有天赋点已退还。");
+        } else {
+            TalentNode node = talentEngine.getNode(nodeId);
+            String label = node == null ? nodeId : node.displayName();
+            boolean upgraded = !change.before().equals(change.after());
+            player.sendMessage((upgraded ? "§a天赋升级成功: " : "§c无法升级天赋: ") + label);
+        }
+        renderTalentsData(player, uiId, change.after());
     }
 
     // ─── 等级奖励领取 ──────────────────────────────────────────
@@ -1387,23 +1826,47 @@ public final class FishingService {
      *
      * @param player   玩家
      * @param rewardId 奖励 ID
-     * @return {@code true} 表示领取成功
+     * @return 持久交接结果
      */
-    public boolean claimReward(@NotNull Player player, @NotNull String rewardId) {
+    public CompletableFuture<Boolean> claimReward(@NotNull Player player, @NotNull String rewardId) {
+        UUID playerId = player.getUniqueId();
+        if (stopping || !Bukkit.isPrimaryThread() || Bukkit.getPlayer(playerId) != player || !player.isOnline()) {
+            return CompletableFuture.completedFuture(false);
+        }
+        AuthSnapshot admission = AuthAccess.snapshot(playerId);
+        if (!admission.admitted()) return CompletableFuture.completedFuture(false);
         SeasonRewardDefinition reward = seasonRewards.stream()
             .filter(r -> r.rewardId().equals(rewardId))
             .findFirst().orElse(null);
-        if (reward == null) return false;
+        if (reward == null) return CompletableFuture.completedFuture(false);
+        String key = RewardDispatcher.rewardKey("level", rewardId);
+        var result = submitRewardWork(() -> {
+            if (!sameRewardSession(admission)) return false;
+            FishingSeasonData data = repository.loadSeasonData(playerId, configuration.season().seasonId());
+            if (data.level() < reward.level() || repository.completedRewardKeys(playerId, data.seasonId()).contains(key)
+                    || !sameRewardSession(admission)) return false;
+            return rewardDispatcher.dispatch(playerId, key, reward, "等级奖励 Lv." + reward.level());
+        });
+        result.thenAccept(accepted -> {
+            if (accepted) onMain(() -> {
+                if (Bukkit.getPlayer(playerId) == player && player.isOnline() && sameRewardSession(admission)) {
+                    rewardDispatcher.flushPlayer(player);
+                }
+            });
+        });
+        return result;
+    }
 
-        FishingSeasonData data = repository.loadSeasonData(player.getUniqueId(), configuration.season().seasonId());
-        if (data.level() < reward.level()) return false;
-        if (data.claimedRewards().contains(rewardId)) return false;
+    private static boolean sameRewardSession(AuthSnapshot admission) {
+        AuthSnapshot current = AuthAccess.snapshot(admission.playerId());
+        return current.admitted() && current.generation() == admission.generation()
+            && java.util.Objects.equals(current.connectionId(), admission.connectionId());
+    }
 
-        FishingSeasonData updated = data.withRewardClaimed(rewardId);
-        repository.saveSeasonData(updated);
-
-        rewardDispatcher.dispatch(player, player.getUniqueId(), reward, "等级奖励 Lv." + reward.level());
-        return true;
+    private <T> CompletableFuture<T> submitRewardWork(Supplier<T> work) {
+        if (stopping) return CompletableFuture.failedFuture(new IllegalStateException("钓鱼模块已停止"));
+        try { return CompletableFuture.supplyAsync(work, playerWrites); }
+        catch (RejectedExecutionException busy) { return CompletableFuture.failedFuture(busy); }
     }
 
     /**
@@ -1414,9 +1877,21 @@ public final class FishingService {
      */
     public @NotNull List<SeasonRewardDefinition> getClaimableRewards(@NotNull UUID uuid) {
         FishingSeasonData data = repository.loadSeasonData(uuid, configuration.season().seasonId());
+        Set<String> claimed = claimedRewardIds(data);
         return seasonRewards.stream()
-            .filter(r -> data.level() >= r.level() && !data.claimedRewards().contains(r.rewardId()))
+            .filter(r -> data.level() >= r.level() && !claimed.contains(r.rewardId()))
             .toList();
+    }
+
+    private Set<String> claimedRewardIds(FishingSeasonData data) {
+        Set<String> claimed = new HashSet<>();
+        Set<String> completed = repository.completedRewardKeys(data.uuid(), data.seasonId());
+        for (SeasonRewardDefinition reward : seasonRewards) {
+            if (completed.contains(RewardDispatcher.rewardKey("level", reward.rewardId()))) {
+                claimed.add(reward.rewardId());
+            }
+        }
+        return claimed;
     }
 
     // ─── 赛季结算 ──────────────────────────────────────────────
@@ -1424,18 +1899,16 @@ public final class FishingService {
     /**
      * 触发赛季结算（对所有在线玩家）。
      */
-    public void triggerSettlement() {
-        settlementEngine.settleAllOnline();
-        logger.info("钓鱼赛季结算已触发: " + configuration.season().seasonId());
-    }
-
-    /**
-     * 对单个玩家执行赛季结算。
-     *
-     * @param uuid 玩家 UUID
-     */
-    public void settlePlayer(@NotNull UUID uuid) {
-        settlementEngine.settlePlayer(uuid);
+    public CompletableFuture<Integer> triggerSettlement() {
+        List<UUID> recipients = Bukkit.getOnlinePlayers().stream().map(Player::getUniqueId).toList();
+        var result = submitRewardWork(() -> settlementEngine.settlePlayers(recipients));
+        result.thenAccept(failed -> onMain(() -> {
+            for (UUID id : recipients) {
+                Player player = Bukkit.getPlayer(id);
+                if (player != null && player.isOnline()) rewardDispatcher.flushPlayer(player);
+            }
+        }));
+        return result;
     }
 
     /**
@@ -1447,6 +1920,7 @@ public final class FishingService {
      * @param player 上线玩家
      */
     public void onPlayerJoin(@NotNull Player player) {
+        if (fishSales != null) fishSales.joined(player);
         try {
             taskEngine.onPlayerJoin(player);
         } catch (Exception e) {
@@ -1457,14 +1931,18 @@ public final class FishingService {
     /**
      * 玩家退出时清理内存缓存，防止内存泄漏。
      * <p>
-     * 清理 recentCatches 和 fishingCooldowns 中该玩家的条目。
+     * 清理该玩家的界面查询与钓鱼冷却状态。
      *
      * @param uuid 玩家 UUID
      */
     public void onPlayerQuit(@NotNull UUID uuid) {
+        if (fishSales != null) fishSales.quit(uuid);
+        forgetCast(uuid);
         tokenGuard.clear(uuid);
+        uiQueries.forget(uuid);
         recentCatches.remove(uuid);
         fishingCooldowns.remove(uuid);
+        placeholderStats.forget(uuid);
         taskEngine.onPlayerQuit(uuid);
     }
 
@@ -1507,13 +1985,11 @@ public final class FishingService {
      * @param value 疲惫值（0-100，自动 clamp）
      */
     public void setFatigue(@NotNull UUID uuid, int value) {
-        FishingSeasonData data = repository.loadSeasonData(uuid, configuration.season().seasonId());
         int clamped = Math.max(0, Math.min(100, value));
-        FishingSeasonData updated = new FishingSeasonData(
+        updateSeason(uuid, data -> new FishingSeasonData(
             data.uuid(), data.seasonId(), data.level(), data.currentXp(),
             data.talentPoints(), data.unspentTalentPoints(), data.talents(),
-            data.claimedRewards(), clamped, data.claimedMaxFatigueReward());
-        repository.saveSeasonData(updated);
+            clamped, data.claimedMaxFatigueReward()));
     }
 
     // ─── 任务查询 ──────────────────────────────────────────────
@@ -1523,69 +1999,40 @@ public final class FishingService {
     }
 
     public int getCollectionCount(@NotNull UUID uuid) {
-        return repository.loadCollection(uuid).size();
+        return repository.countCollection(uuid);
     }
 
     public int getTotalFishTypes() {
         return configuration.fishes().size();
     }
 
-    public @NotNull String getFavoriteFishDisplayName(@NotNull UUID uuid) {
-        Map<String, FishCollectionEntry> entries = new HashMap<>();
-        for (FishCollectionEntry entry : repository.loadCollection(uuid)) {
-            entries.put(entry.fishId(), entry);
-        }
-        FishDefinition favoriteFish = null;
-        int favoriteCount = 0;
-        for (FishDefinition fish : configuration.fishes()) {
-            FishCollectionEntry entry = entries.get(fish.id());
-            if (entry != null && entry.caughtCount() > favoriteCount) {
-                favoriteFish = fish;
-                favoriteCount = entry.caughtCount();
-            }
-        }
-        return favoriteFish != null ? favoriteFish.displayName() : "";
+    public @Nullable String displayPlaceholder(@NotNull UUID uuid, @NotNull String name) {
+        return name.equals("season_id") ? configuration.season().seasonId() : placeholderStats.value(uuid, name);
     }
 
-    /** 记录最近捕获到内存缓存（保留最近 MAX_RECENT_CATCHES 条）。 */
-    private void recordRecentCatch(@NotNull UUID uuid, @NotNull RecentCatch catchEntry) {
-        // 持久化到数据库
-        repository.saveCatchRecord(new FishingCatchRecord(
-            uuid, catchEntry.fishId(), catchEntry.fishName(), catchEntry.rarity(),
-            catchEntry.size(), catchEntry.perfect(), catchEntry.timestamp()
-        ));
-        // 同时更新内存缓存（避免每次打开 UI 都查库）
-        Deque<RecentCatch> deque = recentCatches.computeIfAbsent(uuid, k -> new ArrayDeque<>());
-        deque.addFirst(catchEntry);
-        while (deque.size() > MAX_RECENT_CATCHES) {
-            deque.removeLast();
-        }
+    private List<RecentCatch> loadRecentCatches(UUID uuid) {
+        CatchHistory history = recentCatches.computeIfAbsent(uuid, ignored -> new CatchHistory());
+        List<RecentCatch> cached = history.entries;
+        if (cached != null) return cached;
+        List<RecentCatch> loaded = repository.loadCatchRecords(uuid, MAX_RECENT_CATCHES).stream()
+            .map(record -> new RecentCatch(record.fishId(), record.fishName(), record.rarity(),
+                record.size(), record.perfect(), record.timestamp()))
+            .toList();
+        // A catch or logout can detach this holder while SQL is in flight.
+        if (!loaded.isEmpty()) history.entries = loaded;
+        return loaded;
     }
 
-    /** 获取玩家最近捕获记录列表（最新在前）。优先用内存缓存，缓存未命中时从数据库加载。 */
-    @NotNull
-    public List<RecentCatch> getRecentCatches(@NotNull UUID uuid) {
-        Deque<RecentCatch> deque = recentCatches.get(uuid);
-        if (deque != null && !deque.isEmpty()) {
-            return new ArrayList<>(deque);
-        }
-        // 缓存未命中，从数据库加载
-        List<FishingCatchRecord> records = repository.loadCatchRecords(uuid, MAX_RECENT_CATCHES);
-        List<RecentCatch> result = new ArrayList<>();
-        for (FishingCatchRecord r : records) {
-            result.add(new RecentCatch(r.fishId(), r.fishName(), r.rarity(), r.size(), r.perfect(), r.timestamp()));
-        }
-        // 回填缓存
-        if (!result.isEmpty()) {
-            Deque<RecentCatch> newDeque = new ArrayDeque<>(result);
-            recentCatches.put(uuid, newDeque);
-        }
-        return result;
+    private static final class CatchHistory {
+        private volatile List<RecentCatch> entries;
     }
 
     /** 打开指定 UI（供 PacketHandler 导航跳转使用）。 */
     public void openUi(@NotNull Player player, @NotNull String uiId) {
-        if (packetBridge == null || !packetBridge.isAvailable()) return;
+        if (stopping || packetBridge == null || !packetBridge.isAvailable()) return;
+        UUID uuid = player.getUniqueId();
+        uiQueries.forget(uuid);
+        tokenGuard.clear(uuid);
         packetBridge.openUi(player, uiId);
     }
 
@@ -1595,24 +2042,32 @@ public final class FishingService {
      * 包含：等级/经验、图鉴完成度、捕获统计、天赋点、可领取奖励数、最近捕获记录流。
      */
     public void pushMainData(@NotNull Player player, @NotNull String uiId) {
-        if (packetBridge == null || !packetBridge.isAvailable()) return;
+        uiQueries.read(player, uiId, uuid -> {
+            var season = getSeasonData(uuid);
+            return new MainViewData(season, repository.loadPermanentData(uuid), repository.countCollection(uuid),
+                loadRecentCatches(uuid), claimedRewardIds(season), season.xpForNextLevel(configuration.season().xpCurve()));
+        }, data -> renderMainData(player, uiId, data));
+    }
 
-        FishingSeasonData seasonData = repository.loadSeasonData(player.getUniqueId(), configuration.season().seasonId());
-        FishingPermanentData permData = repository.loadPermanentData(player.getUniqueId());
-        List<FishCollectionEntry> collection = repository.loadCollection(player.getUniqueId());
-        List<RecentCatch> recent = getRecentCatches(player.getUniqueId());
+    private record MainViewData(FishingSeasonData season, FishingPermanentData permanent, int collectionCount,
+                                List<RecentCatch> recent, Set<String> claimedRewards, int xpForNext) {}
+
+    private void renderMainData(Player player, String uiId, MainViewData data) {
+        FishingSeasonData seasonData = data.season();
+        FishingPermanentData permData = data.permanent();
+        List<RecentCatch> recent = data.recent();
 
         // 统计可领取奖励数
+        Set<String> claimedRewards = data.claimedRewards();
         int claimableRewardCount = 0;
         for (SeasonRewardDefinition reward : seasonRewards) {
-            if (seasonData.level() >= reward.level() && !seasonData.claimedRewards().contains(reward.rewardId())) {
+            if (seasonData.level() >= reward.level() && !claimedRewards.contains(reward.rewardId())) {
                 claimableRewardCount++;
             }
         }
 
         // 当前级升级所需经验与进度比
-        XpCurve xpCurve = configuration.season().xpCurve();
-        int xpForNext = seasonData.xpForNextLevel(xpCurve);
+        int xpForNext = data.xpForNext();
         int maxLevel = configuration.season().maxLevel();
         double progressRatio = xpForNext > 0 ? (double) seasonData.currentXp() / xpForNext : 0;
         if (seasonData.level() >= maxLevel) progressRatio = 1.0;
@@ -1628,15 +2083,15 @@ public final class FishingService {
         payload.put("totalCaught", permData.totalCaught());
         payload.put("perfectCatches", permData.perfectCatches());
         payload.put("treasureCaught", permData.treasureCaught());
-        payload.put("collectionCount", collection.size());
+        payload.put("collectionCount", data.collectionCount());
         payload.put("totalFishTypes", configuration.fishes().size());
-        int collectionPercent = configuration.fishes().isEmpty() ? 0 : (collection.size() * 100) / configuration.fishes().size();
+        int collectionPercent = configuration.fishes().isEmpty() ? 0 : (data.collectionCount() * 100) / configuration.fishes().size();
         payload.put("collectionPercent", collectionPercent);
         payload.put("unspentTalentPoints", seasonData.unspentTalentPoints());
         payload.put("totalTalentPoints", seasonData.talentPoints());
         payload.put("unlockedTalentCount", seasonData.talents().size());
         payload.put("claimableRewardCount", claimableRewardCount);
-        payload.put("claimedRewardCount", seasonData.claimedRewards().size());
+        payload.put("claimedRewardCount", claimedRewards.size());
         payload.put("totalRewardCount", seasonRewards.size());
 
         // 最近捕获记录流
@@ -1665,17 +2120,23 @@ public final class FishingService {
     }
 
     public void pushCollectionData(@NotNull Player player, @NotNull String uiId) {
-        if (packetBridge == null || !packetBridge.isAvailable()) return;
+        uiQueries.read(player, uiId, uuid -> {
+            var season = getSeasonData(uuid);
+            var counts = new HashMap<String, FishCollectionEntry>();
+            for (FishCollectionEntry caught : repository.loadCollection(uuid)) counts.put(caught.fishId(), caught);
+            return new CollectionViewData(season.level(), season.currentXp(), getPermanentData(uuid).totalCaught(), counts);
+        }, data -> renderCollectionData(player, uiId, data));
+    }
 
-        FishingSeasonData seasonData = repository.loadSeasonData(player.getUniqueId(), configuration.season().seasonId());
-        FishingPermanentData permData = repository.loadPermanentData(player.getUniqueId());
-        List<FishCollectionEntry> collection = repository.loadCollection(player.getUniqueId());
+    private record CollectionViewData(int level, int xp, int totalCaught, Map<String, FishCollectionEntry> collection) {}
 
+    private void renderCollectionData(Player player, String uiId, CollectionViewData data) {
+        Map<String, FishCollectionEntry> collection = data.collection();
         java.util.Map<String, Object> payload = new java.util.LinkedHashMap<>();
         payload.put("packetId", "AXS_FISHING");
-        payload.put("playerLevel", seasonData.level());
-        payload.put("currentXp", seasonData.currentXp());
-        payload.put("totalCaught", permData.totalCaught());
+        payload.put("playerLevel", data.level());
+        payload.put("currentXp", data.xp());
+        payload.put("totalCaught", data.totalCaught());
         payload.put("collectionCount", collection.size());
         payload.put("totalFishTypes", configuration.fishes().size());
         int percent = configuration.fishes().isEmpty() ? 0 : (collection.size() * 100) / configuration.fishes().size();
@@ -1689,10 +2150,7 @@ public final class FishingService {
             entry.put("name", fish.displayName());
             entry.put("rarity", fish.rarity().name().toLowerCase());
 
-            FishCollectionEntry caught = collection.stream()
-                .filter(c -> c.fishId().equals(fish.id()))
-                .findFirst()
-                .orElse(null);
+            FishCollectionEntry caught = collection.get(fish.id());
 
             entry.put("caught", caught != null && caught.caughtCount() > 0);
             entry.put("maxSize", caught != null ? caught.maxSize() : 0);
@@ -1712,70 +2170,55 @@ public final class FishingService {
 
     private void emitFishingEvent(@NotNull Player player, @NotNull FishDefinition fish, int size,
                                    @Nullable WaterArea water, @Nullable String baitId, boolean perfect,
-                                   boolean isFirstCatch, boolean gotTreasure,
+                                    boolean isFirstCatch, @Nullable String treasureId, @Nullable String schoolId,
                                    @NotNull FishingSeasonData seasonData, @NotNull FishingPermanentData permData) {
         // EventBus 发布（供 BattlePass / QuestGPS / OnlineRewards 等订阅）
         EventBusCapability eventBus = eventBusProvider != null ? eventBusProvider.get() : null;
+        boolean gotTreasure = treasureId != null;
         if (eventBus != null) {
             Map<String, String> payload = new LinkedHashMap<>();
             payload.put("fish_id", fish.id());
+            payload.put("fish_name", fish.displayName());
             payload.put("fish_rarity", fish.rarity().name());
             payload.put("fish_size", String.valueOf(size));
             payload.put("water_area", water != null ? water.id() : "default");
             payload.put("bait_id", baitId != null ? baitId : "");
+            if (schoolId != null) payload.put("school_id", schoolId);
             payload.put("is_perfect", String.valueOf(perfect));
+            payload.put("first_catch", String.valueOf(isFirstCatch));
             payload.put("player_level", String.valueOf(seasonData.level()));
-            eventBus.publish("axs.fishing.success", player, payload);
+            Map<String, String> snapshot = Map.copyOf(payload);
+            eventBus.publish("axs.fishing.success", player, snapshot);
 
             if (perfect) {
-                eventBus.publish("axs.fishing.perfect", player, payload);
+                eventBus.publish("axs.fishing.perfect", player, snapshot);
             }
-            if (isFirstCatch) {
+            if (isFirstCatch && eventBus.hasSubscribers("axs.fishing.collection_unlock")) {
                 // loadCollection 是 DB 查询，挪异步读完后回主线程 publish（保持订阅者在主线程）
                 UUID uid = player.getUniqueId();
                 Map<String, String> collectionPayload = new LinkedHashMap<>(payload);
-                Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+                readAsync(() -> {
                     int totalCollection;
                     try {
-                        totalCollection = repository.loadCollection(uid).size();
+                        totalCollection = repository.countCollection(uid);
                     } catch (Exception e) {
                         logger.warning("读取图鉴计数失败 [" + uid + "]: " + e.getMessage());
                         return;
                     }
                     collectionPayload.put("total_collection_count", String.valueOf(totalCollection));
-                    Bukkit.getScheduler().runTask(plugin, () ->
+                    onMain(() ->
                         eventBus.publish("axs.fishing.collection_unlock", player, collectionPayload));
                 });
             }
             if (gotTreasure) {
                 Map<String, String> treasurePayload = new LinkedHashMap<>();
                 treasurePayload.put("water_area", water != null ? water.id() : "default");
+                treasurePayload.put("treasure_id", treasureId);
+                if (schoolId != null) treasurePayload.put("school_id", schoolId);
                 eventBus.publish("axs.fishing.treasure", player, treasurePayload);
             }
         }
 
-        // EventPacket Signal（供 EventPacket 规则引擎匹配）
-        SignalDispatchable signal = signalProvider != null ? signalProvider.get() : null;
-        if (signal != null) {
-            Map<String, String> vars = new LinkedHashMap<>();
-            vars.put("fish_id", fish.id());
-            vars.put("fish_name", fish.displayName());
-            vars.put("fish_rarity", fish.rarity().name());
-            vars.put("fish_size", String.valueOf(size));
-            vars.put("water_area", water != null ? water.id() : "default");
-            vars.put("is_perfect", String.valueOf(perfect));
-            signal.dispatchSignal("fishing_success", player, vars);
-
-            if (fish.rarity() == FishRarity.LEGENDARY) {
-                signal.dispatchSignal("fishing_legendary_catch", player, vars);
-            }
-            if (isFirstCatch) {
-                signal.dispatchSignal("fishing_first_catch", player, vars);
-            }
-            if (gotTreasure) {
-                signal.dispatchSignal("fishing_treasure", player, vars);
-            }
-        }
     }
 
     // ─── 里程碑检测 ─────────────────────────────────────────────────
@@ -1846,80 +2289,77 @@ public final class FishingService {
      * 售卖玩家主手中的鱼。
      */
     public @NotNull String sellFishInHand(@NotNull Player player) {
-        ItemStack hand = player.getInventory().getItemInMainHand();
-        String fishId = getFishIdFromItem(hand);
-        if (fishId == null) {
-            return msgOr("sell_not_fish", "&c手中物品不是钓鱼产物。");
-        }
-
-        FishDefinition fish = findFish(fishId);
-        if (fish == null) {
-            return "&c未知鱼种，无法出售。";
-        }
-
+        if (stopping || fishSales == null || !Bukkit.isPrimaryThread()) return "&c售鱼暂不可用。";
+        int slot = player.getInventory().getHeldItemSlot();
+        var offer = fishOffer(player.getInventory().getItemInMainHand(), slot, 1);
+        if (offer == null) return msgOr("sell_not_fish", "&c手中没有可出售的钓鱼产物。");
         CurrencyBridgeAPI currencyApi = currencyApi();
-        if (currencyApi == null) {
-            return "&c货币系统暂不可用。";
-        }
-
-        int size = getFishSizeFromItem(hand);
-        int price = fish.calculatePrice(size);
-        String currency = resolveSellCurrency(fish);
-
-        var bridge = currencyApi.bridge(currency);
-        if (bridge == null || !bridge.available()) {
-            return "&c货币 " + currency + " 暂不可用。";
-        }
-
-        bridge.deposit(player, BigDecimal.valueOf(price));
-        hand.setAmount(hand.getAmount() - 1);
-        return msgOr("sell_success", "&a成功出售 &e" + fish.displayName() + " &a获得 &6" + price + " " + currency,
-            fish.displayName(), String.valueOf(price), currency);
+        if (currencyApi == null) return "&c货币系统暂不可用。";
+        var result = fishSales.sell(player, offer.currency(), currencyApi.bridge(offer.currency()),
+            offer.amount(), List.of(offer.fish()));
+        if (result.outcome() != FishingSales.Outcome.SOLD) return saleMessage(result);
+        return msgOr("sell_success", "&a成功出售 &e" + offer.name() + " &a获得 &6" + offer.amount() + " " + offer.currency(),
+            offer.name(), offer.amount().toPlainString(), offer.currency());
     }
 
     /**
      * 售卖背包中所有钓鱼产物。
      */
     public @NotNull String sellAllFish(@NotNull Player player) {
+        if (stopping || fishSales == null || !Bukkit.isPrimaryThread()) return "&c售鱼暂不可用。";
         CurrencyBridgeAPI currencyApi = currencyApi();
-        if (currencyApi == null) {
-            return "&c货币系统暂不可用。";
+        if (currencyApi == null) return "&c货币系统暂不可用。";
+        Map<String, List<FishOffer>> byCurrency = new LinkedHashMap<>();
+        PlayerInventory inventory = player.getInventory();
+        for (int slot = 0; slot < inventory.getSize(); slot++) {
+            ItemStack item = inventory.getItem(slot);
+            if (item == null) continue;
+            var offer = fishOffer(item, slot, item.getAmount());
+            if (offer != null) byCurrency.computeIfAbsent(offer.currency(), ignored -> new ArrayList<>()).add(offer);
         }
+        if (byCurrency.isEmpty()) return msgOr("sell_none", "&c背包中没有可出售的鱼。");
 
-        Map<String, Double> earnings = new LinkedHashMap<>();
+        StringBuilder details = new StringBuilder();
         int totalSold = 0;
-
-        for (int i = 0; i < player.getInventory().getSize(); i++) {
-            ItemStack item = player.getInventory().getItem(i);
-            String fishId = getFishIdFromItem(item);
-            if (fishId == null) continue;
-
-            FishDefinition fish = findFish(fishId);
-            if (fish == null) continue;
-
-            String currency = resolveSellCurrency(fish);
-            var bridge = currencyApi.bridge(currency);
-            if (bridge == null || !bridge.available()) continue;
-
-            int size = getFishSizeFromItem(item);
-            int price = fish.calculatePrice(size);
-            int amount = item.getAmount();
-            bridge.deposit(player, BigDecimal.valueOf(price * amount));
-            earnings.merge(currency, (double) price * amount, Double::sum);
-            totalSold += amount;
-            player.getInventory().setItem(i, null);
+        for (var entry : byCurrency.entrySet()) {
+            String currency = entry.getKey();
+            var offers = entry.getValue();
+            BigDecimal payout = offers.stream().map(FishOffer::amount).reduce(BigDecimal.ZERO, BigDecimal::add);
+            var fish = offers.stream().map(FishOffer::fish).toList();
+            var result = fishSales.sell(player, currency, currencyApi.bridge(currency), payout, fish);
+            if (result.outcome() == FishingSales.Outcome.SOLD) {
+                totalSold += fish.stream().mapToInt(FishingSales.Fish::count).sum();
+                details.append(" &6+").append(payout.toPlainString()).append(' ').append(currency).append('。');
+            } else {
+                details.append(' ').append(currency).append(' ').append(saleMessage(result));
+                if (result.outcome() == FishingSales.Outcome.REVIEW || result.outcome() == FishingSales.Outcome.BLOCKED) break;
+            }
         }
+        return (totalSold == 0 ? details.toString() : "&a共出售 &e" + totalSold + " &a条鱼。" + details).trim();
+    }
 
-        if (totalSold == 0) {
-            return msgOr("sell_none", "&c背包中没有可出售的鱼。");
-        }
+    private record FishOffer(FishingSales.Fish fish, String name, String currency, BigDecimal amount) {}
 
-        StringBuilder sb = new StringBuilder();
-        sb.append("&a共出售 &e").append(totalSold).append(" &a条鱼，获得 ");
-        for (var e : earnings.entrySet()) {
-            sb.append("&6").append(String.format("%.0f", e.getValue())).append(" ").append(e.getKey()).append(" ");
-        }
-        return sb.toString().trim();
+    private @Nullable FishOffer fishOffer(@Nullable ItemStack item, int slot, int count) {
+        String fishId = getFishIdFromItem(item);
+        if (item == null || fishId == null || count <= 0 || count > item.getAmount()) return null;
+        FishDefinition fish = findFish(fishId);
+        if (fish == null) return null;
+        int price = fish.calculatePrice(getFishSizeFromItem(item));
+        String currency = resolveSellCurrency(fish);
+        if (price <= 0 || currency == null || currency.isBlank()) return null;
+        return new FishOffer(new FishingSales.Fish(slot, item.clone(), count), fish.displayName(), currency,
+            BigDecimal.valueOf(price).multiply(BigDecimal.valueOf(count)));
+    }
+
+    private static String saleMessage(FishingSales.Result result) {
+        return switch (result.outcome()) {
+            case RETURN_QUEUED -> "&e入账未成功，鱼已加入返还队列。";
+            case UNAVAILABLE -> "&c售鱼条件未满足，物品未扣除。";
+            case BLOCKED -> "&c上一笔售鱼尚未结清，请联系管理员核对。";
+            case REVIEW -> "&e售鱼结果待核对，交易编号：" + result.request();
+            case SOLD -> "&a售鱼完成。";
+        };
     }
 
     // ─── 物品识别辅助 ────────────────────────────────────────────────
@@ -1962,9 +2402,11 @@ public final class FishingService {
      * 推送天赋树数据到 UI。
      */
     public void pushTalentsData(@NotNull Player player, @NotNull String uiId) {
-        if (packetBridge == null || !packetBridge.isAvailable()) return;
-        FishingSeasonData seasonData = repository.loadSeasonData(player.getUniqueId(), configuration.season().seasonId());
+        if (pendingTalents.contains(player.getUniqueId())) return;
+        uiQueries.read(player, uiId, this::getSeasonData, season -> renderTalentsData(player, uiId, season));
+    }
 
+    private void renderTalentsData(Player player, String uiId, FishingSeasonData seasonData) {
         java.util.Map<String, Object> payload = new java.util.LinkedHashMap<>();
         payload.put("packetId", "AXS_FISHING_TALENTS");
         payload.put("seasonId", seasonData.seasonId());
@@ -2000,8 +2442,9 @@ public final class FishingService {
                 nodeMap.put("unlocked", currentLevel > 0);
                 nodeMap.put("level", currentLevel);
                 nodeMap.put("maxLevel", node.maxLevel());
-                nodeMap.put("canLevelUp", talentEngine.canLevelUp(seasonData, node.id()));
-                nodeMap.put("iconJson", buildTalentNodeIconJson(node, currentLevel > 0, talentEngine.canLevelUp(seasonData, node.id()), player));
+                boolean canLevelUp = talentEngine.canLevelUp(seasonData, node.id());
+                nodeMap.put("canLevelUp", canLevelUp);
+                nodeMap.put("iconJson", buildTalentNodeIconJson(node, currentLevel > 0, canLevelUp, player));
                 // 效果描述（中文）
                 java.util.List<String> effects = new java.util.ArrayList<>();
                 if (node.effectType() != null) {
@@ -2107,13 +2550,20 @@ public final class FishingService {
      * 推送赛季奖励数据到 UI。
      */
     public void pushRewardsData(@NotNull Player player, @NotNull String uiId) {
-        if (packetBridge == null || !packetBridge.isAvailable()) return;
-        FishingSeasonData seasonData = repository.loadSeasonData(player.getUniqueId(), configuration.season().seasonId());
+        uiQueries.read(player, uiId, uuid -> {
+            var season = getSeasonData(uuid);
+            return new RewardsViewData(season.level(), claimedRewardIds(season));
+        }, data -> renderRewardsData(player, uiId, data));
+    }
 
+    private record RewardsViewData(int level, Set<String> claimedRewards) {}
+
+    private void renderRewardsData(Player player, String uiId, RewardsViewData data) {
         java.util.Map<String, Object> payload = new java.util.LinkedHashMap<>();
         payload.put("packetId", "AXS_FISHING_REWARDS");
-        payload.put("level", seasonData.level());
-        payload.put("claimedRewards", new java.util.ArrayList<>(seasonData.claimedRewards()));
+        payload.put("level", data.level());
+        Set<String> claimedRewards = data.claimedRewards();
+        payload.put("claimedRewards", new java.util.ArrayList<>(claimedRewards));
 
         // 奖励列表
         java.util.Map<String, Object> rewardsMap = new java.util.LinkedHashMap<>();
@@ -2129,8 +2579,8 @@ public final class FishingService {
                 ? ChatColor.stripColor(MessageProvider.translateColors(iconDef.name())) : "");
             entry.put("iconMaterial", iconDef != null ? iconDef.material() : "");
             entry.put("iconAmount", reward.item() != null ? reward.item().amount() : (iconDef != null ? iconDef.amount() : 1));
-            entry.put("claimable", seasonData.level() >= reward.level() && !seasonData.claimedRewards().contains(reward.rewardId()));
-            entry.put("claimed", seasonData.claimedRewards().contains(reward.rewardId()));
+            entry.put("claimable", data.level() >= reward.level() && !claimedRewards.contains(reward.rewardId()));
+            entry.put("claimed", claimedRewards.contains(reward.rewardId()));
             rewardsMap.put(Integer.toString(idx), entry);
             // 图标 itemJson：Java 端通过 IconResolver 生成完整 ItemStack 后序列化
             payload.put("iconJson" + idx, buildRewardIconJson(reward, player));
@@ -2342,9 +2792,9 @@ public final class FishingService {
      * 推送任务数据到 UI。
      */
     public void pushTasksData(@NotNull Player player, @NotNull String uiId) {
-        if (packetBridge == null || !packetBridge.isAvailable()) return;
+        if (!uiQueries.canView(player, uiId) || !AuthAccess.admitted(player.getUniqueId())) return;
         // 确保玩家任务已分配（模块重载或玩家在线时模块加载会导致缓存为空）
-        taskEngine.assignTasks(player.getUniqueId());
+        if (!taskEngine.prepareTasks(player.getUniqueId(), () -> pushTasksData(player, uiId))) return;
         java.util.List<xuanmo.arcartxsuite.fishing.task.PlayerTaskInstance> allTasks = taskEngine.getAllTasks(player.getUniqueId());
 
         java.util.Map<String, Object> payload = new java.util.LinkedHashMap<>();
@@ -2388,21 +2838,24 @@ public final class FishingService {
      * 包含：饵料槽数量、当前队列内容（含物品图标 JSON）、可用饵料定义列表。
      */
     public void pushBaitsData(@NotNull Player player, @NotNull String uiId) {
-        if (packetBridge == null || !packetBridge.isAvailable()) return;
+        if (pendingBaitEdits.contains(player.getUniqueId())) return;
+        uiQueries.read(player, uiId,
+            uuid -> new BaitsViewData(baitSlotBonus(getSeasonData(uuid)), repository.loadBaitQueue(uuid)),
+            data -> renderBaitsData(player, uiId, data));
+    }
 
-        int slots = getBaitSlots(player);
-        int[] breakdown = getBaitSlotsBreakdown(player);
-        List<BaitQueueEntry> queue = loadBaitQueue(player);
+    private record BaitsViewData(int bonusSlots, List<BaitQueueEntry> queue) {}
 
+    private void renderBaitsData(Player player, String uiId, BaitsViewData data) {
         java.util.Map<String, Object> payload = new java.util.LinkedHashMap<>();
         payload.put("packetId", "AXS_FISHING_BAITS");
-        payload.put("baitSlots", slots);
-        payload.put("baitSlotsBase", breakdown[0]);
-        payload.put("baitSlotsBonus", breakdown[1]);
+        payload.put("baitSlots", 1 + data.bonusSlots());
+        payload.put("baitSlotsBase", 1);
+        payload.put("baitSlotsBonus", data.bonusSlots());
 
         // 队列条目
         java.util.Map<String, Object> queueMap = new java.util.LinkedHashMap<>();
-        for (BaitQueueEntry entry : queue) {
+        for (BaitQueueEntry entry : data.queue()) {
             BaitDefinition bait = findBait(entry.baitId());
             java.util.Map<String, Object> slotData = new java.util.LinkedHashMap<>();
             slotData.put("slotIndex", entry.slotIndex());
@@ -2435,50 +2888,16 @@ public final class FishingService {
         sendUiInitPacket(player, uiId, payload);
     }
 
-    /**
-     * 处理客户端 UI 操作请求（点亮天赋/领取奖励等）。
-     *
-     * @param player 玩家
-     * @param action 操作类型
-     * @param data   操作数据
-     */
-    public void handleUiAction(@NotNull Player player, @NotNull String action, @NotNull java.util.List<String> data) {
-        switch (action.toLowerCase()) {
-            case "level_up_talent" -> {
-                if (data.size() > 2) {
-                    String nodeId = data.get(2);
-                    TalentNode node = talentEngine.getNode(nodeId);
-                    String nodeName = node != null ? node.displayName() : nodeId;
-                    if (levelUpTalent(player.getUniqueId(), nodeId)) {
-                        player.sendMessage("§a天赋升级成功: " + nodeName);
-                    } else {
-                        player.sendMessage("§c无法升级天赋: " + nodeName);
-                    }
-                }
-            }
-            case "reset_talents" -> {
-                resetTalents(player.getUniqueId());
-                player.sendMessage("§a天赋树已重置，所有天赋点已退还。");
-            }
-            case "claim_reward" -> {
-                if (data.size() > 2) {
-                    String rewardId = data.get(2);
-                    if (claimReward(player, rewardId)) {
-                        player.sendMessage("§a奖励领取成功！");
-                    } else {
-                        player.sendMessage("§c无法领取奖励: " + rewardId);
-                    }
-                }
-            }
-            case "refresh_talents", "open_talents" -> {
-                // UI 请求刷新数据
-            }
-            case "refresh_rewards", "open_rewards" -> {
-                // UI 请求刷新数据
-            }
-            case "refresh_tasks", "open_tasks" -> {
-                // UI 请求刷新数据
-            }
-        }
+    public void submitRewardClaim(Player player, String uiId, String token, String rewardId) {
+        if (!beginWriteAction(player, uiId, token)) return;
+        AuthSnapshot admission = AuthAccess.snapshot(player.getUniqueId());
+        claimReward(player, rewardId).whenComplete((accepted, failure) -> onMain(() -> {
+            if (Bukkit.getPlayer(player.getUniqueId()) != player) return;
+            finishWriteAction(player);
+            if (!sameRewardSession(admission) || !uiQueries.canView(player, uiId)) return;
+            player.sendMessage(failure == null && Boolean.TRUE.equals(accepted)
+                ? "§a奖励已进入待发队列。" : "§c无法确认领取奖励: " + rewardId);
+            pushRewardsData(player, uiId);
+        }));
     }
 }

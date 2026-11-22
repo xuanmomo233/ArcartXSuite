@@ -11,6 +11,7 @@ function rewrite(code) {
   const quoted= /("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\/\/[^\n]*)/g;
   const transform=s=>s.replace(/\bvar\./g,'state.').replace(/\bval\./g,'refs.')
     .replace(/\bnone\b/g,'null').replace(/\belif\b/g,'else if')
+    .replace(/\.parent\(\)/g,'.parent')
     .replace(/\b(\d+)\.round\(/g,'($1).round(');
   let out='',start=0;
   for(const m of code.matchAll(quoted)){out+=transform(code.slice(start,m.index))+m[0];start=m.index+m[0].length;}
@@ -59,13 +60,21 @@ class Engine {
  constructor(document,width=1920,height=1080) {
   const scale=Math.min(width/1920,height/1080);this.viewWidth=width/scale;this.viewHeight=height/scale;
   this.document=document;this.nodes=[];this.pending=[];this.delayed=[];this.packets=[];this.state={};this.refs={};this.compiled=new Map();
+  this.time=0;
   this.context=vm.createContext({state:this.state,refs:this.refs,packet:{},console,Math,
    Screen:{getWidth:()=>width,getHeight:()=>height,close:()=>this.run(this.document.ui.action?.close||'',this.root)},
    Sound:{self(){}},Lerp:()=>({get:()=>0}),Smooth:()=>({get:()=>0,reset(){}}),
    Packet:{send:(...args)=>{assert(args.every(a=>a!==null&&a!==undefined),'undefined packet field: '+JSON.stringify(args));this.packets.push(args)}},
    range:(a,b)=>{assert(Number.isInteger(a)&&Number.isInteger(b),'range needs integer bounds');assert(b>=a,'descending range '+a+','+b);assert(b-a<5000,'unbounded list');return Array.from({length:b-a+1},(_,i)=>a+i)},
   });
-  vm.runInContext("Object.defineProperty(Object.prototype,'keys',{value:function(){return Object.keys(this)}});Number.prototype.round=function(n=0){const p=10**n;return Math.round(this*p)/p}",this.context);
+  vm.runInContext(`
+   Object.defineProperty(Object.prototype,'keys',{value:function(){return Object.keys(this)}});
+   Number.prototype.round=function(n=0){const p=10**n;return Math.round(this*p)/p};
+   Object.defineProperties(Array.prototype,{
+    add:{value:function(item){this.push(item)}},
+    size:{value:function(){return this.length}}
+   });
+  `,this.context);
   this.root=this.make('$screen',{children:document.controls},null,true);
   this.run(document.ui.action?.load||'',this.root);
   this.run(document.ui.action?.open||'',this.root);
@@ -134,10 +143,43 @@ class Engine {
   });
   this.nodes.push(node);
   if(definition.val&&mounted)this.refs[definition.val]=node.proxy;
-  for(const [child,def]of Object.entries(definition.children||{}))node.children.push(this.make(child,def,node,mounted));
+  const children=Object.entries(definition.children||{});
+  if(definition.type==='RepeatGrid'){
+   assert.equal(children.length,1,'RepeatGrid needs exactly one template: '+node.path);
+   node.template=children[0];
+   node.nextRefresh=this.time;
+  }else{
+   for(const [child,def]of children)node.children.push(this.make(child,def,node,mounted));
+  }
   return node;
  }
  mount(node){node.mounted=true;for(const child of node.children)this.mount(child)}
+ refreshRepeats(node) {
+  if(node.removed||!node.mounted)return;
+  if(node.template&&this.time>=node.nextRefresh){
+   const grid=node.proxy,items=grid.items??[];
+   assert(Array.isArray(items),'RepeatGrid items must be a list: '+node.path);
+   const [name,template]=node.template;
+   const previous=new Map(node.children.map(child=>[child.proxy.key,child]));
+   const keys=new Set();
+   const columnFlow=grid.flow!=='row';
+   const span=columnFlow?grid.row??20:grid.column??1;
+   assert(Number.isInteger(span)&&span>0,'invalid RepeatGrid row/column count: '+node.path);
+   node.children=items.slice(0,grid.maxSize??80).map((item,index)=>{
+    const key=grid.key?item[grid.key]:index;
+    assert(key!=null&&!keys.has(key),'missing or duplicate RepeatGrid key: '+node.path);
+    keys.add(key);
+    const child=previous.get(key)??this.make(name+'['+key+']',template,node,true);
+    Object.assign(child.overrides,{item,key,index,
+     row:columnFlow?index%span:Math.floor(index/span),
+     column:columnFlow?Math.floor(index/span):index%span});
+    return child;
+   });
+   for(const [key,child]of previous)if(!keys.has(key))child.removed=true;
+   node.nextRefresh=this.time+(grid.updateInterval??100);
+  }
+  for(const child of node.children)this.refreshRepeats(child);
+ }
  flush(){
   for(const work of this.pending.splice(0))work();
   for(const node of this.nodes)if(['hstack','vstack'].includes((node.definition.type||'').toLowerCase())&&!node.removed){
@@ -146,10 +188,12 @@ class Engine {
   }
  }
  tick() {
+  this.time+=50;
   this.run(this.document.ui.action?.tick||'',this.root);this.flush();
   for(const task of [...this.delayed])if(--task.frames<=0){
     this.delayed=this.delayed.filter(t=>t!==task);this.run(this.document.ui.action?.[task.action]||'',this.root);this.flush();
   }
+  this.refreshRepeats(this.root);
  }
  receive(payload,handler='init'){this.context.packet=payload;this.run(this.document.ui.packetHandler?.[handler]||'',this.root);this.flush()}
  settle(){for(let i=0;i<9;i++)this.tick()}
@@ -197,6 +241,19 @@ class Engine {
     w=w||Math.min(cols,sizes.length)*Math.max(0,...sizes.map(s=>s.w))+Math.max(0,Math.min(cols,sizes.length)-1)*sx;
     h=h||Math.ceil(sizes.length/cols)*Math.max(0,...sizes.map(s=>s.h))+Math.max(0,Math.ceil(sizes.length/cols)-1)*sy;
    }
+   if(type==='repeatgrid'){
+    const columns=[],rows=[];
+    children.forEach((child,index)=>{
+     const {column,row}=child.proxy,{w,h}=sizes[index];
+     columns[column]=Math.max(columns[column]??0,w);
+     rows[row]=Math.max(rows[row]??0,h);
+    });
+    const trackOffsets=(tracks,gap)=>tracks.map((_,index)=>tracks.slice(0,index).reduce((sum,size)=>sum+size+gap,0));
+    node.columns=trackOffsets(columns,p.spaceBetweenX??0);
+    node.rows=trackOffsets(rows,p.spaceBetweenY??0);
+    w=w||(node.columns.at(-1)??0)+(columns.at(-1)??0);
+    h=h||(node.rows.at(-1)??0)+(rows.at(-1)??0);
+   }
    if(node===this.root){w=this.viewWidth;h=this.viewHeight}
    return node.size={w,h,type,lines,glyphWidth};
   };
@@ -214,6 +271,9 @@ class Engine {
    if(pt==='hgrid'){
     const q=node.parent.proxy,cols=q.column||1;
     x=(index%cols)*(w+(q.spaceBetweenX||q.spaceBetween||0));y=Math.floor(index/cols)*(h+(q.spaceBetweenY||q.spaceBetween||0));
+   }
+   if(pt==='repeatgrid'){
+    x+=node.parent.columns[p.column];y+=node.parent.rows[p.row];
    }
    const box={path:node.path,x:parentBox.x+x,y:parentBox.y+y,w,h,type,lines,
      glyphWidth:p.limitControl?Math.min(w,glyphWidth):glyphWidth,
@@ -258,14 +318,25 @@ class Engine {
  }
  checkLists(node=this.root) {
   if(!this.visible(node))return;
+  if(node.template){
+   const items=node.proxy.items??[];
+   assert.equal(node.children.length,Math.min(items.length,node.proxy.maxSize??80),'stale RepeatGrid rows: '+node.path);
+   node.children.forEach((child,index)=>{
+    assert.equal(child.proxy.item,items[index],'stale RepeatGrid item: '+child.path);
+    if(Object.hasOwn(child.definition.attribute||{},'entry'))assert(child.proxy.entry!=null,'missing RepeatGrid entry: '+child.path);
+   });
+  }
   const templates=node.children.filter(c=>Object.hasOwn(c.definition.attribute||{},'entry'));
   if(templates.length) {
     const visible=templates.filter(c=>c.proxy.entry!=null);
     const keys=visible.map(c=>c.proxy.entryKey);
     assert.equal(new Set(keys).size,keys.length,'duplicate generated keys in '+node.path);
     const expression=templates[0].definition.attribute.entry;
-    const match=expression.match(/^var\.([\p{L}\w]+)\[self.entryKey\]$/u);
-    if(match && this.state[match[1]])assert.equal(templates.length,Math.max(1,Object.keys(this.state[match[1]]).length),'stale generated controls in '+node.path);
+    const match=expression.match(/^var\.([\p{L}\w]+)\[(?:'' \+ )?self.entryKey\]$/u);
+    if(match && this.state[match[1]]){
+     const entries=Object.keys(this.state[match[1]]).length;
+     assert.equal(templates.length,node.template?entries:Math.max(1,entries),'stale generated controls in '+node.path);
+    }
   }
   for(const child of node.children)this.checkLists(child);
  }
@@ -301,10 +372,35 @@ for(const [name,doc]of Object.entries(documents)) {
  engine.state.invitePanel=false;engine.state.dungeonPanel=true;engine.render();
  engine.state.invitePanel=false;engine.state.dungeonPanel=false;
  layouts[name]=engine.geometry();
+ if(name==='browser'){
+  const card=engine.refs.dungeon_rows.get(1);
+  engine.invoke(card,'clickLeft');
+  const selectedId=card.entry.id;
+  const enter=engine.nodes.find(node=>node.name==='进入按钮').proxy;
+  engine.invoke(enter,'clickLeft');
+  assert.deepEqual(engine.packets.at(-1),['abyss','open_confirm',selectedId,'token']);
+
+  const refreshed=fixture(2,12),icon='{"id":"minecraft:emerald","Count":1b}';
+  refreshed.dungeonRows[1].iconJson=icon;
+  engine.receive(refreshed);engine.settle();
+  assert.equal(engine.refs.dungeon_rows.get(1),card,'same-size refresh must reuse the row');
+  assert.equal(engine.state.selectedId,selectedId,'same dungeon must remain selected');
+  assert.equal(engine.nodes.find(node=>node.proxy===card['图标']).icon,icon,'same-size refresh must refresh the item icon');
+  engine.run(doc.ui.action.close);
+  assert.deepEqual(engine.packets.at(-1),['abyss','close_view','browser','token','nonce']);
+
+  const reopened=new Engine(doc);
+  reopened.receive({...fixture(1,99),view_nonce:'reopen-nonce'});reopened.settle();
+  assert.equal(reopened.refs.dungeon_rows.childrenCount(),1);
+  assert.equal(reopened.state.selectedId,'id_99_0');
+  reopened.run(doc.ui.action.close);
+  assert.deepEqual(reopened.packets.at(-1),['abyss','close_view','browser','token','reopen-nonce']);
+  scenarios+=3;
+ }
  if(name==='design_edit'){
   assert.equal(engine.refs.rename_input.getContent(),'test','rename must contain the current id');
   assert.equal(engine.refs.字段容器.get(0)['输入壳']['输入框'].getContent(),'true','field must be editable, not a placeholder');
-  const second=engine.state.组引用[1],firstLine=second['行容器'].get(0);
+  const second=engine.refs.组容器.get(1),firstLine=second['行容器'].get(0);
   assert.equal(firstLine['行号'].texts,'&613','page 2 must show absolute line numbers');
   engine.invoke(firstLine['改钮'],'clickLeft');
   assert.equal(engine.state.editI,12,'editing must use the absolute index');
@@ -314,6 +410,26 @@ for(const [name,doc]of Object.entries(documents)) {
   assert.equal(second['追加框']['框']['输入框'].getContent(),'','switching edit groups must clear the previous loaded edit');
   engine.invoke(firstGroup['追加框']['取消编辑'],'clickLeft');
   assert.equal(engine.state.editI,-1);assert.equal(firstGroup['追加框']['框']['输入框'].getContent(),'');
+
+  const paging=new Engine(doc);
+  paging.receive(fixture(14));paging.settle();
+  const group=paging.refs.组容器.get(0),input=group['追加框']['框']['输入框'];
+  assert.equal(group['行容器'].childrenCount(),12);
+  assert.equal(group['分页']['上一页'].visible,false);
+  input.setContent('上一页的草稿');
+  paging.invoke(group['分页']['下一页'],'clickLeft');
+  assert.deepEqual(paging.packets.at(-1),['abyss','design_line_page','interact:test','field0',1,'token']);
+  const following=fixture(14,1);
+  Object.assign(following.groupRows[0],{lineCount:2,lineOffset:12,linePage:1,lines:{0:'page 2',1:'last line'}});
+  paging.receive(following,'update');paging.settle();
+  assert.equal(paging.refs.组容器.get(0),group);
+  assert.equal(group['行容器'].childrenCount(),2);
+  assert.equal(group['行容器'].get(0)['行号'].texts,'&613');
+  assert.equal(input.getContent(),'','reused first group must clear the previous page draft');
+  assert.equal(group['分页']['下一页'].visible,false);
+  paging.invoke(group['分页']['上一页'],'clickLeft');
+  assert.deepEqual(paging.packets.at(-1),['abyss','design_line_page','interact:test','field0',0,'token']);
+  scenarios+=2;
  }
  if(name==='input'){
   const plain={...fixture(1),masked:'0',pattern:'',length:8};engine.receive(plain);

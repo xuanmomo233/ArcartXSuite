@@ -34,6 +34,12 @@
 # ─── Suite-core 契约接口（明文、版本化，宿主薄壳与业务核心唯一耦合点） ──
 # 宿主薄壳直接引用本接口，必须保留全限定名与成员（且 encrypt-jar 保持明文）。
 -keep interface xuanmo.arcartxsuite.bootstrap.SuiteCore { *; }
+-keep class xuanmo.arcartxsuite.bootstrap.HostShutdown { *; }
+-keep class xuanmo.arcartxsuite.bootstrap.HostShutdown$* { *; }
+-keep class xuanmo.arcartxsuite.bootstrap.RuntimeBootstrap { *; }
+-keep class xuanmo.arcartxsuite.bootstrap.RuntimeBootstrap$* { *; }
+-keep interface xuanmo.arcartxsuite.bootstrap.RuntimeBootstrap$* { *; }
+-keep interface xuanmo.arcartxsuite.bootstrap.HostShutdown$* { *; }
 
 # ─── 业务核心实现类：保留类名 + 无参构造器供宿主反射加载 ───────────
 # 宿主以 Class.forName("xuanmo.arcartxsuite.SuiteCoreImpl") 反射实例化，故类名与
@@ -67,6 +73,7 @@
 -keep class redis.clients.** { *; }
 -keep class com.mysql.** { *; }
 -keep class org.sqlite.** { *; }
+-keep class org.tukaani.xz.** { *; }
 -keep class org.bouncycastle.** { *; }
 -keep class at.favre.lib.** { *; }
 -keep class net.sourceforge.pinyin4j.** { *; }
@@ -82,7 +89,8 @@
 
 # ─── 保留资源文件名/内容（不重命名 yml 等资源）─────────
 -adaptresourcefilenames !**.yml,!**.yaml
--adaptresourcefilecontents !**.yml,!**.yaml
+# The runtime catalog is signed over the exact bytes and the signature is binary.
+-adaptresourcefilecontents !META-INF/axs-libraries.properties,!META-INF/axs-libraries.sig,!**.yml,!**.yaml
 
 # ─── 混淆字典（使用难以辨认的名称） ──────────────────────────
 -obfuscationdictionary dictionary.txt

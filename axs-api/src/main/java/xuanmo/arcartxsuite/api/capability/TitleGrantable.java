@@ -23,4 +23,8 @@ public interface TitleGrantable {
      * @return {@code true} 表示授予成功
      */
     boolean giveTitle(@NotNull UUID playerId, @NotNull String titleId, @NotNull String duration, @NotNull String source);
+
+    /** Completes true after the permanent ownership record is saved. */
+    java.util.concurrent.CompletableFuture<Boolean> grantPermanent(
+            @NotNull UUID playerId, @NotNull String titleId, @NotNull String source);
 }

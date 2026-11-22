@@ -2,11 +2,11 @@ id: market
 name: Market
 version: 2.0.0
 main: xuanmo.arcartxsuite.market.MarketModule
-api-version: 3.0
+api-version: 3.9
 
 depends: []
 softdepends: [warehouse]
 external-depends:
   - PlaceholderAPI
 
-external-softdepends: [Adyeshach]
+external-softdepends: [Adyeshach, LuckPerms]

@@ -33,6 +33,7 @@ public interface TitleRepository {
 
     /**
      * 保存玩家在指定分组的装备称号。
+     * titleId 为空时卸下该组，装备和展示变更一起提交。
      *
      * @param playerUuid 玩家 UUID
      * @param groupId    分组 ID
@@ -40,42 +41,26 @@ public interface TitleRepository {
      * @param updatedAt  更新时间
      * @throws SQLException 数据库异常
      */
-    void saveEquippedTitle(UUID playerUuid, String groupId, String titleId, Instant updatedAt) throws SQLException;
+    PlayerTitleState setEquippedTitle(UUID playerUuid, String groupId, String titleId, Instant updatedAt) throws SQLException;
 
     /**
-     * 删除玩家在指定分组的装备记录。
-     *
-     * @param playerUuid 玩家 UUID
-     * @param groupId    分组 ID
-     * @throws SQLException 数据库异常
+     * 原子清空装备和展示，返回提交后的状态。
      */
-    void deleteEquippedGroup(UUID playerUuid, String groupId) throws SQLException;
+    PlayerTitleState clearEquippedTitles(UUID playerUuid) throws SQLException;
 
     /**
-     * 删除玩家所有分组中装备了指定称号的装备记录。
+     * 原子授予称号，保留已有隐藏设置，清理旧授予留下的装备和展示。
      *
      * @param playerUuid 玩家 UUID
-     * @param titleId    称号 ID
+     * @param proposal 本次授予的称号记录
+     * @param keepPermanent 是否保留已有永久持有记录
      * @throws SQLException 数据库异常
      */
-    void deleteEquippedTitle(UUID playerUuid, String titleId) throws SQLException;
+    GrantedTitle grantOwnedTitle(UUID playerUuid, PlayerOwnedTitle proposal, boolean keepPermanent) throws SQLException;
 
-    /**
-     * 删除玩家的全部装备分组记录。
-     *
-     * @param playerUuid 玩家 UUID
-     * @throws SQLException 数据库异常
-     */
-    void deleteAllEquippedGroups(UUID playerUuid) throws SQLException;
+    record GrantedTitle(PlayerOwnedTitle title, boolean clearedPresentation) {}
 
-    /**
-     * 保存玩家拥有的称号记录。
-     *
-     * @param playerUuid 玩家 UUID
-     * @param ownedTitle 拥有的称号记录
-     * @throws SQLException 数据库异常
-     */
-    void saveOwnedTitle(UUID playerUuid, PlayerOwnedTitle ownedTitle) throws SQLException;
+    PlayerTitleState setOwnedTitleHidden(UUID playerUuid, String titleId, boolean hidden, Instant updatedAt) throws SQLException;
 
     /**
      * 删除玩家拥有的指定称号记录。
@@ -94,18 +79,10 @@ public interface TitleRepository {
      * @param updatedAt  更新时间
      * @throws SQLException 数据库异常
      */
-    void saveDisplayTitle(UUID playerUuid, String titleId, Instant updatedAt) throws SQLException;
+    PlayerTitleState setDisplayTitle(UUID playerUuid, String titleId, Instant updatedAt) throws SQLException;
 
     /**
-     * 删除玩家的展示称号记录。
-     *
-     * @param playerUuid 玩家 UUID
-     * @throws SQLException 数据库异常
-     */
-    void deleteDisplayTitle(UUID playerUuid) throws SQLException;
-
-    /**
-     * 批量删除已过期的称号记录。
+     * 在一个有上限的事务中清理已过期的持有记录及关联的装备和展示。
      *
      * @param now 当前时间
      * @return 删除的记录数
@@ -113,8 +90,4 @@ public interface TitleRepository {
      */
     int deleteExpiredTitles(Instant now) throws SQLException;
 
-    /**
-     * 关闭仓储，释放数据库连接等资源。
-     */
-    void shutdown();
 }

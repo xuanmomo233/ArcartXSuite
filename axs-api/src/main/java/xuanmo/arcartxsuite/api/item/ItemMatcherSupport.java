@@ -60,11 +60,25 @@ public final class ItemMatcherSupport implements ItemMatcherAPI {
         if (matcher == null || matcher.emptyMatcher() || itemStack == null || itemStack.getType().isAir()) {
             return false;
         }
+        return matches(matcher, itemStack, newFeatures(itemStack));
+    }
 
-        ItemFeatures features = new ItemFeatures(
-            itemStack, mythicItemIdResolver, neigeItemIdResolver, overtureItemIdResolver
-        );
+    @Override
+    public boolean matchesAny(List<ItemMatcher> matchers, ItemStack itemStack) {
+        if (matchers.isEmpty() || itemStack == null || itemStack.getType().isAir()) return false;
+        if (matchers.size() == 1) return matches(matchers.get(0), itemStack);
+        ItemFeatures features = newFeatures(itemStack);
+        for (ItemMatcher matcher : matchers) {
+            if (matcher != null && !matcher.emptyMatcher() && matches(matcher, itemStack, features)) return true;
+        }
+        return false;
+    }
 
+    private ItemFeatures newFeatures(ItemStack itemStack) {
+        return new ItemFeatures(itemStack, mythicItemIdResolver, neigeItemIdResolver, overtureItemIdResolver);
+    }
+
+    private boolean matches(ItemMatcher matcher, ItemStack itemStack, ItemFeatures features) {
         if (!matcher.materialIds().isEmpty() && !matcher.materialIds().contains(features.materialId())) {
             return false;
         }

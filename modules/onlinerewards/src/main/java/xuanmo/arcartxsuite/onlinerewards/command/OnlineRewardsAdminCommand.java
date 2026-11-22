@@ -3,10 +3,14 @@ package xuanmo.arcartxsuite.onlinerewards.command;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.UUID;
+import java.util.concurrent.CompletionStage;
+import java.sql.SQLException;
 import java.util.function.Supplier;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.command.CommandSender;
+import org.bukkit.command.ConsoleCommandSender;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -23,7 +27,7 @@ import xuanmo.arcartxsuite.onlinerewards.service.OnlineRewardsService;
  */
 public final class OnlineRewardsAdminCommand implements ModuleCommandHandler {
 
-    private static final List<String> ACTIONS = List.of("help", "status", "add", "remove", "set", "card", "savings");
+    private static final List<String> ACTIONS = List.of("help", "status", "add", "remove", "set", "card", "savings", "delivery-review");
 
     private final Supplier<OnlineRewardsService> serviceProvider;
     private final MessageProvider messages;
@@ -63,6 +67,7 @@ public final class OnlineRewardsAdminCommand implements ModuleCommandHandler {
             case "add", "remove", "set" -> handleTimeAdjust(sender, action, args);
             case "card" -> handleCard(sender, args);
             case "savings" -> handleSavings(sender, args);
+            case "delivery-review" -> handleDeliveryReview(sender, args);
             default -> showHelp(sender, label);
         }
         return true;
@@ -105,6 +110,46 @@ public final class OnlineRewardsAdminCommand implements ModuleCommandHandler {
         sender.sendMessage(msg("help.set", cmd));
         sender.sendMessage(msg("help.card", cmd));
         sender.sendMessage(msg("help.savings", cmd));
+        if (sender instanceof ConsoleCommandSender) sender.sendMessage(msg("help.delivery-review", cmd));
+    }
+
+    private void handleDeliveryReview(CommandSender sender, String[] args) {
+        if (!(sender instanceof ConsoleCommandSender)) {
+            sender.sendMessage(msg("admin.delivery-review.console"));
+            return;
+        }
+        if (args.length != 3 && args.length != 7) {
+            sender.sendMessage(msg("admin.delivery-review.usage"));
+            return;
+        }
+        OnlineRewardsService service = serviceProvider.get();
+        if (service == null) { sender.sendMessage(msg("common.service-down")); return; }
+        try {
+            UUID player = UUID.fromString(args[2]);
+            if (args.length == 3) {
+                var rows = service.deliveriesForReview(player);
+                if (rows.isEmpty()) sender.sendMessage(msg("admin.delivery-review.empty"));
+                for (var row : rows) {
+                    var delivery = row.delivery();
+                    sender.sendMessage(msg("admin.delivery-review.detail", delivery.batchId(), delivery.step() + 1,
+                        row.attempt(), row.status(), delivery.reward().kind(), delivery.reward().value()));
+                }
+                return;
+            }
+            int step = Integer.parseInt(args[4]);
+            String resolution = args[6].toLowerCase(Locale.ROOT);
+            if (step <= 0 || (!resolution.equals("confirmed") && !resolution.equals("retry"))) {
+                sender.sendMessage(msg("admin.delivery-review.usage"));
+                return;
+            }
+            boolean ok = service.resolveDelivery(player, args[3], step - 1, UUID.fromString(args[5]),
+                resolution.equals("confirmed"), sender.getName());
+            sender.sendMessage(msg(ok ? "admin.delivery-review.resolved" : "admin.delivery-review.conflict"));
+        } catch (IllegalArgumentException invalid) {
+            sender.sendMessage(msg("admin.delivery-review.usage"));
+        } catch (SQLException failure) {
+            sender.sendMessage(msg("admin.delivery-review.storage-failed", failure.getMessage()));
+        }
     }
 
     private void sendStatus(CommandSender sender) {
@@ -130,8 +175,7 @@ public final class OnlineRewardsAdminCommand implements ModuleCommandHandler {
         }
         Player target = Bukkit.getPlayer(args[3]);
         if (target == null) { sender.sendMessage(msg("common.player-offline", args[3])); return; }
-        OnlineRewardsOperationResult result = svc.adjustOnlineTime(target, operation, minutes);
-        sender.sendMessage(messages.get("prefix") + (result.success() ? ChatColor.GREEN : ChatColor.RED) + result.message());
+        sendWriteResult(sender, svc, svc.adjustOnlineTime(target, operation, minutes));
     }
 
     private void handleCard(CommandSender sender, String[] args) {
@@ -148,8 +192,7 @@ public final class OnlineRewardsAdminCommand implements ModuleCommandHandler {
         }
         Player target = Bukkit.getPlayer(args[4]);
         if (target == null) { sender.sendMessage(msg("common.player-offline", args[4])); return; }
-        OnlineRewardsOperationResult result = svc.adjustMakeupCards(target, operation, amount);
-        sender.sendMessage(messages.get("prefix") + (result.success() ? ChatColor.GREEN : ChatColor.RED) + result.message());
+        sendWriteResult(sender, svc, svc.adjustMakeupCards(target, operation, amount));
     }
 
     private void handleSavings(CommandSender sender, String[] args) {
@@ -167,8 +210,18 @@ public final class OnlineRewardsAdminCommand implements ModuleCommandHandler {
         }
         Player target = Bukkit.getPlayer(args[4]);
         if (target == null) { sender.sendMessage(msg("common.player-offline", args[4])); return; }
-        OnlineRewardsOperationResult result = svc.adjustOfflineSavings(target, operation, minutes);
-        sender.sendMessage(messages.get("prefix") + (result.success() ? ChatColor.GREEN : ChatColor.RED) + result.message());
+        sendWriteResult(sender, svc, svc.adjustOfflineSavings(target, operation, minutes));
+    }
+
+    private void sendWriteResult(CommandSender sender, OnlineRewardsService service, CompletionStage<OnlineRewardsOperationResult> operation) {
+        operation.whenComplete((result, failure) -> service.runOnMain(() -> {
+            if (sender instanceof Player player && (!player.isOnline() || Bukkit.getPlayer(player.getUniqueId()) != player)) return;
+            if (failure != null) {
+                sender.sendMessage(messages.get("prefix") + ChatColor.RED + "写入结果未确认，请核对当前数据后再试。");
+            } else {
+                sender.sendMessage(messages.get("prefix") + (result.success() ? ChatColor.GREEN : ChatColor.RED) + result.message());
+            }
+        }));
     }
 
     private static int parseDurationMinutes(String input) {

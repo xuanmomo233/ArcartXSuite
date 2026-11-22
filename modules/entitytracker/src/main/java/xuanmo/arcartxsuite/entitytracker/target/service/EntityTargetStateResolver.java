@@ -3,7 +3,6 @@ package xuanmo.arcartxsuite.entitytracker.target.service;
 import io.lumine.mythic.core.mobs.ActiveMob;
 import java.text.DecimalFormat;
 import java.util.Optional;
-import java.util.function.Function;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.LivingEntity;
@@ -41,7 +40,9 @@ public final class EntityTargetStateResolver {
         long lastHitAtMillis,
         long nowMillis
     ) {
-        return resolve(attacker, target, configuration, lastHitAtMillis, nowMillis, EntityCombatMetadata::resolveMythicMobId);
+        ActiveMob activeMob = EntityCombatMetadata.resolveActiveMob(target);
+        return resolve(attacker, target, configuration, lastHitAtMillis, nowMillis, activeMob,
+            EntityCombatMetadata.resolveMythicMobIdFrom(activeMob), target == null ? "" : EntityCombatMetadata.resolveEntityType(target));
     }
 
     static Optional<EntityTargetSnapshot> resolve(
@@ -50,7 +51,9 @@ public final class EntityTargetStateResolver {
         EntityTargetHudConfiguration configuration,
         long lastHitAtMillis,
         long nowMillis,
-        Function<LivingEntity, String> mythicMobIdResolver
+        ActiveMob activeMob,
+        String mythicMobId,
+        String entityType
     ) {
         if (attacker == null || target == null || configuration == null) {
             return Optional.empty();
@@ -86,13 +89,10 @@ public final class EntityTargetStateResolver {
         }
 
         int distance = (int) Math.round(Math.sqrt(Math.max(0.0D, distanceSquared)));
-        ActiveMob activeMob = EntityCombatMetadata.resolveActiveMob(target);
-        String mythicMobId = nullToEmpty(EntityCombatMetadata.resolveMythicMobIdFrom(activeMob));
         double maxHealth = EntityCombatMetadata.resolveMaxHealth(target, activeMob);
         double health = EntityCombatMetadata.resolveCurrentHealth(target, maxHealth, activeMob);
         double progress = maxHealth <= 0.0D ? 0.0D : Math.max(0.0D, Math.min(health / maxHealth, 1.0D));
         double healthPercent = progress * 100.0D;
-        String entityType = EntityCombatMetadata.resolveEntityType(target);
         String entityTypeName = EntityCombatMetadata.formatEntityTypeName(target.getType());
 
         EntityTargetSnapshot snapshot = new EntityTargetSnapshot(

@@ -69,15 +69,13 @@ ui:
       Packet.send('abyss', 'view_ready', 'buff')
       Sound.self('minecraft:block.note_block.pling', 0.8, 10)
     tick: |-
-      if(var.iconsPending && !var.dirty){
+      if(var.iconsPending && var.卡片区GridRows != none && val.卡片区 != none && val.卡片区.childrenCount() == var.卡片区GridRows.size()){
         var.iconsPending = false
-        卡片目标数 = var.count.round()
-        // seticon 不随 var/entry 自动重算，需逐卡片手动触发
-        if(卡片目标数 > 0){
-          val.卡片区.get(0)['图标槽'].seticon()
-          if(卡片目标数 > 1){
-            for(i in range(1, 卡片目标数 - 1)){
-              var.卡片引用[i.round()]['图标槽'].seticon()
+        if(var.卡片区GridRows.size() > 0){
+          for(i in range(0, var.卡片区GridRows.size() - 1)){
+            row = val.卡片区.get(i.round())
+            if(row != none && row['图标槽'] != none){
+              row['图标槽'].seticon()
             }
           }
         }
@@ -86,22 +84,14 @@ ui:
         var.dirty = false
         // 卡片 copy（引用字典 + 轮次名 + 数量变化才重建）
         卡片目标数 = var.count.round()
-        if(var.已建_卡片区 != 卡片目标数){
-        var.已建_卡片区 = 卡片目标数
-          for(key in var.卡片引用.keys()){
-            var.卡片引用[key].remove()
-          }
-          var.卡片引用 = {}
-          var.轮次 = (var.轮次 + 1).round()
-          模板 = val.卡片区.get(0)
-          模板.entryKey = 0.round()
-          if(卡片目标数 > 1){
-            for(i in range(1, 卡片目标数 - 1)){
-              e = 模板.copy('卡片_' + var.轮次 + '_' + i.round())
-              e.entryKey = i.round()
-              var.卡片引用[i.round()] = e
+        if(var.卡片区GridRows == none || var.卡片区GridRows.size() != (var.count)){
+          网格数据 = []
+          if((var.count) > 0){
+            for(网格序号 in range(0, (var.count) - 1)){
+              网格数据.add(网格序号.round())
             }
           }
+          var.卡片区GridRows = 网格数据
         }
         var.iconsPending = true
       }
@@ -212,9 +202,12 @@ controls:
             val.buff_slider.setDragYRatio(Math.max(0, Math.min(1, self.moveY - self.wheelValue * 0.1)))
         children:
           卡片区:
-            type: HGrid
+            type: RepeatGrid
             val: 卡片区
             attribute:
+              items: "var.卡片区GridRows"
+              flow: ~row
+              maxSize: "var.卡片区GridRows == none ? 0 : var.卡片区GridRows.size()"
               width: "Math.min(4, Math.max(1, var.count)) * 336 - 36"
               column: "Math.min(4, Math.max(1, var.count))"
               spaceBetweenX: 36
@@ -225,7 +218,7 @@ controls:
                 attribute:
                   width: 300
                   height: 420
-                  entryKey: 0.round()
+                  entryKey: self.item
                   entry: "var.cards[self.entryKey]"
                   visible: "self.entry != none"
                 children:

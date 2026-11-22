@@ -60,13 +60,24 @@ public final class VanillaRecipeRegistry implements VanillaRecipeAccess, Listene
     public boolean configured(Entry entry) { return entry.key().getNamespace().equals(CONFIG); }
 
     public void save(String id, Definition definition, long expected) throws Exception {
+        save(id, definition, expected, Map.of());
+    }
+
+    public Map<Integer, Map<String, Object>> references(String id) throws Exception {
+        requireMain();
+        var document = file.read();
+        if (!document.digest().equals(diskDigest)) throw new IllegalStateException("recipes.yml 已修改，请先重载");
+        return RecipeFile.references(document, id);
+    }
+
+    public void save(String id, Definition definition, long expected, Map<Integer, Map<String, Object>> references) throws Exception {
         requireMain();
         if (expected != editRevision) throw new IllegalStateException("配方已被修改，请刷新后重新编辑");
         if (!id.matches("[a-z0-9_-]{1,64}")) throw new IllegalArgumentException("配方 ID 格式无效");
         RecipeFile.Document current = file.read();
         if (!current.digest().equals(diskDigest)) throw new IllegalStateException("recipes.yml 已修改，请先重载");
         current.yaml().set("recipes." + id, null);
-        if (definition != null) current.yaml().createSection("recipes." + id, RecipeFile.serialize(definition));
+        if (definition != null) current.yaml().createSection("recipes." + id, RecipeFile.serialize(definition, references));
         current.yaml().set("config-version", 1);
         current.yaml().set("revision", editRevision + 1);
         var previous = new LinkedHashMap<>(entries);
@@ -231,6 +242,11 @@ public final class VanillaRecipeRegistry implements VanillaRecipeAccess, Listene
 
     @Override
     public CompletableFuture<FillReceipt> fill(Player player, NamespacedKey key, long revision) {
+        return fill(player, key, revision, () -> true);
+    }
+
+    public CompletableFuture<FillReceipt> fill(Player player, NamespacedKey key, long revision,
+                                               java.util.function.BooleanSupplier currentView) {
         requireMain();
         if (!valid(player, key, revision)) {
             return CompletableFuture.completedFuture(new FillReceipt(key, revision, false, "配方已更新或没有使用权限"));
@@ -249,9 +265,9 @@ public final class VanillaRecipeRegistry implements VanillaRecipeAccess, Listene
         java.util.function.Consumer<String> done = message ->
             future.complete(new FillReceipt(key, revision, message.isEmpty(), message));
         if (type == WorkshopType.BREWING) {
-            planner.fillCustom(player, type, stock -> brewDemand(player, entry, stock), done);
+            planner.fillCustom(player, type, stock -> brewDemand(player, entry, stock), currentView, done);
         } else {
-            planner.fill(player, key.toString(), type, () -> valid(player, key, revision), done);
+            planner.fill(player, key.toString(), type, () -> currentView.getAsBoolean() && valid(player, key, revision), done);
         }
         return future;
     }

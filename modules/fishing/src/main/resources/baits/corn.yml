@@ -33,4 +33,6 @@ fish-attract-modifiers:        # 鱼类吸引倍率（对该鱼种的捕获概�
   legendary_carp: 2.5          # 传说鲤鱼吸引倍率2.5倍（强力吸引）
   catfish: 1.8                 # 鲶鱼吸引倍率1.8倍
 treasure-chance-boost: 0.05    # 宝藏概率额外加成（+5%）
+fight-effects:
+  - { fish: legendary_carp, action: sinker, recovery-extra-ticks: 8 }
 max-durability-bonus: 0        # 鱼竿最大耐久度加成

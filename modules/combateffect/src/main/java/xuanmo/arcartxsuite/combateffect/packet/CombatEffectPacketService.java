@@ -1,9 +1,12 @@
 package xuanmo.arcartxsuite.combateffect.packet;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.logging.Logger;
 import org.bukkit.Bukkit;
@@ -13,15 +16,14 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
-import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.scheduler.BukkitTask;
 import xuanmo.arcartxsuite.api.capability.EventBusCapability;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
-import xuanmo.arcartxsuite.api.combat.CombatEventSupport;
 import xuanmo.arcartxsuite.api.combat.EntityCombatMetadata;
-import xuanmo.arcartxsuite.api.event.TaczGunDamageEvent;
+import xuanmo.arcartxsuite.api.event.CombatDamageEvent;
 import xuanmo.arcartxsuite.api.event.TaczGunKillEvent;
 import xuanmo.arcartxsuite.combateffect.packet.config.CombatPacketContext;
 import xuanmo.arcartxsuite.combateffect.packet.config.PacketDefinition;
@@ -31,11 +33,18 @@ import xuanmo.arcartxsuite.combateffect.packet.config.CombatEffectPacketConfigur
 
 public final class CombatEffectPacketService implements Listener {
 
+    private static final String DAMAGE_TOPIC = "axs.combateffect.damage_dealt";
+
     private final JavaPlugin plugin;
     private final CombatEffectPacketConfiguration configuration;
     private final PacketBridgeAPI packetBridge;
     private final Logger logger;
+    private final List<PacketDefinition> attackPackets;
+    private final List<PacketDefinition> killPackets;
     private Supplier<EventBusCapability> eventBusProvider;
+    private Function<Player, Player> deferredKiller = player -> null;
+    private final Set<UUID> notifiedDeaths = new HashSet<>();
+    private BukkitTask clearNotifiedDeaths;
 
     // cooldown: key = "packetId:playerUUID", value = expiry timestamp
     private final ConcurrentHashMap<String, Long> cooldownMap = new ConcurrentHashMap<>();
@@ -50,10 +59,16 @@ public final class CombatEffectPacketService implements Listener {
         this.configuration = configuration;
         this.packetBridge = packetBridge;
         this.logger = logger;
+        this.attackPackets = configuration.enabledPackets(PacketTrigger.ATTACK);
+        this.killPackets = configuration.enabledPackets(PacketTrigger.KILL);
     }
 
     public void setEventBusProvider(Supplier<EventBusCapability> eventBusProvider) {
         this.eventBusProvider = eventBusProvider;
+    }
+
+    public void setDeferredKiller(Function<Player, Player> deferredKiller) {
+        this.deferredKiller = deferredKiller;
     }
 
     public void start() {
@@ -63,6 +78,11 @@ public final class CombatEffectPacketService implements Listener {
     public void shutdown() {
         HandlerList.unregisterAll(this);
         cooldownMap.clear();
+        if (clearNotifiedDeaths != null) {
+            clearNotifiedDeaths.cancel();
+            clearNotifiedDeaths = null;
+        }
+        notifiedDeaths.clear();
     }
 
     @EventHandler
@@ -75,39 +95,19 @@ public final class CombatEffectPacketService implements Listener {
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onEntityDeath(EntityDeathEvent event) {
         LivingEntity victim = event.getEntity();
-        Player killer = victim.getKiller();
-        if (killer == null || killer.equals(victim)) {
-            return;
-        }
+        Player killer = victim instanceof Player player ? deferredKiller.apply(player) : null;
+        if (killer == null) killer = victim.getKiller();
         String deathMessage = event instanceof PlayerDeathEvent pde ? pde.getDeathMessage() : "";
-        dispatchPackets(PacketTrigger.KILL, CombatPacketContext.fromKill(killer, victim, deathMessage));
-        publishKillEvent(killer, victim, event instanceof PlayerDeathEvent);
+        handleKill(killer, victim, deathMessage);
     }
 
-    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
-    public void onEntityAttack(EntityDamageByEntityEvent event) {
-        if (!(event.getEntity() instanceof LivingEntity target)) {
-            return;
-        }
-        Player attacker = CombatEventSupport.resolvePlayerAttacker(event);
-        if (attacker == null || attacker.equals(target)) {
-            return;
-        }
-        publishDamageEvent(attacker, target, event);
-        dispatchPackets(PacketTrigger.ATTACK, CombatPacketContext.fromAttack(attacker, target, event));
-    }
-
-    /**
-     * 监听 TACZ 枪械伤害事件，发布到 EventBus。
-     * <p>
-     * TACZ 伤害不触发 {@link EntityDamageByEntityEvent}，必须单独监听。
-     */
     @EventHandler(priority = EventPriority.MONITOR)
-    public void onTaczGunDamage(TaczGunDamageEvent event) {
-        Player attacker = event.getAttacker();
-        LivingEntity target = event.getTarget();
-        if (attacker.equals(target)) return;
-        publishTaczDamageEvent(attacker, target, event.getDamage(), event.isHeadShot());
+    public void onCombatDamage(CombatDamageEvent event) {
+        publishDamageEvent(event);
+        if (!attackPackets.isEmpty() && configuration.entityCombatEnabled()) {
+            dispatchPackets(PacketTrigger.ATTACK, attackPackets,
+                CombatPacketContext.fromAttack(event.getAttacker(), event.getTarget(), event.getDamage()));
+        }
     }
 
     /**
@@ -118,16 +118,27 @@ public final class CombatEffectPacketService implements Listener {
      */
     @EventHandler(priority = EventPriority.MONITOR)
     public void onTaczGunKill(TaczGunKillEvent event) {
-        Player killer = event.getAttacker();
-        LivingEntity victim = event.getKilledEntity();
-        if (killer.equals(victim)) return;
-        boolean isPlayerKill = victim instanceof Player;
-        publishKillEvent(killer, victim, isPlayerKill);
-        String deathMessage = isPlayerKill ? "" : "";
-        dispatchPackets(PacketTrigger.KILL, CombatPacketContext.fromKill(killer, victim, deathMessage));
+        handleKill(event.getAttacker(), event.getKilledEntity(), "");
     }
 
-    private void dispatchPackets(PacketTrigger trigger, CombatPacketContext context) {
+    private void handleKill(Player killer, LivingEntity victim, String deathMessage) {
+        if (killer == null || killer.equals(victim) || !notifiedDeaths.add(victim.getUniqueId())) {
+            return;
+        }
+        // TaCZ can emit its kill event after Bukkit has already reported the same death.
+        if (clearNotifiedDeaths == null) {
+            clearNotifiedDeaths = Bukkit.getScheduler().runTask(plugin, () -> {
+                notifiedDeaths.clear();
+                clearNotifiedDeaths = null;
+            });
+        }
+        if (!killPackets.isEmpty()) {
+            dispatchPackets(PacketTrigger.KILL, killPackets, CombatPacketContext.fromKill(killer, victim, deathMessage));
+        }
+        publishKillEvent(killer, victim, victim instanceof Player);
+    }
+
+    private void dispatchPackets(PacketTrigger trigger, List<PacketDefinition> definitions, CombatPacketContext context) {
         if (packetBridge == null || !packetBridge.isAvailable()) {
             return;
         }
@@ -148,10 +159,7 @@ public final class CombatEffectPacketService implements Listener {
         }
 
         long now = System.currentTimeMillis();
-        for (PacketDefinition definition : configuration.packetDefinitions()) {
-            if (!definition.enabled() || !definition.triggers().contains(trigger)) {
-                continue;
-            }
+        for (PacketDefinition definition : definitions) {
             for (PacketRecipient recipientType : definition.recipients()) {
                 Player recipient = recipientType.resolve(context.attacker(), context.target());
                 if (recipient == null || !recipient.isOnline()) {
@@ -205,56 +213,15 @@ public final class CombatEffectPacketService implements Listener {
         }
     }
 
-    private void publishDamageEvent(Player attacker, LivingEntity target, EntityDamageByEntityEvent event) {
-        if (eventBusProvider == null) {
-            return;
-        }
-        EventBusCapability eventBus = eventBusProvider.get();
-        if (eventBus == null) {
-            return;
-        }
+    private void publishDamageEvent(CombatDamageEvent event) {
+        EventBusCapability eventBus = eventBusProvider == null ? null : eventBusProvider.get();
+        if (eventBus == null) return;
         try {
-            Map<String, String> payload = new java.util.LinkedHashMap<>();
-            payload.put("attacker", attacker.getName());
-            payload.put("targetType", target.getType().name());
-            payload.put("targetName", target.getName());
-            payload.put("damage", String.valueOf(event.getFinalDamage()));
-            eventBus.publish("axs.combateffect.damage_dealt", attacker, payload);
-        } catch (Exception e) {
-            logger.warning("CombatEffect EventBus 发布失败: " + e.getMessage());
-        }
-    }
-
-    /**
-     * 发布 TACZ 枪械伤害事件到 EventBus。
-     * <p>
-     * 与 {@link #publishDamageEvent} 发布到同一 topic（{@code axs.combateffect.damage_dealt}），
-     * payload 结构一致，下游消费者无需区分伤害来源。
-     *
-     * @param attacker 攻击者
-     * @param target   目标实体
-     * @param damage   伤害值
-     * @param headShot 是否爆头
-     */
-    private void publishTaczDamageEvent(Player attacker, LivingEntity target, double damage, boolean headShot) {
-        if (eventBusProvider == null) {
-            return;
-        }
-        EventBusCapability eventBus = eventBusProvider.get();
-        if (eventBus == null) {
-            return;
-        }
-        try {
-            Map<String, String> payload = new java.util.LinkedHashMap<>();
-            payload.put("attacker", attacker.getName());
-            payload.put("targetType", target.getType().name());
-            payload.put("targetName", target.getName());
-            payload.put("damage", String.valueOf(damage));
-            payload.put("headshot", String.valueOf(headShot));
-            payload.put("source", "tacz");
-            eventBus.publish("axs.combateffect.damage_dealt", attacker, payload);
-        } catch (Exception e) {
-            logger.warning("CombatEffect EventBus 发布 TACZ 伤害失败: " + e.getMessage());
+            if (eventBus.hasSubscribers(DAMAGE_TOPIC)) {
+                eventBus.publish(DAMAGE_TOPIC, event.getAttacker(), event.payload());
+            }
+        } catch (RuntimeException e) {
+            logger.warning("CombatEffect EventBus 发布伤害失败: " + e.getMessage());
         }
     }
 
@@ -280,26 +247,8 @@ public final class CombatEffectPacketService implements Listener {
         Object payload;
         if (variables != null && !variables.isEmpty()) {
             payload = new java.util.LinkedHashMap<>(variables);
-        } else if (definition.packTemplate() != null && !definition.packTemplate().isEmpty()) {
-            // 使用模板但无上下文，只做简单变量替换
-            Map<String, Object> rendered = new java.util.LinkedHashMap<>();
-            for (Map.Entry<String, Object> entry : definition.packTemplate().entrySet()) {
-                Object value = entry.getValue();
-                if (value instanceof String text) {
-                    value = text
-                        .replace("{recipient}", recipient.getName())
-                        .replace("{player}", recipient.getName());
-                    if (variables != null) {
-                        for (Map.Entry<String, String> var : variables.entrySet()) {
-                            value = ((String) value).replace("{" + var.getKey() + "}", var.getValue());
-                        }
-                    }
-                }
-                rendered.put(entry.getKey(), value);
-            }
-            payload = rendered;
         } else {
-            payload = Map.of();
+            payload = renderTemplate(definition, recipient, Map.of());
         }
         boolean success = packetBridge.sendPacket(
             recipient, definition.uiId(), definition.packetHandler(), payload
@@ -314,6 +263,30 @@ public final class CombatEffectPacketService implements Listener {
             );
         }
         return success;
+    }
+
+    public boolean triggerConfiguredPacket(String packetId, Player recipient, Map<String, String> variables) {
+        if (packetBridge == null || !packetBridge.isAvailable()) return false;
+        PacketDefinition definition = configuration.findPacketById(packetId);
+        if (definition == null || !definition.enabled()) return false;
+        return packetBridge.sendPacket(recipient, definition.uiId(), definition.packetHandler(),
+            renderTemplate(definition, recipient, variables));
+    }
+
+    private Map<String, Object> renderTemplate(PacketDefinition definition, Player recipient, Map<String, String> variables) {
+        Map<String, Object> rendered = new java.util.LinkedHashMap<>();
+        if (definition.packTemplate() == null) return rendered;
+        definition.packTemplate().forEach((key, value) -> {
+            if (value instanceof String text) {
+                text = text.replace("{recipient}", recipient.getName()).replace("{player}", recipient.getName());
+                for (Map.Entry<String, String> variable : variables.entrySet()) {
+                    text = text.replace("{" + variable.getKey() + "}", variable.getValue());
+                }
+                value = text;
+            }
+            rendered.put(key, value);
+        });
+        return rendered;
     }
 
     /**

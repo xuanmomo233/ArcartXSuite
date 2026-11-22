@@ -73,6 +73,12 @@ public final class MenuConditionEvaluator {
      * @return 解析后的文本
      */
     public static String applyPlaceholders(Player player, String input) {
+        if (input == null) return "";
+        if (!hasPlaceholders(input)) return input;
         return ScriptConditionServices.evaluator().applyPlaceholders(player, input);
+    }
+
+    static boolean hasPlaceholders(String input) {
+        return input != null && (input.indexOf('%') >= 0 || input.contains("{player}"));
     }
 }

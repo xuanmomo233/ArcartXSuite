@@ -11,7 +11,44 @@ repositories {
     maven("https://repo.extendedclip.com/releases/")
 }
 
+// Compile against upstream APIs, but ship only the runtime components used by Suite.
+val runtimeTarget = RuntimeTarget.parse(providers.gradleProperty("axs.runtimeTarget").orElse("universal").get())
+val packagingSqlite by configurations.creating { isTransitive = false }
+val packagingCrypto by configurations.creating { isTransitive = false }
+
+val compactSqliteJar by tasks.registering(Jar::class) {
+    archiveFileName.set("sqlite-jdbc-${runtimeTarget.id}.jar")
+    destinationDirectory.set(layout.buildDirectory.dir("packaging"))
+    from({ zipTree(packagingSqlite.singleFile) })
+    exclude(ExcludeOtherRuntimeAssets(runtimeTarget))
+    exclude("META-INF/MANIFEST.MF", "META-INF/*.SF", "META-INF/*.RSA", "META-INF/*.DSA")
+    isPreserveFileTimestamps = false
+    isReproducibleFileOrder = true
+}
+
+val generateRuntimeTarget by tasks.registering(GenerateRuntimeTargetTask::class) {
+    targetId.set(runtimeTarget.id)
+    outputFile.set(layout.buildDirectory.file("generated/runtime/axs-runtime.properties"))
+}
+
+val compactCryptoJar by tasks.registering(CompactCryptoJarTask::class) {
+    inputJar.set(layout.file(providers.provider { packagingCrypto.singleFile }))
+    consumerClasses.from(layout.buildDirectory.dir("classes/java/main"),
+        project(":auth-engine").layout.buildDirectory.dir("classes/java/main"))
+    dependsOn("compileJava", ":auth-engine:compileJava")
+    outputJar.set(layout.buildDirectory.file("packaging/bcprov-suite.jar"))
+}
+
+configurations.matching { it.name == "runtimeClasspath" || it.name == "testRuntimeClasspath" }.configureEach {
+    exclude(group = "org.xerial", module = "sqlite-jdbc")
+    exclude(group = "org.bouncycastle", module = "bcprov-jdk18on")
+}
+
 dependencies {
+    packagingSqlite("org.xerial:sqlite-jdbc:3.46.0.0")
+    packagingCrypto("org.bouncycastle:bcprov-jdk18on:1.86")
+    runtimeOnly(files(compactSqliteJar.flatMap { it.archiveFile }))
+    runtimeOnly(files(compactCryptoJar.flatMap { it.outputJar }))
     implementation(project(":axs-api"))
     implementation(project(":auth-minecraft"))
     implementation(project(":auth-engine"))
@@ -35,7 +72,16 @@ dependencies {
     compileOnly("me.clip:placeholderapi:2.11.7")
     implementation("com.zaxxer:HikariCP:5.1.0")
     implementation("org.xerial:sqlite-jdbc:3.46.0.0")
-    implementation("com.mysql:mysql-connector-j:8.4.0")
+    implementation("com.mysql:mysql-connector-j:8.4.0") {
+        // Suite uses JDBC; protobuf is only needed by Connector/J's X DevAPI.
+        exclude(group = "com.google.protobuf", module = "protobuf-java")
+    }
+    implementation("org.tukaani:xz:1.12")
+    constraints {
+        implementation("com.google.protobuf:protobuf-java:3.25.5") {
+            because("MySQL Connector/J brings a version affected by CVE-2024-7254")
+        }
+    }
     implementation("redis.clients:jedis:5.2.0")
     implementation("com.belerweb:pinyin4j:2.5.1")
     implementation("com.google.code.gson:gson:2.11.0")
@@ -45,6 +91,8 @@ dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter")
     testImplementation("org.mockito:mockito-core:5.12.0")
     testImplementation(files("../libs/MythicLib-dist-1.7.1-49.jar"))
+    testImplementation(files("../libs/symphony-bukkit-1.0.6.jar"))
+    testRuntimeOnly("org.jetbrains.kotlin:kotlin-stdlib:1.9.24")
     testImplementation("me.clip:placeholderapi:2.11.7")
 }
 
@@ -101,11 +149,14 @@ tasks {
 
     val nativeLibDir = rootProject.layout.projectDirectory.dir("src/main/resources/native")
     val skipNativeCheck = project.findProperty("skipNativeCheck") == "true"
+    val expectedNativeFiles = runtimeTarget.nativeFiles
 
     processResources {
+        exclude(ExcludeOtherRuntimeAssets(runtimeTarget))
+        from(generateRuntimeTarget.flatMap { it.outputFile }) { into("META-INF") }
         doFirst {
             // jar 跨平台分发，只要包含任一平台的 native 库即可放行构建
-            val expectedLibs = listOf("axs-native.dll", "libaxs-native.so", "libaxs-native.dylib", "axs-native.enc", "libaxs-native.enc", "libaxs-native.dylib.enc")
+            val expectedLibs = expectedNativeFiles
             val found = expectedLibs.map { nativeLibDir.file(it).asFile }.filter { it.exists() }
             val isCi = System.getenv("GITHUB_ACTIONS") != null
             if (found.isEmpty()) {
@@ -126,6 +177,7 @@ tasks {
             }
         }
         inputs.property("version", version)
+        inputs.property("runtimeTarget", runtimeTarget.id)
         val props = mapOf("version" to version)
         filesMatching("plugin.yml") {
             expand(props)
@@ -134,15 +186,15 @@ tasks {
 
     jar {
         archiveBaseName.set("ArcartX-Suite")
-        archiveClassifier.set("plain")
+        archiveClassifier.set("plain${runtimeTarget.fileSuffix}")
         // 合并 modern 源集编译产物（跨版本兼容类）
         from(sourceSets.named("modern").get().output)
     }
 
     named<ShadowJar>("shadowJar") {
         archiveBaseName.set("ArcartX-Suite")
-        archiveClassifier.set("unobf")
-        destinationDirectory.set(layout.buildDirectory.dir("libs"))
+        archiveClassifier.set("all-unobf${runtimeTarget.fileSuffix}")
+        destinationDirectory.set(layout.buildDirectory.dir("packaging"))
         mergeServiceFiles()
         // 合并 modern 源集编译产物
         from(sourceSets.named("modern").get().output)
@@ -150,6 +202,11 @@ tasks {
 
     test {
         useJUnitPlatform()
+        systemProperty("java.io.tmpdir", temporaryDir.absolutePath)
+        jvmArgumentProviders.add(objects.newInstance(PackagingReferenceArguments::class.java).apply {
+            sqliteJar.set(layout.file(providers.provider { packagingSqlite.singleFile }))
+            cryptoJar.set(layout.file(providers.provider { packagingCrypto.singleFile }))
+        })
     }
 }
 
@@ -171,11 +228,23 @@ tasks {
 // ═══════════════════════════════════════════════════════════════════
 
 // Step 1: ProGuard
+val thinCoreJar by tasks.registering(SplitRuntimeTask::class) {
+    inputJar.set(tasks.named<ShadowJar>("shadowJar").flatMap { it.archiveFile })
+    outputJar.set(layout.buildDirectory.file("libs/ArcartX-Suite-${version}-unobf${runtimeTarget.fileSuffix}.jar"))
+    libraries.set(layout.buildDirectory.dir("runtime-libraries"))
+}
+
+tasks.test {
+    jvmArgumentProviders.add(objects.newInstance(RuntimeLibraryTestArguments::class.java).apply {
+        jar.set(thinCoreJar.flatMap { it.outputJar })
+        libraries.set(thinCoreJar.flatMap { it.libraries })
+    })
+}
+
 val step1Jar = layout.buildDirectory.file("libs/ArcartX-Suite-step1-obfuscated.jar")
 
 val obfuscateCore by tasks.registering(ObfuscateJarTask::class) {
-    dependsOn(tasks.named("shadowJar"))
-    inputJar.set(tasks.named<ShadowJar>("shadowJar").flatMap { it.archiveFile })
+    inputJar.set(thinCoreJar.flatMap { it.outputJar })
     outputJar.set(step1Jar)
     coreJar.set(true)
     libraryJars.from(
@@ -209,7 +278,7 @@ val embedIntegrityCore by tasks.registering(EmbedIntegrityTask::class) {
 val publishCoreJar by tasks.registering {
     dependsOn(embedIntegrityCore)
     val src = step3Jar.get().asFile
-    val dst = layout.buildDirectory.file("libs/ArcartX-Suite-${version}.jar").get().asFile
+    val dst = layout.buildDirectory.file("libs/ArcartX-Suite-${version}${runtimeTarget.fileSuffix}.jar").get().asFile
     inputs.file(src)
     outputs.file(dst)
     doLast {

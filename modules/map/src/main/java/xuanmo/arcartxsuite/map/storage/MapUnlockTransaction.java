@@ -12,18 +12,8 @@ public final class MapUnlockTransaction {
 
     public static CompletableFuture<MapOperationResult> execute(MapStorageExecutor storage,
         Callable<Boolean> reserve, BooleanSupplier eligible, Supplier<MapOperationResult> settle,
-        Callable<Void> rollback, MapOperationResult duplicate, MapOperationResult cancelled) {
-        return storage.query(reserve).thenCompose(inserted -> {
-            if (!inserted) return CompletableFuture.completedFuture(duplicate);
-            MapOperationResult result;
-            try {
-                result = eligible.getAsBoolean() ? settle.get() : cancelled;
-            } catch (Throwable error) {
-                return storage.compensate(rollback).thenCompose(ignored -> CompletableFuture.failedFuture(error));
-            }
-            if (result.success()) return CompletableFuture.completedFuture(result);
-            MapOperationResult failure = result;
-            return storage.compensate(rollback).thenApply(ignored -> failure);
-        });
+        Callable<Void> publish, Callable<Void> rollback, Callable<MapOperationResult> duplicate, MapOperationResult cancelled) {
+        return storage.reserve(reserve, () -> eligible.getAsBoolean() ? settle.get() : cancelled,
+            MapOperationResult::success, publish, rollback, duplicate, cancelled);
     }
 }

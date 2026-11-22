@@ -1,54 +1,36 @@
 package xuanmo.arcartxsuite.tab;
 
 import java.io.File;
-import java.util.LinkedHashMap;
-import java.util.List;
+import java.util.Locale;
 import java.util.Map;
-import org.bukkit.command.CommandSender;
-import org.bukkit.command.TabExecutor;
+import org.bukkit.Bukkit;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.AbstractAXSModule;
-import xuanmo.arcartxsuite.api.ModuleCommandHandler;
-import xuanmo.arcartxsuite.api.config.SyncPolicy;
-import xuanmo.arcartxsuite.api.config.ValidationRule;
-import xuanmo.arcartxsuite.api.config.ValueType;
-import xuanmo.arcartxsuite.api.ClientPacketHandler;
 import xuanmo.arcartxsuite.api.ModuleDescriptor;
-import xuanmo.arcartxsuite.api.UiBinding;
-import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
-import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
-import xuanmo.arcartxsuite.api.config.ModuleConfig;
 import xuanmo.arcartxsuite.api.ModuleUiSpec;
-import xuanmo.arcartxsuite.api.PacketHandlerSpec;
-import xuanmo.arcartxsuite.tab.command.TabAdminCommand;
-import xuanmo.arcartxsuite.tab.command.TabPlayerCommand;
-import xuanmo.arcartxsuite.tab.config.TabDefinition;
-import xuanmo.arcartxsuite.tab.config.TabModuleConfiguration;
-import xuanmo.arcartxsuite.tab.debug.TabSnapshotStore;
-import xuanmo.arcartxsuite.tab.listener.TabPvpListener;
-import xuanmo.arcartxsuite.tab.placeholder.TabPlaceholderExpansion;
-import xuanmo.arcartxsuite.tab.placeholder.TabPlayerFallbackExpansion;
-import xuanmo.arcartxsuite.tab.placeholder.TabServerFallbackExpansion;
-import xuanmo.arcartxsuite.tab.sync.TabSyncService;
+import xuanmo.arcartxsuite.api.UiBinding;
+import xuanmo.arcartxsuite.api.capability.TabRefreshable;
+import xuanmo.arcartxsuite.api.config.ModuleConfig;
 
-/**
- * Tab 列表同步独立模块。
- */
-public final class TabModule extends AbstractAXSModule implements ModuleCommandHandler {
+public final class TabModule extends AbstractAXSModule {
 
-    private static final String TAB_UI_RESOURCE_PATH = "arcartx/ui/tab.yml";
-    private static final String TAB_UI_FILE_PATH = "ui/tab.yml";
-    private static final String TAB_RICH_UI_RESOURCE_PATH = "arcartx/ui/tab-rich.yml";
-    private static final String TAB_RICH_UI_FILE_PATH = "ui/tab-rich.yml";
-    private static final String TAB_ARENA_UI_RESOURCE_PATH = "arcartx/ui/tab-arena.yml";
-    private static final String TAB_ARENA_UI_FILE_PATH = "ui/tab-arena.yml";
+    private enum Layout {
+        SIMPLE("tab-simple"),
+        AVATAR("tab-avatar");
 
-    private TabModuleConfiguration configuration;
-    private TabSyncService service;
-    private TabSnapshotStore snapshotStore;
-    private TabAdminCommand adminCommand;
+        private final String fileName;
+
+        Layout(String fileName) {
+            this.fileName = fileName;
+        }
+    }
+
+    private Layout layout;
+    private boolean proxyRoster;
+    private String registeredHudId;
+    private TabVisibilityPublisher visibility;
 
     @Override
     public ModuleDescriptor descriptor() {
@@ -61,266 +43,61 @@ public final class TabModule extends AbstractAXSModule implements ModuleCommandH
 
     @Override
     protected @NotNull ModuleConfig configSpec() {
-        return ModuleConfig.builder()
-            .configFileName("ArcartXTab.yml")
-            .messagesFileName("messages.yml")
-            .syncPolicy(SyncPolicy.builder()
-                .dynamicSection("tabs")
-                .build())
-            .validations(List.of(
-                // 服务端ID不能为空
-                ValidationRule.required("settings.server-id", ValueType.STRING),
-                ValidationRule.of("settings.stale-snapshot-ms", ValueType.LONG)
-                    .withRange(1000, null),
-                ValidationRule.of("cross-server.enabled", ValueType.BOOLEAN)
-            ))
-            .build();
+        return ModuleConfig.builder().configFileName("ArcartXTab.yml").build();
     }
 
     @Override
     protected @NotNull ModuleUiSpec uiSpec() {
-        Map<String, String> mappings = new LinkedHashMap<>();
-        mappings.put(TAB_UI_RESOURCE_PATH, TAB_UI_FILE_PATH);
-        mappings.put(TAB_RICH_UI_RESOURCE_PATH, TAB_RICH_UI_FILE_PATH);
-        mappings.put(TAB_ARENA_UI_RESOURCE_PATH, TAB_ARENA_UI_FILE_PATH);
-        return new ModuleUiSpec(mappings, configuration != null && configuration.overwriteUiFile());
+        return ModuleUiSpec.of(Map.of(
+            "arcartx/ui/tab-simple.yml", "ui/tab-simple.yml",
+            "arcartx/ui/tab-avatar.yml", "ui/tab-avatar.yml"
+        ));
     }
 
     @Override
-    protected @NotNull PacketHandlerSpec createPacketHandlerSpec() {
-        return PacketHandlerSpec.of((player, packetId, data) ->
-            service != null && service.handleClientRefreshPacket(player, packetId, data), 0, null, null);
-    }
-
-    @Override
-    protected void loadConfiguration(@Nullable File configFile) throws Exception {
+    protected void loadConfiguration(@Nullable File configFile) {
         if (configFile == null) {
-            throw new IllegalStateException("ArcartXTab.yml 配置文件缺失");
+            throw new IllegalStateException("Tab 配置文件缺失");
         }
         var yaml = YamlConfiguration.loadConfiguration(configFile);
-        String tabsDirRelative = yaml.getString("tabs-directory", "tabs");
-        File tabsDirectory = new File(dataFolder, tabsDirRelative);
-        ensureTabDefaults(tabsDirRelative);
-        configuration = TabModuleConfiguration.load(yaml, tabsDirectory, logger);
-    }
-
-    private void ensureTabDefaults(String tabsRelative) {
-        File tabsDir = new File(dataFolder, tabsRelative);
-        if (!tabsDir.exists()) {
-            tabsDir.mkdirs();
-        }
-        File[] existing = tabsDir.listFiles((dir, name) -> name.endsWith(".yml") || name.endsWith(".yaml"));
-        if (existing != null && existing.length > 0) {
-            return;
-        }
-        for (String tab : new String[]{"online-tab.yml", "demo.yml", "arena.yml"}) {
-            File target = new File(tabsDir, tab);
-            if (!target.exists()) {
-                exportResource("tabs/" + tab, target, false);
-            }
+        proxyRoster = yaml.getBoolean("settings.proxy-roster", false);
+        String selected = yaml.getString("settings.layout", "simple").trim().toUpperCase(Locale.ROOT);
+        try {
+            layout = Layout.valueOf(selected);
+        } catch (IllegalArgumentException failure) {
+            throw new IllegalArgumentException("settings.layout 必须为 simple 或 avatar", failure);
         }
     }
 
     @Override
-    protected void startService() throws Exception {
-        Map<String, UiBinding> tabUiBindings = registerTabUis();
-        service = new TabSyncService(plugin, logger, configuration, packetBridge, packetGuard, crossServer, placeholderResolver);
-        service.start();
-
-        // Snapshot 调试存储：plugins/ArcartXSuite/data/tab/snapshots/
-        snapshotStore = new TabSnapshotStore(
-            new File(pluginDataFolder, "data/tab/snapshots").toPath()
-        );
-
-        // /axs tab 管理命令（ModuleCommandHandler）
-        adminCommand = new TabAdminCommand(() -> service, () -> snapshotStore, messages());
-
-        // 注册 PVP 监听器（始终注册，是否生效由 settings.style.pvp-highlight.enabled 控制）
-        plugin.getServer().getPluginManager()
-            .registerEvents(new TabPvpListener(service), plugin);
-
-        // 注册 TabRefreshable capability，供其他模块刷新 Tab
-        registerCapability(xuanmo.arcartxsuite.api.capability.TabRefreshable.class, service);
-
-        // 检测 PAPI 扩展状态：如果已经加载完毕就直接检测，否则注册事件监听器等待
-        if (hasPlugin("PlaceholderAPI")) {
-            boolean ready = tryDetectPapiExpansions();
-            if (!ready) {
-                org.bukkit.Bukkit.getPluginManager().registerEvents(
-                    new PapiExpansionListener(), plugin);
-            }
+    protected void startService() {
+        String path = "ui/" + layout.fileName + ".yml";
+        String id = "AXS:" + layout.fileName;
+        var registration = packetBridge.registerOrReloadUi(id, new File(pluginDataFolder, path));
+        if (!registration.success()) {
+            throw new IllegalStateException("Tab HUD 注册失败: " + registration.message());
         }
-
-        logger.fine(
-            "Tab 模块已载入，定义数量: " + configuration.definitions().size()
-                + " | UI: " + tabUiBindings.keySet()
-                + " | 轮询间隔: " + configuration.refreshIntervalTicks() + " ticks"
-        );
+        registeredHudId = registration.runtimeUiId();
+        recordUiBinding(path, new UiBinding(registeredHudId, registration.registeredUiId()));
+        if (proxyRoster) {
+            visibility = new TabVisibilityPublisher(plugin);
+            registerListener(visibility);
+            registerCapability(TabRefreshable.class, visibility);
+            visibility.requestGlobalRefresh("enable");
+        }
     }
 
     @Override
     protected void stopService() {
-        if (service != null) {
-            service.shutdown();
-            service = null;
+        if (visibility != null) {
+            visibility.close();
+            visibility = null;
         }
-        adminCommand = null;
-        configuration = null;
-    }
-
-    @Override
-    protected @NotNull Map<String, TabExecutor> commandBindings() {
-        TabPlayerCommand cmd = new TabPlayerCommand(() -> service, messages());
-        return Map.of("tab", (TabExecutor) cmd);
-    }
-
-    // ─── ModuleCommandHandler（/axs tab）────────────────────
-
-    @Override public String commandId() { return "tab"; }
-    @Override public List<String> actions() { return adminCommand != null ? adminCommand.actions() : List.of("help", "status"); }
-    @Override public boolean onCommand(@NotNull CommandSender sender, @NotNull String label, @NotNull String[] args) {
-        return adminCommand != null && adminCommand.onCommand(sender, label, args);
-    }
-    @Override public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull String[] args) {
-        return adminCommand != null ? adminCommand.onTabComplete(sender, args) : null;
-    }
-
-    @Override
-    protected @Nullable Object createPlaceholderExpansion() {
-        if (service == null || configuration == null) {
-            return null;
+        if (registeredHudId != null) {
+            for (var player : Bukkit.getOnlinePlayers()) {
+                packetBridge.closeUi(player, registeredHudId);
+            }
+            registeredHudId = null;
         }
-        return new TabPlaceholderExpansion(
-            plugin,
-            service,
-            configuration.style(),
-            configuration.privacy()
-        );
-    }
-
-    public TabSyncService getService() {
-        return service;
-    }
-
-    private final java.util.concurrent.atomic.AtomicBoolean papiDetected = new java.util.concurrent.atomic.AtomicBoolean(false);
-
-    private class PapiExpansionListener implements org.bukkit.event.Listener {
-        @org.bukkit.event.EventHandler
-        public void onExpansionsLoaded(me.clip.placeholderapi.events.ExpansionsLoadedEvent event) {
-            if (papiDetected.get()) return;
-            logger.info("监听到 PAPI 全部扩展加载完成，开始检测");
-            performFinalPapiDetection();
-        }
-    }
-
-    /**
-     * 启动时尝试直接检测。如果 PAPI 已经加载完毕且扩展都在，返回 true。
-     * 如果有缺失，返回 false（可能是还没加载完，需要等待事件）。
-     */
-    private boolean tryDetectPapiExpansions() {
-        try {
-            me.clip.placeholderapi.PlaceholderAPIPlugin papi =
-                (me.clip.placeholderapi.PlaceholderAPIPlugin) org.bukkit.Bukkit.getPluginManager().getPlugin("PlaceholderAPI");
-            if (papi == null) {
-                return false;
-            }
-            java.util.Collection<me.clip.placeholderapi.expansion.PlaceholderExpansion> expansions =
-                papi.getLocalExpansionManager().getExpansions();
-            boolean hasPlayer = false;
-            boolean hasServer = false;
-            for (me.clip.placeholderapi.expansion.PlaceholderExpansion expansion : expansions) {
-                String id = expansion.getIdentifier().toLowerCase();
-                if ("player".equals(id)) {
-                    hasPlayer = true;
-                }
-                if ("server".equals(id)) {
-                    hasServer = true;
-                }
-            }
-
-            if (hasPlayer && hasServer) {
-                logger.info("PAPI 扩展状态 — player: 已安装，server: 已安装");
-                papiDetected.set(true);
-                return true;
-            }
-
-            logger.info("PAPI 扩展尚未全部加载，等待加载完成事件");
-            return false;
-        } catch (Exception e) {
-            return false;
-        }
-    }
-
-    /**
-     * 终检：PAPI 全部加载完成后调用，确定是否注册 fallback。
-     */
-    private void performFinalPapiDetection() {
-        if (!papiDetected.compareAndSet(false, true)) {
-            return;
-        }
-        try {
-            me.clip.placeholderapi.PlaceholderAPIPlugin papi =
-                (me.clip.placeholderapi.PlaceholderAPIPlugin) org.bukkit.Bukkit.getPluginManager().getPlugin("PlaceholderAPI");
-            if (papi == null) {
-                return;
-            }
-            java.util.Collection<me.clip.placeholderapi.expansion.PlaceholderExpansion> expansions =
-                papi.getLocalExpansionManager().getExpansions();
-            boolean hasPlayer = false;
-            boolean hasServer = false;
-            for (me.clip.placeholderapi.expansion.PlaceholderExpansion expansion : expansions) {
-                String id = expansion.getIdentifier().toLowerCase();
-                if ("player".equals(id)) {
-                    hasPlayer = true;
-                }
-                if ("server".equals(id)) {
-                    hasServer = true;
-                }
-            }
-            logger.info("PAPI 扩展状态 — player: " + (hasPlayer ? "已安装" : "未安装") + "，server: " + (hasServer ? "已安装" : "未安装"));
-
-            if (!hasPlayer) {
-                logger.info("PAPI player 扩展未安装，已注册内置 fallback");
-                expansionRegistry.register(new TabPlayerFallbackExpansion(plugin));
-            }
-            if (!hasServer) {
-                logger.info("PAPI server 扩展未安装，已注册内置 fallback");
-                expansionRegistry.register(new TabServerFallbackExpansion(plugin));
-            }
-        } catch (Exception e) {
-            logger.warning("PAPI 扩展检测失败: " + e.getMessage());
-        }
-    }
-
-    private Map<String, UiBinding> registerTabUis() {
-        Map<String, UiBinding> bindings = new LinkedHashMap<>();
-        xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI bridge = packetBridge;
-        for (TabDefinition definition : configuration.definitions()) {
-            if (!definition.enabled()) {
-                continue;
-            }
-            // 按每个 target 的 uiId 注册（同 uiId 只注册一次）。
-            // 内置资源 tab.yml / tab-rich.yml / tab-arena.yml 在 startService 前已被 uiResourceMappings 复制到 plugins 目录。
-            for (String uiId : definition.distinctUiIds()) {
-                if (uiId.isBlank() || bindings.containsKey(uiId)) {
-                    continue;
-                }
-                // ui-id 可能带命名空间前缀（如 "AXS:tab"），拼文件路径时剥离前缀，
-                // 与 ArcartXPacketBridge.buildCandidateUiIds 的剥离逻辑保持一致。
-                String fileName = uiId.contains(":") ? uiId.substring(uiId.lastIndexOf(':') + 1) : uiId;
-                String fileRelative = "ui/" + fileName + ".yml";
-                File uiFile = new File(pluginDataFolder, fileRelative);
-                xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI.UiRegistrationResult reg =
-                    bridge.registerOrReloadUi(uiId, uiFile);
-                if (!reg.success()) {
-                    throw new IllegalStateException("Tab UI 注册失败: " + uiId + " (file=" + fileRelative + "): " + reg.message());
-                }
-                UiBinding binding = new UiBinding(reg.runtimeUiId(), reg.registeredUiId());
-                recordUiBinding(fileRelative + "#" + uiId, binding);
-                bindings.put(uiId, binding);
-            }
-        }
-        return bindings;
     }
 }
-

@@ -41,7 +41,8 @@ public record BattlePassReward(
     double currencyAmount,
     @Nullable List<String> mailPresets,
     @Nullable String mailSubject,
-    @Nullable String mailBody
+    @Nullable String mailBody,
+    @Nullable String targetId
 ) {
 
     /**

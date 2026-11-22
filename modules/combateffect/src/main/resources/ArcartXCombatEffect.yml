@@ -38,9 +38,9 @@ combo-tracker:
   # 是否启用连击追踪
   enabled: false
   # combo 来源模式:
-  # auto: Chronos 可用时优先 Chronos 状态事件，否则回退 Bukkit 攻击事件
+  # auto: Symphony 确认桥可用时统计有效伤害，否则优先 Chronos 状态事件
   # chronos: 仅使用 Chronos PlayerEnterStateEvent
-  # bukkit: 仅使用 Bukkit EntityDamageByEntityEvent
+  # bukkit: 统计宿主归并后的 Symphony、Bukkit 和 TaCZ 有效伤害
   source: "auto"
   # combo 超时重置时间（毫秒），超过该时间无攻击则重置计数
   timeout: 2000
@@ -48,10 +48,10 @@ combo-tracker:
   chronos-groups:
     - "攻击"
     - "连击"
-  # 实时同步 combo 计数到 ArcartX 客户端服务器变量
-  # 客户端 UI 可通过 {server.combo_count} 直接引用当前连击数
+  # 实时推送连击变化。关闭时，默认 HUD 仍按里程碑包显示提示。
   sync-variable: true
-  variable-name: "combo_count"
+  # 自定义界面仍依赖 server.combo_count 时，可同时发送原有服务器变量。
+  # 自定义变量名继续接收原有服务器变量推送。
   # 目标锁定模式: true 时切换攻击目标会重置 combo
   # 适用于 Boss 战等场景，确保 combo 仅计入对同一目标的连续攻击
   per-target: false
@@ -75,10 +75,11 @@ death-buffer:
     # Chronos 集成（需安装 Chronos 插件）
     chronos:
       enabled: false
-      # 强制玩家进入的 Chronos 状态 ID，需在控制器中注册该状态
+      # 尝试进入的 Chronos 受控状态 ID，需在当前控制器中定义，受霸体窗口限制
       state-id: "死亡"
-  # 缓冲期间阻止其他插件触发的自动复活
-  block-auto-respawn: true
+  # Abyss 负责副本内的倒地和复活。可指定一个只播放表现的包 ID，空值关闭联动发包。
+  # 可用变量：{dungeon} {instance} {deaths}。建议选用不遮挡救援界面的 HUD。
+  abyss-packet-id: ""
   # 不启用死亡缓冲的世界列表
   world-blacklist: []
   # 是否开启死亡缓冲调试日志
@@ -96,6 +97,22 @@ state-trigger:
   # controller: 玩家切换 Chronos 控制器时触发特效
   enabled: false
 
+# Chronos 技能特效（需要动作实例和外部执行处理器能力）
+skill-effects:
+  enabled: false
+  # 按顺序使用首条匹配规则。skill、profession、slot 同时匹配，留空或填 "*" 表示任意。
+  rules:
+    example-charge:
+      enabled: false
+      skill: "example:charge"
+      profession: "example:warrior"
+      slot: "primary"
+      # 首次入态时发送，填写 packets/ 中已启用的包 ID。
+      start-packets: []
+      hud-text: "蓄力中"
+      # 仅发给该动作已挂载的 UI。发完后会关闭该动作打开的界面。
+      cleanup-packets: []
+
 # 伤害飘字显示
 digis-display:
   # 伤害显示配置
@@ -111,13 +128,12 @@ digis-display:
       # attributeplus: 仅优先使用 AttributePlus 伤害事件
       #   支持: 玩家近战攻击、AttributePlus 属性附加伤害
 
-      # symphony: 仅优先使用 Symphony 伤害事件
+      # symphony: 使用 Symphony 确认伤害与闪避反馈
       #   支持: 玩家近战攻击、Symphony 元素/暴击伤害
       
-      # bukkit: 仅使用 Bukkit 原版伤害事件
-      #   支持: 玩家近战攻击、Projectile（弓箭/三叉戟/投掷药水等）
+      # bukkit: 以普通样式显示宿主结算后的有效伤害
       mode: "auto"
-      # true: 指定来源不可用时自动回退到下一个可用来源。
+      # true: 指定来源不可用时自动回退。选择 Symphony 时也显示它未接管的 Bukkit 与 TaCZ 有效伤害。
       fallback: true
       # true: 输出伤害来源选择与回退日志。
       debug: false

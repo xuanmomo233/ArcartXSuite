@@ -221,14 +221,14 @@ public final class RewardPacketHandler implements ClientPacketHandler {
             ? rewardScheduler.manualTriggerWeeklyRewards()
             : rewardScheduler.manualTriggerMonthlyRewards();
 
-        future.thenAccept(total -> {
+        future.thenAccept(total -> rewardService.onMainIfActive(() -> {
             if (player.isOnline()) {
                 pushResult(player, managerUiId, "§a" + finalPeriodDisplay + "奖励发放完成，共发放 §e" + total + " §a个奖励");
             }
-        }).exceptionally(throwable -> {
-            if (player.isOnline()) {
+        })).exceptionally(throwable -> {
+            rewardService.onMainIfActive(() -> { if (player.isOnline()) {
                 pushResult(player, managerUiId, "§c" + finalPeriodDisplay + "奖励发放失败: " + throwable.getMessage());
-            }
+            }});
             return null;
         });
     }
@@ -243,11 +243,15 @@ public final class RewardPacketHandler implements ClientPacketHandler {
         }
 
         String rewardType = currentRewardType.getOrDefault(player.getUniqueId(), "weekly");
-        String message = rewardService.toggleConfig(configId, rewardType);
-        pushResult(player, managerUiId, message);
-
-        // 刷新列表
-        handleListConfigs(player, List.of("list-configs", rewardType));
+        rewardService.toggleConfig(configId, rewardType).thenAccept(message -> rewardService.onMainIfActive(() -> {
+            if (packetBridge == null || managerUiId == null || !player.isOnline()
+                    || !player.hasPermission("entitytracker.rewards.admin")
+                    || !packetBridge.isUiOpen(player, managerUiId)) return;
+            pushResult(player, managerUiId, message);
+            if (rewardType.equals(currentRewardType.getOrDefault(player.getUniqueId(), "weekly"))) {
+                handleListConfigs(player, List.of("list-configs", rewardType));
+            }
+        }));
     }
 
     // ─── Action 6: history-list ────────────────────────────
@@ -267,7 +271,7 @@ public final class RewardPacketHandler implements ClientPacketHandler {
         String typeFilter = (rewardType.isBlank() || "none".equalsIgnoreCase(rewardType)) ? null : rewardType;
 
         rewardService.getRewardRecords(typeFilter, statusFilter, null)
-            .thenAccept(records -> {
+            .thenAccept(records -> rewardService.onMainIfActive(() -> {
                 if (!player.isOnline()) return;
 
                 int pageSize = 20;
@@ -293,7 +297,7 @@ public final class RewardPacketHandler implements ClientPacketHandler {
                 payload.put("action_token", tokenGuard.issue(player.getUniqueId(), historyUiId));
 
                 packetBridge.sendPacket(player, historyUiId, "history-list", payload);
-            })
+            }))
             .exceptionally(throwable -> {
                 if (player.isOnline()) {
                     pushResult(player, historyUiId, "§c获取历史记录失败: " + throwable.getMessage());
@@ -319,13 +323,14 @@ public final class RewardPacketHandler implements ClientPacketHandler {
             return;
         }
 
-        String message = rewardService.retryDistribution(recordId);
-        pushResult(player, historyUiId, message);
-
-        // 刷新历史列表
-        if (packetBridge != null && historyUiId != null && packetBridge.isUiOpen(player, historyUiId)) {
-            handleHistoryList(player, List.of("history-list", "none", "none", "1"));
-        }
+        rewardService.retryDistribution(recordId).thenAccept(message -> {
+            if (!plugin.isEnabled()) return;
+            rewardService.onMainIfActive(() -> {
+                if (!player.isOnline() || !packetBridge.isUiOpen(player, historyUiId)) return;
+                pushResult(player, historyUiId, message);
+                handleHistoryList(player, List.of("history-list", "none", "none", "1"));
+            });
+        });
     }
 
     // ─── 辅助方法 ──────────────────────────────────────────
@@ -374,6 +379,8 @@ public final class RewardPacketHandler implements ClientPacketHandler {
         return switch (status) {
             case "success" -> "&a成功";
             case "failed" -> "&c失败";
+            case "issuing", "review" -> "&e待核对";
+            case "mail_issuing" -> "&e邮件待确认";
             case "pending" -> "&e待发";
             default -> status;
         };
@@ -393,6 +400,7 @@ public final class RewardPacketHandler implements ClientPacketHandler {
     }
 
     private static String buildRewardSummary(RankingRewardRecord record) {
+        if (record.getRewardPlan() != null) return "已确认 " + record.getNextAction() + " 项动作";
         List<String> parts = new ArrayList<>();
         if (record.getRewardMoney() != null && record.getRewardMoney() > 0) {
             parts.add("金币×" + record.getRewardMoney());

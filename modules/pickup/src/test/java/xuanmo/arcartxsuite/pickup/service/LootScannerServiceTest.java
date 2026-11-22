@@ -3,6 +3,8 @@ package xuanmo.arcartxsuite.pickup.service;
 import java.lang.reflect.*;
 import java.util.*;
 import java.util.concurrent.atomic.*;
+import java.util.function.BooleanSupplier;
+import java.util.function.Predicate;
 import java.util.logging.Logger;
 import org.bukkit.*;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -29,6 +31,7 @@ class LootScannerServiceTest {
     PlayerInventory inventory;
     PluginManager manager;
     PacketBridgeAPI packets;
+    VanillaItemNameBridge names;
     WarehouseAutoDepositable warehouse;
     LootScannerService service;
     List<Entity> entities = new ArrayList<>();
@@ -47,6 +50,9 @@ class LootScannerServiceTest {
             delayed.add(inv.getArgument(1)); return mock(BukkitTask.class);
         });
         world = mock(World.class);
+        Item returned = mock(Item.class);
+        when(returned.isValid()).thenReturn(true);
+        when(world.dropItem(any(Location.class), any(ItemStack.class), any())).thenReturn(returned);
         player = mock(Player.class);
         inventory = mock(PlayerInventory.class);
         when(player.getInventory()).thenReturn(inventory);
@@ -67,7 +73,7 @@ class LootScannerServiceTest {
         });
         ItemBridgeAPI items = mock(ItemBridgeAPI.class);
         when(items.itemToPreviewJson(any())).thenAnswer(inv -> Optional.of(metadata.get(inv.getArgument(0))));
-        VanillaItemNameBridge names = mock(VanillaItemNameBridge.class);
+        names = mock(VanillaItemNameBridge.class);
         when(names.resolveDisplayName(any())).thenReturn("同名物品");
         warehouse = mock(WarehouseAutoDepositable.class);
         YamlConfiguration yaml = new YamlConfiguration();
@@ -110,11 +116,14 @@ class LootScannerServiceTest {
         assertTrue(((Map<?,?>)jobs.get(service)).isEmpty());
     }
     @SuppressWarnings("unchecked") Map<String,Object> payload() throws Exception {
+        return payload(player);
+    }
+    @SuppressWarnings("unchecked") Map<String,Object> payload(Player viewer) throws Exception {
         Field states=LootScannerService.class.getDeclaredField("playerStates");states.setAccessible(true);
-        Object state=((Map<?,?>)states.get(service)).get(id);
+        Object state=((Map<?,?>)states.get(service)).get(viewer.getUniqueId());
         Method build=LootScannerService.class.getDeclaredMethod("buildPayload",Player.class,state.getClass(),int.class);
         build.setAccessible(true);
-        return (Map<String,Object>)build.invoke(service,player,state,5);
+        return (Map<String,Object>)build.invoke(service,viewer,state,5);
     }
     void scan() throws Exception { invoke("scanForPlayer",new Class<?>[]{Player.class},player); }
     Object invoke(String name,Class<?>[] types,Object... args) throws Exception {
@@ -135,19 +144,64 @@ class LootScannerServiceTest {
         assertEquals(List.of(32),delivered);
         verify(item).remove();
     }
-    @Test void partialWarehouseAndPartialInventoryKeepExactRemainderOnGround() throws Exception {
+    @Test void partialWarehouseKeepsTheExactRemainderOnTheSameEntity() throws Exception {
         Item item=item("plain",32);
-        when(warehouse.depositToPersonalWarehouse(any(),any())).thenReturn(new WarehouseAutoDepositable.DepositResult(true,16,16,""));
-        when(inventory.addItem(any(ItemStack[].class))).thenAnswer(inv -> {
-            ItemStack requested=inv.getArgument(0);assertEquals(16,requested.getAmount());
-            HashMap<Integer,ItemStack> left=new HashMap<>();left.put(0,stack("plain",8));return left;
+        when(warehouse.depositFromGroundAsync(any(),any(),any(),any(),any())).thenAnswer(invocation -> {
+            BooleanSupplier take = invocation.getArgument(3);
+            Predicate<WarehouseAutoDepositable.GroundDepositResult> completed = invocation.getArgument(4);
+            assertTrue(take.getAsBoolean());
+            assertEquals(32, item.getItemStack().getAmount());
+            item.setItemStack(stack("plain", 16));
+            assertTrue(completed.test(new WarehouseAutoDepositable.GroundDepositResult(true,false,16,true,"receipt")));
+            return true;
         });
         var events=mock(xuanmo.arcartxsuite.api.capability.EventBusCapability.class);
         service.setEventBusProvider(()->events);
         pick(item);
-        verify(item,never()).remove();
-        assertEquals(8,item.getItemStack().getAmount());
-        verify(events).publish(eq("axs.pickup.item_pickup"),eq(player),argThat(payload->payload.get("amount").equals("24")));
+        verify(item, never()).remove();
+        verify(world, never()).dropItem(any(Location.class), any(), any());
+        assertEquals(16, item.getItemStack().getAmount());
+        assertTrue(delivered.isEmpty());
+        verify(events).publish(eq("axs.pickup.item_pickup"),eq(player),argThat(payload->payload.get("amount").equals("16")));
+    }
+
+    @Test void asyncPreparationDoesNotTouchSourceAndConfirmedRemainderSurvivesQuit() throws Exception {
+        Item item = item("plain", 32);
+        AtomicReference<BooleanSupplier> take = new AtomicReference<>();
+        AtomicReference<Predicate<WarehouseAutoDepositable.GroundDepositResult>> completed = new AtomicReference<>();
+        when(warehouse.depositFromGroundAsync(any(),any(),any(),any(),any())).thenAnswer(invocation -> {
+            take.set(invocation.getArgument(3));
+            completed.set(invocation.getArgument(4));
+            return true;
+        });
+        scan();
+        assertTrue(service.handleInteractKeyFromHost(player));
+        invoke("collectionTick", new Class<?>[]{});
+        verify(item, never()).remove();
+        assertTrue(delivered.isEmpty());
+        assertTrue(take.get().getAsBoolean());
+        assertEquals(32, item.getItemStack().getAmount());
+        when(player.isOnline()).thenReturn(false);
+        service.onPlayerQuit(new org.bukkit.event.player.PlayerQuitEvent(player, ""));
+        var result = new WarehouseAutoDepositable.GroundDepositResult(true,false,16,true,"receipt");
+        assertTrue(completed.get().test(result));
+        verify(world, never()).dropItem(any(Location.class), any(), any());
+        assertTrue(delivered.isEmpty());
+    }
+
+    @Test void unknownWarehouseCommitDoesNotReturnOrReplayReservedGroundItem() throws Exception {
+        Item item = item("plain", 32);
+        when(warehouse.depositFromGroundAsync(any(),any(),any(),any(),any())).thenAnswer(invocation -> {
+            BooleanSupplier take = invocation.getArgument(3);
+            Predicate<WarehouseAutoDepositable.GroundDepositResult> completed = invocation.getArgument(4);
+            assertTrue(take.getAsBoolean());
+            assertFalse(completed.test(new WarehouseAutoDepositable.GroundDepositResult(true,true,0,true,"receipt")));
+            return true;
+        });
+        pick(item);
+        verify(item, never()).remove();
+        verify(world, never()).dropItem(any(Location.class), any(ItemStack.class), any());
+        assertTrue(delivered.isEmpty());
     }
     @Test void mergedRowActuallyPicksAllMatchingEntities() throws Exception {
         Item first=item("plain",32);Item second=item("plain",16);
@@ -170,6 +224,84 @@ class LootScannerServiceTest {
         Item foreign=item("owned",1);when(foreign.getOwner()).thenReturn(UUID.randomUUID());
         Item delay=item("delay",1);when(delay.getPickupDelay()).thenReturn(10);
         scan();assertFalse(service.handleInteractKeyFromHost(player));
+    }
+
+    @Test void sharedScanReusesPublicDropWithoutExposingOwnerOnlyDrop() throws Exception {
+        Item sharedItem = item("public", 2);
+        Item personal = item("personal", 3);
+        when(personal.getOwner()).thenReturn(id);
+        Player second = mock(Player.class);
+        when(second.getUniqueId()).thenReturn(UUID.randomUUID());
+        when(second.isOnline()).thenReturn(true);
+        when(second.getCanPickupItems()).thenReturn(true);
+        when(second.getLocation()).thenReturn(new Location(world, 0, 64, 0));
+        when(second.getNearbyEntities(anyDouble(), anyDouble(), anyDouble())).thenReturn(entities);
+
+        Map<UUID, ?> tickDrops = new HashMap<>();
+        Class<?>[] input = {Player.class, Map.class};
+        invoke("scanForPlayer", input, player, tickDrops);
+        invoke("scanForPlayer", input, second, tickDrops);
+
+        assertEquals(2, payload().get("totalCount"));
+        Map<String, Object> secondView = payload(second);
+        assertEquals(1, secondView.get("totalCount"));
+        assertEquals(sharedItem.getUniqueId().toString(), secondView.get("item0Uuid"));
+        verify(sharedItem, times(1)).getItemStack();
+    }
+
+    @Test void onlyPlayersWithOverlappingScanCirclesShareTheTickCache() throws Exception {
+        ArrayDeque<Player> queue = new ArrayDeque<>();
+        queue.add(viewerAt(world, 0));
+        queue.add(viewerAt(world, 16));
+        queue.add(viewerAt(world, 9));
+        queue.add(viewerAt(mock(World.class), 0));
+        Field scanQueue = LootScannerService.class.getDeclaredField("scanQueue");
+        scanQueue.setAccessible(true);
+        @SuppressWarnings("unchecked")
+        ArrayDeque<Player> active = (ArrayDeque<Player>) scanQueue.get(service);
+
+        active.addAll(queue);
+        Class<?>[] args = {int.class, double.class};
+        assertEquals(0L, invoke("overlappingScans", args, 2, 5d));
+        assertEquals(0b0111L, invoke("overlappingScans", args, 4, 5d));
+
+        active.removeFirst();
+        active.removeFirst();
+        assertEquals(0L, invoke("overlappingScans", args, 2, 5d));
+    }
+
+    private Player viewerAt(World viewerWorld, double x) {
+        Player viewer = mock(Player.class);
+        when(viewer.getLocation(any(Location.class))).thenAnswer(invocation -> {
+            Location target = invocation.getArgument(0);
+            target.setWorld(viewerWorld);
+            target.setX(x);
+            target.setY(64);
+            target.setZ(0);
+            return target;
+        });
+        return viewer;
+    }
+
+    @Test void changingSameEntityAmountOrMetadataRefreshesTheHud() throws Exception {
+        when(names.resolveDisplayName(any())).thenAnswer(inv -> metadata.get(inv.getArgument(0)));
+        Item item = item("old", 2);
+        scan();
+        String entityId = item.getUniqueId().toString();
+        assertEquals("old", payload().get("item0Name"));
+
+        item.setItemStack(stack("old", 4));
+        scan();
+        assertEquals(4L, payload().get("item0Amount"));
+        assertEquals("old", payload().get("item0Name"));
+
+        item.setItemStack(stack("renamed", 3));
+        scan();
+        Map<String, Object> renamed = payload();
+        assertEquals(entityId, renamed.get("item0Uuid"));
+        assertEquals(3L, renamed.get("item0Amount"));
+        assertEquals("renamed", renamed.get("item0Name"));
+        assertEquals("renamed", renamed.get("item0ItemJson"));
     }
     @Test void menuClosureInvalidatesOutstandingPick() throws Exception {
         Item item=item("plain",1);scan();service.handleHostAction(player,"details");String token=token();

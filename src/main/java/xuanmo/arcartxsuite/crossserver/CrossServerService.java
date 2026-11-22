@@ -4,23 +4,47 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.sql.SQLException;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.function.Predicate;
+import java.util.logging.Level;
 import org.bukkit.Bukkit;
 
 import org.bukkit.entity.Player;
+import org.bukkit.plugin.IllegalPluginAccessException;
+import org.bukkit.plugin.messaging.Messenger;
 import org.bukkit.plugin.messaging.PluginMessageListener;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.scheduler.BukkitRunnable;
+import redis.clients.jedis.DefaultJedisClientConfig;
+import redis.clients.jedis.HostAndPort;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
 import redis.clients.jedis.JedisPoolConfig;
-import redis.clients.jedis.JedisPubSub;
+import redis.clients.jedis.resps.StreamEntry;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerAPI;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerChannel;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerChannelConfig;
@@ -34,23 +58,30 @@ import xuanmo.arcartxsuite.api.crossserver.CrossServerEnvelope;
  * Redis 不可用时自动降级到 PluginMessage 通道。
  */
 public final class CrossServerService implements CrossServerAPI, PluginMessageListener {
+    private static final CompletableFuture<Boolean> DELIVERED = CompletableFuture.completedFuture(true);
 
     private static final String BUNGEE_CHANNEL = "BungeeCord";
     private static final int PROXY_MAX_BYTES = Short.MAX_VALUE;
+    private static final long INBOX_RETRY_MS = 250;
+    private static final int INBOUND_QUEUE_MESSAGES = 2_048;
+    private static final int INBOUND_BATCH_SIZE = 128;
+    private static final int INBOUND_CALLBACKS_PER_TICK = 32;
+    private static final long INBOUND_CALLBACK_BUDGET_NS = TimeUnit.MILLISECONDS.toNanos(4);
+    private static final long INBOUND_BATCH_WAIT_NANOS = TimeUnit.MILLISECONDS.toNanos(3);
+    private static final int REDIS_QUEUE_CHARS = 8 * 1024 * 1024;
 
     private final JavaPlugin plugin;
-    private CrossServerGlobalConfiguration configuration;
-    private CrossServerDedupe dedupe = new CrossServerDedupe(60_000L);
+    private volatile CrossServerGlobalConfiguration configuration;
+    private volatile InboundWorker inboundWorker;
     private final Map<String, ModuleRegistration> registrations = new ConcurrentHashMap<>();
+    private final AtomicLong nextInboundWarning = new AtomicLong();
+    private final AtomicLong redisRegistrationRevision = new AtomicLong();
 
-    private JedisPool jedisPool;
-    private ExecutorService redisSubscriberExecutor;
-    private JedisPubSub redisPubSub;
+    private volatile JedisPool jedisPool;
+    private volatile CrossServerRedisOutbox redisPublisher;
+    private xuanmo.arcartxsuite.api.scheduler.ModuleExecutor redisSubscriberExecutor;
     private volatile boolean redisSubscriberActive;
-    private boolean proxyActive;
-    /** 已告警过的未签名来源节点（签名关闭时每节点只告警一次，避免刷日志）。 */
-    private final java.util.Set<String> unsignedWarnedNodes =
-        ConcurrentHashMap.newKeySet();
+    private volatile boolean proxyActive;
 
     public CrossServerService(JavaPlugin plugin) {
         this.plugin = plugin;
@@ -58,45 +89,54 @@ public final class CrossServerService implements CrossServerAPI, PluginMessageLi
     }
 
     public void start() {
+        start(CompletableFuture.completedFuture(null));
+    }
+
+    public void start(CompletionStage<Void> modulesReady) {
         shutdownBackends();
         configuration = CrossServerGlobalConfiguration.from(plugin.getConfig());
-        dedupe = new CrossServerDedupe(configuration.dedupeTtlMs());
-        if (configuration.signatureEnabled() && configuration.signatureSecret().isBlank()) {
-            xuanmo.arcartxsuite.module.AxsLog.logger().warning("[CrossServer] signature.enabled=true 但 secret 为空，跨服消息发送已被禁用（拒绝裸奔）。请配置 cross-server.signature.secret 或将 signature.enabled 设为 false。");
+        boolean enabled = configuration.redisEnabled() || configuration.proxyEnabled();
+        if (enabled && !CrossServerGlobalConfiguration.validEnvelopeField(configuration.nodeId())) {
+            xuanmo.arcartxsuite.module.AxsLog.logger().warning("[CrossServer] node-id 无效，跨服传输未启动");
+            return;
         }
-        if ((configuration.redisEnabled() || configuration.proxyEnabled()) && !configuration.signatureEnabled()) {
+        if (enabled && configuration.missingSignatureSecret()) {
             xuanmo.arcartxsuite.module.AxsLog.logger().warning(
-                "════════════════════════════════════════════════════════════════\n"
-                + " [CrossServer] ⚠ 跨服签名已关闭（cross-server.signature.enabled=false）\n"
-                + " 任何能向 Redis 频道/Proxy 通道投递消息的来源都可伪造跨服消息：\n"
-                + " 注入假玩家、操纵拍卖/动态商店、伪造跨服传送握手等。\n"
-                + " 仅在可信内网/同机部署时可接受；否则请开启 signature 并配置 secret。\n"
-                + "════════════════════════════════════════════════════════════════"
+                "[CrossServer] 跨服消息已禁用：signature.enabled 或 signature.verify 已开启，必须配置有效的 secret"
+            );
+        } else if (enabled && !configuration.shouldVerify()) {
+            xuanmo.arcartxsuite.module.AxsLog.logger().warning(
+                "[CrossServer] 未要求入站签名。请仅在可信传输网络使用此配置"
             );
         }
-        if (configuration.redisEnabled()) {
-            startRedis();
+        if (enabled && !configuration.missingSignatureSecret()) {
+            inboundWorker = new InboundWorker(configuration, modulesReady.toCompletableFuture());
         }
-        if (configuration.proxyEnabled()) {
+        if (configuration.redisEnabled()) {
+            startRedis(modulesReady);
+        }
+        if (configuration.proxyEnabled() && !configuration.missingSignatureSecret()) {
             startProxy();
         }
         if (configuration.redisEnabled() || configuration.proxyEnabled()) {
             xuanmo.arcartxsuite.module.AxsLog.logger().info(
                 "[CrossServer] 已启动 | node=" + configuration.nodeId()
-                    + " | redis=" + configuration.redisEnabled()
-                    + " | proxy=" + configuration.proxyEnabled()
+                    + " | redis=" + (redisPublisher != null)
+                    + " | proxy=" + proxyActive
                     + " | sign=" + configuration.shouldSign()
                     + " | verify=" + configuration.shouldVerify()
             );
         }
     }
 
-    public void shutdown() {
+    public CompletionStage<Void> shutdown() { return shutdownAsync(); }
+
+    CompletionStage<Void> shutdownAsync() {
         for (ModuleRegistration registration : registrations.values()) {
             registration.closed = true;
         }
         registrations.clear();
-        shutdownBackends();
+        return shutdownBackends();
     }
 
     @Override
@@ -106,7 +146,8 @@ public final class CrossServerService implements CrossServerAPI, PluginMessageLi
 
     /** Redis 后端是否已激活（供 axs-core 内部选主服务使用）。 */
     public boolean isRedisAvailable() {
-        return jedisPool != null && !jedisPool.isClosed();
+        JedisPool pool = jedisPool;
+        return pool != null && !pool.isClosed();
     }
 
     /** 获取 Redis 连接池（供 axs-core 内部选主服务使用，Redis 不可用时返回 null）。 */
@@ -121,71 +162,92 @@ public final class CrossServerService implements CrossServerAPI, PluginMessageLi
         CrossServerChannelConfig config,
         Consumer<CrossServerDelivery> consumer
     ) {
-        Objects.requireNonNull(moduleId, "moduleId");
         Objects.requireNonNull(consumer, "consumer");
+        return registerChannel(moduleId, config, delivery -> {
+            consumer.accept(delivery);
+            return DELIVERED;
+        }, Admission.DIRECT);
+    }
+
+    @Override
+    public CrossServerChannel openChannelAdmitting(String moduleId, CrossServerChannelConfig config,
+                                                    Predicate<CrossServerDelivery> admit) {
+        Objects.requireNonNull(admit, "admit");
+        return registerChannel(moduleId, config, delivery -> admit.test(delivery) ? DELIVERED : null, Admission.BUFFERED);
+    }
+
+    @Override
+    public CrossServerChannel openChannelCompleting(String moduleId, CrossServerChannelConfig config,
+            Function<CrossServerDelivery, CompletionStage<Boolean>> admit) {
+        return registerChannel(moduleId, config, Objects.requireNonNull(admit, "admit"), Admission.CONFIRMED);
+    }
+
+    private CrossServerChannel registerChannel(String moduleId, CrossServerChannelConfig config,
+            Function<CrossServerDelivery, CompletionStage<Boolean>> admit, Admission admission) {
+        if (!CrossServerGlobalConfiguration.validEnvelopeField(moduleId)) {
+            throw new IllegalArgumentException("Invalid cross-server module id");
+        }
         CrossServerChannelConfig channelConfig = config == null ? CrossServerChannelConfig.disabled() : config;
-        closeChannel(moduleId);
-        ModuleRegistration registration = new ModuleRegistration(moduleId, channelConfig, consumer);
-        registrations.put(moduleId, registration);
+        ModuleRegistration registration = new ModuleRegistration(moduleId, channelConfig, admit, admission);
+        registrations.compute(moduleId, (id, existing) -> {
+            if (existing != null) {
+                existing.closed = true;
+            }
+            return registration;
+        });
+        redisRegistrationRevision.incrementAndGet();
         return new CrossServerChannelHandle(registration);
     }
 
-    private void closeChannel(String moduleId) {
-        ModuleRegistration existing = registrations.remove(moduleId);
-        if (existing != null) {
-            existing.closed = true;
-        }
-    }
-
-    private void startRedis() {
+    private void startRedis(CompletionStage<Void> modulesReady) {
+        CrossServerGlobalConfiguration activeConfig = configuration;
         try {
-            String password = configuration.redisPassword().isBlank() ? null : configuration.redisPassword();
-            jedisPool = new JedisPool(
-                new JedisPoolConfig(),
-                configuration.redisHost(),
-                configuration.redisPort(),
-                configuration.redisConnectTimeoutMs(),
-                password,
-                configuration.redisDatabase()
+            String password = activeConfig.redisPassword().isBlank() ? null : activeConfig.redisPassword();
+            String username = activeConfig.redisUsername().isBlank() ? null : activeConfig.redisUsername();
+            JedisPoolConfig poolConfig = new JedisPoolConfig();
+            poolConfig.setMaxWait(Duration.ofMillis(activeConfig.redisConnectTimeoutMs()));
+            JedisPool pool = new JedisPool(
+                poolConfig,
+                new HostAndPort(activeConfig.redisHost(), activeConfig.redisPort()),
+                DefaultJedisClientConfig.builder()
+                    .connectionTimeoutMillis(activeConfig.redisConnectTimeoutMs())
+                    .socketTimeoutMillis(activeConfig.redisConnectTimeoutMs())
+                    .blockingSocketTimeoutMillis(activeConfig.redisConnectTimeoutMs())
+                    .user(username)
+                    .password(password)
+                    .database(activeConfig.redisDatabase())
+                    .build()
             );
-            try (Jedis jedis = jedisPool.getResource()) {
-                jedis.ping();
+            jedisPool = pool;
+            if (activeConfig.missingSignatureSecret()) {
+                // 保留 Redis 连接池供独立的跨服选主功能使用。
+                return;
             }
+            int frameBytes = (int) Math.min(REDIS_QUEUE_CHARS, 3L * activeConfig.maxPayloadChars());
+            var stream = new CrossServerRedisStream(activeConfig, frameBytes);
+            redisPublisher = new CrossServerRedisOutbox(pool, activeConfig, stream,
+                plugin.getDataFolder().toPath().resolve("data/cross-server-outbox.db"), frameBytes,
+                () -> registrations.values().stream()
+                    .filter(registration -> registration.accepts(Transport.REDIS, activeConfig))
+                    .map(registration -> registration.moduleId)
+                    .collect(java.util.stream.Collectors.toUnmodifiableSet()));
             redisSubscriberActive = true;
-            redisPubSub = new JedisPubSub() {
-                @Override
-                public void onMessage(String channel, String message) {
-                    handleWireMessage(message, "redis");
-                }
-            };
-            redisSubscriberExecutor = Executors.newSingleThreadExecutor(runnable -> {
+            redisSubscriberExecutor = new xuanmo.arcartxsuite.api.scheduler.ModuleExecutor(1, 1, 0,
+                java.util.concurrent.TimeUnit.MILLISECONDS, new java.util.concurrent.LinkedBlockingQueue<>(), runnable -> {
                 Thread thread = new Thread(runnable, "AXS-CrossServer-Redis");
                 thread.setDaemon(true);
                 return thread;
             });
-            redisSubscriberExecutor.execute(this::redisSubscribeLoop);
+            var receiver = new RedisStreamReceiver(pool, stream, inboundWorker, frameBytes, modulesReady.toCompletableFuture());
+            ExecutorService receiverExecutor = redisSubscriberExecutor;
+            plugin.getServer().getScheduler().runTask(plugin, () -> {
+                if (redisSubscriberExecutor == receiverExecutor && redisSubscriberActive) {
+                    receiverExecutor.execute(receiver::run);
+                }
+            });
         } catch (Exception exception) {
             xuanmo.arcartxsuite.module.AxsLog.logger().warning("[CrossServer] Redis 初始化失败: " + exception.getMessage());
             shutdownRedis();
-        }
-    }
-
-    private void redisSubscribeLoop() {
-        while (redisSubscriberActive && jedisPool != null && redisPubSub != null) {
-            try (Jedis jedis = jedisPool.getResource()) {
-                jedis.subscribe(redisPubSub, configuration.redisChannel());
-                return;
-            } catch (Exception exception) {
-                if (redisSubscriberActive) {
-                    xuanmo.arcartxsuite.module.AxsLog.logger().warning("[CrossServer] Redis 订阅中断，3 秒后重试: " + exception.getMessage());
-                    try {
-                        Thread.sleep(3000L);
-                    } catch (InterruptedException interruptedException) {
-                        Thread.currentThread().interrupt();
-                        return;
-                    }
-                }
-            }
         }
     }
 
@@ -195,19 +257,26 @@ public final class CrossServerService implements CrossServerAPI, PluginMessageLi
         proxyActive = true;
     }
 
-    private void shutdownBackends() {
+    private CompletionStage<Void> shutdownBackends() {
+        InboundWorker worker = inboundWorker;
+        var publisher = redisPublisher;
+        var receiver = redisSubscriberExecutor;
+        inboundWorker = null;
+        if (worker != null) worker.thread.interrupt();
         shutdownRedis();
         shutdownProxy();
+        return CompletableFuture.allOf(
+            worker == null ? CompletableFuture.completedFuture(null) : worker.stopped,
+            publisher == null ? CompletableFuture.completedFuture(null) : publisher.stopped().toCompletableFuture(),
+            receiver == null ? CompletableFuture.completedFuture(null) : receiver.stopped().toCompletableFuture());
     }
 
     private void shutdownRedis() {
         redisSubscriberActive = false;
-        if (redisPubSub != null) {
-            try {
-                redisPubSub.unsubscribe();
-            } catch (Exception ignored) {
-            }
-            redisPubSub = null;
+        CrossServerRedisOutbox publisher = redisPublisher;
+        redisPublisher = null;
+        if (publisher != null) {
+            publisher.shutdown();
         }
         if (redisSubscriberExecutor != null) {
             redisSubscriberExecutor.shutdownNow();
@@ -239,138 +308,159 @@ public final class CrossServerService implements CrossServerAPI, PluginMessageLi
 
     @Override
     public void onPluginMessageReceived(String channel, Player player, byte[] message) {
-        if (!proxyActive || !BUNGEE_CHANNEL.equals(channel) || message == null || message.length == 0) {
+        CrossServerGlobalConfiguration activeConfig = configuration;
+        if (!proxyActive || !BUNGEE_CHANNEL.equals(channel) || activeConfig.missingSignatureSecret()) {
             return;
         }
-        try (DataInputStream input = new DataInputStream(new ByteArrayInputStream(message))) {
-            String subChannel = input.readUTF();
-            if (!"Forward".equalsIgnoreCase(subChannel)) {
-                return;
-            }
-            input.readUTF();
-            String actualChannel = input.readUTF();
-            if (!configuration.proxyMessengerChannel().equalsIgnoreCase(actualChannel)) {
-                return;
-            }
-            short length = input.readShort();
-            byte[] payload = new byte[length];
-            input.readFully(payload);
-            handleWireMessage(new String(payload, StandardCharsets.UTF_8), "proxy");
-        } catch (Exception exception) {
-            xuanmo.arcartxsuite.module.AxsLog.logger().warning("[CrossServer] Proxy 消息解析失败: " + exception.getMessage());
+        String wire = decodeProxyPayload(message, activeConfig.proxyMessengerChannel());
+        if (wire != null) {
+            handleWireMessage(wire, Transport.PROXY, activeConfig);
         }
     }
 
-    private void handleWireMessage(String wire, String source) {
-        if (wire == null || wire.isBlank()) {
-            return;
+    static String decodeProxyPayload(byte[] message, String expectedChannel) {
+        if (message == null || message.length > Messenger.MAX_MESSAGE_SIZE) {
+            return null;
         }
-        if (wire.length() > configuration.maxPayloadChars()) {
-            xuanmo.arcartxsuite.module.AxsLog.logger().warning("[CrossServer] 丢弃超大 payload (" + source + "): " + wire.length());
-            return;
+        try (DataInputStream input = new DataInputStream(new ByteArrayInputStream(message))) {
+            // Forward 请求中的目标服和命令名已被代理消费，转发后的帧从子频道开始。
+            if (!expectedChannel.equalsIgnoreCase(input.readUTF())) {
+                return null;
+            }
+            int length = input.readUnsignedShort();
+            if (length == 0 || length > PROXY_MAX_BYTES || input.available() != length) {
+                return null;
+            }
+            return new String(input.readNBytes(length), StandardCharsets.UTF_8);
+        } catch (IOException exception) {
+            return null;
+        }
+    }
+
+    private void handleWireMessage(String wire, Transport transport, CrossServerGlobalConfiguration activeConfig) {
+        CrossServerEnvelope envelope = verifyWire(wire, activeConfig, false);
+        InboundWorker worker = inboundWorker;
+        if (envelope == null || worker == null || worker.config != activeConfig) return;
+        InboundMessage message = inboundMessage(envelope, wire, transport, activeConfig);
+        if (message != null) worker.submit(message);
+    }
+
+    private CrossServerEnvelope verifyWire(String wire, CrossServerGlobalConfiguration activeConfig, boolean fromInbox) {
+        if (configuration != activeConfig || activeConfig.missingSignatureSecret()
+            || wire == null || wire.length() > activeConfig.maxPayloadChars() || wire.isBlank()) {
+            return null;
         }
         try {
             CrossServerEnvelope envelope = CrossServerEnvelopeCodec.decode(wire);
-            if (envelope.protocol() != CrossServerEnvelope.PROTOCOL_VERSION) {
-                xuanmo.arcartxsuite.module.AxsLog.logger().warning("[CrossServer] 不支持的 protocol=" + envelope.protocol());
-                return;
+            if (envelope.protocol() != CrossServerEnvelope.PROTOCOL_VERSION
+                || !CrossServerGlobalConfiguration.validEnvelopeField(envelope.nodeId())
+                || !CrossServerGlobalConfiguration.validEnvelopeField(envelope.messageId())
+                || activeConfig.nodeId().equalsIgnoreCase(envelope.nodeId())
+                || envelope.timestamp() <= 0
+                || (!fromInbox && !activeConfig.acceptsTimestamp(envelope.timestamp(), System.currentTimeMillis()))) {
+                return null;
             }
-            if (configuration.nodeId().equalsIgnoreCase(envelope.nodeId())) {
-                return;
+            boolean verify = activeConfig.shouldVerify();
+            if (verify && !CrossServerSigner.verify(envelope, envelope.signature(), secretBytes(activeConfig))) {
+                warnAtMostOncePerInterval(nextInboundWarning, "[CrossServer] 拒绝未签名或签名无效的跨服消息");
+                return null;
             }
-            if (configuration.shouldVerify()) {
-                if (envelope.signature() == null || envelope.signature().isBlank()) {
-                    xuanmo.arcartxsuite.module.AxsLog.logger().warning("[CrossServer] 丢弃无签名消息 module=" + envelope.module());
-                    return;
-                }
-                if (!CrossServerSigner.verify(envelope, envelope.signature(), secretBytes())) {
-                    xuanmo.arcartxsuite.module.AxsLog.logger().warning("[CrossServer] 签名无效 module=" + envelope.module());
-                    return;
-                }
-            } else if (unsignedWarnedNodes.add(envelope.nodeId())) {
-                xuanmo.arcartxsuite.module.AxsLog.logger().warning(
-                    "[CrossServer] 收到未签名消息 node=" + envelope.nodeId() + " module=" + envelope.module()
-                        + "（signature.enabled=false，无法验证来源真实性；可信内网可忽略，否则请开启签名）"
-                );
-            }
-            if (!dedupe.registerIfNew(envelope.messageId())) {
-                return;
-            }
-            ModuleRegistration registration = registrations.get(envelope.module());
-            if (registration == null || registration.closed) {
-                return;
-            }
-            CrossServerDelivery delivery = new CrossServerDelivery(
-                envelope.module(),
-                envelope.nodeId(),
-                envelope.messageId(),
-                envelope.payload(),
-                configuration.shouldVerify()
-            );
-            Bukkit.getScheduler().runTask(plugin, () -> {
-                if (!registration.closed) {
-                    registration.consumer.accept(delivery);
-                }
-            });
-        } catch (Exception exception) {
-            xuanmo.arcartxsuite.module.AxsLog.logger().warning("[CrossServer] 入站消息失败 (" + source + "): " + exception.getMessage());
+            return envelope;
+        } catch (RuntimeException exception) {
+            warnAtMostOncePerInterval(nextInboundWarning, "[CrossServer] 无效的跨服信封或调度已关闭");
+            return null;
         }
     }
 
-    private void publishEnvelope(CrossServerEnvelope unsignedEnvelope, ModuleRegistration registration) {
+    private InboundMessage inboundMessage(CrossServerEnvelope envelope, String wire, Transport transport,
+                                          CrossServerGlobalConfiguration activeConfig) {
+        ModuleRegistration registration = registrations.get(envelope.module());
+        if (registration == null || !registration.accepts(transport, activeConfig)) return null;
+        var delivery = new CrossServerDelivery(envelope.module(), envelope.nodeId(), envelope.messageId(),
+            envelope.payload(), activeConfig.shouldVerify(), envelope.timestamp());
+        String proxyWire = transport == Transport.PROXY && registration.admission == Admission.CONFIRMED ? wire : null;
+        int size = wire.length() + (proxyWire != null && envelope.payload() != null ? envelope.payload().length() : 0);
+        return new InboundMessage(delivery, envelope.timestamp(), size, transport, registration, proxyWire);
+    }
+
+    private CompletionStage<Boolean> publishEnvelope(CrossServerEnvelope unsignedEnvelope, ModuleRegistration registration,
+                                                     CrossServerGlobalConfiguration activeConfig, boolean durableOnly) {
         if (unsignedEnvelope.payload() != null
-            && unsignedEnvelope.payload().length() > configuration.maxPayloadChars()) {
+            && unsignedEnvelope.payload().length() > activeConfig.maxPayloadChars()) {
             xuanmo.arcartxsuite.module.AxsLog.logger().warning(
                 "[CrossServer] 模块 " + unsignedEnvelope.module() + " payload 超过上限，已跳过发送"
             );
-            return;
+            return CompletableFuture.completedFuture(false);
         }
-        // 签名启用但密钥为空时拒绝发送（fail-closed，防止无签名裸奔被中间人伪造）
-        if (configuration.signatureEnabled() && configuration.signatureSecret().isBlank()) {
-            xuanmo.arcartxsuite.module.AxsLog.logger().warning(
-                "[CrossServer] 模块 " + unsignedEnvelope.module() + " 发送被拒绝：signature.enabled=true 但 secret 为空"
-            );
-            return;
+        CrossServerRedisOutbox publisher = redisPublisher;
+        boolean sendRedis = publisher != null && publisher.configuration == activeConfig
+            && registration.accepts(Transport.REDIS, activeConfig);
+        boolean sendProxy = !durableOnly && proxyActive && registration.accepts(Transport.PROXY, activeConfig);
+        if (!sendRedis && !sendProxy) {
+            return CompletableFuture.completedFuture(false);
         }
-        CrossServerEnvelope envelope = configuration.shouldSign()
-            ? CrossServerSigner.withSignature(unsignedEnvelope, secretBytes())
+        if (sendRedis && !sendProxy) {
+            int reserved = publisher.serializationReservation(unsignedEnvelope);
+            if (reserved > 0) return publisher.publish(unsignedEnvelope, reserved);
+        }
+        CrossServerEnvelope envelope = activeConfig.shouldSign()
+            ? CrossServerSigner.withSignature(unsignedEnvelope, secretBytes(activeConfig))
             : unsignedEnvelope;
         String wire = CrossServerEnvelopeCodec.encode(envelope);
-        boolean sendRedis = registration.config.redisEnabled(configuration.redisEnabled()) && jedisPool != null;
-        boolean sendProxy = registration.config.proxyEnabled(configuration.proxyEnabled()) && proxyActive;
-        if (!sendRedis && !sendProxy) {
-            return;
+        if (wire.length() > activeConfig.maxPayloadChars()) {
+            xuanmo.arcartxsuite.module.AxsLog.logger().warning(
+                "[CrossServer] 模块 " + registration.moduleId + " 跨服信封超过上限，已跳过发送"
+            );
+            return CompletableFuture.completedFuture(false);
         }
-        if (sendRedis) {
-            try (Jedis jedis = jedisPool.getResource()) {
-                jedis.publish(configuration.redisChannel(), wire);
-            } catch (Exception exception) {
-                xuanmo.arcartxsuite.module.AxsLog.logger().warning("[CrossServer] Redis 发布失败: " + exception.getMessage());
-            }
-        }
+        CompletionStage<Boolean> result = sendRedis
+            ? publisher.publish(wire, unsignedEnvelope.timestamp(), registration.moduleId)
+            : CompletableFuture.completedFuture(false);
         if (sendProxy) {
-            publishProxy(wire, unsignedEnvelope.module());
+            var proxyReceipt = new CompletableFuture<Boolean>();
+            Runnable send = () -> {
+                if (!proxyReceipt.isCancelled() && proxyActive && configuration == activeConfig && !registration.closed) {
+                    proxyReceipt.complete(publishProxy(wire, registration.moduleId, activeConfig));
+                } else {
+                    proxyReceipt.complete(false);
+                }
+            };
+            if (Bukkit.isPrimaryThread()) {
+                send.run();
+            } else {
+                try {
+                    Bukkit.getScheduler().runTask(plugin, send);
+                } catch (IllegalPluginAccessException ignored) {
+                    proxyReceipt.complete(false);
+                }
+            }
+            if (!sendRedis) return proxyReceipt;
         }
+        return result;
     }
 
-    private void publishProxy(String wire, String moduleId) {
+    private boolean publishProxy(String wire, String moduleId, CrossServerGlobalConfiguration activeConfig) {
         byte[] payloadBytes = wire.getBytes(StandardCharsets.UTF_8);
         if (payloadBytes.length > PROXY_MAX_BYTES) {
             xuanmo.arcartxsuite.module.AxsLog.logger().warning(
                 "[CrossServer] 模块 " + moduleId + " Proxy 负载 " + payloadBytes.length
-                    + " 字节超过 " + PROXY_MAX_BYTES + "，已跳过 Proxy 仅走 Redis"
+                    + " 字节超过 " + PROXY_MAX_BYTES + "，已跳过 Proxy"
             );
-            return;
+            return false;
         }
-        byte[] message = buildProxyMessage(payloadBytes);
+        byte[] message = buildProxyMessage(payloadBytes, activeConfig);
         if (message == null) {
-            return;
+            return false;
+        }
+        if (message.length > Messenger.MAX_MESSAGE_SIZE) {
+            xuanmo.arcartxsuite.module.AxsLog.logger().warning(
+                "[CrossServer] 模块 " + moduleId + " Proxy 完整帧超过传输上限，已跳过 Proxy"
+            );
+            return false;
         }
         // 尝试最多 3 个不同的在线玩家作为消息载体
         Player[] players = Bukkit.getOnlinePlayers().toArray(new Player[0]);
-        if (players.length == 0) {
-            return;
-        }
+        if (players.length == 0) return false;
         int maxAttempts = Math.min(3, players.length);
         for (int i = 0; i < maxAttempts; i++) {
             Player carrier = players[i];
@@ -379,7 +469,7 @@ public final class CrossServerService implements CrossServerAPI, PluginMessageLi
             }
             try {
                 carrier.sendPluginMessage(plugin, BUNGEE_CHANNEL, message);
-                return;
+                return true;
             } catch (Exception exception) {
                 xuanmo.arcartxsuite.module.AxsLog.logger().warning(
                     "[CrossServer] Proxy 发布失败(尝试 " + (i + 1) + "/" + maxAttempts
@@ -390,15 +480,16 @@ public final class CrossServerService implements CrossServerAPI, PluginMessageLi
         xuanmo.arcartxsuite.module.AxsLog.logger().warning(
             "[CrossServer] 模块 " + moduleId + " Proxy 发布失败：所有候选玩家均发送失败。"
         );
+        return false;
     }
 
-    private byte[] buildProxyMessage(byte[] payloadBytes) {
+    private byte[] buildProxyMessage(byte[] payloadBytes, CrossServerGlobalConfiguration activeConfig) {
         try {
             ByteArrayOutputStream buffer = new ByteArrayOutputStream();
             try (DataOutputStream output = new DataOutputStream(buffer)) {
                 output.writeUTF("Forward");
-                output.writeUTF(configuration.proxyForwardTarget());
-                output.writeUTF(configuration.proxyMessengerChannel());
+                output.writeUTF(activeConfig.proxyForwardTarget());
+                output.writeUTF(activeConfig.proxyMessengerChannel());
                 output.writeShort(payloadBytes.length);
                 output.write(payloadBytes);
             }
@@ -411,8 +502,632 @@ public final class CrossServerService implements CrossServerAPI, PluginMessageLi
         }
     }
 
-    private byte[] secretBytes() {
+    private static byte[] secretBytes(CrossServerGlobalConfiguration configuration) {
         return configuration.signatureSecret().getBytes(StandardCharsets.UTF_8);
+    }
+
+    private static void warnAtMostOncePerInterval(AtomicLong nextWarning, String message) {
+        long now = System.currentTimeMillis();
+        long next = nextWarning.get();
+        if (now >= next && nextWarning.compareAndSet(next, now + 10_000L)) {
+            xuanmo.arcartxsuite.module.AxsLog.logger().warning(message);
+        }
+    }
+
+    private enum Transport {
+        REDIS, PROXY
+    }
+
+    private enum Admission {
+        DIRECT, BUFFERED, CONFIRMED
+    }
+
+    private record InboundMessage(CrossServerDelivery delivery, long timestamp, int size,
+                                  Transport transport, ModuleRegistration registration, String proxyWire) {}
+
+    private final class InboundWorker {
+        private final CrossServerGlobalConfiguration config;
+        private final CrossServerReplayStore store;
+        private final CompletableFuture<Void> modulesReady;
+        private final String proxyInboxScope;
+        private final ArrayBlockingQueue<InboundMessage> pending = new ArrayBlockingQueue<>(INBOUND_QUEUE_MESSAGES);
+        private final Semaphore queuedMessages = new Semaphore(INBOUND_QUEUE_MESSAGES);
+        private final Semaphore queuedChars = new Semaphore(REDIS_QUEUE_CHARS);
+        private final Thread thread;
+        private final CompletableFuture<Void> stopped = new CompletableFuture<>();
+        private long proxyInboxRevision = Long.MIN_VALUE;
+        private long proxyInboxNextCheck;
+        private long proxyInboxDeferredUntil = Long.MAX_VALUE;
+        private long proxyInboxAfterRow;
+        private long proxyInboxRetryAt;
+        private InboxDispatch proxyDispatch;
+
+        private InboundWorker(CrossServerGlobalConfiguration config, CompletableFuture<Void> modulesReady) {
+            this.config = config;
+            this.modulesReady = modulesReady;
+            this.proxyInboxScope = "proxy\n" + config.nodeId().toLowerCase(java.util.Locale.ROOT);
+            this.store = new CrossServerReplayStore(plugin.getDataFolder().toPath().resolve("data/cross-server-replay.db"));
+            this.thread = new Thread(this::run, "AXS-CrossServer-Inbound");
+            thread.setDaemon(true);
+            thread.start();
+        }
+
+        private void submit(InboundMessage message) {
+            boolean hasSlot = false;
+            boolean hasChars = false;
+            boolean enqueued = false;
+            try {
+                if (message.size() > REDIS_QUEUE_CHARS) {
+                    warnAtMostOncePerInterval(nextInboundWarning, "[CrossServer] 信封超过跨服入站内存上限");
+                    return;
+                }
+                hasSlot = queuedMessages.tryAcquire();
+                hasChars = hasSlot && queuedChars.tryAcquire(message.size());
+                if (!hasChars) {
+                    warnAtMostOncePerInterval(nextInboundWarning, "[CrossServer] 跨服入站队列已满");
+                    return;
+                }
+                if (inboundWorker == this && !stopped.isDone()
+                    && config.acceptsTimestamp(message.timestamp(), System.currentTimeMillis())) {
+                    enqueued = pending.offer(message);
+                }
+            } finally {
+                if (!enqueued) {
+                    if (hasChars) queuedChars.release(message.size());
+                    if (hasSlot) queuedMessages.release();
+                }
+            }
+        }
+
+        private void run() {
+            try (store) {
+                try {
+                    while (!Thread.currentThread().isInterrupted()) {
+                        advanceProxyInbox();
+                        InboundMessage first = pending.poll(
+                            proxyDispatch == null ? INBOX_RETRY_MS : 25, TimeUnit.MILLISECONDS);
+                        if (first == null) continue;
+                        var batch = new ArrayList<InboundMessage>(INBOUND_BATCH_SIZE);
+                        batch.add(first);
+                        long deadline = System.nanoTime() + INBOUND_BATCH_WAIT_NANOS;
+                        while (batch.size() < INBOUND_BATCH_SIZE) {
+                            pending.drainTo(batch, INBOUND_BATCH_SIZE - batch.size());
+                            long remaining = deadline - System.nanoTime();
+                            if (batch.size() == INBOUND_BATCH_SIZE || remaining <= 0) break;
+                            InboundMessage next = pending.poll(remaining, TimeUnit.NANOSECONDS);
+                            if (next == null) break;
+                            batch.add(next);
+                        }
+                        persistAndDispatch(batch);
+                    }
+                } catch (InterruptedException ignored) {
+                    Thread.currentThread().interrupt();
+                }
+            } catch (SQLException | RuntimeException failure) {
+                stopped.completeExceptionally(failure);
+            } finally {
+                if (proxyDispatch != null) proxyDispatch.close();
+                pending.clear();
+                stopped.complete(null);
+            }
+        }
+
+        private boolean active() {
+            return inboundWorker == this && !Thread.currentThread().isInterrupted();
+        }
+
+        private void advanceProxyInbox() {
+            if (!modulesReady.isDone() || modulesReady.isCompletedExceptionally() || !active()) return;
+            long now = System.currentTimeMillis();
+            if (now < proxyInboxRetryAt) return;
+            try {
+                if (proxyDispatch != null) {
+                    proxyDispatch.saveCompleted(store);
+                    if (!proxyDispatch.settled()) return;
+                    boolean unconfirmed = !proxyDispatch.confirmed();
+                    proxyDispatch.close();
+                    proxyDispatch = null;
+                    if (unconfirmed) {
+                        long retry = now + INBOX_RETRY_MS;
+                        proxyInboxDeferredUntil = Math.min(proxyInboxDeferredUntil, retry);
+                        if (proxyInboxAfterRow == 0) {
+                            proxyInboxNextCheck = Math.min(proxyInboxNextCheck, retry);
+                            proxyInboxRetryAt = retry;
+                            return;
+                        }
+                    }
+                }
+                long revision = redisRegistrationRevision.get();
+                if (revision != proxyInboxRevision) {
+                    proxyInboxRevision = revision;
+                    proxyInboxAfterRow = 0;
+                    proxyInboxNextCheck = 0;
+                }
+                if (now < proxyInboxNextCheck) return;
+                if (proxyInboxAfterRow == 0) proxyInboxDeferredUntil = Long.MAX_VALUE;
+                var batch = readInboxBatch(store, proxyInboxScope, null, proxyInboxAfterRow, Transport.PROXY, config,
+                    PROXY_MAX_BYTES * INBOUND_BATCH_SIZE, this::active);
+                if (!active()) return;
+                if (!batch.deliveries().isEmpty()) {
+                    proxyDispatch = new InboxDispatch(batch.deliveries(), config, this::active, nextInboundWarning, false, () -> 1);
+                }
+                proxyInboxDeferredUntil = Math.min(proxyInboxDeferredUntil, batch.deferredUntil());
+                proxyInboxAfterRow = batch.hasMore() ? batch.lastRow() : 0;
+                proxyInboxNextCheck = batch.hasMore() ? 0 : proxyInboxDeferredUntil;
+            } catch (IOException | SQLException failure) {
+                try { store.close(); } catch (SQLException closeFailure) { failure.addSuppressed(closeFailure); }
+                warnAtMostOncePerInterval(nextInboundWarning, "[CrossServer] Proxy 收件箱暂时无法读取，将重试");
+                proxyInboxRetryAt = now + INBOX_RETRY_MS;
+            }
+        }
+
+        private void persistAndDispatch(List<InboundMessage> batch) throws InterruptedException {
+            boolean handedOff = false;
+            try {
+                if (inboundWorker != this) return;
+                long now = System.currentTimeMillis();
+                var accepted = batch.stream()
+                    .filter(item -> item.registration().accepts(item.transport(), config)
+                        && config.acceptsTimestamp(item.timestamp(), now))
+                    .toList();
+                var inbox = new ArrayList<CrossServerReplayStore.InboxItem>();
+                var candidates = new ArrayList<InboundMessage>(accepted.size());
+                for (var item : accepted) {
+                    if (item.proxyWire() == null) candidates.add(item);
+                    else inbox.add(new CrossServerReplayStore.InboxItem(item.delivery().messageId(), item.registration().moduleId,
+                        CrossServerReplayStore.expiry(item.timestamp(), config.dedupeTtlMs()), item.proxyWire()));
+                }
+                if (!inbox.isEmpty()) {
+                    var staged = store.stageProxy(proxyInboxScope, inbox, now, INBOUND_QUEUE_MESSAGES);
+                    for (boolean inserted : staged.inserted()) {
+                        if (inserted) {
+                            proxyInboxNextCheck = 0;
+                            break;
+                        }
+                    }
+                    if (staged.atCapacity()) {
+                        warnAtMostOncePerInterval(nextInboundWarning, "[CrossServer] Proxy 收件箱达到本机待处理上限");
+                    }
+                }
+                var claims = candidates.stream()
+                    .map(item -> new CrossServerReplayStore.Claim(item.delivery().messageId(), item.timestamp()))
+                    .toList();
+                boolean[] committed = store.claim(claims, now, config.dedupeTtlMs());
+                var deliveries = new ArrayList<InboundMessage>(candidates.size());
+                for (int index = 0; index < committed.length; index++) {
+                    if (committed[index]) deliveries.add(candidates.get(index));
+                }
+                if (deliveries.isEmpty() || inboundWorker != this) return;
+                if (deliveries.stream().anyMatch(item -> item.registration().admission == Admission.BUFFERED)) {
+                    dispatchInOrder(deliveries);
+                    return;
+                }
+                plugin.getServer().getScheduler().runTask(plugin, () -> {
+                    try {
+                        deliver(deliveries);
+                    } finally {
+                        release(batch);
+                    }
+                });
+                handedOff = true;
+            } catch (IOException | SQLException failure) {
+                proxyInboxRevision = Long.MIN_VALUE;
+                try { store.close(); } catch (SQLException closeFailure) { failure.addSuppressed(closeFailure); }
+                warnAtMostOncePerInterval(nextInboundWarning, "[CrossServer] 无法写入重放记录，消息已拒绝");
+            } catch (IllegalPluginAccessException ignored) {
+                // Bukkit is already shutting down.
+            } finally {
+                if (!handedOff) release(batch);
+            }
+        }
+
+        private void dispatchInOrder(List<InboundMessage> deliveries) throws InterruptedException {
+            var finished = new CompletableFuture<Void>();
+            new BukkitRunnable() {
+                private int offset;
+
+                @Override public void run() {
+                    try {
+                        long deadline = System.nanoTime() + INBOUND_CALLBACK_BUDGET_NS;
+                        int callbacks = 0;
+                        while (inboundWorker == InboundWorker.this && offset < deliveries.size()
+                            && callbacks < INBOUND_CALLBACKS_PER_TICK && System.nanoTime() < deadline) {
+                            if (!tryDeliver(deliveries.get(offset))) break;
+                            offset++;
+                            callbacks++;
+                        }
+                    } finally {
+                        if (offset == deliveries.size() || inboundWorker != InboundWorker.this) {
+                            cancel();
+                            finished.complete(null);
+                        }
+                    }
+                }
+            }.runTaskTimer(plugin, 1L, 1L);
+            // The bounded host queue owns this batch until the module admits its last message.
+            try {
+                finished.get();
+            } catch (ExecutionException impossible) {
+                throw new IllegalStateException(impossible);
+            }
+        }
+
+        private void deliver(List<InboundMessage> deliveries) {
+            for (InboundMessage item : deliveries) {
+                if (inboundWorker != this) return;
+                tryDeliver(item);
+            }
+        }
+
+        private boolean tryDeliver(InboundMessage item) {
+            if (!item.registration().accepts(item.transport(), config)) return true;
+            try {
+                return item.registration().admit.apply(item.delivery()) != null;
+            } catch (RuntimeException failure) {
+                plugin.getLogger().log(Level.SEVERE, "[CrossServer] 模块处理跨服消息失败", failure);
+                return true;
+            }
+        }
+
+        private void release(List<InboundMessage> batch) {
+            for (InboundMessage item : batch) {
+                queuedChars.release(item.size());
+            }
+            queuedMessages.release(batch.size());
+        }
+    }
+
+    private record InboxDelivery(CrossServerReplayStore.InboxItem item, InboundMessage message) {}
+    private record InboxReceipt(CrossServerReplayStore.InboxItem item, CompletableFuture<Boolean> finished) {}
+    private record InboxBatch(List<InboxDelivery> deliveries, long lastRow, boolean hasMore, long deferredUntil) {}
+
+    private InboxBatch readInboxBatch(CrossServerReplayStore store, String scope, String moduleId, long afterRow, Transport transport,
+            CrossServerGlobalConfiguration config, int maxBytes, BooleanSupplier active)
+            throws IOException, SQLException {
+        var page = store.pending(scope, moduleId, afterRow, INBOUND_BATCH_SIZE, maxBytes);
+        var deliveries = new ArrayList<InboxDelivery>(page.items().size());
+        var discarded = new ArrayList<CrossServerReplayStore.InboxItem>();
+        long now = System.currentTimeMillis();
+        long deferredUntil = Long.MAX_VALUE;
+        for (var item : page.items()) {
+            var envelope = verifyWire(item.wire(), config, true);
+            if (envelope == null || !item.moduleId().equals(envelope.module())) {
+                // An obsolete or invalid signature must not become trusted through recovery.
+                discarded.add(item);
+                continue;
+            }
+            var message = inboundMessage(envelope, item.wire(), transport, config);
+            if (message == null && transport == Transport.PROXY) {
+                // The local inbox already owns this frame. Continue only through an enabled
+                // confirmed receiver after an operator switches the module away from Proxy.
+                var viaRedis = inboundMessage(envelope, item.wire(), Transport.REDIS, config);
+                if (viaRedis != null && viaRedis.registration().admission == Admission.CONFIRMED) {
+                    message = viaRedis;
+                }
+            }
+            if (message != null) deliveries.add(new InboxDelivery(item, message));
+            else if (item.expiresAt() < now) discarded.add(item);
+            else deferredUntil = Math.min(deferredUntil, item.expiresAt());
+        }
+        if (active.getAsBoolean()) store.finish(discarded);
+        return new InboxBatch(deliveries, page.lastRow(), page.hasMore(), deferredUntil);
+    }
+
+    /** A bounded dispatch batch. Bukkit admits callbacks; the owning worker persists their receipts. */
+    private final class InboxDispatch implements AutoCloseable {
+        private final int expected;
+        private final org.bukkit.scheduler.BukkitTask task;
+        private final boolean stopOnFailure;
+        private final AtomicBoolean stopSubmitting = new AtomicBoolean();
+        private final ConcurrentLinkedQueue<InboxReceipt> receipts = new ConcurrentLinkedQueue<>();
+        private final List<CrossServerReplayStore.InboxItem> completed = new ArrayList<>();
+        private volatile boolean submitted;
+        private int committed;
+
+        private InboxDispatch(List<InboxDelivery> deliveries, CrossServerGlobalConfiguration config,
+                BooleanSupplier active, AtomicLong nextWarning, boolean stopOnFailure,
+                java.util.function.IntSupplier dispatchCount) {
+            expected = deliveries.size();
+            this.stopOnFailure = stopOnFailure;
+            task = new BukkitRunnable() {
+                private int offset;
+
+                @Override
+                public void run() {
+                    int parallel = Math.max(1, dispatchCount.getAsInt());
+                    long deadline = System.nanoTime() + INBOUND_CALLBACK_BUDGET_NS / parallel;
+                    int callbackLimit = Math.max(1, INBOUND_CALLBACKS_PER_TICK / parallel);
+                    int callbacks = 0;
+                    try {
+                        while (active.getAsBoolean() && !stopSubmitting.get() && offset < deliveries.size()
+                                && callbacks < callbackLimit && System.nanoTime() < deadline) {
+                            if (!tryDeliver(deliveries.get(offset))) break;
+                            offset++;
+                            callbacks++;
+                        }
+                    } catch (Error failure) {
+                        finish();
+                        throw failure;
+                    }
+                    if (!active.getAsBoolean() || stopSubmitting.get() || offset == deliveries.size()) finish();
+                }
+
+                private boolean tryDeliver(InboxDelivery delivery) {
+                    InboundMessage message = delivery.message();
+                    if (message.registration().accepts(message.transport(), config)) {
+                        try {
+                            var finished = message.registration().admit.apply(message.delivery());
+                            if (finished == null) {
+                                if (stopOnFailure) stopSubmitting.set(true);
+                                return false;
+                            }
+                            receipts.add(new InboxReceipt(delivery.item(), finished.toCompletableFuture()));
+                        } catch (RuntimeException failure) {
+                            warnAtMostOncePerInterval(nextWarning, "[CrossServer] 模块回调失败，收件箱保留待重试");
+                            if (stopOnFailure) {
+                                stopSubmitting.set(true);
+                                return false;
+                            }
+                        }
+                    }
+                    return true;
+                }
+
+                private void finish() {
+                    cancel();
+                    submitted = true;
+                }
+            }.runTaskTimer(plugin, 1L, 1L);
+        }
+
+        private void saveCompleted(CrossServerReplayStore store) throws IOException, SQLException {
+            // A failed row must not discard a later callback's successful receipt.
+            var waiting = receipts.iterator();
+            while (waiting.hasNext()) {
+                InboxReceipt receipt = waiting.next();
+                if (!receipt.finished().isDone()) continue;
+                waiting.remove();
+                if (!receipt.finished().isCompletedExceptionally()
+                        && Boolean.TRUE.equals(receipt.finished().getNow(false))) {
+                    completed.add(receipt.item());
+                } else if (stopOnFailure) {
+                    stopSubmitting.set(true);
+                }
+            }
+            if (!completed.isEmpty()) {
+                store.finish(completed);
+                committed += completed.size();
+                completed.clear();
+            }
+        }
+
+        private boolean settled() {
+            return submitted && receipts.isEmpty() && completed.isEmpty();
+        }
+
+        private boolean confirmed() {
+            return committed == expected;
+        }
+
+        @Override
+        public void close() {
+            task.cancel();
+        }
+    }
+
+    private final class RedisStreamReceiver {
+        private final JedisPool pool;
+        private final CrossServerRedisStream stream;
+        private final InboundWorker worker;
+        private final CrossServerGlobalConfiguration config;
+        private final CrossServerReplayStore store;
+        private final CompletableFuture<Void> modulesReady;
+        private final int frameBytes;
+        private final int batchBytes;
+        private final String scope;
+        private final AtomicLong nextWarning = new AtomicLong();
+        private final AtomicLong nextGapWarning = new AtomicLong();
+        private final Map<String, InboxLane> inboxLanes = new java.util.HashMap<>();
+        private long nextInboxCleanup;
+        private volatile int dispatchCount;
+        private static final class InboxLane {
+            private InboxDispatch dispatch;
+            private long nextAttemptAt;
+            private boolean retrying;
+        }
+
+        private RedisStreamReceiver(JedisPool pool, CrossServerRedisStream stream, InboundWorker worker, int frameBytes,
+                                    CompletableFuture<Void> modulesReady) {
+            this.pool = pool;
+            this.stream = stream;
+            this.worker = worker;
+            this.config = worker.config;
+            this.modulesReady = modulesReady;
+            this.frameBytes = frameBytes;
+            this.batchBytes = config.proxyEnabled() ? Math.max(REDIS_QUEUE_CHARS / 2, frameBytes) : REDIS_QUEUE_CHARS;
+            this.scope = config.redisHost() + ":" + config.redisPort() + "/" + config.redisDatabase()
+                + "\n" + config.redisChannel() + "\n" + config.nodeId();
+            this.store = new CrossServerReplayStore(plugin.getDataFolder().toPath().resolve("data/cross-server-replay.db"));
+        }
+
+        private boolean active() {
+            return redisSubscriberActive && jedisPool == pool && inboundWorker == worker
+                && !Thread.currentThread().isInterrupted();
+        }
+
+        private void run() {
+            try (store) {
+                while (active()) {
+                    try {
+                        if (modulesReady.isCompletedExceptionally()) return;
+                        if (!modulesReady.isDone()) {
+                            // Keep the cursor leased while enabled modules are still registering.
+                            try (Jedis jedis = pool.getResource()) { stream.checkpoint(jedis, store.cursor(scope)); }
+                            try { modulesReady.get(5, TimeUnit.SECONDS); }
+                            catch (TimeoutException waiting) { continue; }
+                            if (!active()) return;
+                        }
+                        advanceInbox();
+                        if (registrations.isEmpty()) {
+                            Thread.sleep(250);
+                            continue;
+                        }
+                        long revision = redisRegistrationRevision.get();
+                        try (Jedis jedis = pool.getResource()) {
+                            readStream(jedis, revision);
+                        }
+                    } catch (IOException | SQLException | ExecutionException | RuntimeException failure) {
+                        try { store.close(); } catch (SQLException closeFailure) { failure.addSuppressed(closeFailure); }
+                        if (active()) {
+                            warnAtMostOncePerInterval(nextWarning, "[CrossServer] Redis Stream 暂停，保留游标和收件箱重试: "
+                                + failure.getClass().getSimpleName());
+                            Thread.sleep(500);
+                        }
+                    }
+                }
+            } catch (InterruptedException ignored) {
+                Thread.currentThread().interrupt();
+            } catch (SQLException failure) {
+                warnAtMostOncePerInterval(nextWarning, "[CrossServer] 关闭 Redis Stream 收件箱失败");
+            } finally {
+                for (var lane : inboxLanes.values()) if (lane.dispatch != null) lane.dispatch.close();
+            }
+        }
+
+        /** One outstanding batch per module. The cursor and other modules never wait on its receipt. */
+        private boolean advanceInbox() throws IOException, SQLException {
+            long now = System.currentTimeMillis();
+            var iterator = inboxLanes.entrySet().iterator();
+            while (iterator.hasNext()) {
+                var entry = iterator.next();
+                var lane = entry.getValue();
+                if (lane.dispatch != null) {
+                    lane.dispatch.saveCompleted(store);
+                    if (!lane.dispatch.settled()) continue;
+                    lane.retrying = !lane.dispatch.confirmed();
+                    lane.nextAttemptAt = lane.retrying ? now + INBOX_RETRY_MS : 0;
+                    lane.dispatch.close();
+                    lane.dispatch = null;
+                }
+                var registration = registrations.get(entry.getKey());
+                if (registration == null || !registration.accepts(Transport.REDIS, config)) iterator.remove();
+            }
+            int dispatchBytes = Math.max(frameBytes, 256 * 1024);
+            int running = 0;
+            for (var registration : registrations.values()) {
+                if (!registration.accepts(Transport.REDIS, config)) continue;
+                var lane = inboxLanes.computeIfAbsent(registration.moduleId, ignored -> new InboxLane());
+                if (lane.dispatch == null && now >= lane.nextAttemptAt) {
+                    lane.retrying = false;
+                    var batch = readInboxBatch(store, scope, registration.moduleId, 0, Transport.REDIS,
+                        config, dispatchBytes, this::active);
+                    if (!active()) break;
+                    if (batch.deliveries().isEmpty()) lane.nextAttemptAt = now + INBOX_RETRY_MS;
+                    else lane.dispatch = new InboxDispatch(batch.deliveries(), config, this::active, nextWarning, true,
+                        () -> dispatchCount);
+                }
+                if (lane.dispatch != null) running++;
+            }
+            dispatchCount = running;
+            if (now >= nextInboxCleanup && active()) {
+                // Include retired channels whose callbacks can still write a receipt. Never
+                // expire a live module's rows while that module is waiting to process them.
+                store.expireInactive(scope, inboxLanes.keySet(), now);
+                nextInboxCleanup = now + 60_000;
+            }
+            return running != 0;
+        }
+
+        private void readStream(Jedis jedis, long revision)
+                throws IOException, SQLException, InterruptedException {
+            String cursor = store.cursor(scope);
+            stream.checkpoint(jedis, cursor);
+            long nextRenew = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+            while (canReadStream(revision)) {
+                boolean dispatching = advanceInbox();
+                reserve(batchBytes);
+                try {
+                    var entries = readBatch(jedis, cursor, !dispatching && !config.proxyEnabled());
+                    if (entries.isEmpty()) {
+                        if (System.nanoTime() >= nextRenew) {
+                            stream.checkpoint(jedis, cursor);
+                            nextRenew = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+                        }
+                    } else {
+                        if (!canReadStream(revision)) return;
+                        var first = entries.get(0);
+                        String preceding = first.getFields().get("prev");
+                        if (!CrossServerRedisStream.START.equals(cursor) && preceding != null && !preceding.equals(cursor)) {
+                            warnAtMostOncePerInterval(nextGapWarning, "[CrossServer] Redis Stream 留存已越过本机游标，部分历史无法补发");
+                        }
+                        cursor = entries.get(entries.size() - 1).getID().toString();
+                        stage(jedis, entries, cursor);
+                        nextRenew = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+                        continue;
+                    }
+                } finally {
+                    release(batchBytes);
+                }
+                if (dispatching || config.proxyEnabled()) Thread.sleep(10);
+            }
+        }
+
+        private boolean canReadStream(long revision) {
+            return active() && !registrations.isEmpty() && redisRegistrationRevision.get() == revision;
+        }
+
+        private List<StreamEntry> readBatch(Jedis jedis, String cursor, boolean wait) {
+            var entries = new ArrayList<StreamEntry>(INBOUND_BATCH_SIZE);
+            int remaining = batchBytes;
+            while (active() && remaining >= frameBytes && entries.size() < INBOUND_BATCH_SIZE) {
+                int count = Math.min(remaining / frameBytes, INBOUND_BATCH_SIZE - entries.size());
+                var next = stream.read(jedis, cursor, count, entries.isEmpty() && wait);
+                if (next.isEmpty()) break;
+                for (var entry : next) {
+                    String wire = entry.getFields().get("wire");
+                    if (wire != null) remaining -= CrossServerEnvelopeCodec.utf8Length(wire);
+                }
+                entries.addAll(next);
+                cursor = next.get(next.size() - 1).getID().toString();
+                if (next.size() < count) break;
+            }
+            return entries;
+        }
+
+        private void stage(Jedis jedis, List<StreamEntry> entries, String cursor) throws IOException, SQLException {
+            var candidates = new ArrayList<CrossServerReplayStore.InboxItem>(entries.size());
+            for (var entry : entries) {
+                String wire = entry.getFields().get("wire");
+                var envelope = verifyWire(wire, config, false);
+                if (envelope == null) continue;
+                var registration = registrations.get(envelope.module());
+                if (registration == null || !registration.accepts(Transport.REDIS, config)) continue;
+                candidates.add(new CrossServerReplayStore.InboxItem(envelope.messageId(), envelope.module(),
+                    CrossServerReplayStore.expiry(envelope.timestamp(), config.dedupeTtlMs()), wire));
+            }
+            boolean[] inserted = store.stage(scope, cursor, candidates, System.currentTimeMillis());
+            for (int index = 0; index < inserted.length; index++) {
+                if (!inserted[index]) continue;
+                var lane = inboxLanes.get(candidates.get(index).moduleId());
+                if (lane != null && !lane.retrying) lane.nextAttemptAt = 0;
+            }
+            stream.checkpoint(jedis, cursor);
+        }
+
+        private void reserve(int bytes) throws InterruptedException {
+            worker.queuedMessages.acquire(INBOUND_BATCH_SIZE);
+            try {
+                worker.queuedChars.acquire(bytes);
+            } catch (InterruptedException failure) {
+                worker.queuedMessages.release(INBOUND_BATCH_SIZE);
+                throw failure;
+            }
+        }
+
+        private void release(int bytes) {
+            worker.queuedChars.release(bytes);
+            worker.queuedMessages.release(INBOUND_BATCH_SIZE);
+        }
     }
 
     private final class CrossServerChannelHandle implements CrossServerChannel {
@@ -430,48 +1145,84 @@ public final class CrossServerService implements CrossServerAPI, PluginMessageLi
 
         @Override
         public boolean isActive() {
-            if (registration.closed || !registration.config.enabled()) {
+            CrossServerGlobalConfiguration activeConfig = configuration;
+            if (activeConfig.missingSignatureSecret()) {
                 return false;
             }
-            boolean redis = registration.config.redisEnabled(configuration.redisEnabled()) && jedisPool != null;
-            boolean proxy = registration.config.proxyEnabled(configuration.proxyEnabled()) && proxyActive;
-            return redis || proxy;
+            return (redisPublisher != null && registration.accepts(Transport.REDIS, activeConfig))
+                || (proxyActive && registration.accepts(Transport.PROXY, activeConfig));
         }
 
         @Override
         public void publish(String payload) {
-            if (registration.closed || !registration.config.enabled() || payload == null) {
-                return;
+            submit(payload, false);
+        }
+
+        @Override
+        public CompletionStage<Boolean> publishDurably(String payload) {
+            return submit(payload, true);
+        }
+
+        @Override
+        public CompletionStage<Boolean> publishWithReceipt(String payload) {
+            return submit(payload, false);
+        }
+
+        @Override
+        public boolean requiresSharedStateCatchUp() {
+            var current = configuration;
+            return proxyActive && registration.accepts(Transport.PROXY, current)
+                && (redisPublisher == null || !registration.accepts(Transport.REDIS, current));
+        }
+
+        private CompletionStage<Boolean> submit(String payload, boolean durableOnly) {
+            CrossServerGlobalConfiguration activeConfig = configuration;
+            if (registration.closed || !registration.config.enabled() || payload == null
+                || activeConfig.missingSignatureSecret()) {
+                return CompletableFuture.completedFuture(false);
             }
             CrossServerEnvelope envelope = new CrossServerEnvelope(
                 CrossServerEnvelope.PROTOCOL_VERSION,
                 registration.moduleId,
-                configuration.nodeId(),
+                activeConfig.nodeId(),
                 UUID.randomUUID().toString(),
                 System.currentTimeMillis(),
                 payload,
                 ""
             );
-            publishEnvelope(envelope, registration);
+            return publishEnvelope(envelope, registration, activeConfig, durableOnly);
         }
 
         @Override
         public void close() {
             registration.closed = true;
-            registrations.remove(registration.moduleId, registration);
+            if (registrations.remove(registration.moduleId, registration)) redisRegistrationRevision.incrementAndGet();
         }
     }
 
     private static final class ModuleRegistration {
         private final String moduleId;
         private final CrossServerChannelConfig config;
-        private final Consumer<CrossServerDelivery> consumer;
+        private final Function<CrossServerDelivery, CompletionStage<Boolean>> admit;
+        private final Admission admission;
         private volatile boolean closed;
 
-        private ModuleRegistration(String moduleId, CrossServerChannelConfig config, Consumer<CrossServerDelivery> consumer) {
+        private ModuleRegistration(String moduleId, CrossServerChannelConfig config,
+                                   Function<CrossServerDelivery, CompletionStage<Boolean>> admit, Admission admission) {
             this.moduleId = moduleId;
             this.config = config;
-            this.consumer = consumer;
+            this.admit = admit;
+            this.admission = admission;
+        }
+
+        private boolean accepts(Transport transport, CrossServerGlobalConfiguration configuration) {
+            if (closed) {
+                return false;
+            }
+            return switch (transport) {
+                case REDIS -> configuration.redisEnabled() && config.redisEnabled(true);
+                case PROXY -> configuration.proxyEnabled() && config.proxyEnabled(true);
+            };
         }
     }
 }

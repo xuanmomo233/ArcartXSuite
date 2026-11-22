@@ -6,10 +6,12 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -17,6 +19,7 @@ import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.InventoryView;
 import org.bukkit.inventory.ItemStack;
+import xuanmo.arcartxsuite.api.auth.AuthAccess;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.capability.WarehousePanelAccess;
 import xuanmo.arcartxsuite.warehouse.storage.WarehouseRepository.SlotItemRecord;
@@ -56,12 +59,24 @@ public final class WarehouseCursorPanel implements Listener, WarehousePanelAcces
                     try {
                         String clickId = (String) slot.invoke(event);
                         if (clickId == null || !clickId.startsWith(PREFIX)) return;
-                        ((org.bukkit.event.Cancellable) event).setCancelled(true);
+                        var clickEvent = (org.bukkit.event.Cancellable) event;
+                        if (clickEvent.isCancelled()) return;
+                        clickEvent.setCancelled(true);
                         Player actor = (Player) player.invoke(event);
                         int buttonId = ((Number) button.invoke(event)).intValue();
-                        Runnable action = () -> click(actor, clickId, buttonId);
-                        if (org.bukkit.Bukkit.isPrimaryThread()) action.run();
-                        else org.bukkit.Bukkit.getScheduler().runTask(plugin, action);
+                        if (Bukkit.isPrimaryThread()) {
+                            click(actor, clickId, buttonId);
+                        } else {
+                            var admission = AuthAccess.snapshot(actor.getUniqueId());
+                            if (!admission.admitted()) return;
+                            Bukkit.getScheduler().runTask(plugin, () -> {
+                                var current = AuthAccess.snapshot(admission.playerId());
+                                if (current.admitted() && current.generation() == admission.generation()
+                                    && Objects.equals(current.connectionId(), admission.connectionId())) {
+                                    click(actor, clickId, buttonId);
+                                }
+                            });
+                        }
                     } catch (ReflectiveOperationException exception) {
                         throw new org.bukkit.event.EventException(exception);
                     }
@@ -94,6 +109,11 @@ public final class WarehouseCursorPanel implements Listener, WarehousePanelAcces
         String value = WarehouseTexts.value(data, 1, "");
         UUID uuid = player.getUniqueId();
         Session session = sessions.get(uuid);
+        if ("close".equals(action)) {
+            if (session != null && session.uiId.equals(uiId) && session.token.equals(value)) sessions.remove(uuid);
+            return;
+        }
+        if (!canAccess(player)) return;
         try {
             if ("open".equals(action) || "refresh".equals(action) && session == null) {
                 if (!bridge.isUiOpen(player, uiId)) return;
@@ -112,10 +132,6 @@ public final class WarehouseCursorPanel implements Listener, WarehousePanelAcces
                 return;
             }
             if (session == null || !session.uiId.equals(uiId)) return;
-            if ("close".equals(action)) {
-                if (session.token.equals(value)) sessions.remove(uuid);
-                return;
-            }
             if (!valid(player, session)) return;
             switch (action) {
                 case "refresh" -> { }
@@ -188,7 +204,7 @@ public final class WarehouseCursorPanel implements Listener, WarehousePanelAcces
         if (closed) return;
         if (!clickId.startsWith(PREFIX)) return;
         Session session = sessions.get(player.getUniqueId());
-        if (session == null || !valid(player, session) || (button < 0 || button > 2)
+        if (session == null || !canAccess(player) || !valid(player, session) || (button < 0 || button > 2)
             || !empty(player.getItemOnCursor()) || !canWrite(player)) return;
         SlotItemRecord shown = session.entries.get(clickId);
         if (shown == null) return;
@@ -215,9 +231,8 @@ public final class WarehouseCursorPanel implements Listener, WarehousePanelAcces
                 }
                 int visible = visibleAmount(current, item);
                 int requested = button == 0 ? visible : (visible + 1) / 2;
-                var result = service.withdraw(player, current.slot(), requested, current);
+                var result = service.withdrawPanelItem(player, current, item, requested);
                 if (result.success()) {
-                    player.setItemOnCursor(result.itemStack());
                     session.rotateToken();
                 } else {
                     notice(player,result.message());
@@ -233,15 +248,11 @@ public final class WarehouseCursorPanel implements Listener, WarehousePanelAcces
         ItemStack carried = player.getItemOnCursor();
         if (empty(carried)) return;
         ItemStack stack = carried.clone();
-        var result = service.depositStack(player, WarehouseService.OWNER_PERSONAL,
-            player.getUniqueId().toString(), session.warehouseId, stack);
+        var result = service.depositCursor(player, session.warehouseId, session.inventory, stack);
         if (!result.success()) {
             notice(player,result.message());
             return;
         }
-        ItemStack remainder = stack.clone();
-        remainder.setAmount(result.remainingAmount());
-        player.setItemOnCursor(result.remainingAmount() > 0 ? remainder : null);
         session.rotateToken();
         // Closing the deposit overlay can expose the grid during the same native click.
         // Discard click IDs issued before the transfer so that click cannot take the item back.
@@ -329,8 +340,16 @@ public final class WarehouseCursorPanel implements Listener, WarehousePanelAcces
             && bridge.isUiOpen(player, session.uiId);
     }
 
+    private static boolean canAccess(Player player) {
+        UUID id = player.getUniqueId();
+        return player.isOnline() && Bukkit.getPlayer(id) == player
+            && player.hasPermission("arcartxsuite.warehouse.use") && AuthAccess.admitted(id);
+    }
+
     private boolean canWrite(Player player) {
-        if (service.isSecondaryUnlocked(player)) return true;
+        // 背包/容器入口不经过主仓库的临时操作上下文，直接检查统一密码会话。
+        var access = service.secondaryPasswordSupplier == null ? null : service.secondaryPasswordSupplier.get();
+        if (access != null && access.isUnlocked(player)) return true;
         notice(player,"仓库已锁定，请先解锁二级密码。");
         return false;
     }

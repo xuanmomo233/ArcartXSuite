@@ -2,6 +2,7 @@ package xuanmo.arcartxsuite.auth.runtime;
 
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.function.Supplier;
 import org.bukkit.Bukkit;
@@ -9,13 +10,14 @@ import xuanmo.arcartxsuite.api.auth.AuthRestrictionEvent;
 import xuanmo.arcartxsuite.api.auth.AuthSnapshot;
 import xuanmo.arcartxsuite.api.capability.BindingService;
 
-/** Stable capability handle. Only a running LoginView owns Suite authentication and player restrictions. */
+/** Stable capability handle for ordinary admission and active LoginView. */
 public final class LoginViewAuthentication implements HostAuthentication {
     private final Supplier<HostAuthentication> serverFactory;
     private final Supplier<HostAuthentication> authenticationFactory;
     private volatile HostAuthentication delegate;
+    private volatile boolean admissionSuspended;
     private boolean loginViewEnabled;
-    private java.util.concurrent.CompletableFuture<Void> retired=java.util.concurrent.CompletableFuture.completedFuture(null);
+    private CompletableFuture<Void> retired = CompletableFuture.completedFuture(null);
 
     LoginViewAuthentication(Supplier<HostAuthentication> serverFactory,Supplier<HostAuthentication> authenticationFactory) {
         this.serverFactory=serverFactory;
@@ -25,41 +27,77 @@ public final class LoginViewAuthentication implements HostAuthentication {
 
     @Override public void start() { delegate.start(); }
 
-    /** Called on the server thread by the module lifecycle, including failed loads and unloads. */
-    public void setLoginViewEnabled(boolean enabled) {
-        if(loginViewEnabled==enabled) return;
-        HostAuthentication previous=delegate;
-        HostAuthentication next=enabled?authenticationFactory.get():serverFactory.get();
-        var admitted=Bukkit.getOnlinePlayers().stream().map(player->previous.snapshot(player.getUniqueId()))
+    private void suspendLoginViewAdmission() {
+        if (admissionSuspended) return;
+        var admitted = Bukkit.getOnlinePlayers().stream()
+            .map(player -> delegate.snapshot(player.getUniqueId()))
             .filter(AuthSnapshot::admitted).toList();
-        previous.close();
-        retired=java.util.concurrent.CompletableFuture.allOf(retired,previous.drained().toCompletableFuture());
-        next.awaitPrevious(retired);
-        delegate=next;
-        loginViewEnabled=enabled;
-        try {
-            next.start();
-        } catch(RuntimeException | LinkageError e) {
-            try { next.close(); }
-            finally {
-                retired=java.util.concurrent.CompletableFuture.allOf(retired,next.drained().toCompletableFuture());
-                delegate=serverFactory.get();
-                loginViewEnabled=false;
-                delegate.start();
-            }
-            throw e;
-        }
-        if(enabled) {
-            for(AuthSnapshot snapshot:admitted) Bukkit.getPluginManager().callEvent(new AuthRestrictionEvent(snapshot,"LOGINVIEW_ENABLED"));
+        suspendDelegate();
+        for (AuthSnapshot snapshot : admitted) {
+            Bukkit.getPluginManager().callEvent(new AuthRestrictionEvent(snapshot, "LOGINVIEW_REQUIRED"));
         }
     }
 
-    @Override public boolean requiresAdmission() { return delegate.requiresAdmission(); }
+    private void suspendDelegate() {
+        if (admissionSuspended) return;
+        admissionSuspended = true;
+        loginViewEnabled = false;
+        retire(delegate);
+    }
+
+    private void retire(HostAuthentication backend) {
+        try {
+            backend.close();
+        } finally {
+            retired = CompletableFuture.allOf(retired, backend.drained().toCompletableFuture());
+        }
+    }
+
+    public boolean isAdmissionSuspended() { return admissionSuspended; }
+
+    /** Called on the server thread. A disabled or failed LoginView leaves ordinary admission in charge. */
+    public void setLoginViewEnabled(boolean enabled) {
+        if (!admissionSuspended && loginViewEnabled == enabled) return;
+        HostAuthentication next = enabled ? authenticationFactory.get() : serverFactory.get();
+        boolean installed = false;
+        try {
+            if (enabled) suspendLoginViewAdmission();
+            else suspendDelegate();
+            next.awaitPrevious(retired);
+            delegate = next;
+            loginViewEnabled = enabled;
+            admissionSuspended = false;
+            installed = true;
+            next.start();
+        } catch (RuntimeException | LinkageError failure) {
+            if (installed) {
+                admissionSuspended = true;
+                loginViewEnabled = false;
+            }
+            try {
+                retire(next);
+            } catch (RuntimeException | LinkageError cleanupFailure) {
+                failure.addSuppressed(cleanupFailure);
+            }
+            if (enabled) {
+                try {
+                    setLoginViewEnabled(false);
+                } catch (RuntimeException | LinkageError restoreFailure) {
+                    failure.addSuppressed(restoreFailure);
+                }
+            }
+            throw failure;
+        }
+    }
+
+    @Override public boolean requiresAdmission() { return admissionSuspended || delegate.requiresAdmission(); }
     @Override public Terms terms() { return delegate.terms(); }
     @Override public boolean passwordRegistrationAllowed() { return delegate.passwordRegistrationAllowed(); }
     @Override public boolean passwordAuthenticationAllowed() { return delegate.passwordAuthenticationAllowed(); }
-    @Override public AuthSnapshot snapshot(UUID profile) { return delegate.snapshot(profile); }
-    @Override public long eligibleNanos(UUID profile) { return delegate.eligibleNanos(profile); }
+    @Override public AuthSnapshot snapshot(UUID profile) {
+        return admissionSuspended ? AuthSnapshot.absent(profile) : delegate.snapshot(profile);
+    }
+    @Override public long eligibleNanos(UUID profile) { return admissionSuspended ? 0 : delegate.eligibleNanos(profile); }
     @Override public CompletionStage<Result> refresh(UUID profile,UUID connection) { return delegate.refresh(profile,connection); }
     @Override public ExternalPrompt externalPrompt(UUID profile) { return delegate.externalPrompt(profile); }
     @Override public boolean externalLinkAvailable() { return delegate.externalLinkAvailable(); }
@@ -78,5 +116,5 @@ public final class LoginViewAuthentication implements HostAuthentication {
     @Override public CompletionStage<BindingService.BindingResult> requestFromQq(long qq,String name) { return delegate.requestFromQq(qq,name); }
     @Override public CompletionStage<BindingService.BindingResult> revokeByQq(long qq) { return delegate.revokeByQq(qq); }
     @Override public CompletionStage<BindingService.BindingResult> revokeByProfile(UUID profile) { return delegate.revokeByProfile(profile); }
-    @Override public void close() { delegate.close(); }
+    @Override public void close() { suspendDelegate(); }
 }

@@ -227,9 +227,12 @@ public final class RequirementChecker {
                     if (bridge==null || !bridge.available())
                         throw new IllegalStateException("门票扣款失败: "+p.getName());
                     uncertainDebit = p.getUniqueId();
-                    boolean withdrawn = bridge.withdraw(p,BigDecimal.valueOf(r.moneyCost())).success();
+                    var receipt = bridge.withdraw(p, BigDecimal.valueOf(r.moneyCost()));
+                    if (receipt == null || receipt.uncertain() || (receipt.success() && bridge.debitRequiresReconciliation())) {
+                        throw new IllegalStateException("门票扣款待核对: " + p.getName());
+                    }
                     uncertainDebit = null;
-                    if (!withdrawn) throw new IllegalStateException("门票扣款失败: "+p.getName());
+                    if (!receipt.success()) throw new IllegalStateException("门票扣款失败: " + p.getName());
                     String key="entry-refund:"+java.util.UUID.randomUUID();
                     undo.add(new Undo(p.getUniqueId(), () -> { if(!rewards.refundMoney(p,r.moneyCost(),r.currencyId(),key))
                         throw new IllegalStateException("门票退款未完成: "+p.getName()); }));
@@ -259,7 +262,7 @@ public final class RequirementChecker {
             });
             charge.memberCosts = memberCosts;
             return charge;
-        } catch (RuntimeException failure) {
+        } catch (RuntimeException | LinkageError failure) {
             if (uncertainDebit != null) memberCosts.put(uncertainDebit, "NATIVE_REVIEW_REQUIRED");
             try { rollback.run(); } catch(RuntimeException refund) {
                 failure.addSuppressed(refund);

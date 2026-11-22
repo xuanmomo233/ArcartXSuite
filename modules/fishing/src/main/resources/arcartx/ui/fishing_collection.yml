@@ -92,28 +92,39 @@ ui:
     tick: |-
       if(var.needRebuild){
         var.needRebuild = false
-        while(val.鱼类网格.childrenCount() > 1){
-          val.鱼类网格.get(1).remove()
-        }
-        if(var.maxFishCount > 1){
-          for(i in range(1, var.maxFishCount - 1)){
+        keys = []
+        if(var.maxFishCount > 0 && var.fishList != none){
+          for(i in range(0, var.maxFishCount - 1)){
             idx = i.round()
             entry = var.fishList[idx]
             if(entry != none && (var.currentTab == 'all' || entry['rarity'] == var.currentTab)){
-              e = val.鱼类网格['鱼卡片'].copy('鱼卡片' + idx)
-              e.entryKey = idx
-              if(e['图标'] != none){
-                e['图标'].seticon()
-              }
+              keys.add(idx)
             }
           }
         }
-        if(val.鱼类网格['鱼卡片']['图标'] != none){
-          val.鱼类网格['鱼卡片']['图标'].seticon()
-        }
+        var.visibleFishKeys = keys
+        var.fishIconsDirty = true
       }
 
 # ─── 控件树 ────────────────────────────────────────────────────────
+tasks:
+  refresh-repeat-grid-icons:
+    type: loop
+    time: 100
+    cycle: 100
+    run: |-
+      if(var.fishIconsDirty == true && var.visibleFishKeys != none && val.鱼类网格 != none && val.鱼类网格.childrenCount() == var.visibleFishKeys.size()){
+        var.fishIconsDirty = false
+        if(var.visibleFishKeys.size() > 0){
+          for(i in range(0, var.visibleFishKeys.size() - 1)){
+            row = val.鱼类网格.get(i.round())
+            if(row != none && row['图标'] != none){
+              row['图标'].seticon()
+            }
+          }
+        }
+      }
+
 controls:
   # 全屏毛玻璃底（真高斯模糊世界背景）
   全屏玻璃底:
@@ -706,8 +717,11 @@ controls:
               # 鱼类网格：5列网格布局
               鱼类网格:
                 val: 鱼类网格
-                type: HGrid
+                type: RepeatGrid
                 attribute:
+                  items: "var.visibleFishKeys"
+                  flow: ~row
+                  maxSize: "var.visibleFishKeys == none ? 0 : var.visibleFishKeys.size()"
                   width: "var.contentW - 56"
                   column: 5
                   spaceBetweenX: 14
@@ -717,7 +731,7 @@ controls:
                   鱼卡片:
                     type: Texture
                     attribute:
-                      entryKey: 0.round()
+                      entryKey: self.item
                       entry: var.fishList[self.entryKey]
                       visible: self.entry != none && (var.currentTab == 'all' || self.entry['rarity'] == var.currentTab)
                       width: "(var.contentW - 126) / 5"

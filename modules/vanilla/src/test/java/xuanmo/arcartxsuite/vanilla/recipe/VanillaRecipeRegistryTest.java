@@ -49,6 +49,20 @@ class VanillaRecipeRegistryTest {
     }
 
     @Test
+    void nativeStationsWithoutPlayerContextRejectRestrictedRecipes() {
+        var ingredient = new Ingredient(List.of(Material.IRON_ORE), List.of());
+        var furnace = new Definition("restricted_furnace", Station.FURNACE, List.of(ingredient),
+            new ItemStack(Material.IRON_INGOT), "axs.recipe.restricted", 200, 0, SmithingData.INHERIT_BASE);
+        var brewing = new Definition("restricted_brewing", Station.BREWING, List.of(ingredient, ingredient),
+            new ItemStack(Material.POTION), "axs.recipe.restricted", 200, 0, SmithingData.INHERIT_BASE);
+        for (Definition recipe : List.of(furnace, brewing)) {
+            var failure = assertThrows(IllegalArgumentException.class,
+                () -> NativeRecipeFactory.create(NamespacedKey.fromString("axs:test"), recipe));
+            assertTrue(failure.getMessage().contains("不支持玩家权限限制"));
+        }
+    }
+
+    @Test
     void editRevisionAndFailedNativeRegistrationKeepPreviousRecipe() throws Exception {
         var nativeRecipes = new HashMap<NamespacedKey, Recipe>();
         ItemFactory itemFactory = mock(ItemFactory.class);

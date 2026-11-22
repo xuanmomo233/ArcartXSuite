@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
 """
-V2: Native DLL/SO 加密打包工具
+Native DLL/SO 加密打包工具（AXNE v3 / XZ）
 
 两种模式：
 1. --gen-key --patch-java <NativeBridge.java>
    生成 32 字节 DLL 加密密钥，将密钥片段嵌入 NativeBridge.java，输出 dll_key.bin。
 
 2. --encrypt --key <dll_key.bin> --native-dir <dir>
-   用 dll_key.bin 加密目录下所有 native 库（.dll → .enc, .so → .enc, .dylib → .enc）。
+   将目录下 Windows/Linux native 库先 XZ 压缩，再用 dll_key.bin 加密（.dll/.so → .enc）。
 
 加密格式（每个 .enc 文件）：
   [4 bytes: magic "AXNE"]
-  [4 bytes: version = 0x01000000 (big-endian)]
+  [4 bytes: version = 3 (big-endian)]
   [12 bytes: random IV]
-  [N bytes: AES-256-GCM ciphertext (= 原始 DLL 大小)]
+  [N bytes: AES-256-GCM ciphertext（内容为 XZ 压缩后的原始库）]
   [16 bytes: GCM authentication tag]
 
 密钥嵌入策略：
@@ -38,6 +38,7 @@ V2: Native DLL/SO 加密打包工具
 
 import argparse
 import hashlib
+import lzma
 import os
 import struct
 import sys
@@ -50,10 +51,19 @@ except ImportError:
     HAS_CRYPTO = False
 
 MAGIC = b"AXNE"
-VERSION = 1
+VERSION = 3  # AES-GCM payload contains an XZ-compressed native library.
 IV_LEN = 12
 TAG_LEN = 16  # GCM tag appended by AESGCM
-NATIVE_EXTENSIONS = {".dll", ".so", ".dylib"}
+NATIVE_EXTENSIONS = {".dll", ".so"}
+
+
+def compress_native(plaintext: bytes) -> bytes:
+    # Both shipped protection libraries are x86-64. BCJ is lossless and its
+    # decoder is pure Java; the dictionary needs only 8 MiB during startup.
+    return lzma.compress(plaintext, format=lzma.FORMAT_XZ, filters=[
+        {"id": lzma.FILTER_X86},
+        {"id": lzma.FILTER_LZMA2, "preset": 6, "dict_size": 8 * 1024 * 1024},
+    ])
 
 # ─── 密钥派生：raw_key_material → SHA-256 → actual AES key ───
 def derive_aes_key(raw_material: bytes) -> bytes:
@@ -125,14 +135,10 @@ def gen_key_and_patch(java_path: Path, output_key: Path):
     java_path.write_text(patched, encoding="utf-8")
     print(f"[OK] Patched {java_path} with 4 masked key fragments")
 
-    # Derive the actual AES key for verification
-    aes_key = derive_aes_key(raw_key)
-
     # Write raw key material (NOT the derived AES key — both sides derive identically)
     output_key.parent.mkdir(parents=True, exist_ok=True)
     output_key.write_bytes(raw_key)
     print(f"[OK] Written raw key material to {output_key} ({len(raw_key)} bytes)")
-    print(f"     AES key (SHA256 derived) = {aes_key.hex()[:16]}...")
 
     return raw_key
 
@@ -166,7 +172,8 @@ def encrypt_native_libs(key_path: Path, native_dir: Path):
             original_size = len(plaintext)
 
             iv = os.urandom(IV_LEN)
-            ciphertext = aesgcm.encrypt(iv, plaintext, None)  # ct + tag (appended)
+            compressed = compress_native(plaintext)
+            ciphertext = aesgcm.encrypt(iv, compressed, None)  # ct + tag (appended)
 
             # Build .enc file
             header = MAGIC + struct.pack(">I", VERSION) + iv
@@ -194,7 +201,7 @@ def selftest():
         sys.exit(1)
 
     print("="*60)
-    print("  V2 Native DLL 加密自测")
+    print("  AXNE v3 / XZ Native DLL 加密自测")
     print("="*60)
 
     # Generate key
@@ -207,7 +214,7 @@ def selftest():
     # Encrypt
     aesgcm = AESGCM(aes_key)
     iv = os.urandom(IV_LEN)
-    ct = aesgcm.encrypt(iv, fake_dll, None)
+    ct = aesgcm.encrypt(iv, compress_native(fake_dll), None)
 
     # Build .enc
     enc_data = MAGIC + struct.pack(">I", VERSION) + iv + ct
@@ -233,7 +240,7 @@ def selftest():
 
     # Decrypt
     aesgcm2 = AESGCM(rec_aes_key)
-    decrypted = aesgcm2.decrypt(parsed_iv, parsed_ct, None)
+    decrypted = lzma.decompress(aesgcm2.decrypt(parsed_iv, parsed_ct, None))
     assert decrypted == fake_dll, "Decryption mismatch!"
     print("[PASS] 加密→解密往返一致 (500KB 模拟 DLL)")
 
@@ -265,18 +272,18 @@ def selftest():
         ak = derive_aes_key(k)
         dll = os.urandom(i * 1000 + 100)
         iv2 = os.urandom(12)
-        ct2 = AESGCM(ak).encrypt(iv2, dll, None)
-        dec2 = AESGCM(ak).decrypt(iv2, ct2, None)
+        ct2 = AESGCM(ak).encrypt(iv2, compress_native(dll), None)
+        dec2 = lzma.decompress(AESGCM(ak).decrypt(iv2, ct2, None))
         assert dec2 == dll
     print("[PASS] 100 组随机往返全部通过")
 
     print("="*60)
-    print("  ALL PASS — V2 DLL 加密/解密参考模型验证通过")
+    print("  ALL PASS — AXNE v3 / XZ DLL 加密/解密参考模型验证通过")
     print("="*60)
 
 
 def main():
-    parser = argparse.ArgumentParser(description="V2 Native DLL encryption tool")
+    parser = argparse.ArgumentParser(description="Native DLL encryption tool (AXNE v3 / XZ)")
     sub = parser.add_subparsers(dest="mode")
 
     # gen-key mode

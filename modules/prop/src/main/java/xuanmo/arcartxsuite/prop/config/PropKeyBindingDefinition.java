@@ -12,6 +12,23 @@ package xuanmo.arcartxsuite.prop.config;
 public record PropKeyBindingDefinition(
     String bindingId,
     String defaultKey,
-    String slotId
+    String slotId,
+    Mode mode
 ) {
+    public PropKeyBindingDefinition(String bindingId, String defaultKey, String slotId) {
+        this(bindingId, defaultKey, slotId, Mode.PROP);
+    }
+
+    public enum Mode {
+        PROP, VANILLA_POTION, MMOITEMS;
+
+        static Mode parse(String value) {
+            return switch (value) {
+                case "prop" -> PROP;
+                case "vanilla-potion" -> VANILLA_POTION;
+                case "mmoitems" -> MMOITEMS;
+                default -> throw new IllegalArgumentException("未知按键模式 " + value);
+            };
+        }
+    }
 }

@@ -4,8 +4,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.ArrayList;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.Test;
 import xuanmo.arcartxsuite.api.security.ClientPacketGuardMode;
@@ -47,6 +52,34 @@ final class ClientPacketGuardTest {
 
     private static boolean allow(ClientPacketGuard guard, UUID player, String packetId, String action) {
         return guard.allow(player, "Steve", "menu", packetId, action, false, NOOP_SINK);
+    }
+
+    @Test
+    void ingressCountsAcrossPacketIdsEvenWhenActionRulesAreDisabled() {
+        AtomicLong clock = new AtomicLong();
+        ClientPacketGuard guard = newGuard(new ClientPacketGuardConfiguration(
+            false, false, 200L, DEFAULT_RULE, Map.of(), Map.of()), clock);
+        for (int index = 0; index < 128; index++) {
+            assertTrue(guard.allowIngress(PLAYER, "packet_" + index, java.util.List.of("action_" + index)));
+        }
+        assertFalse(guard.allowIngress(PLAYER, "different_packet", java.util.List.of()));
+        assertTrue(guard.allowIngress(OTHER_PLAYER, "different_packet", java.util.List.of()));
+        clock.set(1000);
+        assertTrue(guard.allowIngress(PLAYER, "different_packet", java.util.List.of()));
+    }
+
+    @Test
+    void ingressRejectsOversizedPacketsAndAggregateBytes() {
+        ClientPacketGuard guard = newGuard();
+        assertFalse(guard.allowIngress(PLAYER, "packet", java.util.List.of("x".repeat(90_000))));
+        assertFalse(guard.allowIngress(PLAYER, "packet", java.util.Collections.nCopies(129, "x")));
+        String payload = "界".repeat(80_000);
+        for (int index = 0; index < 4; index++) {
+            assertTrue(guard.allowIngress(PLAYER, "packet", java.util.List.of(payload)));
+        }
+        assertFalse(guard.allowIngress(PLAYER, "packet", java.util.List.of(payload)));
+        guard.clearPlayer(PLAYER);
+        assertTrue(guard.allowIngress(PLAYER, "packet", java.util.List.of(payload)));
     }
 
     @Test
@@ -148,6 +181,67 @@ final class ClientPacketGuardTest {
         // 窗口滑动后恢复
         clock.addAndGet(1001);
         assertTrue(allow(guard, PLAYER, "axs_menu", "click"));
+    }
+
+    @Test
+    void concurrentAdmissionKeepsTheActionQuotaExact() throws Exception {
+        ClientPacketGuard guard = newGuard();
+        var producers = Executors.newFixedThreadPool(4);
+        try {
+            var cases = new ArrayList<Callable<Boolean>>();
+            for (int i = 0; i < 128; i++) {
+                String action = "action_" + i;
+                cases.add(() -> allow(guard, PLAYER, "example", action));
+            }
+            int accepted = 0;
+            for (var result : producers.invokeAll(cases, 5, TimeUnit.SECONDS)) {
+                if (result.get()) accepted++;
+            }
+            assertEquals(64, accepted);
+            assertEquals(64, guard.actionKeys(PLAYER).get("menu|example").size());
+        } finally {
+            producers.shutdownNow();
+        }
+    }
+
+    @Test
+    void growingAWrappedWindowPreservesItsTimestampsAndExpiredBucketsAreRemoved() {
+        var clock = new AtomicLong();
+        var rule = new ClientPacketGuardRule(true, 1000L, 6, ClientPacketGuardMode.SILENT, "", 3000L, "", 5000L);
+        var guard = newGuard(new ClientPacketGuardConfiguration(true, false, 200L, rule, Map.of(), Map.of()), clock);
+        for (int timestamp = 0; timestamp < 4; timestamp++) {
+            clock.set(timestamp);
+            assertTrue(allow(guard, PLAYER, "example", "click"));
+        }
+        clock.set(1000L);
+        for (int i = 0; i < 3; i++) assertTrue(allow(guard, PLAYER, "example", "click"));
+        assertFalse(allow(guard, PLAYER, "example", "click"));
+        clock.set(1001L);
+        assertTrue(allow(guard, PLAYER, "example", "click"));
+        assertFalse(allow(guard, PLAYER, "example", "click"));
+        clock.set(6002L);
+        guard.cleanup();
+        assertTrue(guard.actionKeys(PLAYER).isEmpty());
+        assertTrue(allow(guard, PLAYER, "example", "click"));
+    }
+
+    @Test
+    void reservesFeedbackCooldownBeforeInvokingAReentrantListener() {
+        var clock = new AtomicLong();
+        var rule = new ClientPacketGuardRule(true, 1000L, 1, ClientPacketGuardMode.NOTIFY, "slow", 3000L, "", 5000L);
+        var guard = newGuard(new ClientPacketGuardConfiguration(true, false, 200L, rule, Map.of(), Map.of()), clock);
+        var notifications = new AtomicInteger();
+        ClientPacketGuard.FeedbackSink sink = new ClientPacketGuard.FeedbackSink() {
+            @Override public void notifyPlayer(String message) {
+                if (notifications.incrementAndGet() == 1) {
+                    assertFalse(guard.allow(PLAYER, "Steve", "menu", "example", "click", false, this));
+                }
+            }
+            @Override public void punish(String command) {}
+        };
+        assertTrue(allow(guard, PLAYER, "example", "click"));
+        assertFalse(guard.allow(PLAYER, "Steve", "menu", "example", "click", false, sink));
+        assertEquals(1, notifications.get());
     }
 
     @Test

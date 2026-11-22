@@ -93,7 +93,10 @@ hints:
     essentials-afk: "&c你当前处于 AFK 状态，请先解除后再开始挂机。"
     in-combat: "&c你刚刚参与过战斗，请稍后再开始挂机。"
     broadcast: "&e恭喜玩家 &f{0} &e挂机结束，挂机时长 &f{1}&e，获得奖励 &f{2} &e次！"
-    recovered: "&e检测到上次服崩挂机记录，已自动结算 &f{0}&e，奖励次数 &f{1}&e。"
+    recovered: "&e已结算上次保存的在线挂机时间 &f{0}&e，奖励次数 &f{1}&e。"
+    teleport-failed: "&c无法传送到挂机区域，挂机未开始。"
+    settlement-unavailable: "&c挂机结算暂不可用，稍后会重新检查已保存的记录。"
+    recovery-pending: "&e正在后台核对上次挂机，请稍后再试。"
   anti-abuse:
     time-limit-session: "&c本次连续挂机已达到时长上限，已停止发奖。"
     time-limit-daily: "&c今日挂机累计已达到时长上限，已停止发奖。"

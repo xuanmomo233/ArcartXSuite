@@ -6,6 +6,8 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Optional;
 import javax.sql.DataSource;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -13,18 +15,20 @@ import org.bukkit.plugin.java.JavaPlugin;
 /**
  * 跨服 Boss 排名数据访问对象，属于 entitytracker 模块的数据持久层。
  * <p>
- * 提供跨服排名数据的写入（先删后插）和按排名类型/Boss ID 查询功能。
+ * 提供跨服排名快照的事务写入和按排名类型/Boss ID 查询功能。
  */
 public class CrossServerBossRankingDao {
 
     private final DataSource dataSource;
+    public record Snapshot(String rankingType, String bossId, String rankingDataJson) {}
+    private record RankingKey(String type, String boss) {}
 
     public CrossServerBossRankingDao(DataSource dataSource, JavaPlugin plugin) {
         this.dataSource = dataSource;
     }
 
     /**
-     * 写入或更新跨服排名数据（先删除旧记录再插入新记录）。
+     * 在同一个事务内替换指定排名。
      *
      * @param rankingType     排名类型
      * @param bossId          Boss ID，为空时表示全局排名
@@ -34,28 +38,61 @@ public class CrossServerBossRankingDao {
      */
     public void upsert(String rankingType, String bossId, String rankingDataJson, LocalDateTime expireTime)
         throws SQLException {
-        deleteExisting(rankingType, bossId);
+        replaceAll(List.of(new Snapshot(rankingType, bossId, rankingDataJson)), expireTime);
+    }
+
+    public void replaceAll(List<Snapshot> snapshots, LocalDateTime expireTime) throws SQLException {
+        if (snapshots.isEmpty()) return;
+        var latest = new LinkedHashMap<RankingKey, Snapshot>();
+        for (Snapshot snapshot : snapshots) {
+            String boss = snapshot.bossId();
+            latest.put(new RankingKey(snapshot.rankingType(), boss == null || boss.isBlank() ? null : boss), snapshot);
+        }
         String sql = """
             INSERT INTO cross_server_boss_rankings
             (ranking_type, boss_id, ranking_data, last_update, expire_time)
             VALUES (?, ?, ?, ?, ?)
             """;
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-            stmt.setString(1, rankingType);
-            if (bossId == null || bossId.isBlank()) {
-                stmt.setNull(2, java.sql.Types.VARCHAR);
-            } else {
-                stmt.setString(2, bossId);
+        try (Connection conn = dataSource.getConnection()) {
+            boolean autoCommit = conn.getAutoCommit();
+            conn.setAutoCommit(false);
+            try (var deleteGlobal = conn.prepareStatement(
+                    "DELETE FROM cross_server_boss_rankings WHERE ranking_type=? AND boss_id IS NULL");
+                 var deleteBoss = conn.prepareStatement(
+                    "DELETE FROM cross_server_boss_rankings WHERE ranking_type=? AND boss_id=?");
+                 var insert = conn.prepareStatement(sql)) {
+                Timestamp updated = Timestamp.valueOf(LocalDateTime.now());
+                Timestamp expiry = expireTime == null ? null : Timestamp.valueOf(expireTime);
+                boolean global = false;
+                boolean bosses = false;
+                for (var entry : latest.entrySet()) {
+                    Snapshot snapshot = entry.getValue();
+                    String boss = entry.getKey().boss();
+                    boolean globalRanking = boss == null;
+                    var delete = globalRanking ? deleteGlobal : deleteBoss;
+                    delete.setString(1, snapshot.rankingType());
+                    if (!globalRanking) delete.setString(2, boss);
+                    delete.addBatch();
+                    if (globalRanking) global = true;
+                    else bosses = true;
+
+                    insert.setString(1, snapshot.rankingType());
+                    insert.setString(2, globalRanking ? null : boss);
+                    insert.setString(3, snapshot.rankingDataJson());
+                    insert.setTimestamp(4, updated);
+                    insert.setTimestamp(5, expiry);
+                    insert.addBatch();
+                }
+                if (global) deleteGlobal.executeBatch();
+                if (bosses) deleteBoss.executeBatch();
+                insert.executeBatch();
+                conn.commit();
+            } catch (SQLException | RuntimeException failure) {
+                try { conn.rollback(); } catch (SQLException rollback) { failure.addSuppressed(rollback); }
+                throw failure;
+            } finally {
+                conn.setAutoCommit(autoCommit);
             }
-            stmt.setString(3, rankingDataJson);
-            stmt.setTimestamp(4, Timestamp.valueOf(LocalDateTime.now()));
-            if (expireTime == null) {
-                stmt.setNull(5, java.sql.Types.TIMESTAMP);
-            } else {
-                stmt.setTimestamp(5, Timestamp.valueOf(expireTime));
-            }
-            stmt.executeUpdate();
         }
     }
 
@@ -94,17 +131,4 @@ public class CrossServerBossRankingDao {
         return Optional.empty();
     }
 
-    private void deleteExisting(String rankingType, String bossId) throws SQLException {
-        String sql = bossId == null || bossId.isBlank()
-            ? "DELETE FROM cross_server_boss_rankings WHERE ranking_type = ? AND boss_id IS NULL"
-            : "DELETE FROM cross_server_boss_rankings WHERE ranking_type = ? AND boss_id = ?";
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-            stmt.setString(1, rankingType);
-            if (bossId != null && !bossId.isBlank()) {
-                stmt.setString(2, bossId);
-            }
-            stmt.executeUpdate();
-        }
-    }
 }

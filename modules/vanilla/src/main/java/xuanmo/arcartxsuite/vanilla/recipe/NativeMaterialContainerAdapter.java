@@ -29,12 +29,14 @@ public final class NativeMaterialContainerAdapter implements MaterialContainerAd
     }
     private static boolean sameBlockInventory(Inventory inventory){
         var location=inventory.getLocation();
-        if(location==null)return false;
-        var state=location.getBlock().getState();
+        if(location==null || !location.isWorldLoaded())return false;
+        var world=location.getWorld();
+        if(world==null || !world.isChunkLoaded(location.getBlockX() >> 4, location.getBlockZ() >> 4))return false;
+        var state=world.getBlockAt(location).getState();
         if(state instanceof org.bukkit.block.Chest chest)return chest.getBlockInventory().equals(inventory);
         return state instanceof Container container&&container.getInventory().equals(inventory);
     }
-    private static boolean persistentInventoryUnchanged(Player player,Inventory inventory){
+    public static boolean persistentInventoryUnchanged(Player player,Inventory inventory){
         if(inventory.getType()==org.bukkit.event.inventory.InventoryType.ENDER_CHEST)return player.getEnderChest().equals(inventory);
         if(inventory instanceof DoubleChestInventory doubleChest)return sameBlockInventory(doubleChest.getLeftSide())&&sameBlockInventory(doubleChest.getRightSide());
         if(inventory.getHolder() instanceof org.bukkit.entity.Entity entity)return entity.isValid()&&entity instanceof InventoryHolder holder&&holder.getInventory().equals(inventory);

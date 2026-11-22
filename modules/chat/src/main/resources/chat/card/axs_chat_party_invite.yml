@@ -1,0 +1,34 @@
+root_control:
+  type: card
+  attribute:
+    width: "Math.max(430, val.invite_title.width + 44)"
+    height: "118"
+  children:
+    background:
+      type: Texture
+      attribute:
+        width: "self.parent.width"
+        height: "self.parent.height"
+        normal: ~27,65,48,240
+        shape: ~round_rect
+        radius: 12
+      action:
+        click: |-
+          Chat.say('/abyss party accept ' + self.parent.data['partyId'])
+    title:
+      type: Text
+      val: invite_title
+      attribute:
+        x: 22
+        y: 14
+        fontSize: 38
+        through: true
+        texts: "'§f' + self.parent.data['inviter'] + ' 邀请你加入小队'"
+    action_label:
+      type: Text
+      attribute:
+        x: 22
+        y: 66
+        fontSize: 32
+        through: true
+        texts: "'§a接受邀请'"
