@@ -207,14 +207,23 @@ final class ExternalAuthorization {
         var app = config.launchers().get(client);
         if (app == null) throw new SecurityException("Launcher rejected");
         var pairing = pairing(app.realm(),userCode);
-        Grant grant;
-        synchronized(this) {
-            grant = peek(grants,token);
-            if (!grant.app().equals(app)) throw new SecurityException("Launcher rejected");
-            grants.remove(GameExternalStore.hash(token));
-        }
+        Grant grant = takeLaunch(app,token);
         if (!center.attachLauncher(pairing,grant.identity(),grant.ownership())) throw new SecurityException("Game authorization rejected");
         return GameExternalStore.confirmation(pairing,grant.identity());
+    }
+
+    GameExternalStore.MinecraftIdentity minecraftIdentity(String client, String token) throws Exception {
+        var app = config.launchers().get(client);
+        if (!config.minecraftSessions() || app == null) throw new SecurityException("Minecraft authorization disabled");
+        Grant grant = takeLaunch(app,token);
+        return center.minecraftIdentity(app.realm(),grant.identity(),grant.ownership());
+    }
+
+    private synchronized Grant takeLaunch(ExternalConfiguration.Launcher app, String token) {
+        Grant grant = peek(grants,token);
+        if (!grant.app().equals(app)) throw new SecurityException("Launcher rejected");
+        grants.remove(GameExternalStore.hash(token));
+        return grant;
     }
 
     private GameExternalStore.Pairing pairing(String realm, String code) throws Exception {

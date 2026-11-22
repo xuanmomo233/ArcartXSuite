@@ -143,9 +143,9 @@ final class CenterAuthenticationRuntime implements HostAuthentication,Listener {
     }
     private long timeout() { return policy==null?settings.loginTimeoutNanos():TimeUnit.SECONDS.toNanos(policy.loginTimeoutSeconds()); }
     @Override public Terms terms() { Policy current=policy; return current==null?new Terms(false,"",List.of()):new Terms(current.requireTerms(),current.termsVersion(),current.termsLines()); }
-    @Override public boolean passwordAuthenticationAllowed() { Policy current=policy; return current!=null && current.gamePasswordEnabled(); }
-    @Override public boolean passwordRegistrationAllowed() { return passwordAuthenticationAllowed(); }
-    @Override public boolean externalLinkAvailable() { Policy current=policy; return current!=null && current.externalEnabled() && current.gamePasswordEnabled(); }
+    @Override public boolean passwordAuthenticationAllowed() { return false; }
+    @Override public boolean passwordRegistrationAllowed() { return false; }
+    @Override public boolean externalLinkAvailable() { return false; }
     @Override public AuthRuntimeCapability.ExternalPrompt externalPrompt(UUID profile) {
         Connection connection=connections.get(profile);
         var prompt=connection==null?null:connection.externalPrompt;
@@ -431,22 +431,12 @@ final class CenterAuthenticationRuntime implements HostAuthentication,Listener {
         return submit(connection,Operation.EXTERNAL_CONFIRM,data);
     }
     @Override public CompletionStage<Result> authenticate(UUID profile,UUID physical,char[] password,boolean register,boolean agreed,String termsVersion) {
-        Connection connection=connection(profile,physical); var state=snapshot(profile);
-        if(!passwordAuthenticationAllowed()) {
-            clear(new char[][]{password}); return CompletableFuture.completedFuture(result(profile,false,"PASSWORD_ENTRY_DISABLED"));
-        }
-        if(connection==null || state.stage()!=AuthSnapshot.Stage.AWAITING_IDENTITY && state.stage()!=AuthSnapshot.Stage.RESTRICTED) {
-            clear(new char[][]{password}); return CompletableFuture.completedFuture(result(profile,false,"INVALID_STATE"));
-        }
-        JsonObject data=new JsonObject(); data.addProperty("register",register); data.addProperty("agreed",agreed); data.addProperty("termsVersion",termsVersion);
-        return submit(connection,Operation.PASSWORD,data,password);
+        Arrays.fill(password,'\0');
+        return CompletableFuture.completedFuture(result(profile,false,"PASSWORD_ENTRY_DISABLED"));
     }
     @Override public CompletionStage<Result> changePassword(UUID profile,UUID physical,char[] oldPassword,char[] newPassword) {
-        Connection connection=connection(profile,physical);
-        if(connection==null || !snapshot(profile).admitted()) {
-            clear(new char[][]{oldPassword,newPassword}); return CompletableFuture.completedFuture(result(profile,false,"INVALID_STATE"));
-        }
-        return submit(connection,Operation.CHANGE_PASSWORD,new JsonObject(),oldPassword,newPassword);
+        clear(new char[][]{oldPassword,newPassword});
+        return CompletableFuture.completedFuture(result(profile,false,"PASSWORD_ENTRY_DISABLED"));
     }
     @Override public CompletionStage<Result> confirmBinding(UUID profile,UUID physical,String code) {
         Connection connection=connection(profile,physical);

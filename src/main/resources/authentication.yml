@@ -7,17 +7,18 @@ realm-id: local
 timezone: Asia/Shanghai
 login-timeout-seconds: 300
 ingress:
-  # password、local-mixed 或 signed-proxy。
-  # 游戏内密码要求直连 online-mode=true 的加密连接；离线后端不接受密码。
-  # local-mixed 要求本机直连 online-mode=true；signed-proxy 要求正确配置可信玩家信息转发。
-  type: password
+  # auto 根据 online-mode 选择入口：在线由微软验证，离线只在本机回环启用游戏内密码。
+  # password 要求 online-mode=false、server-ip 为回环地址，且关闭代理转发。
+  # online 信任微软在线握手；local-mixed 使用本机混合网关核验身份，两者都不收本服密码。
+  # signed-proxy 供受信任的代理后端使用，只接受签名验证。
+  type: auto
   gateway-url: http://127.0.0.1:25599
-  # 非 password 入口默认禁止密码登录；仅直连 online-mode=true 时可以显式启用。
+  # password-login 只能在本机 password 入口为 true。
   audience: local-node
   # signed-proxy 必须填入代理启动日志中的公钥。可以为轮换期配置多个公钥，最多8项。
   # - issuer: proxy-main
   #   public-key: BASE64_X509_PUBLIC_KEY
-  #   providers: [microsoft, littleskin]
+  #   providers: [microsoft, littleskin, center]
   trusted-proxies: []
 password:
   min-length: 8

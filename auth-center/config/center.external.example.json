@@ -7,6 +7,7 @@
   "external": {
     "port": 25601,
     "origin": "https://auth.example.net",
+    "minecraftSessions": true,
     "providers": [
       {
         "realm": "network",
