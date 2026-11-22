@@ -1,7 +1,9 @@
+import base64
 import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -9,6 +11,44 @@ import yaml
 
 
 WORKFLOW = Path(__file__).resolve().parents[2] / ".github/workflows/build-encrypted.yml"
+
+
+class BuildSeedsTest(unittest.TestCase):
+    SCRIPT = WORKFLOW.parents[2] / "scripts/run-with-build-seeds.py"
+    NAMES = ("AXS_SEED_PARTS_B64", "AXB_SIGN_SEED_B64", "AXB_RESP_SIGN_SEED_B64")
+    FIXTURE_SEED = base64.b64encode(bytes(32)).decode("ascii")
+
+    def invoke(self, event, ref, validation="true", attempt="1"):
+        env = dict(os.environ, AXS_CI_VALIDATION=validation, GITHUB_EVENT_NAME=event,
+                   GITHUB_REF=ref, GITHUB_REPOSITORY="fixture/test", GITHUB_RUN_ID="431",
+                   GITHUB_RUN_ATTEMPT=attempt, GITHUB_SHA="a" * 40)
+        env.update(dict.fromkeys(self.NAMES, self.FIXTURE_SEED))
+        probe = f"import json, os; print(json.dumps([os.environ[name] for name in {self.NAMES!r}]))"
+        return subprocess.run([sys.executable, str(self.SCRIPT), "-c", probe],
+                              env=env, encoding="utf-8", capture_output=True, timeout=10)
+
+    def seeds(self, result):
+        self.assertEqual(0, result.returncode, result.stderr)
+        return json.loads(result.stdout.splitlines()[-1])
+
+    def test_paused_main_push_uses_validation_seeds_and_supports_retries(self):
+        first = self.seeds(self.invoke("push", "refs/heads/main"))
+        retry = self.seeds(self.invoke("push", "refs/heads/main", attempt="2"))
+        self.assertEqual(first, retry)
+        self.assertEqual(len(self.NAMES), len(set(first)))
+        self.assertNotIn(self.FIXTURE_SEED, first)
+        self.assertTrue(all(len(base64.b64decode(value, validate=True)) == 32 for value in first))
+
+    def test_manual_validation_still_uses_validation_seeds(self):
+        result = self.seeds(self.invoke("workflow_dispatch", "refs/heads/codex/verify"))
+        self.assertNotIn(self.FIXTURE_SEED, result)
+
+    def test_other_validation_triggers_are_rejected_and_production_seeds_are_preserved(self):
+        for event, ref in (("push", "refs/heads/feature"), ("pull_request", "refs/pull/42/merge")):
+            with self.subTest(event=event):
+                self.assertNotEqual(0, self.invoke(event, ref).returncode)
+        production = self.seeds(self.invoke("push", "refs/heads/main", validation="false"))
+        self.assertEqual([self.FIXTURE_SEED] * len(self.NAMES), production)
 
 
 class ReleaseWorkflowTest(unittest.TestCase):
