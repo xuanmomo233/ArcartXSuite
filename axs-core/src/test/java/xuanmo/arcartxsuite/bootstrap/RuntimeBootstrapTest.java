@@ -69,6 +69,54 @@ class RuntimeBootstrapTest {
         };
     }
 
+    @Test void aSlowColdDownloadDoesNotBlockClassOrResourceLookup() throws Exception {
+        byte[] content;
+        try (var bytes = new java.io.ByteArrayOutputStream()) {
+            try (var jar = new JarOutputStream(bytes)) {
+                jar.putNextEntry(new JarEntry("org/sqlite/test.txt"));
+                jar.write(42);
+                jar.closeEntry();
+            }
+            content = bytes.toByteArray();
+        }
+        String hash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(content));
+        var artifact = new RuntimeBootstrap.Artifact("sqlite", hash, content.length, List.of("org/sqlite/"));
+        var started = new java.util.concurrent.CountDownLatch(1);
+        var release = new java.util.concurrent.CountDownLatch(1);
+        var requests = new AtomicInteger();
+        var executor = java.util.concurrent.Executors.newSingleThreadExecutor();
+        try (var runtime = new RuntimeBootstrap.Loader(getClass().getClassLoader(), List.of(artifact), temp, null, url -> {
+            requests.incrementAndGet();
+            started.countDown();
+            try {
+                if (!release.await(5, java.util.concurrent.TimeUnit.SECONDS)) throw new java.io.IOException("fetch timed out");
+            } catch (InterruptedException failure) {
+                Thread.currentThread().interrupt();
+                throw new java.io.IOException(failure);
+            }
+            return connection(url, 200, content);
+        })) {
+            var prepared = runtime.prefetch(executor).toCompletableFuture();
+            assertTrue(started.await(5, java.util.concurrent.TimeUnit.SECONDS));
+            assertTimeoutPreemptively(java.time.Duration.ofSeconds(2), () -> {
+                assertThrows(ClassNotFoundException.class, () -> runtime.loadClass("org.sqlite.JDBC"));
+                assertThrows(IllegalStateException.class, () -> runtime.runtimeResource("org/sqlite/test.txt"));
+            });
+            assertFalse(prepared.isDone());
+            release.countDown();
+            prepared.get(5, java.util.concurrent.TimeUnit.SECONDS);
+            assertEquals(0, runtime.getURLs().length);
+            try (var stream = runtime.getResourceAsStream("org/sqlite/test.txt")) {
+                assertNotNull(stream);
+                assertEquals(42, stream.read());
+            }
+            assertEquals(1, requests.get());
+        } finally {
+            release.countDown();
+            executor.shutdownNow();
+        }
+    }
+
     @Test void domainSeparatedSignatureRejectsModifiedCatalog() throws Exception {
         KeyPair key = KeyPairGenerator.getInstance("Ed25519").generateKeyPair();
         Signature signature = Signature.getInstance("Ed25519");

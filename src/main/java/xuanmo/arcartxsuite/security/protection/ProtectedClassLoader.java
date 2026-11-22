@@ -56,6 +56,15 @@ public final class ProtectedClassLoader extends ClassLoader {
 
     public void attachRuntime(RuntimeBootstrap.Loader runtime) { this.runtime = runtime; }
 
+    public java.util.concurrent.CompletionStage<Void> prepareRuntime() {
+        if (runtime == null) return java.util.concurrent.CompletableFuture.completedFuture(null);
+        return runtime.prefetch(task -> {
+            Thread worker = new Thread(task, "AXS-Runtime-Download");
+            worker.setDaemon(true);
+            worker.start();
+        });
+    }
+
     public void closeRuntime() {
         if (runtime != null) {
             try { runtime.close(); }

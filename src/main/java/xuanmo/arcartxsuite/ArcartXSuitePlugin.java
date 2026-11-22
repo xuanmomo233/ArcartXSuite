@@ -1,6 +1,13 @@
 package xuanmo.arcartxsuite;
 
+import java.util.concurrent.CompletionStage;
 import java.util.logging.Level;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
+import org.bukkit.event.HandlerList;
+import org.bukkit.event.Listener;
+import org.bukkit.event.player.AsyncPlayerPreLoginEvent;
+import org.bukkit.plugin.IllegalPluginAccessException;
 import org.bukkit.plugin.java.JavaPlugin;
 import xuanmo.arcartxsuite.bootstrap.SuiteCore;
 import xuanmo.arcartxsuite.bootstrap.HostShutdown;
@@ -39,6 +46,8 @@ public class ArcartXSuitePlugin extends JavaPlugin {
     /** 业务核心（加密交付，运行时由保护层解密后反射加载）。 */
     private SuiteCore core;
     private HostShutdown shutdown;
+    private CompletionStage<Void> startup;
+    private Listener startupAdmission;
 
     @Override
     public void onEnable() {
@@ -58,6 +67,57 @@ public class ArcartXSuitePlugin extends JavaPlugin {
             getServer().getPluginManager().disablePlugin(this);
             return;
         }
+        var loader = ProtectionInit.getProtectedLoader();
+        if (loader == null) {
+            enableCore();
+            return;
+        }
+        var prepared = loader.prepareRuntime();
+        startup = prepared;
+        if (!prepared.toCompletableFuture().isDone()) {
+            startupAdmission = new Listener() {
+                @EventHandler(priority = EventPriority.HIGHEST)
+                public void onPreLogin(AsyncPlayerPreLoginEvent event) {
+                    if (event.getLoginResult() == AsyncPlayerPreLoginEvent.Result.ALLOWED) {
+                        event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER, "Suite 正在准备运行库，请稍后重试。");
+                    }
+                }
+            };
+            getServer().getPluginManager().registerEvents(startupAdmission, this);
+            getLogger().info("正在后台准备 Suite 运行库。");
+        }
+        prepared.whenComplete((ignored, failure) -> {
+            Runnable finish = () -> finishStartup(prepared, failure);
+            if (getServer().isPrimaryThread()) finish.run();
+            else {
+                try { getServer().getScheduler().runTask(this, finish); }
+                catch (IllegalPluginAccessException disabled) { /* onDisable owns cleanup. */ }
+            }
+        });
+    }
+
+    private void finishStartup(CompletionStage<Void> prepared, Throwable failure) {
+        if (startup != prepared || !isEnabled()) return;
+        startup = null;
+        try {
+            if (failure == null) enableCore();
+            else {
+                getLogger().log(Level.SEVERE, "Suite 运行库准备失败，已禁用插件。", failure);
+                getServer().getPluginManager().disablePlugin(this);
+            }
+        } finally {
+            clearStartupAdmission();
+        }
+    }
+
+    private void clearStartupAdmission() {
+        if (startupAdmission != null) {
+            HandlerList.unregisterAll(startupAdmission);
+            startupAdmission = null;
+        }
+    }
+
+    private void enableCore() {
         try {
             // 此时静态块已安装 ProtectedClassLoader，加密类可被解密加载。
             Class<?> implClass = Class.forName(
@@ -79,6 +139,8 @@ public class ArcartXSuitePlugin extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        startup = null;
+        clearStartupAdmission();
         var current = core;
         core = null;
         java.util.concurrent.CompletionStage<Void> stopped;

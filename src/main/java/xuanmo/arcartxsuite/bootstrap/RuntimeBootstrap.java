@@ -8,6 +8,10 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.security.MessageDigest;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.CompletionStage;
+import java.util.concurrent.Executor;
 import java.util.jar.JarFile;
 import java.util.logging.Logger;
 
@@ -113,14 +117,35 @@ public final class RuntimeBootstrap {
         private final List<Artifact> artifacts;
         private final Path cache;
         private final Path development;
+        private final Connections connections;
         private final Set<String> installed = new HashSet<>();
         private volatile boolean closed;
 
         Loader(ClassLoader parent, List<Artifact> artifacts, Path cache, Path development) {
+            this(parent, artifacts, cache, development, RuntimeBootstrap::openConnection);
+        }
+
+        Loader(ClassLoader parent, List<Artifact> artifacts, Path cache, Path development, Connections connections) {
             super(new URL[0], parent);
             this.artifacts = artifacts;
             this.cache = cache;
             this.development = development;
+            this.connections = connections;
+        }
+
+        /** Fetch production dependencies before enabling the core, without linking any library classes. */
+        public CompletionStage<Void> prefetch(Executor executor) {
+            if (development != null) return CompletableFuture.completedFuture(null);
+            return CompletableFuture.runAsync(() -> {
+                try {
+                    for (Artifact artifact : artifacts) {
+                        if (closed) throw new IOException("Runtime loader closed");
+                        resolveArtifact(artifact, cache, null, connections);
+                    }
+                } catch (IOException failure) {
+                    throw new CompletionException(failure);
+                }
+            }, executor);
         }
 
         public boolean ownsClass(String name) { return owner(name.replace('.', '/') + ".class") != null; }
@@ -177,7 +202,9 @@ public final class RuntimeBootstrap {
         private synchronized void ensure(Artifact artifact) throws IOException {
             if (closed) throw new IOException("Runtime loader closed");
             if (installed.contains(artifact.hash)) return;
-            Path file = resolveArtifact(artifact, cache, development);
+            Path directory = development == null ? cache : development;
+            Path file = directory.resolve(artifact.hash + ".jar");
+            if (!valid(file, artifact)) throw new IOException("Missing or invalid cached runtime: " + artifact.id);
             addURL(file.toUri().toURL());
             installed.add(artifact.hash);
             LOG.info("运行库已就绪: " + artifact.id);
@@ -212,8 +239,11 @@ public final class RuntimeBootstrap {
     }
 
     static Path resolveArtifact(Artifact artifact, Path cache, Path development) throws IOException {
-        return resolveArtifact(artifact, cache, development,
-                url -> (HttpURLConnection) URI.create(url).toURL().openConnection());
+        return resolveArtifact(artifact, cache, development, RuntimeBootstrap::openConnection);
+    }
+
+    private static HttpURLConnection openConnection(String url) throws IOException {
+        return (HttpURLConnection) URI.create(url).toURL().openConnection();
     }
 
     @FunctionalInterface interface Connections { HttpURLConnection open(String url) throws IOException; }
