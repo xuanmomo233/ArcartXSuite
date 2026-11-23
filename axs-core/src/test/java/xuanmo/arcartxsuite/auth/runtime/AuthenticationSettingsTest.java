@@ -1,14 +1,13 @@
 package xuanmo.arcartxsuite.auth.runtime;
 
-import java.net.InetSocketAddress;
 import java.util.List;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class AuthenticationSettingsTest {
-    private static final LoginTransport ONLINE = new LoginTransport(true,"0.0.0.0",false,List.of());
-    private static final LoginTransport LOCAL = new LoginTransport(false,"127.0.0.1",false,List.of());
+    private static final LoginTransport ONLINE = new LoginTransport(true, false, List.of());
+    private static final LoginTransport OFFLINE = new LoginTransport(false, false, List.of());
     private AuthenticationSettings load(String extra) throws Exception {
         return load(extra, ONLINE);
     }
@@ -48,7 +47,7 @@ class AuthenticationSettingsTest {
     @Test void centerRejectsMixedIngressAndConflictingLocalPolicies() {
         assertThrows(IllegalArgumentException.class,()->document(CENTER.replace("type: external","type: signed-proxy"), ONLINE));
         assertThrows(IllegalArgumentException.class,()->document(CENTER+"requirements:\n  terms: false\n", ONLINE));
-        assertThrows(IllegalArgumentException.class,()->document(CENTER, LOCAL));
+        assertThrows(IllegalArgumentException.class,()->document(CENTER, OFFLINE));
     }
     @Test void onlineDefaultsAuthenticateMicrosoftWithoutGamePassword() throws Exception {
         var settings=load("");
@@ -58,18 +57,13 @@ class AuthenticationSettingsTest {
         assertTrue(settings.trustedProxies().isEmpty());
         assertFalse(settings.terms().enabled());
     }
-    @Test void gamePasswordIsAvailableOnlyForDirectLoopbackOfflineServers() throws Exception {
-        assertTrue(load("", LOCAL).passwordAllowed());
-        assertThrows(IllegalArgumentException.class, () -> load("", new LoginTransport(false,"",false,List.of())));
-        assertThrows(IllegalArgumentException.class, () -> load("", new LoginTransport(false,"0.0.0.0",false,List.of())));
-        assertThrows(IllegalArgumentException.class, () -> load("", new LoginTransport(false,"127.0.0.1",true,List.of())));
+    @Test void offlineDirectServersUsePasswordWithoutAnExternalIdentityProvider() throws Exception {
+        assertTrue(load("", OFFLINE).passwordAllowed());
+        assertTrue(load("ingress:\n  type: password\n", OFFLINE).passwordAllowed());
+        assertThrows(IllegalArgumentException.class, () -> load("", new LoginTransport(false, true, List.of())));
         assertThrows(IllegalArgumentException.class, () -> load("ingress:\n  type: password\n"));
         assertThrows(IllegalArgumentException.class, () -> load("ingress:\n  type: online\n  password-login: true\n"));
-        assertThrows(IllegalArgumentException.class, () -> load("ingress:\n  type: online\n", new LoginTransport(true,"127.0.0.1",true,List.of())));
-        assertTrue(LoginTransport.localPeer(new InetSocketAddress("127.0.0.1", 25565)));
-        assertTrue(LoginTransport.localPeer(new InetSocketAddress("::1", 25565)));
-        assertFalse(LoginTransport.localPeer(new InetSocketAddress("192.0.2.1", 25565)));
-        assertFalse(LoginTransport.localPeer(InetSocketAddress.createUnresolved("localhost",25565)));
+        assertThrows(IllegalArgumentException.class, () -> load("ingress:\n  type: online\n", new LoginTransport(true, true, List.of())));
     }
     @Test void futureBackendAndUnknownPoliciesAreRejected() {
         assertThrows(IllegalArgumentException.class,()->load("client-integrity: true\n"));

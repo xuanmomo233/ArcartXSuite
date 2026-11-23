@@ -79,7 +79,7 @@ controls:
             attribute:
               x: 40
               y: 28
-              texts: "var.mode == 'register' ? '创建本地账号' : '账号验证'"
+              texts: "var.mode == 'register' ? '注册本服账号' : '账号验证'"
               fontSize: 49
           密码:
             type: TextBox

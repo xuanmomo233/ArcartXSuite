@@ -377,10 +377,6 @@ public final class AuthenticationRuntime implements HostAuthentication, Listener
         return future;
     }
     private void attach(Player player) {
-        if (passwordAllowed && !LoginTransport.localPeer(player.getAddress())) {
-            player.kickPlayer("本机离线密码入口仅对回环连接开放。");
-            return;
-        }
         if(!player.getName().matches("[\\p{L}\\p{N}_]{1,16}")) {
             player.kickPlayer("当前账号名不受支持，请使用 1 至 16 个字母、数字或下划线。"); return;
         }
@@ -411,7 +407,7 @@ public final class AuthenticationRuntime implements HostAuthentication, Listener
 
     @Override public CompletionStage<Result> authenticate(UUID uuid, UUID connectionId, char[] password, boolean register, boolean agreed,String termsVersion) {
         Connection c = connection(uuid, connectionId);
-        if(!passwordAllowed || c != null && !LoginTransport.localPeer(c.player().getAddress())) {
+        if(!passwordAllowed) {
             Arrays.fill(password,'\0');
             return CompletableFuture.completedFuture(result(uuid,false,"TRUSTED_INGRESS_REQUIRED"));
         }
@@ -461,7 +457,7 @@ public final class AuthenticationRuntime implements HostAuthentication, Listener
             return CompletableFuture.completedFuture(result(uuid,false,"EXTERNAL_PROVIDER"));
         }
         Connection c = connection(uuid, connectionId);
-        if (c == null || !LoginTransport.localPeer(c.player().getAddress()) || !snapshot(uuid).admitted()
+        if (c == null || !snapshot(uuid).admitted()
                 || newPassword.length < minLength || newPassword.length > maxLength) {
             Arrays.fill(oldPassword, '\0'); Arrays.fill(newPassword, '\0');
             return CompletableFuture.completedFuture(result(uuid, false, "INVALID_STATE"));

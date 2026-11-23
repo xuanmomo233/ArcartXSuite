@@ -1,31 +1,20 @@
 package xuanmo.arcartxsuite.auth.runtime;
 
 import java.lang.management.ManagementFactory;
-import java.net.InetSocketAddress;
 import java.util.List;
 import org.bukkit.Bukkit;
 
 /** Evidence from the server process. An offline profile is never an identity proof. */
-record LoginTransport(boolean online, String bindAddress, boolean forwarding, List<String> jvmArguments) {
+record LoginTransport(boolean online, boolean forwarding, List<String> jvmArguments) {
     static LoginTransport current() {
         ClassLoader server = Bukkit.getServer().getClass().getClassLoader();
-        return new LoginTransport(Bukkit.getOnlineMode(), Bukkit.getIp(), forwarding(server),
+        return new LoginTransport(Bukkit.getOnlineMode(), forwarding(server),
             ManagementFactory.getRuntimeMXBean().getInputArguments());
     }
 
-    boolean localPasswordAvailable() {
-        return !online && !forwarding && isLoopbackBind(bindAddress);
-    }
+    boolean directOfflineAvailable() { return !online && !forwarding; }
 
     boolean directOnlineAvailable() { return online && !forwarding; }
-
-    static boolean localPeer(InetSocketAddress address) {
-        return address != null && address.getAddress() != null && address.getAddress().isLoopbackAddress();
-    }
-
-    private static boolean isLoopbackBind(String address) {
-        return "127.0.0.1".equals(address) || "::1".equals(address) || "0:0:0:0:0:0:0:1".equals(address);
-    }
 
     private static boolean forwarding(ClassLoader server) {
         try {

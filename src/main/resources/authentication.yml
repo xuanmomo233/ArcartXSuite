@@ -7,13 +7,13 @@ realm-id: local
 timezone: Asia/Shanghai
 login-timeout-seconds: 300
 ingress:
-  # auto 根据 online-mode 选择入口：在线由微软验证，离线只在本机回环启用游戏内密码。
-  # password 要求 online-mode=false、server-ip 为回环地址，且关闭代理转发。
+  # auto 根据直连服的 online-mode 选择入口：在线使用微软会话，离线由玩家在游戏内注册或登录。
+  # password 要求 online-mode=false 且关闭代理转发。玩家通过服务器的 IP 或域名连接。
   # online 信任微软在线握手；local-mixed 使用本机混合网关核验身份，两者都不收本服密码。
   # signed-proxy 供受信任的代理后端使用，只接受签名验证。
   type: auto
   gateway-url: http://127.0.0.1:25599
-  # password-login 只能在本机 password 入口为 true。
+  # password 入口默认开启 password-login，玩家各自设置本服账号密码。
   audience: local-node
   # signed-proxy 必须填入代理启动日志中的公钥。可以为轮换期配置多个公钥，最多8项。
   # - issuer: proxy-main

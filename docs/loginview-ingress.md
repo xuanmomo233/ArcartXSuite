@@ -4,7 +4,7 @@ LoginView 展示当前连接的验证状态和准入要求。认证入口决定�
 
 | 场景 | Minecraft 设置 | `authentication.yml` | 玩家如何验证 |
 |---|---|---|---|
-| 本机离线直连 | `online-mode=false`，`server-ip=127.0.0.1` 或 `::1`，关闭代理转发 | `backend: standalone`，`ingress.type: password` 或 `auto` | 在 LoginView 输入本服密码 |
+| 离线服游戏内登录 | `online-mode=false`，关闭代理转发，玩家连接服务器对外提供的地址 | `backend: standalone`，`ingress.type: auto` 或 `password` | 首次在 LoginView 设置个人密码，再次进服时输入该密码。无需外部账号 |
 | 微软在线直连 | `online-mode=true`，关闭代理转发，使用原生微软会话服务 | `backend: standalone`，`ingress.type: online` 或 `auto` | 通过 Minecraft 上线握手，免输本服密码 |
 | 多来源混合登录 | `online-mode=true`，使用本机混合网关及对应的 authlib-injector | `backend: standalone`，`ingress.type: local-mixed` | 通过实际会话来源验证，免输本服密码 |
 | 中心网页或启动器授权 | `online-mode=true`，关闭代理转发 | `backend: center`，`ingress.type: external`，见 `auth-center/config/node.example.yml` | 通过中心网页或启动器授权并确认当前连接，免输本服密码 |

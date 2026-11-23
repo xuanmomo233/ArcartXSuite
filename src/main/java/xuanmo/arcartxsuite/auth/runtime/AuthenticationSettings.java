@@ -65,9 +65,9 @@ record AuthenticationSettings(String realm,java.time.ZoneId timezone,long loginT
         if(config.contains("terms.lines") && (!(config.get("terms.lines") instanceof List<?> lines) || lines.stream().anyMatch(line->!(line instanceof String))))
             throw new IllegalArgumentException("terms.lines 必须为字符串列表");
         if(config.getBoolean("ingress.password-login", ingress == Ingress.PASSWORD) != (ingress == Ingress.PASSWORD))
-            throw new IllegalArgumentException("只有本机离线 password 入口可启用游戏内密码");
-        if (ingress == Ingress.PASSWORD && !transport.localPasswordAvailable())
-            throw new IllegalArgumentException("游戏内密码仅支持 online-mode=false 的本机直连服：server-ip 必须是回环地址且关闭代理转发");
+            throw new IllegalArgumentException("游戏内密码须与 password 入口同时启用");
+        if (ingress == Ingress.PASSWORD && !transport.directOfflineAvailable())
+            throw new IllegalArgumentException("游戏内密码要求 online-mode=false，且游戏服关闭代理转发");
         if ((ingress == Ingress.ONLINE || ingress == Ingress.LOCAL_MIXED) && !transport.directOnlineAvailable())
             throw new IllegalArgumentException("在线身份入口要求 online-mode=true 的直连服；代理后端请使用 signed-proxy");
         if (ingress == Ingress.ONLINE) LocalAgentBinding.requireMicrosoftSession(transport.jvmArguments());
