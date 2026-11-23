@@ -2,6 +2,7 @@ package xuanmo.arcartxsuite.loginview;
 
 import java.io.File;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
@@ -10,6 +11,8 @@ import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.*;
+import xuanmo.arcartxsuite.api.auth.AuthAccess;
+import xuanmo.arcartxsuite.api.auth.AuthSnapshot;
 import xuanmo.arcartxsuite.api.config.ModuleConfig;
 import xuanmo.arcartxsuite.api.capability.AuthRuntimeCapability;
 import xuanmo.arcartxsuite.loginview.service.LoginViewController;
@@ -54,14 +57,46 @@ public final class LoginViewModule extends AbstractAXSModule implements ModuleCo
         return new xuanmo.arcartxsuite.loginview.placeholder.AuthPlaceholderExpansion(plugin);
     }
     @Override public String commandId() { return "loginview"; }
-    @Override public List<String> actions() { return List.of("status","open"); }
+    @Override public List<String> actions() { return List.of("status", "open", "account"); }
     @Override public boolean onCommand(@NotNull CommandSender sender,@NotNull String label,@NotNull String[] args) {
+        if (args.length >= 2 && "account".equalsIgnoreCase(args[1])) {
+            if (args.length != 3) {
+                sender.sendMessage("请使用 /" + label + " loginview account <在线玩家名>");
+            } else {
+                showAccount(sender, args[2]);
+            }
+            return true;
+        }
         if(args.length>=3 && args[1].equalsIgnoreCase("open")) {
             Player player=Bukkit.getPlayerExact(args[2]);
             if(player!=null && controller!=null) controller.open(player,true);
             else sender.sendMessage("玩家离线或界面未就绪。");
         } else sender.sendMessage("LoginView 仅负责界面，认证由宿主运行时管理。");
         return true;
+    }
+
+    private void showAccount(CommandSender sender, String playerName) {
+        Player player = Bukkit.getPlayerExact(playerName);
+        if (player == null) {
+            sender.sendMessage("本服没有名为 " + playerName + " 的在线玩家。");
+            return;
+        }
+        AuthSnapshot state = AuthAccess.snapshot(player.getUniqueId());
+        if (state.connectionId() == null || state.stage() == AuthSnapshot.Stage.CLOSED) {
+            sender.sendMessage(player.getName() + " 的当前连接没有可查询的认证状态。");
+            return;
+        }
+        String registration = switch (state.registration()) {
+            case REGISTERED -> "已注册";
+            case UNREGISTERED -> "未注册";
+            case UNKNOWN -> "待确认";
+        };
+        String provider = state.provider().isEmpty() ? "待确认" : state.provider();
+        sender.sendMessage("玩家 " + player.getName() + " | 账号 ID " + (state.accountId() == null ? "待确认" : state.accountId()));
+        sender.sendMessage("登记状态 " + registration + " | 身份来源 " + provider);
+        sender.sendMessage("身份验证 " + (state.identityVerified() ? "已通过" : "未验证")
+                + " | 游戏准入 " + (state.admitted() ? "已放行" : "未放行")
+                + " | 当前阶段 " + state.stage().name().toLowerCase(Locale.ROOT));
     }
 }
 
