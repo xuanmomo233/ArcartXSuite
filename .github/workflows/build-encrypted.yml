@@ -1015,6 +1015,13 @@ jobs:
           overwrite: true
           if-no-files-found: error
 
+      - name: Queue the Suite release announcement
+        if: env.AXS_CLOUD_UPLOAD == 'true'
+        env:
+          CLOUD_CI_TOKEN: ${{ secrets.CLOUD_CI_TOKEN }}
+          FLARE_BASE_URL: ${{ vars.FLARE_BASE_URL }}
+        run: python scripts/publish-suite.py announce
+
       - name: Upload ProGuard mappings (modules)
         if: env.AXS_EXPORT_ONLY != 'true' && steps.staged-release.outputs.restored != 'true' && steps.staged-release.outputs.prepared != 'true'
         uses: actions/upload-artifact@v5

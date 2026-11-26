@@ -214,7 +214,7 @@ def stage_release():
     print(f"Staged Suite release {version} on both origins", flush=True)
 
 
-def activate_release():
+def activation_manifest():
     release = json.loads(ACTIVATION.read_text(encoding="utf-8"))
     commit, version, modules = release["commit"], release["version"], release["modules"]
     run = re.escape(os.environ["GITHUB_RUN_ID"])
@@ -225,11 +225,16 @@ def activate_release():
     mirror = mirror_origin()
     if release["mirror"] != mirror:
         raise SystemExit("Flare origin changed since staging")
+    return {"version": version, "commit": commit, "modules": modules}, mirror
+
+
+def activate_release():
+    identity, mirror = activation_manifest()
     head = subprocess.check_output(["git", "ls-remote", "--exit-code", "origin", "refs/heads/main"], text=True)
-    if head.split()[0] != commit:
+    if head.split()[0] != identity["commit"]:
         raise SystemExit("Only the current main commit may activate a Suite release")
+    version = identity["version"]
     origins = (PRIMARY, mirror)
-    identity = {"version": version, "commit": commit, "modules": modules}
     endpoint = "/v1/ci/suite-release/current"
     for origin in origins:
         post(origin, endpoint, {}, payload={**identity, "action": "withdraw"})
@@ -251,6 +256,22 @@ def activate_release():
     print(f"Activated Suite release {version} on both origins", flush=True)
 
 
+def announce_release():
+    identity, mirror = activation_manifest()
+    version = identity["version"]
+    endpoint = "/v1/ci/suite-release/current"
+    for origin in (PRIMARY, mirror):
+        # On a published release, this existing preflight only rechecks the current pointers.
+        current = post(origin, endpoint, {}, payload={**identity, "action": "withdraw"})
+        if current.get("state") != "published" or current.get("version") != version:
+            raise RuntimeError(f"{urlsplit(origin).hostname} did not confirm the active Suite release {version}")
+        print(f"Confirmed the current Suite release {version} on {urlsplit(origin).hostname}", flush=True)
+    result = post(PRIMARY, endpoint, {}, payload={**identity, "action": "announce"})
+    if result.get("state") != "announced" or result.get("version") != version:
+        raise RuntimeError(f"Primary did not confirm the bot announcement for {version}")
+    print(f"Recorded the bot announcement for {version}", flush=True)
+
+
 if __name__ == "__main__":
     if sys.argv[1:] == ["check"]:
         verify_publication_origins()
@@ -260,5 +281,7 @@ if __name__ == "__main__":
         stage_release()
     elif sys.argv[1:] == ["activate"]:
         activate_release()
+    elif sys.argv[1:] == ["announce"]:
+        announce_release()
     else:
-        raise SystemExit("Usage: publish-suite.py check|prepare|stage|activate")
+        raise SystemExit("Usage: publish-suite.py check|prepare|stage|activate|announce")
