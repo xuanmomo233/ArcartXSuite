@@ -134,7 +134,8 @@ public final class ChatModule extends AbstractAXSModule implements ModuleCommand
         networkIdentity = identity;
         return storageScope.initialize(() -> {
             chatRepo.initialize();
-            identity.complete(chatRepo.networkId().orElse(null));
+            identity.complete(configuration.crossServer().enabled() && advancedCrossServerOrchestrationAllowed()
+                ? chatRepo.networkId().orElse(null) : null);
         });
     }
 
@@ -162,7 +163,8 @@ public final class ChatModule extends AbstractAXSModule implements ModuleCommand
             placeholderResolver,
             messages(),
             vanillaItemNameBridge,
-            contentModerator
+            contentModerator,
+            this::advancedCrossServerOrchestrationAllowed
         );
         service.setEventBusProvider(() -> getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
         service.setPartyProvider(() -> getCapability(xuanmo.arcartxsuite.api.capability.AbyssPartyAccess.class));

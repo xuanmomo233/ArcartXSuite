@@ -4,7 +4,6 @@ import com.google.inject.Inject;
 import com.velocitypowered.api.event.Subscribe;
 import com.velocitypowered.api.event.proxy.ProxyInitializeEvent;
 import com.velocitypowered.api.event.proxy.ProxyShutdownEvent;
-import com.velocitypowered.api.plugin.Plugin;
 import com.velocitypowered.api.plugin.annotation.DataDirectory;
 import com.velocitypowered.api.proxy.ProxyServer;
 
@@ -16,13 +15,6 @@ import xuanmo.arcartxsuite.proxy.common.auth.AuthlibInjectorDetector;
 import xuanmo.arcartxsuite.proxy.common.auth.AuthlibInjectorManager;
 import xuanmo.arcartxsuite.proxy.common.config.ProxyConfig;
 
-@Plugin(
-    id = "arcartxsuite-proxy",
-    name = "ArcartXSuite Proxy",
-    version = "2.0.0",
-    description = "ArcartXSuite 代理端伴侣插件：混合登录管理 + 离线拦截 + 后端信息透传",
-    authors = {"xuanmo"}
-)
 public class ArcartXSuiteVelocity {
 
     private final ProxyServer server;

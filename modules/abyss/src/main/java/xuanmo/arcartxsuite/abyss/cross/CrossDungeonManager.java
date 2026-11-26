@@ -183,6 +183,7 @@ public final class CrossDungeonManager {
 
     /** 宿主：收 req_enter → 校验 → 登记预订 → accept/decline。 */
     private void onReqEnter(Map<String, String> kv) {
+        if (!active()) return;
         String reqId = kv.get("req");
         String dungeon = kv.get("dungeon");
         String from = kv.get("from");
@@ -228,6 +229,7 @@ public final class CrossDungeonManager {
 
     /** 源节点：accept → 前送玩家到宿主节点。 */
     private void onAccept(Map<String, String> kv) {
+        if (!active()) return;
         String reqId = kv.get("req");
         String host = kv.get("host");
         PendingForward pf = reqId != null ? pendingOut.get(reqId) : null;
@@ -305,6 +307,10 @@ public final class CrossDungeonManager {
         if (pe == null || pe.triggered) return;
         pe.triggered = true;
         for (UUID u : pe.expected) expectedArrivals.remove(u);
+        if (!active()) {
+            notifyPlayers(pe.expected, "§c跨服进入已取消，未扣除门票。");
+            return;
+        }
         List<Player> online = new ArrayList<>();
         List<UUID> ordered=new ArrayList<>(pe.expected);ordered.remove(pe.leader);ordered.add(0,pe.leader);
         for (UUID u : ordered) {
@@ -364,6 +370,7 @@ public final class CrossDungeonManager {
 
     /** BungeeCord 插件消息 Connect：把玩家前送到指定代理服。 */
     private void sendToServer(Player player, String server) {
+        if (!active()) return;
         try {
             ByteArrayOutputStream b = new ByteArrayOutputStream();
             DataOutputStream out = new DataOutputStream(b);

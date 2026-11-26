@@ -3,6 +3,7 @@ package xuanmo.arcartxsuite.auth.runtime;
 import java.util.*;
 import xuanmo.arcartxsuite.auth.engine.*;
 import java.util.concurrent.*;
+import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
@@ -15,6 +16,7 @@ import xuanmo.arcartxsuite.api.storage.StorageManager;
 
 /** Host-owned standalone backend. Neither UI lifetime nor account classification can grant admission. */
 public final class AuthenticationRuntime implements HostAuthentication, Listener {
+    private static final String PROXY_LICENSE_REQUIRED = "SUITE_PROXY_LICENSE_REQUIRED";
     private record Connection(Player player, AuthSession session, java.util.concurrent.atomic.AtomicLong loginDeadline,
             java.util.concurrent.atomic.AtomicLong authorityDeadline) {}
     private final JavaPlugin plugin;
@@ -46,6 +48,8 @@ public final class AuthenticationRuntime implements HostAuthentication, Listener
     private final String audience;
     private final boolean passwordAllowed;
     private final boolean microsoftOnline;
+    private final boolean signedProxy;
+    private final BooleanSupplier suiteProxyAllowed;
     private ProxyProofIngress proxyIngress;
     private final boolean requireBinding;
     private final Object bindingLock = new Object();
@@ -70,12 +74,15 @@ public final class AuthenticationRuntime implements HostAuthentication, Listener
     private final Set<UUID> firstBusy=new HashSet<>();
     private org.bukkit.scheduler.BukkitTask presenceTask;
 
-    AuthenticationRuntime(JavaPlugin plugin, StorageManager storage, Supplier<EventBusCapability> events,AuthenticationSettings settings) {
+    AuthenticationRuntime(JavaPlugin plugin, StorageManager storage, Supplier<EventBusCapability> events,
+                          AuthenticationSettings settings, BooleanSupplier suiteProxyAllowed) {
         this.plugin = plugin; this.events = events;
+        this.suiteProxyAllowed = Objects.requireNonNull(suiteProxyAllowed);
         realm=settings.realm(); timezone=settings.timezone(); loginTimeoutNanos=settings.loginTimeoutNanos();
         nativeGateway=settings.nativeGateway(); trustedProxies=settings.trustedProxies(); audience=settings.audience();
         passwordAllowed=settings.passwordAllowed(); requireBinding=settings.requireBinding();
         microsoftOnline=settings.ingress()==AuthenticationSettings.Ingress.ONLINE;
+        signedProxy=settings.ingress()==AuthenticationSettings.Ingress.SIGNED_PROXY;
         terms=settings.terms(); requireTerms=terms.enabled();
         var policy=settings.passwordPolicy();
         minLength=policy.minLength(); maxLength=policy.maxLength(); maxAttempts=policy.maxAttempts(); cooldown=policy.cooldownMillis();
@@ -89,7 +96,7 @@ public final class AuthenticationRuntime implements HostAuthentication, Listener
     }
 
     public void start() {
-        if(!trustedProxies.isEmpty()) { proxyIngress=new ProxyProofIngress(plugin,this); proxyIngress.start(); }
+        refreshProxyIngress();
         predecessor.whenComplete((ignored,failure)->{
             if(!active) return;
             if(failure!=null) { initialized.completeExceptionally(failure); return; }
@@ -104,7 +111,30 @@ public final class AuthenticationRuntime implements HostAuthentication, Listener
         for (Player player : Bukkit.getOnlinePlayers()) attach(player);
         presenceTask = Bukkit.getScheduler().runTaskTimer(plugin, this::presence, 20, 20);
     }
+
+    private boolean admissionEntitled() {
+        return !signedProxy || suiteProxyAllowed.getAsBoolean();
+    }
+
+    boolean proxyAvailable() {
+        return active && signedProxy && suiteProxyAllowed.getAsBoolean();
+    }
+
+    void refreshProxyIngress() {
+        if (proxyAvailable()) {
+            if (proxyIngress == null) {
+                proxyIngress = new ProxyProofIngress(plugin, this);
+                proxyIngress.start();
+            }
+        } else if (proxyIngress != null) {
+            proxyIngress.close();
+            proxyIngress = null;
+            for (Connection connection : connections.values()) restrict(connection, PROXY_LICENSE_REQUIRED);
+        }
+    }
+
     private void presence() {
+        refreshProxyIngress();
         if(proxyIngress!=null) proxyIngress.tick();
         if(System.nanoTime()-nextVersionCheck>=0) { nextVersionCheck=System.nanoTime()+5_000_000_000L; checkVersions(); }
         for(UUID account:pendingRevocations.keySet()) if(!securityWriters.containsKey(account) && reconciling.add(account)) {
@@ -115,7 +145,11 @@ public final class AuthenticationRuntime implements HostAuthentication, Listener
             if(connection.session().snapshot().identityVerified() && System.nanoTime()-connection.authorityDeadline().get()>=0)
                 restrict(connection,"STORAGE_LEASE_EXPIRED");
             if(!snapshot(connection.player().getUniqueId()).admitted() && System.nanoTime()-connection.loginDeadline().get()>0
-                    && connection.player().isOnline()) connection.player().kickPlayer("登录验证已超时，请重新连接。");
+                    && connection.player().isOnline()) {
+                String message = admissionEntitled() ? "登录验证已超时，请重新连接。"
+                    : "ArcartXSuite Proxy 需要有效的客户版授权。";
+                connection.player().kickPlayer(message);
+            }
             if(snapshot(connection.player().getUniqueId()).admitted()) deliverFirst(connection);
         }
         EventBusCapability currentBus=events.get();
@@ -186,6 +220,10 @@ public final class AuthenticationRuntime implements HostAuthentication, Listener
         Connection c = connections.get(playerId);
         if(c==null) return AuthSnapshot.absent(playerId);
         var snapshot=c.session().snapshot();
+        if (!admissionEntitled()) {
+            return new AuthSnapshot(playerId,snapshot.connectionId(),snapshot.generation(),null,snapshot.registration(),
+                AuthSnapshot.Stage.RESTRICTED,"",Set.of(),PROXY_LICENSE_REQUIRED);
+        }
         var account=verifiedAccounts.get(playerId);
         if(account!=null && (System.nanoTime()-c.authorityDeadline().get()>=0 || pendingRevocations.containsKey(account.id()) || account.version()<=invalidVersions.getOrDefault(account.id(),0L)) && snapshot.identityVerified())
             return new AuthSnapshot(playerId,snapshot.connectionId(),snapshot.generation(),null,snapshot.registration(),
@@ -216,6 +254,7 @@ public final class AuthenticationRuntime implements HostAuthentication, Listener
     }
     private boolean completeIdentity(Connection c,JdbcAuthStore.Account account,String provider,Set<AuthSnapshot.Requirement> pending) {
         synchronized(invalidationLock) {
+            if (!admissionEntitled()) return false;
             if(pendingRevocations.containsKey(account.id()) || account.version()<=invalidVersions.getOrDefault(account.id(),0L)) return false;
             var snapshot=c.session().snapshot();
             var operation=new AuthSession.Operation(snapshot.connectionId(),snapshot.generation());
@@ -228,6 +267,7 @@ public final class AuthenticationRuntime implements HostAuthentication, Listener
     private Result completeRequirement(Connection c,JdbcAuthStore.Account account,AuthSnapshot.Requirement requirement) {
         UUID uuid=c.player().getUniqueId();
         synchronized(invalidationLock) {
+            if (!admissionEntitled()) return result(uuid,false,PROXY_LICENSE_REQUIRED);
             if(pendingRevocations.containsKey(account.id()) || account.version()<=invalidVersions.getOrDefault(account.id(),0L)) return result(uuid,false,"STALE_CREDENTIALS");
             if(c.session().snapshot().admitted()) return result(uuid,true,"BOUND");
             if(!c.session().satisfy(requirement)) return result(uuid,false,"INVALID_STATE");
@@ -241,12 +281,13 @@ public final class AuthenticationRuntime implements HostAuthentication, Listener
     }
     @Override public long eligibleNanos(UUID playerId) {
         Connection c = connections.get(playerId);
-        return c == null ? 0 : c.session().eligibleNanosUntil(c.authorityDeadline().get());
+        return c == null || !admissionEntitled() ? 0 : c.session().eligibleNanosUntil(c.authorityDeadline().get());
     }
     @Override public Terms terms() { return terms; }
     @Override public boolean passwordRegistrationAllowed() { return passwordAllowed; }
     @Override public boolean passwordAuthenticationAllowed() { return passwordAllowed; }
     String proxyChallenge(Player player) {
+        if (!proxyAvailable()) return null;
         var state=snapshot(player.getUniqueId());
         if(trustedProxies.isEmpty() || state.identityVerified() || busy.contains(player.getUniqueId())
                 || state.stage()==AuthSnapshot.Stage.LOADING || state.connectionId()==null) return null;
@@ -259,14 +300,17 @@ public final class AuthenticationRuntime implements HostAuthentication, Listener
         return payload.toString();
     }
     void acceptProxyProof(Player player,UUID connection,String envelope) {
+        if (!proxyAvailable()) return;
         UUID uuid=player.getUniqueId(); Connection c=connection(uuid,connection);
         if(c==null || trustedProxies.isEmpty() || snapshot(uuid).identityVerified() || snapshot(uuid).stage()==AuthSnapshot.Stage.LOADING) return;
         String name=player.getName(); UUID challenge=c.session().challengeId();
         submit(c,()->{
+            if (!proxyAvailable()) return new IdentityVerification(null,"",Set.of(),PROXY_LICENSE_REQUIRED);
             xuanmo.arcartxsuite.auth.minecraft.ProxyProofs.Identity identity;
             try { identity=xuanmo.arcartxsuite.auth.minecraft.ProxyProofs.verify(envelope,trustedProxies,uuid,name,
                 new xuanmo.arcartxsuite.auth.minecraft.ProxyProofs.Target(realm,audience,connection,challenge),System.currentTimeMillis()); }
             catch(Exception e) { return new IdentityVerification(null,"",Set.of(),"SIGNED_PROOF_REJECTED"); }
+            if (!proxyAvailable()) return new IdentityVerification(null,"",Set.of(),PROXY_LICENSE_REQUIRED);
             return resolveTransportIdentity(uuid,name,identity.provider());
         },identity->{
             var state=c.session().snapshot(); var operation=new AuthSession.Operation(connection,state.generation());
@@ -551,6 +595,7 @@ public final class AuthenticationRuntime implements HostAuthentication, Listener
         );
     }
     private void publishAdmission(Connection connection,JdbcAuthStore.Account account) {
+        if (!admissionEntitled()) return;
         var snapshot=connection.session().snapshot();
         Bukkit.getPluginManager().callEvent(new AuthAdmissionEvent(snapshot));
         EventBusCapability bus=events.get();

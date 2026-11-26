@@ -58,7 +58,7 @@ class OfflinePasswordLoginTest {
         Field serverField = Bukkit.class.getDeclaredField("server");
         serverField.setAccessible(true);
         Object previousServer = serverField.get(null);
-        var runtime = new AuthenticationRuntime(plugin, storage, () -> null, settings);
+        var runtime = new AuthenticationRuntime(plugin, storage, () -> null, settings, () -> false);
         serverField.set(null, server);
         try {
             runtime.start();

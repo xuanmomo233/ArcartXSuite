@@ -78,7 +78,7 @@ class OnlineRewardsMenuReadsTest {
         var completedOnMain = new LinkedBlockingQueue<Runnable>();
         var service = new OnlineRewardsService(mock(JavaPlugin.class), Logger.getAnonymousLogger(), config,
             repository, null, bridge, null, null, null, null, null, null, null, null, null,
-            Clock.fixed(Instant.parse("2026-11-18T06:00:00Z"), ZoneOffset.ofHours(8)), null) {
+             Clock.fixed(Instant.parse("2026-11-18T06:00:00Z"), ZoneOffset.ofHours(8)), null, () -> false) {
             @Override public void runOnMain(Runnable action) { completedOnMain.add(action); }
         };
         var active = OnlineRewardsService.class.getDeclaredField("active");
@@ -190,7 +190,7 @@ class OnlineRewardsMenuReadsTest {
         var config = OnlineRewardsModuleConfiguration.load(new YamlConfiguration(), Files.createFile(temp.resolve("sign-in.yml")).toFile(), null);
         var service = new OnlineRewardsService(mock(JavaPlugin.class), Logger.getAnonymousLogger(), config,
             repository, null, null, null, null, null, null, null, null, null, null, null,
-            Clock.fixed(Instant.parse("2026-11-18T06:00:00Z"), ZoneOffset.ofHours(8)), null);
+             Clock.fixed(Instant.parse("2026-11-18T06:00:00Z"), ZoneOffset.ofHours(8)), null, () -> false);
         var active = OnlineRewardsService.class.getDeclaredField("active");
         active.setAccessible(true);
         active.setBoolean(service, true);

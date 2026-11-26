@@ -35,6 +35,22 @@ import xuanmo.arcartxsuite.menu.packet.MenuUiPacketHandler;
 
 class MenuSessionSafetyTest {
     @Test
+    void freeMenuSkipsProxyConnectButRunsLocalActions(@TempDir Path directory) throws Exception {
+        var fixture = new Fixture(directory, """
+            id: single
+            layout: panel
+            open-actions: ["connect: remote", "message: local-action"]
+            """);
+        try (var bukkit = mockStatic(Bukkit.class); var auth = fixture.admit()) {
+            bukkit.when(Bukkit::getScheduler).thenReturn(fixture.scheduler);
+            fixture.openPanel("single");
+            fixture.runTasks();
+            verify(fixture.player).sendMessage("local-action");
+            verify(fixture.player, never()).sendPluginMessage(any(), eq("BungeeCord"), any());
+        }
+    }
+
+    @Test
     void escNeedsAnOpenUiAndCloseNeedsTheLiveSessionToken(@TempDir Path directory) throws Exception {
         var fixture = new Fixture(directory);
         try (var bukkit = mockStatic(Bukkit.class); var auth = fixture.admit()) {
@@ -461,7 +477,7 @@ class MenuSessionSafetyTest {
             Path definitions = Files.createDirectories(config.menusDirectory(directory.toFile()).toPath());
             Files.writeString(definitions.resolve("menus.yml"), definitionsYaml);
             service = new MenuService(plugin, Logger.getAnonymousLogger(), bridge, null, config,
-                null, null, null, null);
+                null, null, null, () -> false, null);
             service.reload(directory.toFile());
             packets = new MenuUiPacketHandler(service, "AXS_MENU");
         }

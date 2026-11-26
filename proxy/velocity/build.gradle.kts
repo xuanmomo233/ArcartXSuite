@@ -8,13 +8,20 @@ dependencies {
     implementation(project(":auth-minecraft"))
     compileOnly(project(":axs-api"))
     compileOnly("com.velocitypowered:velocity-api:3.4.0-SNAPSHOT")
-    annotationProcessor("com.velocitypowered:velocity-api:3.4.0-SNAPSHOT")
     compileOnly("org.jetbrains:annotations:24.1.0")
 }
 
 tasks.compileJava {
     options.encoding = "UTF-8"
     options.release = 17
+}
+
+tasks.processResources {
+    val pluginVersion = project.version.toString()
+    inputs.property("version", pluginVersion)
+    filesMatching("velocity-plugin.json") {
+        expand("version" to pluginVersion)
+    }
 }
 
 tasks.jar {

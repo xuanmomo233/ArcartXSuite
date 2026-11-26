@@ -16,6 +16,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiConsumer;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.LongSupplier;
 import java.util.function.Predicate;
@@ -34,6 +35,7 @@ final class ChatDeliveryQueue implements AutoCloseable {
     private final LongSupplier policyVersion;
     private final Consumer<RuntimeException> onDeliveryFailure;
     private final GuardFactory guardFactory;
+    private final BooleanSupplier guardedRemoteAllowed;
     private final xuanmo.arcartxsuite.api.scheduler.ModuleExecutor worker = new xuanmo.arcartxsuite.api.scheduler.ModuleExecutor(
         1, 1, 0, TimeUnit.MILLISECONDS, new java.util.concurrent.LinkedBlockingQueue<>(), task -> {
         Thread thread = new Thread(task, "AXS-Chat-Delivery");
@@ -58,11 +60,18 @@ final class ChatDeliveryQueue implements AutoCloseable {
 
     ChatDeliveryQueue(Consumer<Runnable> onMain, Consumer<Runnable> retryOnMain, LongSupplier policyVersion,
                       Consumer<RuntimeException> onDeliveryFailure, GuardFactory guardFactory) {
+        this(onMain, retryOnMain, policyVersion, onDeliveryFailure, guardFactory, () -> true);
+    }
+
+    ChatDeliveryQueue(Consumer<Runnable> onMain, Consumer<Runnable> retryOnMain, LongSupplier policyVersion,
+                      Consumer<RuntimeException> onDeliveryFailure, GuardFactory guardFactory,
+                      BooleanSupplier guardedRemoteAllowed) {
         this.onMain = onMain;
         this.retryOnMain = retryOnMain;
         this.policyVersion = policyVersion;
         this.onDeliveryFailure = onDeliveryFailure;
         this.guardFactory = guardFactory;
+        this.guardedRemoteAllowed = guardedRemoteAllowed;
     }
 
     <T> boolean offer(Query<T> query, BiConsumer<T, SQLException> complete) {
@@ -90,7 +99,7 @@ final class ChatDeliveryQueue implements AutoCloseable {
 
     synchronized <T> boolean offerGuardedRemote(Set<UUID> actors, int recipients, GuardedQuery<T> query,
                                                Consumer<T> complete, Runnable abandoned) {
-        if (guardFactory == null || !hasRoom()) return false;
+        if (guardFactory == null || !guardedRemoteAllowed.getAsBoolean() || !hasRoom()) return false;
         boolean wasEmpty = pending.isEmpty();
         var guarded = new GuardedTask<>(Set.copyOf(actors), recipients, query);
         pending.addLast(new Pending<>(null, value -> true, value -> true,
@@ -101,7 +110,9 @@ final class ChatDeliveryQueue implements AutoCloseable {
 
     synchronized void startAdmittedRemoteBatch() {
         Pending<?> head = pending.peekFirst();
-        if (!closed && !guardRunning && head != null && head.guarded != null) startGuardedBatch();
+        if (!closed && !guardRunning && head != null && head.guarded != null && guardedRemoteAllowed.getAsBoolean()) {
+            startGuardedBatch();
+        }
     }
 
     private synchronized <T> boolean offer(Query<T> query, Predicate<T> current, Predicate<T> dispatchable,
@@ -160,8 +171,13 @@ final class ChatDeliveryQueue implements AutoCloseable {
                 next = pending.peekFirst();
                 if (next == null) return;
                 if (next.guarded != null) {
-                    startGuardedBatch();
-                    return;
+                    if (guardedRemoteAllowed.getAsBoolean()) {
+                        startGuardedBatch();
+                        return;
+                    }
+                    pending.removeFirst();
+                    next.abandon();
+                    continue;
                 }
                 if (!next.ready) return;
                 if ((next.failure != null && next.abandoned != null)
@@ -234,6 +250,7 @@ final class ChatDeliveryQueue implements AutoCloseable {
     }
 
     private boolean dispatchGuardedBatch(List<Pending<?>> batch) throws SQLException {
+        if (!guardedRemoteAllowed.getAsBoolean()) return false;
         Set<UUID> actors = new HashSet<>();
         for (Pending<?> job : batch) actors.addAll(job.guarded.actors());
         try (GuardedRoutes routes = guardFactory.open(actors)) {
@@ -280,7 +297,8 @@ final class ChatDeliveryQueue implements AutoCloseable {
             try {
                 for (PreparedDelivery<?> delivery : prepared) {
                     synchronized (ChatDeliveryQueue.this) {
-                        if (closed || pending.peekFirst() != delivery.job() || version != policyVersion.getAsLong()) return;
+                        if (closed || !guardedRemoteAllowed.getAsBoolean() || pending.peekFirst() != delivery.job()
+                            || version != policyVersion.getAsLong()) return;
                     }
                     delivery.deliver();
                     synchronized (ChatDeliveryQueue.this) {

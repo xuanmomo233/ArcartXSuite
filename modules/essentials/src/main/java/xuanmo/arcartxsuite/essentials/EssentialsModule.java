@@ -245,7 +245,7 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
         registerListener(inventoryInspection);
 
         playerService = new PlayerManagementService(plugin, logger, configuration,
-            () -> getCapability(TabRefreshable.class));
+            () -> getCapability(TabRefreshable.class), this::advancedCrossServerOrchestrationAllowed);
         playerService.start();
 
         teleportService = new TeleportService(

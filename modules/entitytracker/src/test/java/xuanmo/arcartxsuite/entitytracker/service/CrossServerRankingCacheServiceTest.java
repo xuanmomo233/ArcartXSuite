@@ -13,6 +13,7 @@ import java.util.ArrayDeque;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Logger;
@@ -71,7 +72,8 @@ class CrossServerRankingCacheServiceTest {
             return oneShot;
         });
         var service = new CrossServerRankingCacheService(plugin, Logger.getAnonymousLogger(),
-            new CrossServerRankingSettings(true, 60, List.of("best_damage"), 50), storage, () -> null, () -> "local");
+            new CrossServerRankingSettings(true, 60, List.of("best_damage"), 50), storage, () -> null, () -> "local",
+            () -> true);
         serviceRef.set(service);
         try (var bukkit = mockStatic(Bukkit.class)) {
             bukkit.when(Bukkit::getScheduler).thenReturn(scheduler);
@@ -127,7 +129,7 @@ class CrossServerRankingCacheServiceTest {
         var service = new CrossServerRankingCacheService(plugin, Logger.getAnonymousLogger(),
             new CrossServerRankingSettings(true, 60,
                 List.of("best_damage", "boss_damage", "server", "kills", "participate"), 50),
-            storage, () -> config, () -> "local");
+            storage, () -> config, () -> "local", () -> true);
         try (var bukkit = mockStatic(Bukkit.class)) {
             bukkit.when(Bukkit::getScheduler).thenReturn(scheduler);
             service.requestDamageRefresh("alpha");
@@ -159,6 +161,38 @@ class CrossServerRankingCacheServiceTest {
             scheduled.removeFirst().run();
             assertEquals(12, connections.get()); // The full pass supersedes the pending single-Boss refresh.
             assertEquals("[]", dao.findRankingData("boss_damage", "beta").orElseThrow());
+            service.shutdown();
+        }
+    }
+
+    @Test
+    void freeServerCannotReadOrWriteCrossServerRankingEvenAfterRefreshWasQueued() {
+        var storage = mock(DataSource.class);
+        var allowed = new AtomicBoolean(false);
+        var plugin = mock(JavaPlugin.class);
+        var scheduler = mock(BukkitScheduler.class);
+        var scheduled = new ArrayDeque<Runnable>();
+        when(scheduler.runTaskLaterAsynchronously(eq(plugin), any(Runnable.class), anyLong())).thenAnswer(call -> {
+            scheduled.add(call.getArgument(1));
+            return mock(BukkitTask.class);
+        });
+        var service = new CrossServerRankingCacheService(plugin, Logger.getAnonymousLogger(),
+            new CrossServerRankingSettings(true, 60, List.of("best_damage"), 50),
+            storage, () -> null, () -> "local", allowed::get);
+        try (var bukkit = mockStatic(Bukkit.class)) {
+            bukkit.when(Bukkit::getScheduler).thenReturn(scheduler);
+            service.requestRefresh();
+            assertTrue(scheduled.isEmpty());
+
+            allowed.set(true);
+            service.requestRefresh();
+            assertEquals(1, scheduled.size());
+
+            allowed.set(false);
+            scheduled.removeFirst().run();
+            assertTrue(scheduled.isEmpty());
+            verifyNoInteractions(storage);
+        } finally {
             service.shutdown();
         }
     }

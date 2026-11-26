@@ -271,6 +271,7 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
             currencyManager, itemSourceRegistry, itemSerializer,
             itemStackBridge, vanillaItemNameBridge, () -> getCapability(MailDispatchable.class), itemRewardDispatcher,
             itemMatcher, logger, crossServer, scheduler, messages(), contentModerator, scriptConditionEvaluator);
+        service.setCrossServerAuthorization(this::advancedCrossServerOrchestrationAllowed);
         return service.prepareStorage(storageScope, () -> {
             marketRepo.initialize();
             if (npcRepo != null) {

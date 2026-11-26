@@ -44,6 +44,7 @@ import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.scheduler.BukkitTask;
 import java.util.function.Function;
 import java.util.function.BiConsumer;
+import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 import org.bukkit.plugin.java.JavaPlugin;
 import xuanmo.arcartxsuite.api.capability.ChatCardSendable;
@@ -169,6 +170,7 @@ public class OnlineRewardsService implements Listener {
     private final Supplier<SubtitlePlayable> subtitleProvider;
     private final Supplier<QQBotBroadcastable> qqBotProvider;
     private final Supplier<EventBusCapability> eventBusProvider;
+    private final BooleanSupplier sharedPresenceAllowed;
     private final Function<Boolean, File> menuUiFileExporter;
     private final OnlineRewardsStateEngine stateEngine;
     private final Clock clock;
@@ -222,12 +224,13 @@ public class OnlineRewardsService implements Listener {
         Supplier<EventBusCapability> eventBusProvider,
         MessageProvider messages,
         Function<Boolean, File> menuUiFileExporter,
-        CrossServerAPI crossServer
+        CrossServerAPI crossServer,
+        BooleanSupplier sharedPresenceAllowed
     ) {
         this(plugin, logger, configuration, repository, clientBridge, packetBridge,
             packetGuard, signalProvider, chatCardProvider, titleProvider,
             subtitleProvider, qqBotProvider, eventBusProvider, messages, menuUiFileExporter,
-            resolveClock(configuration), crossServer);
+            resolveClock(configuration), crossServer, sharedPresenceAllowed);
     }
 
     /**
@@ -265,7 +268,8 @@ public class OnlineRewardsService implements Listener {
         MessageProvider messages,
         Function<Boolean, File> menuUiFileExporter,
         Clock clock,
-        CrossServerAPI crossServer
+        CrossServerAPI crossServer,
+        BooleanSupplier sharedPresenceAllowed
     ) {
         this.plugin = plugin;
         this.logger = logger;
@@ -288,6 +292,7 @@ public class OnlineRewardsService implements Listener {
         this.menuUiFileExporter = menuUiFileExporter;
         this.clock = clock;
         this.crossServer = crossServer;
+        this.sharedPresenceAllowed = sharedPresenceAllowed;
         this.stateEngine = new OnlineRewardsStateEngine(configuration);
     }
 
@@ -357,7 +362,7 @@ public class OnlineRewardsService implements Listener {
             active = false;
             dispatched = CompletableFuture.allOf(pendingDispatches.toArray(CompletableFuture[]::new));
         }
-        String presenceNode = sharesPresence() ? crossServer.nodeId() : null;
+        String presenceNode = configuredPresenceNode();
         leaderboardActive = false;
         try {
         if (itemDelivery != null) itemDelivery.close();
@@ -992,7 +997,7 @@ public class OnlineRewardsService implements Listener {
             : previous.connectionId();
         deliveryRequests.remove(playerUuid);
         if (itemDelivery != null) itemDelivery.forget(playerUuid);
-        String presenceNode = sharesPresence() ? crossServer.nodeId() : null;
+        String presenceNode = configuredPresenceNode();
         boolean savings = configuration.offlineSavings().enabled();
         if (active && (savings || presenceNode != null || connection != null)) {
             String name = player.getName();
@@ -2521,7 +2526,6 @@ public class OnlineRewardsService implements Listener {
         String today = currentPeriodContext().rewardDate();
         UUID triggerId = triggerPlayer.getUniqueId();
         String triggerName = triggerPlayer.getName();
-        boolean shared = sharesPresence();
         var names = new LinkedHashMap<UUID, String>();
         for (Player online : Bukkit.getOnlinePlayers()) {
             if (xuanmo.arcartxsuite.api.auth.AuthAccess.admitted(online.getUniqueId())) {
@@ -2529,7 +2533,7 @@ public class OnlineRewardsService implements Listener {
             }
         }
         var local = Map.copyOf(names);
-        writeAsync(() -> recordServerGoals(goalConfig, today, triggerId, triggerName, shared, local), committed -> {
+        writeAsync(() -> recordServerGoals(goalConfig, today, triggerId, triggerName, local), committed -> {
             if (committed) {
                 menuReads.invalidateGoals();
                 scheduleOnlineDeliveries();
@@ -2543,18 +2547,19 @@ public class OnlineRewardsService implements Listener {
     }
 
     private boolean recordServerGoals(OnlineRewardsServerSignInGoalConfiguration goalConfig, String today,
-                                      UUID triggerId, String triggerName, boolean shared, Map<UUID, String> local) {
+                                       UUID triggerId, String triggerName, Map<UUID, String> local) {
         boolean committed = false;
         try {
             int signedCount = repository.countSignInRecords(today);
-            Map<UUID, String> onlineNames = null;
+            Map<UUID, String> remotePresence = null;
             for (var target : goalConfig.targets()) {
                 if (signedCount < target.required() || repository.isServerGoalTriggered(today, target.id())) continue;
-                if (onlineNames == null) {
-                    onlineNames = new LinkedHashMap<>();
-                    if (shared) onlineNames.putAll(repository.loadPresence(clock.millis()));
-                    onlineNames.putAll(local);
+                Map<UUID, String> onlineNames = new LinkedHashMap<>();
+                if (sharedPresenceAllowed.getAsBoolean() && configuredPresenceNode() != null) {
+                    if (remotePresence == null) remotePresence = repository.loadPresence(clock.millis());
+                    if (sharedPresenceAllowed.getAsBoolean()) onlineNames.putAll(remotePresence);
                 }
+                onlineNames.putAll(local);
                 String broadcast = target.broadcastMessage();
                 if (broadcast == null || broadcast.isBlank()) {
                     broadcast = "§e[全服签到] §f" + target.name() + " §7已达成！今日签到人数：§f" + signedCount + "§7。";
@@ -2594,13 +2599,14 @@ public class OnlineRewardsService implements Listener {
         return rewards;
     }
 
-    private boolean sharesPresence() {
-        return configuration.crossServer().enabled() && crossServer != null
-            && crossServer.nodeId() != null && !crossServer.nodeId().isBlank();
+    private String configuredPresenceNode() {
+        if (!configuration.crossServer().enabled() || crossServer == null) return null;
+        String node = crossServer.nodeId();
+        return node == null || node.isBlank() ? null : node;
     }
 
     private void refreshPresence() {
-        if (!sharesPresence()) return;
+        if (!sharedPresenceAllowed.getAsBoolean() || configuredPresenceNode() == null) return;
         Map<UUID, String> online = new java.util.LinkedHashMap<>();
         for (Player player : Bukkit.getOnlinePlayers()) {
             if (xuanmo.arcartxsuite.api.auth.AuthAccess.admitted(player.getUniqueId())) {
@@ -2611,12 +2617,15 @@ public class OnlineRewardsService implements Listener {
     }
 
     private void savePresence(Map<UUID, String> online) {
-        if (!active || !sharesPresence() || online.isEmpty()) return;
-        String node = crossServer.nodeId();
+        if (!active || !sharedPresenceAllowed.getAsBoolean() || online.isEmpty()) return;
+        String node = configuredPresenceNode();
+        if (node == null) return;
         long expires = clock.millis() + PRESENCE_TTL_MILLIS;
         var snapshot = Map.copyOf(online);
         writeAsync(() -> {
-            if (clock.millis() < expires) repository.savePresence(node, presenceServiceId, snapshot, expires);
+            if (sharedPresenceAllowed.getAsBoolean() && clock.millis() < expires) {
+                repository.savePresence(node, presenceServiceId, snapshot, expires);
+            }
             return null;
         }, null).whenComplete((ignored, failure) -> {
             if (failure != null) logger.log(Level.WARNING, "写入在线奖励跨服在线名单失败", failure);

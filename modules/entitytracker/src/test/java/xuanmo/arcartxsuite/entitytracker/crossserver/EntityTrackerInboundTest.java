@@ -67,7 +67,7 @@ class EntityTrackerInboundTest {
     private EntityTrackerCrossServerService create(DataSource source) {
         var api=mock(CrossServerAPI.class);var channel=mock(CrossServerChannel.class);
         when(api.openChannelCompleting(anyString(),any(),any())).thenReturn(channel);
-        return new EntityTrackerCrossServerService(mock(JavaPlugin.class),java.util.logging.Logger.getAnonymousLogger(),api,CrossServerChannelConfig.disabled(),source);
+        return new EntityTrackerCrossServerService(mock(JavaPlugin.class),java.util.logging.Logger.getAnonymousLogger(),api,CrossServerChannelConfig.disabled(),source,() -> true);
     }
     private CompletionStage<Boolean> admit(EntityTrackerCrossServerService service,String payload)throws Exception {
         var method=EntityTrackerCrossServerService.class.getDeclaredMethod("admit",String.class);method.setAccessible(true);

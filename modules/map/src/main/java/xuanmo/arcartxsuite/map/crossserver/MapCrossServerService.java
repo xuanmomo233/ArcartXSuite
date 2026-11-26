@@ -218,6 +218,7 @@ public final class MapCrossServerService {
      * @return 远程世界视图列表
      */
     public List<RemoteWorldView> remoteWorlds() {
+        if (!active()) return List.of();
         List<RemoteWorldView> out = new ArrayList<>();
         for (RemoteNode node : nodes.values()) {
             for (RemoteWorld world : node.worlds.values()) {
@@ -234,6 +235,7 @@ public final class MapCrossServerService {
      * @return 远程世界视图；未知/未广播时返回 {@code null}
      */
     public RemoteWorldView remoteWorld(String compositeId) {
+        if (!active()) return null;
         String[] parts = splitComposite(compositeId);
         if (parts == null) {
             return null;
@@ -254,6 +256,7 @@ public final class MapCrossServerService {
      * @return 远程锚点视图；不存在返回 {@code null}
      */
     public RemoteAnchorView remoteAnchor(String compositeAnchorId) {
+        if (!active()) return null;
         String[] parts = splitComposite(compositeAnchorId);
         if (parts == null) {
             return null;
@@ -389,10 +392,18 @@ public final class MapCrossServerService {
     public void onPlayerAdmitted(MapTeleportSession session) {
         UUID playerUuid = session.admission().playerId();
         PendingArrival arrival = pendingArrivals.get(playerUuid);
+        if (!active()) {
+            if (arrival != null) pendingArrivals.remove(playerUuid, arrival);
+            return;
+        }
         if (arrival == null || arrival.expiresAt() < System.currentTimeMillis() || !session.current()) {
             return;
         }
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            if (!active()) {
+                pendingArrivals.remove(playerUuid, arrival);
+                return;
+            }
             if (sweepTask != null && arrival.expiresAt() >= System.currentTimeMillis()
                 && session.current() && pendingArrivals.remove(playerUuid, arrival)) {
                 handler.executeArrival(session, arrival.worldId(), arrival.anchorId());
@@ -808,7 +819,7 @@ public final class MapCrossServerService {
         if (validatingArrivals.putIfAbsent(playerUuid, ticket) != null) return;
         lastTeleportRequestAt.put(playerUuid, now);
         handler.validateArrival(playerUuid, worldId, anchorId).whenComplete((check, error) -> {
-            if (!validatingArrivals.remove(playerUuid, ticket) || sweepTask == null) return;
+            if (!validatingArrivals.remove(playerUuid, ticket) || sweepTask == null || !active()) return;
             if (error != null || !check.success()) {
                 respondTeleport(source, requestId, false, error == null ? check.message() : "storage-error");
                 return;
@@ -861,7 +872,7 @@ public final class MapCrossServerService {
 
     /** BungeeCord/Velocity "Connect" 子消息：把玩家切到目标代理服务器。 */
     private boolean sendConnect(Player player, String serverName) {
-        if (serverName == null || serverName.isBlank()) {
+        if (!active() || serverName == null || serverName.isBlank()) {
             return false;
         }
         try {

@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.function.BooleanSupplier;
 import javax.sql.DataSource;
 import org.bukkit.Bukkit;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -40,6 +41,7 @@ public final class CrossServerRankingCacheService {
     private final BossKillRecordDao killRecordDao;
     private final java.util.function.Supplier<PluginConfiguration> configurationSupplier;
     private final java.util.function.Supplier<String> nodeIdSupplier;
+    private final BooleanSupplier crossServerRankingAllowed;
     private final xuanmo.arcartxsuite.api.scheduler.ModuleCallback refresh =
         new xuanmo.arcartxsuite.api.scheduler.ModuleCallback(this::runRefresh);
 
@@ -56,7 +58,8 @@ public final class CrossServerRankingCacheService {
         CrossServerRankingSettings settings,
         DataSource dataSource,
         java.util.function.Supplier<PluginConfiguration> configurationSupplier,
-        java.util.function.Supplier<String> nodeIdSupplier
+        java.util.function.Supplier<String> nodeIdSupplier,
+        BooleanSupplier crossServerRankingAllowed
     ) {
         this.plugin = plugin;
         this.logger = logger;
@@ -67,6 +70,7 @@ public final class CrossServerRankingCacheService {
         this.killRecordDao = new BossKillRecordDao(dataSource, this.logger);
         this.configurationSupplier = configurationSupplier;
         this.nodeIdSupplier = nodeIdSupplier;
+        this.crossServerRankingAllowed = crossServerRankingAllowed;
     }
 
     public synchronized void start() {
@@ -127,6 +131,7 @@ public final class CrossServerRankingCacheService {
 
     private void queueRefresh(long delay) {
         if (closed || running || queuedRefresh != null || (dirtyTypes.isEmpty() && dirtyBosses.isEmpty())) return;
+        if (!crossServerRankingAllowed.getAsBoolean()) return;
         try {
             queuedRefresh = Bukkit.getScheduler().runTaskLaterAsynchronously(plugin, refresh, delay);
         } catch (RuntimeException | LinkageError failure) {
@@ -140,6 +145,7 @@ public final class CrossServerRankingCacheService {
         synchronized (this) {
             queuedRefresh = null;
             if (closed || (dirtyTypes.isEmpty() && dirtyBosses.isEmpty())) return;
+            if (!crossServerRankingAllowed.getAsBoolean()) return;
             running = true;
             types = List.copyOf(dirtyTypes);
             bosses = Set.copyOf(dirtyBosses);
@@ -185,7 +191,7 @@ public final class CrossServerRankingCacheService {
                 }
             }
             for (String bossId : bosses) addBossDamageRanking(limit, snapshots, bossId);
-            rankingDao.replaceAll(snapshots, expire);
+            if (crossServerRankingAllowed.getAsBoolean()) rankingDao.replaceAll(snapshots, expire);
         } catch (SQLException exception) {
             this.logger.warning("排行缓存刷新失败: " + exception.getMessage());
         }

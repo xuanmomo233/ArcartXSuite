@@ -12,6 +12,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 import java.util.logging.Logger;
 import org.bukkit.Bukkit;
@@ -48,6 +49,7 @@ public final class MenuActionExecutor {
     private final MenuService menuService;
     private final Logger logger;
     private final Supplier<SignalDispatchable> signalProvider;
+    private final BooleanSupplier crossServerAllowed;
     // All scheduling and cancellation are on the server thread.
     private final Map<UUID, Set<DeferredAction>> pending = new HashMap<>();
     private int pendingCount;
@@ -58,18 +60,14 @@ public final class MenuActionExecutor {
         JavaPlugin plugin,
         MenuService menuService,
         Logger logger,
-        Supplier<SignalDispatchable> signalProvider
+        Supplier<SignalDispatchable> signalProvider,
+        BooleanSupplier crossServerAllowed
     ) {
         this.plugin = plugin;
         this.menuService = menuService;
         this.logger = logger;
         this.signalProvider = signalProvider;
-        // 确保 BungeeCord outgoing channel 已注册，供 connect: 动作使用
-        try {
-            plugin.getServer().getMessenger().registerOutgoingPluginChannel(plugin, BUNGEE_CHANNEL);
-        } catch (IllegalArgumentException ignored) {
-            // channel 已注册，忽略
-        }
+        this.crossServerAllowed = crossServerAllowed;
     }
 
     /**
@@ -107,6 +105,10 @@ public final class MenuActionExecutor {
                     && menuService.configuration().settings().closeOnAction();
             }
             case CONNECT -> {
+                if (!crossServerAllowed.getAsBoolean()) {
+                    player.sendMessage(menuService.messages().colorize(menuService.messages().noPermission()));
+                    yield false;
+                }
                 String targetServer = MenuConditionEvaluator.applyPlaceholders(player, action.value());
                 if (targetServer == null || targetServer.isBlank()) {
                     yield false;
@@ -360,7 +362,12 @@ public final class MenuActionExecutor {
     }
 
     private void connectToServer(Player player, String serverName) {
+        if (!crossServerAllowed.getAsBoolean()) return;
         try {
+            var messenger = plugin.getServer().getMessenger();
+            if (!messenger.isOutgoingChannelRegistered(plugin, BUNGEE_CHANNEL)) {
+                messenger.registerOutgoingPluginChannel(plugin, BUNGEE_CHANNEL);
+            }
             ByteArrayOutputStream buffer = new ByteArrayOutputStream();
             try (DataOutputStream output = new DataOutputStream(buffer)) {
                 output.writeUTF("Connect");

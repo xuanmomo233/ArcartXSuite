@@ -154,6 +154,7 @@ public final class MenuModule extends AbstractAXSModule implements ModuleCommand
             itemStackBridge,
             itemSourceRegistry,
             (Supplier<SignalDispatchable>) () -> getCapability(SignalDispatchable.class),
+            this::advancedCrossServerOrchestrationAllowed,
             messages()
         );
         service.setRuntimeUiIds(panelBinding.runtimeUiId(), escBinding.runtimeUiId());

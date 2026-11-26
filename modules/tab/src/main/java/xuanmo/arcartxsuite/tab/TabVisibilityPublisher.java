@@ -6,6 +6,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BooleanSupplier;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -28,21 +29,27 @@ final class TabVisibilityPublisher implements Listener, PluginMessageListener, T
     private record VanishRequest(long id, Player player, CompletableFuture<Boolean> result) {}
 
     private final JavaPlugin plugin;
+    private final BooleanSupplier proxyAllowed;
     private final Map<UUID, Byte> published = new HashMap<>();
     private final Map<UUID, VanishRequest> pendingVanish = new HashMap<>();
     private final AtomicBoolean globalQueued = new AtomicBoolean();
     private volatile boolean active = true;
 
-    TabVisibilityPublisher(JavaPlugin plugin) {
+    TabVisibilityPublisher(JavaPlugin plugin, BooleanSupplier proxyAllowed) {
         this.plugin = plugin;
+        this.proxyAllowed = proxyAllowed;
         var messenger = plugin.getServer().getMessenger();
         messenger.registerIncomingPluginChannel(plugin, ProxyTabVisibility.CHANNEL, this);
         messenger.registerOutgoingPluginChannel(plugin, ProxyTabVisibility.CHANNEL);
     }
 
+    private boolean canPublish() {
+        return active && proxyAllowed.getAsBoolean();
+    }
+
     @Override
     public void onPluginMessageReceived(String channel, Player player, byte[] data) {
-        if (!active || !ProxyTabVisibility.CHANNEL.equals(channel)) return;
+        if (!canPublish() || !ProxyTabVisibility.CHANNEL.equals(channel)) return;
         if (!Bukkit.isPrimaryThread()) {
             byte[] payload = data.clone();
             Bukkit.getScheduler().runTask(plugin, () -> onPluginMessageReceived(channel, player, payload));
@@ -66,7 +73,7 @@ final class TabVisibilityPublisher implements Listener, PluginMessageListener, T
     @Override
     public CompletionStage<Boolean> requestVanish(Player player) {
         UUID id = player.getUniqueId();
-        if (!active || !player.isOnline() || pendingVanish.containsKey(id)) {
+        if (!canPublish() || !player.isOnline() || pendingVanish.containsKey(id)) {
             return CompletableFuture.completedFuture(false);
         }
         var request = new VanishRequest(ProxyTabVisibility.nextSequence(), player, new CompletableFuture<>());
@@ -116,22 +123,22 @@ final class TabVisibilityPublisher implements Listener, PluginMessageListener, T
 
     @Override
     public void requestViewerRefresh(Player viewer, String reason) {
-        if (!active) return;
+        if (!canPublish()) return;
         if (Bukkit.isPrimaryThread()) publish(viewer, false);
         else Bukkit.getScheduler().runTask(plugin, () -> publish(viewer, false));
     }
 
     @Override
     public void requestGlobalRefresh(String reason) {
-        if (!active || !globalQueued.compareAndSet(false, true)) return;
+        if (!canPublish() || !globalQueued.compareAndSet(false, true)) return;
         Bukkit.getScheduler().runTask(plugin, () -> {
             globalQueued.set(false);
-            if (active) Bukkit.getOnlinePlayers().forEach(player -> publish(player, false));
+            if (canPublish()) Bukkit.getOnlinePlayers().forEach(player -> publish(player, false));
         });
     }
 
     private void publish(Player player, boolean force) {
-        if (!active || !player.isOnline()) return;
+        if (!canPublish() || !player.isOnline()) return;
         UUID id = player.getUniqueId();
         // An older visible state cannot revoke permission for a pending hide command.
         if (pendingVanish.containsKey(id)) return;

@@ -79,8 +79,8 @@ public final class TabModule extends AbstractAXSModule {
         }
         registeredHudId = registration.runtimeUiId();
         recordUiBinding(path, new UiBinding(registeredHudId, registration.registeredUiId()));
-        if (proxyRoster) {
-            visibility = new TabVisibilityPublisher(plugin);
+        if (proxyRoster && advancedCrossServerOrchestrationAllowed()) {
+            visibility = new TabVisibilityPublisher(plugin, this::advancedCrossServerOrchestrationAllowed);
             registerListener(visibility);
             registerCapability(TabRefreshable.class, visibility);
             visibility.requestGlobalRefresh("enable");

@@ -137,7 +137,8 @@ public final class ModuleRegistry {
                 admissionGuard.registerPaperChat(plugin);
             }
             authenticationRuntime = xuanmo.arcartxsuite.auth.runtime.HostAuthentication.forLoginView(
-                plugin, storageManager, () -> getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
+                plugin, storageManager, () -> getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class),
+                () -> customerFeaturesAllowed(null));
             authenticationRuntime.start();
         }
         return authenticationRuntime;

@@ -351,10 +351,11 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
             return;
         }
         boolean crossServerRanking = newFeaturesSettings.crossServerRanking().enabled()
-            && crossServerChannelConfig.enabled();
+            && crossServerChannelConfig.enabled()
+            && advancedCrossServerOrchestrationAllowed();
         if (crossServerRanking) {
             crossServerService = new EntityTrackerCrossServerService(
-                plugin, logger, crossServer, crossServerChannelConfig, ds
+                plugin, logger, crossServer, crossServerChannelConfig, ds, this::advancedCrossServerOrchestrationAllowed
             );
             var currentConfiguration = configuration;
             rankingCacheService = new CrossServerRankingCacheService(
@@ -362,7 +363,8 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
                 newFeaturesSettings.crossServerRanking(),
                 ds,
                 () -> currentConfiguration,
-                () -> crossServer.nodeId()
+                () -> crossServer.nodeId(),
+                this::advancedCrossServerOrchestrationAllowed
             );
         }
         if (newFeaturesSettings.dropRecording().enabled()

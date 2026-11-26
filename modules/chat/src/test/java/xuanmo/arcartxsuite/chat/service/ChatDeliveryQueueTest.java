@@ -74,6 +74,28 @@ class ChatDeliveryQueueTest {
     }
 
     @Test
+    void revokedRemoteRouteDoesNotAcquireLocksOrBlockLocalMessages() throws Exception {
+        var main = new LinkedBlockingQueue<Runnable>();
+        var authorized = new AtomicBoolean(true);
+        var received = new ArrayList<String>();
+        var locks = new AtomicInteger();
+        try (var queue = new ChatDeliveryQueue(main::add, main::add, () -> 0,
+                failure -> { throw failure; }, actors -> {
+                    locks.incrementAndGet();
+                    return guard(new AtomicBoolean());
+                }, authorized::get)) {
+            assertTrue(queue.offerGuardedRemote(Set.of(UUID.randomUUID()), 1, route -> "remote",
+                received::add, () -> received.add("abandoned")));
+            authorized.set(false);
+            assertTrue(queue.offer(() -> "local", (value, failure) -> received.add(value)));
+            next(main).run();
+            if (received.size() == 1) next(main).run();
+            assertEquals(List.of("abandoned", "local"), received);
+            assertEquals(0, locks.get());
+        }
+    }
+
+    @Test
     void localHeadWaitsForAnOutstandingPolicyWriteThenReadsRoutesAgain() throws Exception {
         var main = new LinkedBlockingQueue<Runnable>();
         var retry = new LinkedBlockingQueue<Runnable>();

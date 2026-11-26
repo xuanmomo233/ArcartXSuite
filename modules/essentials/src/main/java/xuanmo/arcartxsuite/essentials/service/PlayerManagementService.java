@@ -68,15 +68,17 @@ public final class PlayerManagementService implements Listener {
      * @param logger              日志器
      * @param config              模块配置
      * @param tabRefreshProvider  Tab 刷新能力延迟供应者
+     * @param suiteProxyAllowed   Suite 代理隐身交接的实时授权
      */
     public PlayerManagementService(JavaPlugin plugin,
         Logger logger, EssentialsConfiguration config,
-                                   java.util.function.Supplier<TabRefreshable> tabRefreshProvider) {
+                                   java.util.function.Supplier<TabRefreshable> tabRefreshProvider,
+                                   java.util.function.BooleanSupplier suiteProxyAllowed) {
         this.plugin = plugin;
         this.logger = logger;
         this.config = config;
         this.tabRefreshProvider = tabRefreshProvider;
-        this.velocityVanishProfile = VelocityVanishProfile.detect(logger);
+        this.velocityVanishProfile = VelocityVanishProfile.detect(logger, suiteProxyAllowed);
     }
 
     /**

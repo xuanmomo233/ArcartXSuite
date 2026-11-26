@@ -183,7 +183,7 @@ public final class OnlineRewardsModule extends AbstractAXSModule implements Modu
                     throw new RuntimeException(ex);
                 }
             },
-            crossServer
+            crossServer, this::advancedCrossServerOrchestrationAllowed
         );
         service.setItemSourceRegistry(itemSourceRegistry);
         service.setDurableMail(() -> getCapability(AxsMailService.class), rewardsRepo.getDescriptor().isMysql());

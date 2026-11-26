@@ -496,9 +496,10 @@ class AuctionSettlementTest {
         assertTrue(repository.settleExpiredAuction(new AuctionSettlement(listing, settlement.receipt(),
             settlement.history(), settlement.deliveries(), publication)));
         assertEquals(1, repository.auctionSettlementRevision());
-        assertEquals(List.of(publication), repository.claimAuctionPublications("first", 100, 4));
+        assertEquals(List.of(publication), repository.claimAuctionPublications("first", 100, 4, false));
         assertTrue(repository.claimAuctionPublications("second", 200, 4).isEmpty());
         repository.finishAuctionPublication(publication.id(), "first", true, false, 600);
+        assertTrue(repository.claimAuctionPublications("local", 600, 4, false).isEmpty());
         var replay = repository.claimAuctionPublications("second", 600, 4).get(0);
         assertFalse(replay.eventPending());
         assertTrue(replay.refreshPending());

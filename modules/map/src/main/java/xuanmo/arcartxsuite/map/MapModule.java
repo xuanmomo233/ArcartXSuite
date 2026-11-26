@@ -182,7 +182,7 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
             () -> getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class),
             () -> getCapability(xuanmo.arcartxsuite.api.capability.EssentialsQueryable.class),
             worldTextureBridge,
-            crossServer
+            advancedCrossServerOrchestrationAllowed() ? crossServer : null
         );
         service.start();
 

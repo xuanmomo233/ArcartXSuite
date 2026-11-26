@@ -140,6 +140,7 @@ public class MarketService {
     private RedisMarketCache redisCache;
     private CompletableFuture<Void> storagePreparation = CompletableFuture.completedFuture(null);
     private volatile CrossServerChannel crossServerChannel;
+    private java.util.function.BooleanSupplier crossServerAuthorization = () -> false;
     private AuctionService auctionService;
     private ShopService shopService;
     private RecycleService recycleService;
@@ -209,6 +210,10 @@ public class MarketService {
         this.eventBusProvider = provider;
     }
 
+    void setCrossServerAuthorization(java.util.function.BooleanSupplier authorization) {
+        this.crossServerAuthorization = authorization;
+    }
+
     /** 玩家退出时清理其 actionToken 与在飞行标记，避免内存累积。 */
     public void clearPlayerState(UUID playerUuid) {
         pageReads.clear(playerUuid);
@@ -255,11 +260,7 @@ public class MarketService {
             config.crossServer(),
             delivery -> handleCrossServerMessage(delivery)
         );
-        java.util.function.Consumer<String> crossServerPublisher = message -> {
-            if (crossServerChannel != null && crossServerChannel.isActive()) {
-                crossServerChannel.publish(message);
-            }
-        };
+        java.util.function.Consumer<String> crossServerPublisher = this::publishCrossServer;
 
         management=new MarketManagementController(work, plugin,repository,config,packetBridge,itemStackBridge,itemSerializer,vanillaItemNameBridge,
             new MarketManagementController.Host(){
@@ -267,7 +268,7 @@ public class MarketService {
                 public void send(Player player,String ui,String handler,Map<String,Object> packet){sendUiPacket(player,ui,handler,packet);}
                 public void rotate(Player player,String ui){rotateToken(player,ui);}
                 public void recycle(Player player){openRecycleUi(player);}
-                public void publish(String payload){var channel=crossServerChannel;try{if(channel!=null && channel.isActive())channel.publish(payload);}catch(RuntimeException exception){logger.warning("保护设置同步通知暂不可用");}}
+                public void publish(String payload){try{publishCrossServer(payload);}catch(RuntimeException exception){logger.warning("保护设置同步通知暂不可用");}}
                 public void protectionChanged(Player player,xuanmo.arcartxsuite.market.recycle.RecyclePreferences preferences){
                     if(recycleService!=null && packetBridge.isUiOpen(player,config.ui().recycleId()))handleRecyclePreviewPacket(player);
                 }
@@ -282,7 +283,9 @@ public class MarketService {
             auctionService.setEventPublisher(this::publishAuctionEvent);
             auctionService.setEventObserver((buyer, payload) ->
                 publishEvent(EventBusCapability.MARKET_AUCTION_PURCHASED, buyer, payload));
-            if (config.crossServer().enabled()) auctionService.setSettlementRefresh(this::publishSettlementRefresh);
+            if (config.crossServer().enabled()) {
+                auctionService.setSettlementRefresh(crossServerAuthorization, this::publishSettlementRefresh);
+            }
             auctionService.setLedger(ledger);
             auctionService.start(config.schedulerIntervalTicks());
             auctionRooms=new xuanmo.arcartxsuite.market.auction.AuctionRoomService(work, repository,packetBridge,config.ui().auctionRoomId(), currencyManager,
@@ -302,10 +305,8 @@ public class MarketService {
                 repository, currencyManager, itemSourceRegistry, scriptConditionEvaluator, dataFolder, logger);
             // 注入跨服限购广播回调
             if (!repository.getDescriptor().isMysql()) shopService.setLimitBroadcaster((playerUuid, shopId, itemId, newCount, timestamp, resetTime) -> {
-                if (crossServerChannel != null && crossServerChannel.isActive()) {
-                    crossServerChannel.publish("SHOP_LIMIT_UPDATE:" + playerUuid + ":" + shopId + ":"
-                        + itemId + ":" + newCount + ":" + timestamp + ":" + resetTime);
-                }
+                publishCrossServer("SHOP_LIMIT_UPDATE:" + playerUuid + ":" + shopId + ":"
+                    + itemId + ":" + newCount + ":" + timestamp + ":" + resetTime);
             });
             shopService.setLedger(ledger);
             shopService.start();
@@ -316,9 +317,7 @@ public class MarketService {
                     work, plugin, logger, scheduler, shopService, repository, config.dynamic().strategies()
                 );
                 dynamicShopService.setStateBroadcaster((action, strategyKey, shopId, data) -> {
-                    if (crossServerChannel != null && crossServerChannel.isActive()) {
-                        crossServerChannel.publish("DYNAMIC_SHOP_UPDATE:" + strategyKey + ":" + shopId + ":" + data);
-                    }
+                    publishCrossServer("DYNAMIC_SHOP_UPDATE:" + strategyKey + ":" + shopId + ":" + data);
                 });
                 dynamicShopService.setEventPublisher((topic, payload) -> publishEvent(topic, null, payload));
                 shopService.setDynamicShopService(dynamicShopService);
@@ -349,8 +348,7 @@ public class MarketService {
                     public void backMarket(Player player){restorePlayerShopBrowse.add(player.getUniqueId());openPlayerShopMarketUi(player);}
                     public void sell(Player player){openSellUi(player,"pshop");}
                     public void publish(String payload){
-                        var channel=crossServerChannel;
-                        try{if(channel!=null && channel.isActive())channel.publish(payload);}
+                        try{publishCrossServer(payload);}
                         catch(RuntimeException exception){logger.warning("店铺资料已保存，但同步通知暂不可用: "+exception.getMessage());}
                     }
                 },logger);
@@ -376,9 +374,7 @@ public class MarketService {
         if (published) {
             try {
                 if (redisCache != null) redisCache.invalidateByPrefix(auction ? "market:listings:" : "market:pshop:");
-                var channel = crossServerChannel;
-                if (channel != null && channel.isActive()) channel.publish(
-                    (auction ? "LISTING_CREATED:" : "PSHOP_LISTING_CREATED:") + save.listingId());
+                publishCrossServer((auction ? "LISTING_CREATED:" : "PSHOP_LISTING_CREATED:") + save.listingId());
                 if (auction) details = repository.readAuctionBidTerms(save.listingId());
             } catch (RuntimeException failure) {
                 logger.warning("Market 上架已提交，刷新失败 #" + save.listingId() + ": " + failure.getMessage());
@@ -1586,7 +1582,7 @@ public class MarketService {
 
     private boolean needsAuctionCatchUp() {
         var channel = crossServerChannel;
-        return channel != null && channel.requiresSharedStateCatchUp()
+        return crossServerAuthorization.getAsBoolean() && channel != null && channel.requiresSharedStateCatchUp()
             && repository instanceof JdbcMarketRepository jdbc && jdbc.getDescriptor().isMysql();
     }
 
@@ -1603,12 +1599,12 @@ public class MarketService {
         readingAuctionRevision = true;
         work.async(() -> {
             long revision = -1;
-            try { revision = currentRepository.auctionSettlementRevision(); }
+            try { if (needsAuctionCatchUp()) revision = currentRepository.auctionSettlementRevision(); }
             catch (RuntimeException failure) { logger.fine("[Market] 无法核对拍卖结算版本: " + failure.getMessage()); }
             long latest = revision;
             work.main(() -> {
                 readingAuctionRevision = false;
-                if (repository != currentRepository || latest < 0 || latest == observedAuctionRevision) return;
+                if (!needsAuctionCatchUp() || repository != currentRepository || latest < 0 || latest == observedAuctionRevision) return;
                 refreshOpenAuctionBrowsers();
                 boolean roomsQueued = true;
                 if (auctionRooms != null) {
@@ -3597,7 +3593,8 @@ public class MarketService {
     }
 
     public boolean crossServerActive() {
-        return crossServerChannel != null && crossServerChannel.isActive();
+        var channel = crossServerChannel;
+        return crossServerAuthorization.getAsBoolean() && channel != null && channel.isActive();
     }
 
     public boolean isListCacheConnected() {
@@ -3652,7 +3649,7 @@ public class MarketService {
     }
 
     private void handleCrossServerMessage(xuanmo.arcartxsuite.api.crossserver.CrossServerDelivery delivery) {
-        if (isStopping()) return;
+        if (isStopping() || !crossServerAuthorization.getAsBoolean()) return;
         String message = delivery == null ? null : delivery.payload();
         if (message == null || message.isBlank()) {
             return;
@@ -3760,9 +3757,15 @@ public class MarketService {
         return amount >= current + minIncrement;
     }
 
+    private void publishCrossServer(String payload) {
+        var channel = crossServerChannel;
+        if (crossServerAuthorization.getAsBoolean() && channel != null && channel.isActive()) channel.publish(payload);
+    }
+
     private java.util.concurrent.CompletionStage<Boolean> publishSettlementRefresh(String payload) {
         var channel = crossServerChannel;
-        return channel == null ? java.util.concurrent.CompletableFuture.completedFuture(false) : channel.publishWithReceipt(payload);
+        return crossServerAuthorization.getAsBoolean() && channel != null
+            ? channel.publishWithReceipt(payload) : CompletableFuture.completedFuture(false);
     }
 
     private boolean publishEvent(String topic, Player player, Map<String, String> payload) {

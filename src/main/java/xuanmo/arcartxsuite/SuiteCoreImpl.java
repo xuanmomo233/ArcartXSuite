@@ -210,7 +210,7 @@ public final class SuiteCoreImpl implements SuiteCore {
         keybindService.initialize(getConfig());
 
         // 4. 跨服传输
-        crossServerService = new CrossServerService(host);
+        crossServerService = new CrossServerService(host, () -> customerFeaturesAllowed(null));
         crossServerService.start(crossServerModulesReady);
 
         // 5. 客户端事件转发到 ModuleRegistry

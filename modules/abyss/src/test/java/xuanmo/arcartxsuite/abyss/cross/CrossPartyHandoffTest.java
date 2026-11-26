@@ -19,6 +19,7 @@ import static org.mockito.Mockito.*;
 class CrossPartyHandoffTest {
     Field serverField;Object previous;Server server;Player leader,member;
     AbyssService service;PartyManager parties;CrossDungeonManager manager;AbyssTemplate template;
+    CrossServerChannel channel;
     @BeforeEach void setup()throws Exception {
         server=mock(Server.class);serverField=Bukkit.class.getDeclaredField("server");serverField.setAccessible(true);previous=serverField.get(null);serverField.set(null,server);
         leader=player("Leader");member=player("Member");
@@ -29,7 +30,11 @@ class CrossPartyHandoffTest {
         instances.registerTemplate(template);
         when(service.enterDungeon(anyList(),eq("test"),eq("route_a"))).thenReturn(AbyssService.EnterResult.success());
         var api=mock(CrossServerAPI.class);when(api.nodeId()).thenReturn("host");
+        channel = mock(CrossServerChannel.class);
+        when(channel.isActive()).thenReturn(true);
+        when(api.openChannel(eq("abyss"), any(), any())).thenReturn(channel);
         manager=new CrossDungeonManager(service,api,null,Logger.getAnonymousLogger());
+        manager.start();
     }
     Player player(String name) {
         var p=mock(Player.class);when(p.getName()).thenReturn(name);when(p.getUniqueId()).thenReturn(UUID.randomUUID());when(p.isOnline()).thenReturn(true);
@@ -70,5 +75,37 @@ class CrossPartyHandoffTest {
     @Test void unexpectedSenderCannotReservePlayers()throws Exception {
         var context=context();context.put("_sender","wrong-node");request(context);manager.onPlayerJoin(member);manager.onPlayerJoin(leader);
         verify(service,never()).enterDungeon(anyList(),anyString(),any());
+    }
+
+    @Test void inactiveChannelDoesNotReserveArrivalsOrStartReservedParty() throws Exception {
+        when(channel.isActive()).thenReturn(false);
+        request(context());
+        manager.onPlayerJoin(member);
+        manager.onPlayerJoin(leader);
+        verify(channel, never()).publish(anyString());
+
+        when(channel.isActive()).thenReturn(true);
+        request(context());
+        verify(channel).publish(contains("op=accept"));
+        manager.onPlayerJoin(member);
+        when(channel.isActive()).thenReturn(false);
+        manager.onPlayerJoin(leader);
+        verify(service, never()).enterDungeon(anyList(), anyString(), any());
+        assertNull(parties.partyOf(leader));
+    }
+
+    @Test void crossServerAcceptAfterEntitlementLossCannotSendProxyConnect() throws Exception {
+        when(template.crossServer()).thenReturn("remote");
+        manager.requestRemoteEnter(List.of(leader), template, "route_a");
+        var payload = ArgumentCaptor.forClass(String.class);
+        verify(channel).publish(payload.capture());
+        String requestId = Arrays.stream(payload.getValue().split(";"))
+            .filter(part -> part.startsWith("req=")).findFirst().orElseThrow().substring(4);
+        when(channel.isActive()).thenReturn(false);
+
+        var accept = CrossDungeonManager.class.getDeclaredMethod("onAccept", Map.class);
+        accept.setAccessible(true);
+        accept.invoke(manager, Map.of("req", requestId, "host", "remote", "_sender", "remote"));
+        verify(leader, never()).sendPluginMessage(any(), eq("BungeeCord"), any());
     }
 }

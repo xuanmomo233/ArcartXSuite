@@ -4,6 +4,7 @@ import java.sql.SQLException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.BooleanSupplier;
 import javax.sql.DataSource;
 import org.bukkit.plugin.java.JavaPlugin;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerAPI;
@@ -28,6 +29,7 @@ public final class EntityTrackerCrossServerService {
     private final CrossServerAPI crossServer;
     private final CrossServerChannelConfig channelConfig;
     private final PlayerBossBestDamageDao damageDao;
+    private final BooleanSupplier crossServerRankingAllowed;
     private final xuanmo.arcartxsuite.api.scheduler.ModuleExecutor worker =
         new xuanmo.arcartxsuite.api.scheduler.ModuleExecutor(0,1,30,java.util.concurrent.TimeUnit.SECONDS,
             new java.util.concurrent.ArrayBlockingQueue<>(256),task->{
@@ -44,13 +46,15 @@ public final class EntityTrackerCrossServerService {
         Logger logger,
         CrossServerAPI crossServer,
         CrossServerChannelConfig channelConfig,
-        DataSource dataSource
+        DataSource dataSource,
+        BooleanSupplier crossServerRankingAllowed
     ) {
         this.plugin = plugin;
         this.logger = logger;
         this.crossServer = crossServer;
         this.channelConfig = channelConfig == null ? CrossServerChannelConfig.disabled() : channelConfig;
         this.damageDao = new PlayerBossBestDamageDao(dataSource, plugin);
+        this.crossServerRankingAllowed = crossServerRankingAllowed;
     }
 
     public void attachKillRecording(BossKillRecordingService killRecordingService) {
@@ -81,7 +85,7 @@ public final class EntityTrackerCrossServerService {
     public java.util.concurrent.CompletionStage<Void> databaseStopped() { return worker.stopped(); }
 
     private java.util.concurrent.CompletionStage<Boolean> admit(String payload) {
-        if(closed)return null;
+        if (closed || !crossServerRankingAllowed.getAsBoolean()) return null;
         var done=new java.util.concurrent.CompletableFuture<Boolean>();
         try{worker.execute(()->{try{handlePayload(payload);done.complete(true);}catch(Exception|LinkageError failure){
             logger.log(java.util.logging.Level.WARNING,"跨服 Boss 入站未确认",failure);done.complete(false);
@@ -90,12 +94,12 @@ public final class EntityTrackerCrossServerService {
     }
 
     public boolean isActive() {
-        return channel != null && channel.isActive();
+        return crossServerRankingAllowed.getAsBoolean() && channel != null && channel.isActive();
     }
 
     /** Called only by an accepted kill worker, whose lifetime also owns these SQL operations. */
     public void publishSettlement(BossDamageSettlementRecord record, BossKillRecord location) {
-        if (record == null) {
+        if (record == null || !crossServerRankingAllowed.getAsBoolean()) {
             return;
         }
         String nodeId = crossServer.nodeId();
@@ -139,6 +143,7 @@ public final class EntityTrackerCrossServerService {
     }
 
     private boolean saveAndPublishDamage(String bossId, List<PlayerBossBestDamage> candidates) {
+        if (!crossServerRankingAllowed.getAsBoolean()) return false;
         List<PlayerBossBestDamage> improved;
         try {
             improved = damageDao.saveBetterBatch(bossId, candidates);
@@ -160,7 +165,12 @@ public final class EntityTrackerCrossServerService {
         if (record != null) publish(EntityTrackerCrossServerPayloadCodec.encodeKillRecord(record));
     }
 
-    private void publish(String payload) { var current=channel;if(current!=null&&current.isActive())current.publish(payload); }
+    private void publish(String payload) {
+        var current = channel;
+        if (crossServerRankingAllowed.getAsBoolean() && current != null && current.isActive()) {
+            current.publish(payload);
+        }
+    }
 
     private void handlePayload(String payload) throws SQLException {
         if (payload == null || payload.isBlank()) {

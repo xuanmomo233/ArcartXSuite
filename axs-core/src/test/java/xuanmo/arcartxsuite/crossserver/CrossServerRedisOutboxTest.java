@@ -65,7 +65,7 @@ class CrossServerRedisOutboxTest {
             return 0;
         });
 
-        var outbox = new CrossServerRedisOutbox(pool, config, stream, database, frameBytes, () -> Set.of("tab"));
+        var outbox = new CrossServerRedisOutbox(pool, config, stream, database, frameBytes, () -> Set.of("tab"), () -> true);
         try (var bukkit = mockStatic(Bukkit.class)) {
             bukkit.when(Bukkit::getConsoleSender).thenReturn(mock(ConsoleCommandSender.class));
             assertTrue(appending.await(5, TimeUnit.SECONDS));

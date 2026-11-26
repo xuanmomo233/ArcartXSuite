@@ -3231,13 +3231,15 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
     }
 
     @Override
-    public List<AuctionPublication> claimAuctionPublications(String token, long now, int limit) {
+    public List<AuctionPublication> claimAuctionPublications(String token, long now, int limit, boolean includeRefreshOnly) {
         var selected = new ArrayList<AuctionPublication>();
         try (Connection conn = getConnection(); PreparedStatement query = conn.prepareStatement(
             "SELECT p.*,o.created_at AS settled_at FROM " + tAuctionPublications + " p LEFT JOIN "
-                + tOperations + " o ON o.id=p.id WHERE p.lease_until<=? ORDER BY p.lease_until,p.id LIMIT ?")) {
+                + tOperations + " o ON o.id=p.id WHERE p.lease_until<=? AND (?=1 OR p.event_pending<>0)"
+                + " ORDER BY p.lease_until,p.id LIMIT ?")) {
             query.setLong(1, now);
-            query.setInt(2, limit);
+            query.setInt(2, includeRefreshOnly ? 1 : 0);
+            query.setInt(3, limit);
             try (ResultSet rows = query.executeQuery()) {
                 while (rows.next()) selected.add(new AuctionPublication(rows.getString("id"), rows.getLong("listing_id"),
                     UUID.fromString(rows.getString("seller")), parseUuidSafe(rows.getString("buyer"), "publication.buyer"),
@@ -3248,7 +3250,8 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
             var claimed = new ArrayList<AuctionPublication>();
             for (var entry : selected) {
                 if (execUpdate(conn, "UPDATE " + tAuctionPublications + " SET lease_token=?,lease_until=?"
-                    + " WHERE id=? AND lease_until<=?", token, now + 30_000, entry.id(), now) == 1) claimed.add(entry);
+                    + " WHERE id=? AND lease_until<=? AND (?=1 OR event_pending<>0)",
+                    token, now + 30_000, entry.id(), now, includeRefreshOnly ? 1 : 0) == 1) claimed.add(entry);
             }
             return claimed;
         } catch (SQLException exception) { throw new IllegalStateException("认领拍卖通知失败", exception); }
