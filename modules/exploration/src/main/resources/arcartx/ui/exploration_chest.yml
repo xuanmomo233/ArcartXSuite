@@ -1,0 +1,271 @@
+ui:
+  isHud: false
+  defaultOpen: false
+  closeDied: true
+  escClose: true
+  background: false
+  through: false
+  screenScale: true
+  show: true
+  level: 8
+  packetHandler:
+    sync: |-
+      var.title = packet['title']
+      var.rows = packet['rows']
+      var.count = packet['count']
+      var.token = packet['token']
+      var.listHeight = var.count > 5 ? 490 : (var.count > 0 ? var.count * 100 - 10 : 90)
+      var.iconsDirty = true
+  action:
+    tick: |-
+      if(var.iconsDirty == true && val.物品列表 != none && val.物品列表.get(0) != none){
+        if(var.rowRefs == none || var.rowRefs.size() != var.count){
+          if(var.rowRefs != none){
+            for(k in var.rowRefs.keys()){
+              if(k != 0.round()){ var.rowRefs[k].remove() }
+            }
+          }
+          var.rowRefs = {}
+          template = val.物品列表.get(0)
+          if(var.count > 0){
+            template.entryKey = 0.round()
+            var.rowRefs[0.round()] = template
+          }
+          if(var.count > 1){
+            for(i in range(1, var.count - 1)){
+              index = i.round()
+              cell = template.copy('奖励行' + index)
+              cell.entryKey = index
+              var.rowRefs[index] = cell
+            }
+          }
+        }
+        var.iconsDirty = false
+        for(k in var.rowRefs.keys()){
+          cell = var.rowRefs[k]
+          row = var.rows[k]
+          if(cell['物品图标'] == none){
+            var.iconsDirty = true
+          }else{
+            cell['物品图标'].setItemIcon(row == none || row['icon'] == none ? '' : row['icon'])
+          }
+        }
+      }
+controls:
+  遮罩:
+    type: Texture
+    attribute:
+      point: ~stretch_all
+      normal: ~10,16,14,128
+      through: true
+  全局:
+    type: Adaptive
+    attribute:
+      point: ~middle_center
+      width: 1920
+      height: 1080
+    children:
+      宝箱:
+        type: Canvas
+        attribute:
+          point: ~middle_center
+          width: 820
+          height: "var.listHeight == none ? 328 : var.listHeight + 238"
+          visible: var.token != none
+        children:
+          底板:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~32,45,42,255
+              shape: ~round_rect
+              radius: 14
+              through: true
+            effect:
+              stroke:
+                width: 3
+                color: ~185,151,94,255
+          标题:
+            type: Text
+            attribute:
+              x: 36
+              y: 31
+              width: 584
+              texts: var.title
+              fontSize: 68
+              limit: 18
+              through: true
+          奖励项数:
+            type: Text
+            attribute:
+              point: ~top_right
+              x: -36
+              y: 41
+              texts: "var.count == none ? none : '&7' + var.count.round() + ' 项物资'"
+              fontSize: 44
+              through: true
+          标题分隔:
+            type: Texture
+            attribute:
+              x: 36
+              y: 98
+              width: 748
+              height: 3
+              normal: ~97,112,94,255
+              through: true
+          奖励窗口:
+            type: Scroll
+            attribute:
+              x: 36
+              y: 122
+              width: "var.count > 5 ? 728 : 748"
+              height: var.listHeight
+              moveY: "var.count > 5 ? self.parent['滑块'].getDragYRatio() : 0"
+            action:
+              wheel: |-
+                if(var.count > 5 && self.wheelValue != 0){
+                  self.parent['滑块'].setDragYRatio(Math.max(0, Math.min(1, self.moveY - self.wheelValue / (var.count - 5))))
+                }
+            children:
+              物品列表:
+                type: HGrid
+                val: 物品列表
+                attribute:
+                  column: 1
+                  width: "var.count > 5 ? 728 : 748"
+                  spaceBetweenY: 10
+                children:
+                  物品行:
+                    type: Canvas
+                    attribute:
+                      entryKey: 0.round()
+                      entry: "var.rows == none ? none : var.rows[self.entryKey]"
+                      visible: self.entry != none
+                      width: "var.count > 5 ? 728 : 748"
+                      height: 90
+                    children:
+                      行背景:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: ~48,68,61,255
+                          shape: ~round_rect
+                          radius: 7
+                          through: true
+                        effect:
+                          stroke:
+                            width: 3
+                            color: ~76,98,85,255
+                      图标底:
+                        type: Texture
+                        attribute:
+                          point: ~middle_left
+                          x: 12
+                          width: 66
+                          height: 66
+                          normal: ~32,47,42,255
+                          shape: ~round_rect
+                          radius: 6
+                          through: true
+                      物品图标:
+                        type: Slot
+                        attribute:
+                          point: ~middle_left
+                          x: 15
+                          width: 60
+                          height: 60
+                          normal: ~0,0,0,0
+                          slotType: ~Icon
+                          itemScale: 0.90
+                      物品名:
+                        type: Text
+                        attribute:
+                          point: ~middle_left
+                          x: 98
+                          texts: "self.parent.entry != none ? self.parent.entry['name'] : none"
+                          fontSize: 48
+                          limit: 22
+                          through: true
+                      数量:
+                        type: Text
+                        attribute:
+                          point: ~middle_right
+                          x: -24
+                          texts: "self.parent.entry != none ? '&e×' + self.parent.entry['amount'].round() : none"
+                          fontSize: 46
+                          through: true
+          滑块:
+            type: Texture
+            attribute:
+              x: 776
+              y: 122
+              width: 8
+              height: 52
+              maxDragY: "var.listHeight - 52"
+              visible: var.count > 5
+              normal: ~212,182,117,255
+              shape: ~round_rect
+              radius: 4
+          关闭:
+            type: Canvas
+            attribute:
+              point: ~bottom_left
+              x: 36
+              y: -30
+              width: 184
+              height: 64
+            action:
+              clickLeft: "Screen.close()"
+            children:
+              按钮底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: "self.parent.isHovered() ? '64,83,73,255' : '38,56,51,255'"
+                  shape: ~round_rect
+                  radius: 7
+                  through: true
+                effect:
+                  stroke:
+                    width: 3
+                    color: ~99,121,107,255
+              文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: ~关闭
+                  fontSize: 46
+                  through: true
+          领取:
+            type: Canvas
+            attribute:
+              point: ~bottom_right
+              x: -36
+              y: -30
+              width: 236
+              height: 64
+            action:
+              clickLeft: |-
+                if(var.token != none && var.token != '' && var.count > 0){
+                  Packet.send('AXS_EXPLORATION', 'claim', var.token)
+                }
+            children:
+              按钮底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: "self.parent.isHovered() ? '232,210,151,255' : '212,182,117,255'"
+                  shape: ~round_rect
+                  radius: 7
+                  through: true
+                effect:
+                  stroke:
+                    width: 3
+                    color: ~168,138,83,255
+              文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: ~&0领取全部
+                  fontSize: 46
+                  through: true

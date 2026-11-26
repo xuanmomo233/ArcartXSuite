@@ -1,0 +1,125 @@
+ui:
+  isHud: true
+  defaultOpen: false
+  background: false
+  through: true
+  closeDied: true
+  show: true
+  level: 3
+  packetHandler:
+    sync: |-
+      var.area = packet['name']
+      var.percent = packet['percent']
+      var.searching = var.percent >= 0
+      var.key = Keyboard.getKeyBindingKeyName("AXS_EXPLORE")
+controls:
+  全局:
+    type: Adaptive
+    attribute:
+      point: ~stretch_all
+      width: 1920
+      height: 1080
+    children:
+      探索:
+        type: Canvas
+        attribute:
+          point: ~middle_center
+          y: 198
+          width: 440
+          height: 112
+          visible: var.area != none
+          through: true
+        children:
+          面板:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~32,45,42,255
+              shape: ~round_rect
+              radius: 12
+              through: true
+            effect:
+              stroke:
+                width: 3
+                color: ~99,121,107,255
+          区域名:
+            type: Text
+            attribute:
+              x: 24
+              y: 15
+              width: 264
+              texts: var.area
+              fontSize: 52
+              limit: 13
+              through: true
+          操作提示:
+            type: Text
+            attribute:
+              x: 24
+              y: 62
+              width: 264
+              texts: "var.searching ? '&7探索中，请保持原位' : '&7按键原地探索'"
+              fontSize: 36
+              through: true
+          键位:
+            type: Canvas
+            attribute:
+              point: ~middle_right
+              x: -24
+              width: 112
+              height: 54
+              visible: var.searching == false
+              through: true
+            children:
+              键帽:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~212,182,117,255
+                  shape: ~round_rect
+                  radius: 7
+                  through: true
+                effect:
+                  stroke:
+                    width: 3
+                    color: ~185,151,94,255
+              键名:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  alignment: ~center
+                  texts: "'&0' + var.key"
+                  fontSize: 46
+                  limit: 6
+                  through: true
+          百分比:
+            type: Text
+            attribute:
+              point: ~middle_right
+              x: -24
+              y: -5
+              texts: "var.searching ? '&f' + var.percent.round() + '%' : none"
+              fontSize: 50
+              through: true
+          进度槽:
+            type: Texture
+            attribute:
+              point: ~bottom_left
+              x: 24
+              y: -12
+              width: 392
+              height: 6
+              normal: ~78,98,88,255
+              visible: var.searching
+              through: true
+          进度:
+            type: Texture
+            attribute:
+              point: ~bottom_left
+              x: 24
+              y: -12
+              width: "var.searching ? var.percent * 3.92 : 0"
+              height: 6
+              normal: ~212,182,117,255
+              visible: var.searching
+              through: true

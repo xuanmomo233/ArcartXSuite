@@ -121,12 +121,16 @@ subprojects {
                 }
             }
 
+            // Some modules must retain their package for package-private access after ProGuard.
+            val namedModuleEntry = (findProperty("axs.namedModuleEntry") as? String).orEmpty()
             val encryptModuleClasses = tasks.register<Exec>("encryptModuleClasses") {
                 group = "protection"
                 description = "对模块 Jar 做逐类字节码加密（Option 2，供云端下发）"
                 dependsOn(stringEncryptModule, generateModuleKey)
                 inputs.file(stringEncryptedModuleJar)
                 inputs.file(moduleKeyFileProvider)
+                inputs.file(scriptsDir.resolve("encrypt-jar.py"))
+                inputs.property("namedModuleEntry", namedModuleEntry)
                 outputs.file(encryptedClassesModuleJar)
                 val sIn = stringEncryptedModuleJar
                 val sOut = encryptedClassesModuleJar
@@ -144,10 +148,10 @@ subprojects {
                         "--module-seed-b64", seedB64,        // 方案 B：用模块自带 moduleKey 作种子，与本体 root_seed 解耦
                         "--protection-level", "high",
                         "--no-native",                         // 模块不嵌 native
-                        "--bootstrap-classes", "",             // 模块无引导类（入口由 -keep 保持明文）
-                        "--encrypt-prefixes", "",              // default-package 模式忽略前缀
+                        "--bootstrap-classes", namedModuleEntry,
+                        "--encrypt-prefixes", if (namedModuleEntry.isEmpty()) "" else namedModuleEntry.substringBeforeLast('.') + ".",
                         "--keep-prefixes", "xuanmo.arcartxsuite.api.,xuanmo.arcartxsuite.auth.",
-                        "--encrypt-mode", "default-package",   // 仅加密 -repackageclasses '' 扁平化后的模块自身代码
+                        "--encrypt-mode", if (namedModuleEntry.isEmpty()) "default-package" else "prefix",
                         "--fake-classes-count", "5"
                     )
                 }

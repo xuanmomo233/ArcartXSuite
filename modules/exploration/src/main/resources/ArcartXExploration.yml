@@ -1,0 +1,57 @@
+# 首次加载时导出为 data/exploration/config.yml。修改后执行 /axs reload exploration。
+config-version: 1
+# ArcartX 客户端注册名 AXS_EXPLORE，玩家可在按键设置中改绑。
+default-key: V
+# 以按键时的脚下位置为中心，允许的最大位移（格）。转动视角不影响读条。
+movement-tolerance: 0.15
+
+# 区域 ID 使用小写英文字母、数字、下划线或短横线。重叠区域优先使用排在前面的可用区域。
+regions:
+  forest_ruins:
+    enabled: false
+    name: 林间遗迹
+    world: world
+    # 任意两个对角方块的 [x, y, z]，包含边界的整格。
+    corner-a: [100, 60, 100]
+    corner-b: [112, 74, 116]
+    duration-ticks: 60
+    # 每名玩家单独冷却，单位秒，0 表示可连续探索。
+    cooldown-seconds: 120
+    # 每次完成只抽取一个结果。权重按比例计算；0 表示关闭此结果。
+    outcomes:
+      herbs:
+        type: gather
+        weight: 70
+        # 来源支持 minecraft、mythic、neige、overture、mmoitems。
+        # 每条物品占一格，数量不能超过该物品的单组上限。
+        items:
+          - {source: minecraft, id: SWEET_BERRIES, amount: 3}
+      cache:
+        type: chest
+        weight: 30
+        title: 遗落的行囊
+        # Adyeshach 为发现者生成私有 NPC。右键模型打开 ArcartX 界面，点击「领取全部」获得物品。
+        # 首次加载导出 data/exploration/client/ArcartX/resource/model/exploration_chest.bbmodel。
+        # 将其随客户端资源包发放到 .minecraft/resourcepacks/ArcartX/resource/model/ 后重载客户端资源。
+        model: exploration_chest
+        scale: 1.0
+        # 关窗后可再点模型。离发现位置超过 32 格、换世界、死亡、下线或重载会清除未领取宝箱。
+        items:
+          - {source: minecraft, id: IRON_INGOT, amount: 2}
+          - {source: minecraft, id: EMERALD, amount: 1}
+      lost_letter:
+        type: quest
+        weight: 0
+        # 填写 QuestGPS 能解析的任务 ID，调高权重后会打开任务推荐界面。
+        quest: lost_letter
+      hidden_gate:
+        type: abyss
+        weight: 0
+        # 本服单人秘境，沿用 Abyss 的入场条件、门票和副本冷却。
+        dungeon: example
+        # plan: 方案ID  # 可省略，由副本选择默认方案。
+      wandering_herbalist:
+        type: conversation
+        weight: 0
+        # 填写 Conversation 已配置的 NPC ID，触发对应的奇遇对话。
+        npc: herbalist
