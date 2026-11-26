@@ -170,7 +170,7 @@ public final class CloudModuleService {
         if (!java.util.Set.of("cloud", "local").contains(source))
             throw new IllegalArgumentException("cloud.module-source must be cloud or local");
         this.localModuleSource = "local".equals(source) || RuntimeAuthorization.isCustomerRelease(suiteRelease);
-        registry.setProtectedModuleAuthorization(runtimeAuthorization::permits);
+        registry.setProtectedModuleAuthorization(this::moduleRuntimeAuthorized);
 
         this.apiBaseUrl = API_BASE_URLS.get(0);
     }
@@ -203,6 +203,23 @@ public final class CloudModuleService {
     public boolean customerFeaturesAllowed(String moduleId) {
         return !tasks.isClosed()
             && runtimeAuthorization.permitsCustomerFeatures(customerRelease, moduleId, System.nanoTime());
+    }
+
+    private boolean moduleRuntimeAuthorized(String moduleId) {
+        return customerRelease == null ? runtimeAuthorization.permits(moduleId) : customerFeaturesAllowed(moduleId);
+    }
+
+    List<String> authorizedModuleIds() {
+        return customerRelease == null ? allowedModules : runtimeModuleIds().stream().sorted().toList();
+    }
+
+    private java.util.Set<String> runtimeModuleIds() {
+        return customerRelease == null ? runtimeAuthorization.permittedModules()
+            : runtimeAuthorization.permittedCustomerModules(customerRelease);
+    }
+
+    void acceptPublicModuleList(String responseBody) {
+        if (customerRelease == null) allowedModules = extractStringArray(responseBody, "allowedModules");
     }
 
     private enum CloudStatus {
@@ -609,7 +626,7 @@ public final class CloudModuleService {
             if (code != null && !code.isEmpty()) {
                 if (!code.equals(this.serverCode)) runtimeAuthorization.invalidate();
                 this.serverCode = code;
-                this.allowedModules = extractStringArray(body, "allowedModules");
+                acceptPublicModuleList(body);
                 if (token != null) {
                     this.moduleToken = token;
                     this.tokenExpiry = System.currentTimeMillis() + 23 * 3600 * 1000;
@@ -670,11 +687,24 @@ public final class CloudModuleService {
 
             return CompletableFuture.completedFuture(false);
         }
-        return refreshToken(true);
+        return refreshToken(true).thenApply(ok -> {
+            if (ok && customerRelease != null) syncModuleChanges();
+            return ok;
+        });
     }
 
     private CompletableFuture<Boolean> refreshToken(boolean forceRefresh) {
-        return refreshTokenGate(forceRefresh).thenApply(CloudResponse::isOk);
+        return refreshTokenGate(forceRefresh).thenCompose(response -> {
+            if (!response.isOk()) return CompletableFuture.completedFuture(false);
+            return prepareCustomerModuleAccess(forceRefresh).thenApply(ignored -> true);
+        });
+    }
+
+    CompletableFuture<Void> prepareCustomerModuleAccess(boolean forceRenewal) {
+        if (customerRelease == null) return CompletableFuture.completedFuture(null);
+        // A newly bound customer server may have a cached bearer token but no public equipment or lease yet.
+        startHeartbeat();
+        return ensureRuntimeLease(forceRenewal);
     }
 
     private CompletableFuture<CloudResponse<Void>> refreshTokenGate(boolean forceRefresh) {
@@ -748,12 +778,10 @@ public final class CloudModuleService {
             if (token != null) {
                 this.moduleToken = token;
                 this.tokenExpiry = System.currentTimeMillis() + 23 * 3600 * 1000;
-                List<String> oldAllowed = this.allowedModules;
-                this.allowedModules = extractStringArray(body, "allowedModules");
-
-                plugin.consoleInfo("[Cloud] 模块令牌已刷新，授权模块: " + allowedModules.size() + " 列表: " + allowedModules);
-
-                syncModuleChanges(oldAllowed);
+                acceptPublicModuleList(body);
+                List<String> authorized = authorizedModuleIds();
+                plugin.consoleInfo("[Cloud] 模块令牌已刷新，授权模块: " + authorized.size() + " 列表: " + authorized);
+                if (customerRelease == null) syncModuleChanges();
                 startHeartbeat();
                 return CompletableFuture.completedFuture(new CloudResponse<>(CloudStatus.OK, null, resp.httpStatus(), resp.endpoint(), null, body));
             }
@@ -821,23 +849,25 @@ public final class CloudModuleService {
 
                     return CompletableFuture.<Void>completedFuture(null);
                 }
-                List<String> mods = allowedModules;
-                if (mods == null || mods.isEmpty()) {
-
-                    plugin.consoleInfo("[Cloud] 该服务器未装备任何云端模块。");
-
-                    return CompletableFuture.<Void>completedFuture(null);
-                }
-
-                plugin.consoleInfo("[Cloud] 本次需同步 " + mods.size() + " 个云端模块: " + mods);
-
-                CompletableFuture<Void> chain = CompletableFuture.completedFuture(null);
-                for (String id : mods) {
-                    if (id == null || id.isEmpty() || (requested != null && !requested.contains(id))) continue;
-                    chain = chain.thenCompose(v -> syncModuleFile(id));
-                }
-                return chain;
+                return syncAuthorizedModules(requested);
             });
+        });
+    }
+
+    CompletableFuture<Void> syncAuthorizedModules(java.util.Set<String> requested) {
+        return prepareCustomerModuleAccess(false).thenCompose(ignored -> {
+            List<String> mods = authorizedModuleIds();
+            if (mods.isEmpty()) {
+                plugin.consoleInfo("[Cloud] 该服务器未装备任何适用于当前发行批次的模块。");
+                return CompletableFuture.completedFuture(null);
+            }
+            plugin.consoleInfo("[Cloud] 本次需同步 " + mods.size() + " 个授权模块: " + mods);
+            CompletableFuture<Void> chain = CompletableFuture.completedFuture(null);
+            for (String id : mods) {
+                if (id == null || id.isEmpty() || (requested != null && !requested.contains(id))) continue;
+                chain = chain.thenCompose(v -> syncModuleFile(id));
+            }
+            return chain;
         });
     }
 
@@ -926,11 +956,11 @@ public final class CloudModuleService {
         // 若本地缓存不包含该模块，先刷新令牌获取最新授权列表（应对启动后云端新装备模块的场景）
 
         CompletableFuture<Boolean> ready;
-        if (!allowedModules.contains(moduleId)) {
+        if (!authorizedModuleIds().contains(moduleId)) {
 
             plugin.consoleInfo("[Cloud] 模块 " + moduleId + " 不在本地缓存授权列表中，尝试刷新令牌...");
 
-            ready = refreshToken();
+            ready = customerRelease == null ? refreshToken() : refreshToken(true);
         } else {
             ready = CompletableFuture.completedFuture(true);
         }
@@ -942,7 +972,7 @@ public final class CloudModuleService {
 
                 return CompletableFuture.completedFuture(false);
             }
-            if (!allowedModules.contains(moduleId)) {
+            if (!authorizedModuleIds().contains(moduleId)) {
 
                 plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 不在云端授权列表中，无法通过云端更新。");
 
@@ -1130,7 +1160,7 @@ public final class CloudModuleService {
         return tasks.request(() -> downloadAndLoadRequest(moduleId));
     }
 
-    private CompletableFuture<Void> syncModuleFile(String moduleId) {
+    CompletableFuture<Void> syncModuleFile(String moduleId) {
         CompletableFuture<Void> work = downloadAndLoad(moduleId);
         if (!localModuleSource) return work;
         return work.exceptionally(failure -> {
@@ -1422,8 +1452,8 @@ public final class CloudModuleService {
         });
     }
 
-    private synchronized CompletableFuture<Void> ensureRuntimeLease() {
-        if (!runtimeAuthorization.needsRenewal()) return CompletableFuture.completedFuture(null);
+    private synchronized CompletableFuture<Void> ensureRuntimeLease(boolean forceRenewal) {
+        if (!forceRenewal && !runtimeAuthorization.needsRenewal()) return CompletableFuture.completedFuture(null);
         if (pendingRuntimeLease != null) return pendingRuntimeLease.copy();
         CompletableFuture<Void> work = requestRuntimeLease();
         pendingRuntimeLease = work;
@@ -1488,18 +1518,20 @@ public final class CloudModuleService {
                             throw new IllegalStateException("运行授权未确认: " + denialCode + "，HTTP " + response.httpStatus());
                         }
                         String envelope = extractJsonField(response.rawBody(), "runtimeLease");
+                        List<String> previous = authorizedModuleIds();
                         runtimeAuthorization.accept(envelope, serverCode, serverPublicKeyB64, NativeBridge::verifyResponseSig,
                             System.currentTimeMillis(), System.nanoTime(), requestStarted);
                         rememberSuccessfulEndpoint(response.endpoint());
-                        java.util.Set<String> permitted = runtimeAuthorization.permittedModules();
-                        List<String> previous = allowedModules;
-                        var ordered = new java.util.LinkedHashSet<String>();
-                        previous.stream().filter(permitted::contains).forEach(ordered::add);
-                        permitted.stream().sorted().forEach(ordered::add);
-                        allowedModules = List.copyOf(ordered);
+                        java.util.Set<String> permitted = runtimeModuleIds();
+                        if (customerRelease == null) {
+                            var ordered = new java.util.LinkedHashSet<String>();
+                            previous.stream().filter(permitted::contains).forEach(ordered::add);
+                            permitted.stream().sorted().forEach(ordered::add);
+                            allowedModules = List.copyOf(ordered);
+                        }
                         boolean resume = protectedModulesSuspended;
                         protectedModulesSuspended = false;
-                        if (resume || !java.util.Set.copyOf(previous).equals(permitted)) syncModuleChanges(previous);
+                        if (resume || !java.util.Set.copyOf(previous).equals(permitted)) syncModuleChanges();
                         startRuntimeWatchdog();
                         return (Void) null;
                     });
@@ -1510,7 +1542,7 @@ public final class CloudModuleService {
         tasks.main(() -> {
             if (runtimeLeaseWatchdog == null && !tasks.isClosed() && plugin.host().isEnabled()) {
                 runtimeLeaseWatchdog = plugin.getServer().getScheduler().runTaskTimer(plugin.host(), () -> {
-                    List<String> stopped = registry.revokeProtectedModulesNotIn(runtimeAuthorization.permittedModules());
+                    List<String> stopped = registry.revokeProtectedModulesNotIn(runtimeModuleIds());
                     if (!stopped.isEmpty()) {
                         protectedModulesSuspended = true;
                         stopped.forEach(cachedAxb::remove);
@@ -1527,7 +1559,10 @@ public final class CloudModuleService {
     }
 
     private CompletableFuture<String> requestModuleKey(String moduleId, byte[] axb, boolean recoverToken) {
-        return ensureRuntimeLease().thenCompose(ignored -> {
+        return ensureRuntimeLease(false).thenCompose(ignored -> {
+            if (customerRelease != null && !moduleRuntimeAuthorized(moduleId)) {
+                return CompletableFuture.failedFuture(new IllegalStateException("客户模块发行批次或席位未授权"));
+            }
             // Retries get distinct proofs. A consumed request must never be replayed to a cloud.
             Map<String, RuntimeAuthorization.KeyProof> attempts = new ConcurrentHashMap<>();
             return sendSignedWithFailover("key",
@@ -1580,7 +1615,7 @@ public final class CloudModuleService {
         });
     }
 
-    private void startHeartbeat() {
+    private synchronized void startHeartbeat() {
         if (tasks.isClosed() || !plugin.host().isEnabled() || heartbeatTask != null) return;
         heartbeatTask = plugin.getServer().getScheduler().runTaskTimerAsynchronously(plugin.host(), () -> tasks.request(this::sendHeartbeat), 30L * 20L, 30L * 20L);
 
@@ -1645,8 +1680,8 @@ public final class CloudModuleService {
     }
 
     private CompletableFuture<Void> sendHeartbeat() {
-        CompletableFuture<Void> renewal = runtimeAuthorization.hasLease() || protectedModulesSuspended
-            ? ensureRuntimeLease() : CompletableFuture.completedFuture(null);
+        CompletableFuture<Void> renewal = customerRelease != null || runtimeAuthorization.hasLease() || protectedModulesSuspended
+            ? ensureRuntimeLease(false) : CompletableFuture.completedFuture(null);
         return renewal.handle((ignored, failure) -> {
             if (failure != null) plugin.consoleWarn("[Cloud] 运行授权续租暂未完成，期限由本地监控独立执行");
             return (Void) null;
@@ -1747,12 +1782,12 @@ public final class CloudModuleService {
      * 对比前后授权列表，卸载已撤销的云端模块，加载新授权的模块。
 
      */
-    private void syncModuleChanges(List<String> oldAllowed) {
-        tasks.main(() -> { syncModuleChangesMain(oldAllowed); return null; });
+    private void syncModuleChanges() {
+        tasks.main(() -> { syncModuleChangesMain(); return null; });
     }
 
-    private void syncModuleChangesMain(List<String> oldAllowed) {
-        List<String> currentAllowed = this.allowedModules;
+    private void syncModuleChangesMain() {
+        List<String> currentAllowed = authorizedModuleIds();
         List<String> loadedCloud = registry.getLoadedCloudModuleIds();
 
 

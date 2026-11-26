@@ -10,7 +10,9 @@ import shutil
 import subprocess
 import sys
 import zipfile
+from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
+from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 
 PLATFORMS = ("windows-x86_64", "linux-x86_64")
@@ -18,6 +20,34 @@ PRIMARY = "https://cloud.021209.xyz"
 ACTIVATION = Path("suite-release/activation.json")
 PREPARED = Path("suite-release/staging.enc")
 STAGED_MODULES = Path("suite-release/modules")
+
+
+class NoRedirects(HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+def verify_publication_origins():
+    http = build_opener(NoRedirects())
+    for origin in (PRIMARY, mirror_origin()):
+        request = Request(origin + "/v1/ci/suite-release/current", data=b"{}", headers={
+            "X-CI-Token": os.environ["CLOUD_CI_TOKEN"],
+            "Content-Type": "application/json",
+        })
+        try:
+            with http.open(request, timeout=25) as response:
+                status, payload = response.status, {}
+        except HTTPError as error:
+            status = error.code
+            try:
+                payload = json.loads(error.read(4096))
+            except ValueError:
+                payload = {}
+        except (URLError, TimeoutError) as error:
+            raise RuntimeError(f"Suite publication preflight unavailable on {urlsplit(origin).hostname}") from error
+        if status != 400 or not isinstance(payload, dict) or payload.get("error") != "INVALID_RELEASE":
+            raise RuntimeError(f"Suite publication preflight failed on {urlsplit(origin).hostname} (HTTP {status})")
+        print(f"Suite publication endpoint verified on {urlsplit(origin).hostname}", flush=True)
 
 
 def post(origin, path, fields, *, payload=None):
@@ -221,11 +251,13 @@ def activate_release():
 
 
 if __name__ == "__main__":
-    if sys.argv[1:] == ["prepare"]:
+    if sys.argv[1:] == ["check"]:
+        verify_publication_origins()
+    elif sys.argv[1:] == ["prepare"]:
         prepare_release()
     elif sys.argv[1:] == ["stage"]:
         stage_release()
     elif sys.argv[1:] == ["activate"]:
         activate_release()
     else:
-        raise SystemExit("Usage: publish-suite.py prepare|stage|activate")
+        raise SystemExit("Usage: publish-suite.py check|prepare|stage|activate")

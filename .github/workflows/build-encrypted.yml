@@ -225,6 +225,13 @@ jobs:
             exit 1
           fi
 
+      - name: Verify both Suite publication endpoints
+        if: env.AXS_CLOUD_UPLOAD == 'true' && steps.changes.outputs.core_changed == 'true'
+        env:
+          CLOUD_CI_TOKEN: ${{ secrets.CLOUD_CI_TOKEN }}
+          FLARE_BASE_URL: ${{ vars.FLARE_BASE_URL }}
+        run: python3 scripts/publish-suite.py check
+
   verify-abyss:
     runs-on: ubuntu-latest
     needs: detect-changes

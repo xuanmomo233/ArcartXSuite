@@ -109,11 +109,14 @@ class RuntimeAuthorizationTest {
         var body = claims(now);
         authorization.accept(envelope(body), "SERVER_A", "INSTALLATION", this::verify, now, nanos);
         assertFalse(authorization.permitsCustomerFeatures(release, null, nanos));
+        assertEquals(java.util.Set.of(), authorization.permittedCustomerModules(release));
         body.addProperty("customerRelease", release);
         body.getAsJsonObject("moduleExpiresAt").addProperty("market", now + 1_000L);
         authorization.accept(envelope(body), "SERVER_A", "INSTALLATION", this::verify, now, nanos);
         assertTrue(authorization.permitsCustomerFeatures(release, null, nanos));
         assertTrue(authorization.permitsCustomerFeatures(release, "market", nanos));
+        assertEquals(java.util.Set.of("market"), authorization.permittedCustomerModules(release));
+        assertEquals(java.util.Set.of(), authorization.permittedCustomerModules(release.replace("2.0.0", "2.0.1")));
         assertFalse(authorization.permitsCustomerFeatures(release, "eventpacket", nanos));
         assertFalse(authorization.permitsCustomerFeatures(null, null, nanos));
         assertFalse(authorization.permitsCustomerFeatures(release.replace("2.0.0", "2.0.1"), null, nanos));

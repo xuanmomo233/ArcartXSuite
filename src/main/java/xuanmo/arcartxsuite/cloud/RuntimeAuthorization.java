@@ -159,7 +159,14 @@ final class RuntimeAuthorization {
     }
     java.util.Set<String> permittedModules() { return permittedModules(System.nanoTime()); }
     java.util.Set<String> permittedModules(long nanos) {
+        return permittedModules(lease, nanos);
+    }
+    java.util.Set<String> permittedCustomerModules(String release) {
         Lease current = lease;
+        if (current == null || release == null || !release.equals(current.customerRelease())) return java.util.Set.of();
+        return permittedModules(current, System.nanoTime());
+    }
+    private static java.util.Set<String> permittedModules(Lease current, long nanos) {
         if (current == null || current.deadlineNanos() - nanos <= 0) return java.util.Set.of();
         return current.moduleDeadlines().entrySet().stream().filter(entry -> entry.getValue() - nanos > 0)
             .map(java.util.Map.Entry::getKey).collect(java.util.stream.Collectors.toUnmodifiableSet());
