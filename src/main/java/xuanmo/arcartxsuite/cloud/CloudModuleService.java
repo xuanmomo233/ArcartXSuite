@@ -133,6 +133,11 @@ public final class CloudModuleService {
     private final Map<String, CompletableFuture<Void>> downloading = new ConcurrentHashMap<>();
     private final ResponseSignatureVerifier responseSignatureVerifier = new ResponseSignatureVerifier();
     private final String suiteRelease;
+    private final boolean localModuleSource;
+    private final RuntimeAuthorization runtimeAuthorization = new RuntimeAuthorization();
+    private CompletableFuture<Void> pendingRuntimeLease;
+    private BukkitTask runtimeLeaseWatchdog;
+    private volatile boolean protectedModulesSuspended;
 
     private BukkitTask heartbeatTask;
     private final long pluginStartTime = System.currentTimeMillis();
@@ -157,6 +162,12 @@ public final class CloudModuleService {
         this.serverCode = config.getString("cloud.server-code", "").trim();
         this.keyPair = loadOrGenerateKeyPair();
         this.serverPublicKeyB64 = encodeRawEd25519PublicKey(keyPair);
+        String source = config.getString("cloud.module-source", "cloud");
+        if (!java.util.Set.of("cloud", "local").contains(source))
+            throw new IllegalArgumentException("cloud.module-source must be cloud or local");
+        this.localModuleSource = "local".equals(source)
+            || suiteRelease.matches("[a-zA-Z0-9._-]{1,40}-local\\.[0-9a-f]{40}-suite\\.0\\.0-ci\\.[0-9a-f]{7}");
+        registry.setProtectedModuleAuthorization(runtimeAuthorization::permits);
 
         this.apiBaseUrl = API_BASE_URLS.get(0);
     }
@@ -538,15 +549,21 @@ public final class CloudModuleService {
 
             return CompletableFuture.completedFuture(new CloudResponse<>(CloudStatus.REJECTED, null, 0, null, "missing cloud config", null));
         }
-        String fingerprint = generateFingerprint();
-        String payload = "{"
-            + "\"qq\":\"" + escapeJson(qq) + "\","
-            + "\"apiKey\":\"" + escapeJson(apiKey) + "\","
-            + "\"pubkey\":\"" + serverPublicKeyB64 + "\","
-            + "\"keyAnchor\":\"" + escapeJson(serverSecretB64()) + "\","
-            + "\"fingerprintHash\":\"" + sha256(fingerprint) + "\","
-            + "\"name\":\"" + escapeJson(serverName) + "\""
-            + "}";
+        String fingerprint = sha256(generateFingerprint());
+        long proofAt = runtimeAuthorization.timestamp();
+        String proofId = java.util.UUID.randomUUID().toString();
+        String anchor = serverSecretB64();
+        var binding = new com.google.gson.JsonObject();
+        binding.addProperty("qq", qq);
+        binding.addProperty("apiKey", apiKey);
+        binding.addProperty("pubkey", serverPublicKeyB64);
+        binding.addProperty("keyAnchor", anchor);
+        binding.addProperty("fingerprintHash", fingerprint);
+        binding.addProperty("name", serverName);
+        binding.addProperty("proofAt", proofAt);
+        binding.addProperty("proofId", proofId);
+        binding.addProperty("proof", sign(RuntimeAuthorization.bindingMessage(qq, serverPublicKeyB64, anchor, fingerprint, serverName, proofAt, proofId)));
+        String payload = binding.toString();
 
         return sendSignedWithFailover(
             "bind",
@@ -568,6 +585,7 @@ public final class CloudModuleService {
             String token = extractJsonField(body, "token");
             String responseApiKey = extractJsonField(body, "apiKey");
             if (code != null && !code.isEmpty()) {
+                if (!code.equals(this.serverCode)) runtimeAuthorization.invalidate();
                 this.serverCode = code;
                 this.allowedModules = extractStringArray(body, "allowedModules");
                 if (token != null) {
@@ -653,7 +671,7 @@ public final class CloudModuleService {
         }
 
         String requestServerCode = serverCode;
-        long timestamp = System.currentTimeMillis();
+        long timestamp = runtimeAuthorization.timestamp();
         String signMessage = "POST\n/v1/servers/refresh\n" + timestamp + "\n" + requestServerCode;
 
         String signature = sign(signMessage);
@@ -794,7 +812,7 @@ public final class CloudModuleService {
                 CompletableFuture<Void> chain = CompletableFuture.completedFuture(null);
                 for (String id : mods) {
                     if (id == null || id.isEmpty() || (requested != null && !requested.contains(id))) continue;
-                    chain = chain.thenCompose(v -> downloadAndLoad(id));
+                    chain = chain.thenCompose(v -> syncModuleFile(id));
                 }
                 return chain;
             });
@@ -930,7 +948,7 @@ public final class CloudModuleService {
 
                     return CompletableFuture.completedFuture(false);
                 }
-                return requestModuleKey(moduleId).thenCompose(keyResp -> {
+                return requestModuleKey(moduleId, axb).thenCompose(keyResp -> {
                     if (tasks.isClosed()) return CompletableFuture.failedFuture(new java.util.concurrent.CancellationException("云端模块服务正在停止"));
                     if (keyResp == null) {
 
@@ -1090,6 +1108,17 @@ public final class CloudModuleService {
         return tasks.request(() -> downloadAndLoadRequest(moduleId));
     }
 
+    private CompletableFuture<Void> syncModuleFile(String moduleId) {
+        CompletableFuture<Void> work = downloadAndLoad(moduleId);
+        if (!localModuleSource) return work;
+        return work.exceptionally(failure -> {
+            Throwable cause = unwrap(failure);
+            if (cause instanceof java.util.concurrent.CancellationException) throw (java.util.concurrent.CancellationException) cause;
+            plugin.consoleWarn("[Cloud] 本地模块 " + moduleId + " 加载失败: " + failure.getMessage());
+            return null;
+        });
+    }
+
     private CompletableFuture<Void> downloadAndLoadRequest(String moduleId) {
         if (!isValidModuleId(moduleId)) {
 
@@ -1169,7 +1198,7 @@ public final class CloudModuleService {
 
     private CompletableFuture<Void> decryptAndLoadBody(String moduleId, byte[] axb, boolean isRetry, CloudPayload payload) {
 
-        return retryAsync(moduleId, "密钥获取", 3, 2000L, () -> requestModuleKey(moduleId)).thenCompose(keyResp -> {
+        return retryAsync(moduleId, "密钥获取", 3, 2000L, () -> requestModuleKey(moduleId, axb)).thenCompose(keyResp -> {
             if (tasks.isClosed()) return CompletableFuture.failedFuture(new java.util.concurrent.CancellationException("云端模块服务正在停止"));
 
             if (keyResp == null) {
@@ -1311,6 +1340,15 @@ public final class CloudModuleService {
     }
 
     private CompletableFuture<byte[]> downloadAxb(String moduleId) {
+        if (localModuleSource) {
+            return CompletableFuture.supplyAsync(() -> {
+                try {
+                    return new LocalModuleFiles(plugin.getDataFolder().toPath().resolve("modules")).read(moduleId);
+                } catch (java.io.IOException failure) {
+                    throw new java.util.concurrent.CompletionException("本地受保护模块不可用，请安装同批次的 " + moduleId + ".axb；不会回退下载", failure);
+                }
+            });
+        }
         if (suiteRelease.isEmpty()) {
             plugin.consoleWarn("[Cloud] 当前宿主缺少发行批次，无法获取云端模块。");
             return CompletableFuture.completedFuture(null);
@@ -1362,57 +1400,162 @@ public final class CloudModuleService {
         });
     }
 
-    private CompletableFuture<String> requestModuleKey(String moduleId) {
-        return sendSignedWithFailover(
-            "key",
-            endpoint -> HttpRequest.newBuilder()
-                .uri(URI.create(endpoint + "/v1/modules/" + moduleId + "/key"))
-                .header("Content-Type", "application/json")
-                .header("X-Module-Token", moduleToken)
-                .header("X-Server-Code", serverCode)
-                .header("X-Fingerprint", sha256(generateFingerprint()))
-                .POST(HttpRequest.BodyPublishers.ofString("{\"version\":\"" + suiteRelease + "\"}"))
-                .build(),
-            resp -> validateSignedResponse("key:" + moduleId, "[Cloud] 获取模块 " + moduleId + " 密钥响应", resp)
-        ).thenApply(resp -> {
-            if (!resp.isOk()) {
-                if (resp.isTransient()) {
+    private synchronized CompletableFuture<Void> ensureRuntimeLease() {
+        if (!runtimeAuthorization.needsRenewal()) return CompletableFuture.completedFuture(null);
+        if (pendingRuntimeLease != null) return pendingRuntimeLease.copy();
+        CompletableFuture<Void> work = requestRuntimeLease();
+        pendingRuntimeLease = work;
+        work.whenComplete((ignored, failure) -> {
+            synchronized (this) { if (pendingRuntimeLease == work) pendingRuntimeLease = null; }
+        });
+        return work.copy();
+    }
 
-                    plugin.consoleWarn("[Cloud] 获取模块 " + moduleId + " 密钥暂时失败，HTTP " + resp.httpStatus());
+    private HttpRequest authenticatedRuntimeRequest(String endpoint, String path, String method, String body) {
+        long at = runtimeAuthorization.timestamp();
+        String proof = sign(method + "\n" + path + "\n" + at + "\n" + serverCode);
+        return HttpRequest.newBuilder().uri(URI.create(endpoint + path))
+            .header("Content-Type", "application/json").header("X-Server-Code", serverCode)
+            .header("X-Timestamp", Long.toString(at)).header("X-Signature", proof)
+            .method(method, body == null ? HttpRequest.BodyPublishers.noBody() : HttpRequest.BodyPublishers.ofString(body))
+            .build();
+    }
 
-                } else {
-
-                    plugin.consoleWarn("[Cloud] 获取模块 " + moduleId + " 密钥被拒绝，HTTP " + resp.httpStatus());
-
+    private CompletableFuture<Void> requestRuntimeLease() {
+        try {
+            if (!NativeBridge.isAvailable() || !NativeBridge.responseVerifyActive())
+                return CompletableFuture.failedFuture(new IllegalStateException("受保护模块需要可用的 Native 发行公钥验签"));
+        } catch (LinkageError unavailable) {
+            return CompletableFuture.failedFuture(unavailable);
+        }
+        return sendSignedWithFailover("runtime-challenge",
+            endpoint -> authenticatedRuntimeRequest(endpoint, "/v1/servers/runtime-challenge", "GET", null),
+            response -> validateSignedResponse("runtime-challenge:" + response.endpoint(), "[Cloud] 运行实例挑战", response))
+            .thenCompose(challenge -> {
+                if (!challenge.isOk()) {
+                    if (challenge.isRejected()) runtimeAuthorization.invalidate();
+                    return CompletableFuture.failedFuture(new IllegalStateException("无法取得运行授权挑战"));
                 }
-                return null;
+                String nonce = extractJsonField(challenge.rawBody(), "nonce");
+                if (nonce == null || nonce.length() > 256)
+                    return CompletableFuture.failedFuture(new IllegalStateException("运行挑战格式无效"));
+                rememberSuccessfulEndpoint(challenge.endpoint());
+                long at = runtimeAuthorization.timestamp();
+                String id = java.util.UUID.randomUUID().toString();
+                String message = runtimeAuthorization.leaseRequestMessage(serverCode, nonce, at, id);
+                var body = new com.google.gson.JsonObject();
+                body.addProperty("instancePublicKey", runtimeAuthorization.instancePublicKey());
+                body.addProperty("apiKey", apiKey);
+                body.addProperty("nonce", nonce);
+                body.addProperty("proofAt", at);
+                body.addProperty("proofId", id);
+                body.addProperty("proof", sign(message));
+                body.addProperty("instanceProof", runtimeAuthorization.signInstance(message));
+                String previousLease = runtimeAuthorization.currentEnvelope();
+                if (previousLease != null) body.addProperty("previousLease", previousLease);
+                long requestStarted = System.nanoTime();
+                return sendSignedWithFailover("runtime-lease",
+                    endpoint -> authenticatedRuntimeRequest(endpoint, "/v1/servers/runtime-lease", "POST", body.toString()),
+                    response -> validateSignedResponse("runtime-lease:" + response.endpoint(), "[Cloud] 运行实例授权", response))
+                    .thenApply(response -> {
+                        if (!response.isOk()) {
+                            if (response.isRejected()) runtimeAuthorization.invalidate();
+                            String denialCode = extractJsonField(response.rawBody(), "error");
+                            if (denialCode == null || !denialCode.matches("[A-Z_]{1,64}")) denialCode = "UNKNOWN_AUTH_ERROR";
+                            throw new IllegalStateException("运行授权未确认: " + denialCode + "，HTTP " + response.httpStatus());
+                        }
+                        String envelope = extractJsonField(response.rawBody(), "runtimeLease");
+                        runtimeAuthorization.accept(envelope, serverCode, serverPublicKeyB64, NativeBridge::verifyResponseSig,
+                            System.currentTimeMillis(), System.nanoTime(), requestStarted);
+                        rememberSuccessfulEndpoint(response.endpoint());
+                        java.util.Set<String> permitted = runtimeAuthorization.permittedModules();
+                        List<String> previous = allowedModules;
+                        var ordered = new java.util.LinkedHashSet<String>();
+                        previous.stream().filter(permitted::contains).forEach(ordered::add);
+                        permitted.stream().sorted().forEach(ordered::add);
+                        allowedModules = List.copyOf(ordered);
+                        boolean resume = protectedModulesSuspended;
+                        protectedModulesSuspended = false;
+                        if (resume || !java.util.Set.copyOf(previous).equals(permitted)) syncModuleChanges(previous);
+                        startRuntimeWatchdog();
+                        return (Void) null;
+                    });
+            });
+    }
+
+    private void startRuntimeWatchdog() {
+        tasks.main(() -> {
+            if (runtimeLeaseWatchdog == null && !tasks.isClosed() && plugin.host().isEnabled()) {
+                runtimeLeaseWatchdog = plugin.getServer().getScheduler().runTaskTimer(plugin.host(), () -> {
+                    List<String> stopped = registry.revokeProtectedModulesNotIn(runtimeAuthorization.permittedModules());
+                    if (!stopped.isEmpty()) {
+                        protectedModulesSuspended = true;
+                        stopped.forEach(cachedAxb::remove);
+                        plugin.consoleWarn("[Cloud] 运行授权已失效或撤销，已停止相关模块及其依赖: " + stopped);
+                    }
+                }, 20L, 20L);
             }
-            String body = resp.rawBody();
-            if (body == null || body.isEmpty() || !suiteRelease.equals(extractJsonField(body, "version"))) {
-
-                plugin.consoleWarn("[Cloud] 获取模块 " + moduleId + " 密钥成功但响应体为空");
-
-                return null;
-            }
-            rememberSuccessfulEndpoint(resp.endpoint());
-            String key = extractJsonField(body, "key");
-            if (key == null || key.isEmpty()) {
-
-                plugin.consoleWarn("[Cloud] 获取模块 " + moduleId + " 密钥失败，响应中缺少 key 字段");
-
-                return null;
-            }
-
-            plugin.consoleInfo("[Cloud] 获取模块 " + moduleId + " 密钥成功");
-
-            rememberSuccessfulEndpoint(resp.endpoint());
-            return body;
+            return null;
         });
     }
 
+    private CompletableFuture<String> requestModuleKey(String moduleId, byte[] axb) {
+        return requestModuleKey(moduleId, axb, true);
+    }
 
-    // -- 心跳 ------------------------------------------------
-
+    private CompletableFuture<String> requestModuleKey(String moduleId, byte[] axb, boolean recoverToken) {
+        return ensureRuntimeLease().thenCompose(ignored -> {
+            // Retries get distinct proofs. A consumed request must never be replayed to a cloud.
+            Map<String, RuntimeAuthorization.KeyProof> attempts = new ConcurrentHashMap<>();
+            return sendSignedWithFailover("key",
+                endpoint -> {
+                    RuntimeAuthorization.KeyProof proof = runtimeAuthorization.keyProof(serverCode, moduleId, suiteRelease, axb);
+                    attempts.put(proof.requestId(), proof);
+                    var body = new com.google.gson.JsonObject();
+                    body.addProperty("version", suiteRelease);
+                    body.addProperty("checksum", proof.checksum());
+                    return HttpRequest.newBuilder()
+                        .uri(URI.create(endpoint + "/v1/modules/" + moduleId + "/key"))
+                        .header("Content-Type", "application/json")
+                        .header("X-Module-Token", moduleToken).header("X-Server-Code", serverCode)
+                        .header("X-Fingerprint", sha256(generateFingerprint()))
+                        .header("X-AXS-Runtime-Lease", proof.envelope())
+                        .header("X-AXS-Runtime-Proof", proof.signature())
+                        .header("X-AXS-Request-Time", Long.toString(proof.timestamp()))
+                        .header("X-AXS-Request-Id", proof.requestId())
+                        .POST(HttpRequest.BodyPublishers.ofString(body.toString())).build();
+                },
+                response -> validateSignedResponse("key:" + moduleId + ":" + response.endpoint(), "[Cloud] 模块密钥授权响应", response))
+                .thenCompose(response -> {
+                    if (!response.isOk()) {
+                        // A standby-issued opaque token may not yet exist in the recovered primary database.
+                        if (recoverToken && response.httpStatus() == 401
+                            && "INVALID_TOKEN".equals(extractJsonField(response.rawBody(), "error"))) {
+                            return refreshTokenGate(true).thenCompose(refreshed -> {
+                                if (refreshed.isOk()) return requestModuleKey(moduleId, axb, false);
+                                if (refreshed.isRejected()) runtimeAuthorization.invalidate();
+                                if (refreshed.isTransient()) return CompletableFuture.<String>failedFuture(
+                                    new java.io.IOException("跨云模块令牌刷新暂时失败"));
+                                return CompletableFuture.<String>completedFuture(null);
+                            });
+                        }
+                        if (response.isTransient()) return CompletableFuture.<String>failedFuture(
+                            new java.io.IOException("模块取钥暂时失败，HTTP " + response.httpStatus()));
+                        return CompletableFuture.<String>completedFuture(null);
+                    }
+                    String raw = response.rawBody();
+                    String requestId = extractJsonField(raw, "runtimeRequestId");
+                    RuntimeAuthorization.KeyProof proof = requestId == null ? null : attempts.get(requestId);
+                    if (proof == null || !suiteRelease.equals(extractJsonField(raw, "version"))
+                        || !proof.checksum().equals(RuntimeAuthorization.normalizeChecksum(extractJsonField(raw, "checksum"))))
+                        throw new IllegalArgumentException("本地模块发行批次、摘要或取钥请求不匹配");
+                    String key = extractJsonField(raw, "key");
+                    if (key == null || key.isEmpty()) throw new IllegalArgumentException("授权响应缺少密钥");
+                    rememberSuccessfulEndpoint(response.endpoint());
+                    return CompletableFuture.completedFuture(raw);
+                });
+        });
+    }
 
     private void startHeartbeat() {
         if (tasks.isClosed() || !plugin.host().isEnabled() || heartbeatTask != null) return;
@@ -1434,17 +1577,22 @@ public final class CloudModuleService {
                 throw new java.util.concurrent.CompletionException(original);
             });
         }
-        return exited.whenComplete((ignored, failure) -> {
+        return exited.thenCompose(ignored -> releaseRuntimeLease()).whenComplete((ignored, failure) -> {
             cachedAxb.clear();
             downloading.clear();
             byte[] secret = serverSecret;
             serverSecret = null;
             if (secret != null) java.util.Arrays.fill(secret, (byte) 0);
             moduleToken = null;
+            if (runtimeAuthorization != null) runtimeAuthorization.invalidate();
         });
     }
 
     public void stopHeartbeat() {
+        if (runtimeLeaseWatchdog != null) {
+            runtimeLeaseWatchdog.cancel();
+            runtimeLeaseWatchdog = null;
+        }
         if (heartbeatTask != null) {
             heartbeatTask.cancel();
             heartbeatTask = null;
@@ -1453,8 +1601,36 @@ public final class CloudModuleService {
 
         }
     }
+    private CompletableFuture<Void> releaseRuntimeLease() {
+        if (runtimeAuthorization == null || keyPair == null || serverCode == null || serverCode.isEmpty())
+            return CompletableFuture.completedFuture(null);
+        RuntimeAuthorization.ReleaseProof proof = runtimeAuthorization.releaseProof(serverCode);
+        if (proof == null) return CompletableFuture.completedFuture(null);
+        var body = new com.google.gson.JsonObject();
+        body.addProperty("runtimeLease", proof.envelope());
+        body.addProperty("proofAt", proof.timestamp());
+        body.addProperty("proofId", proof.requestId());
+        body.addProperty("proof", proof.signature());
+        String endpoint = API_BASE_URLS.get("axs-standby".equals(proof.issuer()) ? 1 : 0);
+        var request = authenticatedRuntimeRequest(endpoint, "/v1/servers/runtime-release", "POST", body.toString());
+        return HTTP.sendAsync(request, HttpResponse.BodyHandlers.discarding()).orTimeout(5, java.util.concurrent.TimeUnit.SECONDS)
+            .handle((response, failure) -> {
+                if (failure != null || response.statusCode() != 200)
+                    plugin.consoleWarn("[Cloud] 运行租约未能主动释放，将按原期限自动过期");
+                return (Void) null;
+            });
+    }
 
     private CompletableFuture<Void> sendHeartbeat() {
+        CompletableFuture<Void> renewal = runtimeAuthorization.hasLease() || protectedModulesSuspended
+            ? ensureRuntimeLease() : CompletableFuture.completedFuture(null);
+        return renewal.handle((ignored, failure) -> {
+            if (failure != null) plugin.consoleWarn("[Cloud] 运行授权续租暂未完成，期限由本地监控独立执行");
+            return (Void) null;
+        }).thenCompose(ignored -> sendHeartbeatReport());
+    }
+
+    private CompletableFuture<Void> sendHeartbeatReport() {
         if (moduleToken == null || moduleToken.isEmpty()) return CompletableFuture.completedFuture(null);
 
         syncCounter++;
@@ -1557,23 +1733,10 @@ public final class CloudModuleService {
         List<String> loadedCloud = registry.getLoadedCloudModuleIds();
 
 
-        // 需要卸载的：已加载的云端模块不再在授权列表中
-
-        for (String id : loadedCloud) {
-            if (!currentAllowed.contains(id)) {
-                tasks.main(() -> {
-                    boolean ok = registry.unloadModule(id);
-                    if (ok) {
-
-                        plugin.consoleInfo("[Cloud] 模块 " + id + " 授权已撤销，已卸载");
-
-                    }
-                    cachedAxb.remove(id);
-                    return null;
-                });
-            }
+        for (String id : registry.revokeProtectedModulesNotIn(java.util.Set.copyOf(currentAllowed))) {
+            cachedAxb.remove(id);
+            plugin.consoleInfo("[Cloud] 模块 " + id + " 授权或依赖已撤销，已停止");
         }
-
 
         // 需要加载的：新出现在授权列表中且尚未加载
 
@@ -1587,7 +1750,7 @@ public final class CloudModuleService {
 
             CompletableFuture<Void> chain = CompletableFuture.completedFuture(null);
             for (String id : toLoad) {
-                chain = chain.thenCompose(v -> downloadAndLoad(id));
+                chain = chain.thenCompose(v -> syncModuleFile(id));
             }
         }
     }
