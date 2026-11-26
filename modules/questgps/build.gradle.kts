@@ -5,6 +5,7 @@
 dependencies {
     testImplementation(platform("org.junit:junit-bom:5.10.2"))
     testImplementation("org.junit.jupiter:junit-jupiter")
+    testImplementation("org.mockito:mockito-core:5.12.0")
     testImplementation(project(":axs-api"))
     testImplementation("org.spigotmc:spigot-api:1.20.1-R0.1-SNAPSHOT")
     testImplementation(files("../../libs/Chemdah-1.1.33-FREE.jar"))

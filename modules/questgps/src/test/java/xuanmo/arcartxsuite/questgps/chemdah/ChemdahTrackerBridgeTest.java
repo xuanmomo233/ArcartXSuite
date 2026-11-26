@@ -1,9 +1,9 @@
 package xuanmo.arcartxsuite.questgps.chemdah;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.mock;
 
 import ink.ptms.chemdah.core.quest.addon.data.TrackCenter;
-import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.List;
 import org.bukkit.Location;
@@ -14,8 +14,8 @@ import org.junit.jupiter.api.Test;
 class ChemdahTrackerBridgeTest {
     @Test
     void orderedNativeCentersSkipUnavailableTargetsAndStopAtTheFirstUsablePoint() {
-        World world = (World) Proxy.newProxyInstance(World.class.getClassLoader(), new Class<?>[]{World.class},
-            (proxy, method, args) -> { throw new AssertionError(method.getName()); });
+        World world = mock(World.class,
+            call -> { throw new AssertionError(call.getMethod().getName()); });
         var target = new Location(world, 12, 64, 25);
         var visited = new ArrayList<String>();
         var resolved = ChemdahTrackerBridge.firstResolved(null, List.of("done", "unloaded", "invalid", "pending", "later"), id -> {
