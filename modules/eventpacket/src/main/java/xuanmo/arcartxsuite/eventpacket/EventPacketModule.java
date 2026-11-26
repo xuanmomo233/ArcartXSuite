@@ -47,7 +47,7 @@ public final class EventPacketModule extends AbstractAXSModule implements Module
     private long actionFailures;
 
     @Override public ModuleDescriptor descriptor() {
-        return ModuleDescriptor.builder("eventpacket").name("EventPacket").version("2.0.0")
+        return ModuleDescriptor.builder("eventpacket").name("EventPacket").version("3.3.7")
             .mainClass(getClass().getName()).build();
     }
 

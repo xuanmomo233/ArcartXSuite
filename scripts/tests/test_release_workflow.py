@@ -17,7 +17,8 @@ WORKFLOW = Path(__file__).resolve().parents[2] / ".github/workflows/build-encryp
 
 
 class CloudActivationTest(unittest.TestCase):
-    def run_activation(self, failure=None, rollback_failure=None):
+    def run_publication(self, failure=None, rollback_failure=None, *, announce=False,
+                        invalid_announcement=False, advance_main_after_activation=False, stale_origin=None):
         script = WORKFLOW.parents[2] / "scripts/publish-suite.py"
         spec = importlib.util.spec_from_file_location("suite_publisher", script)
         publisher = importlib.util.module_from_spec(spec)
@@ -25,13 +26,25 @@ class CloudActivationTest(unittest.TestCase):
         commit = "a" * 40
         mirror = "https://mirror.example.test"
         self.calls = []
+        published_origins = set()
 
-        def post(origin, _path, _fields, *, payload):
+        def post(origin, path, _fields, *, payload):
             name = "primary" if origin == publisher.PRIMARY else "mirror"
             action = payload["action"]
             self.calls.append((name, action))
             if (name, action) in (failure, rollback_failure):
                 raise RuntimeError("fixture request failed")
+            if action == "activate":
+                published_origins.add(name)
+            if action == "withdraw":
+                active = name in published_origins and name != stale_origin
+                return {"ok": True, "state": "published" if active else "prepared", "version": payload["version"]}
+            if action == "announce":
+                self.assertEqual("/v1/ci/suite-release/current", path)
+                self.assertEqual(["market"], payload["modules"])
+                self.assertEqual(commit, payload["commit"])
+                return {"ok": True, "state": "published" if invalid_announcement else "announced",
+                        "version": payload["version"]}
             return {"ok": True}
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -47,10 +60,14 @@ class CloudActivationTest(unittest.TestCase):
                     patch.object(publisher, "post", side_effect=post), \
                     patch.object(publisher, "subprocess", git):
                 publisher.activate_release()
+                if advance_main_after_activation:
+                    git.check_output = lambda *_args, **_kwargs: ("b" * 40) + "\trefs/heads/main\n"
+                if announce:
+                    publisher.announce_release()
 
     def test_later_activation_failure_rolls_back_both_origins(self):
         with self.assertRaisesRegex(RuntimeError, "both origins confirmed rollback"):
-            self.run_activation(failure=("mirror", "activate"))
+            self.run_publication(failure=("mirror", "activate"), announce=True)
         self.assertEqual([
             ("primary", "withdraw"), ("mirror", "withdraw"),
             ("primary", "activate"), ("mirror", "activate"),
@@ -59,13 +76,37 @@ class CloudActivationTest(unittest.TestCase):
 
     def test_failed_preflight_does_not_change_active_versions(self):
         with self.assertRaisesRegex(RuntimeError, "fixture request failed"):
-            self.run_activation(failure=("mirror", "withdraw"))
+            self.run_publication(failure=("mirror", "withdraw"))
         self.assertEqual([("primary", "withdraw"), ("mirror", "withdraw")], self.calls)
 
     def test_unconfirmed_rollback_still_attempts_the_other_origin(self):
         with self.assertRaisesRegex(RuntimeError, "rollback remains unconfirmed on mirror.example.test"):
-            self.run_activation(failure=("mirror", "activate"), rollback_failure=("mirror", "rollback"))
+            self.run_publication(failure=("mirror", "activate"), rollback_failure=("mirror", "rollback"))
         self.assertEqual([("mirror", "rollback"), ("primary", "rollback")], self.calls[-2:])
+
+    def test_both_origins_activate_before_primary_announces(self):
+        self.run_publication(announce=True)
+        self.assertEqual([
+            ("primary", "withdraw"), ("mirror", "withdraw"),
+            ("primary", "activate"), ("mirror", "activate"),
+            ("primary", "withdraw"), ("mirror", "withdraw"), ("primary", "announce"),
+        ], self.calls)
+
+    def test_announcement_requires_readback_from_both_origins(self):
+        with self.assertRaisesRegex(RuntimeError, "mirror.example.test did not confirm the active Suite release"):
+            self.run_publication(announce=True, stale_origin="mirror")
+        self.assertEqual([("primary", "withdraw"), ("mirror", "withdraw")], self.calls[-2:])
+        self.assertNotIn(("primary", "announce"), self.calls)
+
+    def test_announcement_failure_does_not_roll_back_a_published_release(self):
+        with self.assertRaisesRegex(RuntimeError, "did not confirm the bot announcement"):
+            self.run_publication(announce=True, invalid_announcement=True)
+        self.assertEqual(("primary", "announce"), self.calls[-1])
+        self.assertNotIn("rollback", [action for _, action in self.calls])
+
+    def test_primary_checks_the_active_release_after_source_main_advances(self):
+        self.run_publication(announce=True, advance_main_after_activation=True)
+        self.assertEqual(("primary", "announce"), self.calls[-1])
 
 
 class BuildSeedsTest(unittest.TestCase):
@@ -194,9 +235,12 @@ class ReleaseWorkflowTest(unittest.TestCase):
         steps = self.workflow["jobs"]["publish-suite"]["steps"]
         activate = next(i for i, step in enumerate(steps) if step.get("name") == "Activate the staged Suite release")
         record = next(i for i, step in enumerate(steps) if step.get("with", {}).get("name") == "suite-published")
+        announce = next(i for i, step in enumerate(steps) if step.get("name") == "Queue the Suite release announcement")
         self.assertEqual("env.AXS_CLOUD_UPLOAD == 'true'", steps[activate]["if"])
         self.assertGreater(record, activate, "a staging run does not record a completed publication")
+        self.assertGreater(announce, record, "a failed notification must not erase the publication record")
         self.assertEqual(steps[activate]["if"], steps[record]["if"])
+        self.assertEqual(steps[record]["if"], steps[announce]["if"])
 
 
     def test_customer_export_dispatch_builds_only_the_requested_modules(self):

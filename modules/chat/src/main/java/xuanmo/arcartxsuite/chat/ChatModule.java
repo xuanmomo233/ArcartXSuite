@@ -63,7 +63,7 @@ public final class ChatModule extends AbstractAXSModule implements ModuleCommand
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("chat")
             .name("Chat")
-            .version("2.0.0")
+            .version("3.3.7")
             .mainClass(getClass().getName())
             .build();
     }

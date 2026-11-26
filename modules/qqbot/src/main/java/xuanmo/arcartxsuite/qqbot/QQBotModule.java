@@ -69,7 +69,7 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("qqbot")
             .name("QQBot")
-            .version("2.0.0")
+            .version("3.3.7")
             .mainClass(getClass().getName())
             .softDepends(List.of("chat"))
             .build();

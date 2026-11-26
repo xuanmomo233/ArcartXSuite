@@ -91,7 +91,7 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("entitytracker")
             .name("EntityTracker")
-            .version("2.0.0")
+            .version("3.3.7")
             .mainClass(getClass().getName())
             .build();
     }

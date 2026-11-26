@@ -73,7 +73,7 @@ public final class RegionsModule extends AbstractAXSModule implements ModuleComm
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("regions")
             .name("Regions")
-            .version("3.0.0")
+            .version("3.3.7")
             .mainClass(getClass().getName())
             .build();
     }
