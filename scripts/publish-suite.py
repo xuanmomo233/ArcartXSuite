@@ -33,6 +33,7 @@ def verify_publication_origins():
         request = Request(origin + "/v1/ci/suite-release/current", data=b"{}", headers={
             "X-CI-Token": os.environ["CLOUD_CI_TOKEN"],
             "Content-Type": "application/json",
+            "User-Agent": "ArcartX-Suite-CI/1",
         })
         try:
             with http.open(request, timeout=25) as response:
