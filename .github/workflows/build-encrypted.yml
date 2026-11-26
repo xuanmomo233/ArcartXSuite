@@ -253,8 +253,8 @@ jobs:
           python -m unittest discover -s scripts/tests -p test_module_watermark.py
       - name: Verify Abyss UI contracts
         run: python modules/abyss/src/test/ui/verify_abyss_ui.py
-      - name: Test public API and Abyss transactions
-        run: bash ./gradlew :axs-api:test :modules:abyss:test -PskipNativeCheck=true --no-build-cache
+      - name: Test public API, Abyss transactions and EventPacket delivery tiers
+        run: bash ./gradlew :axs-api:test :modules:abyss:test :modules:eventpacket:test -PskipNativeCheck=true --no-build-cache
       - name: Test authentication and proxy forwarding
         if: needs.detect-changes.outputs.auth_changed == 'true'
         run: |
