@@ -58,7 +58,7 @@ class DurableLinkTest {
             mock(org.bukkit.plugin.java.JavaPlugin.class), service, logger, false);
         var buyer = UUID.randomUUID();
         var fields = java.util.Map.of("event_id", "auction-expiry:42", "listing_id", "42", "formatted_price", "20");
-        var worker = new DurableRules(new RuleJournal(source, false), () -> null, () -> mail, () -> config, logger);
+        var worker = new DurableRules(new RuleJournal(source, false), () -> null, () -> mail, () -> config, () -> false, logger);
         try (var retirement = retire(worker)) {
             worker.auctionPurchased("auction-expiry:42", buyer, fields).get(5, TimeUnit.SECONDS);
             worker.auctionPurchased("auction-expiry:42", buyer, fields).get(5, TimeUnit.SECONDS);
@@ -227,7 +227,7 @@ class DurableLinkTest {
             calls.incrementAndGet();
             return CompletableFuture.completedFuture(AxsDeliveryReceipt.ok(inserted.id(), 1));
         });
-        var worker = new DurableRules(journal, () -> abyss, () -> mail, () -> config, Logger.getAnonymousLogger());
+        var worker = new DurableRules(journal, () -> abyss, () -> mail, () -> config, () -> false, Logger.getAnonymousLogger());
         try (var retirement = retire(worker)) {
             worker.wake();
             await(() -> {
@@ -243,6 +243,48 @@ class DurableLinkTest {
         assertEquals(14, journal.cursor("other-dungeon", "abyss").orElseThrow().sequence());
         assertEquals(12, journal.cursor("interleaved", "abyss-secondary").orElseThrow().sequence());
         verify(abyss).committedResults(eq("abyss"), eq(12L), anyInt());
+    }
+
+    @Test
+    void sharedAbyssOrchestrationRequiresCustomerAccessButQueuedMailContinues() throws Exception {
+        var source = source(false, "jdbc:sqlite:" + folder.resolve("tier.sqlite"));
+        var journal = spy(new RuleJournal(source, false));
+        doReturn(true).when(journal).mysql();
+        journal.initialize();
+        var player = UUID.randomUUID();
+        assertTrue(journal.stageEvent("queued-before-cutover", List.of(
+            new RuleJournal.MailJob("old-job", player, "旧奖励", "", "", 0.0))));
+
+        var config = configuration();
+        var abyss = mock(AbyssRunResultAccess.class);
+        when(abyss.usesSharedHostStorage()).thenReturn(true);
+        when(abyss.latestCommittedSequence()).thenReturn(CompletableFuture.completedFuture(12L));
+        when(abyss.committedResults(eq("abyss"), eq(12L), anyInt())).thenReturn(
+            CompletableFuture.completedFuture(List.of(new AbyssRunResultAccess.Committed(13L, result(player, UUID.randomUUID())))));
+        when(abyss.committedResults(eq("abyss"), eq(13L), anyInt())).thenReturn(CompletableFuture.completedFuture(List.of()));
+        var mail = mock(AxsMailService.class);
+        when(mail.usesSharedHostStorage()).thenReturn(true);
+        when(mail.sendDurable(any())).thenReturn(CompletableFuture.completedFuture(AxsDeliveryReceipt.ok(52L, 1)));
+        var authorized = new java.util.concurrent.atomic.AtomicBoolean(false);
+        var worker = new DurableRules(journal, () -> abyss, () -> mail, () -> config,
+            authorized::get, Logger.getAnonymousLogger());
+        try (var retirement = retire(worker)) {
+            worker.wake();
+            await(() -> {
+                try { return count(source, "SELECT COUNT(*) FROM ep_mail_job WHERE state=?", "DONE") == 1; }
+                catch (SQLException failure) { return false; }
+            });
+            verifyNoInteractions(abyss);
+            assertTrue(journal.cursor("clear", "abyss").isEmpty());
+
+            authorized.set(true);
+            worker.wake();
+            await(() -> {
+                try { return count(source, "SELECT COUNT(*) FROM ep_mail_job WHERE state=?", "DONE") == 2; }
+                catch (SQLException failure) { return false; }
+            });
+            assertEquals(13L, journal.cursor("clear", "abyss").orElseThrow().sequence());
+        }
     }
 
     private static AutoCloseable retire(DurableRules worker) {

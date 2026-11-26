@@ -569,6 +569,10 @@ public abstract class AbstractAXSModule implements AXSModule {
         return context.getCapability(capabilityType);
     }
 
+    protected final boolean advancedCrossServerOrchestrationAllowed() {
+        return context.advancedCrossServerOrchestrationAllowed();
+    }
+
     /** 创建新的路标桥接实例 */
     @NotNull
     protected xuanmo.arcartxsuite.api.bridge.WaypointBridgeAPI createWaypointBridge() {

@@ -42,6 +42,7 @@ import xuanmo.arcartxsuite.module.ModuleRegistry;
 import xuanmo.arcartxsuite.module.ModuleRegistry.CloudModuleSnapshot;
 import xuanmo.arcartxsuite.security.NativeBridge;
 import xuanmo.arcartxsuite.security.protection.ProtectionEnvironment;
+import xuanmo.arcartxsuite.security.protection.ProtectionInit;
 
 
 /**
@@ -133,6 +134,7 @@ public final class CloudModuleService {
     private final Map<String, CompletableFuture<Void>> downloading = new ConcurrentHashMap<>();
     private final ResponseSignatureVerifier responseSignatureVerifier = new ResponseSignatureVerifier();
     private final String suiteRelease;
+    private final String customerRelease;
     private final boolean localModuleSource;
     private final RuntimeAuthorization runtimeAuthorization = new RuntimeAuthorization();
     private CompletableFuture<Void> pendingRuntimeLease;
@@ -145,7 +147,9 @@ public final class CloudModuleService {
     public CloudModuleService(SuiteCoreImpl plugin, ModuleRegistry registry) {
         this.plugin = plugin;
         this.registry = registry;
-        this.suiteRelease = readSuiteRelease(plugin);
+        String verifiedRelease = parseSuiteRelease(ProtectionInit.verifiedBuildProvenance());
+        this.suiteRelease = verifiedRelease.isEmpty() ? readSuiteRelease(plugin) : verifiedRelease;
+        this.customerRelease = RuntimeAuthorization.isCustomerRelease(verifiedRelease) ? verifiedRelease : null;
         this.tasks = new CloudTasks((action, delay, async) -> {
             var scheduler = plugin.getServer().getScheduler();
             BukkitTask scheduled = async
@@ -165,8 +169,7 @@ public final class CloudModuleService {
         String source = config.getString("cloud.module-source", "cloud");
         if (!java.util.Set.of("cloud", "local").contains(source))
             throw new IllegalArgumentException("cloud.module-source must be cloud or local");
-        this.localModuleSource = "local".equals(source)
-            || suiteRelease.matches("[a-zA-Z0-9._-]{1,40}-local\\.[0-9a-f]{40}-suite\\.0\\.0-ci\\.[0-9a-f]{7}");
+        this.localModuleSource = "local".equals(source) || RuntimeAuthorization.isCustomerRelease(suiteRelease);
         registry.setProtectedModuleAuthorization(runtimeAuthorization::permits);
 
         this.apiBaseUrl = API_BASE_URLS.get(0);
@@ -175,12 +178,31 @@ public final class CloudModuleService {
     private static String readSuiteRelease(SuiteCoreImpl plugin) {
         try (var input = plugin.getResource("axs-build.json")) {
             if (input == null) return "";
-            String release = extractJsonField(new String(input.readNBytes(4096), StandardCharsets.UTF_8), "release");
-            return release != null && release.matches("[a-zA-Z0-9._-]+-suite\\.\\d+\\.\\d+-ci\\.[0-9a-f]{7}") ? release : "";
+            return parseSuiteRelease(new String(input.readNBytes(4096), StandardCharsets.UTF_8));
         } catch (java.io.IOException failure) {
             plugin.consoleWarn("[Cloud] 无法读取宿主发行批次: " + failure.getMessage());
             return "";
         }
+    }
+
+    private static String parseSuiteRelease(String provenance) {
+        if (provenance.isEmpty()) return "";
+        try {
+            var release = com.google.gson.JsonParser.parseString(provenance).getAsJsonObject().getAsJsonPrimitive("release");
+            if (release != null && release.isString()
+                && release.getAsString().matches("[A-Za-z0-9._-]+-suite\\.\\d+\\.\\d+-ci\\.[0-9a-f]{7}")) {
+                return release.getAsString();
+            }
+        } catch (RuntimeException invalid) {
+            return "";
+        }
+        return "";
+    }
+
+    /** moduleId 为 null 时校验宿主功能；模块功能需要同一客户批次的有效模块席位。 */
+    public boolean customerFeaturesAllowed(String moduleId) {
+        return !tasks.isClosed()
+            && runtimeAuthorization.permitsCustomerFeatures(customerRelease, moduleId, System.nanoTime());
     }
 
     private enum CloudStatus {
@@ -1442,9 +1464,10 @@ public final class CloudModuleService {
                 rememberSuccessfulEndpoint(challenge.endpoint());
                 long at = runtimeAuthorization.timestamp();
                 String id = java.util.UUID.randomUUID().toString();
-                String message = runtimeAuthorization.leaseRequestMessage(serverCode, nonce, at, id);
+                String message = runtimeAuthorization.leaseRequestMessage(serverCode, nonce, at, id, customerRelease);
                 var body = new com.google.gson.JsonObject();
                 body.addProperty("instancePublicKey", runtimeAuthorization.instancePublicKey());
+                if (customerRelease != null) body.addProperty("customerRelease", customerRelease);
                 body.addProperty("apiKey", apiKey);
                 body.addProperty("nonce", nonce);
                 body.addProperty("proofAt", at);

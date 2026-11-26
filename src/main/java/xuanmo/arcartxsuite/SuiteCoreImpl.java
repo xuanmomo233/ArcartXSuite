@@ -75,7 +75,7 @@ public final class SuiteCoreImpl implements SuiteCore {
     private ClientPacketGuardConfiguration clientPacketGuardConfiguration;
     private ModuleRegistry moduleRegistry;
     private PlaceholderResolverImpl placeholderResolver;
-    private CloudModuleService cloudModuleService;
+    private volatile CloudModuleService cloudModuleService;
     private KeybindService keybindService;
     private CrossServerService crossServerService;
     private ConfigDiagnosticEngine configDiagnosticEngine;
@@ -681,6 +681,11 @@ public final class SuiteCoreImpl implements SuiteCore {
 
     public CloudModuleService getCloudModuleService() {
         return cloudModuleService;
+    }
+
+    public boolean customerFeaturesAllowed(String moduleId) {
+        var service = cloudModuleService;
+        return service != null && service.customerFeaturesAllowed(moduleId);
     }
 
     public String describePacketBridgeMode() {

@@ -69,7 +69,7 @@ public final class EventPacketModule extends AbstractAXSModule implements Module
         storageScope = storageManager.openModuleStorage("eventpacket", "eventpacket.db", dataFolder, null);
         durable = new DurableRules(new RuleJournal(storageScope.dataSource(), storageManager.getDescriptor().isMysql()),
             () -> getCapability(AbyssRunResultAccess.class), () -> getCapability(AxsMailService.class),
-            () -> configuration, logger);
+            () -> configuration, this::advancedCrossServerOrchestrationAllowed, logger);
         var worker = durable;
         var calls = runtimeCalls;
         authSubscription = bus.subscribeConfirmed("eventpacket/admission-rules", RuleConfiguration.FIRST_ADMITTED,
