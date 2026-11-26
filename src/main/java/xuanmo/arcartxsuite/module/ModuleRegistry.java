@@ -80,6 +80,12 @@ public final class ModuleRegistry {
     private final TaczCombatBridge taczCombatBridge;
     private final CrossServerService crossServerService;
     private final ModuleSignatureVerifier signatureVerifier;
+    private volatile java.util.function.Predicate<String> protectedModuleAuthorization = ignored -> false;
+
+    public void setProtectedModuleAuthorization(java.util.function.Predicate<String> authorization) {
+        protectedModuleAuthorization = java.util.Objects.requireNonNull(authorization);
+    }
+
     private final PlaceholderResolverAPI placeholderResolver;
     private final ArcartXWorldTextureService worldTextureBridge;
     private final xuanmo.arcartxsuite.api.storage.StorageManager storageManager;
@@ -406,6 +412,10 @@ public final class ModuleRegistry {
         if (loaded == null || !loaded.isEnabled() || shuttingDown) {
             LOGGER.warning("模块未加载或未启用，无法重载: " + moduleId);
             return java.util.concurrent.CompletableFuture.completedFuture(false);
+        }
+        if (loaded.moduleSeedDirect() != null && !protectedModuleAuthorization.test(moduleId)) {
+            LOGGER.warning("受保护模块未取得有效运行授权，拒绝重载: " + moduleId);
+            return CompletableFuture.completedFuture(false);
         }
         boolean inPlace = loaded.instance().reloadsInPlace();
         var result = new java.util.concurrent.CompletableFuture<Boolean>();
@@ -923,11 +933,25 @@ public final class ModuleRegistry {
     public List<String> getLoadedCloudModuleIds() {
         List<String> ids = new ArrayList<>();
         for (LoadedModule loaded : modules.values()) {
-            if (loaded.classLoader() instanceof ByteArrayModuleClassLoader) {
+            if (loaded.moduleSeedDirect() != null && loaded.classLoader() instanceof ByteArrayModuleClassLoader) {
                 ids.add(loaded.descriptor().id());
             }
         }
         return ids;
+    }
+
+    /** Stop revoked protected modules and their hard dependents through normal lifecycle retirement. */
+    public List<String> revokeProtectedModulesNotIn(java.util.Set<String> allowed) {
+        if (!org.bukkit.Bukkit.isPrimaryThread()) throw new IllegalStateException("Module revocation requires the server thread");
+        var denied = new java.util.LinkedHashSet<String>();
+        for (LoadedModule module : modules.values()) {
+            if (module.moduleSeedDirect() != null && !allowed.contains(module.descriptor().id())) denied.add(module.descriptor().id());
+        }
+        var descriptors = modules.values().stream().map(LoadedModule::descriptor).toList();
+        var order = ModuleRevocations.order(descriptors, denied);
+        List<String> stopped = new ArrayList<>();
+        for (String id : order) if (unloadModule(id)) stopped.add(id);
+        return stopped;
     }
 
     /**
@@ -987,6 +1011,10 @@ public final class ModuleRegistry {
 
     private CompletionStage<Boolean> loadAndEnable(DiscoveredModule dm) throws Exception {
         ModuleDescriptor descriptor = dm.descriptor;
+        if (dm.moduleSeed() != null && !protectedModuleAuthorization.test(descriptor.id())) {
+            LOGGER.warning("受保护模块未取得有效运行授权，拒绝启用: " + descriptor.id());
+            return CompletableFuture.completedFuture(false);
+        }
         if (retiringModules.containsKey(descriptor.id())) {
             LOGGER.warning("模块旧实例尚未退出，暂不能启用: " + descriptor.id());
             return CompletableFuture.completedFuture(false);
