@@ -30,7 +30,7 @@ class DurableShutdownTest {
             return source.getConnection();
         });
         var active=new AtomicReference<>(configuration());
-        var worker=new DurableRules(new RuleJournal(gate,false),()->null,()->null,active::get,java.util.logging.Logger.getAnonymousLogger());
+        var worker=new DurableRules(new RuleJournal(gate,false),()->null,()->null,active::get,()->false,java.util.logging.Logger.getAnonymousLogger());
         var admitted=new ArrayList<CompletableFuture<Void>>();
         try {
             admitted.add(worker.auctionPurchased("one",UUID.randomUUID(),Map.of()));
@@ -54,7 +54,7 @@ class DurableShutdownTest {
         var mail=mock(AxsMailService.class);var sent=new CountDownLatch(1);var result=new CompletableFuture<AxsDeliveryReceipt>();
         when(mail.sendDurable(any())).thenAnswer(call->{sent.countDown();return result;});
         var config=configuration();
-        var worker=new DurableRules(new RuleJournal(source,false),()->null,()->mail,()->config,java.util.logging.Logger.getAnonymousLogger());
+        var worker=new DurableRules(new RuleJournal(source,false),()->null,()->mail,()->config,()->false,java.util.logging.Logger.getAnonymousLogger());
         try {
             worker.auctionPurchased("claim",UUID.randomUUID(),Map.of()).get(5,TimeUnit.SECONDS);
             assertTrue(sent.await(5,TimeUnit.SECONDS));worker.close();
@@ -70,7 +70,7 @@ class DurableShutdownTest {
         var real=source("jdbc:sqlite:"+directory.resolve("idle.sqlite"));var source=mock(DataSource.class);var reads=new AtomicInteger();
         when(source.getConnection()).thenAnswer(call->{reads.incrementAndGet();return real.getConnection();});
         var empty=RuleConfiguration.parse(new YamlConfiguration());
-        var worker=new DurableRules(new RuleJournal(source,false),()->null,()->null,()->empty,java.util.logging.Logger.getAnonymousLogger());
+        var worker=new DurableRules(new RuleJournal(source,false),()->null,()->null,()->empty,()->false,java.util.logging.Logger.getAnonymousLogger());
         try {
             worker.pollIfDue();barrier(worker);int initial=reads.get();assertEquals(2,initial);
             for(int i=0;i<1000;i++)worker.pollIfDue();barrier(worker);
@@ -82,7 +82,7 @@ class DurableShutdownTest {
         var source=source("jdbc:sqlite:"+directory.resolve("remote.sqlite"));
         var mail=mock(AxsMailService.class);when(mail.sendDurable(any())).thenReturn(CompletableFuture.completedFuture(AxsDeliveryReceipt.ok(77,1)));
         var empty=RuleConfiguration.parse(new YamlConfiguration());
-        var worker=new DurableRules(new RuleJournal(source,false),()->null,()->mail,()->empty,java.util.logging.Logger.getAnonymousLogger());
+        var worker=new DurableRules(new RuleJournal(source,false),()->null,()->mail,()->empty,()->false,java.util.logging.Logger.getAnonymousLogger());
         try {
             worker.pollIfDue();barrier(worker);
             new RuleJournal(source,false).stageEvent("remote",List.of(new RuleJournal.MailJob("remote-job",UUID.randomUUID(),"Title","Body","",0)));
@@ -121,7 +121,7 @@ class DurableShutdownTest {
             """);
         var config = RuleConfiguration.parse(yaml);
         var worker = new DurableRules(new RuleJournal(source, false), () -> abyss, () -> null, () -> config,
-            java.util.logging.Logger.getAnonymousLogger());
+            () -> false, java.util.logging.Logger.getAnonymousLogger());
         try {
             worker.pollIfDue();
             assertTrue(entered.await(5, TimeUnit.SECONDS));
@@ -169,7 +169,7 @@ class DurableShutdownTest {
             """);
         var config = RuleConfiguration.parse(yaml);
         var worker = new DurableRules(journal, () -> abyss, () -> mail, () -> config,
-            java.util.logging.Logger.getAnonymousLogger());
+            () -> false, java.util.logging.Logger.getAnonymousLogger());
         try {
             worker.pollIfDue();
             barrier(worker);
@@ -208,7 +208,7 @@ class DurableShutdownTest {
         var empty = RuleConfiguration.parse(new YamlConfiguration());
         var mail = mock(AxsMailService.class);
         var worker = new DurableRules(new RuleJournal(source, false), () -> null, () -> mail, () -> empty,
-            java.util.logging.Logger.getAnonymousLogger());
+            () -> false, java.util.logging.Logger.getAnonymousLogger());
         try {
             worker.pollIfDue();
             barrier(worker);
@@ -235,7 +235,7 @@ class DurableShutdownTest {
         });
         var empty = RuleConfiguration.parse(new YamlConfiguration());
         var worker = new DurableRules(new RuleJournal(failing, false), () -> null, () -> null, () -> empty,
-            java.util.logging.Logger.getAnonymousLogger());
+            () -> false, java.util.logging.Logger.getAnonymousLogger());
         try {
             worker.wake();
             barrier(worker);

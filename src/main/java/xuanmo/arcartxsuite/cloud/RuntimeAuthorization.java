@@ -11,12 +11,14 @@ import java.util.Base64;
 import java.util.HexFormat;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.regex.Pattern;
 
 /** The boot private key is deliberately never persisted with the installation keystore. */
 final class RuntimeAuthorization {
     static final String PURPOSE = "ArcartXSuite/runtime-lease/v1";
     static final long LEASE_MILLIS = 180_000L;
     static final long MAX_LEASE_MILLIS = 1_800_000L;
+    private static final Pattern CUSTOMER_RELEASE = Pattern.compile("[A-Za-z0-9._-]{1,40}-local\\.([0-9a-f]{40})-suite\\.0\\.0-ci\\.([0-9a-f]{7})");
     private final KeyPair instance;
     private final String instancePublicKey;
     private final AtomicLong lastTimestamp = new AtomicLong();
@@ -25,7 +27,8 @@ final class RuntimeAuthorization {
     @FunctionalInterface interface Verifier {
         boolean verify(long timestamp, byte[] body, byte[] signature);
     }
-    private record Lease(String envelope, String id, String issuer, long deadlineNanos, long renewAfterNanos, java.util.Map<String, Long> moduleDeadlines) {}
+    private record Lease(String envelope, String id, String issuer, long deadlineNanos, long renewAfterNanos,
+                         java.util.Map<String, Long> moduleDeadlines, String customerRelease) {}
     record KeyProof(String envelope, String signature, long timestamp, String requestId, String checksum) {}
     record ReleaseProof(String envelope, String signature, long timestamp, String requestId, String issuer) {}
 
@@ -42,7 +45,17 @@ final class RuntimeAuthorization {
             Base64.getUrlEncoder().withoutPadding().encodeToString(name.getBytes(StandardCharsets.UTF_8)), Long.toString(at), id);
     }
     String leaseRequestMessage(String serverCode, String nonce, long at, String id) {
-        return String.join("\n", "ArcartXSuite/runtime-lease-request/v1", serverCode, instancePublicKey, nonce, Long.toString(at), id);
+        return leaseRequestMessage(serverCode, nonce, at, id, null);
+    }
+    String leaseRequestMessage(String serverCode, String nonce, long at, String id, String customerRelease) {
+        String message = String.join("\n", "ArcartXSuite/runtime-lease-request/v1", serverCode,
+            instancePublicKey, nonce, Long.toString(at), id);
+        return customerRelease == null ? message : message + "\n" + customerRelease;
+    }
+    static boolean isCustomerRelease(String release) {
+        if (release == null) return false;
+        var match = CUSTOMER_RELEASE.matcher(release);
+        return match.matches() && match.group(1).startsWith(match.group(2));
     }
     String signInstance(String message) {
         try {
@@ -83,6 +96,13 @@ final class RuntimeAuthorization {
                 || expiresAt <= issuedAt || expiresAt - issuedAt > MAX_LEASE_MILLIS
                 || signature.length != 64 || !verifier.verify(issuedAt, (PURPOSE + "\n" + new String(raw, StandardCharsets.UTF_8)).getBytes(StandardCharsets.UTF_8), signature))
                 throw new IllegalArgumentException("Runtime lease rejected");
+            String customerRelease = null;
+            if (body.has("customerRelease")) {
+                var claim = body.getAsJsonPrimitive("customerRelease");
+                if (claim == null || !claim.isString() || !isCustomerRelease(claim.getAsString()))
+                    throw new IllegalArgumentException("Invalid customer release");
+                customerRelease = claim.getAsString();
+            }
             var moduleIds = new java.util.HashSet<String>();
             var permissions = body.getAsJsonArray("moduleIds");
             if (permissions == null || permissions.size() > 128) throw new IllegalArgumentException("Invalid runtime permissions");
@@ -105,7 +125,8 @@ final class RuntimeAuthorization {
             long remaining = Math.min(expiresAt - now, expiresAt - issuedAt - elapsed);
             if (remaining <= 0) throw new IllegalArgumentException("Runtime lease expired in transit");
             long renewAfter = requestStarted + Math.min(120_000L, Math.max(0L, expiresAt - issuedAt - 60_000L)) * 1_000_000L;
-            lease = new Lease(envelope, id, issuer, nanos + remaining * 1_000_000L, renewAfter, java.util.Map.copyOf(moduleDeadlines));
+            lease = new Lease(envelope, id, issuer, nanos + remaining * 1_000_000L, renewAfter,
+                java.util.Map.copyOf(moduleDeadlines), customerRelease);
         } catch (RuntimeException failure) {
             throw new IllegalArgumentException("Runtime lease rejected", failure);
         }
@@ -128,9 +149,24 @@ final class RuntimeAuthorization {
         Long deadline = current == null ? null : current.moduleDeadlines().get(moduleId);
         return current != null && current.deadlineNanos() - nanos > 0 && deadline != null && deadline - nanos > 0;
     }
+    boolean permitsCustomerFeatures(String release, String moduleId, long nanos) {
+        Lease current = lease;
+        if (current == null || release == null || !release.equals(current.customerRelease())
+            || current.deadlineNanos() - nanos <= 0) return false;
+        if (moduleId == null) return current.moduleDeadlines().values().stream().anyMatch(deadline -> deadline - nanos > 0);
+        Long deadline = current.moduleDeadlines().get(moduleId);
+        return deadline != null && deadline - nanos > 0;
+    }
     java.util.Set<String> permittedModules() { return permittedModules(System.nanoTime()); }
     java.util.Set<String> permittedModules(long nanos) {
+        return permittedModules(lease, nanos);
+    }
+    java.util.Set<String> permittedCustomerModules(String release) {
         Lease current = lease;
+        if (current == null || release == null || !release.equals(current.customerRelease())) return java.util.Set.of();
+        return permittedModules(current, System.nanoTime());
+    }
+    private static java.util.Set<String> permittedModules(Lease current, long nanos) {
         if (current == null || current.deadlineNanos() - nanos <= 0) return java.util.Set.of();
         return current.moduleDeadlines().entrySet().stream().filter(entry -> entry.getValue() - nanos > 0)
             .map(java.util.Map.Entry::getKey).collect(java.util.stream.Collectors.toUnmodifiableSet());

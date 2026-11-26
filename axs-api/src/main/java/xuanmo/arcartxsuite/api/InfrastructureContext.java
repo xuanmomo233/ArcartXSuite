@@ -25,4 +25,9 @@ public interface InfrastructureContext {
 
     /** 宿主插件数据目录（plugins/ArcartXSuite/），模块配置文件仍放在此处以保持用户习惯 */
     File pluginDataFolder();
+
+    /** 当前模块是否持有允许高级跨服编排的客户发行授权。 */
+    default boolean advancedCrossServerOrchestrationAllowed() {
+        return false;
+    }
 }

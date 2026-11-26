@@ -103,6 +103,36 @@ class RuntimeAuthorizationTest {
         assertEquals("ArcartXSuite/bind/v1\n123456789\nPUBLIC\nANCHOR\nFINGERPRINT\nTXkgU2VydmVy\n1800000000000\nrequest-id",
             RuntimeAuthorization.bindingMessage("123456789", "PUBLIC", "ANCHOR", "FINGERPRINT", "My Server", 1_800_000_000_000L, "request-id"));
     }
+    @Test void customerPrivilegesRequireAMatchingSignedReleaseAndUnexpiredPaidSeat() throws Exception {
+        String release = "2.0.0-local." + "a".repeat(40) + "-suite.0.0-ci.aaaaaaa";
+        long now = System.currentTimeMillis(), nanos = System.nanoTime();
+        var body = claims(now);
+        authorization.accept(envelope(body), "SERVER_A", "INSTALLATION", this::verify, now, nanos);
+        assertFalse(authorization.permitsCustomerFeatures(release, null, nanos));
+        assertEquals(java.util.Set.of(), authorization.permittedCustomerModules(release));
+        body.addProperty("customerRelease", release);
+        body.getAsJsonObject("moduleExpiresAt").addProperty("market", now + 1_000L);
+        authorization.accept(envelope(body), "SERVER_A", "INSTALLATION", this::verify, now, nanos);
+        assertTrue(authorization.permitsCustomerFeatures(release, null, nanos));
+        assertTrue(authorization.permitsCustomerFeatures(release, "market", nanos));
+        assertEquals(java.util.Set.of("market"), authorization.permittedCustomerModules(release));
+        assertEquals(java.util.Set.of(), authorization.permittedCustomerModules(release.replace("2.0.0", "2.0.1")));
+        assertFalse(authorization.permitsCustomerFeatures(release, "eventpacket", nanos));
+        assertFalse(authorization.permitsCustomerFeatures(null, null, nanos));
+        assertFalse(authorization.permitsCustomerFeatures(release.replace("2.0.0", "2.0.1"), null, nanos));
+        assertFalse(authorization.permitsCustomerFeatures(release, null, nanos + 1_000_000_000L));
+    }
+    @Test void leaseProofRetainsLegacyShapeAndBindsCustomerReleaseWhenPresent() throws Exception {
+        String release = "2.0.0-local." + "a".repeat(40) + "-suite.0.0-ci.aaaaaaa";
+        String old = authorization.leaseRequestMessage("SERVER_A", "nonce", 1L, "request-id");
+        assertEquals(old, authorization.leaseRequestMessage("SERVER_A", "nonce", 1L, "request-id", null));
+        assertEquals(old + "\n" + release, authorization.leaseRequestMessage("SERVER_A", "nonce", 1L, "request-id", release));
+        long now = System.currentTimeMillis();
+        var body = claims(now);
+        body.addProperty("customerRelease", release.replace("ci.aaaaaaa", "ci.bbbbbbb"));
+        String invalid = envelope(body);
+        assertThrows(IllegalArgumentException.class, () -> authorization.accept(invalid, "SERVER_A", "INSTALLATION", this::verify));
+    }
     @Test void oneExpiringLicenseDoesNotExpireUnrelatedModules() throws Exception {
         long now = System.currentTimeMillis(), nanos = System.nanoTime();
         var body = claims(now);

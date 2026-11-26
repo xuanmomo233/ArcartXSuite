@@ -63,7 +63,7 @@ public final class ArcartXSuiteConfigSubCommand {
             if (action.equals("diagnose") || action.equals("preview")
                 || action.equals("apply") || action.equals("rollback")) {
                 List<String> ids = new ArrayList<>(ownerIds());
-                ids.add("all");
+                if (!action.equals("apply") || plugin.customerFeaturesAllowed(null)) ids.add("all");
                 return filter(ids, subArgs[1]);
             }
         }
@@ -192,8 +192,15 @@ public final class ArcartXSuiteConfigSubCommand {
     }
 
     private boolean handleApply(CommandSender sender, String[] args) {
+        boolean batchAllowed = plugin.customerFeaturesAllowed(null);
+        String target = batchAllowed ? "<ownerId|all>" : "<ownerId>";
         if (args.length == 0) {
-            sender.sendMessage(PREFIX + ChatColor.YELLOW + "用法: /arcartxsuite config apply <ownerId|all> [--force]");
+            sender.sendMessage(PREFIX + ChatColor.YELLOW + "用法: /arcartxsuite config apply " + target + " [--force]");
+            return true;
+        }
+        boolean batch = "all".equalsIgnoreCase(args[0]);
+        if (batch && !batchAllowed) {
+            sender.sendMessage(PREFIX + ChatColor.YELLOW + "批量配置同步需要客户版有效授权。可指定单个模块应用配置。");
             return true;
         }
         boolean force = args.length > 1 && "--force".equalsIgnoreCase(args[1]);
@@ -203,7 +210,7 @@ public final class ArcartXSuiteConfigSubCommand {
             sender.sendMessage(PREFIX + ChatColor.RED + "诊断引擎未初始化。");
             return true;
         }
-        if ("all".equalsIgnoreCase(args[0])) {
+        if (batch) {
             int success = 0, skipped = 0, failed = 0;
             for (var entry : store.all()) {
                 var result = engine.apply(entry.spec(), entry.report(), force);
@@ -295,7 +302,9 @@ public final class ArcartXSuiteConfigSubCommand {
         sender.sendMessage(PREFIX + ChatColor.YELLOW + "  config status" + ChatColor.GRAY + " - 当前会话诊断概况");
         sender.sendMessage(PREFIX + ChatColor.YELLOW + "  config diagnose [ownerId|all]" + ChatColor.GRAY + " - 重新跑一次诊断");
         sender.sendMessage(PREFIX + ChatColor.YELLOW + "  config preview <ownerId|all>" + ChatColor.GRAY + " - 控制台输出 issue 详情");
-        sender.sendMessage(PREFIX + ChatColor.YELLOW + "  config apply <ownerId|all> [--force]" + ChatColor.GRAY + " - 应用 proposal");
+        sender.sendMessage(PREFIX + ChatColor.YELLOW + "  config apply "
+            + (plugin.customerFeaturesAllowed(null) ? "<ownerId|all>" : "<ownerId>")
+            + " [--force]" + ChatColor.GRAY + " - 应用 proposal");
         sender.sendMessage(PREFIX + ChatColor.YELLOW + "  config rollback <ownerId|all> [--to <timestamp>]" + ChatColor.GRAY + " - 还原备份");
     }
 

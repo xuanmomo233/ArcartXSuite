@@ -30,6 +30,7 @@ public final class ProtectionInit {
     /** 保护层初始化时解析到的宿主插件 JAR（可能为 null——所有策略均失败时）。 */
     private static volatile java.io.File pluginJarFile = null;
     private static volatile java.net.URL pluginJarUrl = null;
+    private static volatile String verifiedBuildProvenance = "";
     private static final Logger LOGGER = Logger.getLogger("AXS-Protection");
 
     // 检测间隔（秒），加随机偏移防止时序分析
@@ -157,8 +158,39 @@ public final class ProtectionInit {
         // hook 就位后再启动反调试监控
         JvmAntiDebug.startMonitoring(ProtectionInit::onThreatDetected, CHECK_INTERVAL_SECONDS);
 
+        if (encrypted) verifiedBuildProvenance = readVerifiedBuildProvenance(jarFile);
         active = true;
         return true;
+    }
+
+    /** Native 验证宿主签名后从同一宿主 JAR 读取的发行信息。明文构建不提供此证明。 */
+    public static String verifiedBuildProvenance() {
+        return active ? verifiedBuildProvenance : "";
+    }
+
+    private static String readVerifiedBuildProvenance(java.io.File archive) {
+        try (JarFile jar = new JarFile(archive)) {
+            var provenance = jar.getJarEntry("axs-build.json");
+            var manifest = jar.getJarEntry("META-INF/BOOTSTRAP.MF");
+            var signature = jar.getJarEntry("META-INF/BOOTSTRAP.SIG");
+            if (provenance == null || manifest == null || signature == null
+                || provenance.getSize() <= 0 || provenance.getSize() > 4096
+                || manifest.getSize() <= 0 || manifest.getSize() > 4 * 1024 * 1024 || signature.getSize() != 64) return "";
+            try (var provenanceInput = jar.getInputStream(provenance);
+                 var manifestInput = jar.getInputStream(manifest);
+                 var signatureInput = jar.getInputStream(signature)) {
+                byte[] sealedManifest = manifestInput.readNBytes((int) manifest.getSize());
+                byte[] build = provenanceInput.readNBytes((int) provenance.getSize());
+                var sha256 = MessageDigest.getInstance("SHA-256");
+                if (!NativeBridge.n7(sha256.digest(sealedManifest), signatureInput.readNBytes(64))) return "";
+                String signedEntry = "axs-build.json " + java.util.HexFormat.of().formatHex(sha256.digest(build));
+                if (new String(sealedManifest, java.nio.charset.StandardCharsets.UTF_8).lines().noneMatch(signedEntry::equals)) return "";
+                return new String(build, java.nio.charset.StandardCharsets.UTF_8);
+            }
+        } catch (Exception failure) {
+            LOGGER.warning("[Protection] 无法核对已签名的发行批次: " + failure.getMessage());
+            return "";
+        }
     }
 
     static int prepareSharedApiTypes(ClassLoader pluginLoader, JarFile jar) throws ClassNotFoundException {
@@ -469,6 +501,7 @@ public final class ProtectionInit {
             protectedLoader.deactivate();
         }
         ProtectionEnvironment.reset();
+        verifiedBuildProvenance = "";
         active = false;
     }
 

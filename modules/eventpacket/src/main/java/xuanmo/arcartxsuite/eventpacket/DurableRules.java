@@ -15,6 +15,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 import java.util.logging.Logger;
 import xuanmo.arcartxsuite.api.capability.AbyssRunResultAccess;
@@ -34,6 +35,7 @@ final class DurableRules implements AutoCloseable {
     private final Supplier<AbyssRunResultAccess> abyss;
     private final Supplier<AxsMailService> mail;
     private final Supplier<RuleConfiguration> rules;
+    private final BooleanSupplier advancedCrossServerOrchestrationAllowed;
     private final Logger logger;
     private final AtomicBoolean polling = new AtomicBoolean();
     private final AtomicBoolean wakeRequested = new AtomicBoolean();
@@ -52,11 +54,12 @@ final class DurableRules implements AutoCloseable {
     private volatile String status = "starting";
 
     DurableRules(RuleJournal journal, Supplier<AbyssRunResultAccess> abyss, Supplier<AxsMailService> mail,
-                 Supplier<RuleConfiguration> rules, Logger logger) {
+                 Supplier<RuleConfiguration> rules, BooleanSupplier advancedCrossServerOrchestrationAllowed, Logger logger) {
         this.journal = journal;
         this.abyss = abyss;
         this.mail = mail;
         this.rules = rules;
+        this.advancedCrossServerOrchestrationAllowed = advancedCrossServerOrchestrationAllowed;
         this.logger = logger;
     }
 
@@ -68,7 +71,7 @@ final class DurableRules implements AutoCloseable {
 
     void abyssCommitted() {
         var configuration = rules.get();
-        if (configuration != null && !configuration.abyss().isEmpty()) wake();
+        if (configuration != null && !configuration.abyss().isEmpty() && canOrchestrateResults()) wake();
     }
 
     void pollIfDue() {
@@ -109,7 +112,9 @@ final class DurableRules implements AutoCloseable {
         status = "ready";
         long delay = SHARED_POLL_MILLIS;
         var configuration = rules.get();
-        if (configuration != null && !configuration.abyss().isEmpty()) {
+        if (configuration != null && !configuration.abyss().isEmpty() && !canOrchestrateResults()) {
+            status = "共享 MySQL 副本结果编排需要客户版有效授权";
+        } else if (configuration != null && !configuration.abyss().isEmpty()) {
             delay = ABYSS_POLL_MILLIS;
             var source = abyss.get();
             if (source == null) {
@@ -182,13 +187,13 @@ final class DurableRules implements AutoCloseable {
     }
 
     private boolean consumeResults(RuleConfiguration configuration, AbyssRunResultAccess source) throws Exception {
-        if (closed || rules.get() != configuration) return false;
+        if (!canConsumeResults(configuration)) return false;
         Long highWater = null;
         boolean more = false;
         var cursors = journal.cursors(configuration.abyss());
         var pages = new LinkedHashMap<ResultPosition, List<AbyssRunResultAccess.Committed>>(16, 0.75f, true);
         for (var rule : configuration.abyss()) {
-            if (closed || rules.get() != configuration) break;
+            if (!canConsumeResults(configuration)) break;
             var position = cursors.get(new RuleJournal.CursorKey(rule.id(), rule.owner()));
             if (position == null) {
                 Long start = rule.startSequence();
@@ -196,7 +201,7 @@ final class DurableRules implements AutoCloseable {
                     if (highWater == null) highWater = source.latestCommittedSequence().get(WAIT_SECONDS, TimeUnit.SECONDS);
                     start = highWater;
                 }
-                if (closed || rules.get() != configuration) break;
+                if (!canConsumeResults(configuration)) break;
                 journal.startCursor(rule.id(), rule.owner(), start, rule.startSequence() == null);
                 position = journal.cursor(rule.id(), rule.owner()).orElseThrow();
             }
@@ -208,7 +213,7 @@ final class DurableRules implements AutoCloseable {
                 if (pages.size() == REUSABLE_PAGES) pages.remove(pages.keySet().iterator().next());
                 pages.put(key, page);
             }
-            if (page.isEmpty() || closed || rules.get() != configuration) continue;
+            if (page.isEmpty() || !canConsumeResults(configuration)) continue;
             var jobs = new ArrayList<RuleJournal.MailJob>();
             long to = from;
             for (var entry : page) {
@@ -220,10 +225,19 @@ final class DurableRules implements AutoCloseable {
                     planResult(jobs, entry.result(), rule);
                 }
             }
+            if (!canConsumeResults(configuration)) break;
             journal.stagePage(rule.id(), rule.owner(), from, to, jobs);
             more |= page.size() >= PAGE_SIZE;
         }
         return more;
+    }
+
+    private boolean canConsumeResults(RuleConfiguration configuration) {
+        return !closed && rules.get() == configuration && canOrchestrateResults();
+    }
+
+    private boolean canOrchestrateResults() {
+        return !journal.mysql() || advancedCrossServerOrchestrationAllowed.getAsBoolean();
     }
 
     private record ResultPosition(String owner, long cursor) {}

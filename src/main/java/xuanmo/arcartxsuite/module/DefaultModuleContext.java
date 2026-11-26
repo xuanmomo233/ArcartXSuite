@@ -151,6 +151,11 @@ final class DefaultModuleContext implements ModuleContext {
     }
 
     @Override
+    public boolean advancedCrossServerOrchestrationAllowed() {
+        return registry.customerFeaturesAllowed(moduleId);
+    }
+
+    @Override
     public Logger logger() {
         return logger;
     }

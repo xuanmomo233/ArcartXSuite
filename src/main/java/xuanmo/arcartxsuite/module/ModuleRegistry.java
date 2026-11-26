@@ -210,6 +210,10 @@ public final class ModuleRegistry {
         this.core = core;
     }
 
+    boolean customerFeaturesAllowed(String moduleId) {
+        return core != null && core.customerFeaturesAllowed(moduleId);
+    }
+
     // ─── 生命周期 ─────────────────────────────────────────────
 
     /**
