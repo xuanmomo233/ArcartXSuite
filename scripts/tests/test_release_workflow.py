@@ -154,7 +154,9 @@ class ReleaseWorkflowTest(unittest.TestCase):
         output = self.repo / "github-output"
         output.unlink(missing_ok=True)
         env = dict(os.environ, GITHUB_REPOSITORY="fixture/test", GITHUB_EVENT_NAME=event,
-                   GITHUB_OUTPUT=output.as_posix(), RUNNER_TEMP=self.repo.as_posix())
+                   GITHUB_OUTPUT=output.as_posix(), RUNNER_TEMP=self.repo.as_posix(),
+                   AXS_EXPORT_ONLY="false", VALIDATION_ONLY="false",
+                   AXS_MANUAL_SUITE_PUBLISH="false", PUBLISH_SUITE_REQUESTED="false")
         env.update(inputs)
         run = subprocess.run([os.environ.get("AXS_TEST_BASH", "bash"), "-s"], cwd=self.repo,
                              env=env, input=stub + "\n" + self.detect, capture_output=True,
