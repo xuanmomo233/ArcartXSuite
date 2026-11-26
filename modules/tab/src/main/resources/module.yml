@@ -1,6 +1,6 @@
 id: tab
 name: Tab
-version: 2.0.0
+version: 3.3.7
 main: xuanmo.arcartxsuite.tab.TabModule
 api-version: 3.9
 

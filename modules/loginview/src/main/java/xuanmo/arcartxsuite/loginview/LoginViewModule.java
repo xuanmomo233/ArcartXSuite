@@ -22,7 +22,7 @@ public final class LoginViewModule extends AbstractAXSModule implements ModuleCo
     private LoginViewController controller;
     private long delay;
     @Override public ModuleDescriptor descriptor() {
-        return ModuleDescriptor.builder("loginview").name("LoginView").version("2.0.0").mainClass(getClass().getName()).build();
+        return ModuleDescriptor.builder("loginview").name("LoginView").version("3.3.7").mainClass(getClass().getName()).build();
     }
     @Override protected @NotNull ModuleConfig configSpec() {
         return ModuleConfig.builder().configFileName("LoginView.yml").currentVersion(1).build();

@@ -36,7 +36,7 @@ public final class TabModule extends AbstractAXSModule {
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("tab")
             .name("Tab")
-            .version("2.0.0")
+            .version("3.3.7")
             .mainClass(getClass().getName())
             .build();
     }

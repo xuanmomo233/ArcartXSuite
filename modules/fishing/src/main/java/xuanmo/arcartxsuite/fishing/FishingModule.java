@@ -91,7 +91,7 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("fishing")
             .name("Fishing")
-            .version("2.0.0")
+            .version("3.3.7")
             .mainClass(getClass().getName())
             .build();
     }

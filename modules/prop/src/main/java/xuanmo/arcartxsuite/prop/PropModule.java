@@ -42,7 +42,7 @@ public final class PropModule extends AbstractAXSModule implements ModuleCommand
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("prop")
             .name("Prop")
-            .version("2.0.0")
+            .version("3.3.7")
             .mainClass(getClass().getName())
             .build();
     }

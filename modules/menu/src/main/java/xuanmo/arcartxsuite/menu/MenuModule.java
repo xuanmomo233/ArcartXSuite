@@ -53,7 +53,7 @@ public final class MenuModule extends AbstractAXSModule implements ModuleCommand
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("menu")
             .name("Menu")
-            .version("2.0.0")
+            .version("3.3.7")
             .mainClass(getClass().getName())
             .externalSoftDepends(List.of("PlaceholderAPI"))
             .build();
