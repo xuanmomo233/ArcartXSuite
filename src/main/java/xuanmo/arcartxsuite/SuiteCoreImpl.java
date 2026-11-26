@@ -483,6 +483,7 @@ public final class SuiteCoreImpl implements SuiteCore {
                     .dynamicSection("keybinds")
                     .build()),
             1, "config-version", "", List.of(
+                ValidationRule.of("cloud.module-source", ValueType.STRING).withEnum(java.util.Set.of("cloud", "local")),
                 ValidationRule.of("moderation.ignore-separators", ValueType.BOOLEAN),
                 ValidationRule.of("moderation.redact.enabled", ValueType.BOOLEAN)
             )

@@ -82,7 +82,7 @@ class ReleaseWorkflowTest(unittest.TestCase):
     def artifact(sha, created, branch="main", expired=False):
         return {"created_at": created, "expired": expired, "workflow_run": {"head_branch": branch, "head_sha": sha}}
 
-    def detect_scopes(self, suite, proxy, event="push"):
+    def detect_scopes(self, suite, proxy, event="push", **inputs):
         def fixture(name, artifacts):
             (self.repo / name).write_text(json.dumps({"artifacts": artifacts}), encoding="utf-8")
 
@@ -100,6 +100,7 @@ class ReleaseWorkflowTest(unittest.TestCase):
         output.unlink(missing_ok=True)
         env = dict(os.environ, GITHUB_REPOSITORY="fixture/test", GITHUB_EVENT_NAME=event,
                    GITHUB_OUTPUT=output.as_posix(), RUNNER_TEMP=self.repo.as_posix())
+        env.update(inputs)
         run = subprocess.run([os.environ.get("AXS_TEST_BASH", "bash"), "-s"], cwd=self.repo,
                              env=env, input=stub + "\n" + self.detect, capture_output=True,
                              encoding="utf-8", timeout=20)
@@ -136,9 +137,45 @@ class ReleaseWorkflowTest(unittest.TestCase):
         steps = self.workflow["jobs"]["publish-suite"]["steps"]
         activate = next(i for i, step in enumerate(steps) if step.get("name") == "Activate the staged Suite release")
         record = next(i for i, step in enumerate(steps) if step.get("with", {}).get("name") == "suite-published")
-        self.assertEqual("env.AXS_CI_VALIDATION != 'true'", steps[activate]["if"])
+        self.assertEqual("env.AXS_CLOUD_UPLOAD == 'true'", steps[activate]["if"])
         self.assertGreater(record, activate, "a staging run does not record a completed publication")
         self.assertEqual(steps[activate]["if"], steps[record]["if"])
+
+
+    def test_customer_export_dispatch_builds_only_the_requested_modules(self):
+        self.commit("modules/mail/build.gradle.kts", "include a second available module")
+        flags = self.detect_scopes([], [], event="workflow_dispatch",
+                                   AXS_EXPORT_ONLY="true", VALIDATION_ONLY="false", GITHUB_REF="refs/heads/main",
+                                   EXPORT_ACCOUNT="12345", EXPORT_RECIPIENT="customer-test",
+                                   EXPORT_DELIVERY_ID="delivery-test", EXPORT_MODULES="market")
+        self.assertEqual(["market"], json.loads(flags["changed_modules"]))
+        self.assertEqual("true", flags["core_changed"])
+        self.assertEqual("true", flags["proxy_changed"])
+
+    def test_cloud_writes_require_main_and_exclude_export_only(self):
+        condition = self.workflow["env"]["AXS_CLOUD_UPLOAD"]
+        self.assertIn("github.ref == 'refs/heads/main'", condition)
+        self.assertIn("!inputs.export_only", condition)
+        self.assertIn("!inputs.skip_upload", condition)
+        self.assertIn("vars.AXS_SKIP_CLOUD_UPLOAD != 'true'", condition)
+        steps = self.workflow["jobs"]["publish-suite"]["steps"]
+        for name in ("Stage the Suite release", "Activate the staged Suite release", "Record Suite publication"):
+            self.assertIn("env.AXS_CLOUD_UPLOAD == 'true'", next(step["if"] for step in steps if step.get("name") == name))
+        self.assertIn("github.ref != 'refs/heads/main'", self.workflow["env"]["AXS_CI_VALIDATION"])
+        self.assertIn("!inputs.export_only", self.workflow["env"]["AXS_CI_VALIDATION"])
+
+    def test_export_preflight_reports_missing_inputs_without_printing_values(self):
+        steps = self.workflow["jobs"]["detect-changes"]["steps"]
+        preflight = next(step for step in steps if step.get("name") == "Check customer export signing inputs")
+        self.assertEqual("env.AXS_EXPORT_ONLY == 'true'", preflight["if"])
+        fixture = "test-value-that-must-not-appear"
+        env = dict(os.environ, **dict.fromkeys(preflight["env"], fixture))
+        env["AXS_VARIANT_REGISTRATION_KEY_B64"] = ""
+        run = subprocess.run([os.environ.get("AXS_TEST_BASH", "bash"), "-s"], input=preflight["run"],
+                             env=env, encoding="utf-8", capture_output=True, timeout=20)
+        self.assertNotEqual(0, run.returncode)
+        self.assertIn("AXS_VARIANT_REGISTRATION_KEY_B64", run.stdout)
+        self.assertNotIn(fixture, run.stdout + run.stderr)
 
 
 if __name__ == "__main__":

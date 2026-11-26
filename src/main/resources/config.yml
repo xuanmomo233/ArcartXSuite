@@ -16,6 +16,8 @@ config-version: 2
 #   - apiKey 仅用于服务器与云端通信，无法登录管理后台，与登录密码完全分离。
 #   - server-code 由云端生成，请勿手动修改；删除后会触发重新绑定。
 cloud:
+  # 受保护模块的文件来源。local 从 modules/ 读取对应 AXB，并在线验权取钥。
+  module-source: cloud
   # 服主 QQ 号（须与云端注册账号一致）。
   qq: ""
   # 验证密匙（从管理后台「设置 → 验证密匙」页面复制）。

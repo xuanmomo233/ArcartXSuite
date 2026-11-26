@@ -155,11 +155,42 @@ subprojects {
 
             // 将模块 Jar 加密为 .axb，供上传到 AXS Cloud Platform。
             // 开启 Option 2 时封装逐类加密 Jar；否则封装明文类 Jar（默认）。
-            val axbSourceJar = if (protectModules) encryptedClassesModuleJar else stringEncryptedModuleJar
+            val baseAxbSourceJar = if (protectModules) encryptedClassesModuleJar else stringEncryptedModuleJar
+            val watermarkRecipient = providers.gradleProperty("axs.watermark.recipient")
+            val watermarkLicense = providers.gradleProperty("axs.watermark.license")
+            val watermarkKey = providers.gradleProperty("axs.watermark.privateKey")
+            val watermarkEnabled = watermarkRecipient.isPresent || watermarkLicense.isPresent || watermarkKey.isPresent
+            require(!watermarkEnabled || (watermarkRecipient.isPresent && watermarkLicense.isPresent && watermarkKey.isPresent)) {
+                "Watermark builds require axs.watermark.recipient, axs.watermark.license and axs.watermark.privateKey"
+            }
+            val watermarkedJar = distDir.map { it.file("modules-watermarked/${moduleJarTask.get().archiveFileName.get()}") }
+            val watermarkTask = if (watermarkEnabled) tasks.register<Exec>("watermarkModuleJar") {
+                group = "protection"
+                description = "逐类加密后写入指定收件人的签名水印，再交由 AXB 封装"
+                dependsOn(if (protectModules) encryptModuleClasses else stringEncryptModule)
+                inputs.file(baseAxbSourceJar)
+                inputs.file(rootProject.file(watermarkKey.get()))
+                inputs.file(scriptsDir.resolve("watermark-module.py"))
+                inputs.property("recipient", watermarkRecipient.get())
+                inputs.property("license", watermarkLicense.get())
+                val release = providers.gradleProperty("axs.watermark.release").orElse(rootProject.version.toString()).get()
+                inputs.property("release", release)
+                outputs.file(watermarkedJar)
+                commandLine(
+                    providers.gradleProperty("axs.python").orElse("python").get(),
+                    scriptsDir.resolve("watermark-module.py").absolutePath, "stamp",
+                    "--input", baseAxbSourceJar.get().asFile.absolutePath,
+                    "--output", watermarkedJar.get().asFile.absolutePath,
+                    "--module-id", moduleName, "--release", release,
+                    "--recipient", watermarkRecipient.get(), "--license-id", watermarkLicense.get(),
+                    "--private-key", rootProject.file(watermarkKey.get()).absolutePath, "--overwrite"
+                )
+            } else null
+            val axbSourceJar = if (watermarkEnabled) watermarkedJar else baseAxbSourceJar
             tasks.register<EncryptModuleAxbTask>("encryptModuleAxb") {
                 group = "protection"
                 description = "将模块 Jar 加密为 .axb（上传云端用）"
-                dependsOn(if (protectModules) encryptModuleClasses else stringEncryptModule)
+                dependsOn(if (watermarkEnabled) watermarkTask!! else if (protectModules) encryptModuleClasses else stringEncryptModule)
                 inputJar.set(axbSourceJar.map { it } as Provider<RegularFile>)
                 outputAxb.set(distDir.map { it.file("module-axb/${moduleName}.axb") })
                 val keyProp = project.findProperty("module.${moduleName}.key") as String?
