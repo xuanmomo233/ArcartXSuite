@@ -1,16 +1,71 @@
 import base64
+import importlib.util
 import json
 import os
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
+from types import SimpleNamespace
 import unittest
+from unittest.mock import patch
 
 import yaml
 
 
 WORKFLOW = Path(__file__).resolve().parents[2] / ".github/workflows/build-encrypted.yml"
+
+
+class CloudActivationTest(unittest.TestCase):
+    def run_activation(self, failure=None, rollback_failure=None):
+        script = WORKFLOW.parents[2] / "scripts/publish-suite.py"
+        spec = importlib.util.spec_from_file_location("suite_publisher", script)
+        publisher = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(publisher)
+        commit = "a" * 40
+        mirror = "https://mirror.example.test"
+        self.calls = []
+
+        def post(origin, _path, _fields, *, payload):
+            name = "primary" if origin == publisher.PRIMARY else "mirror"
+            action = payload["action"]
+            self.calls.append((name, action))
+            if (name, action) in (failure, rollback_failure):
+                raise RuntimeError("fixture request failed")
+            return {"ok": True}
+
+        with tempfile.TemporaryDirectory() as tmp:
+            release = Path(tmp) / "activation.json"
+            release.write_text(json.dumps({
+                "commit": commit, "version": "2.0.0-suite.42.1-ci.aaaaaaa",
+                "modules": ["market"], "mirror": mirror,
+            }), encoding="utf-8")
+            environment = {"GITHUB_SHA": commit, "GITHUB_RUN_ID": "42", "FLARE_BASE_URL": mirror}
+            git = SimpleNamespace(check_output=lambda *_args, **_kwargs: commit + "\trefs/heads/main\n")
+            with patch.object(publisher, "os", SimpleNamespace(environ=environment)), \
+                    patch.object(publisher, "ACTIVATION", release), \
+                    patch.object(publisher, "post", side_effect=post), \
+                    patch.object(publisher, "subprocess", git):
+                publisher.activate_release()
+
+    def test_later_activation_failure_rolls_back_both_origins(self):
+        with self.assertRaisesRegex(RuntimeError, "both origins confirmed rollback"):
+            self.run_activation(failure=("mirror", "activate"))
+        self.assertEqual([
+            ("primary", "withdraw"), ("mirror", "withdraw"),
+            ("primary", "activate"), ("mirror", "activate"),
+            ("mirror", "rollback"), ("primary", "rollback"),
+        ], self.calls)
+
+    def test_failed_preflight_does_not_change_active_versions(self):
+        with self.assertRaisesRegex(RuntimeError, "fixture request failed"):
+            self.run_activation(failure=("mirror", "withdraw"))
+        self.assertEqual([("primary", "withdraw"), ("mirror", "withdraw")], self.calls)
+
+    def test_unconfirmed_rollback_still_attempts_the_other_origin(self):
+        with self.assertRaisesRegex(RuntimeError, "rollback remains unconfirmed on mirror.example.test"):
+            self.run_activation(failure=("mirror", "activate"), rollback_failure=("mirror", "rollback"))
+        self.assertEqual([("mirror", "rollback"), ("primary", "rollback")], self.calls[-2:])
 
 
 class BuildSeedsTest(unittest.TestCase):
@@ -151,6 +206,17 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertEqual(["market"], json.loads(flags["changed_modules"]))
         self.assertEqual("true", flags["core_changed"])
         self.assertEqual("true", flags["proxy_changed"])
+
+    def test_manual_suite_publication_builds_all_modules_without_publishing_proxies(self):
+        self.commit("modules/mail/build.gradle.kts", "second public module")
+        flags = self.detect_scopes([], [], event="workflow_dispatch",
+                                   PUBLISH_SUITE_REQUESTED="true", AXS_MANUAL_SUITE_PUBLISH="true",
+                                   GITHUB_REF="refs/heads/main")
+        self.assertEqual(["mail", "market"], json.loads(flags["changed_modules"]))
+        self.assertEqual("true", flags["core_changed"])
+        self.assertEqual("false", flags["proxy_changed"])
+        condition = self.workflow["env"]["AXS_CLOUD_UPLOAD"]
+        self.assertIn("github.event_name == 'workflow_dispatch' && inputs.publish_suite", condition)
 
     def test_cloud_writes_require_main_and_exclude_export_only(self):
         condition = self.workflow["env"]["AXS_CLOUD_UPLOAD"]

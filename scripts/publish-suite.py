@@ -197,10 +197,26 @@ def activate_release():
     head = subprocess.check_output(["git", "ls-remote", "--exit-code", "origin", "refs/heads/main"], text=True)
     if head.split()[0] != commit:
         raise SystemExit("Only the current main commit may activate a Suite release")
-    for action in ("withdraw", "activate"):
-        for origin in (PRIMARY, mirror):
-            post(origin, "/v1/ci/suite-release/current", {},
-                 payload={"version": version, "commit": commit, "modules": modules, "action": action})
+    origins = (PRIMARY, mirror)
+    identity = {"version": version, "commit": commit, "modules": modules}
+    endpoint = "/v1/ci/suite-release/current"
+    for origin in origins:
+        post(origin, endpoint, {}, payload={**identity, "action": "withdraw"})
+    try:
+        for origin in origins:
+            post(origin, endpoint, {}, payload={**identity, "action": "activate"})
+    except Exception as activation_error:
+        rollback_failures = []
+        # A timed-out activation may already have committed on the receiving origin.
+        for origin in reversed(origins):
+            try:
+                post(origin, endpoint, {}, payload={**identity, "action": "rollback"})
+            except Exception:
+                rollback_failures.append(urlsplit(origin).hostname)
+        if rollback_failures:
+            raise RuntimeError("Suite activation failed and rollback remains unconfirmed on "
+                               + ", ".join(rollback_failures)) from activation_error
+        raise RuntimeError("Suite activation failed; both origins confirmed rollback") from activation_error
     print(f"Activated Suite release {version} on both origins", flush=True)
 
 

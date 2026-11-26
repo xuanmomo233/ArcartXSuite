@@ -28,6 +28,10 @@ on:
         description: '用正式密钥为指定账号构建客户包，仅导出 GitHub Artifacts'
         type: boolean
         default: false
+      publish_suite:
+        description: '单次正式发布当前 main 的 Suite 宿主和模块，保持自动发布暂停设置'
+        type: boolean
+        default: false
       export_account:
         description: '收件人的云端 QQ 账号'
         type: string
@@ -59,8 +63,9 @@ env:
   PYTHONUTF8: '1'
   # Export-only builds use the production signing inputs even while cloud publishing is paused.
   AXS_EXPORT_ONLY: ${{ github.event_name == 'workflow_dispatch' && inputs.export_only && 'true' || 'false' }}
-  AXS_CI_VALIDATION: ${{ !inputs.export_only && (github.ref != 'refs/heads/main' || vars.AXS_SKIP_CLOUD_UPLOAD == 'true' || inputs.skip_upload) && 'true' || 'false' }}
-  AXS_CLOUD_UPLOAD: ${{ github.ref == 'refs/heads/main' && !inputs.export_only && !inputs.skip_upload && vars.AXS_SKIP_CLOUD_UPLOAD != 'true' && 'true' || 'false' }}
+  AXS_MANUAL_SUITE_PUBLISH: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_suite && github.ref == 'refs/heads/main' && !inputs.skip_upload && !inputs.export_only && 'true' || 'false' }}
+  AXS_CI_VALIDATION: ${{ !inputs.export_only && (github.ref != 'refs/heads/main' || inputs.skip_upload || (vars.AXS_SKIP_CLOUD_UPLOAD == 'true' && !(github.event_name == 'workflow_dispatch' && inputs.publish_suite))) && 'true' || 'false' }}
+  AXS_CLOUD_UPLOAD: ${{ github.ref == 'refs/heads/main' && !inputs.export_only && !inputs.skip_upload && (vars.AXS_SKIP_CLOUD_UPLOAD != 'true' || (github.event_name == 'workflow_dispatch' && inputs.publish_suite)) && 'true' || 'false' }}
   # 首次验证使用 skip_upload。双平台通过后可设置仓库变量启用常规发布。
   AXS_PRODUCTION: ${{ (inputs.native_self_check || vars.AXS_NATIVE_SELF_CHECK == 'true') && 'ON' || 'OFF' }}
 
@@ -88,8 +93,13 @@ jobs:
           EXPORT_DELIVERY_ID: ${{ inputs.export_delivery_id }}
           EXPORT_MODULES: ${{ inputs.export_modules }}
           VALIDATION_ONLY: ${{ inputs.skip_upload }}
+          PUBLISH_SUITE_REQUESTED: ${{ inputs.publish_suite }}
         run: |
           set -euo pipefail
+          if [[ "${PUBLISH_SUITE_REQUESTED:-false}" == true && "${AXS_MANUAL_SUITE_PUBLISH:-false}" != true ]]; then
+            echo "::error::Suite 单次发布要求选择 main，且不能同时选择 skip_upload 或 export_only"
+            exit 1
+          fi
           # 全部模块清单（用于手动 / 无法 diff 时的全量构建）
           # 排除 debug 模块（非生产模块，无 encryptModuleAxb 任务）
           ALL_MODULES=$(ls -d modules/*/ 2>/dev/null | sed 's#modules/##; s#/##' | sort -u | grep -v '^debug$' | jq -R -s -c 'split("\n") | map(select(. != ""))')
@@ -136,7 +146,11 @@ jobs:
             echo "无法 diff（手动/首提），全量构建本体 + 全部模块"
             echo "core_changed=true" >> $GITHUB_OUTPUT
             echo "module_changed=true" >> $GITHUB_OUTPUT
-            echo "proxy_changed=true" >> $GITHUB_OUTPUT
+            if [[ "${AXS_MANUAL_SUITE_PUBLISH:-false}" == true ]]; then
+              echo "proxy_changed=false" >> $GITHUB_OUTPUT
+            else
+              echo "proxy_changed=true" >> $GITHUB_OUTPUT
+            fi
             echo "auth_changed=true" >> $GITHUB_OUTPUT
             echo "changed_modules=$ALL_MODULES" >> $GITHUB_OUTPUT
             echo "any_changed=true" >> $GITHUB_OUTPUT
