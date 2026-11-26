@@ -96,7 +96,10 @@ public interface MarketRepository {
     int countBrowseAuction(String mode,UUID viewer,String keyword);
     boolean settleExpiredAuction(AuctionSettlement settlement);
     long auctionSettlementRevision();
-    List<AuctionPublication> claimAuctionPublications(String token, long now, int limit);
+    default List<AuctionPublication> claimAuctionPublications(String token, long now, int limit) {
+        return claimAuctionPublications(token, now, limit, true);
+    }
+    List<AuctionPublication> claimAuctionPublications(String token, long now, int limit, boolean includeRefreshOnly);
     boolean finishAuctionPublication(String id, String token, boolean event, boolean refresh, long retryAt);
     boolean cancelAuction(AuctionSettlement settlement, @Nullable UUID seller, boolean allowBids);
     List<AuctionListing> favoriteListings(UUID player, String keyword, int offset, int limit);

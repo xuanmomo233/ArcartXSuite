@@ -18,6 +18,14 @@ tasks.compileJava {
     options.release = 17
 }
 
+tasks.processResources {
+    val pluginVersion = project.version.toString()
+    inputs.property("version", pluginVersion)
+    filesMatching("plugin.yml") {
+        expand("version" to pluginVersion)
+    }
+}
+
 tasks.jar {
     archiveBaseName.set("ArcartXSuite-Proxy-Bungee")
     archiveClassifier.set("")

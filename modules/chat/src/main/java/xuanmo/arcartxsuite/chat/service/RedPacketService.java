@@ -935,6 +935,8 @@ public final class RedPacketService {
             Instant now = Instant.now();
             for (RedPacket packet : repository.loadActiveRedPackets()) {
                 if (closed) break;
+                if (crossServerStorage && !packet.originNode().isBlank()
+                    && !chatService.nodeId().equals(packet.originNode()) && !crossServerEnabled()) continue;
                 if (packet.expired(now)) repository.expireRedPacket(packet.id());
             }
         } catch (SQLException exception) {
@@ -1215,17 +1217,20 @@ public final class RedPacketService {
         String packetId = yaml.getString("packet-id", "");
         if (!packetId.matches("[0-9a-f]{8,16}") || !List.of("create-v2", "claim-v2").contains(action)) return;
         ioExecutor.execute(() -> {
+            if (closed || !crossServerEnabled()) return;
             try {
                 RedPacket packet = repository.findRedPacket(packetId).orElse(null);
                 if (packet == null) return;
                 if ("create-v2".equals(action) && packet.originNode().equals(sourceNode)) {
-                    Bukkit.getScheduler().runTask(plugin, () -> broadcastLocal(packet));
+                    Bukkit.getScheduler().runTask(plugin, () -> {
+                        if (!closed && crossServerEnabled()) broadcastLocal(packet);
+                    });
                 } else if ("claim-v2".equals(action)) {
                     String claimer = yaml.getString("claimer", "");
                     for (RedPacketClaim claim : repository.listRedPacketClaims(packetId)) {
                         if (!claim.playerUuid().equals(claimer)) continue;
                         Bukkit.getScheduler().runTask(plugin, () -> {
-                            if (config().announceClaims()) announce(packet, message("redpacket.broadcast-claim-remote",
+                            if (!closed && crossServerEnabled() && config().announceClaims()) announce(packet, message("redpacket.broadcast-claim-remote",
                                 claim.playerName(), packet.senderDisplay(), claim.rewardDesc()));
                         });
                         break;

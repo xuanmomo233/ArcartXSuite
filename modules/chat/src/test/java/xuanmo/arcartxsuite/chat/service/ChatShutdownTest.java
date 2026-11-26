@@ -10,6 +10,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Logger;
 import org.junit.jupiter.api.Test;
@@ -99,7 +100,7 @@ class ChatShutdownTest {
     void relayReportsTheActualExitOfAnInterruptedDriver() throws Exception {
         var relay = new ChatRelay(mock(ChatRelayJournal.class), "lab", Runnable::run,
             (payload, source, timestamp) -> java.util.concurrent.CompletableFuture.completedFuture(false),
-            () -> {}, Logger.getAnonymousLogger());
+            () -> {}, Logger.getAnonymousLogger(), () -> true);
         var executor = field(relay, "writer");
         var entered = new CountDownLatch(1);
         var release = new CountDownLatch(1);
@@ -118,6 +119,31 @@ class ChatShutdownTest {
             assertFalse(relay.stopped().toCompletableFuture().isDone());
         } finally { release.countDown(); }
         relay.stopped().toCompletableFuture().get(2, TimeUnit.SECONDS);
+    }
+
+    @Test
+    void queuedRelayWriteIsAbandonedWhenTheSeatExpires() throws Exception {
+        var journal = mock(ChatRelayJournal.class);
+        var allowed = new AtomicBoolean(true);
+        var relay = new ChatRelay(journal, "lab", Runnable::run,
+            (payload, source, timestamp) -> CompletableFuture.completedFuture(false),
+            () -> {}, Logger.getAnonymousLogger(), allowed::get);
+        var entered = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        field(relay, "writer").execute(() -> { entered.countDown(); await(release); });
+        try {
+            assertTrue(entered.await(2, TimeUnit.SECONDS));
+            var receipt = relay.publish(UUID.randomUUID(), "pending");
+            allowed.set(false);
+            release.countDown();
+            assertFalse(receipt.toCompletableFuture().get(2, TimeUnit.SECONDS));
+            assertFalse(relay.publish(UUID.randomUUID(), "later").toCompletableFuture().get(2, TimeUnit.SECONDS));
+            verifyNoInteractions(journal);
+        } finally {
+            release.countDown();
+            relay.close();
+            relay.stopped().toCompletableFuture().get(2, TimeUnit.SECONDS);
+        }
     }
 
     @Test

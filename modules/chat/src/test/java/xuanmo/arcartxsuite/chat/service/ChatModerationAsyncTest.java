@@ -344,9 +344,10 @@ class ChatModerationAsyncTest {
             serverField = Bukkit.class.getDeclaredField("server"); serverField.setAccessible(true);
             previous = serverField.get(null); serverField.set(null, server);
             var crossServer = mock(CrossServerAPI.class); when(crossServer.nodeId()).thenReturn("node");
+            when(config.crossServer()).thenReturn(new xuanmo.arcartxsuite.api.crossserver.CrossServerChannelConfig(true, null, null));
             service = new ChatService(mock(JavaPlugin.class), Logger.getAnonymousLogger(), () -> null,
                 config, repository, mock(PacketBridgeAPI.class), mock(ItemBridgeAPI.class),
-                "chat", crossServer, null);
+                "chat", crossServer, null, null, null, null, () -> true);
         }
         @SuppressWarnings("unchecked")
         CompletableFuture<Boolean> remoteModeration(UUID id) throws Exception {

@@ -256,7 +256,7 @@ def activate_release():
     print(f"Activated Suite release {version} on both origins", flush=True)
 
 
-def announce_release():
+def verify_release():
     identity, mirror = activation_manifest()
     version = identity["version"]
     endpoint = "/v1/ci/suite-release/current"
@@ -266,7 +266,13 @@ def announce_release():
         if current.get("state") != "published" or current.get("version") != version:
             raise RuntimeError(f"{urlsplit(origin).hostname} did not confirm the active Suite release {version}")
         print(f"Confirmed the current Suite release {version} on {urlsplit(origin).hostname}", flush=True)
-    result = post(PRIMARY, endpoint, {}, payload={**identity, "action": "announce"})
+    return identity
+
+
+def announce_release():
+    identity = verify_release()
+    version = identity["version"]
+    result = post(PRIMARY, "/v1/ci/suite-release/current", {}, payload={**identity, "action": "announce"})
     if result.get("state") != "announced" or result.get("version") != version:
         raise RuntimeError(f"Primary did not confirm the bot announcement for {version}")
     print(f"Recorded the bot announcement for {version}", flush=True)
@@ -281,7 +287,9 @@ if __name__ == "__main__":
         stage_release()
     elif sys.argv[1:] == ["activate"]:
         activate_release()
+    elif sys.argv[1:] == ["verify"]:
+        verify_release()
     elif sys.argv[1:] == ["announce"]:
         announce_release()
     else:
-        raise SystemExit("Usage: publish-suite.py check|prepare|stage|activate|announce")
+        raise SystemExit("Usage: publish-suite.py check|prepare|stage|activate|verify|announce")

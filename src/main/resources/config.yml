@@ -752,6 +752,10 @@ modules:
     # EventPacket 规则引擎，在 data/eventpacket/config.yml 订阅事件并配置动作。
     # 跨服副本奖励要求参与节点使用同一套共享 MySQL、Abyss 和 Mail 存储。
 
+  exploration:
+    enabled: true
+    # 在 data/exploration/config.yml 中配置探索区域、采集物、宝箱和奇遇。
+
   tab:
     enabled: true
     # Tab 在线列表

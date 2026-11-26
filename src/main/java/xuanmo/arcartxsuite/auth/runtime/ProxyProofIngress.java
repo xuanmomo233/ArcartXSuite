@@ -29,7 +29,7 @@ final class ProxyProofIngress implements PluginMessageListener,AutoCloseable {
         nextProof.keySet().retainAll(online);
     }
     @Override public void onPluginMessageReceived(String channel,Player player,byte[] data) {
-        if(!CHANNEL.equals(channel) || data.length>4096) return;
+        if(!CHANNEL.equals(channel) || data.length>4096 || !runtime.proxyAvailable()) return;
         long now=System.nanoTime(); UUID id=player.getUniqueId();
         Long deadline=nextProof.get(id);
         if(deadline!=null && now-deadline<0) return;

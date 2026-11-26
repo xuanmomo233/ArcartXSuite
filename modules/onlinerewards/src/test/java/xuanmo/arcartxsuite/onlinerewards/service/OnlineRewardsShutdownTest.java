@@ -13,6 +13,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
@@ -33,6 +34,8 @@ import xuanmo.arcartxsuite.api.crossserver.CrossServerAPI;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerChannelConfig;
 import xuanmo.arcartxsuite.api.scheduler.ModuleExecutor;
 import xuanmo.arcartxsuite.onlinerewards.config.OnlineRewardsModuleConfiguration;
+import xuanmo.arcartxsuite.onlinerewards.config.OnlineRewardsServerSignInGoalConfiguration;
+import xuanmo.arcartxsuite.onlinerewards.config.OnlineRewardsServerSignInGoalTarget;
 import xuanmo.arcartxsuite.onlinerewards.config.OnlineRewardsSignInConfiguration;
 import xuanmo.arcartxsuite.onlinerewards.model.OnlineRewardsPlayerState;
 import xuanmo.arcartxsuite.onlinerewards.storage.OnlineRewardsRepository;
@@ -44,6 +47,48 @@ import xuanmo.arcartxsuite.onlinerewards.storage.OnlineRewardsRepository.SignInC
 import xuanmo.arcartxsuite.onlinerewards.storage.OnlineRewardsRepository.SignInStatus;
 
 class OnlineRewardsShutdownTest {
+    @Test
+    void localGoalSettlementSurvivesWithoutCrossServerPresence() throws Exception {
+        var repository = mock(OnlineRewardsRepository.class);
+        var cross = mock(CrossServerAPI.class);
+        when(cross.nodeId()).thenReturn("local");
+        var configuration = mock(OnlineRewardsModuleConfiguration.class);
+        when(configuration.crossServer()).thenReturn(CrossServerChannelConfig.enabledDefault());
+        var allowed = new AtomicBoolean(false);
+        var service = new OnlineRewardsService(mock(JavaPlugin.class), Logger.getAnonymousLogger(), configuration,
+            repository, null, null, null, null, null, null, null, null, null, null, null,
+            Clock.systemUTC(), cross, allowed::get);
+        UUID local = UUID.randomUUID();
+        UUID remote = UUID.randomUUID();
+        var target = new OnlineRewardsServerSignInGoalTarget("goal", 1, "goal", "",
+            List.of(), List.of(), List.of(), List.of(), List.of(), "", List.of());
+        var goal = new OnlineRewardsServerSignInGoalConfiguration(true, true, List.of(target));
+        var settle = OnlineRewardsService.class.getDeclaredMethod("recordServerGoals",
+            OnlineRewardsServerSignInGoalConfiguration.class, String.class, UUID.class, String.class, Map.class);
+        settle.setAccessible(true);
+        when(repository.countSignInRecords(anyString())).thenReturn(1);
+        when(repository.recordServerGoalWithRewards(anyString(), eq("goal"), anyMap())).thenReturn(true);
+
+        assertEquals(true, settle.invoke(service, goal, "2026-11-26", local, "Local", Map.of(local, "Local")));
+        verify(repository, never()).loadPresence(anyLong());
+        verify(repository).recordServerGoalWithRewards(eq("2026-11-26"), eq("goal"),
+            argThat(recipients -> recipients.keySet().equals(Set.of(local))));
+
+        allowed.set(true);
+        when(repository.loadPresence(anyLong())).thenReturn(Map.of(remote, "Remote"));
+        assertEquals(true, settle.invoke(service, goal, "2026-11-27", local, "Local", Map.of(local, "Local")));
+        verify(repository).recordServerGoalWithRewards(eq("2026-11-27"), eq("goal"),
+            argThat(recipients -> recipients.keySet().equals(Set.of(local, remote))));
+
+        when(repository.loadPresence(anyLong())).thenAnswer(call -> {
+            allowed.set(false);
+            return Map.of(remote, "Remote");
+        });
+        assertEquals(true, settle.invoke(service, goal, "2026-11-28", local, "Local", Map.of(local, "Local")));
+        verify(repository).recordServerGoalWithRewards(eq("2026-11-28"), eq("goal"),
+            argThat(recipients -> recipients.keySet().equals(Set.of(local))));
+    }
+
     @Test
     void acceptedTimeAdjustmentIsSavedOffThreadBeforePresenceAndStorageClose() throws Exception {
         var repository = mock(OnlineRewardsRepository.class);
@@ -287,7 +332,7 @@ class OnlineRewardsShutdownTest {
             ? CrossServerChannelConfig.disabled() : CrossServerChannelConfig.enabledDefault());
         return new OnlineRewardsService(mock(JavaPlugin.class), Logger.getAnonymousLogger(), configuration,
             repository, null, null, null, null, null, () -> title, null, null, null, null, null,
-            Clock.systemUTC(), cross);
+             Clock.systemUTC(), cross, () -> true);
     }
 
     private Object field(Object object, String name) throws Exception {

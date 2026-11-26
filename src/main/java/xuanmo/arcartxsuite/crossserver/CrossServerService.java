@@ -39,6 +39,7 @@ import org.bukkit.plugin.messaging.Messenger;
 import org.bukkit.plugin.messaging.PluginMessageListener;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitRunnable;
+import org.bukkit.scheduler.BukkitTask;
 import redis.clients.jedis.DefaultJedisClientConfig;
 import redis.clients.jedis.HostAndPort;
 import redis.clients.jedis.Jedis;
@@ -71,6 +72,7 @@ public final class CrossServerService implements CrossServerAPI, PluginMessageLi
     private static final int REDIS_QUEUE_CHARS = 8 * 1024 * 1024;
 
     private final JavaPlugin plugin;
+    private final BooleanSupplier transportAllowed;
     private volatile CrossServerGlobalConfiguration configuration;
     private volatile InboundWorker inboundWorker;
     private final Map<String, ModuleRegistration> registrations = new ConcurrentHashMap<>();
@@ -82,9 +84,14 @@ public final class CrossServerService implements CrossServerAPI, PluginMessageLi
     private xuanmo.arcartxsuite.api.scheduler.ModuleExecutor redisSubscriberExecutor;
     private volatile boolean redisSubscriberActive;
     private volatile boolean proxyActive;
+    private CompletionStage<Void> modulesReady;
+    private CompletableFuture<Void> backendsStopped = CompletableFuture.completedFuture(null);
+    private BukkitTask authorizationWatchdog;
+    private boolean backendsRunning;
 
-    public CrossServerService(JavaPlugin plugin) {
+    public CrossServerService(JavaPlugin plugin, BooleanSupplier transportAllowed) {
         this.plugin = plugin;
+        this.transportAllowed = Objects.requireNonNull(transportAllowed);
         this.configuration = CrossServerGlobalConfiguration.disabled();
     }
 
@@ -93,23 +100,42 @@ public final class CrossServerService implements CrossServerAPI, PluginMessageLi
     }
 
     public void start(CompletionStage<Void> modulesReady) {
-        shutdownBackends();
+        stopWatchingAuthorization();
+        stopRunningBackends();
+        this.modulesReady = Objects.requireNonNull(modulesReady);
         configuration = CrossServerGlobalConfiguration.from(plugin.getConfig());
-        boolean enabled = configuration.redisEnabled() || configuration.proxyEnabled();
-        if (enabled && !CrossServerGlobalConfiguration.validEnvelopeField(configuration.nodeId())) {
+        if (!configuration.redisEnabled() && !configuration.proxyEnabled()) return;
+        if (!CrossServerGlobalConfiguration.validEnvelopeField(configuration.nodeId())) {
             xuanmo.arcartxsuite.module.AxsLog.logger().warning("[CrossServer] node-id 无效，跨服传输未启动");
             return;
         }
-        if (enabled && configuration.missingSignatureSecret()) {
+        refreshAuthorization();
+        authorizationWatchdog = plugin.getServer().getScheduler()
+            .runTaskTimer(plugin, this::refreshAuthorization, 1L, 20L);
+    }
+
+    void refreshAuthorization() {
+        if (modulesReady == null) return;
+        if (!transportAllowed.getAsBoolean()) {
+            stopRunningBackends();
+            return;
+        }
+        if (backendsRunning || !backendsStopped.isDone()) return;
+        backendsRunning = true;
+        startBackends();
+    }
+
+    private void startBackends() {
+        if (configuration.missingSignatureSecret()) {
             xuanmo.arcartxsuite.module.AxsLog.logger().warning(
                 "[CrossServer] 跨服消息已禁用：signature.enabled 或 signature.verify 已开启，必须配置有效的 secret"
             );
-        } else if (enabled && !configuration.shouldVerify()) {
+        } else if (!configuration.shouldVerify()) {
             xuanmo.arcartxsuite.module.AxsLog.logger().warning(
                 "[CrossServer] 未要求入站签名。请仅在可信传输网络使用此配置"
             );
         }
-        if (enabled && !configuration.missingSignatureSecret()) {
+        if (!configuration.missingSignatureSecret()) {
             inboundWorker = new InboundWorker(configuration, modulesReady.toCompletableFuture());
         }
         if (configuration.redisEnabled()) {
@@ -118,25 +144,36 @@ public final class CrossServerService implements CrossServerAPI, PluginMessageLi
         if (configuration.proxyEnabled() && !configuration.missingSignatureSecret()) {
             startProxy();
         }
-        if (configuration.redisEnabled() || configuration.proxyEnabled()) {
-            xuanmo.arcartxsuite.module.AxsLog.logger().info(
-                "[CrossServer] 已启动 | node=" + configuration.nodeId()
-                    + " | redis=" + (redisPublisher != null)
-                    + " | proxy=" + proxyActive
-                    + " | sign=" + configuration.shouldSign()
-                    + " | verify=" + configuration.shouldVerify()
-            );
-        }
+        xuanmo.arcartxsuite.module.AxsLog.logger().info(
+            "[CrossServer] 已启动 | node=" + configuration.nodeId()
+                + " | redis=" + (redisPublisher != null)
+                + " | proxy=" + proxyActive
+                + " | sign=" + configuration.shouldSign()
+                + " | verify=" + configuration.shouldVerify());
+    }
+
+    private void stopWatchingAuthorization() {
+        if (authorizationWatchdog != null) authorizationWatchdog.cancel();
+        authorizationWatchdog = null;
+    }
+
+    private void stopRunningBackends() {
+        if (!backendsRunning) return;
+        backendsRunning = false;
+        backendsStopped = shutdownBackends().toCompletableFuture();
     }
 
     public CompletionStage<Void> shutdown() { return shutdownAsync(); }
 
     CompletionStage<Void> shutdownAsync() {
+        stopWatchingAuthorization();
+        modulesReady = null;
         for (ModuleRegistration registration : registrations.values()) {
             registration.closed = true;
         }
         registrations.clear();
-        return shutdownBackends();
+        stopRunningBackends();
+        return backendsStopped;
     }
 
     @Override
@@ -147,13 +184,13 @@ public final class CrossServerService implements CrossServerAPI, PluginMessageLi
     /** Redis 后端是否已激活（供 axs-core 内部选主服务使用）。 */
     public boolean isRedisAvailable() {
         JedisPool pool = jedisPool;
-        return pool != null && !pool.isClosed();
+        return transportAllowed.getAsBoolean() && pool != null && !pool.isClosed();
     }
 
     /** 获取 Redis 连接池（供 axs-core 内部选主服务使用，Redis 不可用时返回 null）。 */
     @org.jetbrains.annotations.Nullable
     public JedisPool getJedisPoolInternal() {
-        return jedisPool;
+        return transportAllowed.getAsBoolean() ? jedisPool : null;
     }
 
     @Override
@@ -230,7 +267,7 @@ public final class CrossServerService implements CrossServerAPI, PluginMessageLi
                 () -> registrations.values().stream()
                     .filter(registration -> registration.accepts(Transport.REDIS, activeConfig))
                     .map(registration -> registration.moduleId)
-                    .collect(java.util.stream.Collectors.toUnmodifiableSet()));
+                    .collect(java.util.stream.Collectors.toUnmodifiableSet()), transportAllowed);
             redisSubscriberActive = true;
             redisSubscriberExecutor = new xuanmo.arcartxsuite.api.scheduler.ModuleExecutor(1, 1, 0,
                 java.util.concurrent.TimeUnit.MILLISECONDS, new java.util.concurrent.LinkedBlockingQueue<>(), runnable -> {
@@ -309,7 +346,8 @@ public final class CrossServerService implements CrossServerAPI, PluginMessageLi
     @Override
     public void onPluginMessageReceived(String channel, Player player, byte[] message) {
         CrossServerGlobalConfiguration activeConfig = configuration;
-        if (!proxyActive || !BUNGEE_CHANNEL.equals(channel) || activeConfig.missingSignatureSecret()) {
+        if (!transportAllowed.getAsBoolean() || !proxyActive
+                || !BUNGEE_CHANNEL.equals(channel) || activeConfig.missingSignatureSecret()) {
             return;
         }
         String wire = decodeProxyPayload(message, activeConfig.proxyMessengerChannel());
@@ -419,7 +457,8 @@ public final class CrossServerService implements CrossServerAPI, PluginMessageLi
         if (sendProxy) {
             var proxyReceipt = new CompletableFuture<Boolean>();
             Runnable send = () -> {
-                if (!proxyReceipt.isCancelled() && proxyActive && configuration == activeConfig && !registration.closed) {
+                if (transportAllowed.getAsBoolean() && !proxyReceipt.isCancelled() && proxyActive
+                        && configuration == activeConfig && !registration.closed) {
                     proxyReceipt.complete(publishProxy(wire, registration.moduleId, activeConfig));
                 } else {
                     proxyReceipt.complete(false);
@@ -760,6 +799,7 @@ public final class CrossServerService implements CrossServerAPI, PluginMessageLi
         }
 
         private boolean tryDeliver(InboundMessage item) {
+            if (!transportAllowed.getAsBoolean()) return false;
             if (!item.registration().accepts(item.transport(), config)) return true;
             try {
                 return item.registration().admit.apply(item.delivery()) != null;
@@ -854,6 +894,7 @@ public final class CrossServerService implements CrossServerAPI, PluginMessageLi
 
                 private boolean tryDeliver(InboxDelivery delivery) {
                     InboundMessage message = delivery.message();
+                    if (!transportAllowed.getAsBoolean()) return false;
                     if (message.registration().accepts(message.transport(), config)) {
                         try {
                             var finished = message.registration().admit.apply(message.delivery());
@@ -1146,7 +1187,7 @@ public final class CrossServerService implements CrossServerAPI, PluginMessageLi
         @Override
         public boolean isActive() {
             CrossServerGlobalConfiguration activeConfig = configuration;
-            if (activeConfig.missingSignatureSecret()) {
+            if (!transportAllowed.getAsBoolean() || activeConfig.missingSignatureSecret()) {
                 return false;
             }
             return (redisPublisher != null && registration.accepts(Transport.REDIS, activeConfig))
@@ -1171,13 +1212,13 @@ public final class CrossServerService implements CrossServerAPI, PluginMessageLi
         @Override
         public boolean requiresSharedStateCatchUp() {
             var current = configuration;
-            return proxyActive && registration.accepts(Transport.PROXY, current)
+            return transportAllowed.getAsBoolean() && proxyActive && registration.accepts(Transport.PROXY, current)
                 && (redisPublisher == null || !registration.accepts(Transport.REDIS, current));
         }
 
         private CompletionStage<Boolean> submit(String payload, boolean durableOnly) {
             CrossServerGlobalConfiguration activeConfig = configuration;
-            if (registration.closed || !registration.config.enabled() || payload == null
+            if (!transportAllowed.getAsBoolean() || registration.closed || !registration.config.enabled() || payload == null
                 || activeConfig.missingSignatureSecret()) {
                 return CompletableFuture.completedFuture(false);
             }

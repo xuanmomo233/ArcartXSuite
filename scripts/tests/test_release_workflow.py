@@ -17,7 +17,7 @@ WORKFLOW = Path(__file__).resolve().parents[2] / ".github/workflows/build-encryp
 
 
 class CloudActivationTest(unittest.TestCase):
-    def run_publication(self, failure=None, rollback_failure=None, *, announce=False,
+    def run_publication(self, failure=None, rollback_failure=None, *, announce=False, verify=False,
                         invalid_announcement=False, advance_main_after_activation=False, stale_origin=None):
         script = WORKFLOW.parents[2] / "scripts/publish-suite.py"
         spec = importlib.util.spec_from_file_location("suite_publisher", script)
@@ -64,6 +64,8 @@ class CloudActivationTest(unittest.TestCase):
                     git.check_output = lambda *_args, **_kwargs: ("b" * 40) + "\trefs/heads/main\n"
                 if announce:
                     publisher.announce_release()
+                elif verify:
+                    publisher.verify_release()
 
     def test_later_activation_failure_rolls_back_both_origins(self):
         with self.assertRaisesRegex(RuntimeError, "both origins confirmed rollback"):
@@ -90,6 +92,14 @@ class CloudActivationTest(unittest.TestCase):
             ("primary", "withdraw"), ("mirror", "withdraw"),
             ("primary", "activate"), ("mirror", "activate"),
             ("primary", "withdraw"), ("mirror", "withdraw"), ("primary", "announce"),
+        ], self.calls)
+
+    def test_release_readback_can_run_without_an_announcement(self):
+        self.run_publication(verify=True)
+        self.assertEqual([
+            ("primary", "withdraw"), ("mirror", "withdraw"),
+            ("primary", "activate"), ("mirror", "activate"),
+            ("primary", "withdraw"), ("mirror", "withdraw"),
         ], self.calls)
 
     def test_announcement_requires_readback_from_both_origins(self):
@@ -227,6 +237,24 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertEqual("true", flags["proxy_changed"])
         self.assertEqual("false", flags["core_changed"])
 
+    def test_new_exploration_module_enters_the_next_cloud_build(self):
+        self.commit("modules/exploration/build.gradle.kts", "register Exploration")
+        self.commit("modules/debug/build.gradle.kts", "local Debug module")
+        published = self.artifact(self.baseline, "2026-11-20T00:00:00Z")
+        expected = ["exploration", "market"]
+
+        push = self.detect_scopes([published], [published])
+        self.assertEqual(expected, json.loads(push["changed_modules"]))
+        self.assertEqual("true", push["core_changed"])
+        self.assertEqual("false", push["proxy_changed"])
+
+        dispatch = self.detect_scopes([], [], event="workflow_dispatch",
+                                      PUBLISH_SUITE_REQUESTED="true", AXS_MANUAL_SUITE_PUBLISH="true",
+                                      GITHUB_REF="refs/heads/main")
+        self.assertEqual(expected, json.loads(dispatch["changed_modules"]))
+        self.assertEqual("true", dispatch["module_changed"])
+        self.assertEqual("false", dispatch["proxy_changed"])
+
     def test_manual_dispatch_builds_all_and_uses_the_same_activation_step(self):
         baseline = self.artifact(self.baseline, "2026-11-20T00:00:00Z")
         flags = self.detect_scopes([baseline], [baseline], event="workflow_dispatch")
@@ -236,11 +264,14 @@ class ReleaseWorkflowTest(unittest.TestCase):
         activate = next(i for i, step in enumerate(steps) if step.get("name") == "Activate the staged Suite release")
         record = next(i for i, step in enumerate(steps) if step.get("with", {}).get("name") == "suite-published")
         announce = next(i for i, step in enumerate(steps) if step.get("name") == "Queue the Suite release announcement")
+        verify = next(i for i, step in enumerate(steps) if step.get("name") == "Verify the active Suite release without an announcement")
         self.assertEqual("env.AXS_CLOUD_UPLOAD == 'true'", steps[activate]["if"])
         self.assertGreater(record, activate, "a staging run does not record a completed publication")
         self.assertGreater(announce, record, "a failed notification must not erase the publication record")
         self.assertEqual(steps[activate]["if"], steps[record]["if"])
-        self.assertEqual(steps[record]["if"], steps[announce]["if"])
+        self.assertGreater(verify, record)
+        self.assertEqual(steps[record]["if"] + " && !inputs.skip_announcement", steps[announce]["if"])
+        self.assertEqual(steps[record]["if"] + " && inputs.skip_announcement", steps[verify]["if"])
 
 
     def test_customer_export_dispatch_builds_only_the_requested_modules(self):

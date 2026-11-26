@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 import java.util.concurrent.ConcurrentHashMap;
 import org.bukkit.Bukkit;
@@ -82,6 +83,7 @@ public final class MenuService {
         ItemBridgeAPI itemStackBridge,
         ItemSourceRegistry itemSourceRegistry,
         Supplier<SignalDispatchable> signalProvider,
+        BooleanSupplier crossServerAllowed,
         MessageProvider messageProvider
     ) {
         this.plugin = plugin;
@@ -89,7 +91,7 @@ public final class MenuService {
         this.packetBridge = packetBridge;
         this.packetGuard = packetGuard;
         this.configuration = configuration;
-        this.actionExecutor = new MenuActionExecutor(plugin, this, logger, signalProvider);
+        this.actionExecutor = new MenuActionExecutor(plugin, this, logger, signalProvider, crossServerAllowed);
         this.presentation = new MenuPresentation(new IconResolver(itemStackBridge, itemSourceRegistry,
             MenuConditionEvaluator::applyPlaceholders)::resolveItemJson);
         this.messageProvider = messageProvider;

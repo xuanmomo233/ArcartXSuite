@@ -13,6 +13,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -29,6 +30,7 @@ final class ChatRelay implements AutoCloseable {
     private final Delivery delivery;
     private final Runnable dispatchAdmitted;
     private final Logger logger;
+    private final BooleanSupplier authorized;
     private final long startedAt = System.currentTimeMillis();
     private final long reconnectUntil = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(RECONNECT_MILLIS);
     private final xuanmo.arcartxsuite.api.scheduler.ModuleScheduledExecutor receiver =
@@ -49,13 +51,14 @@ final class ChatRelay implements AutoCloseable {
     private List<Receipt> pending = List.of();
 
     ChatRelay(ChatRelayJournal journal, String node, Consumer<Runnable> onMain,
-              Delivery delivery, Runnable dispatchAdmitted, Logger logger) {
+              Delivery delivery, Runnable dispatchAdmitted, Logger logger, BooleanSupplier authorized) {
         this.journal = journal;
         this.node = node;
         this.onMain = onMain;
         this.delivery = delivery;
         this.dispatchAdmitted = dispatchAdmitted;
         this.logger = logger;
+        this.authorized = authorized;
     }
 
     void start(Set<UUID> localAudience) {
@@ -86,7 +89,7 @@ final class ChatRelay implements AutoCloseable {
     }
 
     CompletionStage<Boolean> publish(UUID id, String payload) {
-        if (closed) {
+        if (!available()) {
             return CompletableFuture.completedFuture(false);
         }
         var submission = new Submission(id, payload);
@@ -99,10 +102,10 @@ final class ChatRelay implements AutoCloseable {
     }
 
     private void tick() {
-        if (closed || System.nanoTime() < retryAt) return;
+        if (!available() || System.nanoTime() < retryAt) return;
         try {
             saveAudience();
-            poll();
+            if (available()) poll();
         } catch (SQLException | RuntimeException failure) {
             long now = System.nanoTime();
             if (now >= nextWarning && !closed) {
@@ -114,6 +117,7 @@ final class ChatRelay implements AutoCloseable {
     }
 
     private void saveAudience() throws SQLException {
+        if (!available()) return;
         if (previousAudience == null) {
             persistedAudience = journal.loadAudience(node);
             previousAudience = persistedAudience;
@@ -128,7 +132,7 @@ final class ChatRelay implements AutoCloseable {
                 cleanedRecoveryAudience = true;
             }
         }
-        if (!latest.equals(persistedAudience)) {
+        if (available() && !latest.equals(persistedAudience)) {
             journal.saveAudience(node, latest);
             persistedAudience = latest;
         }
@@ -140,7 +144,7 @@ final class ChatRelay implements AutoCloseable {
 
     private void poll() throws SQLException {
         long now = System.nanoTime();
-        if (now < nextPull) return;
+        if (!available() || now < nextPull) return;
         if (cursor == null) cursor = journal.openNode(node);
         if (submitted != null) {
             if (!submitted.isDone()) return;
@@ -153,10 +157,12 @@ final class ChatRelay implements AutoCloseable {
         }
         if (!pending.isEmpty() && !finishPrefix()) return;
 
+        if (!available()) return;
         if (now >= nextPurge) {
             journal.purgeExpired();
             nextPurge = now + TimeUnit.SECONDS.toNanos(5);
         }
+        if (!available()) return;
         List<ChatRelayJournal.Entry> page = journal.pull(cursor);
         if (page.isEmpty()) {
             nextPull = now + TimeUnit.MILLISECONDS.toNanos(200);
@@ -166,8 +172,9 @@ final class ChatRelay implements AutoCloseable {
         onMain.accept(() -> {
             var receipts = new ArrayList<Receipt>(page.size());
             try {
-                if (closed) return;
+                if (!available()) return;
                 for (var entry : page) {
+                    if (!available()) break;
                     CompletionStage<Boolean> result = node.equals(entry.origin())
                         ? CompletableFuture.completedFuture(true)
                         : delivery.admit(entry.payload(), entry.origin(), entry.expiresAt() - MESSAGE_MILLIS);
@@ -178,7 +185,7 @@ final class ChatRelay implements AutoCloseable {
                 logger.log(Level.WARNING, "Chat 转发接收回调失败，将从未确认的消息重试", failure);
             } finally {
                 admitted.complete(receipts);
-                if (!closed && !receipts.isEmpty()) {
+                if (available() && !receipts.isEmpty()) {
                     dispatchAdmitted.run();
                     receipts.get(receipts.size() - 1).result().whenComplete((result, failure) -> wakeReceiver());
                 }
@@ -188,7 +195,7 @@ final class ChatRelay implements AutoCloseable {
     }
 
     private void wakeReceiver() {
-        if (closed) return;
+        if (!available()) return;
         try {
             receiver.execute(this::tick);
         } catch (RejectedExecutionException stopped) {
@@ -209,8 +216,9 @@ final class ChatRelay implements AutoCloseable {
             count++;
         }
         if (completed != cursor) {
+            if (!available()) return false;
             if (!journal.advance(node, cursor, completed)) {
-                cursor = journal.openNode(node);
+                cursor = available() ? journal.openNode(node) : null;
                 pending = List.of();
                 return false;
             }
@@ -239,6 +247,10 @@ final class ChatRelay implements AutoCloseable {
         return thread;
     }
 
+    private boolean available() {
+        return !closed && authorized.getAsBoolean();
+    }
+
     @FunctionalInterface
     interface Delivery {
         CompletionStage<Boolean> admit(String payload, String source, long timestamp);
@@ -259,7 +271,7 @@ final class ChatRelay implements AutoCloseable {
 
         @Override
         public void run() {
-            for (int attempt = 0; attempt < 2 && !closed; attempt++) {
+            for (int attempt = 0; attempt < 2 && available(); attempt++) {
                 try {
                     result.complete(journal.append(id, node, payload, expiresAt));
                     return;

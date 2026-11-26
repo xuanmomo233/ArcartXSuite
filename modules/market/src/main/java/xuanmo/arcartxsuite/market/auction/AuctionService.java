@@ -95,7 +95,7 @@ public class AuctionService {
     private final AtomicBoolean scanningExpired = new AtomicBoolean();
     private final AtomicBoolean settlingExpired = new AtomicBoolean();
     private final AtomicBoolean publishingExpired = new AtomicBoolean();
-    private volatile @Nullable java.util.function.Function<String, java.util.concurrent.CompletionStage<Boolean>> settlementRefresh;
+    private volatile @Nullable SettlementRefresh settlementRefresh;
     private volatile boolean stopped;
     private BukkitTask schedulerTask;
     private BukkitTask settlementTask;
@@ -110,8 +110,17 @@ public class AuctionService {
         this.eventObserver = observer;
     }
 
-    public void setSettlementRefresh(java.util.function.Function<String, java.util.concurrent.CompletionStage<Boolean>> publisher) {
-        this.settlementRefresh = publisher;
+    public void setSettlementRefresh(java.util.function.BooleanSupplier authorized,
+            java.util.function.Function<String, java.util.concurrent.CompletionStage<Boolean>> publisher) {
+        this.settlementRefresh = new SettlementRefresh(authorized, publisher);
+    }
+
+    private record SettlementRefresh(java.util.function.BooleanSupplier authorized,
+            java.util.function.Function<String, java.util.concurrent.CompletionStage<Boolean>> publish) {}
+
+    private boolean settlementRefreshAllowed() {
+        var refresh = settlementRefresh;
+        return refresh != null && refresh.authorized().getAsBoolean();
     }
 
     public AuctionService(MarketWork work, JavaPlugin plugin, AuctionConfiguration config, MessagesConfiguration messages,
@@ -525,7 +534,7 @@ public class AuctionService {
                 deliveries.add(settlementDelivery(receipt, recipient, "NOTICE", "", "0", notice, "notice-chat:cancel:" + id));
             }
         }
-        var publication = settlementRefresh == null ? null : new AuctionPublication(tradeId, id, listing.getSeller(), null,
+        var publication = !settlementRefreshAllowed() ? null : new AuctionPublication(tradeId, id, listing.getSeller(), null,
             listing.getItemDisplayName(), 0, listing.getCurrency(), 0, "", false, true, now);
         return new AuctionSettlement(listing, receipt, history, deliveries, publication);
     }
@@ -712,7 +721,7 @@ public class AuctionService {
             try { bidderName = repository.latestAuctionBidderName(id, listing.getHighestBidder()); }
             catch (RuntimeException exception) { logger.log(Level.WARNING, "[Auction] 成交事件买家名称读取失败 #" + id, exception); }
         }
-        boolean refreshPending = settlementRefresh != null;
+        boolean refreshPending = settlementRefreshAllowed();
         var publication = eventPending || refreshPending ? new AuctionPublication(tradeId, id, listing.getSeller(),
             sold ? listing.getHighestBidder() : null, listing.getItemDisplayName(), price, listing.getCurrency(),
             tax, bidderName, eventPending, refreshPending, now) : null;
@@ -751,17 +760,18 @@ public class AuctionService {
         if (stopped || !publishingExpired.compareAndSet(false, true)) return;
         String lease = UUID.randomUUID().toString();
         try {
-            var claimed = repository.claimAuctionPublications(lease, System.currentTimeMillis(), 8);
+            var claimed = repository.claimAuctionPublications(lease, System.currentTimeMillis(), 8, settlementRefreshAllowed());
             if (!claimed.isEmpty() && !stopped && redisCache.isAvailable()) redisCache.invalidateByPrefix("market:listings:");
             for (var notice : claimed) {
                 if (stopped) break;
                 boolean event = !notice.eventPending();
                 boolean refresh = !notice.refreshPending();
                 AuctionEvent observed = null;
-                if (!refresh && settlementRefresh != null) {
+                var delivery = settlementRefresh;
+                if (!refresh && delivery != null && delivery.authorized().getAsBoolean()) {
                     java.util.concurrent.CompletableFuture<Boolean> submitted = null;
                     try {
-                        submitted = settlementRefresh.apply(notice.refreshPayload()).toCompletableFuture();
+                        submitted = delivery.publish().apply(notice.refreshPayload()).toCompletableFuture();
                         refresh = Boolean.TRUE.equals(submitted.get(1, TimeUnit.SECONDS));
                     } catch (InterruptedException exception) {
                         if (submitted != null) submitted.cancel(false);

@@ -14,6 +14,7 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.LockSupport;
+import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 import redis.clients.jedis.JedisPool;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerEnvelope;
@@ -29,6 +30,7 @@ final class CrossServerRedisOutbox {
     private final JedisPool pool;
     private final CrossServerRedisStream stream;
     private final Supplier<Set<String>> modules;
+    private final BooleanSupplier transportAllowed;
     private final Path database;
     private final int frameBytes;
     private final byte[] secret;
@@ -46,7 +48,7 @@ final class CrossServerRedisOutbox {
     private volatile boolean closed;
 
     CrossServerRedisOutbox(JedisPool pool, CrossServerGlobalConfiguration configuration, CrossServerRedisStream stream,
-                         Path database, int frameBytes, Supplier<Set<String>> modules) {
+                         Path database, int frameBytes, Supplier<Set<String>> modules, BooleanSupplier transportAllowed) {
         this.pool = pool;
         this.configuration = configuration;
         this.stream = stream;
@@ -54,6 +56,7 @@ final class CrossServerRedisOutbox {
         this.frameBytes = frameBytes;
         this.secret = configuration.signatureSecret().getBytes(StandardCharsets.UTF_8);
         this.modules = modules;
+        this.transportAllowed = transportAllowed;
         this.scope = configuration.redisHost() + ":" + configuration.redisPort() + "/" + configuration.redisDatabase()
             + "\n" + configuration.redisChannel() + "\n" + configuration.nodeId();
         admission = new Thread(this::admit, "AXS-CrossServer-Outbox-Write");
@@ -81,7 +84,7 @@ final class CrossServerRedisOutbox {
 
     private synchronized CompletionStage<Boolean> publish(String wire, CrossServerEnvelope envelope,
                                                            long timestamp, String module, int reserved) {
-        if (closed) return CompletableFuture.completedFuture(false);
+        if (closed || !transportAllowed.getAsBoolean()) return CompletableFuture.completedFuture(false);
         if (!requestSlots.tryAcquire()) {
             warn(nextAdmissionWarning, "本地发件箱暂存队列已满，消息尚未受理");
             return CompletableFuture.completedFuture(false);
@@ -225,7 +228,7 @@ final class CrossServerRedisOutbox {
 
     private int appendAndConfirm(List<CrossServerOutboxStore.Frame> frames) {
         long firstExpiry = frames.get(0).head().expiresAt();
-        if (closed || System.currentTimeMillis() > firstExpiry
+        if (closed || !transportAllowed.getAsBoolean() || System.currentTimeMillis() > firstExpiry
                 || !modules.get().contains(frames.get(0).head().module())) return 0;
         try (var jedis = pool.getResource()) {
             long now = System.currentTimeMillis();
@@ -235,7 +238,7 @@ final class CrossServerRedisOutbox {
                 if (closed || now > frame.head().expiresAt() || !activeModules.contains(frame.head().module())) break;
                 wires.add(frame.wire());
             }
-            if (wires.isEmpty()) return 0;
+            if (wires.isEmpty() || !transportAllowed.getAsBoolean()) return 0;
             int accepted = stream.append(jedis, wires);
             if (accepted == 0) {
                 warn(nextDrainWarning, "Redis Stream 等待慢节点，保留待写消息");

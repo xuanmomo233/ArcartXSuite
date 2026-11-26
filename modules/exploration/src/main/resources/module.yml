@@ -1,0 +1,9 @@
+id: exploration
+name: Exploration
+version: 3.3.7
+main: xuanmo.arcartxsuite.exploration.ExplorationModule
+api-version: 3.9
+depends: []
+softdepends: [questgps, conversation, abyss]
+external-depends: []
+external-softdepends: [Adyeshach]

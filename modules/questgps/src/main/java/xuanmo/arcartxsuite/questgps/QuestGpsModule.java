@@ -206,6 +206,11 @@ public final class QuestGpsModule extends AbstractAXSModule implements ModuleCom
             }
 
             @Override
+            public boolean tryOfferQuest(@NotNull org.bukkit.entity.Player player, @NotNull String questId, boolean openMenu) {
+                return service != null && service.tryOfferQuest(player, questId, openMenu);
+            }
+
+            @Override
             public void acceptQuest(@NotNull org.bukkit.entity.Player player, @NotNull String questId) {
                 service.acceptQuest(player, questId);
             }

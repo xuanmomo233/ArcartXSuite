@@ -5,6 +5,7 @@ import java.net.InetAddress;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.BooleanSupplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.bukkit.event.player.AsyncPlayerPreLoginEvent;
@@ -15,14 +16,16 @@ final class VelocityVanishProfile {
     private static final int MAX_PENDING = 4096;
     private final Method getProfile;
     private final Method removeProperty;
+    private final BooleanSupplier suiteProxyAllowed;
     private final Map<UUID, InetAddress> pending = new HashMap<>();
 
-    private VelocityVanishProfile(Method getProfile, Method removeProperty) {
+    VelocityVanishProfile(Method getProfile, Method removeProperty, BooleanSupplier suiteProxyAllowed) {
         this.getProfile = getProfile;
         this.removeProperty = removeProperty;
+        this.suiteProxyAllowed = suiteProxyAllowed;
     }
 
-    static VelocityVanishProfile detect(Logger logger) {
+    static VelocityVanishProfile detect(Logger logger, BooleanSupplier suiteProxyAllowed) {
         Class<?> configuration;
         try {
             configuration = Class.forName("io.papermc.paper.configuration.GlobalConfiguration");
@@ -38,7 +41,7 @@ final class VelocityVanishProfile {
             // Keep Paper-only types out of the Spigot API linkage.
             Method getter = AsyncPlayerPreLoginEvent.class.getMethod("getPlayerProfile");
             Class<?> profile = getter.getReturnType();
-            return new VelocityVanishProfile(getter, profile.getMethod("removeProperty", String.class));
+            return new VelocityVanishProfile(getter, profile.getMethod("removeProperty", String.class), suiteProxyAllowed);
         } catch (ReflectiveOperationException failure) {
             logger.log(Level.WARNING, "无法初始化 Velocity 隐身交接。", failure);
             return null;
@@ -52,13 +55,15 @@ final class VelocityVanishProfile {
         boolean hidden = Boolean.TRUE.equals(removeProperty.invoke(profile, ProxyTabVisibility.VANISH_PROFILE_PROPERTY));
         UUID id = event.getUniqueId();
         pending.remove(id);
-        if (!hidden || event.getLoginResult() != AsyncPlayerPreLoginEvent.Result.ALLOWED) return true;
+        if (!hidden || event.getLoginResult() != AsyncPlayerPreLoginEvent.Result.ALLOWED
+                || !suiteProxyAllowed.getAsBoolean()) return true;
         if (pending.size() >= MAX_PENDING) return false;
         pending.put(id, event.getAddress());
         return true;
     }
 
     synchronized InetAddress take(UUID id) {
-        return pending.remove(id);
+        InetAddress address = pending.remove(id);
+        return address != null && suiteProxyAllowed.getAsBoolean() ? address : null;
     }
 }

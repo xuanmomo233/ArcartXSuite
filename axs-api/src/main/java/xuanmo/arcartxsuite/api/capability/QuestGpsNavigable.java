@@ -26,6 +26,11 @@ public interface QuestGpsNavigable {
     /** 向玩家推送任务供选择 */
     void offerQuest(@NotNull Player player, @NotNull String questId, boolean openMenu);
 
+    /** 尝试向玩家推荐可用任务。返回 true 表示已触发推荐；旧实现未提供确认能力时返回 false。 */
+    default boolean tryOfferQuest(@NotNull Player player, @NotNull String questId, boolean openMenu) {
+        return false;
+    }
+
     /** 让玩家接受任务 */
     void acceptQuest(@NotNull Player player, @NotNull String questId);
 

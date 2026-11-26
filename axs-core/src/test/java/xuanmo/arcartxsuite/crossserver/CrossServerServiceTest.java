@@ -16,6 +16,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.bukkit.Bukkit;
 import org.bukkit.Server;
 import org.bukkit.command.ConsoleCommandSender;
@@ -33,6 +34,41 @@ import xuanmo.arcartxsuite.api.crossserver.CrossServerEnvelope;
 
 class CrossServerServiceTest {
     @TempDir Path dataFolder;
+
+    @Test
+    void freeHostCannotActivateConfiguredProxyOrRedis() throws Exception {
+        try (var bukkit = mockStatic(Bukkit.class); var fixture = new Fixture(bukkit, true, true, "present")) {
+            fixture.paid.set(false);
+            fixture.configuration.set("cross-server.redis.enabled", true);
+            fixture.service.start();
+            var channel = fixture.service.openChannel("chat", CrossServerChannelConfig.enabledDefault(), delivery -> {});
+            assertFalse(channel.isActive());
+            assertFalse(channel.publishWithReceipt("本服数据").toCompletableFuture().join());
+            assertFalse(fixture.service.isRedisAvailable());
+            assertNull(fixture.service.getJedisPoolInternal());
+            verifyNoInteractions(fixture.messenger);
+        }
+    }
+
+    @Test
+    void proxyBackendFollowsTheLiveHostSeat() throws Exception {
+        try (var bukkit = mockStatic(Bukkit.class); var fixture = new Fixture(bukkit, true, true, "present")) {
+            fixture.paid.set(false);
+            fixture.service.start();
+            var channel = fixture.service.openChannel("chat", CrossServerChannelConfig.enabledDefault(), delivery -> {});
+            assertFalse(channel.isActive());
+            fixture.paid.set(true);
+            fixture.service.refreshAuthorization();
+            assertTrue(channel.isActive());
+            verify(fixture.messenger).registerIncomingPluginChannel(any(), eq("BungeeCord"), eq(fixture.service));
+
+            fixture.paid.set(false);
+            assertFalse(channel.isActive());
+            assertFalse(channel.publishWithReceipt("仍待发送").toCompletableFuture().join());
+            fixture.service.refreshAuthorization();
+            verify(fixture.messenger).unregisterIncomingPluginChannel(any(), eq("BungeeCord"), eq(fixture.service));
+        }
+    }
 
     @Test
     void redisWaitsForModuleRegistrationAndDoesNotBlockOnAnUnavailableChannel() throws Exception {
@@ -399,6 +435,7 @@ class CrossServerServiceTest {
         final Messenger messenger = mock(Messenger.class);
         final Server server = mock(Server.class);
         final LinkedBlockingQueue<Runnable> timerTasks = new LinkedBlockingQueue<>();
+        final AtomicBoolean paid = new AtomicBoolean(true);
         final CrossServerService service;
         final YamlConfiguration configuration = new YamlConfiguration();
 
@@ -419,7 +456,7 @@ class CrossServerServiceTest {
             when(server.getScheduler()).thenReturn(scheduler);
             when(server.getConsoleSender()).thenReturn(console);
             when(scheduler.runTaskTimer(eq(plugin), any(Runnable.class), anyLong(), anyLong())).thenAnswer(call -> {
-                timerTasks.add(call.getArgument(1));
+                if (call.<Long>getArgument(3) != 20L) timerTasks.add(call.getArgument(1));
                 return task;
             });
             when(scheduler.runTask(eq(plugin), any(Runnable.class))).thenAnswer(call -> {
@@ -428,7 +465,7 @@ class CrossServerServiceTest {
             });
             bukkit.when(Bukkit::getScheduler).thenReturn(scheduler);
             bukkit.when(Bukkit::getConsoleSender).thenReturn(console);
-            this.service = new CrossServerService(plugin);
+            this.service = new CrossServerService(plugin, paid::get);
         }
 
         void receive(byte[] frame) {

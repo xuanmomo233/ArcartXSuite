@@ -650,9 +650,29 @@ public final class QuestGpsService implements Listener {
         if (player == null || definition == null) {
             return;
         }
-        QuestGpsViewState state = viewStates.computeIfAbsent(player.getUniqueId(), ignored -> new QuestGpsViewState());
         Template template = ChemdahAPI.INSTANCE.getQuestTemplate(definition.id());
-        state.setCategory(presentationService.effectiveCategory(template, definition));
+        presentOffer(player, definition, presentationService.effectiveCategory(template, definition), openMenu);
+    }
+
+    public boolean tryOfferQuest(Player player, String questId, boolean openMenu) {
+        var definition = configuration.quest(questId);
+        if (definition == null || !definition.enabled() || !canView(player) || (openMenu && menuUiIds.isEmpty())) return false;
+        Template template = ChemdahAPI.INSTANCE.getQuestTemplate(definition.id());
+        if (template == null) return false;
+        var category = presentationService.effectiveCategory(template, definition);
+        if (category == null || isCategoryLocked(player, category)) return false;
+        PlayerProfile profile = loadProfile(player, false);
+        if (profile == null || !presentationService.hasCompletedRequiredMainline(profile, definition.requiredMainline())) return false;
+        Quest activeQuest = profile.getQuestById(template.getId(), false);
+        if ((activeQuest != null && !activeQuest.isCompleted()) || profile.isQuestCompleted(template)) return false;
+        presentOffer(player, definition, category, openMenu);
+        return true;
+    }
+
+    private void presentOffer(Player player, QuestGpsModuleConfiguration.QuestDefinition definition,
+                              QuestGpsCategory category, boolean openMenu) {
+        QuestGpsViewState state = viewStates.computeIfAbsent(player.getUniqueId(), ignored -> new QuestGpsViewState());
+        state.setCategory(category);
         state.setPage(QuestGpsPage.AVAILABLE);
         state.setSelectedQuestId(definition.id());
         fireQuestHooks(player, definition, Lifecycle.TRIGGERED);

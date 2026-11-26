@@ -32,6 +32,10 @@ on:
         description: '单次正式发布当前 main 的 Suite 宿主和模块，保持自动发布暂停设置'
         type: boolean
         default: false
+      skip_announcement:
+        description: '发布完成后只核对主备云，不再发送该版本的群公告'
+        type: boolean
+        default: false
       export_account:
         description: '收件人的云端 QQ 账号'
         type: string
@@ -262,6 +266,9 @@ jobs:
         run: python modules/abyss/src/test/ui/verify_abyss_ui.py
       - name: Test public API, Abyss transactions and EventPacket delivery tiers
         run: bash ./gradlew :axs-api:test :modules:abyss:test :modules:eventpacket:test -PskipNativeCheck=true --no-build-cache
+      - name: Test Exploration and QuestGPS quest offers
+        if: contains(fromJSON(needs.detect-changes.outputs.changed_modules), 'exploration')
+        run: bash ./gradlew :modules:exploration:test :modules:questgps:test -PskipNativeCheck=true --no-build-cache
       - name: Test authentication and proxy forwarding
         if: needs.detect-changes.outputs.auth_changed == 'true'
         run: |
@@ -277,6 +284,9 @@ jobs:
             axs-api/build/reports/tests/
             modules/abyss/build/reports/tests/
             modules/abyss/build/test-results/
+            modules/exploration/build/reports/tests/
+            modules/exploration/build/test-results/
+            modules/questgps/build/reports/tests/
           retention-days: 7
 
   native-public-keys:
@@ -906,6 +916,10 @@ jobs:
         if: steps.staged-release.outputs.restored != 'true' && steps.staged-release.outputs.prepared != 'true' && contains(fromJSON(needs.detect-changes.outputs.changed_modules), 'abyss')
         run: python3 modules/abyss/src/test/protection/verify_journal_mapping.py
 
+      - name: Verify protected Exploration classes
+        if: steps.staged-release.outputs.restored != 'true' && steps.staged-release.outputs.prepared != 'true' && contains(fromJSON(needs.detect-changes.outputs.changed_modules), 'exploration')
+        run: python3 modules/exploration/src/test/protection/verify_protected_classes.py
+
       - uses: actions/download-artifact@v5
         if: (env.AXS_CLOUD_UPLOAD == 'true' || env.AXS_EXPORT_ONLY == 'true') && steps.staged-release.outputs.restored != 'true' && steps.staged-release.outputs.prepared != 'true'
         with:
@@ -1016,11 +1030,18 @@ jobs:
           if-no-files-found: error
 
       - name: Queue the Suite release announcement
-        if: env.AXS_CLOUD_UPLOAD == 'true'
+        if: env.AXS_CLOUD_UPLOAD == 'true' && !inputs.skip_announcement
         env:
           CLOUD_CI_TOKEN: ${{ secrets.CLOUD_CI_TOKEN }}
           FLARE_BASE_URL: ${{ vars.FLARE_BASE_URL }}
         run: python scripts/publish-suite.py announce
+
+      - name: Verify the active Suite release without an announcement
+        if: env.AXS_CLOUD_UPLOAD == 'true' && inputs.skip_announcement
+        env:
+          CLOUD_CI_TOKEN: ${{ secrets.CLOUD_CI_TOKEN }}
+          FLARE_BASE_URL: ${{ vars.FLARE_BASE_URL }}
+        run: python scripts/publish-suite.py verify
 
       - name: Upload ProGuard mappings (modules)
         if: env.AXS_EXPORT_ONLY != 'true' && steps.staged-release.outputs.restored != 'true' && steps.staged-release.outputs.prepared != 'true'
