@@ -439,9 +439,12 @@ public final class SuiteCoreImpl implements SuiteCore {
         keybindService.reportDeferred();
         runConfigDiagnosis(null, false);
         printConfigDiagnosisSummary();
-        cloudModuleService.syncModules().whenComplete((ignored, failure) -> {
+        var service = cloudModuleService;
+        service.syncModules().whenComplete((ignored, failure) -> {
             crossServerModulesReady.complete(null);
-            if (failure == null) consoleInfo("[Cloud] 云端模块同步完成");
+            if (failure == null) consoleInfo(service.usesLocalModuleFiles()
+                ? "[本地模块] 本地模块加载流程结束。"
+                : "[Cloud] 云端模块同步完成");
         });
         consoleInfo(ChatColor.GREEN + "加载完成");
     }

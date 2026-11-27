@@ -22,6 +22,8 @@ class CloudCustomerModuleSyncTest {
     void customerWithoutPublicEquipmentWaitsForThePaidLeaseThenLoadsItsModule() throws Exception {
         var lease = mock(RuntimeAuthorization.class);
         var service = customerService(lease);
+        var plugin = mock(SuiteCoreImpl.class);
+        set(service, "plugin", plugin);
         service.acceptPublicModuleList("{\"allowedModules\":[]}");
         when(lease.permittedCustomerModules(CUSTOMER_RELEASE)).thenReturn(Set.of());
         var acquisition = new CompletableFuture<Void>();
@@ -37,6 +39,7 @@ class CloudCustomerModuleSyncTest {
         acquisition.complete(null);
         sync.join();
         verify(service).syncModuleFile("abyss");
+        verify(plugin).consoleInfo("[本地模块] 本次需读取 1 个授权模块: [abyss]");
     }
 
     @Test
@@ -59,6 +62,7 @@ class CloudCustomerModuleSyncTest {
         set(service, "runtimeAuthorization", lease);
         set(service, "plugin", mock(SuiteCoreImpl.class));
         set(service, "allowedModules", List.of());
+        set(service, "localModuleSource", true);
         return service;
     }
 

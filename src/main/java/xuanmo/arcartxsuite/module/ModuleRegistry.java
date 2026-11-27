@@ -543,17 +543,17 @@ public final class ModuleRegistry {
             ModuleDescriptor descriptor = ModuleDescriptorParser.parse(jarBytes);
             cloudModuleId = descriptor.id();
             if (!cloudModuleId.equals(expectedId)) {
-                LOGGER.warning("云端模块 id 与请求不符，拒绝加载: " + expectedId + " / " + cloudModuleId);
+                LOGGER.warning("受保护模块 id 与请求不符，拒绝加载: " + expectedId + " / " + cloudModuleId);
                 return CompletableFuture.completedFuture(false);
             }
             initializeGlobalBridges();
             String moduleId = cloudModuleId;
             if (modules.containsKey(moduleId)) {
-                LOGGER.info("云端模块 " + moduleId + " 已加载，跳过。");
+                LOGGER.info("受保护模块 " + moduleId + " 已加载，跳过。");
                 return CompletableFuture.completedFuture(false);
             }
             if (!isModuleEnabled(loadRootConfig(), moduleId)) {
-                LOGGER.fine("云端模块 " + moduleId + " 已在 config.yml 中关闭，跳过加载。");
+                LOGGER.info("模块 " + moduleId + " 未启用，检查 config.yml 中的 modules." + moduleId + ".enabled。");
                 return CompletableFuture.completedFuture(false);
             }
             if (packetBridge != null) {
@@ -561,13 +561,13 @@ public final class ModuleRegistry {
             }
             return tryLoad(new DiscoveredModule(descriptor, jarBytes, moduleSeed)).exceptionally(failure -> false);
         } catch (Exception | LinkageError exception) {
-            LOGGER.log(Level.SEVERE, "加载云端模块失败", exception);
+            LOGGER.log(Level.SEVERE, "加载受保护模块失败", exception);
             return CompletableFuture.completedFuture(false);
         } catch (StackOverflowError error) {
             // StackOverflowError 是 VirtualMachineError，不会被上面的 catch(Exception|LinkageError) 捕获。
             // 模块加载过程中的无限递归（如配置树循环引用、toString/equals 循环）会抛出此错误，
             // 若不在此捕获则会直接传播到 Bukkit 调度器，丢失模块上下文信息。
-            LOGGER.log(Level.SEVERE, "加载云端模块 " + (cloudModuleId != null ? cloudModuleId : "<未知>")
+            LOGGER.log(Level.SEVERE, "加载受保护模块 " + (cloudModuleId != null ? cloudModuleId : "<未知>")
                 + " 时发生 StackOverflowError"
                 + "（可能由配置树循环引用或递归方法无终止条件引起）", error);
             if (cloudModuleId != null) {
@@ -583,12 +583,12 @@ public final class ModuleRegistry {
         try {
             ModuleDescriptor descriptor = ModuleDescriptorParser.parse(jarBytes);
             if (!descriptor.id().equals(expectedId)) {
-                LOGGER.warning("云端模块 id 与请求不符，拒绝更新: " + expectedId + " / " + descriptor.id());
+                LOGGER.warning("受保护模块 id 与请求不符，拒绝更新: " + expectedId + " / " + descriptor.id());
                 return false;
             }
             initializeGlobalBridges();
             if (!isModuleEnabled(loadRootConfig(), descriptor.id())) {
-                LOGGER.fine("云端模块 " + descriptor.id() + " 已在 config.yml 中关闭，跳过加载。");
+                LOGGER.fine("受保护模块 " + descriptor.id() + " 已在 config.yml 中关闭，跳过更新。");
                 return false;
             }
             for (String externalPlugin : descriptor.externalDepends()) {
@@ -619,7 +619,7 @@ public final class ModuleRegistry {
             }
             return signatureVerifier.verify(descriptor);
         } catch (Exception | LinkageError exception) {
-            LOGGER.log(Level.SEVERE, "校验云端模块失败", exception);
+            LOGGER.log(Level.SEVERE, "校验受保护模块失败", exception);
             return false;
         }
     }

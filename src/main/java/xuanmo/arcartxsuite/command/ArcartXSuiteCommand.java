@@ -698,11 +698,15 @@ public final class ArcartXSuiteCommand implements CommandExecutor, TabCompleter 
             sender.sendMessage(PREFIX + ChatColor.RED + "云端服务未初始化。");
             return true;
         }
-        sender.sendMessage(PREFIX + ChatColor.GRAY + "正在从云端同步授权模块列表...");
+        boolean local = cloudService.usesLocalModuleFiles();
+        sender.sendMessage(PREFIX + ChatColor.GRAY + (local
+            ? "正在刷新云端授权并检查本地模块..."
+            : "正在从云端同步授权模块列表..."));
         cloudService.forceSyncModules().thenAccept(ok ->
             Bukkit.getScheduler().runTask(plugin.host(), () ->
                 sender.sendMessage(PREFIX + (ok
-                    ? ChatColor.GREEN + "同步完成。新授权的云端模块已自动加载，已撤销的模块已卸载。"
+                    ? ChatColor.GREEN + (local ? "授权已刷新。模块加载结果请查看控制台日志。"
+                        : "同步完成。新授权的云端模块已自动加载，已撤销的模块已卸载。")
                     : ChatColor.RED + "同步失败，请查看控制台日志。"))
             )
         );
@@ -715,25 +719,26 @@ public final class ArcartXSuiteCommand implements CommandExecutor, TabCompleter 
             sender.sendMessage(PREFIX + ChatColor.RED + "云端服务未初始化。");
             return true;
         }
+        String source = cloudService.usesLocalModuleFiles() ? "本地模块" : "云端模块";
         if (args.length < 2) {
             sender.sendMessage(PREFIX + ChatColor.YELLOW + "用法: /axs update <moduleId|all>");
-            sender.sendMessage(PREFIX + ChatColor.GRAY + "moduleId: 已加载的云端模块 ID");
-            sender.sendMessage(PREFIX + ChatColor.GRAY + "all: 更新所有已加载的云端模块");
+            sender.sendMessage(PREFIX + ChatColor.GRAY + "moduleId: 已加载的" + source + " ID");
+            sender.sendMessage(PREFIX + ChatColor.GRAY + "all: 更新所有已加载的" + source);
             ModuleRegistry registry = plugin.getModuleRegistry();
             if (registry != null && !registry.getLoadedCloudModuleIds().isEmpty()) {
-                sender.sendMessage(PREFIX + ChatColor.GRAY + "可更新的云端模块: " + ChatColor.WHITE + String.join(", ", registry.getLoadedCloudModuleIds()));
+                sender.sendMessage(PREFIX + ChatColor.GRAY + "可更新的" + source + ": " + ChatColor.WHITE + String.join(", ", registry.getLoadedCloudModuleIds()));
             }
             return true;
         }
         String target = args[1].toLowerCase(Locale.ROOT);
-        sender.sendMessage(PREFIX + ChatColor.GRAY + "正在更新云端模块...");
+        sender.sendMessage(PREFIX + ChatColor.GRAY + "正在更新" + source + "...");
 
         if ("all".equals(target)) {
             cloudService.updateAllModules().thenAccept(ok ->
                 Bukkit.getScheduler().runTask(plugin.host(), () ->
                     sender.sendMessage(PREFIX + (ok
-                        ? ChatColor.GREEN + "所有云端模块更新完成。"
-                        : ChatColor.YELLOW + "部分云端模块更新失败，请查看控制台日志。"))
+                        ? ChatColor.GREEN + "所有" + source + "更新完成。"
+                        : ChatColor.YELLOW + "部分" + source + "更新失败，请查看控制台日志。"))
                 )
             );
         } else {

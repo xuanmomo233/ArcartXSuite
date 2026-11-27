@@ -187,6 +187,14 @@ public final class CloudModuleService {
         this.apiBaseUrl = API_BASE_URLS.get(0);
     }
 
+    public boolean usesLocalModuleFiles() {
+        return localModuleSource;
+    }
+
+    private String moduleLogPrefix() {
+        return localModuleSource ? "[本地模块] " : "[Cloud] ";
+    }
+
     private static String readSuiteRelease(SuiteCoreImpl plugin) {
         try (var input = plugin.getResource("axs-build.json")) {
             if (input == null) return "";
@@ -884,7 +892,7 @@ public final class CloudModuleService {
                             return refreshTokenGate(true, true);
                         }
 
-                        plugin.consoleWarn("[Cloud] 自动重新绑定失败，跳过云端模块同步。");
+                        plugin.consoleWarn("[Cloud] 自动重新绑定失败，跳过模块加载。");
 
                         return CompletableFuture.completedFuture(bound);
                     });
@@ -981,7 +989,9 @@ public final class CloudModuleService {
 
         // 1. 未绑定则先用 QQ+apiKey 绑定服务器
 
-        plugin.consoleInfo("[Cloud] 开始云端模块同步...");
+        plugin.consoleInfo(localModuleSource
+            ? "[本地模块] 开始校验授权并加载本地模块。"
+            : "[Cloud] 开始云端模块同步...");
 
         CompletableFuture<CloudResponse<Void>> ready = hasServerCode()
             ? CompletableFuture.completedFuture(new CloudResponse<>(CloudStatus.OK, null, 200, apiBaseUrl, null, null))
@@ -991,13 +1001,13 @@ public final class CloudModuleService {
             if (bound.status() == CloudStatus.TIMEOUT) return this.<Void>customerTimeout();
             if (bound.isTransient()) {
 
-                plugin.consoleWarn("[Cloud] 未能绑定服务器（暂时故障），保留现有云模块并等待下次同步。");
+                plugin.consoleWarn("[Cloud] 未能绑定服务器（暂时故障），等待下次重试。");
 
                 return CompletableFuture.<Void>completedFuture(null);
             }
             if (!bound.isOk()) {
 
-                plugin.consoleWarn("[Cloud] 未能绑定服务器，跳过云端模块同步。请检查 config.yml 中 cloud.qq 和 cloud.apiKey 是否正确。");
+                plugin.consoleWarn("[Cloud] 未能绑定服务器，跳过模块加载。请检查 config.yml 中 cloud.qq 和 cloud.apiKey 是否正确。");
 
                 return CompletableFuture.<Void>completedFuture(null);
             }
@@ -1008,13 +1018,13 @@ public final class CloudModuleService {
                 if (refresh.status() == CloudStatus.TIMEOUT) return this.<Void>customerTimeout();
                 if (refresh.isTransient()) {
 
-                    plugin.consoleWarn("[Cloud] 刷新模块令牌暂时失败，保留现有云模块。");
+                    plugin.consoleWarn("[Cloud] 刷新模块令牌暂时失败，等待下次重试。");
 
                     return CompletableFuture.<Void>completedFuture(null);
                 }
                 if (!refresh.isOk()) {
 
-                    plugin.consoleWarn("[Cloud] 刷新模块令牌失败，跳过云端模块同步。");
+                    plugin.consoleWarn("[Cloud] 刷新模块令牌失败，跳过模块加载。");
 
                     return CompletableFuture.<Void>completedFuture(null);
                 }
@@ -1033,7 +1043,8 @@ public final class CloudModuleService {
             plugin.consoleInfo("[Cloud] 该服务器未装备任何适用于当前发行批次的模块。");
             return CompletableFuture.completedFuture(null);
         }
-        plugin.consoleInfo("[Cloud] 本次需同步 " + mods.size() + " 个授权模块: " + mods);
+        plugin.consoleInfo(moduleLogPrefix() + (localModuleSource ? "本次需读取 " : "本次需同步 ")
+            + mods.size() + " 个授权模块: " + mods);
         CompletableFuture<Void> chain = CompletableFuture.completedFuture(null);
         for (String id : mods) {
             if (id == null || id.isEmpty() || (requested != null && !requested.contains(id))) continue;
@@ -1065,7 +1076,7 @@ public final class CloudModuleService {
         if (!isValidModuleId(moduleId)) return updateModuleBody(moduleId, null);
         var reserved = new CompletableFuture<Void>();
         if (downloading.putIfAbsent(moduleId, reserved) != null) {
-            plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 已有下载或更新任务，请等待完成。");
+            plugin.consoleWarn(moduleLogPrefix() + "模块 " + moduleId + " 正在处理，待完成后再更新。");
             return CompletableFuture.completedFuture(false);
         }
         var payload = new CloudPayload();
@@ -1090,7 +1101,7 @@ public final class CloudModuleService {
                 return registry.loadCloudModule(moduleId, payload.jar, payload.seed);
             }).thenCompose(stage -> stage)).thenCompose(loaded -> {
                 if (loaded) {
-                    plugin.consoleInfo("[Cloud] 模块 " + moduleId + " 更新成功并已加载");
+                    plugin.consoleInfo(moduleLogPrefix() + "模块 " + moduleId + " 更新成功并已加载");
                     return CompletableFuture.completedFuture(true);
                 }
                 var rollback = snapshot.get();
@@ -1099,8 +1110,8 @@ public final class CloudModuleService {
                     if (registry.isModuleLoaded(moduleId)) return CompletableFuture.completedFuture(false);
                     return registry.loadCloudModule(moduleId, rollback.jarBytes(), rollback.moduleSeed());
                 }).thenCompose(stage -> stage)).thenApply(restored -> {
-                    if (restored) plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 更新失败，已回滚旧版本。");
-                    else plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 更新失败，旧版本未能恢复，请核对状态。");
+                    if (restored) plugin.consoleWarn(moduleLogPrefix() + "模块 " + moduleId + " 更新失败，已回滚旧版本。");
+                    else plugin.consoleWarn(moduleLogPrefix() + "模块 " + moduleId + " 更新失败，旧版本未能恢复，请核对状态。");
                     return false;
                 });
             });
@@ -1145,29 +1156,30 @@ public final class CloudModuleService {
             }
             if (!authorizedModuleIds().contains(moduleId)) {
 
-                plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 不在云端授权列表中，无法通过云端更新。");
+                plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 不在当前授权列表中，无法更新。");
 
                 return CompletableFuture.completedFuture(false);
             }
 
             if (!NativeBridge.isAvailable()) {
 
-                plugin.consoleWarn("[Cloud] Native 安全库未加载，跳过云端模块 " + moduleId + " 的更新。错误: " + NativeBridge.getLoadError());
+                plugin.consoleWarn(moduleLogPrefix() + "Native 安全库未加载，跳过模块 " + moduleId + " 的更新。错误: " + NativeBridge.getLoadError());
 
                 return CompletableFuture.completedFuture(false);
             }
 
             cachedAxb.remove(moduleId);
-            return downloadAxb(moduleId).thenCompose(axb -> {
+            return readModuleAxb(moduleId).thenCompose(axb -> {
                 if (axb == null || axb.length == 0) {
 
-                    plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 更新失败：axb 下载失败");
+                    plugin.consoleWarn(moduleLogPrefix() + "模块 " + moduleId + " 更新失败，无法"
+                        + (localModuleSource ? "读取本地 AXB 文件。" : "下载 AXB 文件。"));
 
                     return CompletableFuture.completedFuture(false);
                 }
                 if (axb.length < 32) {
 
-                    plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 更新失败：axb 文件过小");
+                    plugin.consoleWarn(moduleLogPrefix() + "模块 " + moduleId + " 更新失败，AXB 文件过小。");
 
                     return CompletableFuture.completedFuture(false);
                 }
@@ -1230,13 +1242,13 @@ public final class CloudModuleService {
 
                     } catch (Exception e) {
 
-                        plugin.consoleWarn("[Cloud] 模块 " + moduleId + " native 解密抛异常: " + e.getClass().getSimpleName() + " - " + e.getMessage());
+                        plugin.consoleWarn(moduleLogPrefix() + "模块 " + moduleId + " Native 解密异常: " + e.getClass().getSimpleName() + " - " + e.getMessage());
 
                         jarBytes = null;
                     }
                     if (jarBytes == null || jarBytes.length == 0) {
 
-                        plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 更新失败：native 解密失败");
+                        plugin.consoleWarn(moduleLogPrefix() + "模块 " + moduleId + " 更新失败，Native 解密失败。");
 
                         return CompletableFuture.completedFuture(false);
                     }
@@ -1264,13 +1276,13 @@ public final class CloudModuleService {
         return tasks.main(registry::getLoadedCloudModuleIds).thenCompose(loadedCloud -> {
         if (loadedCloud.isEmpty()) {
 
-            plugin.consoleInfo("[Cloud] 没有已加载的云端模块需要更新。");
+            plugin.consoleInfo(moduleLogPrefix() + "没有已加载的受保护模块需要更新。");
 
             return CompletableFuture.completedFuture(true);
         }
 
 
-        plugin.consoleInfo("[Cloud] 开始批量更新 " + loadedCloud.size() + " 个云端模块: " + loadedCloud);
+        plugin.consoleInfo(moduleLogPrefix() + "开始批量更新 " + loadedCloud.size() + " 个模块: " + loadedCloud);
 
         CompletableFuture<Boolean> chain = CompletableFuture.completedFuture(true);
         for (String id : loadedCloud) {
@@ -1294,6 +1306,7 @@ public final class CloudModuleService {
 
      */
     private <T> CompletableFuture<T> retryAsync(
+        String logPrefix,
         String moduleId,
         String operation,
         int maxRetries,
@@ -1304,11 +1317,12 @@ public final class CloudModuleService {
             if (result != null || maxRetries <= 0) {
                 return CompletableFuture.completedFuture(result);
             }
-            return retryWithDelay(moduleId, operation, 1, maxRetries, baseDelayMs, supplier);
+            return retryWithDelay(logPrefix, moduleId, operation, 1, maxRetries, baseDelayMs, supplier);
         });
     }
 
     private <T> CompletableFuture<T> retryWithDelay(
+        String logPrefix,
         String moduleId,
         String operation,
         int attempt,
@@ -1318,12 +1332,12 @@ public final class CloudModuleService {
     ) {
         long delay = baseDelayMs * (1L << (attempt - 1));
 
-        plugin.consoleInfo("[Cloud] 模块 " + moduleId + " " + operation + " 失败，" + delay + "ms 后第 " + attempt + "/" + maxRetries + " 次重试...");
+        plugin.consoleInfo(logPrefix + "模块 " + moduleId + " " + operation + " 失败，" + delay + "ms 后第 " + attempt + "/" + maxRetries + " 次重试...");
 
 
         return tasks.delay(delay / 50L).thenCompose(ignored -> supplier.get()).thenCompose(result -> {
             if (result != null || attempt >= maxRetries) return CompletableFuture.completedFuture(result);
-            return retryWithDelay(moduleId, operation, attempt + 1, maxRetries, baseDelayMs, supplier);
+            return retryWithDelay(logPrefix, moduleId, operation, attempt + 1, maxRetries, baseDelayMs, supplier);
         });
     }
 
@@ -1338,7 +1352,7 @@ public final class CloudModuleService {
             Throwable cause = unwrap(failure);
             if (cause instanceof CustomerCloudTimeout timeout) throw timeout;
             if (cause instanceof java.util.concurrent.CancellationException) throw (java.util.concurrent.CancellationException) cause;
-            plugin.consoleWarn("[Cloud] 本地模块 " + moduleId + " 加载失败: " + failure.getMessage());
+            plugin.consoleWarn(moduleLogPrefix() + "模块 " + moduleId + " 加载失败: " + cause.getMessage());
             return null;
         });
     }
@@ -1352,7 +1366,7 @@ public final class CloudModuleService {
         }
         if (!NativeBridge.isAvailable()) {
 
-            plugin.consoleWarn("[Cloud] Native 安全库未加载，跳过云端模块 " + moduleId + " 的解密加载。错误: " + NativeBridge.getLoadError());
+            plugin.consoleWarn(moduleLogPrefix() + "Native 安全库未加载，跳过模块 " + moduleId + " 的解密加载。错误: " + NativeBridge.getLoadError());
 
             return CompletableFuture.<Void>completedFuture(null);
         }
@@ -1362,7 +1376,8 @@ public final class CloudModuleService {
         CompletableFuture<Void> existing = downloading.get(moduleId);
         if (existing != null) {
 
-            plugin.consoleInfo("[Cloud] 模块 " + moduleId + " 正在下载中，复用已有任务");
+            plugin.consoleInfo(moduleLogPrefix() + "模块 " + moduleId
+                + (localModuleSource ? " 正在加载，复用已有任务。" : " 正在下载中，复用已有任务。"));
 
             return existing;
         }
@@ -1371,13 +1386,16 @@ public final class CloudModuleService {
         if (competing != null) return competing;
 
 
-        plugin.consoleInfo("[Cloud] 开始同步模块: " + moduleId + " (native 版本: " + NativeBridge.n0() + ")");
+        plugin.consoleInfo(moduleLogPrefix() + (localModuleSource ? "开始读取本地模块文件 " : "开始同步模块 ")
+            + moduleId + " (native 版本: " + NativeBridge.n0() + ")");
 
-        CompletableFuture<Void> work = retryAsync(moduleId, "axb下载", 3, 2000L, () -> downloadAxb(moduleId)).thenCompose(axb -> {
+        String operation = localModuleSource ? "读取本地 AXB" : "下载 AXB";
+        CompletableFuture<Void> work = retryAsync(moduleLogPrefix(), moduleId, operation, 3, 2000L,
+            () -> readModuleAxb(moduleId)).thenCompose(axb -> {
 
             if (axb == null || axb.length == 0) {
 
-                plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 同步中止：axb 下载失败");
+                plugin.consoleWarn(moduleLogPrefix() + "模块 " + moduleId + " " + operation + " 失败，停止加载。");
 
                 return CompletableFuture.<Void>completedFuture(null);
             }
@@ -1386,7 +1404,7 @@ public final class CloudModuleService {
 
             if (axb.length < 32) {
 
-                plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 同步中止：axb 文件过小 (" + axb.length + " 字节)，可能下载不完整或文件损坏。期望至少 32 字节 (4 字节 magic + 12 字节 IV + 16 字节 tag)");
+                plugin.consoleWarn(moduleLogPrefix() + "模块 " + moduleId + " 的 AXB 文件仅有 " + axb.length + " 字节，至少需要 32 字节。");
 
                 return CompletableFuture.<Void>completedFuture(null);
             }
@@ -1427,15 +1445,15 @@ public final class CloudModuleService {
                 return CompletableFuture.<Void>completedFuture(null);
             }
             return registry.loadCloudModule(moduleId, payload.jar, payload.seed).thenAccept(loaded -> {
-                if (loaded) plugin.consoleInfo("[Cloud] 模块 " + moduleId + " 已加载");
-                else plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 加载失败，请核对依赖与模块开关。");
+                if (loaded) plugin.consoleInfo(moduleLogPrefix() + "模块 " + moduleId + " 已加载");
+                else plugin.consoleWarn(moduleLogPrefix() + "模块 " + moduleId + " 未能启用，请查看上方日志。");
             });
         }).thenCompose(stage -> stage);
     }
 
     private CompletableFuture<Void> decryptAndLoadBody(String moduleId, byte[] axb, boolean isRetry, CloudPayload payload) {
 
-        return retryAsync(moduleId, "密钥获取", 3, 2000L, () -> requestModuleKey(moduleId, axb)).thenCompose(keyResp -> {
+        return retryAsync("[Cloud] ", moduleId, "密钥获取", 3, 2000L, () -> requestModuleKey(moduleId, axb)).thenCompose(keyResp -> {
             if (tasks.isClosed()) return CompletableFuture.failedFuture(new java.util.concurrent.CancellationException("云端模块服务正在停止"));
 
             if (keyResp == null) {
@@ -1486,7 +1504,7 @@ public final class CloudModuleService {
                 String keyHash = sha256Hex(key);
                 String ivHex = bytesToHex(java.util.Arrays.copyOfRange(axb, 4, 16));
 
-                debugLog("[Cloud] 模块 " + moduleId + " 诊断: keyHash=" + keyHash + ", ivHex=" + ivHex + ", axbLen=" + axb.length);
+                debugLog(moduleLogPrefix() + "模块 " + moduleId + " 诊断: keyHash=" + keyHash + ", ivHex=" + ivHex + ", axbLen=" + axb.length);
 
             }
 
@@ -1516,7 +1534,7 @@ public final class CloudModuleService {
                 jarBytes = payload.jar = NativeBridge.n10(axb, key, sigBytes);
             } catch (Exception e) {
 
-                plugin.consoleWarn("[Cloud] 模块 " + moduleId + " native 解密抛异常: " + e.getClass().getSimpleName() + " - " + e.getMessage());
+                plugin.consoleWarn(moduleLogPrefix() + "模块 " + moduleId + " Native 解密异常: " + e.getClass().getSimpleName() + " - " + e.getMessage());
 
                 jarBytes = null;
             }
@@ -1553,26 +1571,26 @@ public final class CloudModuleService {
                     });
                 }
 
-                plugin.consoleWarn("[Cloud] 模块 " + moduleId + " native 解密失败，已拒绝加载该模块。"
+                plugin.consoleWarn(moduleLogPrefix() + "模块 " + moduleId + " Native 解密失败，已拒绝加载该模块。"
 
                     + "解密仅在 native 安全库中进行，不提供 Java 回退。请确认 native 库版本与 axb 匹配且 moduleKey 正确。");
 
                 return CompletableFuture.<Void>completedFuture(null);
             }
 
-            plugin.consoleInfo("[Cloud] 模块 " + moduleId + " 解密成功: " + jarBytes.length + " 字节");
+            plugin.consoleInfo(moduleLogPrefix() + "模块 " + moduleId + " 解密成功: " + jarBytes.length + " 字节");
 
             return installDecryptedModule(moduleId, payload);
         });
     }
 
-    private CompletableFuture<byte[]> downloadAxb(String moduleId) {
+    private CompletableFuture<byte[]> readModuleAxb(String moduleId) {
         if (localModuleSource) {
             return CompletableFuture.supplyAsync(() -> {
                 try {
                     return localModuleFiles.read(moduleId);
                 } catch (java.io.IOException failure) {
-                    throw new java.util.concurrent.CompletionException("本地受保护模块不可用，请安装同批次的 " + moduleId + ".axb；不会回退下载", failure);
+                    throw new java.util.concurrent.CompletionException("无法读取本地受保护模块，请安装同批次的 " + moduleId + ".axb", failure);
                 }
             });
         }
@@ -2086,7 +2104,7 @@ public final class CloudModuleService {
 
         if (!toLoad.isEmpty()) {
 
-            plugin.consoleInfo("[Cloud] 检测到 " + toLoad.size() + " 个新授权模块，开始加载: " + toLoad);
+            plugin.consoleInfo(moduleLogPrefix() + "检测到 " + toLoad.size() + " 个新授权模块，开始加载: " + toLoad);
 
             CompletableFuture<Void> chain = CompletableFuture.completedFuture(null);
             for (String id : toLoad) {
