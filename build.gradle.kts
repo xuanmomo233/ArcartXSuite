@@ -45,19 +45,12 @@ subprojects {
             }
         }
         if (module || host) {
-            val editionFile = layout.buildDirectory.file("generated/suite-edition/axs-edition.txt")
-            val generateSuiteEdition = tasks.register("generateSuiteEdition") {
-                inputs.property("edition", suiteEdition)
-                outputs.file(editionFile)
-                doLast {
-                    val output = editionFile.get().asFile
-                    output.parentFile.mkdirs()
-                    output.writeText("$suiteEdition\n")
-                }
+            val generateSuiteEdition = tasks.register<GenerateSuiteEditionTask>("generateSuiteEdition") {
+                edition.set(suiteEdition)
+                editionFile.set(layout.buildDirectory.file("generated/suite-edition/axs-edition.txt"))
             }
             tasks.named<ProcessResources>("processResources") {
-                dependsOn(generateSuiteEdition)
-                from(editionFile) { into("META-INF") }
+                from(generateSuiteEdition.flatMap { it.editionFile }) { into("META-INF") }
             }
         }
     }
