@@ -250,6 +250,19 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertEqual("true", flags["proxy_changed"])
         self.assertEqual("false", flags["core_changed"])
 
+    def test_unit_test_only_push_does_not_rebuild_release_artifacts(self):
+        for path in ("axs-core/src/freeTest/java/Check.java", "modules/market/src/test/java/Check.java",
+                     "proxy/bungee/src/test/java/Check.java", "scripts/tests/check.py"):
+            self.commit(path, "regression fixture")
+        published = self.artifact(self.baseline, "2026-11-20T00:00:00Z")
+        flags = self.detect_scopes([published], [published])
+        self.assertEqual("false", flags["core_changed"])
+        self.assertEqual("false", flags["proxy_changed"])
+
+        self.commit("modules/market/src/test/protection/verify.py", "artifact protection check")
+        flags = self.detect_scopes([published], [published])
+        self.assertEqual("true", flags["core_changed"])
+
     def test_new_exploration_module_enters_the_next_cloud_build(self):
         self.commit("modules/exploration/build.gradle.kts", "register Exploration")
         self.commit("modules/debug/build.gradle.kts", "local Debug module")
@@ -348,12 +361,52 @@ class ReleaseWorkflowTest(unittest.TestCase):
         jobs = self.workflow["jobs"]
         self.assertEqual("${{ steps.changes.outputs.export_delivery_id }}",
                          jobs["detect-changes"]["outputs"]["export_delivery_id"])
-        steps = jobs["publish-suite"]["steps"]
-        stamp = next(step for step in steps if step.get("name") == "Encrypt changed modules per-class (-Paxs.protectModules)")
-        registration = next(step for step in steps if step.get("name") == "Assemble signed customer export")
+        stamp = next(step for step in jobs["build-modules"]["steps"]
+                     if step.get("name") == "Encrypt changed modules per-class (-Paxs.protectModules)")
+        registration = next(step for step in jobs["publish-suite"]["steps"]
+                            if step.get("name") == "Assemble signed customer export")
         resolved = "${{ needs.detect-changes.outputs.export_delivery_id }}"
         self.assertEqual(resolved, stamp["env"]["EXPORT_DELIVERY_ID"])
         self.assertEqual(resolved, registration["env"]["AXS_EXPORT_DELIVERY_ID"])
+        self.assertEqual("env.AXS_EXPORT_ONLY == 'true'", registration["if"])
+        self.assertNotIn("AXS_CUSTOMER_EXPORT_SEED_PARTS_B64", registration["env"])
+
+    def test_encrypted_builds_only_run_artifact_checks(self):
+        self.assertNotIn("verify-abyss", self.workflow["jobs"])
+        for job in self.workflow["jobs"].values():
+            for step in job.get("steps", []):
+                script = step.get("run", "")
+                self.assertNotIn("unittest discover", script)
+                self.assertNotIn(":axs-core:test", script)
+        regression = yaml.load(WORKFLOW.with_name("verify-suite.yml").read_text(encoding="utf-8"),
+                               Loader=yaml.BaseLoader)
+        self.assertEqual({"workflow_dispatch"}, set(regression["on"]))
+        tasks = [step.get("run", "") for step in regression["jobs"]["regression"]["steps"]]
+        self.assertTrue(any(":axs-core:test" in task and ":modules:abyss:test" in task for task in tasks))
+
+    def test_module_build_runs_in_parallel_and_only_transfers_sealed_inputs(self):
+        jobs = self.workflow["jobs"]
+        modules = jobs["build-modules"]
+        self.assertEqual("detect-changes", modules["needs"])
+        self.assertEqual("needs.detect-changes.outputs.module_changed == 'true'", modules["if"])
+        self.assertEqual(["detect-changes", "build-encrypted", "build-modules"], jobs["publish-suite"]["needs"])
+        self.assertEqual("needs.detect-changes.outputs.assemble_release == 'true'", jobs["publish-suite"]["if"])
+        seal, upload = [i for i, step in enumerate(modules["steps"])
+                        if step.get("name") in ("Seal module inputs", "Save sealed module inputs")]
+        self.assertLess(seal, upload)
+        self.assertIn("suite-module-stage.py seal", modules["steps"][seal]["run"])
+        self.assertEqual("suite-module-stage/", modules["steps"][upload]["with"]["path"])
+        restore = next(step for step in jobs["publish-suite"]["steps"]
+                       if step.get("name") == "Restore verified module inputs")
+        self.assertIn("suite-module-stage.py open", restore["run"])
+        self.assertEqual(modules["steps"][seal]["env"]["AXS_MODULE_STAGE_SECRET"], restore["env"]["AXS_MODULE_STAGE_SECRET"])
+
+    def test_customer_export_does_not_share_cloud_publication_concurrency(self):
+        settings = self.workflow["concurrency"]
+        self.assertIn("inputs.export_only && format('encrypted-export-{0}', github.run_id)", settings["group"])
+        self.assertIn("format('encrypted-publication-{0}', github.ref)", settings["group"])
+        self.assertIn("format('encrypted-validation-{0}', github.ref)", settings["group"])
+        self.assertEqual("false", settings["cancel-in-progress"])
 
     def test_manual_suite_publication_builds_all_modules_without_publishing_proxies(self):
         self.commit("modules/mail/build.gradle.kts", "second public module")
@@ -377,6 +430,20 @@ class ReleaseWorkflowTest(unittest.TestCase):
             self.assertIn("env.AXS_CLOUD_UPLOAD == 'true'", next(step["if"] for step in steps if step.get("name") == name))
         self.assertIn("github.ref != 'refs/heads/main'", self.workflow["env"]["AXS_CI_VALIDATION"])
         self.assertIn("!inputs.export_only", self.workflow["env"]["AXS_CI_VALIDATION"])
+
+    def test_customer_delivery_only_cleans_after_export_and_upload(self):
+        job = self.workflow["jobs"]["customer-delivery"]
+        self.assertEqual(["publish-suite", "build-proxy"], job["needs"])
+        self.assertIn("github.event_name == 'workflow_dispatch' && inputs.export_only", job["if"])
+        self.assertIn("needs.publish-suite.result == 'success' && needs.build-proxy.result == 'success'", job["if"])
+        self.assertEqual("read", self.workflow["permissions"]["actions"])
+        self.assertEqual({"contents": "read", "actions": "write"}, job["permissions"])
+        prepare, upload, cleanup = job["steps"][-3:]
+        self.assertEqual("delivery", prepare["id"])
+        self.assertEqual("customer-delivery/", upload["with"]["path"])
+        self.assertEqual("${{ steps.delivery.outputs.artifact_name }}", upload["with"]["name"])
+        self.assertIn("customer-delivery-artifacts.py cleanup", cleanup["run"])
+        self.assertNotIn("if", cleanup)
 
     def test_export_preflight_reports_missing_inputs_without_printing_values(self):
         steps = self.workflow["jobs"]["detect-changes"]["steps"]

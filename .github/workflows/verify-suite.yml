@@ -1,0 +1,73 @@
+name: Suite Regression
+
+on:
+  workflow_dispatch:
+    inputs:
+      edition:
+        description: '要验证的发行版'
+        type: choice
+        options:
+          - free
+          - customer
+        default: free
+
+permissions:
+  contents: read
+
+env:
+  PYTHONUTF8: '1'
+  AXS_EDITION: ${{ inputs.edition }}
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v5
+        with:
+          java-version: '17'
+          distribution: temurin
+      - uses: gradle/actions/setup-gradle@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install regression check dependencies
+        run: python -m pip install PyYAML javalang==0.13.0 cryptography
+
+      - name: Verify release workflow and customer packages
+        run: |
+          python -m unittest discover -s scripts/tests -p test_release_workflow.py
+          python -m unittest discover -s scripts/tests -p test_customer_release.py
+          python -m unittest discover -s scripts/tests -p test_customer_delivery.py
+          python -m unittest discover -s scripts/tests -p test_module_watermark.py
+          python -m unittest discover -s scripts/tests -p test_suite_module_stage.py
+
+      - name: Verify Abyss UI and authentication contracts
+        run: |
+          python modules/abyss/src/test/ui/verify_abyss_ui.py
+          python scripts/check_auth_refactor.py
+          python scripts/check_auth_security_sql.py
+
+      - name: Test host, API, quest modules and authentication
+        run: |
+          bash ./gradlew :axs-core:test :axs-api:test :modules:abyss:test :modules:eventpacket:test \
+            :modules:exploration:test :modules:questgps:test :auth-engine:test :auth-minecraft:test \
+            :auth-protocol:test :auth-center:test :proxy:common:test :proxy:bungee:test \
+            -Paxs.edition="$AXS_EDITION" -PskipNativeCheck=true --parallel
+
+      - name: Upload regression reports
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: suite-regression-reports-${{ inputs.edition }}
+          path: |
+            **/build/reports/tests/
+            **/build/test-results/
+          if-no-files-found: ignore
+          retention-days: 7

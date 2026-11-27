@@ -61,7 +61,12 @@ permissions:
   contents: read
   actions: read
 concurrency:
-  group: encrypted-publication-${{ github.ref }}
+  group: >-
+    ${{ github.event_name == 'workflow_dispatch' && inputs.export_only && format('encrypted-export-{0}', github.run_id)
+        || (github.ref == 'refs/heads/main' && !inputs.export_only && !inputs.skip_upload
+            && (vars.AXS_SKIP_CLOUD_UPLOAD != 'true' || (github.event_name == 'workflow_dispatch' && inputs.publish_suite))
+            && format('encrypted-publication-{0}', github.ref))
+        || format('encrypted-validation-{0}', github.ref) }}
   cancel-in-progress: false
 env:
   PYTHONUTF8: '1'
@@ -83,6 +88,7 @@ jobs:
       proxy_changed: ${{ steps.changes.outputs.proxy_changed }}
       auth_changed: ${{ steps.changes.outputs.auth_changed }}
       changed_modules: ${{ steps.changes.outputs.changed_modules }}
+      assemble_release: ${{ steps.delivery.outputs.needed }}
       export_delivery_id: ${{ steps.changes.outputs.export_delivery_id }}
       any_changed: ${{ steps.changes.outputs.any_changed }}
     steps:
@@ -183,7 +189,15 @@ jobs:
 
           CHANGED_FILES=$(mktemp "$RUNNER_TEMP/axs-changed.XXXXXXXX")
           trap 'rm -f "$CHANGED_FILES"' EXIT
-          git diff --name-only "$BASE" HEAD > "$CHANGED_FILES"
+          TEST_PATHS=(
+            ':(exclude,glob)**/src/test/java/**'
+            ':(exclude,glob)**/src/test/kotlin/**'
+            ':(exclude,glob)**/src/test/resources/**'
+            ':(exclude,glob)**/src/customerTest/**'
+            ':(exclude,glob)**/src/freeTest/**'
+            ':(exclude,glob)scripts/tests/**'
+          )
+          git diff --name-only "$BASE" HEAD -- . "${TEST_PATHS[@]}" > "$CHANGED_FILES"
           echo "=== Changed files ==="
           cat "$CHANGED_FILES"
 
@@ -197,7 +211,7 @@ jobs:
           if [ -z "$PROXY_BASE" ] || ! git merge-base --is-ancestor "$PROXY_BASE" HEAD 2>/dev/null; then
             PROXY_CHANGED=true
           elif ! git diff --quiet "$PROXY_BASE" HEAD -- proxy/ auth-protocol/ gradle.properties \
-              axs-api/src/main/java/xuanmo/arcartxsuite/api/crossserver/ProxyTabVisibility.java; then
+              axs-api/src/main/java/xuanmo/arcartxsuite/api/crossserver/ProxyTabVisibility.java "${TEST_PATHS[@]}"; then
             PROXY_CHANGED=true
           fi
           echo "proxy_changed=$PROXY_CHANGED" >> $GITHUB_OUTPUT
@@ -256,62 +270,18 @@ jobs:
           FLARE_BASE_URL: ${{ vars.FLARE_BASE_URL }}
         run: python3 scripts/publish-suite.py check
 
-  verify-abyss:
-    runs-on: ubuntu-latest
-    needs: detect-changes
-    if: needs.detect-changes.outputs.any_changed == 'true' || needs.detect-changes.outputs.auth_changed == 'true'
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-java@v5
-        with:
-          java-version: '17'
-          distribution: temurin
-      - uses: gradle/actions/setup-gradle@v6
-        with:
-          cache-read-only: true
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - name: Install regression check dependencies
-        run: python -m pip install PyYAML javalang==0.13.0 cryptography
-      - name: Verify release modes and customer packages
+      - name: Select release assembly
+        id: delivery
         run: |
-          python -m unittest discover -s scripts/tests -p test_release_workflow.py
-          python -m unittest discover -s scripts/tests -p test_customer_release.py
-          python -m unittest discover -s scripts/tests -p test_module_watermark.py
-      - name: Verify Abyss UI contracts
-        run: python modules/abyss/src/test/ui/verify_abyss_ui.py
-      - name: Test public API, Abyss transactions and EventPacket delivery tiers
-        run: bash ./gradlew :axs-api:test :modules:abyss:test :modules:eventpacket:test -Paxs.edition="$AXS_EDITION" -PskipNativeCheck=true --no-build-cache
-      - name: Test Exploration and QuestGPS quest offers
-        if: contains(fromJSON(needs.detect-changes.outputs.changed_modules), 'exploration')
-        run: bash ./gradlew :modules:exploration:test :modules:questgps:test -Paxs.edition="$AXS_EDITION" -PskipNativeCheck=true --no-build-cache
-      - name: Test authentication and proxy forwarding
-        if: needs.detect-changes.outputs.auth_changed == 'true'
-        run: |
-          python scripts/check_auth_refactor.py
-          python scripts/check_auth_security_sql.py
-          bash ./gradlew :auth-engine:test :auth-minecraft:test :auth-protocol:test :auth-center:test :proxy:common:test :proxy:bungee:test -PskipNativeCheck=true --no-build-cache
-      - name: Upload regression reports
-        if: always()
-        uses: actions/upload-artifact@v5
-        with:
-          name: abyss-regression-reports
-          path: |
-            axs-api/build/reports/tests/
-            modules/abyss/build/reports/tests/
-            modules/abyss/build/test-results/
-            modules/exploration/build/reports/tests/
-            modules/exploration/build/test-results/
-            modules/questgps/build/reports/tests/
-          retention-days: 7
+          if [[ "$AXS_CLOUD_UPLOAD" == true || "$AXS_EXPORT_ONLY" == true ]]; then
+            echo "needed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "needed=false" >> "$GITHUB_OUTPUT"
+          fi
 
   native-public-keys:
     runs-on: ubuntu-latest
-    needs: [detect-changes, verify-abyss]
+    needs: detect-changes
     if: needs.detect-changes.outputs.core_changed == 'true'
     steps:
       - uses: actions/checkout@v5
@@ -624,8 +594,6 @@ jobs:
           ls -la src/main/resources/native/
 
       - uses: gradle/actions/setup-gradle@v6
-        with:
-          cache-read-only: true
 
       - name: Build obfuscated JAR
         run: |
@@ -634,8 +602,6 @@ jobs:
           # fresh runner 无历史产物，clean 为纯开销，省略；--parallel 并行编译 axs-api 等依赖。
           CORE_LIB_DIR="axs-core/build/runtime/$AXS_RUNTIME_TARGET/libs"
           CORE_ARTIFACT_NAME="axs-jar-encrypted-$AXS_RUNTIME_TARGET"
-          # 业务测试始终使用通用运行时，避免 Ubuntu 执行 Windows 专用 SQLite。
-          bash ./gradlew :axs-core:test -Paxs.edition="$AXS_EDITION" --no-build-cache --parallel
           echo "CORE_LIB_DIR=$CORE_LIB_DIR" >> "$GITHUB_ENV"
           echo "CORE_ARTIFACT_NAME=$CORE_ARTIFACT_NAME" >> "$GITHUB_ENV"
           bash ./gradlew :axs-core:build --no-build-cache --parallel -Paxs.edition="$AXS_EDITION" -Paxs.runtimeTarget="$AXS_RUNTIME_TARGET" -x test
@@ -726,8 +692,8 @@ jobs:
 
   build-proxy:
     runs-on: ubuntu-latest
-    needs: [detect-changes, verify-abyss]
-    if: always() && needs.detect-changes.result == 'success' && needs.detect-changes.outputs.proxy_changed == 'true' && (needs.verify-abyss.result == 'success' || needs.verify-abyss.result == 'skipped')
+    needs: detect-changes
+    if: needs.detect-changes.outputs.proxy_changed == 'true'
     steps:
       - uses: actions/checkout@v5
 
@@ -737,8 +703,6 @@ jobs:
           distribution: 'temurin'
 
       - uses: gradle/actions/setup-gradle@v6
-        with:
-          cache-read-only: true
 
       - name: Build proxy JARs
         run: bash ./gradlew :proxy:bungee:shadowJar :proxy:velocity:shadowJar --no-build-cache --parallel
@@ -847,12 +811,107 @@ jobs:
           overwrite: true
           if-no-files-found: error
 
+  build-modules:
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: needs.detect-changes.outputs.module_changed == 'true'
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v5
+        with:
+          java-version: '17'
+          distribution: temurin
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install cryptography
+        run: pip install cryptography
+      - uses: gradle/actions/setup-gradle@v6
+
+      - name: Prepare watermark key
+        if: env.AXS_EXPORT_ONLY == 'true'
+        env:
+          WATERMARK_PRIVATE_PEM: ${{ secrets.AXS_WATERMARK_PRIVATE_PEM }}
+        run: |
+          set -euo pipefail
+          umask 077
+          test -n "$WATERMARK_PRIVATE_PEM"
+          printf '%s\n' "$WATERMARK_PRIVATE_PEM" > "$RUNNER_TEMP/axs-watermark.pem"
+
+      - name: Encrypt changed modules per-class (-Paxs.protectModules)
+        env:
+          RELEASE_MODULES: ${{ needs.detect-changes.outputs.changed_modules }}
+          EXPORT_RECIPIENT: ${{ inputs.export_recipient }}
+          EXPORT_DELIVERY_ID: ${{ needs.detect-changes.outputs.export_delivery_id }}
+          # This build's core is ProGuard input only. The published host has its own signed catalog.
+          AXS_PRODUCTION: 'OFF'
+        run: |
+          set -euo pipefail
+          TASKS=()
+          for module in $(jq -r '.[]' <<< "$RELEASE_MODULES"); do
+            TASKS+=(":modules:$module:encryptModuleAxb")
+          done
+          if (( ${#TASKS[@]} == 0 )); then
+            echo "没有需要构建的模块"; exit 1
+          fi
+          printf 'Gradle task: %s\n' "${TASKS[@]}"
+          # -Paxs.protectModules 使用各模块独立的 moduleKey 加密类和 .axb 容器。
+          watermark=()
+          if [[ "$AXS_EXPORT_ONLY" == true ]]; then
+            release=$(python scripts/export-customer-release.py release --commit "$GITHUB_SHA")
+            watermark=("-Paxs.watermark.recipient=$EXPORT_RECIPIENT" "-Paxs.watermark.license=$EXPORT_DELIVERY_ID"
+              "-Paxs.watermark.release=$release" "-Paxs.watermark.privateKey=$RUNNER_TEMP/axs-watermark.pem")
+          fi
+          bash ./gradlew "${TASKS[@]}" "${watermark[@]}" -Paxs.edition="$AXS_EDITION" -Paxs.protectModules -PskipNativeCheck=true --no-build-cache --parallel
+          echo "=== 生成的 .axb ==="
+          ls -la build/ArcartX-Suite/module-axb/ || echo "DIR NOT FOUND"
+
+      - name: Verify protected Abyss journal schema
+        if: contains(fromJSON(needs.detect-changes.outputs.changed_modules), 'abyss')
+        run: python3 modules/abyss/src/test/protection/verify_journal_mapping.py
+
+      - name: Verify protected Exploration classes
+        if: contains(fromJSON(needs.detect-changes.outputs.changed_modules), 'exploration')
+        run: python3 modules/exploration/src/test/protection/verify_protected_classes.py
+
+      - name: Verify module editions
+        env:
+          RELEASE_MODULES: ${{ needs.detect-changes.outputs.changed_modules }}
+        run: python3 scripts/verify-suite-edition.py --edition "$AXS_EDITION" modules --selection "$RELEASE_MODULES"
+
+      - name: Seal module inputs
+        if: needs.detect-changes.outputs.assemble_release == 'true'
+        env:
+          RELEASE_MODULES: ${{ needs.detect-changes.outputs.changed_modules }}
+          AXS_MODULE_STAGE_SECRET: ${{ secrets[inputs.export_only && 'AXS_VARIANT_REGISTRATION_KEY_B64' || 'CLOUD_CI_TOKEN'] }}
+        run: python scripts/suite-module-stage.py seal
+
+      - name: Save sealed module inputs
+        if: needs.detect-changes.outputs.assemble_release == 'true'
+        uses: actions/upload-artifact@v5
+        with:
+          name: suite-module-stage
+          path: suite-module-stage/
+          compression-level: 0
+          overwrite: true
+          if-no-files-found: error
+
+      - name: Upload ProGuard mappings (modules)
+        if: env.AXS_EXPORT_ONLY != 'true'
+        uses: actions/upload-artifact@v5
+        with:
+          name: axs-modules-proguard-mapping
+          path: build/ArcartX-Suite/modules-obf/*-proguard-mapping.txt
+          overwrite: true
+          if-no-files-found: warn
+          retention-days: 1
+
   publish-suite:
     runs-on: ubuntu-latest
-    needs: [detect-changes, verify-abyss, build-encrypted]
-    if: >-
-      ${{ !cancelled() && needs.detect-changes.result == 'success' && needs.verify-abyss.result == 'success'
-          && needs.detect-changes.outputs.core_changed == 'true' && needs.build-encrypted.result == 'success' }}
+    needs: [detect-changes, build-encrypted, build-modules]
+    if: needs.detect-changes.outputs.assemble_release == 'true'
     steps:
       - uses: actions/checkout@v5
 
@@ -881,12 +940,6 @@ jobs:
             break
           done
 
-      - uses: actions/setup-java@v5
-        if: steps.staged-release.outputs.restored != 'true' && steps.staged-release.outputs.prepared != 'true'
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -895,64 +948,18 @@ jobs:
         if: steps.staged-release.outputs.restored != 'true'
         run: pip install cryptography
 
-      - uses: gradle/actions/setup-gradle@v6
+      - uses: actions/download-artifact@v5
         if: steps.staged-release.outputs.restored != 'true' && steps.staged-release.outputs.prepared != 'true'
         with:
-          cache-read-only: true
+          name: suite-module-stage
+          path: suite-module-stage
 
-      - name: Prepare watermark key
-        if: env.AXS_EXPORT_ONLY == 'true'
-        env:
-          WATERMARK_PRIVATE_PEM: ${{ secrets.AXS_WATERMARK_PRIVATE_PEM }}
-        run: |
-          set -euo pipefail
-          umask 077
-          test -n "$WATERMARK_PRIVATE_PEM"
-          printf '%s\n' "$WATERMARK_PRIVATE_PEM" > "$RUNNER_TEMP/axs-watermark.pem"
-
-      - name: Encrypt changed modules per-class (-Paxs.protectModules)
-        if: needs.detect-changes.outputs.module_changed == 'true' && steps.staged-release.outputs.restored != 'true' && steps.staged-release.outputs.prepared != 'true'
-        env:
-          EXPORT_RECIPIENT: ${{ inputs.export_recipient }}
-          EXPORT_DELIVERY_ID: ${{ needs.detect-changes.outputs.export_delivery_id }}
-          # This build's core is ProGuard input only. The published host has its own signed catalog.
-          AXS_PRODUCTION: 'OFF'
-        run: |
-          set -euo pipefail
-          CHANGED='${{ needs.detect-changes.outputs.changed_modules }}'
-          echo "变更模块: $CHANGED"
-          TASKS=()
-          for module in $(echo "$CHANGED" | jq -r '.[]'); do
-            TASKS+=(":modules:$module:encryptModuleAxb")
-          done
-          if (( ${#TASKS[@]} == 0 )); then
-            echo "没有需要构建的模块"; exit 0
-          fi
-          printf 'Gradle task: %s\n' "${TASKS[@]}"
-          # -Paxs.protectModules 使用各模块独立的 moduleKey 加密类和 .axb 容器。
-          watermark=()
-          if [[ "$AXS_EXPORT_ONLY" == true ]]; then
-            release=$(python scripts/export-customer-release.py release --commit "$GITHUB_SHA")
-            watermark=("-Paxs.watermark.recipient=$EXPORT_RECIPIENT" "-Paxs.watermark.license=$EXPORT_DELIVERY_ID"
-              "-Paxs.watermark.release=$release" "-Paxs.watermark.privateKey=$RUNNER_TEMP/axs-watermark.pem")
-          fi
-          bash ./gradlew "${TASKS[@]}" "${watermark[@]}" -Paxs.edition="$AXS_EDITION" -Paxs.protectModules -PskipNativeCheck=true --no-build-cache --parallel
-          echo "=== 生成的 .axb ==="
-          ls -la build/ArcartX-Suite/module-axb/ || echo "DIR NOT FOUND"
-
-      - name: Verify protected Abyss journal schema
-        if: steps.staged-release.outputs.restored != 'true' && steps.staged-release.outputs.prepared != 'true' && contains(fromJSON(needs.detect-changes.outputs.changed_modules), 'abyss')
-        run: python3 modules/abyss/src/test/protection/verify_journal_mapping.py
-
-      - name: Verify protected Exploration classes
-        if: steps.staged-release.outputs.restored != 'true' && steps.staged-release.outputs.prepared != 'true' && contains(fromJSON(needs.detect-changes.outputs.changed_modules), 'exploration')
-        run: python3 modules/exploration/src/test/protection/verify_protected_classes.py
-
-      - name: Verify module editions
+      - name: Restore verified module inputs
         if: steps.staged-release.outputs.restored != 'true' && steps.staged-release.outputs.prepared != 'true'
         env:
           RELEASE_MODULES: ${{ needs.detect-changes.outputs.changed_modules }}
-        run: python3 scripts/verify-suite-edition.py --edition "$AXS_EDITION" modules --selection "$RELEASE_MODULES"
+          AXS_MODULE_STAGE_SECRET: ${{ secrets[inputs.export_only && 'AXS_VARIANT_REGISTRATION_KEY_B64' || 'CLOUD_CI_TOKEN'] }}
+        run: python scripts/suite-module-stage.py open
 
       - uses: actions/download-artifact@v5
         if: (env.AXS_CLOUD_UPLOAD == 'true' || env.AXS_EXPORT_ONLY == 'true') && steps.staged-release.outputs.restored != 'true' && steps.staged-release.outputs.prepared != 'true'
@@ -1077,11 +1084,42 @@ jobs:
           FLARE_BASE_URL: ${{ vars.FLARE_BASE_URL }}
         run: python scripts/publish-suite.py verify
 
-      - name: Upload ProGuard mappings (modules)
-        if: env.AXS_EXPORT_ONLY != 'true' && steps.staged-release.outputs.restored != 'true' && steps.staged-release.outputs.prepared != 'true'
+  customer-delivery:
+    name: Package customer delivery
+    runs-on: ubuntu-latest
+    needs: [publish-suite, build-proxy]
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch' && inputs.export_only
+          && needs.publish-suite.result == 'success' && needs.build-proxy.result == 'success' }}
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Prepare the administrator delivery
+        id: delivery
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python scripts/customer-delivery-artifacts.py prepare --output customer-delivery
+
+      - name: Upload customer delivery
+        if: steps.delivery.outputs.needs_upload == 'true'
         uses: actions/upload-artifact@v5
         with:
-          name: axs-modules-proguard-mapping
-          path: build/ArcartX-Suite/modules-obf/*-proguard-mapping.txt
-          if-no-files-found: warn
-          retention-days: 1
+          name: ${{ steps.delivery.outputs.artifact_name }}
+          path: customer-delivery/
+          compression-level: 0
+          if-no-files-found: error
+
+      - name: Remove intermediate artifacts after upload
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CUSTOMER_DELIVERY: ${{ steps.delivery.outputs.artifact_name }}
+        run: python scripts/customer-delivery-artifacts.py cleanup --delivery "$CUSTOMER_DELIVERY"

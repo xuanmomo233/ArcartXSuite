@@ -23,11 +23,11 @@ python -X utf8 scripts/watermark-module.py keygen --private-key 'D:\AXS-Private\
 
    - `export_delivery_id` 可自填交付编号。留空时按 GitHub Actions 运行编号生成 `delivery-${GITHUB_RUN_ID}`，重跑同一次运行会沿用该编号。一个交付编号可对应多个席位。
    - `export_modules` 留空时导出全部正式模块，排除 Debug。只交付部分模块时，填写以逗号分隔的模块 ID，并包含所选模块的硬依赖。
-3. 从同一次构建尝试下载 `axs-customer-installers-attempt-N` 和 `axs-customer-registration-attempt-N`。主云后台打开「授权管理 → 登记客户水印包」，导入 `register-module-variants.json`。核对显示的账号、模块和水印 ID。再次提交同一登记文件可查看备云同步状态。若显示某个模块的备云摘要冲突，核对该模块的交付记录，其他模块会继续同步。
-4. 只交付客户操作系统对应的安装 ZIP。若客户需要代理端插件，可另交付 `axs-customer-proxy-attempt-N` 中对应的 JAR。登记文件留在管理员侧。
+3. 客户导出成功后下载 `axs-customer-delivery-attempt-N`。主云后台打开「授权管理 → 登记客户水印包」，导入交付包内的 `admin-only/register-module-variants.json`。核对显示的账号、模块和水印 ID。再次提交同一登记文件可查看备云同步状态。
+4. 从 `customer/installers/` 取客户操作系统对应的安装 ZIP。客户需要代理端插件时，从 `customer/optional-proxy/` 取对应的 JAR。整份管理员交付包和登记文件由管理员保存。
 5. 在「发放授权」中按实际装备的后端数量分配席位。如果同一客户两台后端都装 Market，就共需两份 Market 授权。客户在两台后端各自生成安装身份，并在两个服务器码上分别装备。两台后端可以各安装同一个客户的同一份 `.axb`。
 
-导出模式使用现有正式签名和加密 Secrets，即使仓库暂停 AXS 云端发布也可运行。`skip_upload` 用于验证构建，与 `export_only` 互斥。正式导出在构建前检查所需的 Secrets。Windows 和 Linux 安装包以及登记文件全部生成后，作业才会导出 GitHub Artifacts。管理员导入登记文件后，客户通过安装包放置模块文件，宿主启动时向云端验权取钥。
+导出模式使用现有正式签名和加密 Secrets，即使仓库暂停 AXS 云端发布也可运行。`skip_upload` 用于验证构建，与 `export_only` 互斥。正式导出在构建前检查所需的 Secrets。管理员交付包上传成功后，工作流清理该次运行的构建中间产物。管理员登记文件后，客户通过安装包放置模块文件，宿主启动时向云端验权取钥。
 
 客户导出构建使用 `customer` 版，包含跨服实现。云端发行构建使用 `free` 版，提供单服功能。两版分别打包并在发布步骤核验。
 
