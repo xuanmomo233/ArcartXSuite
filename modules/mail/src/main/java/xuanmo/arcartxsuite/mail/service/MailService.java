@@ -52,6 +52,7 @@ import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.scheduler.BukkitTask;
 import java.util.function.BiConsumer;
 import org.bukkit.plugin.java.JavaPlugin;
+import xuanmo.arcartxsuite.api.BuildEdition;
 import xuanmo.arcartxsuite.api.auth.AuthAccess;
 import xuanmo.arcartxsuite.api.auth.AuthAdmissionEvent;
 import xuanmo.arcartxsuite.api.auth.AuthRestrictionEvent;
@@ -390,11 +391,13 @@ public final class MailService implements Listener {
         claimTask = Bukkit.getScheduler().runTaskTimer(plugin, claimPulse, 1L, 1L);
         long cleanupInterval = configuration.retention().cleanupIntervalTicks();
         cleanupTask = Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, cleanupPulse, cleanupInterval, cleanupInterval);
-        crossServerChannel = crossServer.openChannel(
-            "mail",
-            configuration.crossServer(),
-            delivery -> handleCrossServerMessage(delivery.payload())
-        );
+        if (BuildEdition.CROSS_SERVER_INCLUDED) {
+            crossServerChannel = crossServer.openChannel(
+                "mail",
+                configuration.crossServer(),
+                delivery -> handleCrossServerMessage(delivery.payload())
+            );
+        }
         for (Player player : Bukkit.getOnlinePlayers()) {
             recoverAdmittedDraft(player, AuthAccess.snapshot(player.getUniqueId()));
         }
@@ -422,7 +425,7 @@ public final class MailService implements Listener {
             cleanupTask.cancel();
             cleanupTask = null;
         }
-        if (crossServerChannel != null) {
+        if (BuildEdition.CROSS_SERVER_INCLUDED && crossServerChannel != null) {
             crossServerChannel.close();
             crossServerChannel = null;
         }
@@ -678,7 +681,7 @@ public final class MailService implements Listener {
     }
 
     public boolean crossServerActive() {
-        return crossServerChannel != null && crossServerChannel.isActive();
+        return BuildEdition.CROSS_SERVER_INCLUDED && crossServerChannel != null && crossServerChannel.isActive();
     }
 
     public int composeSessionCount() {
@@ -1974,6 +1977,7 @@ public final class MailService implements Listener {
     }
 
     private void handleCrossServerMessage(String message) {
+        if (!BuildEdition.CROSS_SERVER_INCLUDED) return;
         if (configuration.debug()) {
             this.logger.info("收到邮件跨服消息: " + message);
         }
@@ -4679,6 +4683,7 @@ public final class MailService implements Listener {
     }
 
     private void publishRefresh(UUID playerUuid) {
+        if (!BuildEdition.CROSS_SERVER_INCLUDED) return;
         if (playerUuid != null && crossServerChannel != null && crossServerChannel.isActive()) {
             crossServerChannel.publish("refresh:" + playerUuid);
         }

@@ -97,6 +97,7 @@ class DurableShutdownTest {
     @Test void anAbyssCommitDuringAnActiveProbeSchedulesAnotherPass() throws Exception {
         var source = source("jdbc:sqlite:" + directory.resolve("abyss-wake.sqlite"));
         var abyss = mock(AbyssRunResultAccess.class);
+        when(abyss.usesLocalResultStorage()).thenReturn(true);
         var first = new CompletableFuture<List<AbyssRunResultAccess.Committed>>();
         var entered = new CountDownLatch(1);
         var repeated = new CountDownLatch(1);
@@ -153,6 +154,7 @@ class DurableShutdownTest {
             new RuleJournal.MailJob("auction-job", UUID.randomUUID(), "Title", "Body", "", 0)));
 
         var abyss = mock(AbyssRunResultAccess.class);
+        when(abyss.usesLocalResultStorage()).thenReturn(true);
         when(abyss.committedResults("abyss", 0, 16)).thenReturn(
             CompletableFuture.failedFuture(new SQLException("Abyss unavailable")));
         var mail = mock(AxsMailService.class);

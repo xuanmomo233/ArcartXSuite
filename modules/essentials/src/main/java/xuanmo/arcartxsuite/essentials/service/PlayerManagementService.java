@@ -18,9 +18,7 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageEvent;
-import org.bukkit.event.player.AsyncPlayerPreLoginEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
-import org.bukkit.event.player.PlayerLoginEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.Inventory;
@@ -28,6 +26,7 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.inventory.meta.Damageable;
 import org.bukkit.plugin.java.JavaPlugin;
+import xuanmo.arcartxsuite.api.BuildEdition;
 import xuanmo.arcartxsuite.api.auth.AuthAccess;
 import xuanmo.arcartxsuite.api.util.AttributeResolver;
 import xuanmo.arcartxsuite.api.capability.TabRefreshable;
@@ -47,7 +46,7 @@ public final class PlayerManagementService implements Listener {
     private final Logger logger;
     private final EssentialsConfiguration config;
     private final java.util.function.Supplier<TabRefreshable> tabRefreshProvider;
-    private final VelocityVanishProfile velocityVanishProfile;
+    private final Listener proxyVanishListener;
 
     private final Map<UUID, FlightState> flyEnabled = new ConcurrentHashMap<>();
     private final Map<UUID, Boolean> godEnabled = new ConcurrentHashMap<>();
@@ -78,7 +77,8 @@ public final class PlayerManagementService implements Listener {
         this.logger = logger;
         this.config = config;
         this.tabRefreshProvider = tabRefreshProvider;
-        this.velocityVanishProfile = VelocityVanishProfile.detect(logger, suiteProxyAllowed);
+        this.proxyVanishListener = BuildEdition.CROSS_SERVER_INCLUDED
+            ? VelocityVanishBridge.create(logger, suiteProxyAllowed, player -> setVanished(player, true)) : null;
     }
 
     /**
@@ -86,6 +86,9 @@ public final class PlayerManagementService implements Listener {
      */
     public void start() {
         Bukkit.getPluginManager().registerEvents(this, plugin);
+        if (BuildEdition.CROSS_SERVER_INCLUDED && proxyVanishListener != null) {
+            Bukkit.getPluginManager().registerEvents(proxyVanishListener, plugin);
+        }
         for (Player player : Bukkit.getOnlinePlayers()) {
             lastActivity.put(player.getUniqueId(), System.currentTimeMillis());
         }
@@ -102,6 +105,9 @@ public final class PlayerManagementService implements Listener {
         active = false;
         afkPulse.close();
         HandlerList.unregisterAll(this);
+        if (BuildEdition.CROSS_SERVER_INCLUDED && proxyVanishListener != null) {
+            HandlerList.unregisterAll(proxyVanishListener);
+        }
         if (afkTaskId != -1) {
             Bukkit.getScheduler().cancelTask(afkTaskId);
             afkTaskId = -1;
@@ -513,39 +519,6 @@ public final class PlayerManagementService implements Listener {
 
 
     // ─── Events ───
-
-    @EventHandler(priority = EventPriority.HIGHEST)
-    public void captureProxyVanish(AsyncPlayerPreLoginEvent event) {
-        if (velocityVanishProfile == null) return;
-        try {
-            if (velocityVanishProfile.capture(event)) return;
-        } catch (ReflectiveOperationException failure) {
-            logger.log(java.util.logging.Level.WARNING, "无法读取 Velocity 隐身交接。", failure);
-        }
-        event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER, "无法完成 Velocity 隐身交接，请重新连接。");
-    }
-
-    @EventHandler(priority = EventPriority.MONITOR)
-    public void clearDeniedProxyVanish(PlayerLoginEvent event) {
-        if (velocityVanishProfile != null && event.getResult() != PlayerLoginEvent.Result.ALLOWED) {
-            velocityVanishProfile.take(event.getPlayer().getUniqueId());
-        }
-    }
-
-    @EventHandler(priority = EventPriority.LOWEST)
-    public void applyProxyVanish(PlayerJoinEvent event) {
-        if (velocityVanishProfile == null) return;
-        Player player = event.getPlayer();
-        var origin = velocityVanishProfile.take(player.getUniqueId());
-        if (origin == null) return;
-        var address = player.getAddress();
-        if (address == null || !origin.equals(address.getAddress())) {
-            player.kickPlayer("无法完成 Velocity 隐身交接，请重新连接。");
-            return;
-        }
-        // Paper publishes its native player-list entries after the join event.
-        setVanished(player, true);
-    }
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void onJoin(PlayerJoinEvent event) {

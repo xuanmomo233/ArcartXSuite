@@ -15,6 +15,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Logger;
 import org.junit.jupiter.api.Test;
 import org.bukkit.plugin.java.JavaPlugin;
+import xuanmo.arcartxsuite.api.BuildEdition;
 import xuanmo.arcartxsuite.api.auth.AuthAccess;
 import xuanmo.arcartxsuite.api.auth.AuthSnapshot;
 import xuanmo.arcartxsuite.api.item.PendingRewardService;
@@ -98,6 +99,7 @@ class ChatShutdownTest {
 
     @Test
     void relayReportsTheActualExitOfAnInterruptedDriver() throws Exception {
+        org.junit.jupiter.api.Assumptions.assumeTrue(BuildEdition.CROSS_SERVER_INCLUDED);
         var relay = new ChatRelay(mock(ChatRelayJournal.class), "lab", Runnable::run,
             (payload, source, timestamp) -> java.util.concurrent.CompletableFuture.completedFuture(false),
             () -> {}, Logger.getAnonymousLogger(), () -> true);
@@ -123,6 +125,7 @@ class ChatShutdownTest {
 
     @Test
     void queuedRelayWriteIsAbandonedWhenTheSeatExpires() throws Exception {
+        org.junit.jupiter.api.Assumptions.assumeTrue(BuildEdition.CROSS_SERVER_INCLUDED);
         var journal = mock(ChatRelayJournal.class);
         var allowed = new AtomicBoolean(true);
         var relay = new ChatRelay(journal, "lab", Runnable::run,

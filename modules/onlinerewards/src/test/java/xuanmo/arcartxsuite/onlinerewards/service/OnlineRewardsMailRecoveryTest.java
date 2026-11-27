@@ -1,6 +1,7 @@
 package xuanmo.arcartxsuite.onlinerewards.service;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
@@ -23,6 +24,7 @@ import org.bukkit.scheduler.BukkitScheduler;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.sqlite.SQLiteDataSource;
+import xuanmo.arcartxsuite.api.BuildEdition;
 import xuanmo.arcartxsuite.api.mail.AxsDeliveryReceipt;
 import xuanmo.arcartxsuite.api.mail.AxsMailService;
 import xuanmo.arcartxsuite.api.storage.StorageDescriptor;
@@ -35,6 +37,15 @@ class OnlineRewardsMailRecoveryTest {
     @TempDir Path directory;
 
     @Test void anotherNodeReplaysTheOriginalKeyAndWaitsForDurableMailConfirmation() throws Exception {
+        assumeTrue(BuildEdition.CROSS_SERVER_INCLUDED);
+        replayPersistedSharedMail(true);
+    }
+
+    @Test void originalNodeReplaysPreviouslySharedMailWithItsOriginalKey() throws Exception {
+        replayPersistedSharedMail(false);
+    }
+
+    private void replayPersistedSharedMail(boolean anotherNode) throws Exception {
         var source = new SQLiteDataSource();
         source.setUrl("jdbc:sqlite:" + directory.resolve("rewards.sqlite"));
         var descriptor = StorageDescriptor.sqlite("rewards.sqlite");
@@ -55,7 +66,8 @@ class OnlineRewardsMailRecoveryTest {
         Path first = Files.createDirectory(directory.resolve("first"));
         Path second = Files.createDirectory(directory.resolve("second"));
         Files.writeString(first.resolve(".arcartxsuite-onlinerewards-node"), origin.toString());
-        Files.writeString(second.resolve(".arcartxsuite-onlinerewards-node"), UUID.randomUUID().toString());
+        Files.writeString(second.resolve(".arcartxsuite-onlinerewards-node"),
+            (anotherNode ? UUID.randomUUID() : origin).toString());
         var mainTasks = new LinkedBlockingQueue<Runnable>();
         var server = mock(Server.class);
         var scheduler = mock(BukkitScheduler.class);

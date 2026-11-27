@@ -22,6 +22,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitScheduler;
 import org.junit.jupiter.api.Test;
+import xuanmo.arcartxsuite.api.BuildEdition;
 import xuanmo.arcartxsuite.api.auth.AuthAccess;
 import xuanmo.arcartxsuite.api.auth.AuthSnapshot;
 import xuanmo.arcartxsuite.api.bridge.*;
@@ -254,6 +255,7 @@ class ChatModerationAsyncTest {
     }
 
     @Test void aRemoteMuteRetriesItsReadBeforeAcknowledgingAndDeduplicatesTheReceipt() throws Exception {
+        org.junit.jupiter.api.Assumptions.assumeTrue(BuildEdition.CROSS_SERVER_INCLUDED);
         try (var test = new Harness()) {
             Thread caller = Thread.currentThread();
             UUID playerId = test.target.getUniqueId();

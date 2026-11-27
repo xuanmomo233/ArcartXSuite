@@ -4,6 +4,7 @@ import java.util.UUID;
 import java.util.Base64;
 import java.nio.charset.StandardCharsets;
 import org.jetbrains.annotations.NotNull;
+import xuanmo.arcartxsuite.api.BuildEdition;
 
 /**
  * 捕获记录，持久化到数据库，用于 UI 最近捕获记录流展示。
@@ -28,6 +29,7 @@ public record FishingCatchRecord(
     }
 
     public String encodeCrossServer() {
+        if (!BuildEdition.CROSS_SERVER_INCLUDED) throw new UnsupportedOperationException("Cross-server fishing is unavailable");
         var encoder = Base64.getUrlEncoder().withoutPadding();
         return String.join(":", "CATCH2", eventId.toString(), playerUuid.toString(),
             encoder.encodeToString(fishId.getBytes(StandardCharsets.UTF_8)),
@@ -36,6 +38,7 @@ public record FishingCatchRecord(
     }
 
     public static FishingCatchRecord decodeCrossServer(String message, long now) {
+        if (!BuildEdition.CROSS_SERVER_INCLUDED) throw new UnsupportedOperationException("Cross-server fishing is unavailable");
         String[] fields = message.split(":", -1);
         if (fields.length != 9 || !"CATCH2".equals(fields[0])) throw new IllegalArgumentException("未知捕获消息格式");
         int size = Integer.parseInt(fields[6]);

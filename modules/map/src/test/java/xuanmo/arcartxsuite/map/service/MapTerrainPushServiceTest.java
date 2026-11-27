@@ -25,6 +25,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.AfterEach;
 import org.mockito.ArgumentCaptor;
+import xuanmo.arcartxsuite.api.BuildEdition;
 import xuanmo.arcartxsuite.api.auth.AuthSnapshot;
 import static org.mockito.Mockito.*;
 import static org.junit.jupiter.api.Assertions.*;
@@ -143,9 +144,14 @@ class MapTerrainPushServiceTest {
         assertSame(packet.getValue(), another.getValue());
         var input = new DataInputStream(new ByteArrayInputStream(packet.getValue()));
         assertEquals("minecraft:overworld", input.readUTF());
-        assertEquals(1, relay.size());
-        assertArrayEquals(input.readAllBytes(), relay.get(0));
-        var body = new DataInputStream(new ByteArrayInputStream(relay.get(0)));
+        byte[] content = input.readAllBytes();
+        if (BuildEdition.CROSS_SERVER_INCLUDED) {
+            assertEquals(1, relay.size());
+            assertArrayEquals(content, relay.get(0));
+        } else {
+            assertTrue(relay.isEmpty());
+        }
+        var body = new DataInputStream(new ByteArrayInputStream(content));
         assertEquals(0, body.readInt());
         assertEquals(0, body.readInt());
         assertEquals(7, body.readInt());

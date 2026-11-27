@@ -19,6 +19,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import xuanmo.arcartxsuite.api.BuildEdition;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.logging.Logger;
@@ -299,7 +300,7 @@ public final class MapTerrainPushService {
      */
     public void submitForRelay(World world, Iterable<Long> chunkCoords, int sourceVersion,
                                Consumer<byte[]> chunkBodySink) {
-        if (stopped || world == null || chunkCoords == null || chunkBodySink == null) {
+         if (!BuildEdition.CROSS_SERVER_INCLUDED || stopped || world == null || chunkCoords == null || chunkBodySink == null) {
             return;
         }
         submitRequestsForRelay(world, fullRequests(chunkCoords), sourceVersion, (request, body) -> {
@@ -310,6 +311,7 @@ public final class MapTerrainPushService {
     /** Returns the requests that did not fit in the queue. */
     public List<ChunkRequest> submitRequestsForRelay(World world, List<ChunkRequest> requests, int sourceVersion,
                                                     BiConsumer<ChunkRequest, byte[]> chunkBodySink) {
+        if (!BuildEdition.CROSS_SERVER_INCLUDED) return requests;
         int processed = enqueue(null, world.getUID(), requests, sourceVersion, chunkBodySink);
         return requests.subList(processed, requests.size());
     }
@@ -360,7 +362,7 @@ public final class MapTerrainPushService {
         var encoded = delivery.work().encoded;
         var recipient = delivery.recipient();
         try {
-            if (recipient.relay() != null) {
+            if (BuildEdition.CROSS_SERVER_INCLUDED && recipient.relay() != null) {
                 // The relay sink owns its byte array and must not be able to modify the shared packet.
                 recipient.relay().accept(delivery.work().key.request(), encoded == null ? null : java.util.Arrays.copyOfRange(
                     encoded.packet(), encoded.bodyOffset(), encoded.packet().length));

@@ -59,6 +59,7 @@ import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import xuanmo.arcartxsuite.api.BuildEdition;
 import xuanmo.arcartxsuite.api.auth.AuthAccess;
 import xuanmo.arcartxsuite.api.auth.AuthSnapshot;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
@@ -372,7 +373,7 @@ public final class WarehouseService implements Listener, WarehouseAccess {
         if (configuration.pickup().enabled() && Bukkit.getOnlinePlayers().isEmpty()) warmGroundItemMetadata();
         bindUis();
         active = true;
-        if (crossServerChannelConfig.enabled()
+        if (BuildEdition.CROSS_SERVER_INCLUDED && crossServerChannelConfig.enabled()
             && crossServerApi != null) {
             crossServerLockService = new WarehouseCrossServerLockService(
                 plugin,
@@ -484,7 +485,7 @@ public final class WarehouseService implements Listener, WarehouseAccess {
         automaticScopes.clear();
         if (recoveryTask != null) recoveryTask.cancel();
         if (sharedLeaseHeartbeat != null) sharedLeaseHeartbeat.cancel();
-        if (crossServerLockService != null) {
+        if (BuildEdition.CROSS_SERVER_INCLUDED && crossServerLockService != null) {
             crossServerLockService.shutdown();
             crossServerLockService = null;
         }
@@ -550,7 +551,7 @@ public final class WarehouseService implements Listener, WarehouseAccess {
     }
 
     public boolean crossServerActive() {
-        return crossServerLockService != null && crossServerLockService.isActive();
+        return BuildEdition.CROSS_SERVER_INCLUDED && crossServerLockService != null && crossServerLockService.isActive();
     }
 
     public int activeSharedEditLockCount() {
@@ -2055,7 +2056,7 @@ public final class WarehouseService implements Listener, WarehouseAccess {
     private void revokeShowcase(UUID owner, String ownerType, String warehouseId) {
         var revoke = new WarehouseCrossServerPayloadCodec.ShowcaseRevocation(owner, ownerType, warehouseId);
         closePublicPreviews(revoke);
-        if (crossServerLockService != null) crossServerLockService.publishShowcaseRevocation(revoke);
+        if (BuildEdition.CROSS_SERVER_INCLUDED && crossServerLockService != null) crossServerLockService.publishShowcaseRevocation(revoke);
     }
 
     private void closePublicPreviews(WarehouseCrossServerPayloadCodec.ShowcaseRevocation revoke) {
@@ -4340,7 +4341,7 @@ public final class WarehouseService implements Listener, WarehouseAccess {
     }
 
     private String localNodeId() {
-        return crossServerLockService != null ? crossServerLockService.nodeId() : "local";
+        return BuildEdition.CROSS_SERVER_INCLUDED && crossServerLockService != null ? crossServerLockService.nodeId() : "local";
     }
 
     String lockOwnerName(ViewState state) {

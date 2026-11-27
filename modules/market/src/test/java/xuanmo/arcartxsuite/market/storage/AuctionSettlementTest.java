@@ -12,6 +12,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.sqlite.SQLiteDataSource;
+import xuanmo.arcartxsuite.api.BuildEdition;
 import xuanmo.arcartxsuite.api.storage.StorageDescriptor;
 import xuanmo.arcartxsuite.api.currency.CurrencyTransactionResult;
 import xuanmo.arcartxsuite.market.auction.AuctionListing;
@@ -296,11 +297,17 @@ class AuctionSettlementTest {
         var refunds = repository.pendingDeliveries(buyer, "node", 10);
         assertEquals(1, refunds.size());
         assertEquals("20", refunds.get(0).amount());
-        assertEquals(1, repository.auctionSettlementRevision());
-        var publication = repository.claimAuctionPublications("worker", 1, 8).get(0);
-        assertEquals("LISTING_CANCELLED:" + listing.getId(), publication.refreshPayload());
-        assertFalse(publication.eventPending());
-        assertTrue(publication.refreshPending());
+        var publications = repository.claimAuctionPublications("worker", 1, 8);
+        if (BuildEdition.CROSS_SERVER_INCLUDED) {
+            assertEquals(1, repository.auctionSettlementRevision());
+            var publication = publications.get(0);
+            assertEquals("LISTING_CANCELLED:" + listing.getId(), publication.refreshPayload());
+            assertFalse(publication.eventPending());
+            assertTrue(publication.refreshPending());
+        } else {
+            assertEquals(0, repository.auctionSettlementRevision());
+            assertTrue(publications.isEmpty());
+        }
     }
 
     @Test
@@ -490,6 +497,7 @@ class AuctionSettlementTest {
 
     @Test
     void publicationLeaseKeepsIndependentAcknowledgementsAcrossTakeover() {
+        org.junit.jupiter.api.Assumptions.assumeTrue(BuildEdition.CROSS_SERVER_INCLUDED);
         var listing = listing(true, System.currentTimeMillis() - 10);
         var settlement = settlement(listing);
         var publication = publication(listing, true, settlement.receipt().createdAt());

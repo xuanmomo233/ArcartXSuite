@@ -8,6 +8,7 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.AbstractAXSModule;
+import xuanmo.arcartxsuite.api.BuildEdition;
 import xuanmo.arcartxsuite.api.ModuleDescriptor;
 import xuanmo.arcartxsuite.api.ModuleUiSpec;
 import xuanmo.arcartxsuite.api.UiBinding;
@@ -30,7 +31,7 @@ public final class TabModule extends AbstractAXSModule {
     private Layout layout;
     private boolean proxyRoster;
     private String registeredHudId;
-    private TabVisibilityPublisher visibility;
+    private TabProxyRoster visibility;
 
     @Override
     public ModuleDescriptor descriptor() {
@@ -79,8 +80,8 @@ public final class TabModule extends AbstractAXSModule {
         }
         registeredHudId = registration.runtimeUiId();
         recordUiBinding(path, new UiBinding(registeredHudId, registration.registeredUiId()));
-        if (proxyRoster && advancedCrossServerOrchestrationAllowed()) {
-            visibility = new TabVisibilityPublisher(plugin, this::advancedCrossServerOrchestrationAllowed);
+        if (BuildEdition.CROSS_SERVER_INCLUDED && proxyRoster && advancedCrossServerOrchestrationAllowed()) {
+            visibility = TabProxyRosterFactory.create(plugin, this::advancedCrossServerOrchestrationAllowed);
             registerListener(visibility);
             registerCapability(TabRefreshable.class, visibility);
             visibility.requestGlobalRefresh("enable");

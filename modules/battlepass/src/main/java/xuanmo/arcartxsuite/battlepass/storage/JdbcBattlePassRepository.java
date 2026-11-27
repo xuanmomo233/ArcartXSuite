@@ -14,6 +14,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.logging.Logger;
 import javax.sql.DataSource;
+import xuanmo.arcartxsuite.api.BuildEdition;
 import xuanmo.arcartxsuite.api.storage.AbstractModuleRepository;
 import xuanmo.arcartxsuite.api.storage.StorageDescriptor;
 import xuanmo.arcartxsuite.battlepass.model.BattlePassPlayerProgress;
@@ -36,12 +37,12 @@ public final class JdbcBattlePassRepository extends AbstractModuleRepository imp
     }
 
     private record ProgressWrite(UUID player, String season, Connection connection) {}
-    private final ThreadLocal<ProgressWrite> progressWrite = new ThreadLocal<>();
+    private final ThreadLocal<ProgressWrite> progressWrite = BuildEdition.CROSS_SERVER_INCLUDED ? new ThreadLocal<>() : null;
 
-    @Override public boolean sharedProgress() { return isMysql(); }
+    @Override public boolean sharedProgress() { return BuildEdition.CROSS_SERVER_INCLUDED && isMysql(); }
 
     @Override public <T> T withProgressWrite(UUID player, String season, Write<T> work) throws SQLException {
-        if (!sharedProgress()) return work.run();
+        if (!BuildEdition.CROSS_SERVER_INCLUDED || !sharedProgress()) return work.run();
         var current = progressWrite.get();
         if (current != null) {
             if (!current.player().equals(player) || !current.season().equals(season)) {
@@ -71,16 +72,20 @@ public final class JdbcBattlePassRepository extends AbstractModuleRepository imp
     private interface ProgressQuery<T> { T run(Connection connection) throws SQLException; }
 
     private <T> T progressQuery(ProgressQuery<T> query) throws SQLException {
-        var current = progressWrite.get();
-        if (current != null) return query.run(current.connection());
+        if (BuildEdition.CROSS_SERVER_INCLUDED) {
+            var current = progressWrite.get();
+            if (current != null) return query.run(current.connection());
+        }
         try (Connection connection = getConnection()) {
             return query.run(connection);
         }
     }
 
     private <T> T progressTransaction(ProgressQuery<T> query) throws SQLException {
-        var current = progressWrite.get();
-        if (current != null) return query.run(current.connection());
+        if (BuildEdition.CROSS_SERVER_INCLUDED) {
+            var current = progressWrite.get();
+            if (current != null) return query.run(current.connection());
+        }
         try (Connection connection = getConnection()) {
             connection.setAutoCommit(false);
             try {
@@ -109,7 +114,7 @@ public final class JdbcBattlePassRepository extends AbstractModuleRepository imp
     @Override
     protected java.util.List<String> playerDataTables() {
         var tables = new ArrayList<>(List.of("bp_player_progress", "bp_claimed_rewards", "bp_player_tasks", "bp_auth_receipts", "bp_reward_requests"));
-        if (sharedProgress()) tables.add("bp_progress_writers");
+        if (BuildEdition.CROSS_SERVER_INCLUDED && sharedProgress()) tables.add("bp_progress_writers");
         return tables;
     }
 
@@ -120,7 +125,7 @@ public final class JdbcBattlePassRepository extends AbstractModuleRepository imp
 
     private void createTables(Connection conn) throws SQLException {
         try(Statement statement=conn.createStatement()) {
-            if (sharedProgress()) {
+            if (BuildEdition.CROSS_SERVER_INCLUDED && sharedProgress()) {
                 statement.executeUpdate("""
                     CREATE TABLE IF NOT EXISTS bp_progress_writers (
                         player_uuid VARCHAR(36) NOT NULL,

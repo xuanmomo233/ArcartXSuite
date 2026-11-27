@@ -2,6 +2,8 @@ import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 import org.gradle.api.artifacts.ProjectDependency
 import org.gradle.api.file.RegularFile
 import org.gradle.api.provider.Provider
+import org.gradle.api.tasks.SourceSetContainer
+import org.gradle.language.jvm.tasks.ProcessResources
 
 plugins {
     id("base")
@@ -10,6 +12,8 @@ plugins {
 
 // 宿主、公开 API、认证组件、模块与代理端使用同一套发布版本。
 val runtimeTarget = RuntimeTarget.parse(providers.gradleProperty("axs.runtimeTarget").orElse("universal").get())
+val suiteEdition = providers.gradleProperty("axs.edition").orElse("customer").get()
+require(suiteEdition in setOf("free", "customer")) { "axs.edition must be free or customer" }
 allprojects {
     version = rootProject.version
     // Profiles can coexist without overwriting another target's generated resources or JARs.
@@ -24,6 +28,40 @@ val distDir = rootProject.layout.buildDirectory.dir("ArcartX-Suite")
 val obfuscatedCoreJar: Provider<RegularFile> = project(":axs-core").layout.buildDirectory.file("libs/ArcartX-Suite-step1-obfuscated.jar")
 
 subprojects {
+    plugins.withId("java") {
+        val module = path.startsWith(":modules:")
+        val host = path == ":axs-core"
+        if (module || host || path == ":axs-api") {
+            extensions.configure<SourceSetContainer> {
+                if (!host) {
+                    named("main") {
+                        java.srcDir("src/$suiteEdition/java")
+                        resources.srcDir("src/$suiteEdition/resources")
+                    }
+                }
+                named("test") {
+                    java.srcDir("src/${suiteEdition}Test/java")
+                }
+            }
+        }
+        if (module || host) {
+            val editionFile = layout.buildDirectory.file("generated/suite-edition/axs-edition.txt")
+            val generateSuiteEdition = tasks.register("generateSuiteEdition") {
+                inputs.property("edition", suiteEdition)
+                outputs.file(editionFile)
+                doLast {
+                    val output = editionFile.get().asFile
+                    output.parentFile.mkdirs()
+                    output.writeText("$suiteEdition\n")
+                }
+            }
+            tasks.named<ProcessResources>("processResources") {
+                dependsOn(generateSuiteEdition)
+                from(editionFile) { into("META-INF") }
+            }
+        }
+    }
+
     repositories {
         mavenCentral()
         maven("https://hub.spigotmc.org/nexus/content/repositories/snapshots/")

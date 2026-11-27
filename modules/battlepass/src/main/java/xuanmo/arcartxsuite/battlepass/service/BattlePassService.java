@@ -30,6 +30,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
 import org.jetbrains.annotations.Nullable;
+import xuanmo.arcartxsuite.api.BuildEdition;
 import xuanmo.arcartxsuite.api.auth.AuthAccess;
 import xuanmo.arcartxsuite.api.auth.AuthSnapshot;
 import xuanmo.arcartxsuite.api.capability.EventBusCapability;
@@ -177,7 +178,9 @@ public final class BattlePassService {
                             request.apply();applied=true;if(!request.load)unavailable=false;
                         }catch(Throwable failure){
                             request.failure=failure;
-                            if(sharedProgressWrite.get() != null) throw new SQLException("BattlePass progress request failed", failure);
+                            if (BuildEdition.CROSS_SERVER_INCLUDED && sharedProgressWrite.get() != null) {
+                                throw new SQLException("BattlePass progress request failed", failure);
+                            }
                         }
                     }
                     if(applied){
@@ -218,7 +221,8 @@ public final class BattlePassService {
 
         SharedProgressWrite(UUID player) { this.player = player; }
     }
-    private final ThreadLocal<SharedProgressWrite> sharedProgressWrite = new ThreadLocal<>();
+    private final ThreadLocal<SharedProgressWrite> sharedProgressWrite =
+        BuildEdition.CROSS_SERVER_INCLUDED ? new ThreadLocal<>() : null;
     private record AuthTaskDelta(String instance,int increment,int completionXp) {}
     private record AuthProjection(BattlePassPlayerProgress progress,List<PlayerTaskInstance> tasks,List<AuthTaskDelta> deltas) {}
     // Accessed only under repository.withPlayerWrite; an ambiguous commit fences all ordinary snapshot writers.
@@ -352,7 +356,7 @@ public final class BattlePassService {
         return finalizer.stopped();
     }
     private void finishShutdown() {
-        if (repository.sharedProgress()) {
+        if (BuildEdition.CROSS_SERVER_INCLUDED && repository.sharedProgress()) {
             try { flushSharedTaskLoads(); }
             catch (SQLException failure) { logger.log(java.util.logging.Level.WARNING, "战令停用时任务尚未保存", failure); }
         }
@@ -523,7 +527,7 @@ public final class BattlePassService {
      */
     private <T> T withAuthoritativeProgress(UUID uuid, BattlePassRepository.Write<T> work) throws SQLException {
         return repository.withPlayerWrite(uuid, () -> {
-            if (!repository.sharedProgress() || ownsSharedProgress(uuid)) return work.run();
+            if (!BuildEdition.CROSS_SERVER_INCLUDED || !repository.sharedProgress() || ownsSharedProgress(uuid)) return work.run();
             if (sharedProgressWrite.get() != null) throw new IllegalStateException("BattlePass write targets another player");
             String season = configuration.season().seasonId();
             try {
@@ -551,6 +555,7 @@ public final class BattlePassService {
     }
 
     private boolean ownsSharedProgress(UUID uuid) {
+        if (!BuildEdition.CROSS_SERVER_INCLUDED) return false;
         var current = sharedProgressWrite.get();
         return current != null && uuid.equals(current.player);
     }
@@ -598,7 +603,7 @@ public final class BattlePassService {
     }
 
     private List<PlayerTaskInstance> getTaskInstances(UUID uuid) {
-        if (ownsSharedProgress(uuid)) {
+        if (BuildEdition.CROSS_SERVER_INCLUDED && ownsSharedProgress(uuid)) {
             var write = sharedProgressWrite.get();
             if (write.tasksLoaded) return Objects.requireNonNullElse(taskSnapshot(uuid), List.of());
             var tasks = loadTaskInstances(uuid);
@@ -609,7 +614,7 @@ public final class BattlePassService {
         if (cached != null) return cached;
         try {
             return withAuthoritativeProgress(uuid, () -> {
-                if (ownsSharedProgress(uuid)) return getTaskInstances(uuid);
+                if (BuildEdition.CROSS_SERVER_INCLUDED && ownsSharedProgress(uuid)) return getTaskInstances(uuid);
                 var ready = taskSnapshot(uuid);
                 return ready == null ? loadTaskInstances(uuid) : ready;
             });
@@ -736,14 +741,14 @@ public final class BattlePassService {
     /** 退服时安排后台落盘，失败时留给下一轮保存。 */
     public void handleQuit(UUID uuid) {
         if (!active) return;
-        if (!repository.sharedProgress()) coldTaskLoads.remove(uuid);
+        if (!BuildEdition.CROSS_SERVER_INCLUDED || !repository.sharedProgress()) coldTaskLoads.remove(uuid);
         nextWarmup.remove(uuid);
         pendingEvictions.add(uuid);
         persistProgressAsync(uuid);
     }
 
     private void clearPlayerCache(UUID uuid) {
-        if (!repository.sharedProgress()) coldTaskLoads.remove(uuid);
+        if (!BuildEdition.CROSS_SERVER_INCLUDED || !repository.sharedProgress()) coldTaskLoads.remove(uuid);
         nextWarmup.remove(uuid);
         discardProgressProjection(uuid);
         taskEngine.clearPlayerLimits(uuid);
@@ -757,7 +762,7 @@ public final class BattlePassService {
     }
 
     public void updateInstanceProgress(Player player, PlayerTaskInstance instance, int increment) {
-        if (repository.sharedProgress()) {
+        if (BuildEdition.CROSS_SERVER_INCLUDED && repository.sharedProgress()) {
             UUID uuid = player.getUniqueId();
             String name = player.getName();
             change(uuid, true, () -> {
@@ -823,7 +828,7 @@ public final class BattlePassService {
         if (!canMutate() || increments.isEmpty() || !isSeasonActive()) return;
         UUID uuid = player.getUniqueId();
         String playerName = player.getName();
-        if (repository.sharedProgress()) {
+        if (BuildEdition.CROSS_SERVER_INCLUDED && repository.sharedProgress()) {
             if (ownsSharedProgress(uuid)) updateCachedTaskProgress(uuid, playerName, increments);
             else queueColdTaskProgress(player, uuid, playerName, increments);
             return;
@@ -838,7 +843,8 @@ public final class BattlePassService {
         final String name;
         final AuthSnapshot session;
         final Map<String, Integer> increments;
-        final Map<LocalDate, Map<String, Integer>> sharedIncrements = new LinkedHashMap<>();
+        final Map<LocalDate, Map<String, Integer>> sharedIncrements =
+            BuildEdition.CROSS_SERVER_INCLUDED ? new LinkedHashMap<>() : null;
         boolean scheduled;
         SharedTaskBatch inFlight;
 
@@ -851,7 +857,8 @@ public final class BattlePassService {
         }
 
         void add(Map<String, Integer> values, LocalDate day) {
-            var target = day == null ? increments : sharedIncrements.computeIfAbsent(day, ignored -> new LinkedHashMap<>());
+            var target = BuildEdition.CROSS_SERVER_INCLUDED && day != null
+                ? sharedIncrements.computeIfAbsent(day, ignored -> new LinkedHashMap<>()) : increments;
             values.forEach((task, amount) -> target.merge(task, amount, (a, b) -> (int) Math.min((long) a + b, Integer.MAX_VALUE)));
         }
     }
@@ -861,10 +868,10 @@ public final class BattlePassService {
     private void queueColdTaskProgress(Player player, UUID uuid, String name, Map<String, Integer> increments) {
         var session = AuthAccess.snapshot(uuid);
         if (!active || !session.admitted()) return;
-        LocalDate sharedDay = repository.sharedProgress() ? LocalDate.now() : null;
+        LocalDate sharedDay = BuildEdition.CROSS_SERVER_INCLUDED && repository.sharedProgress() ? LocalDate.now() : null;
         var selected = coldTaskLoads.compute(uuid, (ignored, current) -> {
             if (!active) return null;
-            if (current != null && (sharedDay != null
+            if (current != null && (BuildEdition.CROSS_SERVER_INCLUDED && sharedDay != null
                     || current.player == player && sameTaskSession(current.session, session))) {
                 synchronized (current) {
                     current.add(increments, sharedDay);
@@ -887,10 +894,13 @@ public final class BattlePassService {
             load.scheduled = true;
         }
         try {
-            if (repository.sharedProgress()) laterAsync(() -> finishSharedTaskLoad(uuid, load), delay);
-            else async(() -> finishColdTaskLoad(uuid, load));
+            if (BuildEdition.CROSS_SERVER_INCLUDED && repository.sharedProgress()) {
+                laterAsync(() -> finishSharedTaskLoad(uuid, load), delay);
+            } else {
+                async(() -> finishColdTaskLoad(uuid, load));
+            }
         } catch (RuntimeException | LinkageError failure) {
-            if (repository.sharedProgress()) {
+            if (BuildEdition.CROSS_SERVER_INCLUDED && repository.sharedProgress()) {
                 synchronized (load) { load.scheduled = false; }
             } else {
                 coldTaskLoads.remove(uuid, load);
@@ -900,6 +910,7 @@ public final class BattlePassService {
     }
 
     private void finishSharedTaskLoad(UUID uuid, ColdTaskLoad load) {
+        if (!BuildEdition.CROSS_SERVER_INCLUDED) return;
         long nextDelay = SHARED_TASK_BATCH_TICKS;
         try {
             persistSharedTaskLoad(uuid, load);
@@ -919,6 +930,7 @@ public final class BattlePassService {
     }
 
     private void persistSharedTaskLoad(UUID uuid, ColdTaskLoad load) throws SQLException {
+        if (!BuildEdition.CROSS_SERVER_INCLUDED) return;
         SharedTaskBatch batch;
         synchronized (load) {
             if (load.inFlight == null && !load.sharedIncrements.isEmpty()) {
@@ -949,6 +961,7 @@ public final class BattlePassService {
     }
 
     private void flushSharedTaskLoads() throws SQLException {
+        if (!BuildEdition.CROSS_SERVER_INCLUDED) return;
         SQLException pending = null;
         for (var entry : List.copyOf(coldTaskLoads.entrySet())) {
             try {
@@ -1074,10 +1087,13 @@ public final class BattlePassService {
                     if (repository.isSeasonSettled(season)) return null;
                     if (!cachedProgress.containsKey(uuid)) getProgress(uuid);
                     if (!cachedProgress.containsKey(uuid)) throw new SQLException("Player progress is not ready");
-                    if (repository.sharedProgress() && !assignmentScoped && repository.receivedAuthFact(uuid, season, baseFact)) {
+                    if (BuildEdition.CROSS_SERVER_INCLUDED && repository.sharedProgress()
+                        && !assignmentScoped && repository.receivedAuthFact(uuid, season, baseFact)) {
                         return null;
                     }
-                    if (repository.sharedProgress() || !cachedInstances.containsKey(uuid)) getTaskInstances(uuid);
+                    if ((BuildEdition.CROSS_SERVER_INCLUDED && repository.sharedProgress()) || !cachedInstances.containsKey(uuid)) {
+                        getTaskInstances(uuid);
+                    }
                     reconcileAuthWrites(uuid, season);
                     String fact = baseFact;
                     if (assignmentScoped) {
@@ -1088,12 +1104,13 @@ public final class BattlePassService {
                         if (instance == null) return null;
                         fact = authReceiptId(receiptPrefix + "assignment/" + instance.instanceId() + "/" + eventId);
                     }
-                    if ((!repository.sharedProgress() || assignmentScoped) && repository.receivedAuthFact(uuid,season,fact)) return null;
+                    if ((!BuildEdition.CROSS_SERVER_INCLUDED || !repository.sharedProgress() || assignmentScoped)
+                        && repository.receivedAuthFact(uuid, season, fact)) return null;
                     if (!assignmentScoped) resetPeriods(uuid,true,true);
                     AuthProjection projection=projectAuthFact(uuid,task,increment,businessDate);
                     try {
                         repository.saveAuthFact(fact,projection.progress(),projection.tasks(),!projection.deltas().isEmpty());
-                        if (repository.sharedProgress()) {
+                        if (BuildEdition.CROSS_SERVER_INCLUDED && repository.sharedProgress()) {
                             if (!projection.deltas().isEmpty()) {
                                 synchronized (playerLock(uuid)) {
                                     cachedProgress.put(uuid, projection.progress());
@@ -1104,7 +1121,7 @@ public final class BattlePassService {
                             applyAuthDeltas(uuid, projection.deltas());
                         }
                     } catch(SQLException | RuntimeException e) {
-                        if (!repository.sharedProgress()) {
+                        if (!BuildEdition.CROSS_SERVER_INCLUDED || !repository.sharedProgress()) {
                             pendingAuthApply.computeIfAbsent(uuid, key -> new HashMap<>()).put(fact, projection.deltas());
                             uncertainAuthWrites.add(uuid);
                         }
@@ -1282,7 +1299,7 @@ public final class BattlePassService {
     }
 
     private BattlePassPlayerProgress rewardProgress(Player player) throws SQLException {
-        if (!repository.sharedProgress()) return getProgress(player);
+        if (!BuildEdition.CROSS_SERVER_INCLUDED || !repository.sharedProgress()) return getProgress(player);
         return repository.loadProgress(player.getUniqueId(), configuration.season().seasonId());
     }
 
@@ -1362,7 +1379,7 @@ public final class BattlePassService {
     }
 
     void flushProgressForSettlement() throws SQLException {
-        if (repository.sharedProgress()) flushSharedTaskLoads();
+        if (BuildEdition.CROSS_SERVER_INCLUDED && repository.sharedProgress()) flushSharedTaskLoads();
         for (UUID player : List.copyOf(cachedProgress.keySet())) {
             repository.withPlayerWrite(player, () -> {
                 if (failedLoads.contains(player)) throw new SQLException("BattlePass progress unavailable for " + player);
@@ -1451,7 +1468,7 @@ public final class BattlePassService {
 
     /** Caller holds the repository write fence. The game thread can update the cache during JDBC work. */
     private void savePlayerStateLocked(UUID uuid) throws SQLException {
-        if (repository.sharedProgress() && !ownsSharedProgress(uuid)) {
+        if (BuildEdition.CROSS_SERVER_INCLUDED && repository.sharedProgress() && !ownsSharedProgress(uuid)) {
             if (dirtyPlayers.contains(uuid) || dirtyInstances.containsKey(uuid) || dirtyPeriods.containsKey(uuid)) {
                 throw new SQLException("MySQL battle pass progress requires an authoritative transaction");
             }
@@ -1728,7 +1745,7 @@ public final class BattlePassService {
     private void resetPeriods(UUID playerUuid, boolean requestedDaily, boolean requestedWeekly) throws SQLException {
         withAuthoritativeProgress(playerUuid, () -> {
             if (failedLoads.contains(playerUuid)) throw new SQLException("Player battle pass data is not ready");
-            if (repository.sharedProgress()) getTaskInstances(playerUuid);
+            if (BuildEdition.CROSS_SERVER_INCLUDED && repository.sharedProgress()) getTaskInstances(playerUuid);
             if (uncertainAuthWrites.contains(playerUuid) || dirtyPeriods.containsKey(playerUuid)) {
                 savePlayerStateLocked(playerUuid);
             }

@@ -25,6 +25,7 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
 import org.jetbrains.annotations.Nullable;
+import xuanmo.arcartxsuite.api.BuildEdition;
 import xuanmo.arcartxsuite.api.auth.AuthAccess;
 import xuanmo.arcartxsuite.api.auth.AuthSnapshot;
 import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI;
@@ -592,6 +593,7 @@ public class PlayerShopService {
 
 
     private void publishCrossServer(String message) {
+        if (!BuildEdition.CROSS_SERVER_INCLUDED) return;
         if (crossServerPublisher != null && message != null && !message.isBlank()) {
             crossServerPublisher.accept(message);
         }

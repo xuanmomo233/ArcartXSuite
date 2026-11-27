@@ -18,6 +18,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import xuanmo.arcartxsuite.api.BuildEdition;
 import xuanmo.arcartxsuite.api.scheduler.ModuleExecutor;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.RejectedExecutionException;
@@ -194,7 +195,7 @@ public final class ChatService implements Listener {
         this.messages = messages;
         this.vanillaItemNameBridge = vanillaItemNameBridge;
         this.contentModerator = contentModerator != null ? contentModerator : new NoopContentModerator();
-        this.guardRemoteIgnores = repository.supportsIgnoreGuards();
+        this.guardRemoteIgnores = BuildEdition.CROSS_SERVER_INCLUDED && repository.supportsIgnoreGuards();
         this.publicDelivery = new ChatDeliveryQueue(task -> Bukkit.getScheduler().runTask(plugin, task),
             task -> Bukkit.getScheduler().runTaskLater(plugin, task, 10),
             deliveryPolicyVersion::get, failure -> logger.log(java.util.logging.Level.WARNING, "聊天投递失败", failure),
@@ -464,7 +465,7 @@ public final class ChatService implements Listener {
 
     public void start(@org.jetbrains.annotations.Nullable String initializedNetworkId) throws Exception {
         networkId = initializedNetworkId;
-        if (crossServerAllowed()) {
+        if (BuildEdition.CROSS_SERVER_INCLUDED && crossServerAllowed()) {
             if (networkId == null) {
                 logger.warning("Chat 跨服需要各节点共用同一 MySQL 数据库，本节点保持本地聊天。");
             } else {
@@ -577,12 +578,13 @@ public final class ChatService implements Listener {
     }
 
     public boolean crossServerActive() {
+        if (!BuildEdition.CROSS_SERVER_INCLUDED) return false;
         var channel = crossServerChannel;
         return crossServerAllowed() && (chatRelay != null || channel != null && channel.isActive());
     }
 
     private boolean crossServerAllowed() {
-        return !isStopping() && crossServerAuthorization.getAsBoolean() && configuration.crossServer().enabled();
+        return BuildEdition.CROSS_SERVER_INCLUDED && !isStopping() && crossServerAuthorization.getAsBoolean() && configuration.crossServer().enabled();
     }
 
     public List<String> channelIds() {
@@ -1618,6 +1620,7 @@ public final class ChatService implements Listener {
     }
 
     private CompletionStage<Boolean> handleRemotePayload(String payload, String sourceNode, long timestamp) {
+        if (!BuildEdition.CROSS_SERVER_INCLUDED) return RELAY_HANDLED;
         if (payload == null || networkId == null || !payload.startsWith(networkId + "|")) {
             return RELAY_HANDLED;
         }
@@ -1625,6 +1628,7 @@ public final class ChatService implements Listener {
     }
 
     private CompletionStage<Boolean> handleRelayPayload(String payload, String sourceNode, long timestamp) {
+        if (!BuildEdition.CROSS_SERVER_INCLUDED) return RELAY_HANDLED;
         if (!crossServerAllowed()) return CompletableFuture.completedFuture(false);
         if ("axs_chat_policy".equals(payload)) {
             deliveryPolicyVersion.incrementAndGet();
@@ -1644,6 +1648,7 @@ public final class ChatService implements Listener {
     }
 
     private CompletionStage<Boolean> handleRemoteChat(String payload, String sourceNode, long timestamp) {
+        if (!BuildEdition.CROSS_SERVER_INCLUDED) return RELAY_HANDLED;
         if (!publicDelivery.hasRoom()) return null;
         ChatEnvelopeCodec.Delivery delivery;
         try {
@@ -1657,6 +1662,7 @@ public final class ChatService implements Listener {
     }
 
     private CompletionStage<Boolean> handleRemoteModeration(UUID id, String sourceNode) {
+        if (!BuildEdition.CROSS_SERVER_INCLUDED) return RELAY_HANDLED;
         if (id == null) return RELAY_HANDLED;
         String key = "mute:" + id + ":" + sourceNode;
         if (processedEnvelopeKeys.containsKey(key)) return RELAY_HANDLED;
@@ -1686,6 +1692,7 @@ public final class ChatService implements Listener {
     }
 
     private void applyRemoteModeration(RemoteModeration result) {
+        if (!BuildEdition.CROSS_SERVER_INCLUDED) return;
         ChatModerationReceipt receipt = result.receipt();
         if (Bukkit.getPlayer(receipt.playerId()) == null) return;
         ChatMuteRecord active = result.active();
@@ -1703,6 +1710,7 @@ public final class ChatService implements Listener {
 
     private CompletionStage<Boolean> handleRemoteEnvelope(ChatEnvelope envelope, Set<UUID> originRecipients,
                                                             long timestamp) {
+        if (!BuildEdition.CROSS_SERVER_INCLUDED) return RELAY_HANDLED;
         if (envelope == null || processedEnvelopeKeys.containsKey(envelope.dedupeKey())) return RELAY_HANDLED;
         CompletableFuture<Boolean> pending = remoteInFlight.get(envelope.dedupeKey());
         if (pending != null) return pending;
@@ -1730,6 +1738,7 @@ public final class ChatService implements Listener {
 
     private CompletionStage<Boolean> queueRemotePrivate(ChatEnvelope envelope, ChatChannelDefinition channel,
                                                          UUID senderId, Set<UUID> recoveryAudience) {
+        if (!BuildEdition.CROSS_SERVER_INCLUDED) return RELAY_HANDLED;
         UUID targetId = parseUuid(envelope.targetUuid());
         if (targetId == null || (recoveryAudience != null && !recoveryAudience.contains(targetId))
                 || !canReceiveChannel(channel, Bukkit.getPlayer(targetId))) return RELAY_HANDLED;
@@ -1757,6 +1766,7 @@ public final class ChatService implements Listener {
 
     private CompletionStage<Boolean> queueRemoteDelivery(ChatEnvelope envelope, ChatChannelDefinition channel,
             UUID senderId, List<ChatConnection> audience, Consumer<Map<UUID, RouteState>> deliver) {
+        if (!BuildEdition.CROSS_SERVER_INCLUDED) return RELAY_HANDLED;
         List<UUID> ids = audience.stream().map(connection -> connection.snapshot().playerId()).toList();
         String key = envelope.dedupeKey();
         var receipt = new CompletableFuture<Boolean>();
@@ -2547,6 +2557,7 @@ public final class ChatService implements Listener {
 
     /** 向跨服通道发布自定义负载（红包等非聊天信封消息）。 */
     void publishCrossServer(String payload) {
+        if (!BuildEdition.CROSS_SERVER_INCLUDED) return;
         if (!crossServerAllowed()) return;
         ChatRelay relay = chatRelay;
         if (relay != null && ChatRelay.fits(payload)) {
@@ -2570,6 +2581,7 @@ public final class ChatService implements Listener {
 
     private void publishChatEnvelope(Player sender, ChatEnvelope envelope, Set<UUID> originRecipients,
                                      Runnable acceptedAction) {
+        if (!BuildEdition.CROSS_SERVER_INCLUDED) return;
         CrossServerChannel channel = crossServerChannel;
         if (!crossServerAllowed() || channel == null || networkId == null) {
             sender.sendMessage(PREFIX + ChatColor.RED + message("result.relay-unavailable"));

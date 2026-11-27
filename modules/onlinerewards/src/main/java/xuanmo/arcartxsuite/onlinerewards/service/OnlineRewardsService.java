@@ -47,6 +47,7 @@ import java.util.function.BiConsumer;
 import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 import org.bukkit.plugin.java.JavaPlugin;
+import xuanmo.arcartxsuite.api.BuildEdition;
 import xuanmo.arcartxsuite.api.capability.ChatCardSendable;
 import xuanmo.arcartxsuite.api.capability.EventBusCapability;
 import xuanmo.arcartxsuite.api.message.MessageProvider;
@@ -341,13 +342,15 @@ public class OnlineRewardsService implements Listener {
             leaderboardRefreshTask = Bukkit.getScheduler().runTaskTimer(plugin, this::refreshLeaderboardSnapshots, 100L, 6000L);
         }
         registerTimeBasedRewards();
-        crossServerChannel = crossServer.openChannel(
-            "onlinerewards",
-            configuration.crossServer(),
-            delivery -> handleCrossServerMessage(delivery.payload())
-        );
-        if (crossServerChannel.isActive()) {
-            this.logger.fine("OnlineRewards 跨服通知已启用。");
+        if (BuildEdition.CROSS_SERVER_INCLUDED) {
+            crossServerChannel = crossServer.openChannel(
+                "onlinerewards",
+                configuration.crossServer(),
+                delivery -> handleCrossServerMessage(delivery.payload())
+            );
+            if (crossServerChannel.isActive()) {
+                this.logger.fine("OnlineRewards 跨服通知已启用。");
+            }
         }
     }
 
@@ -386,7 +389,7 @@ public class OnlineRewardsService implements Listener {
             task.cancel();
         }
         timeBasedRewardTasks.clear();
-        if (crossServerChannel != null) {
+        if (BuildEdition.CROSS_SERVER_INCLUDED && crossServerChannel != null) {
             crossServerChannel.close();
             crossServerChannel = null;
         }
@@ -503,7 +506,7 @@ public class OnlineRewardsService implements Listener {
      * @return 跨服启用返回 {@code true}
      */
     public boolean crossServerActive() {
-        return crossServerChannel != null && crossServerChannel.isActive();
+        return BuildEdition.CROSS_SERVER_INCLUDED && crossServerChannel != null && crossServerChannel.isActive();
     }
 
     /**
@@ -1549,12 +1552,13 @@ public class OnlineRewardsService implements Listener {
     private void publishRefresh(UUID playerUuid) {
         if (playerUuid == null) return;
         placeholderReads.invalidate(playerUuid, currentPeriodContext().date());
-        if (crossServerChannel != null && crossServerChannel.isActive()) {
+        if (BuildEdition.CROSS_SERVER_INCLUDED && crossServerChannel != null && crossServerChannel.isActive()) {
             crossServerChannel.publish("refresh:" + playerUuid);
         }
     }
 
     private void handleCrossServerMessage(String message) {
+        if (!BuildEdition.CROSS_SERVER_INCLUDED) return;
         if (!active) return;
         if (configuration.debug()) {
             this.logger.info("收到 OnlineRewards 跨服消息: " + message);

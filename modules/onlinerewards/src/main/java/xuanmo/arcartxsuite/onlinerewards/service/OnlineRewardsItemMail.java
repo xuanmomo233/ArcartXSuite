@@ -7,6 +7,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.function.Supplier;
 import org.bukkit.inventory.ItemStack;
+import xuanmo.arcartxsuite.api.BuildEdition;
 import xuanmo.arcartxsuite.api.mail.AxsMailRequest;
 import xuanmo.arcartxsuite.api.mail.AxsMailService;
 import xuanmo.arcartxsuite.onlinerewards.storage.OnlineRewardsRepository.Delivery;
@@ -33,7 +34,7 @@ final class OnlineRewardsItemMail {
 
     boolean canRecoverAcrossNodes() {
         // In this mode every send also requires Mail to use the shared host database.
-        return sharedMysql;
+        return BuildEdition.CROSS_SERVER_INCLUDED && sharedMysql;
     }
 
     boolean canRetryPreset() {

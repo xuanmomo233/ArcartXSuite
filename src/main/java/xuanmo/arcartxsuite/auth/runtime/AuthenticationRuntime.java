@@ -44,13 +44,13 @@ public final class AuthenticationRuntime implements HostAuthentication, Listener
     private final Terms terms;
     private final String realm;
     private final xuanmo.arcartxsuite.auth.minecraft.LocalHandshakeClient nativeGateway;
-    private final List<xuanmo.arcartxsuite.auth.minecraft.ProxyProofs.Trust> trustedProxies;
+    private final List<AuthenticationSettings.TrustedProxy> trustedProxies;
     private final String audience;
     private final boolean passwordAllowed;
     private final boolean microsoftOnline;
     private final boolean signedProxy;
     private final BooleanSupplier suiteProxyAllowed;
-    private ProxyProofIngress proxyIngress;
+    private ProxyAdmissionChannel proxyIngress;
     private final boolean requireBinding;
     private final Object bindingLock = new Object();
     private final Object invalidationLock = new Object();
@@ -113,17 +113,17 @@ public final class AuthenticationRuntime implements HostAuthentication, Listener
     }
 
     private boolean admissionEntitled() {
-        return !signedProxy || suiteProxyAllowed.getAsBoolean();
+        return !signedProxy || (SignedProxyEdition.supported() && suiteProxyAllowed.getAsBoolean());
     }
 
     boolean proxyAvailable() {
-        return active && signedProxy && suiteProxyAllowed.getAsBoolean();
+        return active && signedProxy && admissionEntitled();
     }
 
     void refreshProxyIngress() {
         if (proxyAvailable()) {
             if (proxyIngress == null) {
-                proxyIngress = new ProxyProofIngress(plugin, this);
+                proxyIngress = SignedProxyEdition.channel(plugin, this);
                 proxyIngress.start();
             }
         } else if (proxyIngress != null) {
@@ -292,12 +292,9 @@ public final class AuthenticationRuntime implements HostAuthentication, Listener
         if(trustedProxies.isEmpty() || state.identityVerified() || busy.contains(player.getUniqueId())
                 || state.stage()==AuthSnapshot.Stage.LOADING || state.connectionId()==null) return null;
         Connection c=connections.get(player.getUniqueId());
-        var payload=new com.google.gson.JsonObject(); payload.addProperty("type","challenge");
-        payload.addProperty("profile",player.getUniqueId().toString()); payload.addProperty("name",player.getName());
-        payload.addProperty("connection",state.connectionId().toString()); payload.addProperty("challenge",c.session().challengeId().toString());
-        payload.addProperty("realm",realm); payload.addProperty("audience",audience);
         c.session().note(new AuthSession.Operation(state.connectionId(),state.generation()),"WAITING_PROXY");
-        return payload.toString();
+        return SignedProxyEdition.challenge(player.getUniqueId(), player.getName(), state.connectionId(),
+            c.session().challengeId(), realm, audience);
     }
     void acceptProxyProof(Player player,UUID connection,String envelope) {
         if (!proxyAvailable()) return;
@@ -306,12 +303,13 @@ public final class AuthenticationRuntime implements HostAuthentication, Listener
         String name=player.getName(); UUID challenge=c.session().challengeId();
         submit(c,()->{
             if (!proxyAvailable()) return new IdentityVerification(null,"",Set.of(),PROXY_LICENSE_REQUIRED);
-            xuanmo.arcartxsuite.auth.minecraft.ProxyProofs.Identity identity;
-            try { identity=xuanmo.arcartxsuite.auth.minecraft.ProxyProofs.verify(envelope,trustedProxies,uuid,name,
-                new xuanmo.arcartxsuite.auth.minecraft.ProxyProofs.Target(realm,audience,connection,challenge),System.currentTimeMillis()); }
+            String provider;
+            try { provider=SignedProxyEdition.verifyProvider(envelope, trustedProxies, uuid, name, realm, audience,
+                connection, challenge); }
             catch(Exception e) { return new IdentityVerification(null,"",Set.of(),"SIGNED_PROOF_REJECTED"); }
+            if (provider == null) return new IdentityVerification(null,"",Set.of(),"SIGNED_PROOF_REJECTED");
             if (!proxyAvailable()) return new IdentityVerification(null,"",Set.of(),PROXY_LICENSE_REQUIRED);
-            return resolveTransportIdentity(uuid,name,identity.provider());
+            return resolveTransportIdentity(uuid,name,provider);
         },identity->{
             var state=c.session().snapshot(); var operation=new AuthSession.Operation(connection,state.generation());
             if(identity.account()==null) { c.session().note(operation,identity.error()); return result(uuid,false,identity.error()); }

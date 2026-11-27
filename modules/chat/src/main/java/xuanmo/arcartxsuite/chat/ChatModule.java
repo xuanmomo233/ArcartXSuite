@@ -12,6 +12,7 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.Plugin;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import xuanmo.arcartxsuite.api.BuildEdition;
 import xuanmo.arcartxsuite.api.AbstractAXSModule;
 import xuanmo.arcartxsuite.api.config.SyncPolicy;
 import xuanmo.arcartxsuite.api.config.ValidationRule;
@@ -134,7 +135,7 @@ public final class ChatModule extends AbstractAXSModule implements ModuleCommand
         networkIdentity = identity;
         return storageScope.initialize(() -> {
             chatRepo.initialize();
-            identity.complete(configuration.crossServer().enabled() && advancedCrossServerOrchestrationAllowed()
+            identity.complete(BuildEdition.CROSS_SERVER_INCLUDED && configuration.crossServer().enabled() && advancedCrossServerOrchestrationAllowed()
                 ? chatRepo.networkId().orElse(null) : null);
         });
     }

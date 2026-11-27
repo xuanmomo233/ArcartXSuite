@@ -14,6 +14,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.sqlite.SQLiteDataSource;
+import xuanmo.arcartxsuite.api.BuildEdition;
 import xuanmo.arcartxsuite.api.item.PendingRewardService;
 import xuanmo.arcartxsuite.api.item.PendingRewardService.PendingReward;
 import xuanmo.arcartxsuite.api.script.AriaBridge;
@@ -327,10 +328,11 @@ class FishingRepositoryTest {
         repository.initialize();
 
         FishingCatchRecord local = new FishingCatchRecord(UUID.randomUUID(), player, "fish", "鲤鱼:春季", "common", 5, true, 2);
-        FishingCatchRecord remote = FishingCatchRecord.decodeCrossServer(local.encodeCrossServer(), 2);
-        assertEquals(local, remote);
+        FishingCatchRecord replay = BuildEdition.CROSS_SERVER_INCLUDED
+            ? FishingCatchRecord.decodeCrossServer(local.encodeCrossServer(), 2) : local;
+        assertEquals(local, replay);
         repository.saveCatchRecord(local);
-        repository.saveCatchRecord(remote);
+        repository.saveCatchRecord(replay);
 
         List<FishingCatchRecord> stored = repository.loadCatchRecords(player, 10);
         assertEquals(1, stored.size());

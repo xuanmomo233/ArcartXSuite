@@ -33,6 +33,7 @@ import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
 import org.jetbrains.annotations.Nullable;
+import xuanmo.arcartxsuite.api.BuildEdition;
 import xuanmo.arcartxsuite.api.auth.AuthAccess;
 import xuanmo.arcartxsuite.api.auth.AuthSnapshot;
 import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI;
@@ -119,6 +120,7 @@ public class AuctionService {
             java.util.function.Function<String, java.util.concurrent.CompletionStage<Boolean>> publish) {}
 
     private boolean settlementRefreshAllowed() {
+        if (!BuildEdition.CROSS_SERVER_INCLUDED) return false;
         var refresh = settlementRefresh;
         return refresh != null && refresh.authorized().getAsBoolean();
     }
@@ -396,7 +398,7 @@ public class AuctionService {
     private void refreshBidSurfaces(AuctionBidOrder bid) {
         try {
             if (redisCache.isAvailable()) redisCache.invalidateByPrefix("market:listings:");
-            publishCrossServer("BID_PLACED:" + bid.expected().getId() + ":" + bid.amount() + ":" + bid.order().player());
+            if (BuildEdition.CROSS_SERVER_INCLUDED) publishCrossServer("BID_PLACED:" + bid.expected().getId() + ":" + bid.amount() + ":" + bid.order().player());
         } catch (RuntimeException failure) {
             logger.log(Level.WARNING, "[Auction] 竞价已提交，跨服刷新失败 #" + bid.expected().getId(), failure);
         }
@@ -768,7 +770,7 @@ public class AuctionService {
                 boolean refresh = !notice.refreshPending();
                 AuctionEvent observed = null;
                 var delivery = settlementRefresh;
-                if (!refresh && delivery != null && delivery.authorized().getAsBoolean()) {
+                if (BuildEdition.CROSS_SERVER_INCLUDED && !refresh && delivery != null && delivery.authorized().getAsBoolean()) {
                     java.util.concurrent.CompletableFuture<Boolean> submitted = null;
                     try {
                         submitted = delivery.publish().apply(notice.refreshPayload()).toCompletableFuture();
@@ -937,6 +939,7 @@ public class AuctionService {
      */
 
     private void publishCrossServer(String message) {
+        if (!BuildEdition.CROSS_SERVER_INCLUDED) return;
         if (crossServerPublisher != null && message != null && !message.isBlank()) {
             crossServerPublisher.accept(message);
         }

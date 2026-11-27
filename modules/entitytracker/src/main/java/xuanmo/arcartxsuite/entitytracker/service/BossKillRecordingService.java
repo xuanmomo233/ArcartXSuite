@@ -1,5 +1,7 @@
 package xuanmo.arcartxsuite.entitytracker.service;
 
+import xuanmo.arcartxsuite.api.BuildEdition;
+
 import com.google.gson.*;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -200,8 +202,8 @@ public final class BossKillRecordingService implements Listener {
         }
         catch(SQLException|RuntimeException failure){logger.log(Level.WARNING,"掉落仍由分配记录持有，等待宿主接收: "+capture.key(),failure);scheduleRecovery();}
         finally { scheduleFlush(); }
-        if (cache != null && stored.created()) cache.requestKillRefresh();
-        if(cross!=null) {
+        if (BuildEdition.CROSS_SERVER_INCLUDED && cache != null && stored.created()) cache.requestKillRefresh();
+        if(BuildEdition.CROSS_SERVER_INCLUDED&&cross!=null) {
             cross.publishSettlement(capture.settlement(),capture.record());
             cross.publishKillRecord(capture.record());
         }
@@ -420,7 +422,7 @@ public final class BossKillRecordingService implements Listener {
     }
 
     public void applyRemoteKillRecord(BossKillRecord record) throws SQLException {
-        if (record == null) return;
+        if (!BuildEdition.CROSS_SERVER_INCLUDED || record == null) return;
         var stored = store.commit(record.getSettlementKey(), record, null, List.of(), false, DropAllocationSettings.disabled());
         if (cache != null && stored.created()) cache.requestKillRefresh();
     }
@@ -434,7 +436,7 @@ public final class BossKillRecordingService implements Listener {
         if(closed)return;
         try {
             int deleted = killRecords.deleteExpiredBatch(cutoff, 256);
-            if (deleted > 0 && cache != null) cache.requestKillRefresh();
+            if (BuildEdition.CROSS_SERVER_INCLUDED && deleted > 0 && cache != null) cache.requestKillRefresh();
             if(deleted==256&&!closed) {
                 try{worker.execute(()->purgeBatch(cutoff));}
                 catch(RejectedExecutionException retiring){if(!closed)throw retiring;}

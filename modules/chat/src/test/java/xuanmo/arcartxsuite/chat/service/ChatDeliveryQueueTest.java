@@ -19,11 +19,13 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
 import xuanmo.arcartxsuite.chat.storage.ChatRepository.GuardedRoutes;
+import xuanmo.arcartxsuite.api.BuildEdition;
 import xuanmo.arcartxsuite.chat.storage.ChatRepository.RouteState;
 
 class ChatDeliveryQueueTest {
     @Test
     void oneGuardCoversTheWholeOrderedRemoteBatchUntilCallbacksFinish() throws Exception {
+        org.junit.jupiter.api.Assumptions.assumeTrue(BuildEdition.CROSS_SERVER_INCLUDED);
         var main = new LinkedBlockingQueue<Runnable>();
         var received = new ArrayList<String>();
         var locks = new AtomicInteger();
@@ -55,6 +57,7 @@ class ChatDeliveryQueueTest {
 
     @Test
     void guardedCallbackCannotSendAfterItsUnstartedLeaseWasCancelled() throws Exception {
+        org.junit.jupiter.api.Assumptions.assumeTrue(BuildEdition.CROSS_SERVER_INCLUDED);
         var main = new LinkedBlockingQueue<Runnable>();
         var retry = new LinkedBlockingQueue<Runnable>();
         var held = new AtomicBoolean();
@@ -75,6 +78,7 @@ class ChatDeliveryQueueTest {
 
     @Test
     void revokedRemoteRouteDoesNotAcquireLocksOrBlockLocalMessages() throws Exception {
+        org.junit.jupiter.api.Assumptions.assumeTrue(BuildEdition.CROSS_SERVER_INCLUDED);
         var main = new LinkedBlockingQueue<Runnable>();
         var authorized = new AtomicBoolean(true);
         var received = new ArrayList<String>();
@@ -134,6 +138,7 @@ class ChatDeliveryQueueTest {
 
     @Test
     void retriesThrowingRemoteCallbackBeforeReleasingAnyReadyLaterMessage() throws Exception {
+        org.junit.jupiter.api.Assumptions.assumeTrue(BuildEdition.CROSS_SERVER_INCLUDED);
         var main = new LinkedBlockingQueue<Runnable>();
         var retry = new LinkedBlockingQueue<Runnable>();
         var received = new ArrayList<String>();
@@ -158,6 +163,7 @@ class ChatDeliveryQueueTest {
 
     @Test
     void retriesTheUnsentRemoteHeadBeforeAReadyTailAndAbandonsOnClose() throws Exception {
+        org.junit.jupiter.api.Assumptions.assumeTrue(BuildEdition.CROSS_SERVER_INCLUDED);
         var main = new LinkedBlockingQueue<Runnable>();
         var retry = new LinkedBlockingQueue<Runnable>();
         var received = new ArrayList<String>();
@@ -188,6 +194,7 @@ class ChatDeliveryQueueTest {
 
     @Test
     void checksSharedPolicyAgainAtHeadEvenWhenNoNotificationArrives() throws Exception {
+        org.junit.jupiter.api.Assumptions.assumeTrue(BuildEdition.CROSS_SERVER_INCLUDED);
         var main = new LinkedBlockingQueue<Runnable>();
         var retry = new LinkedBlockingQueue<Runnable>();
         var ignored = new AtomicBoolean();

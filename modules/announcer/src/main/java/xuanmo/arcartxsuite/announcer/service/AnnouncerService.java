@@ -26,6 +26,7 @@ import xuanmo.arcartxsuite.announcer.config.AnnouncerEntry;
 import xuanmo.arcartxsuite.announcer.config.AnnouncerModuleConfiguration;
 import xuanmo.arcartxsuite.announcer.transport.AnnouncerEnvelope;
 import xuanmo.arcartxsuite.announcer.transport.AnnouncerEnvelopeCodec;
+import xuanmo.arcartxsuite.api.BuildEdition;
 import xuanmo.arcartxsuite.api.capability.QQBotBroadcastable;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerAPI;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerChannel;
@@ -109,11 +110,13 @@ public final class AnnouncerService implements Listener {
     }
 
     public void start() {
-        crossServerChannel = crossServer.openChannel(
-            "announcer",
-            configuration.crossServer(),
-            delivery -> handleRemotePayload(delivery.payload())
-        );
+        if (BuildEdition.CROSS_SERVER_INCLUDED) {
+            crossServerChannel = crossServer.openChannel(
+                "announcer",
+                configuration.crossServer(),
+                delivery -> handleRemotePayload(delivery.payload())
+            );
+        }
         Bukkit.getPluginManager().registerEvents(this, plugin);
         broadcastTask = Bukkit.getScheduler().runTaskTimer(
             plugin,
@@ -130,7 +133,7 @@ public final class AnnouncerService implements Listener {
             immediateTask = null;
             immediateBroadcasts.clear();
         }
-        if (crossServerChannel != null) {
+        if (BuildEdition.CROSS_SERVER_INCLUDED && crossServerChannel != null) {
             crossServerChannel.close();
             crossServerChannel = null;
         }
@@ -277,7 +280,7 @@ public final class AnnouncerService implements Listener {
             droppedManualBroadcasts.incrementAndGet();
             return false;
         }
-        if (forward) forwardCrossServer(text, false);
+        if (BuildEdition.CROSS_SERVER_INCLUDED && forward) forwardCrossServer(text, false);
         return true;
     }
 
@@ -308,7 +311,7 @@ public final class AnnouncerService implements Listener {
     private void broadcastImmediately(ImmediateBroadcast broadcast) {
         String text = broadcast.text();
         broadcastManualDisplay(text);
-        if (broadcast.forward()) {
+        if (BuildEdition.CROSS_SERVER_INCLUDED && broadcast.forward()) {
             forwardCrossServer(text, true);
         }
     }
@@ -340,10 +343,11 @@ public final class AnnouncerService implements Listener {
     // ─── 跨服传输 ──────────────────────────────────────────────
 
     public boolean crossServerActive() {
-        return crossServerChannel != null && crossServerChannel.isActive();
+        return BuildEdition.CROSS_SERVER_INCLUDED && crossServerChannel != null && crossServerChannel.isActive();
     }
 
     private void handleRemotePayload(String payload) {
+        if (!BuildEdition.CROSS_SERVER_INCLUDED) return;
         if (payload == null || payload.isBlank()) {
             return;
         }
@@ -359,6 +363,7 @@ public final class AnnouncerService implements Listener {
      * 在主线程中调度本地展示，跳过自身节点和重复消息。
      */
     public void handleRemoteEnvelope(AnnouncerEnvelope envelope) {
+        if (!BuildEdition.CROSS_SERVER_INCLUDED) return;
         if (closed || envelope == null || envelope.text().isBlank()) return;
         if (crossServer.nodeId().equals(envelope.originNode())) return;
         String key = envelope.dedupeKey();
@@ -405,6 +410,7 @@ public final class AnnouncerService implements Listener {
     }
 
     private void forwardCrossServer(String text, boolean immediate) {
+        if (!BuildEdition.CROSS_SERVER_INCLUDED) return;
         CrossServerChannel channel = crossServerChannel;
         if (channel == null || !channel.isActive()) return;
         AnnouncerEnvelope envelope = new AnnouncerEnvelope(

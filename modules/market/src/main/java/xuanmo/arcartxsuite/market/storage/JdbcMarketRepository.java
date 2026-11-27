@@ -14,6 +14,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.sql.DataSource;
 import org.jetbrains.annotations.Nullable;
+import xuanmo.arcartxsuite.api.BuildEdition;
 import xuanmo.arcartxsuite.api.storage.AbstractModuleRepository;
 import xuanmo.arcartxsuite.api.storage.StorageDescriptor;
 import xuanmo.arcartxsuite.market.auction.AuctionBid;
@@ -128,7 +129,7 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
         tStockPolicies = prefix + "stock_policies";
         tShopReservations = prefix + "shop_order_reservations";
         tAuctionPublications = prefix + "auction_publications";
-        tAuctionRevision = prefix + "auction_revision";
+        if (BuildEdition.CROSS_SERVER_INCLUDED) tAuctionRevision = prefix + "auction_revision";
         tShopProfiles=prefix+"player_shop_profiles";
         tShopFollows=prefix+"player_shop_follows";
         createTables(conn);
@@ -2282,10 +2283,12 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
                 + " item VARCHAR(255) NOT NULL, price DOUBLE NOT NULL, currency VARCHAR(64) NOT NULL, tax DOUBLE NOT NULL,"
                 + " buyer_name VARCHAR(64) NOT NULL, event_pending INTEGER NOT NULL, refresh_pending INTEGER NOT NULL,"
                 + " lease_until BIGINT NOT NULL, lease_token VARCHAR(36) NOT NULL)");
-            statement.executeUpdate("CREATE TABLE IF NOT EXISTS " + tAuctionRevision
-                + " (id INTEGER PRIMARY KEY, revision BIGINT NOT NULL)");
-            statement.executeUpdate("INSERT INTO " + tAuctionRevision + " (id,revision) VALUES (1,0)"
-                + (isMysql() ? " ON DUPLICATE KEY UPDATE id=id" : " ON CONFLICT(id) DO NOTHING"));
+            if (BuildEdition.CROSS_SERVER_INCLUDED) {
+                statement.executeUpdate("CREATE TABLE IF NOT EXISTS " + tAuctionRevision
+                    + " (id INTEGER PRIMARY KEY, revision BIGINT NOT NULL)");
+                statement.executeUpdate("INSERT INTO " + tAuctionRevision + " (id,revision) VALUES (1,0)"
+                    + (isMysql() ? " ON DUPLICATE KEY UPDATE id=id" : " ON CONFLICT(id) DO NOTHING"));
+            }
         }
         ensureManagementColumn(conn, tStockPolicies, "revision", "BIGINT NOT NULL DEFAULT 0");
         ensureManagementColumn(conn, tShopLimits, "quota_epoch", "VARCHAR(36) NOT NULL DEFAULT ''");
@@ -3199,15 +3202,16 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
                 insertHistory(conn, settlement.history(), receipt.id(), receipt.material());
                 for (var delivery : settlement.deliveries()) insertOperation(conn, delivery, false);
                 var publication = settlement.publication();
-                if (publication != null) {
+                boolean refreshPending = BuildEdition.CROSS_SERVER_INCLUDED && publication != null && publication.refreshPending();
+                if (publication != null && (publication.eventPending() || refreshPending)) {
                     execUpdate(conn, "INSERT INTO " + tAuctionPublications + " (id,listing_id,seller,buyer,item,price,"
                         + "currency,tax,buyer_name,event_pending,refresh_pending,lease_until,lease_token) VALUES (?,?,?,?,?,?,?,?,?,?,?,0,'')",
                         publication.id(), publication.listingId(), publication.seller().toString(),
                         publication.buyer() == null ? null : publication.buyer().toString(), publication.item(),
                         publication.price(), publication.currency(), publication.tax(), publication.buyerName(),
-                        publication.eventPending() ? 1 : 0, publication.refreshPending() ? 1 : 0);
+                        publication.eventPending() ? 1 : 0, refreshPending ? 1 : 0);
                 }
-                if (publication != null && publication.refreshPending()) {
+                if (BuildEdition.CROSS_SERVER_INCLUDED && refreshPending) {
                     execUpdate(conn, "UPDATE " + tAuctionRevision + " SET revision=revision+1 WHERE id=1");
                 }
                 conn.commit();
@@ -3221,6 +3225,7 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
 
     @Override
     public long auctionSettlementRevision() {
+        if (!BuildEdition.CROSS_SERVER_INCLUDED) return 0L;
         try (Connection conn = getConnection(); Statement query = conn.createStatement();
              ResultSet rows = query.executeQuery("SELECT revision FROM " + tAuctionRevision + " WHERE id=1")) {
             if (rows.next()) return rows.getLong(1);
@@ -3232,13 +3237,14 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
 
     @Override
     public List<AuctionPublication> claimAuctionPublications(String token, long now, int limit, boolean includeRefreshOnly) {
+        int claimRefreshOnly = BuildEdition.CROSS_SERVER_INCLUDED && includeRefreshOnly ? 1 : 0;
         var selected = new ArrayList<AuctionPublication>();
         try (Connection conn = getConnection(); PreparedStatement query = conn.prepareStatement(
             "SELECT p.*,o.created_at AS settled_at FROM " + tAuctionPublications + " p LEFT JOIN "
                 + tOperations + " o ON o.id=p.id WHERE p.lease_until<=? AND (?=1 OR p.event_pending<>0)"
                 + " ORDER BY p.lease_until,p.id LIMIT ?")) {
             query.setLong(1, now);
-            query.setInt(2, includeRefreshOnly ? 1 : 0);
+            query.setInt(2, claimRefreshOnly);
             query.setInt(3, limit);
             try (ResultSet rows = query.executeQuery()) {
                 while (rows.next()) selected.add(new AuctionPublication(rows.getString("id"), rows.getLong("listing_id"),
@@ -3251,7 +3257,7 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
             for (var entry : selected) {
                 if (execUpdate(conn, "UPDATE " + tAuctionPublications + " SET lease_token=?,lease_until=?"
                     + " WHERE id=? AND lease_until<=? AND (?=1 OR event_pending<>0)",
-                    token, now + 30_000, entry.id(), now, includeRefreshOnly ? 1 : 0) == 1) claimed.add(entry);
+                    token, now + 30_000, entry.id(), now, claimRefreshOnly) == 1) claimed.add(entry);
             }
             return claimed;
         } catch (SQLException exception) { throw new IllegalStateException("认领拍卖通知失败", exception); }

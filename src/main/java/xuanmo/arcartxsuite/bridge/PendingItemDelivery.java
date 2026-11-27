@@ -12,6 +12,8 @@ import java.nio.file.attribute.FileTime;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -26,6 +28,7 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.BiFunction;
 import java.util.function.Supplier;
@@ -38,6 +41,7 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
+import xuanmo.arcartxsuite.api.BuildEdition;
 import xuanmo.arcartxsuite.api.auth.AuthAccess;
 import xuanmo.arcartxsuite.api.auth.AuthSnapshot;
 import xuanmo.arcartxsuite.api.capability.WarehouseRewardDepositable;
@@ -60,6 +64,7 @@ final class PendingItemDelivery {
     private static final int PAGE = 32;
     private static final int MAX_STAGED = 64;
     private static final int MAX_WAITING_INVENTORY = 512;
+    private static final int LEGACY_PLAYERS_PER_SCAN = 8;
 
     private final JavaPlugin plugin;
     private final Logger logger;
@@ -84,12 +89,14 @@ final class PendingItemDelivery {
     private final HashSet<Save> localStages = new HashSet<>();
     private final AtomicBoolean applicationScheduled = new AtomicBoolean();
     private final AtomicBoolean scanQueued = new AtomicBoolean();
+    private final AtomicBoolean legacyScanQueued = new AtomicBoolean();
     private final LinkedHashSet<UUID> waitingInventory = new LinkedHashSet<>();
     private final LinkedHashMap<UUID, FileVersion> checked = new LinkedHashMap<>();
     private final BukkitTask timer;
     private volatile boolean closed;
     private String node;
     private String cursor = "";
+    private UUID legacyPlayerCursor;
     private long idleUntil;
 
     PendingItemDelivery(JavaPlugin plugin, Logger logger, Path playerData, PendingItemSaveStore store,
@@ -106,7 +113,7 @@ final class PendingItemDelivery {
         this.warehouseProvider = warehouseProvider;
         this.resolveItem = resolveItem;
         this.sharedHostStorage = store.sharedHostStorage();
-        this.timer = plugin.getServer().getScheduler().runTaskTimer(plugin, this::requestScan, 20L, 100L);
+        this.timer = plugin.getServer().getScheduler().runTaskTimer(plugin, this::tick, 20L, 100L);
     }
 
     void stage(Player player, AuthSnapshot auth, String claim, long claimedAt, List<PendingReward> rewards,
@@ -176,11 +183,7 @@ final class PendingItemDelivery {
         boolean staged = false;
         boolean scheduled = false;
         try {
-            String owner = !sharedHostStorage ? node() : switch (mode) {
-                case MAIL -> PendingItemSaveStore.SHARED_MAIL;
-                case WAREHOUSE -> PendingItemSaveStore.SHARED_WAREHOUSE;
-                default -> node();
-            };
+            String owner = routeOwner(mode);
             var save = new Save(auth.playerId(), owner, UUID.randomUUID().toString(), BOOT, mode,
                 items.stream().map(item -> item.reward().id()).toList());
             Map<Long, String> frozen = Map.of();
@@ -203,6 +206,14 @@ final class PendingItemDelivery {
             if (!staged) release.accept(items.stream().map(Prepared::reward).toList());
             if (!scheduled) staging.release();
         }
+    }
+
+    private String routeOwner(Mode mode) throws IOException {
+        if (BuildEdition.CROSS_SERVER_INCLUDED && sharedHostStorage) {
+            if (mode == Mode.MAIL) return PendingItemSaveStore.SHARED_MAIL;
+            if (mode == Mode.WAREHOUSE) return PendingItemSaveStore.SHARED_WAREHOUSE;
+        }
+        return node();
     }
 
     private boolean queueApplication(Save save, Runnable action) {
@@ -310,13 +321,18 @@ final class PendingItemDelivery {
         }
     }
 
-    private void recoverRouted(Save save, long now) throws SQLException {
+    private void recoverRouted(Save save, long now, BooleanSupplier eligible) throws SQLException {
         if (!staging.tryAcquire()) return;
         boolean queued = false;
         try {
             if (!store.claimRouted(save, now)) return;
             var rewards = store.loadRoutedRewards(save);
             queued = queueApplication(save, () -> {
+                if (!eligible.getAsBoolean()) {
+                    waitingForEvidence.add(save);
+                    requestScan();
+                    return;
+                }
                 try {
                     dispatchRouted(save, rewards.get(0).sourceModule(),
                         rewards.stream().map(reward -> resolveItem.apply(null, reward)).toList());
@@ -405,7 +421,7 @@ final class PendingItemDelivery {
         }
         for (Save save; (save = warehouseDeclines.peek()) != null; ) {
             if (availableMail() != null) {
-                if (store.routeWarehouseToMail(save, sharedHostStorage ? PendingItemSaveStore.SHARED_MAIL : node())) idleUntil = 0;
+                if (store.routeWarehouseToMail(save, routeOwner(Mode.MAIL))) idleUntil = 0;
             } else if (store.finish(save, Resolution.UNAPPLIED)) {
                 retryAfterWarehouseDecline(save.player());
             }
@@ -464,6 +480,68 @@ final class PendingItemDelivery {
         waitingInventory.remove(player);
     }
 
+    private void tick() {
+        requestScan();
+        if (!BuildEdition.CROSS_SERVER_INCLUDED && sharedHostStorage) requestLocalLegacyRecovery();
+    }
+
+    private record LegacyRecipient(Player player, AuthSnapshot admission) {
+        boolean currentAdmission() {
+            var current = AuthAccess.snapshot(admission.playerId());
+            return current.admitted() && current.generation() == admission.generation()
+                && Objects.equals(current.connectionId(), admission.connectionId());
+        }
+
+        boolean stillHere() {
+            return Bukkit.getPlayer(admission.playerId()) == player && player.isOnline() && currentAdmission();
+        }
+    }
+
+    /** Limit legacy MySQL recovery to this server's admitted recipients, one saved receipt each. */
+    private void requestLocalLegacyRecovery() {
+        if (BuildEdition.CROSS_SERVER_INCLUDED || closed || !legacyScanQueued.compareAndSet(false, true)) return;
+        var page = legacyPlayerPage(Bukkit.getOnlinePlayers(), legacyPlayerCursor);
+        var recipients = new ArrayList<LegacyRecipient>(page.size());
+        for (Player player : page) {
+            var admission = AuthAccess.snapshot(player.getUniqueId());
+            if (admission.admitted()) recipients.add(new LegacyRecipient(player, admission));
+        }
+        if (!page.isEmpty()) legacyPlayerCursor = page.get(page.size() - 1).getUniqueId();
+        if (recipients.isEmpty() || !submit(() -> {
+            try {
+                long now = System.currentTimeMillis();
+                boolean mailAvailable = availableMail() != null;
+                boolean warehouseAvailable = availableWarehouse() != null;
+                if (!mailAvailable && !warehouseAvailable) return;
+                for (var recipient : recipients) {
+                    if (closed || !recipient.currentAdmission()) continue;
+                    try {
+                        var save = store.loadLegacyRoute(recipient.admission().playerId(), mailAvailable, warehouseAvailable, now);
+                        if (save != null && !localStages.contains(save)) recoverRouted(save, now, recipient::stillHere);
+                    } catch (SQLException failure) {
+                        logger.log(Level.FINE, "旧版待发物品恢复暂缓", failure);
+                    }
+                }
+            } finally {
+                legacyScanQueued.set(false);
+            }
+        })) legacyScanQueued.set(false);
+    }
+
+    static List<Player> legacyPlayerPage(Collection<? extends Player> online, UUID after) {
+        var ordered = new ArrayList<Player>(online);
+        ordered.sort(Comparator.comparing(Player::getUniqueId));
+        var page = new ArrayList<Player>(Math.min(LEGACY_PLAYERS_PER_SCAN, ordered.size()));
+        int start = 0;
+        if (after != null) {
+            while (start < ordered.size() && ordered.get(start).getUniqueId().compareTo(after) <= 0) start++;
+        }
+        for (int index = 0; index < Math.min(LEGACY_PLAYERS_PER_SCAN, ordered.size()); index++) {
+            page.add(ordered.get((start + index) % ordered.size()));
+        }
+        return page;
+    }
+
     private void requestScan() {
         if (!applications.isEmpty()) scheduleApplications();
         if (closed || !scanQueued.compareAndSet(false, true)) return;
@@ -483,7 +561,8 @@ final class PendingItemDelivery {
         long now = System.currentTimeMillis();
         boolean mailAvailable = availableMail() != null;
         boolean warehouseAvailable = availableWarehouse() != null;
-        var rows = store.load(node(), sharedHostStorage && mailAvailable, sharedHostStorage && warehouseAvailable, cursor, PAGE, now);
+        var rows = store.load(node(), BuildEdition.CROSS_SERVER_INCLUDED && sharedHostStorage && mailAvailable,
+            BuildEdition.CROSS_SERVER_INCLUDED && sharedHostStorage && warehouseAvailable, cursor, PAGE, now);
         if (rows.isEmpty() && cursor.isEmpty()) idleUntil = System.nanoTime() + TimeUnit.SECONDS.toNanos(30);
         cursor = rows.size() == PAGE ? rows.get(rows.size() - 1).player().toString() : "";
         for (Save save : rows) {
@@ -492,7 +571,7 @@ final class PendingItemDelivery {
             if (localStages.contains(save)) continue;
             try {
                 if (save.mode().routed()) {
-                    if (save.mode() == Mode.MAIL ? mailAvailable : warehouseAvailable) recoverRouted(save, now);
+                    if (save.mode() == Mode.MAIL ? mailAvailable : warehouseAvailable) recoverRouted(save, now, () -> true);
                     continue;
                 }
                 var evidence = inspect(save);

@@ -24,6 +24,7 @@ import javax.sql.DataSource;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import xuanmo.arcartxsuite.api.BuildEdition;
 import xuanmo.arcartxsuite.api.capability.AbyssRunResultAccess;
 import xuanmo.arcartxsuite.api.mail.AxsDeliveryReceipt;
 import xuanmo.arcartxsuite.api.mail.AxsMailService;
@@ -106,6 +107,7 @@ class DurableLinkTest {
 
     @Test
     void mysqlProtocolTwoNodesAndLostMailAcknowledgement() throws Exception {
+        org.junit.jupiter.api.Assumptions.assumeTrue(BuildEdition.CROSS_SERVER_INCLUDED);
         String url = System.getenv("AXS_EVENTPACKET_MYSQL_URL");
         assumeTrue(url != null && url.matches("jdbc:mysql://127\\.0\\.0\\.1:[0-9]+/eventpacket_verify(?:_[0-9]+)?"));
         exercise(true, url);
@@ -207,6 +209,7 @@ class DurableLinkTest {
         var recipient = UUID.randomUUID();
         var result = result(recipient, UUID.randomUUID());
         var abyss = mock(AbyssRunResultAccess.class);
+        when(abyss.usesLocalResultStorage()).thenReturn(true);
         when(abyss.latestCommittedSequence()).thenReturn(CompletableFuture.completedFuture(12L));
         when(abyss.committedResults(eq("abyss"), eq(12L), anyInt())).thenReturn(
             CompletableFuture.completedFuture(List.of(
@@ -247,6 +250,7 @@ class DurableLinkTest {
 
     @Test
     void sharedAbyssOrchestrationRequiresCustomerAccessButQueuedMailContinues() throws Exception {
+        assumeTrue(BuildEdition.CROSS_SERVER_INCLUDED);
         var source = source(false, "jdbc:sqlite:" + folder.resolve("tier.sqlite"));
         var journal = spy(new RuleJournal(source, false));
         doReturn(true).when(journal).mysql();
@@ -284,6 +288,34 @@ class DurableLinkTest {
                 catch (SQLException failure) { return false; }
             });
             assertEquals(13L, journal.cursor("clear", "abyss").orElseThrow().sequence());
+        }
+    }
+
+    @Test
+    void freeLocalJournalDoesNotReplayMySqlAbyssResultsAndStillDrainsStagedMail() throws Exception {
+        assumeTrue(!BuildEdition.CROSS_SERVER_INCLUDED);
+        var source = source(false, "jdbc:sqlite:" + folder.resolve("tier-local-journal.sqlite"));
+        var journal = new RuleJournal(source, false);
+        journal.initialize();
+        var player = UUID.randomUUID();
+        assertTrue(journal.stageEvent("queued-before-cutover", List.of(
+            new RuleJournal.MailJob("old-job", player, "旧奖励", "", "", 0.0))));
+
+        var config = configuration();
+        var abyss = mock(AbyssRunResultAccess.class);
+        var mail = mock(AxsMailService.class);
+        when(mail.sendDurable(any())).thenReturn(CompletableFuture.completedFuture(AxsDeliveryReceipt.ok(52L, 1)));
+        var worker = new DurableRules(journal, () -> abyss, () -> mail, () -> config,
+            () -> true, Logger.getAnonymousLogger());
+        try (var retirement = retire(worker)) {
+            worker.wake();
+            await(() -> {
+                try { return count(source, "SELECT COUNT(*) FROM ep_mail_job WHERE state=?", "DONE") == 1; }
+                catch (SQLException failure) { return false; }
+            });
+            verify(abyss, never()).latestCommittedSequence();
+            verify(abyss, never()).committedResults(anyString(), anyLong(), anyInt());
+            assertTrue(journal.cursor("clear", "abyss").isEmpty());
         }
     }
 

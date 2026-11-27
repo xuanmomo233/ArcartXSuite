@@ -1,6 +1,7 @@
 package xuanmo.arcartxsuite.auth.runtime;
 
 import java.io.File;
+import java.security.PublicKey;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -8,14 +9,14 @@ import org.bukkit.plugin.java.JavaPlugin;
 import xuanmo.arcartxsuite.api.capability.AuthRuntimeCapability;
 import xuanmo.arcartxsuite.auth.minecraft.LocalAgentBinding;
 import xuanmo.arcartxsuite.auth.minecraft.LocalHandshakeClient;
-import xuanmo.arcartxsuite.auth.minecraft.ProxyProofs;
 
 /** Validated immutable startup configuration; never reloaded through a presentation module. */
 record AuthenticationSettings(String realm,java.time.ZoneId timezone,long loginTimeoutNanos,
-        LocalHandshakeClient nativeGateway,List<ProxyProofs.Trust> trustedProxies,String audience,
+        LocalHandshakeClient nativeGateway,List<TrustedProxy> trustedProxies,String audience,
         Ingress ingress,PasswordPolicy passwordPolicy,boolean requireBinding,
         AuthRuntimeCapability.Terms terms,Performance performance,CenterEndpoint center) {
     enum Ingress { PASSWORD, ONLINE, LOCAL_MIXED, SIGNED_PROXY, EXTERNAL }
+    record TrustedProxy(String issuer, PublicKey key, Set<String> providers) {}
     record PasswordPolicy(int minLength,int maxLength,int maxAttempts,long cooldownMillis) {}
     record Performance(int workers,int queueCapacity,int renewalWorkers,int renewalQueueCapacity) {}
     record CenterEndpoint(String url,String nodeId,String keyEnvironment) {}
@@ -72,28 +73,8 @@ record AuthenticationSettings(String realm,java.time.ZoneId timezone,long loginT
             throw new IllegalArgumentException("在线身份入口要求 online-mode=true 的直连服；代理后端请使用 signed-proxy");
         if (ingress == Ingress.ONLINE) LocalAgentBinding.requireMicrosoftSession(transport.jvmArguments());
         String audience=config.getString("ingress.audience","");
-        var trusts=new ArrayList<xuanmo.arcartxsuite.auth.minecraft.ProxyProofs.Trust>();
-        if(ingress == Ingress.SIGNED_PROXY) {
-            if(!audience.matches("[a-zA-Z0-9_-]{1,64}")) throw new IllegalArgumentException("signed-proxy 需要有效 audience");
-            if(!(config.get("ingress.trusted-proxies") instanceof List<?> configured)
-                    || configured.stream().anyMatch(value->!(value instanceof Map<?,?>)))
-                throw new IllegalArgumentException("可信代理必须为对象列表");
-            var values=config.getMapList("ingress.trusted-proxies");
-            if(values.isEmpty() || values.size()>8) throw new IllegalArgumentException("需要 1 至 8 个可信代理公钥");
-            for(var value:values) {
-                try {
-                    if(!Set.of("issuer","public-key","providers").containsAll(value.keySet())) throw new IllegalArgumentException();
-                    String issuer=(String)value.get("issuer");
-                    if(issuer==null || !issuer.matches("[a-zA-Z0-9_-]{1,64}") || !(value.get("providers") instanceof List<?> providers)) throw new IllegalArgumentException();
-                    Set<String> permitted=new HashSet<>();
-                    for(Object provider:providers) permitted.add((String)provider);
-                    if(permitted.isEmpty() || !Set.of("microsoft","littleskin","center").containsAll(permitted)) throw new IllegalArgumentException();
-                    trusts.add(new xuanmo.arcartxsuite.auth.minecraft.ProxyProofs.Trust(issuer,
-                        xuanmo.arcartxsuite.auth.minecraft.ProxyProofs.publicKey((String)value.get("public-key")),permitted));
-                } catch(Exception e) { throw new IllegalArgumentException("可信代理配置无效"); }
-            }
-        }
-        List<xuanmo.arcartxsuite.auth.minecraft.ProxyProofs.Trust> trustedProxies=List.copyOf(trusts);
+        List<TrustedProxy> trustedProxies = ingress == Ingress.SIGNED_PROXY
+            ? SignedProxyEdition.readTrust(config, audience) : List.of();
         LocalHandshakeClient nativeGateway=ingress == Ingress.LOCAL_MIXED ? new LocalHandshakeClient(
             config.getString("ingress.gateway-url","http://127.0.0.1:25599")) : null;
         if(nativeGateway!=null) LocalAgentBinding.require(

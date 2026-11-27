@@ -14,6 +14,7 @@ import org.bukkit.plugin.Plugin;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.AbstractAXSModule;
+import xuanmo.arcartxsuite.api.BuildEdition;
 import xuanmo.arcartxsuite.api.config.SyncPolicy;
 import xuanmo.arcartxsuite.api.config.ValidationRule;
 import xuanmo.arcartxsuite.api.config.ValueType;
@@ -182,7 +183,7 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
             () -> getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class),
             () -> getCapability(xuanmo.arcartxsuite.api.capability.EssentialsQueryable.class),
             worldTextureBridge,
-            advancedCrossServerOrchestrationAllowed() ? crossServer : null
+            BuildEdition.CROSS_SERVER_INCLUDED && advancedCrossServerOrchestrationAllowed() ? crossServer : null
         );
         service.start();
 

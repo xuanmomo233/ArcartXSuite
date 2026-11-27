@@ -36,6 +36,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import xuanmo.arcartxsuite.api.BuildEdition;
 import xuanmo.arcartxsuite.api.auth.AuthSnapshot;
 import xuanmo.arcartxsuite.api.auth.AuthAccess;
 import xuanmo.arcartxsuite.api.item.PendingRewardService.PendingReward;
@@ -393,12 +394,35 @@ class PendingItemDeliveryTest {
         assertTrue(store.reserve(save, "claim", 5));
         long afterInitialLease = System.currentTimeMillis() + 31_000;
         assertTrue(store.load("other-node", false, false, "", 5, afterInitialLease).isEmpty());
-        assertEquals(List.of(save), store.load("other-node", true, false, "", 5, afterInitialLease));
+        assertEquals(BuildEdition.CROSS_SERVER_INCLUDED ? List.of(save) : List.of(),
+            store.load("other-node", true, false, "", 5, afterInitialLease));
+        assertNull(store.loadLegacyRoute(UUID.randomUUID(), true, true, afterInitialLease));
+        assertNull(store.loadLegacyRoute(player, false, true, afterInitialLease));
+        assertEquals(save, store.loadLegacyRoute(player, true, false, afterInitialLease));
         assertTrue(store.claimRouted(save, afterInitialLease));
+        assertNull(store.loadLegacyRoute(player, true, false, afterInitialLease));
         assertFalse(store.claimRouted(save, afterInitialLease));
         var inventory = new Save(player, "other-node", UUID.randomUUID().toString(), save.boot(), Mode.CHECKPOINT, List.of(id));
         assertFalse(store.reserve(inventory, "claim", 5));
         assertEquals(-2, store.loadRoutedRewards(save).get(0).attempts());
+    }
+
+    @Test
+    void boundedLegacyPlayerPageAdvancesBeyondTheFirstEightRecipients() {
+        List<Player> players = new ArrayList<>();
+        for (int index = 9; index >= 0; index--) {
+            Player online = mock(Player.class);
+            when(online.getUniqueId()).thenReturn(new UUID(0, index));
+            players.add(online);
+        }
+        var first = PendingItemDelivery.legacyPlayerPage(players, null);
+        assertEquals(8, first.size());
+        assertEquals(new UUID(0, 7), first.get(7).getUniqueId());
+        var second = PendingItemDelivery.legacyPlayerPage(players, first.get(7).getUniqueId());
+        assertEquals(8, second.size());
+        assertEquals(new UUID(0, 8), second.get(0).getUniqueId());
+        assertEquals(new UUID(0, 9), second.get(1).getUniqueId());
+        assertEquals(new UUID(0, 0), second.get(2).getUniqueId());
     }
 
     private long claim() throws Exception {

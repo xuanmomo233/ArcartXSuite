@@ -22,6 +22,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Logger;
 import javax.sql.DataSource;
+import xuanmo.arcartxsuite.api.BuildEdition;
 import xuanmo.arcartxsuite.api.capability.ChatMutable.MuteInfo;
 import xuanmo.arcartxsuite.api.storage.AbstractModuleRepository;
 import xuanmo.arcartxsuite.api.storage.StorageDescriptor;
@@ -48,7 +49,7 @@ import xuanmo.arcartxsuite.chat.model.RedPacketType;
  */
 public final class JdbcChatRepository extends AbstractModuleRepository implements ChatRepository {
     private static final int IGNORE_WRITE_TIMEOUT_SECONDS = 3;
-    private final ChatRelayJournal relayJournal = new ChatRelayJournal(this::getConnection);
+    private final ChatRelayJournal relayJournal = BuildEdition.CROSS_SERVER_INCLUDED ? new ChatRelayJournal(this::getConnection) : null;
     private final AtomicReference<HikariDataSource> guardPool = new AtomicReference<>();
     private final Object guardPoolCreation = new Object();
     private volatile boolean guardPoolClosed;
@@ -77,6 +78,7 @@ public final class JdbcChatRepository extends AbstractModuleRepository implement
 
     @Override
     public Optional<String> networkId() throws SQLException {
+        if (!BuildEdition.CROSS_SERVER_INCLUDED) return Optional.empty();
         if (!isMysql()) return Optional.empty();
         try (Connection connection = getConnection();
              PreparedStatement ensure = connection.prepareStatement(
@@ -199,6 +201,7 @@ public final class JdbcChatRepository extends AbstractModuleRepository implement
 
     @Override
     public GuardedRoutes lockRouteStates(Set<UUID> actors) throws SQLException {
+        if (!BuildEdition.CROSS_SERVER_INCLUDED) return ChatRepository.super.lockRouteStates(actors);
         if (!isMysql() || actors.isEmpty()) return ChatRepository.super.lockRouteStates(actors);
         Set<UUID> covered = Set.copyOf(actors);
         List<String> ordered = orderedActors(covered);
@@ -1394,12 +1397,14 @@ public final class JdbcChatRepository extends AbstractModuleRepository implement
     private void createTables(Connection connection) throws SQLException {
         try (Statement statement = connection.createStatement()) {
             String engine = isMysql() ? " ENGINE=InnoDB DEFAULT CHARSET=utf8mb4" : "";
-            statement.execute("""
-                CREATE TABLE IF NOT EXISTS chat_network_identity (
-                    slot INTEGER PRIMARY KEY,
-                    network_id VARCHAR(36) NOT NULL
-                )
-                """ + engine);
+            if (BuildEdition.CROSS_SERVER_INCLUDED) {
+                statement.execute("""
+                    CREATE TABLE IF NOT EXISTS chat_network_identity (
+                        slot INTEGER PRIMARY KEY,
+                        network_id VARCHAR(36) NOT NULL
+                    )
+                    """ + engine);
+            }
             statement.execute("""
                 CREATE TABLE IF NOT EXISTS chat_moderation_log (
                     id VARCHAR(36) PRIMARY KEY,

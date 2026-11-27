@@ -1,8 +1,5 @@
 package xuanmo.arcartxsuite.menu.service;
 
-import java.io.ByteArrayOutputStream;
-import java.io.DataOutputStream;
-import java.io.IOException;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -20,6 +17,7 @@ import org.bukkit.Sound;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
+import xuanmo.arcartxsuite.api.BuildEdition;
 import xuanmo.arcartxsuite.api.auth.AuthAccess;
 import xuanmo.arcartxsuite.api.auth.AuthSnapshot;
 import xuanmo.arcartxsuite.api.capability.SignalDispatchable;
@@ -41,7 +39,6 @@ import xuanmo.arcartxsuite.api.util.TemporaryOpExecutor;
  */
 public final class MenuActionExecutor {
 
-    private static final String BUNGEE_CHANNEL = "BungeeCord";
     private static final int MAX_PENDING_PER_PLAYER = 64;
     private static final int MAX_PENDING = 4096;
 
@@ -105,7 +102,7 @@ public final class MenuActionExecutor {
                     && menuService.configuration().settings().closeOnAction();
             }
             case CONNECT -> {
-                if (!crossServerAllowed.getAsBoolean()) {
+                if (!BuildEdition.CROSS_SERVER_INCLUDED || !crossServerAllowed.getAsBoolean()) {
                     player.sendMessage(menuService.messages().colorize(menuService.messages().noPermission()));
                     yield false;
                 }
@@ -115,7 +112,7 @@ public final class MenuActionExecutor {
                 }
                 targetServer = targetServer.trim();
                 final String serverName = targetServer;
-                yield defer(context, 0L, () -> connectToServer(player, serverName))
+                yield defer(context, 0L, () -> MenuProxyTransfer.connect(plugin, logger, player, serverName, crossServerAllowed))
                     && menuService.configuration().settings().closeOnAction();
             }
             case PLAYER_OP -> {
@@ -358,24 +355,6 @@ public final class MenuActionExecutor {
             return Math.max(0L, Long.parseLong(raw.trim()));
         } catch (NumberFormatException exception) {
             return 0L;
-        }
-    }
-
-    private void connectToServer(Player player, String serverName) {
-        if (!crossServerAllowed.getAsBoolean()) return;
-        try {
-            var messenger = plugin.getServer().getMessenger();
-            if (!messenger.isOutgoingChannelRegistered(plugin, BUNGEE_CHANNEL)) {
-                messenger.registerOutgoingPluginChannel(plugin, BUNGEE_CHANNEL);
-            }
-            ByteArrayOutputStream buffer = new ByteArrayOutputStream();
-            try (DataOutputStream output = new DataOutputStream(buffer)) {
-                output.writeUTF("Connect");
-                output.writeUTF(serverName);
-            }
-            player.sendPluginMessage(plugin, BUNGEE_CHANNEL, buffer.toByteArray());
-        } catch (IOException exception) {
-            logger.warning("Menu connect 动作发送失败: " + exception.getMessage());
         }
     }
 

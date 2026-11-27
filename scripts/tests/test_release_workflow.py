@@ -188,7 +188,7 @@ class ReleaseWorkflowTest(unittest.TestCase):
     def artifact(sha, created, branch="main", expired=False):
         return {"created_at": created, "expired": expired, "workflow_run": {"head_branch": branch, "head_sha": sha}}
 
-    def detect_scopes(self, suite, proxy, event="push", **inputs):
+    def detect_scopes(self, suite, proxy, event="push", *, expected_error=None, **inputs):
         def fixture(name, artifacts):
             (self.repo / name).write_text(json.dumps({"artifacts": artifacts}), encoding="utf-8")
 
@@ -212,8 +212,21 @@ class ReleaseWorkflowTest(unittest.TestCase):
         run = subprocess.run([os.environ.get("AXS_TEST_BASH", "bash"), "-s"], cwd=self.repo,
                              env=env, input=stub + "\n" + self.detect, capture_output=True,
                              encoding="utf-8", timeout=20)
+        if expected_error is not None:
+            self.assertNotEqual(0, run.returncode, run.stdout)
+            self.assertIn(expected_error, run.stdout + run.stderr)
+            self.assertFalse(output.exists())
+            return None
         self.assertEqual(0, run.returncode, run.stdout + run.stderr)
         return dict(line.split("=", 1) for line in output.read_text(encoding="utf-8").splitlines())
+
+    def detect_customer_export(self, modules="", delivery_id="", **overrides):
+        inputs = dict(AXS_EXPORT_ONLY="true", GITHUB_REF="refs/heads/main",
+                      GITHUB_RUN_ID="431", GITHUB_RUN_ATTEMPT="1",
+                      EXPORT_ACCOUNT="12345", EXPORT_RECIPIENT="customer-test",
+                      EXPORT_DELIVERY_ID=delivery_id, EXPORT_MODULES=modules)
+        inputs.update(overrides)
+        return self.detect_scopes([], [], event="workflow_dispatch", **inputs)
 
     def test_docs_push_recovers_product_changes_after_paused_runs(self):
         self.commit("src/main/code.txt", "paused product change")
@@ -276,13 +289,71 @@ class ReleaseWorkflowTest(unittest.TestCase):
 
     def test_customer_export_dispatch_builds_only_the_requested_modules(self):
         self.commit("modules/mail/build.gradle.kts", "include a second available module")
-        flags = self.detect_scopes([], [], event="workflow_dispatch",
-                                   AXS_EXPORT_ONLY="true", VALIDATION_ONLY="false", GITHUB_REF="refs/heads/main",
-                                   EXPORT_ACCOUNT="12345", EXPORT_RECIPIENT="customer-test",
-                                   EXPORT_DELIVERY_ID="delivery-test", EXPORT_MODULES="market")
+        flags = self.detect_customer_export(modules="market", delivery_id="delivery-test")
         self.assertEqual(["market"], json.loads(flags["changed_modules"]))
+        self.assertEqual("delivery-test", flags["export_delivery_id"])
         self.assertEqual("true", flags["core_changed"])
         self.assertEqual("true", flags["proxy_changed"])
+
+    def test_blank_customer_export_inputs_select_all_formal_modules_and_keep_delivery_on_retry(self):
+        self.commit("modules/mail/build.gradle.kts", "include mail")
+        self.commit("modules/exploration/build.gradle.kts", "include exploration")
+        self.commit("modules/debug/build.gradle.kts", "local Debug module")
+        expected = ["exploration", "mail", "market"]
+        first = self.detect_customer_export()
+        retry = self.detect_customer_export(modules=" \t ", delivery_id=" \t ", GITHUB_RUN_ATTEMPT="2")
+        next_run = self.detect_customer_export(GITHUB_RUN_ID="432")
+
+        self.assertEqual(expected, json.loads(first["changed_modules"]))
+        self.assertEqual(expected, json.loads(retry["changed_modules"]))
+        self.assertEqual("delivery-431", first["export_delivery_id"])
+        self.assertEqual(first["export_delivery_id"], retry["export_delivery_id"])
+        self.assertEqual("delivery-432", next_run["export_delivery_id"])
+
+    def test_default_customer_delivery_requires_a_numeric_run_id(self):
+        for run_id in ("", "not-a-run"):
+            with self.subTest(run_id=run_id):
+                self.detect_customer_export(GITHUB_RUN_ID=run_id, expected_error="无法生成交付编号")
+
+    def test_customer_export_identifies_the_invalid_field(self):
+        self.detect_customer_export(EXPORT_ACCOUNT="invalid", expected_error="QQ 账号须为")
+        self.detect_customer_export(EXPORT_RECIPIENT="客户编号", expected_error="内部客户编号须为")
+        self.detect_customer_export(delivery_id="invalid id", expected_error="交付编号须为")
+
+    def test_edition_only_host_changes_trigger_a_suite_build(self):
+        for edition in ("free", "customer"):
+            with self.subTest(edition=edition):
+                baseline = self.artifact(self.git("rev-parse", "HEAD"), "2026-11-20T00:00:00Z")
+                path = f"src/{edition}/java/xuanmo/arcartxsuite/auth/EditionCode.java"
+                self.commit(path, f"{edition} host change")
+                flags = self.detect_scopes([baseline], [baseline])
+                self.assertEqual("true", flags["core_changed"])
+                self.assertEqual("true", flags["auth_changed"])
+
+    def test_customer_export_rejects_duplicate_and_debug_ids(self):
+        self.commit("modules/debug/build.gradle.kts", "local Debug module")
+        for modules in ("market,market", "debug"):
+            with self.subTest(modules=modules):
+                self.detect_customer_export(modules=modules, expected_error="互不重复的正式模块 ID")
+
+    def test_default_customer_export_checks_the_formal_module_count(self):
+        for index in range(63):
+            (self.repo / "modules" / f"fixture-{index}").mkdir()
+        flags = self.detect_customer_export()
+        self.assertEqual(64, len(json.loads(flags["changed_modules"])))
+        (self.repo / "modules" / "extra").mkdir()
+        self.detect_customer_export(expected_error="1 至 64 个")
+
+    def test_export_stamping_and_registration_use_the_resolved_delivery_output(self):
+        jobs = self.workflow["jobs"]
+        self.assertEqual("${{ steps.changes.outputs.export_delivery_id }}",
+                         jobs["detect-changes"]["outputs"]["export_delivery_id"])
+        steps = jobs["publish-suite"]["steps"]
+        stamp = next(step for step in steps if step.get("name") == "Encrypt changed modules per-class (-Paxs.protectModules)")
+        registration = next(step for step in steps if step.get("name") == "Assemble signed customer export")
+        resolved = "${{ needs.detect-changes.outputs.export_delivery_id }}"
+        self.assertEqual(resolved, stamp["env"]["EXPORT_DELIVERY_ID"])
+        self.assertEqual(resolved, registration["env"]["AXS_EXPORT_DELIVERY_ID"])
 
     def test_manual_suite_publication_builds_all_modules_without_publishing_proxies(self):
         self.commit("modules/mail/build.gradle.kts", "second public module")

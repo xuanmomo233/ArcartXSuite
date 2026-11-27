@@ -45,4 +45,7 @@ public interface AbyssRunResultAccess {
 
     /** Whether the result feed is read from the host's shared MySQL database. */
     boolean usesSharedHostStorage();
+
+    /** Whether the result feed uses this game's local SQLite store. */
+    default boolean usesLocalResultStorage() { return false; }
 }

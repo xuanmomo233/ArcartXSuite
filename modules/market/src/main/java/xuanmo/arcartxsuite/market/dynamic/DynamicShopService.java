@@ -10,6 +10,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.Nullable;
+import xuanmo.arcartxsuite.api.BuildEdition;
 import xuanmo.arcartxsuite.api.scheduler.ScheduledTask;
 import xuanmo.arcartxsuite.api.scheduler.SchedulerAPI;
 import xuanmo.arcartxsuite.api.scheduler.ScheduleSpec;
@@ -211,6 +212,7 @@ public class DynamicShopService {
      * @param strict 严格校验模式：对价格/乘数/库存做范围 clamp，阻断伪造消息注入非法数值
      */
     public void handleCrossServerMessage(String action, String strategyKey, String shopId, String data, boolean strict) {
+        if (!BuildEdition.CROSS_SERVER_INCLUDED) return;
         if (!"DYNAMIC_SHOP_UPDATE".equals(action)) return;
         DynamicShopContextImpl context = contexts.get(strategyKey);
         if (context == null) {

@@ -14,6 +14,7 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import org.jetbrains.annotations.NotNull;
 import xuanmo.arcartxsuite.entitytracker.config.EntityTrackerStorageConfiguration;
 import org.jetbrains.annotations.Nullable;
+import xuanmo.arcartxsuite.api.BuildEdition;
 import xuanmo.arcartxsuite.api.AbstractAXSModule;
 import xuanmo.arcartxsuite.api.ClientPacketHandler;
 import xuanmo.arcartxsuite.api.config.SyncPolicy;
@@ -350,10 +351,10 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
         if (ds == null) {
             return;
         }
-        boolean crossServerRanking = newFeaturesSettings.crossServerRanking().enabled()
+        boolean crossServerRanking = BuildEdition.CROSS_SERVER_INCLUDED && newFeaturesSettings.crossServerRanking().enabled()
             && crossServerChannelConfig.enabled()
             && advancedCrossServerOrchestrationAllowed();
-        if (crossServerRanking) {
+        if (BuildEdition.CROSS_SERVER_INCLUDED && crossServerRanking) {
             crossServerService = new EntityTrackerCrossServerService(
                 plugin, logger, crossServer, crossServerChannelConfig, ds, this::advancedCrossServerOrchestrationAllowed
             );
@@ -382,7 +383,7 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
             );
             killRecordingService.setEventBusProvider(() -> getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
             killRecordingService.start();
-            if (crossServerService != null) {
+            if (BuildEdition.CROSS_SERVER_INCLUDED && crossServerService != null) {
                 crossServerService.attachKillRecording(killRecordingService);
                 crossServerService.attachRankingCache(rankingCacheService);
                 crossServerService.start();
@@ -437,7 +438,7 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
             retireService(rankingCacheService::shutdown, rankingCacheService::databaseStopped);
             rankingCacheService = null;
         }
-        if (crossServerService != null) {
+        if (BuildEdition.CROSS_SERVER_INCLUDED && crossServerService != null) {
             retireService(crossServerService::shutdown, crossServerService::databaseStopped);
             crossServerService = null;
         }

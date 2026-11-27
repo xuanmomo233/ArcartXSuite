@@ -27,6 +27,7 @@ import xuanmo.arcartxsuite.announcer.config.AnnouncerModuleConfiguration.Subtitl
 import xuanmo.arcartxsuite.announcer.config.AnnouncerEntry;
 import xuanmo.arcartxsuite.announcer.config.AnnouncerModuleConfiguration;
 import xuanmo.arcartxsuite.announcer.transport.AnnouncerEnvelope;
+import xuanmo.arcartxsuite.api.BuildEdition;
 import xuanmo.arcartxsuite.api.auth.AuthAccess;
 import xuanmo.arcartxsuite.api.auth.AuthSnapshot;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
@@ -251,6 +252,7 @@ class AnnouncerReliabilityTest {
 
     @Test
     void remoteImmediateBroadcastsUseABoundedFifoAndStopWithTheService() {
+        org.junit.jupiter.api.Assumptions.assumeTrue(BuildEdition.CROSS_SERVER_INCLUDED);
         var plugin = mock(JavaPlugin.class);
         var config = mock(AnnouncerModuleConfiguration.class);
         var crossServer = mock(CrossServerAPI.class);

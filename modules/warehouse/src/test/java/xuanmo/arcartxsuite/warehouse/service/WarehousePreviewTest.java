@@ -19,6 +19,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
+import xuanmo.arcartxsuite.api.BuildEdition;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
 import xuanmo.arcartxsuite.warehouse.config.WarehouseModuleConfiguration;
@@ -154,6 +155,7 @@ class WarehousePreviewTest {
 
     @Test
     void crossServerRevocationKeepsWarehouseIdentity() {
+        org.junit.jupiter.api.Assumptions.assumeTrue(BuildEdition.CROSS_SERVER_INCLUDED);
         var revoke = new WarehouseCrossServerPayloadCodec.ShowcaseRevocation(target, "shared", "shared-public");
         assertEquals(revoke, WarehouseCrossServerPayloadCodec.decode(
             WarehouseCrossServerPayloadCodec.encodeShowcaseRevoked(revoke)).showcaseRevocation());

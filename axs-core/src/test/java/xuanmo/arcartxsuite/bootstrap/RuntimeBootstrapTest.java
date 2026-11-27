@@ -2,6 +2,7 @@ package xuanmo.arcartxsuite.bootstrap;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import xuanmo.arcartxsuite.api.BuildEdition;
 import xuanmo.arcartxsuite.security.protection.ProtectedClassLoader;
 import java.nio.file.*;
 import java.security.*;
@@ -185,7 +186,7 @@ class RuntimeBootstrapTest {
         Path libraries = Path.of(System.getProperty("axs.runtime.test.libraries"));
         try (JarFile jar = new JarFile(main.toFile())) {
             var artifacts = RuntimeBootstrap.parse(jar.getInputStream(jar.getJarEntry(RuntimeBootstrap.CATALOG)).readAllBytes());
-            assertEquals(9, artifacts.size());
+            assertEquals(BuildEdition.CROSS_SERVER_INCLUDED ? 9 : 6, artifacts.size());
             assertNull(jar.getJarEntry("com/mysql/cj/jdbc/Driver.class"));
             assertNotNull(jar.getJarEntry("com/google/gson/Gson.class"));
             assertNotNull(jar.getJarEntry("org/tukaani/xz/XZInputStream.class"));
@@ -220,18 +221,22 @@ class RuntimeBootstrapTest {
                     assertTrue(rows.next()); assertEquals(43, rows.getInt(1));
                 } finally { ((AutoCloseable) pool).close(); }
                 assertSame(runtime, Class.forName("com.mysql.cj.jdbc.Driver", true, pcl).getClassLoader());
-                assertSame(runtime, Class.forName("redis.clients.jedis.Jedis", false, pcl).getClassLoader());
-                Class<?> mapperClass = Class.forName("redis.clients.jedis.json.DefaultGsonObjectMapper", true, pcl);
-                assertSame(gson, mapperClass.getDeclaredField("gson").getType());
-                Object mapper = mapperClass.getConstructor().newInstance();
-                assertEquals("{\"value\":42}", mapperClass.getMethod("toJson", Object.class).invoke(mapper, Map.of("value", 42)));
-                assertSame(runtime, Class.forName("org.apache.commons.pool2.impl.GenericObjectPool", true, pcl).getClassLoader());
+                if (BuildEdition.CROSS_SERVER_INCLUDED) {
+                    assertSame(runtime, Class.forName("redis.clients.jedis.Jedis", false, pcl).getClassLoader());
+                    Class<?> mapperClass = Class.forName("redis.clients.jedis.json.DefaultGsonObjectMapper", true, pcl);
+                    assertSame(gson, mapperClass.getDeclaredField("gson").getType());
+                    Object mapper = mapperClass.getConstructor().newInstance();
+                    assertEquals("{\"value\":42}", mapperClass.getMethod("toJson", Object.class).invoke(mapper, Map.of("value", 42)));
+                    assertSame(runtime, Class.forName("org.apache.commons.pool2.impl.GenericObjectPool", true, pcl).getClassLoader());
+                    assertSame(runtime, Class.forName("org.json.JSONObject", true, pcl).getClassLoader());
+                } else {
+                    assertThrows(ClassNotFoundException.class, () -> Class.forName("redis.clients.jedis.Jedis", false, pcl));
+                }
                 Class<?> pinyin = Class.forName("net.sourceforge.pinyin4j.PinyinHelper", true, pcl);
                 assertSame(runtime, pinyin.getClassLoader());
                 assertTrue(Arrays.asList((String[]) pinyin.getMethod("toHanyuPinyinStringArray", char.class).invoke(null, '中')).contains("zhong1"));
                 assertSame(runtime, Class.forName("org.bouncycastle.crypto.generators.Argon2BytesGenerator", true, pcl).getClassLoader());
                 assertSame(runtime, Class.forName("org.java_websocket.client.WebSocketClient", false, pcl).getClassLoader());
-                assertSame(runtime, Class.forName("org.json.JSONObject", true, pcl).getClassLoader());
             }
         }
     }

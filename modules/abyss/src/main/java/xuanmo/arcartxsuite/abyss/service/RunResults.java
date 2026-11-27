@@ -220,6 +220,11 @@ final class RunResults implements AbyssRunResultAccess {
         return current != null && current.getDescriptor().isMysql() && !service.config().storage().hasOverride();
     }
 
+    @Override public boolean usesLocalResultStorage() {
+        var current = repository;
+        return current != null && !current.getDescriptor().isMysql();
+    }
+
     static String encode(Result value) {
         var yaml = new YamlConfiguration();
         yaml.set("run", value.runId().toString());

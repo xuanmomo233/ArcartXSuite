@@ -1,6 +1,7 @@
 package xuanmo.arcartxsuite.market.storage;
 
 import java.util.UUID;
+import xuanmo.arcartxsuite.api.BuildEdition;
 
 /** Committed settlement notification. The two destinations acknowledge independently. */
 public record AuctionPublication(String id, long listingId, UUID seller, UUID buyer, String item,
@@ -13,6 +14,7 @@ public record AuctionPublication(String id, long listingId, UUID seller, UUID bu
     }
 
     public String refreshPayload() {
+        if (!BuildEdition.CROSS_SERVER_INCLUDED) return "";
         return (id.startsWith(CANCELLATION_PREFIX) ? "LISTING_CANCELLED:" : "LISTING_SETTLED:") + listingId;
     }
 }

@@ -2,6 +2,7 @@ package xuanmo.arcartxsuite.bridge;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
@@ -12,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import xuanmo.arcartxsuite.api.BuildEdition;
 import xuanmo.arcartxsuite.api.item.PendingRewardService.PendingReward;
 import xuanmo.arcartxsuite.api.storage.StorageManager;
 
@@ -172,25 +174,49 @@ final class PendingItemSaveStore {
     List<Save> load(String node, boolean sharedMail, boolean sharedWarehouse, String after, int limit, long now)
             throws SQLException {
         var saves = new ArrayList<Save>();
+        String owners = BuildEdition.CROSS_SERVER_INCLUDED && (sharedMail || sharedWarehouse)
+            ? "node_id IN (?,?,?)" : "node_id=?";
         try (Connection conn = storage.getHostConnection(); PreparedStatement ps = conn.prepareStatement("""
                 SELECT player_uuid, node_id, receipt, server_boot, save_mode, reward_ids FROM axs_pending_item_saves
-                WHERE node_id IN (?,?,?) AND player_uuid>? AND retry_at<=? ORDER BY player_uuid LIMIT ?
-                """)) {
-            ps.setString(1, node);
-            ps.setString(2, sharedMail ? SHARED_MAIL : node);
-            ps.setString(3, sharedWarehouse ? SHARED_WAREHOUSE : node);
-            ps.setString(4, after);
-            ps.setLong(5, now);
-            ps.setInt(6, limit);
+                WHERE %s AND player_uuid>? AND retry_at<=? ORDER BY player_uuid LIMIT ?
+                """.formatted(owners))) {
+            int index = 1;
+            ps.setString(index++, node);
+            if (BuildEdition.CROSS_SERVER_INCLUDED && (sharedMail || sharedWarehouse)) {
+                ps.setString(index++, sharedMail ? SHARED_MAIL : node);
+                ps.setString(index++, sharedWarehouse ? SHARED_WAREHOUSE : node);
+            }
+            ps.setString(index++, after);
+            ps.setLong(index++, now);
+            ps.setInt(index, limit);
             try (var rs = ps.executeQuery()) {
-                while (rs.next()) {
-                    var ids = Arrays.stream(rs.getString("reward_ids").split(",")).map(Long::parseLong).toList();
-                    saves.add(new Save(UUID.fromString(rs.getString("player_uuid")), rs.getString("node_id"), rs.getString("receipt"),
-                        rs.getLong("server_boot"), Mode.valueOf(rs.getString("save_mode")), ids));
-                }
+                while (rs.next()) saves.add(readSave(rs));
             }
         }
         return saves;
+    }
+
+    Save loadLegacyRoute(UUID player, boolean mailAvailable, boolean warehouseAvailable, long now) throws SQLException {
+        if (!mailAvailable && !warehouseAvailable) return null;
+        try (Connection conn = storage.getHostConnection(); PreparedStatement ps = conn.prepareStatement("""
+                SELECT player_uuid, node_id, receipt, server_boot, save_mode, reward_ids FROM axs_pending_item_saves
+                WHERE player_uuid=? AND retry_at<=? AND
+                    ((save_mode='MAIL' AND node_id=?) OR (save_mode='WAREHOUSE' AND node_id=?))
+                """)) {
+            ps.setString(1, player.toString());
+            ps.setLong(2, now);
+            ps.setString(3, mailAvailable ? SHARED_MAIL : null);
+            ps.setString(4, warehouseAvailable ? SHARED_WAREHOUSE : null);
+            try (var rs = ps.executeQuery()) {
+                return rs.next() ? readSave(rs) : null;
+            }
+        }
+    }
+
+    private static Save readSave(ResultSet rs) throws SQLException {
+        var ids = Arrays.stream(rs.getString("reward_ids").split(",")).map(Long::parseLong).toList();
+        return new Save(UUID.fromString(rs.getString("player_uuid")), rs.getString("node_id"), rs.getString("receipt"),
+            rs.getLong("server_boot"), Mode.valueOf(rs.getString("save_mode")), ids);
     }
 
     boolean claimRouted(Save save, long now) throws SQLException {

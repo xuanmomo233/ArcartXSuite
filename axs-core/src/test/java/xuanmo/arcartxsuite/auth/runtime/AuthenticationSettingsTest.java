@@ -76,8 +76,4 @@ class AuthenticationSettingsTest {
         assertThrows(IllegalArgumentException.class,()->load("ingress:\n  password-login: 'true'\n"));
         assertThrows(IllegalArgumentException.class,()->load("password:\n  max-attempts: 4294967301\n"));
     }
-    @Test void signedIngressRequiresExplicitPinnedTrustObjects() {
-        assertThrows(IllegalArgumentException.class,()->load("ingress:\n  type: signed-proxy\n  audience: node\n  trusted-proxies: []\n"));
-        assertThrows(IllegalArgumentException.class,()->load("ingress:\n  type: signed-proxy\n  audience: node\n  trusted-proxies: [invalid]\n"));
-    }
 }

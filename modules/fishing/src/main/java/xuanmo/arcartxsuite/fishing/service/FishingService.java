@@ -16,6 +16,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import org.bukkit.scheduler.BukkitTask;
+import xuanmo.arcartxsuite.api.BuildEdition;
 import xuanmo.arcartxsuite.api.scheduler.ModuleCallback;
 import xuanmo.arcartxsuite.api.scheduler.ModuleExecutor;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -383,6 +384,7 @@ public final class FishingService {
     // ─── 跨服同步 ────────────────────────────────────────────────
 
     private void startCrossServer() {
+        if (!BuildEdition.CROSS_SERVER_INCLUDED) return;
         if (crossServer == null) return;
         CrossServerChannelConfig channelConfig = configuration.crossServer();
         if (!channelConfig.enabled()) return;
@@ -397,7 +399,7 @@ public final class FishingService {
     }
 
     private void shutdownCrossServer() {
-        if (crossServerChannel != null) {
+        if (BuildEdition.CROSS_SERVER_INCLUDED && crossServerChannel != null) {
             crossServerChannel.close();
             crossServerChannel = null;
         }
@@ -405,16 +407,18 @@ public final class FishingService {
 
     /** 跨服通道是否处于活跃状态。 */
     public boolean crossServerActive() {
-        return crossServerChannel != null && crossServerChannel.isActive();
+        return BuildEdition.CROSS_SERVER_INCLUDED && crossServerChannel != null && crossServerChannel.isActive();
     }
 
     private void publishCrossServer(String message) {
+        if (!BuildEdition.CROSS_SERVER_INCLUDED) return;
         if (crossServerChannel != null && crossServerChannel.isActive() && message != null && !message.isBlank()) {
             crossServerChannel.publish(message);
         }
     }
 
     private CompletionStage<Boolean> admitCrossServerMessage(String message) {
+        if (!BuildEdition.CROSS_SERVER_INCLUDED) return CompletableFuture.completedFuture(false);
         if(stopping)return null;
         if (message == null || !message.startsWith("CATCH2:")) return CompletableFuture.completedFuture(true);
         FishingCatchRecord record;
@@ -905,7 +909,7 @@ public final class FishingService {
             reportCaptureFailure(record, error, online ? player : null);
             return;
         }
-        publishCrossServer(record.encodeCrossServer());
+        if (BuildEdition.CROSS_SERVER_INCLUDED) publishCrossServer(record.encodeCrossServer());
         if (!online) return;
 
         var fish = session.fish();

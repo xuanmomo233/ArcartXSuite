@@ -13,6 +13,7 @@ repositories {
 
 // Compile against upstream APIs, but ship only the runtime components used by Suite.
 val runtimeTarget = RuntimeTarget.parse(providers.gradleProperty("axs.runtimeTarget").orElse("universal").get())
+val suiteEdition = providers.gradleProperty("axs.edition").orElse("customer").get()
 val packagingSqlite by configurations.creating { isTransitive = false }
 val packagingCrypto by configurations.creating { isTransitive = false }
 
@@ -82,7 +83,9 @@ dependencies {
             because("MySQL Connector/J brings a version affected by CVE-2024-7254")
         }
     }
-    implementation("redis.clients:jedis:5.2.0")
+    if (suiteEdition == "customer") {
+        implementation("redis.clients:jedis:5.2.0")
+    }
     implementation("com.belerweb:pinyin4j:2.5.1")
     implementation("com.google.code.gson:gson:2.11.0")
     implementation("org.java-websocket:Java-WebSocket:1.5.7")
@@ -117,9 +120,10 @@ dependencies {
 
 sourceSets {
     main {
-        java.setSrcDirs(listOf("../src/main/java"))
+        java.setSrcDirs(listOf("../src/main/java", "../src/$suiteEdition/java"))
         resources {
-            setSrcDirs(listOf("../src/main/resources"))
+            setSrcDirs(listOf("../src/main/resources", "../src/$suiteEdition/resources"))
+            if (suiteEdition == "free") exclude("redis/**")
         }
     }
     // modern 源集：跨版本兼容代码，用 1.21 API 编译
@@ -196,6 +200,10 @@ tasks {
         archiveClassifier.set("all-unobf${runtimeTarget.fileSuffix}")
         destinationDirectory.set(layout.buildDirectory.dir("packaging"))
         mergeServiceFiles()
+        if (suiteEdition == "free") {
+            exclude("xuanmo/arcartxsuite/auth/minecraft/ProxyProofs*.class")
+            exclude("xuanmo/arcartxsuite/auth/minecraft/ProxyKeys*.class")
+        }
         // 合并 modern 源集编译产物
         from(sourceSets.named("modern").get().output)
     }

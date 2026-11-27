@@ -37,6 +37,7 @@ import xuanmo.arcartxsuite.api.storage.StorageDescriptor;
 import xuanmo.arcartxsuite.fishing.config.FishingModuleConfiguration;
 import xuanmo.arcartxsuite.fishing.model.BaitQueueEntry;
 import xuanmo.arcartxsuite.fishing.model.FishingSeasonData;
+import xuanmo.arcartxsuite.fishing.reward.RewardDispatcher;
 import xuanmo.arcartxsuite.fishing.storage.FishingRepository;
 import xuanmo.arcartxsuite.fishing.storage.FishingRepository.BiteProfile;
 import xuanmo.arcartxsuite.fishing.talent.TalentEngine;
@@ -110,7 +111,7 @@ class FishingBiteFlowTest {
         });
 
         var service = new FishingService(plugin, config, repository, bridge, null, logger, "test-ui",
-            new TalentEngine(Map.of(), List.of()), null, List.of(), null, null, null, null, null, null);
+            new TalentEngine(Map.of(), List.of()), null, List.of(), mock(RewardDispatcher.class), null, null, null, null, null);
         service.configureCatchDelivery(mock(PendingRewardService.class), StorageDescriptor.sqlite("test.db"), directory);
         try (var bukkit = mockStatic(Bukkit.class); var access = mockStatic(AuthAccess.class)) {
             bukkit.when(() -> Bukkit.getPlayer(uuid)).thenReturn(player);

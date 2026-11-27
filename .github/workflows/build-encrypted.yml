@@ -40,13 +40,13 @@ on:
         description: '收件人的云端 QQ 账号'
         type: string
       export_recipient:
-        description: '写入水印的内部客户编号，例如 customer-001'
+        description: '写入水印的内部客户编号，例如 customer-001（英文字母、数字、-、_）'
         type: string
       export_delivery_id:
-        description: '写入水印的交付编号，可关联多份席位'
+        description: '写入水印的交付编号，留空时按工作流运行号生成'
         type: string
       export_modules:
-        description: '逗号分隔的正式模块 ID，例如 market,fishing'
+        description: '逗号分隔的正式模块 ID，留空时打包全部正式模块（排除 Debug）'
         type: string
       native_self_check:
         description: '开启 Native 运行时自校验并验证原件和篡改副本'
@@ -67,6 +67,7 @@ env:
   PYTHONUTF8: '1'
   # Export-only builds use the production signing inputs even while cloud publishing is paused.
   AXS_EXPORT_ONLY: ${{ github.event_name == 'workflow_dispatch' && inputs.export_only && 'true' || 'false' }}
+  AXS_EDITION: ${{ github.event_name == 'workflow_dispatch' && inputs.export_only && 'customer' || 'free' }}
   AXS_MANUAL_SUITE_PUBLISH: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_suite && github.ref == 'refs/heads/main' && !inputs.skip_upload && !inputs.export_only && 'true' || 'false' }}
   AXS_CI_VALIDATION: ${{ !inputs.export_only && (github.ref != 'refs/heads/main' || inputs.skip_upload || (vars.AXS_SKIP_CLOUD_UPLOAD == 'true' && !(github.event_name == 'workflow_dispatch' && inputs.publish_suite))) && 'true' || 'false' }}
   AXS_CLOUD_UPLOAD: ${{ github.ref == 'refs/heads/main' && !inputs.export_only && !inputs.skip_upload && (vars.AXS_SKIP_CLOUD_UPLOAD != 'true' || (github.event_name == 'workflow_dispatch' && inputs.publish_suite)) && 'true' || 'false' }}
@@ -82,6 +83,7 @@ jobs:
       proxy_changed: ${{ steps.changes.outputs.proxy_changed }}
       auth_changed: ${{ steps.changes.outputs.auth_changed }}
       changed_modules: ${{ steps.changes.outputs.changed_modules }}
+      export_delivery_id: ${{ steps.changes.outputs.export_delivery_id }}
       any_changed: ${{ steps.changes.outputs.any_changed }}
     steps:
       - uses: actions/checkout@v5
@@ -119,18 +121,36 @@ jobs:
                 exit 1
               fi
             fi
-            if ! [[ "$EXPORT_ACCOUNT" =~ ^[0-9]{5,20}$ && "$EXPORT_RECIPIENT" =~ ^[A-Za-z0-9_-]{1,80}$ && "$EXPORT_DELIVERY_ID" =~ ^[A-Za-z0-9_-]{1,100}$ ]]; then
-              echo "::error::请填写有效的账号、客户编号和交付编号"
+            if [[ ! "${EXPORT_DELIVERY_ID:-}" =~ [^[:space:]] ]]; then
+              if [[ ! "${GITHUB_RUN_ID:-}" =~ ^[0-9]+$ ]]; then
+                echo "::error::缺少有效的工作流运行号，无法生成交付编号"
+                exit 1
+              fi
+              EXPORT_DELIVERY_ID="delivery-${GITHUB_RUN_ID}"
+            fi
+            if ! [[ "${EXPORT_ACCOUNT:-}" =~ ^[0-9]{5,20}$ ]]; then
+              echo "::error::收件人的云端 QQ 账号须为 5 至 20 位数字"
               exit 1
             fi
-            if ! ALL_MODULES=$(jq -ecn --arg selected "$EXPORT_MODULES" --argjson allowed "$ALL_MODULES" '
-              ($selected | split(",") | map(gsub("^\\s+|\\s+$"; ""))) as $ids
+            if ! [[ "${EXPORT_RECIPIENT:-}" =~ ^[A-Za-z0-9_-]{1,80}$ ]]; then
+              echo "::error::内部客户编号须为 1 至 80 位英文字母、数字、连字符或下划线"
+              exit 1
+            fi
+            if ! [[ "$EXPORT_DELIVERY_ID" =~ ^[A-Za-z0-9_-]{1,100}$ ]]; then
+              echo "::error::交付编号须为 1 至 100 位英文字母、数字、连字符或下划线，也可留空自动生成"
+              exit 1
+            fi
+            if ! ALL_MODULES=$(jq -ecn --arg selected "${EXPORT_MODULES:-}" --argjson allowed "$ALL_MODULES" '
+              ($selected | gsub("^\\s+|\\s+$"; "")) as $selection
+              | (if $selection == "" then $allowed
+                 else ($selection | split(",") | map(gsub("^\\s+|\\s+$"; ""))) end) as $ids
               | select(($ids|length) >= 1 and ($ids|length) <= 64 and ($ids|unique|length) == ($ids|length)
                 and all($ids[]; . as $id | $allowed | index($id) != null))
               | $ids'); then
-              echo "::error::export_modules 必须是互不重复的正式模块 ID"
+              echo "::error::客户包需要 1 至 64 个互不重复的正式模块 ID"
               exit 1
             fi
+            echo "export_delivery_id=$EXPORT_DELIVERY_ID" >> "$GITHUB_OUTPUT"
           fi
 
           last_published() {
@@ -169,7 +189,7 @@ jobs:
 
           # 仅调整工作流时不产生新的产品版本，生产链路可手动选择 skip_upload 验证。
           CORE_CHANGED=false
-          if grep -Eq '^(src/main/|axs-core/|axs-api/|axs-placeholder/|auth-(engine|minecraft|protocol)/|buildSrc/|proguard/|native/|scripts/|gradle/|keys/|gradle\.properties|settings\.gradle\.kts|build\.gradle\.kts)' "$CHANGED_FILES"; then
+          if grep -Eq '^(src/(main|customer|free)/|axs-core/|axs-api/|axs-placeholder/|auth-(engine|minecraft|protocol)/|buildSrc/|proguard/|native/|scripts/|gradle/|keys/|gradle\.properties|settings\.gradle\.kts|build\.gradle\.kts)' "$CHANGED_FILES"; then
             CORE_CHANGED=true
           fi
 
@@ -183,7 +203,7 @@ jobs:
           echo "proxy_changed=$PROXY_CHANGED" >> $GITHUB_OUTPUT
 
           AUTH_CHANGED=false
-          if [ "$PROXY_CHANGED" = "true" ] || grep -Eq '^(auth-(center|engine|minecraft|protocol)/|src/main/java/xuanmo/arcartxsuite/auth/|modules/loginview/)' "$CHANGED_FILES"; then
+          if [ "$PROXY_CHANGED" = "true" ] || grep -Eq '^(auth-(center|engine|minecraft|protocol)/|src/(main|customer|free)/java/xuanmo/arcartxsuite/auth/|modules/loginview/)' "$CHANGED_FILES"; then
             AUTH_CHANGED=true
           fi
           echo "auth_changed=$AUTH_CHANGED" >> $GITHUB_OUTPUT
@@ -265,10 +285,10 @@ jobs:
       - name: Verify Abyss UI contracts
         run: python modules/abyss/src/test/ui/verify_abyss_ui.py
       - name: Test public API, Abyss transactions and EventPacket delivery tiers
-        run: bash ./gradlew :axs-api:test :modules:abyss:test :modules:eventpacket:test -PskipNativeCheck=true --no-build-cache
+        run: bash ./gradlew :axs-api:test :modules:abyss:test :modules:eventpacket:test -Paxs.edition="$AXS_EDITION" -PskipNativeCheck=true --no-build-cache
       - name: Test Exploration and QuestGPS quest offers
         if: contains(fromJSON(needs.detect-changes.outputs.changed_modules), 'exploration')
-        run: bash ./gradlew :modules:exploration:test :modules:questgps:test -PskipNativeCheck=true --no-build-cache
+        run: bash ./gradlew :modules:exploration:test :modules:questgps:test -Paxs.edition="$AXS_EDITION" -PskipNativeCheck=true --no-build-cache
       - name: Test authentication and proxy forwarding
         if: needs.detect-changes.outputs.auth_changed == 'true'
         run: |
@@ -615,10 +635,10 @@ jobs:
           CORE_LIB_DIR="axs-core/build/runtime/$AXS_RUNTIME_TARGET/libs"
           CORE_ARTIFACT_NAME="axs-jar-encrypted-$AXS_RUNTIME_TARGET"
           # 业务测试始终使用通用运行时，避免 Ubuntu 执行 Windows 专用 SQLite。
-          bash ./gradlew :axs-core:test --no-build-cache --parallel
+          bash ./gradlew :axs-core:test -Paxs.edition="$AXS_EDITION" --no-build-cache --parallel
           echo "CORE_LIB_DIR=$CORE_LIB_DIR" >> "$GITHUB_ENV"
           echo "CORE_ARTIFACT_NAME=$CORE_ARTIFACT_NAME" >> "$GITHUB_ENV"
-          bash ./gradlew :axs-core:build --no-build-cache --parallel -Paxs.runtimeTarget="$AXS_RUNTIME_TARGET" -x test
+          bash ./gradlew :axs-core:build --no-build-cache --parallel -Paxs.edition="$AXS_EDITION" -Paxs.runtimeTarget="$AXS_RUNTIME_TARGET" -x test
 
       - name: Ensure real-seed native libs intact in obfuscated JAR
         run: |
@@ -669,6 +689,14 @@ jobs:
           python scripts/verify-runtime.py --input "$OUT" \
             --libraries "axs-core/build/runtime/$AXS_RUNTIME_TARGET/runtime-libraries" \
             --public-key "$KEYS_DIR/ed25519_public.pem"
+
+      - name: Verify host edition
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          raw=("$CORE_LIB_DIR"/ArcartX-Suite-*-unobf*.jar)
+          test "${#raw[@]}" -eq 1
+          python scripts/verify-suite-edition.py --edition "$AXS_EDITION" host --raw "${raw[0]}" --protected "$OUT"
 
       - name: Upload encrypted JAR
         uses: actions/upload-artifact@v5
@@ -886,7 +914,7 @@ jobs:
         if: needs.detect-changes.outputs.module_changed == 'true' && steps.staged-release.outputs.restored != 'true' && steps.staged-release.outputs.prepared != 'true'
         env:
           EXPORT_RECIPIENT: ${{ inputs.export_recipient }}
-          EXPORT_DELIVERY_ID: ${{ inputs.export_delivery_id }}
+          EXPORT_DELIVERY_ID: ${{ needs.detect-changes.outputs.export_delivery_id }}
           # This build's core is ProGuard input only. The published host has its own signed catalog.
           AXS_PRODUCTION: 'OFF'
         run: |
@@ -908,7 +936,7 @@ jobs:
             watermark=("-Paxs.watermark.recipient=$EXPORT_RECIPIENT" "-Paxs.watermark.license=$EXPORT_DELIVERY_ID"
               "-Paxs.watermark.release=$release" "-Paxs.watermark.privateKey=$RUNNER_TEMP/axs-watermark.pem")
           fi
-          bash ./gradlew "${TASKS[@]}" "${watermark[@]}" -Paxs.protectModules -PskipNativeCheck=true --no-build-cache --parallel
+          bash ./gradlew "${TASKS[@]}" "${watermark[@]}" -Paxs.edition="$AXS_EDITION" -Paxs.protectModules -PskipNativeCheck=true --no-build-cache --parallel
           echo "=== 生成的 .axb ==="
           ls -la build/ArcartX-Suite/module-axb/ || echo "DIR NOT FOUND"
 
@@ -919,6 +947,12 @@ jobs:
       - name: Verify protected Exploration classes
         if: steps.staged-release.outputs.restored != 'true' && steps.staged-release.outputs.prepared != 'true' && contains(fromJSON(needs.detect-changes.outputs.changed_modules), 'exploration')
         run: python3 modules/exploration/src/test/protection/verify_protected_classes.py
+
+      - name: Verify module editions
+        if: steps.staged-release.outputs.restored != 'true' && steps.staged-release.outputs.prepared != 'true'
+        env:
+          RELEASE_MODULES: ${{ needs.detect-changes.outputs.changed_modules }}
+        run: python3 scripts/verify-suite-edition.py --edition "$AXS_EDITION" modules --selection "$RELEASE_MODULES"
 
       - uses: actions/download-artifact@v5
         if: (env.AXS_CLOUD_UPLOAD == 'true' || env.AXS_EXPORT_ONLY == 'true') && steps.staged-release.outputs.restored != 'true' && steps.staged-release.outputs.prepared != 'true'
@@ -938,7 +972,7 @@ jobs:
         env:
           AXS_EXPORT_ACCOUNT: ${{ inputs.export_account }}
           AXS_EXPORT_RECIPIENT: ${{ inputs.export_recipient }}
-          AXS_EXPORT_DELIVERY_ID: ${{ inputs.export_delivery_id }}
+          AXS_EXPORT_DELIVERY_ID: ${{ needs.detect-changes.outputs.export_delivery_id }}
           AXB_SIGN_SEED_B64: ${{ secrets.AXB_SIGN_SEED_B64 }}
           AXS_VARIANT_REGISTRATION_KEY_B64: ${{ secrets.AXS_VARIANT_REGISTRATION_KEY_B64 }}
           EXPORT_MODULES: ${{ needs.detect-changes.outputs.changed_modules }}

@@ -1,12 +1,14 @@
 package xuanmo.arcartxsuite.battlepass.service;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonParseException;
 import com.google.gson.JsonParser;
 import java.sql.SQLException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
+import xuanmo.arcartxsuite.api.BuildEdition;
 import xuanmo.arcartxsuite.api.item.PendingRewardService;
 import xuanmo.arcartxsuite.api.item.PendingRewardService.PendingReward;
 import xuanmo.arcartxsuite.battlepass.model.BattlePassReward;
@@ -29,24 +31,33 @@ final class BattlePassRewardDispatcher {
 
     Result accept(UUID player, String season, String rewardId, BattlePassReward reward) throws SQLException {
         if (pending == null) return Result.RETRY;
-        boolean sharedProgress = repository.sharedProgress();
-        UUID storeId = sharedProgress ? pending.rewardReceiptStoreId() : null;
-        if (sharedProgress && storeId == null) return Result.RETRY;
+        boolean sharedProgress = BuildEdition.CROSS_SERVER_INCLUDED && repository.sharedProgress();
+        UUID storeId = BuildEdition.CROSS_SERVER_INCLUDED && sharedProgress ? pending.rewardReceiptStoreId() : null;
+        if (BuildEdition.CROSS_SERVER_INCLUDED && sharedProgress && storeId == null) return Result.RETRY;
         var batch = createBatch(player, rewardId, reward);
         String payload = batch.isEmpty() ? null
-            : GSON.toJson(sharedProgress ? new StoredRewards(storeId, batch) : batch);
+            : GSON.toJson(BuildEdition.CROSS_SERVER_INCLUDED && sharedProgress ? new StoredRewards(storeId, batch) : batch);
         var request = repository.stageReward(player, season, rewardId, payload);
         if (request == null) return Result.RETRY;
         // Retry with the original payload even if the reward configuration has changed.
         List<PendingReward> staged;
-        if (sharedProgress) {
+        try {
             var original = JsonParser.parseString(request.payload());
-            if (!original.isJsonObject()) return Result.RETRY;
-            var stored = GSON.fromJson(original, StoredRewards.class);
-            if (!storeId.equals(stored.receiptStoreId()) || stored.rewards() == null) return Result.RETRY;
-            staged = stored.rewards();
-        } else {
-            staged = Arrays.asList(GSON.fromJson(request.payload(), PendingReward[].class));
+            if (original.isJsonObject()) {
+                // A previously staged customer reward may already be accepted by its original receipt store.
+                var stored = GSON.fromJson(original, StoredRewards.class);
+                UUID currentStoreId = pending.rewardReceiptStoreId();
+                if (currentStoreId == null || !currentStoreId.equals(stored.receiptStoreId()) || stored.rewards() == null) {
+                    return Result.RETRY;
+                }
+                staged = stored.rewards();
+            } else if (!sharedProgress && original.isJsonArray()) {
+                staged = Arrays.asList(GSON.fromJson(original, PendingReward[].class));
+            } else {
+                return Result.RETRY;
+            }
+        } catch (JsonParseException malformed) {
+            return Result.RETRY;
         }
         if (staged.isEmpty() || !pending.savePendingBatchConfirmed("battlepass:" + request.id(), staged)) {
             return Result.RETRY;

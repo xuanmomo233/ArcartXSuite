@@ -21,6 +21,7 @@ import org.bukkit.scheduler.*;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.sqlite.SQLiteDataSource;
+import xuanmo.arcartxsuite.api.BuildEdition;
 import xuanmo.arcartxsuite.api.auth.AuthAccess;
 import xuanmo.arcartxsuite.api.auth.AuthSnapshot;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
@@ -42,6 +43,7 @@ class FishingShutdownTest {
 
     @Test
     void catchInboxIsBoundedDrainsBeforeStopAndCallerCancellationDoesNotCancelTheWrite() throws Exception {
+        org.junit.jupiter.api.Assumptions.assumeTrue(BuildEdition.CROSS_SERVER_INCLUDED);
         var repository=mock(FishingRepository.class);var service=service(mock(JavaPlugin.class),repository,null,null);
         var entered=new CountDownLatch(1);var release=new CountDownLatch(1);var saved=ConcurrentHashMap.<UUID>newKeySet();Thread primary=Thread.currentThread();
         when(repository.saveCatchRecordConfirmed(any())).thenAnswer(call->{assertNotSame(primary,Thread.currentThread());entered.countDown();assertTrue(release.await(4,TimeUnit.SECONDS));saved.add(call.<FishingCatchRecord>getArgument(0).eventId());return true;});
@@ -62,6 +64,7 @@ class FishingShutdownTest {
 
     @Test
     void failedCatchCommitIsNotAcknowledgedAndRetryUsesTheSameEventId() throws Exception {
+        org.junit.jupiter.api.Assumptions.assumeTrue(BuildEdition.CROSS_SERVER_INCLUDED);
         var repository=spy(repository());var service=service(mock(JavaPlugin.class),repository,null,null);
         var record=catchRecord(UUID.randomUUID());
         doReturn(false).doCallRealMethod().when(repository).saveCatchRecordConfirmed(record);

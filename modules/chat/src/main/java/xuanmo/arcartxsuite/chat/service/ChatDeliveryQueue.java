@@ -21,6 +21,7 @@ import java.util.function.Consumer;
 import java.util.function.LongSupplier;
 import java.util.function.Predicate;
 import xuanmo.arcartxsuite.chat.storage.ChatRepository.GuardedRoutes;
+import xuanmo.arcartxsuite.api.BuildEdition;
 
 /** Performs SQL in submission order and accepts results on the server thread. */
 final class ChatDeliveryQueue implements AutoCloseable {
@@ -92,6 +93,7 @@ final class ChatDeliveryQueue implements AutoCloseable {
     }
 
     <T> boolean offerRemote(Query<T> query, Consumer<T> complete, Runnable abandoned) {
+        if (!BuildEdition.CROSS_SERVER_INCLUDED) return false;
         return offer(() -> new RemoteRoute<>(query.run(), System.nanoTime()),
             route -> System.nanoTime() - route.preparedAt() <= REMOTE_ROUTE_MAX_WAIT,
             route -> true, (route, failure) -> complete.accept(route.value()), abandoned);
@@ -99,6 +101,7 @@ final class ChatDeliveryQueue implements AutoCloseable {
 
     synchronized <T> boolean offerGuardedRemote(Set<UUID> actors, int recipients, GuardedQuery<T> query,
                                                Consumer<T> complete, Runnable abandoned) {
+        if (!BuildEdition.CROSS_SERVER_INCLUDED) return false;
         if (guardFactory == null || !guardedRemoteAllowed.getAsBoolean() || !hasRoom()) return false;
         boolean wasEmpty = pending.isEmpty();
         var guarded = new GuardedTask<>(Set.copyOf(actors), recipients, query);
@@ -109,6 +112,7 @@ final class ChatDeliveryQueue implements AutoCloseable {
     }
 
     synchronized void startAdmittedRemoteBatch() {
+        if (!BuildEdition.CROSS_SERVER_INCLUDED) return;
         Pending<?> head = pending.peekFirst();
         if (!closed && !guardRunning && head != null && head.guarded != null && guardedRemoteAllowed.getAsBoolean()) {
             startGuardedBatch();
@@ -211,6 +215,7 @@ final class ChatDeliveryQueue implements AutoCloseable {
     }
 
     private void startGuardedBatch() {
+        if (!BuildEdition.CROSS_SERVER_INCLUDED) return;
         List<Pending<?>> batch = collectGuardedBatch();
         guardRunning = true;
         worker.execute(() -> runGuardedBatches(batch));
@@ -229,6 +234,7 @@ final class ChatDeliveryQueue implements AutoCloseable {
     }
 
     private void runGuardedBatches(List<Pending<?>> batch) {
+        if (!BuildEdition.CROSS_SERVER_INCLUDED) return;
         boolean retry = true;
         try {
             while (!closed && !batch.isEmpty()) {
@@ -250,6 +256,7 @@ final class ChatDeliveryQueue implements AutoCloseable {
     }
 
     private boolean dispatchGuardedBatch(List<Pending<?>> batch) throws SQLException {
+        if (!BuildEdition.CROSS_SERVER_INCLUDED) return false;
         if (!guardedRemoteAllowed.getAsBoolean()) return false;
         Set<UUID> actors = new HashSet<>();
         for (Pending<?> job : batch) actors.addAll(job.guarded.actors());
@@ -292,6 +299,7 @@ final class ChatDeliveryQueue implements AutoCloseable {
         }
 
         private void deliver() {
+            if (!BuildEdition.CROSS_SERVER_INCLUDED) return;
             if (!claimed.compareAndSet(false, true)) return;
             boolean completed = false;
             try {

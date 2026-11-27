@@ -172,7 +172,7 @@ public final class AbyssService {
     private xuanmo.arcartxsuite.abyss.stage.StageManager stageManager;
     private xuanmo.arcartxsuite.abyss.procgen.RoomSetLibrary roomSetLibrary;
     private xuanmo.arcartxsuite.abyss.procgen.ProcGenManager procgenManager;
-    private xuanmo.arcartxsuite.abyss.cross.CrossDungeonManager crossDungeon;
+    private xuanmo.arcartxsuite.abyss.cross.CrossDungeon crossDungeon;
     private DungeonNpcManager npcs;
     private RewardResolver rewards;
     private QuestManager quests;
@@ -363,9 +363,10 @@ public final class AbyssService {
         procgenManager = new xuanmo.arcartxsuite.abyss.procgen.ProcGenManager(
             this, roomSetLibrary, logger);
         // 跨服：副本 cross-server 声明后启用（宿主通道缺席时静默降级）
-        crossDungeon = new xuanmo.arcartxsuite.abyss.cross.CrossDungeonManager(
-            this, crossServer, plugin, logger);
-        crossDungeon.start();
+        if (xuanmo.arcartxsuite.api.BuildEdition.CROSS_SERVER_INCLUDED) {
+            crossDungeon = xuanmo.arcartxsuite.abyss.cross.CrossDungeonFactory.create(this, crossServer, plugin, logger);
+            crossDungeon.start();
+        }
         instanceTasks = new InstanceTaskScheduler(plugin, scheduler, logger);
         instanceTasks.setFireCallback((inst, f) -> runScript(inst, f.script(),
             ScriptContext.withVars(inst, null, f.vars())));
@@ -566,7 +567,7 @@ public final class AbyssService {
         if (entranceMarkers != null) entranceMarkers.shutdown();
         if (partyManager != null) partyManager.shutdown();
         if (links != null) links.close();
-        if (crossDungeon != null) crossDungeon.stop();
+        if (xuanmo.arcartxsuite.api.BuildEdition.CROSS_SERVER_INCLUDED && crossDungeon != null) crossDungeon.stop();
     }
 
     private void finishShutdown() {
@@ -917,7 +918,7 @@ public final class AbyssService {
                 failures.add(AdmissionAccess.deny("COST_CONFIGURATION_CONFLICT", "外部门票与原生物品消耗不能同时配置"));
         }
         if (template.crossServer() != null && !template.crossServer().isBlank()
-            && (crossDungeon == null || !template.crossServer().equals(crossDungeon.nodeId())))
+            && (crossServer == null || !template.crossServer().equals(crossServer.nodeId())))
             return List.of(AdmissionAccess.deny("REMOTE_REQUEST_UNSUPPORTED", "公开事务暂不支持跨服转发"));
         if (intent.plan() != null && !intent.plan().isBlank() && !template.plans().containsKey(intent.plan()))
             failures.add(AdmissionAccess.deny("UNKNOWN_PLAN", "方案不存在"));
@@ -1011,9 +1012,9 @@ public final class AbyssService {
         //   跨服通道未启用且非宿主 → 拒绝（不能静默退化为本地副本）。
         String cs = template.crossServer();
         if (cs != null && !cs.isBlank()) {
-            boolean isHost = crossDungeon != null && cs.equals(crossDungeon.nodeId());
+            boolean isHost = crossServer != null && cs.equals(crossServer.nodeId());
             if (!isHost) {
-                if (crossDungeon != null && crossDungeon.active()) {
+                if (xuanmo.arcartxsuite.api.BuildEdition.CROSS_SERVER_INCLUDED && crossDungeon != null && crossDungeon.active()) {
                     crossDungeon.requestRemoteEnter(players, template,plan);
                     return EnterResult.success();
                 }
@@ -2318,7 +2319,7 @@ public final class AbyssService {
             designManager.close(player);
             if (designListener != null) designListener.removeWand(player);
         }
-        if (crossDungeon != null) crossDungeon.onPlayerQuit(player);
+        if (xuanmo.arcartxsuite.api.BuildEdition.CROSS_SERVER_INCLUDED && crossDungeon != null) crossDungeon.onPlayerQuit(player);
         AbyssInstance instance = instances.getInstance(player);
         if (instance == null) return;
         reconnects.retain(instance, player);
@@ -2419,7 +2420,8 @@ public final class AbyssService {
         recoveringPlayers.remove(player.getUniqueId(),player);
         if (rewardGames != null) rewardGames.remind(player);
         scheduleDelayedRaw(()->{
-            if(crossDungeon!=null && player.isOnline() && org.bukkit.Bukkit.getPlayer(player.getUniqueId())==player)
+            if (xuanmo.arcartxsuite.api.BuildEdition.CROSS_SERVER_INCLUDED && crossDungeon != null
+                && player.isOnline() && org.bukkit.Bukkit.getPlayer(player.getUniqueId()) == player)
                 crossDungeon.onPlayerJoin(player);
         },60L);
     }

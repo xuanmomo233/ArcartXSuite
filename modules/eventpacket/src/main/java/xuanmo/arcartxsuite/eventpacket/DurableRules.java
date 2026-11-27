@@ -18,6 +18,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 import java.util.logging.Logger;
+import xuanmo.arcartxsuite.api.BuildEdition;
 import xuanmo.arcartxsuite.api.capability.AbyssRunResultAccess;
 import xuanmo.arcartxsuite.api.mail.AxsMailService;
 import xuanmo.arcartxsuite.api.scheduler.ModuleExecutor;
@@ -119,8 +120,9 @@ final class DurableRules implements AutoCloseable {
             var source = abyss.get();
             if (source == null) {
                 status = "waiting for Abyss";
-            } else if (journal.mysql() && !source.usesSharedHostStorage()) {
-                status = "Abyss must use shared MySQL";
+            } else if (!canReadAbyssResults(source)) {
+                status = BuildEdition.CROSS_SERVER_INCLUDED ? "Abyss must use shared MySQL"
+                    : "免费云端版的副本结果编排需要 Abyss 本地 SQLite";
             } else if (abyssRetryNotBefore != 0L && System.nanoTime() - abyssRetryNotBefore < 0L) {
                 status = "waiting to retry Abyss";
             } else {
@@ -187,13 +189,13 @@ final class DurableRules implements AutoCloseable {
     }
 
     private boolean consumeResults(RuleConfiguration configuration, AbyssRunResultAccess source) throws Exception {
-        if (!canConsumeResults(configuration)) return false;
+        if (!canConsumeResults(configuration, source)) return false;
         Long highWater = null;
         boolean more = false;
         var cursors = journal.cursors(configuration.abyss());
         var pages = new LinkedHashMap<ResultPosition, List<AbyssRunResultAccess.Committed>>(16, 0.75f, true);
         for (var rule : configuration.abyss()) {
-            if (!canConsumeResults(configuration)) break;
+            if (!canConsumeResults(configuration, source)) break;
             var position = cursors.get(new RuleJournal.CursorKey(rule.id(), rule.owner()));
             if (position == null) {
                 Long start = rule.startSequence();
@@ -201,7 +203,7 @@ final class DurableRules implements AutoCloseable {
                     if (highWater == null) highWater = source.latestCommittedSequence().get(WAIT_SECONDS, TimeUnit.SECONDS);
                     start = highWater;
                 }
-                if (!canConsumeResults(configuration)) break;
+                if (!canConsumeResults(configuration, source)) break;
                 journal.startCursor(rule.id(), rule.owner(), start, rule.startSequence() == null);
                 position = journal.cursor(rule.id(), rule.owner()).orElseThrow();
             }
@@ -209,11 +211,12 @@ final class DurableRules implements AutoCloseable {
             var key = new ResultPosition(rule.owner(), from);
             var page = pages.get(key);
             if (page == null) {
+                if (!canConsumeResults(configuration, source)) break;
                 page = source.committedResults(rule.owner(), from, PAGE_SIZE).get(WAIT_SECONDS, TimeUnit.SECONDS);
                 if (pages.size() == REUSABLE_PAGES) pages.remove(pages.keySet().iterator().next());
                 pages.put(key, page);
             }
-            if (page.isEmpty() || !canConsumeResults(configuration)) continue;
+            if (page.isEmpty() || !canConsumeResults(configuration, source)) continue;
             var jobs = new ArrayList<RuleJournal.MailJob>();
             long to = from;
             for (var entry : page) {
@@ -225,19 +228,24 @@ final class DurableRules implements AutoCloseable {
                     planResult(jobs, entry.result(), rule);
                 }
             }
-            if (!canConsumeResults(configuration)) break;
+            if (!canConsumeResults(configuration, source)) break;
             journal.stagePage(rule.id(), rule.owner(), from, to, jobs);
             more |= page.size() >= PAGE_SIZE;
         }
         return more;
     }
 
-    private boolean canConsumeResults(RuleConfiguration configuration) {
-        return !closed && rules.get() == configuration && canOrchestrateResults();
+    private boolean canConsumeResults(RuleConfiguration configuration, AbyssRunResultAccess source) {
+        return !closed && rules.get() == configuration && canOrchestrateResults() && canReadAbyssResults(source);
+    }
+
+    private boolean canReadAbyssResults(AbyssRunResultAccess source) {
+        if (!BuildEdition.CROSS_SERVER_INCLUDED) return source.usesLocalResultStorage();
+        return !journal.mysql() || source.usesSharedHostStorage();
     }
 
     private boolean canOrchestrateResults() {
-        return !journal.mysql() || advancedCrossServerOrchestrationAllowed.getAsBoolean();
+        return !journal.mysql() || BuildEdition.CROSS_SERVER_INCLUDED && advancedCrossServerOrchestrationAllowed.getAsBoolean();
     }
 
     private record ResultPosition(String owner, long cursor) {}
