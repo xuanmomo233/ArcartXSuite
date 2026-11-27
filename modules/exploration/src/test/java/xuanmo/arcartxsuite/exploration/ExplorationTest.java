@@ -162,6 +162,10 @@ class ExplorationTest {
 
     @Test void bundledPoolHasExactWeightBoundariesAndDisabledOptIns() {
         assertTrue(ExplorationConfig.load(defaults()).worlds().isEmpty());
+        assertEquals(List.of(new ExplorationConfig.Loot("minecraft", "SWEET_BERRIES", 3)),
+            region.outcomes().get(0).items());
+        assertEquals(List.of(new ExplorationConfig.Loot("minecraft", "IRON_INGOT", 2),
+            new ExplorationConfig.Loot("minecraft", "EMERALD", 1)), region.outcomes().get(1).items());
         var random = mock(RandomGenerator.class);
         when(random.nextLong(100)).thenReturn(0L, 69L, 70L, 99L);
         for (var kind : List.of("GATHER", "GATHER", "CHEST", "CHEST")) assertEquals(kind, region.draw(random).kind().name());

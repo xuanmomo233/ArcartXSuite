@@ -25,7 +25,9 @@ regions:
         # 来源支持 minecraft、mythic、neige、overture、mmoitems。
         # 每条物品占一格，数量不能超过该物品的单组上限。
         items:
-          - {source: minecraft, id: SWEET_BERRIES, amount: 3}
+          - source: minecraft
+            id: SWEET_BERRIES
+            amount: 3
       cache:
         type: chest
         weight: 30
@@ -37,8 +39,12 @@ regions:
         scale: 1.0
         # 关窗后可再点模型。离发现位置超过 32 格、换世界、死亡、下线或重载会清除未领取宝箱。
         items:
-          - {source: minecraft, id: IRON_INGOT, amount: 2}
-          - {source: minecraft, id: EMERALD, amount: 1}
+          - source: minecraft
+            id: IRON_INGOT
+            amount: 2
+          - source: minecraft
+            id: EMERALD
+            amount: 1
       lost_letter:
         type: quest
         weight: 0
