@@ -1,76 +1,11 @@
-config-version: 3
+config-version: 4
 
+# 规则位于 rules/，实体清理单独配置在 cleanup.yml。
 runtime:
   queue-capacity: 1024
   work-per-tick: 64
   budget-micros: 750
 
-# 启用前替换示例中的字幕组、任务 ID、副本 ID 和奖励。
-# 规则 ID 和邮件动作 ID 会参与持久化去重。部署后请保持稳定。
-rules:
-  legendary-fishing:
-    enabled: false
-    trigger: event-bus
-    topic: axs.fishing.success
-    when:
-      fish_rarity: LEGENDARY
-    actions:
-      - type: subtitle
-        group: legendary-fishing
-
-  quest-follow-up:
-    enabled: false
-    trigger: event-bus
-    topic: axs.questgps.quest_completed
-    when:
-      quest_id: chapter_one
-    actions:
-      - type: quest.offer
-        quest: chapter_two
-        open-menu: true
-
-  abyss-clear:
-    enabled: false
-    trigger: abyss-result
-    owner: abyss
-    # 省略 start-sequence 时，首次消费从当前结果游标开始。
-    # 显式填 0 可在新规则中回放历史结果。
-    when:
-      dungeon: example_dungeon
-      difficulty: hard
-    actions:
-      - type: mail
-        id: clear-reward
-        title: "副本通关奖励"
-        content: "你已通关 {dungeon}，难度 {difficulty}。"
-        currency: money
-        amount: 100
-
-  welcome-mail:
-    enabled: false
-    trigger: first-admitted
-    actions:
-      - type: mail
-        id: welcome
-        title: "欢迎加入服务器"
-        content: "你的冒险从这里开始。"
-
-  auction-receipt:
-    enabled: false
-    trigger: auction-purchased
-    actions:
-      - type: mail
-        id: auction-receipt
-        title: "拍卖成交 #{listing_id}"
-        content: "你以 {formatted_price} 拍得 {item}。"
-
-  maintenance-save:
-    enabled: false
-    trigger: schedule
-    schedule:
-      mode: interval
-      interval-minutes: 10
-    actions:
-      - type: command
-        executor: console
-        command: save-all
+sampling:
+  interval-ticks: 100
+  work-per-tick: 16

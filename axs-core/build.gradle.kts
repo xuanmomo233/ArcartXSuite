@@ -203,6 +203,7 @@ tasks {
         if (suiteEdition == "free") {
             exclude("xuanmo/arcartxsuite/auth/minecraft/ProxyProofs*.class")
             exclude("xuanmo/arcartxsuite/auth/minecraft/ProxyKeys*.class")
+            exclude("xuanmo/arcartxsuite/api/crossserver/ProxyTabVisibility*.class")
         }
         // 合并 modern 源集编译产物
         from(sourceSets.named("modern").get().output)

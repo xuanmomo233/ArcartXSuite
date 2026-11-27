@@ -21,6 +21,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -34,13 +35,17 @@ final class VelocityTabList implements AutoCloseable {
     private static final long STATE_TTL = TimeUnit.SECONDS.toNanos(30);
     private static final long MOVE_TTL = TimeUnit.SECONDS.toNanos(15);
     private static final long NATIVE_REMOVE_GRACE = TimeUnit.SECONDS.toNanos(1);
+    private static final long DETAILS_TTL = TimeUnit.SECONDS.toNanos(5);
+    private static final long PLAYER_LIST_REFRESH = TimeUnit.SECONDS.toNanos(3);
 
     private record Visibility(ServerConnection connection, byte state, long receivedAt) {}
     private record Move(ServerConnection previous, RegisteredServer destination, boolean carryVanish,
                         boolean failureCorrelated, long startedAt) {}
     private record VanishUpdate(ServerConnection connection, long sequence, boolean pendingGrant) {}
     private record Member(Player player, RegisteredServer backend) {}
-    private record Roster(List<Player> players, Set<UUID> ids) {}
+    private record RemoteSelection(List<Player> players, Set<UUID> ids) {}
+    private record PlayerDetails(ServerConnection backend, long sequence, long receivedAt, ProxyTabVisibility.PlayerDetails details) {}
+    private record PublishedPlayerList(ServerConnection backend, List<ProxyTabVisibility.RemotePlayer> players, long sentAt) {}
 
     private final Object plugin;
     private final ProxyServer proxy;
@@ -51,9 +56,12 @@ final class VelocityTabList implements AutoCloseable {
     private final Set<UUID> vanished = new HashSet<>();
     private final Set<UUID> awaitingVanish = new HashSet<>();
     private final Map<UUID, Map<UUID, TabListEntry>> injected = new HashMap<>();
+    private final Map<UUID, PlayerDetails> playerDetails = new HashMap<>();
+    private final Map<UUID, PublishedPlayerList> publishedPlayerLists = new HashMap<>();
     private final ScheduledTask refreshTask;
     private final ScheduledTask queryTask;
     private long reconcileAfter;
+    private long refreshPlayerListsAfter;
     private boolean dirty = true;
     private boolean closed;
 
@@ -92,6 +100,7 @@ final class VelocityTabList implements AutoCloseable {
         moves.put(id, new Move(old, destination, carryVanish,
             previousMove == null || previousMove.previous() != old, System.nanoTime()));
         visibility.remove(id);
+        playerDetails.remove(id);
         // Remove owned entries before the destination backend can publish native entries for this UUID.
         clearViewer(id);
         clearTarget(id);
@@ -115,6 +124,8 @@ final class VelocityTabList implements AutoCloseable {
         if (update != null && update.connection() != connection) vanishUpdates.remove(id);
         Visibility state = visibility.get(id);
         if (state != null && state.connection() != connection) visibility.remove(id);
+        PlayerDetails details = playerDetails.get(id);
+        if (details != null && details.backend() != connection) playerDetails.remove(id);
         if (connection != null) connection.sendPluginMessage(CHANNEL, QUERY);
         dirty = true;
     }
@@ -144,6 +155,8 @@ final class VelocityTabList implements AutoCloseable {
         vanished.remove(id);
         awaitingVanish.remove(id);
         injected.remove(id);
+        playerDetails.remove(id);
+        publishedPlayerLists.remove(id);
         clearTarget(id);
         dirty = true;
     }
@@ -157,6 +170,10 @@ final class VelocityTabList implements AutoCloseable {
         if (current(player) != backend) return;
         UUID id = player.getUniqueId();
         byte[] data = event.getData();
+        if (data.length > 0 && data[0] == ProxyTabVisibility.PLAYER_LIST_DETAILS) {
+            receivePlayerDetails(backend, id, data);
+            return;
+        }
         if (data.length != ProxyTabVisibility.STATE_MESSAGE_LENGTH) return;
         long sequence = ProxyTabVisibility.sequence(data);
         VanishUpdate previous = vanishUpdates.get(id);
@@ -170,6 +187,7 @@ final class VelocityTabList implements AutoCloseable {
         }
         if (onSource && System.nanoTime() - move.startedAt() < MOVE_TTL) return;
         if (state == ProxyTabVisibility.WITHDRAWN) {
+            playerDetails.remove(id);
             vanishUpdates.put(id, new VanishUpdate(backend, sequence,
                 previous != null && previous.connection() == backend && previous.pendingGrant()));
             if (visibility.remove(id) != null) {
@@ -189,11 +207,36 @@ final class VelocityTabList implements AutoCloseable {
             }
             Visibility old = visibility.put(id, new Visibility(backend, state, System.nanoTime()));
             if (old == null || old.connection() != backend || old.state() != state) {
+                playerDetails.remove(id);
                 if (state != ProxyTabVisibility.VISIBLE) clearTarget(id);
                 if (restricted(state)) clearViewer(id);
                 dirty = true;
             }
         }
+    }
+
+    private void receivePlayerDetails(ServerConnection backend, UUID id, byte[] data) {
+        long now = System.nanoTime();
+        Visibility state = visibility.get(id);
+        Move move = moves.get(id);
+        if (state == null || state.connection() != backend || restricted(state.state()) || grantPending(id)
+                || now - state.receivedAt() >= STATE_TTL
+                || (move != null && now - move.startedAt() < MOVE_TTL)) return;
+        ProxyTabVisibility.PlayerDetails details;
+        try {
+            details = ProxyTabVisibility.readPlayerDetails(data);
+        } catch (IllegalArgumentException malformed) {
+            return;
+        }
+        long sequence = ProxyTabVisibility.sequence(data);
+        VanishUpdate stateUpdate = vanishUpdates.get(id);
+        var previous = playerDetails.get(id);
+        if ((stateUpdate != null && stateUpdate.connection() == backend && sequence <= stateUpdate.sequence())
+                || (previous != null && previous.backend() == backend && sequence <= previous.sequence())) return;
+        if (state.state() != ProxyTabVisibility.VISIBLE) details = null;
+        playerDetails.put(id, new PlayerDetails(backend, sequence, now, details));
+        if (previous == null || now - previous.receivedAt() >= DETAILS_TTL
+                || !Objects.equals(previous.details(), details)) dirty = true;
     }
 
     private void grantVanish(ServerConnection backend, UUID id, long sequence, VanishUpdate previous, boolean onSource) {
@@ -247,11 +290,13 @@ final class VelocityTabList implements AutoCloseable {
     private synchronized void refresh() {
         if (closed) return;
         long now = System.nanoTime();
-        if (!dirty && (reconcileAfter == 0 || now - reconcileAfter < 0)) return;
+        boolean refreshPlayerLists = !publishedPlayerLists.isEmpty() && now - refreshPlayerListsAfter >= 0;
+        if (!dirty && !refreshPlayerLists && (reconcileAfter == 0 || now - reconcileAfter < 0)) return;
+        if (refreshPlayerLists || publishedPlayerLists.isEmpty()) refreshPlayerListsAfter = now + PLAYER_LIST_REFRESH;
         if (reconcileAfter != 0 && now - reconcileAfter >= 0) reconcileAfter = 0;
         dirty = false;
         List<Member> visible = new ArrayList<>();
-        Map<Player, RegisteredServer> viewers = new HashMap<>();
+        Map<Player, ServerConnection> viewers = new HashMap<>();
         for (Player player : proxy.getAllPlayers()) {
             UUID id = player.getUniqueId();
             Visibility state = visibility.get(id);
@@ -263,19 +308,19 @@ final class VelocityTabList implements AutoCloseable {
                 continue;
             }
             var backend = state.connection().getServer();
-            viewers.put(player, backend);
+            viewers.put(player, state.connection());
             if (state.state() == ProxyTabVisibility.VISIBLE && !grantPending(id)) {
                 visible.add(new Member(player, backend));
             }
         }
         visible.sort(Comparator.comparing((Member member) -> member.player().getUsername(), String.CASE_INSENSITIVE_ORDER)
             .thenComparing(member -> member.player().getUniqueId()));
-        Map<RegisteredServer, Roster> byBackend = new HashMap<>();
+        Map<RegisteredServer, RemoteSelection> byBackend = new HashMap<>();
         viewers.forEach((viewer, backend) ->
-            update(viewer, byBackend.computeIfAbsent(backend, local -> roster(visible, local))));
+            update(viewer, backend, byBackend.computeIfAbsent(backend.getServer(), local -> remoteSelection(visible, local)), now));
     }
 
-    private Roster roster(List<Member> visible, RegisteredServer local) {
+    private RemoteSelection remoteSelection(List<Member> visible, RegisteredServer local) {
         List<Player> players = new ArrayList<>();
         Set<UUID> ids = new HashSet<>();
         for (Member member : visible) {
@@ -284,20 +329,21 @@ final class VelocityTabList implements AutoCloseable {
             ids.add(member.player().getUniqueId());
             if (players.size() == maxRemoteEntries) break;
         }
-        return new Roster(players, ids);
+        return new RemoteSelection(players, ids);
     }
 
-    private void update(Player viewer, Roster roster) {
+    private void update(Player viewer, ServerConnection backend, RemoteSelection selection, long now) {
+        if (current(viewer) != backend) return;
         var tab = viewer.getTabList();
         var owned = injected.computeIfAbsent(viewer.getUniqueId(), ignored -> new HashMap<>());
         owned.entrySet().removeIf(row -> {
             UUID id = row.getKey();
             if (tab.getEntry(id).orElse(null) != row.getValue()) return true;
-            if (roster.ids().contains(id)) return false;
+            if (selection.ids().contains(id)) return false;
             tab.removeEntry(id);
             return true;
         });
-        for (Player remote : roster.players()) {
+        for (Player remote : selection.players()) {
             UUID id = remote.getUniqueId();
             if (tab.containsEntry(id)) continue;
             var row = TabListEntry.builder().tabList(tab).profile(remote.getGameProfile())
@@ -311,6 +357,34 @@ final class VelocityTabList implements AutoCloseable {
             }
         }
         if (owned.isEmpty()) injected.remove(viewer.getUniqueId());
+        publishPlayerList(viewer, backend, selection, owned.keySet(), now);
+    }
+
+    private void publishPlayerList(Player viewer, ServerConnection backend, RemoteSelection selection, Set<UUID> owned, long now) {
+        if (current(viewer) != backend) return;
+        UUID viewerId = viewer.getUniqueId();
+        var subscription = playerDetails.get(viewerId);
+        if (subscription == null || subscription.backend() != backend || now - subscription.receivedAt() >= DETAILS_TTL) {
+            clearPlayerList(viewerId);
+            return;
+        }
+        List<ProxyTabVisibility.RemotePlayer> players = new ArrayList<>();
+        for (Player remote : selection.players()) {
+            UUID id = remote.getUniqueId();
+            if (!owned.contains(id)) continue;
+            var source = playerDetails.get(id);
+            if (source == null || current(remote) != source.backend() || now - source.receivedAt() >= DETAILS_TTL
+                    || source.details() == null) continue;
+            if (players.size() == ProxyTabVisibility.MAX_REMOTE_PLAYERS) break;
+            int ping = (int) Math.min(Integer.MAX_VALUE, Math.max(0, remote.getPing()));
+            players.add(new ProxyTabVisibility.RemotePlayer(id, remote.getUsername(), ping, source.details()));
+        }
+        var previous = publishedPlayerLists.get(viewerId);
+        if (previous != null && previous.backend() == backend && previous.players().equals(players)
+                && now - previous.sentAt() < PLAYER_LIST_REFRESH) return;
+        if (backend.sendPluginMessage(CHANNEL, ProxyTabVisibility.crossServerListMessage(players, ProxyTabVisibility.nextSequence()))) {
+            publishedPlayerLists.put(viewerId, new PublishedPlayerList(backend, List.copyOf(players), now));
+        }
     }
 
     private static ServerConnection current(Player player) {
@@ -325,11 +399,28 @@ final class VelocityTabList implements AutoCloseable {
 
     private void clearTarget(UUID id) {
         injected.values().forEach(rows -> removeOwned(id, rows.remove(id)));
+        publishedPlayerLists.replaceAll((viewer, snapshot) -> {
+            if (snapshot.players().stream().noneMatch(player -> id.equals(player.uuid()))
+                    || current(snapshot.backend().getPlayer()) != snapshot.backend()) return snapshot;
+            var players = snapshot.players().stream().filter(player -> !id.equals(player.uuid())).toList();
+            if (!snapshot.backend().sendPluginMessage(CHANNEL,
+                    ProxyTabVisibility.crossServerListMessage(players, ProxyTabVisibility.nextSequence()))) return snapshot;
+            return new PublishedPlayerList(snapshot.backend(), players, System.nanoTime());
+        });
     }
 
     private void clearViewer(UUID id) {
         var rows = injected.remove(id);
         if (rows != null) rows.forEach(VelocityTabList::removeOwned);
+        clearPlayerList(id);
+    }
+
+    private void clearPlayerList(UUID id) {
+        var snapshot = publishedPlayerLists.remove(id);
+        if (snapshot != null && !snapshot.players().isEmpty() && current(snapshot.backend().getPlayer()) == snapshot.backend()) {
+            snapshot.backend().sendPluginMessage(CHANNEL,
+                ProxyTabVisibility.crossServerListMessage(List.of(), ProxyTabVisibility.nextSequence()));
+        }
     }
 
     @Override
@@ -341,6 +432,8 @@ final class VelocityTabList implements AutoCloseable {
         proxy.getChannelRegistrar().unregister(CHANNEL);
         injected.values().forEach(rows -> rows.forEach(VelocityTabList::removeOwned));
         injected.clear();
+        publishedPlayerLists.clear();
+        playerDetails.clear();
         visibility.clear();
         moves.clear();
         vanishUpdates.clear();

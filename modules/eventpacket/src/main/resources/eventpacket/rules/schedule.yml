@@ -1,0 +1,13 @@
+config-version: 1
+
+rules:
+  maintenance-save:
+    enabled: false
+    trigger: schedule
+    schedule:
+      mode: interval
+      interval-minutes: 10
+    actions:
+      - type: command
+        executor: console
+        command: save-all

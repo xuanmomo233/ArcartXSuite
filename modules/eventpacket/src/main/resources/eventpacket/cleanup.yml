@@ -1,0 +1,16 @@
+config-version: 1
+
+enabled: false
+interval-seconds: 300
+warning-seconds: 30
+work-per-tick: 48
+# 留空时处理所有已有实体加载完成的区块。
+worlds: []
+items: true
+monsters: false
+animals: false
+skip-named: true
+entity-types: []
+excluded-types: []
+warning-message: "&e将在 {seconds} 秒后清理实体。"
+result-message: "&a已清理 {count} 个实体。"

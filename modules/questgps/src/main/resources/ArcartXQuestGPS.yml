@@ -159,7 +159,7 @@ gate:
   #   - "market"           # 商店/拍卖行入口
   #   - "regions_warp"     # 区域传送面板
   blocked-module-entries: []
-  # 未过关时，EventPacket 规则不触发（与 data/eventpacket/rules/*.yml 根键一致）
+  # 未过关时，阻止 data/eventpacket/rules/ 中指定规则 ID 的动作。
   # 示例：
   #   - "first_join_offer_mainline"      # rules/examples.yml
   #   - "kill_zombie_trigger_encounter"  # 击杀僵尸累计触发奇遇

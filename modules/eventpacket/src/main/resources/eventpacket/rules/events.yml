@@ -1,0 +1,32 @@
+config-version: 1
+
+rules:
+  legendary-fishing:
+    enabled: false
+    trigger: event-bus
+    topic: axs.fishing.success
+    when:
+      fish_rarity: LEGENDARY
+    actions:
+      - type: subtitle
+        group: legendary-fishing
+
+  quest-follow-up:
+    enabled: false
+    trigger: event-bus
+    topic: axs.questgps.quest_completed
+    when:
+      quest_id: chapter_one
+    actions:
+      - type: quest.offer
+        quest: chapter_two
+        open-menu: true
+
+  mob-milestone:
+    enabled: false
+    trigger: mob-kills
+    entity-type: ZOMBIE
+    count: 20
+    actions:
+      - type: message
+        text: "已击杀 {kill_count} 只僵尸。"

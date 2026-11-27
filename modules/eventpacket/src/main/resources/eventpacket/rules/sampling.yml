@@ -1,0 +1,21 @@
+config-version: 1
+
+rules:
+  level-threshold:
+    enabled: false
+    trigger: placeholder-change
+    placeholder: "%player_level%"
+    match: reach
+    threshold: 10
+    actions:
+      - type: message
+        text: "等级已达到 {new_value}。"
+
+  low-health:
+    enabled: false
+    trigger: script-check
+    engine: js
+    script: "player.getHealth() < 6"
+    actions:
+      - type: message
+        text: "你的生命值过低。"

@@ -652,6 +652,10 @@ client-packet-guard:
           mode: "notify"
     tab:
       actions:
+        open:
+          window-ms: 1000
+          max-hits: 4
+          mode: "silent"
         refresh:
           window-ms: 1500
           max-hits: 1
@@ -749,7 +753,7 @@ modules:
 
   eventpacket:
     enabled: true
-    # EventPacket 规则引擎，在 data/eventpacket/config.yml 订阅事件并配置动作。
+    # EventPacket 规则引擎，在 data/eventpacket/rules/ 订阅事件并配置动作。
     # 跨服副本奖励要求参与节点使用同一套共享 MySQL、Abyss 和 Mail 存储。
 
   exploration:
@@ -759,7 +763,7 @@ modules:
   tab:
     enabled: true
     # Tab 在线列表
-    # 功能：自定义玩家列表（TAB）显示内容，支持 PlaceholderAPI 变量、分组排序、页脚信息。
+    # 功能：本服玩家名单支持权限组筛选、PAPI 排序、分组和置顶。
     # 注意：需与 ArcartX 客户端配合使用；纯服务端不会生效。
 
   title:

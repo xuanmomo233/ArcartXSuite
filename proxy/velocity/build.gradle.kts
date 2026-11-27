@@ -34,6 +34,11 @@ tasks.shadowJar {
     archiveBaseName.set("ArcartXSuite-Proxy-Velocity")
     archiveClassifier.set("")
     duplicatesStrategy = org.gradle.api.file.DuplicatesStrategy.INCLUDE
+    // Packet decoding runs on Velocity, which has no Bukkit host to provide this codec.
+    dependsOn(":axs-api:compileJava")
+    from(project(":axs-api").layout.buildDirectory.dir("classes/java/main")) {
+        include("xuanmo/arcartxsuite/api/crossserver/ProxyTabVisibility*.class")
+    }
 
     // Common 自己的类保持原包名，不 relocate，确保 Velocity 代码中的 import 不受影响
     // 仅对第三方库做 relocate，避免与代理端已有依赖冲突

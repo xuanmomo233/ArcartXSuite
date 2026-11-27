@@ -18,14 +18,19 @@ import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.ArgumentCaptor;
 import xuanmo.arcartxsuite.api.ModuleContext;
+import xuanmo.arcartxsuite.api.PacketHandlerSpec;
 import xuanmo.arcartxsuite.api.auth.AuthAccess;
 import xuanmo.arcartxsuite.api.auth.AuthSnapshot;
 import xuanmo.arcartxsuite.api.capability.AbyssRunResultAccess;
 import xuanmo.arcartxsuite.api.capability.EventBusCapability;
 import xuanmo.arcartxsuite.api.capability.QuestGpsNavigable;
 import xuanmo.arcartxsuite.api.capability.SubtitlePlayable;
+import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
+import xuanmo.arcartxsuite.api.mail.AxsDeliveryReceipt;
 import xuanmo.arcartxsuite.api.mail.AxsMailService;
+import xuanmo.arcartxsuite.api.mail.AxsMailRequest;
 import xuanmo.arcartxsuite.api.scheduler.ScheduledTask;
 import xuanmo.arcartxsuite.api.scheduler.SchedulerAPI;
 import xuanmo.arcartxsuite.api.storage.StorageDescriptor;
@@ -37,7 +42,8 @@ class ModuleRulesTest {
 
     @Test
     void fishingAndQuestCapabilitiesAreInvokedThroughActiveModuleRules() throws Exception {
-        Path config = directory.resolve("config.yml");
+        Files.writeString(directory.resolve("config.yml"), "runtime: {budget-micros: 5000}\n");
+        Path config = Files.createDirectory(directory.resolve("rules")).resolve("events.yml");
         Files.writeString(config, config("legendary"));
         var module = new EventPacketModule();
         var context = mock(ModuleContext.class, RETURNS_DEEP_STUBS);
@@ -58,6 +64,8 @@ class ModuleRulesTest {
         var bus = mock(EventBusCapability.class);
         var subtitles = mock(SubtitlePlayable.class);
         var quests = mock(QuestGpsNavigable.class);
+        var bridge = mock(PacketBridgeAPI.class);
+        var mail = mock(AxsMailService.class);
         var player = mock(Player.class);
         var playerId = UUID.randomUUID();
         var connection = UUID.randomUUID();
@@ -76,10 +84,12 @@ class ModuleRulesTest {
         when(context.getCapability(QuestGpsNavigable.class)).thenReturn(quests);
         when(context.getCapability(AbyssRunResultAccess.class)).thenReturn(null);
         when(context.getCapability(AxsMailService.class)).thenReturn(null);
+        when(context.packetBridge()).thenReturn(bridge);
         when(storage.getDescriptor()).thenReturn(mock(StorageDescriptor.class));
         when(storage.openModuleStorage(eq("eventpacket"), anyString(), any(), isNull())).thenReturn(scope);
         when(source.getConnection()).thenAnswer(ignored -> DriverManager.getConnection("jdbc:sqlite::memory:"));
         when(player.getUniqueId()).thenReturn(playerId);
+        when(player.getName()).thenReturn("Ada");
         when(player.isOnline()).thenReturn(true);
         when(subtitles.playGroup(eq(player), anyString())).thenReturn(true);
         when(scheduler.scheduleAtFixedRate(eq(plugin), any(), anyLong(), anyLong())).thenAnswer(invocation -> {
@@ -146,6 +156,35 @@ class ModuleRulesTest {
                 publish(subscriptions, fishing);
                 drain(realtimeLoops.get(5));
                 verify(subtitles).playGroup(player, "enabled-again");
+
+                Files.writeString(directory.resolve("rules/client.yml"), """
+                    rules:
+                      panel:
+                        trigger: client-packet
+                        permission: demo.panel
+                        actions:
+                          - {type: ui.packet, ui: "AXS:test", handler: update, data: {label: "{player_name}"}}
+                          - {type: mail.send, title: "确认 {player_name}", content: "收到操作"}
+                    """);
+                when(context.getCapability(AxsMailService.class)).thenReturn(mail);
+                when(mail.send(any())).thenReturn(java.util.concurrent.CompletableFuture.completedFuture(AxsDeliveryReceipt.ok(3, 1)));
+                module.onReload().toCompletableFuture().join();
+                var handler = ArgumentCaptor.forClass(PacketHandlerSpec.class);
+                verify(context).registerClientPacketHandler(handler.capture());
+                var route = handler.getValue().handler();
+                when(player.hasPermission("demo.panel")).thenReturn(true);
+                route.handleClientPacket(player, LocalTriggerSettings.PACKET_ID, java.util.List.of("client-packet", "panel"));
+                assertEquals(6, realtimeLoops.size());
+                when(player.isPermissionSet("demo.panel")).thenReturn(true);
+                route.handleClientPacket(player, LocalTriggerSettings.PACKET_ID, java.util.List.of("client-packet", "panel", "untrusted"));
+                assertEquals(6, realtimeLoops.size());
+                route.handleClientPacket(player, LocalTriggerSettings.PACKET_ID, java.util.List.of("client-packet", "panel"));
+                drain(realtimeLoops.get(6));
+                verify(bridge).sendPacket(player, "AXS:test", "update", Map.of("label", "Ada"));
+                var request = ArgumentCaptor.forClass(AxsMailRequest.class);
+                verify(mail).send(request.capture());
+                assertEquals(java.util.List.of(playerId), request.getValue().recipients());
+                assertEquals("确认 Ada", request.getValue().title());
             } finally {
                 module.onDisable();
                 module.shutdownCompletion().toCompletableFuture().get(5, java.util.concurrent.TimeUnit.SECONDS);
@@ -172,8 +211,6 @@ class ModuleRulesTest {
 
     private static String config(String subtitle) {
         return """
-            runtime:
-              budget-micros: 5000
             rules:
               fishing:
                 trigger: event-bus

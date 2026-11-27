@@ -8,9 +8,16 @@ depends: []
 softdepends:
   - abyss
   - announcer
+  - chat
+  - combateffect
   - fishing
   - mail
+  - qqbot
   - questgps
+  - title
 external-depends:
 external-softdepends:
+  - PlaceholderAPI
+  - MythicMobs
+  - Chemdah
 

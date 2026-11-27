@@ -59,3 +59,7 @@ notifications:
   show-actionbar: true
   # 进出消息显示方式: actionbar / chat / title
   display-mode: actionbar
+  # 世界默认规则拒绝飞行时，在聊天栏提示。设为空字符串可关闭对应提示。
+  flight-denied:
+    default: "&c此世界禁止飞行。"
+    worlds: {}

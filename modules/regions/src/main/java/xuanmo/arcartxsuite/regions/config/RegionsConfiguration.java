@@ -1,8 +1,11 @@
 package xuanmo.arcartxsuite.regions.config;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.logging.Logger;
 import org.bukkit.ChatColor;
 import org.bukkit.Material;
+import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 
 /**
@@ -49,7 +52,12 @@ public record RegionsConfiguration(
      * @param showActionbar 是否在 Actionbar 展示通知
      * @param displayMode   显示模式（如 {@code actionbar}）
      */
-    public record NotificationConfig(boolean showActionbar, String displayMode) {}
+    public record NotificationConfig(boolean showActionbar, String displayMode, String defaultFlightDenied,
+                                     Map<String, String> flightDeniedByWorld) {
+        public String flightDenied(String world) {
+            return flightDeniedByWorld.getOrDefault(world, defaultFlightDenied).replace("{world}", world);
+        }
+    }
 
     /**
      * 玩家可见消息模板集合。
@@ -125,9 +133,22 @@ public record RegionsConfiguration(
         );
 
         var notif = yaml.getConfigurationSection("notifications");
+        Map<String, String> flightMessages = new HashMap<>();
+        var flightWorlds = yaml.getConfigurationSection("notifications.flight-denied.worlds");
+        if (flightWorlds != null) {
+            flightWorlds.getValues(true).forEach((world, message) -> {
+                if (message instanceof ConfigurationSection) return;
+                if (!(message instanceof String text)) {
+                    throw new IllegalArgumentException("世界禁飞提示必须是文本：" + world);
+                }
+                flightMessages.put(world, text);
+            });
+        }
         NotificationConfig notifications = new NotificationConfig(
             notif != null && notif.getBoolean("show-actionbar", true),
-            notif != null ? notif.getString("display-mode", "actionbar") : "actionbar"
+            notif != null ? notif.getString("display-mode", "actionbar") : "actionbar",
+            yaml.getString("notifications.flight-denied.default", "&c此世界禁止飞行。"),
+            Map.copyOf(flightMessages)
         );
 
         var msg = messagesYaml;

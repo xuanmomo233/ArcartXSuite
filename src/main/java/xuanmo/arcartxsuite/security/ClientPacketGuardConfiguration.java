@@ -223,7 +223,10 @@ public record ClientPacketGuardConfiguration(
             actionRule("bypass_enter", 5000L, 2, ClientPacketGuardMode.NOTIFY),
             actionRule("bind_code", 3000L, 3, ClientPacketGuardMode.NOTIFY)
         ));
-        rules.put("tab", actionRules(actionRule("refresh", 1500L, 1, ClientPacketGuardMode.SILENT)));
+        rules.put("tab", actionRules(
+            actionRule("open", 1000L, 4, ClientPacketGuardMode.SILENT),
+            actionRule("refresh", 1500L, 1, ClientPacketGuardMode.SILENT)
+        ));
         rules.put("pickup", actionRules(
             actionRule("pick", 1000L, 4, ClientPacketGuardMode.NOTIFY),
             actionRule("scroll_up", 500L, 8, ClientPacketGuardMode.SILENT),

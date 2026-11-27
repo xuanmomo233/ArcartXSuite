@@ -1,0 +1,37 @@
+config-version: 1
+
+# 规则 ID 和邮件动作 ID 参与持久化去重，启用后请保持稳定。
+rules:
+  abyss-clear:
+    enabled: false
+    trigger: abyss-result
+    owner: abyss
+    # 省略 start-sequence 时首次消费从当前结果游标开始。
+    when:
+      dungeon: example_dungeon
+      difficulty: hard
+    actions:
+      - type: mail
+        id: clear-reward
+        title: "副本通关奖励"
+        content: "你已通关 {dungeon}，难度 {difficulty}。"
+        currency: money
+        amount: 100
+
+  welcome-mail:
+    enabled: false
+    trigger: first-admitted
+    actions:
+      - type: mail
+        id: welcome
+        title: "欢迎加入服务器"
+        content: "你的冒险从这里开始。"
+
+  auction-receipt:
+    enabled: false
+    trigger: auction-purchased
+    actions:
+      - type: mail
+        id: auction-receipt
+        title: "拍卖成交 #{listing_id}"
+        content: "你以 {formatted_price} 拍得 {item}。"

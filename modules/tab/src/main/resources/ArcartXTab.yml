@@ -4,5 +4,39 @@ settings:
   # simple 显示名称，avatar 额外显示头像和延迟。
   # 修改后执行 /axs reload tab。
   layout: simple
-  # 与 Suite Velocity 的 tab-list.enabled 配合，仅上报当前连接的准入和隐身状态。
-  proxy-roster: false
+  # 付费版与 Suite Velocity 的 tab-list.enabled 配合，汇总可见的跨服玩家。
+  cross-server-list: false
+
+display:
+  # 留空时保留原版或其他插件设置的显示名。%player_name% 无需 PlaceholderAPI。
+  # 示例：'%axstitle_display_tab_prefix%&f%player_name%%axstitle_display_tab_suffix%'
+  name-format: ""
+
+player-list:
+  # 启用名单规则。跨服子服需配置相同的权限组名称集合和排序占位符。
+  enabled: false
+  # auto 在支持排序接口的服务端优先用原版名单排序，仅限本服排序和置顶。
+  # 权限组筛选、分组、跨服合并，以及原版排序不可用的客户端自动使用自定义 HUD 名单。
+  # hud 始终使用自定义 HUD 名单，适合需要混用不同版本客户端的代理网络。
+  presentation: auto
+  # 填权限组名。匹配 Vault/LuckPerms 主组或已授予的 group.<组名> 权限。
+  # 任一包含组匹配即可。
+  include-groups: []
+  # 排除组优先于包含组。
+  exclude-groups: []
+  sort:
+    # 使用名单中每名玩家自己的 PlaceholderAPI 值。留空时按玩家名排序。
+    placeholder: ""
+    numeric: true
+    order: asc
+  # 按声明顺序分组，玩家只加入第一个匹配组。
+  # groups:
+  #   staff:
+  #     label: "管理组"
+  #     permission-groups: [admin, moderator]
+  groups: {}
+  ungrouped-label: "其他玩家"
+  # 置顶优先于分组和排序，只包含通过筛选的玩家。
+  pinned:
+    names: []
+    permission-groups: []

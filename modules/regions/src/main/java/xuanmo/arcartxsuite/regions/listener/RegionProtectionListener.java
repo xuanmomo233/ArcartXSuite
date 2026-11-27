@@ -433,11 +433,9 @@ public final class RegionProtectionListener implements Listener {
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onToggleFlight(org.bukkit.event.player.PlayerToggleFlightEvent event) {
         if (!event.isFlying()) return;
-        if (isDenied(event.getPlayer().getLocation(), RegionFlag.FLY, event.getPlayer())) {
-            event.setCancelled(true);
-            event.getPlayer().setFlying(false);
-            msg(event.getPlayer(), config.messages().noPermissionRegion());
-        }
+        Player player = event.getPlayer();
+        var decision = manager.rulesAt(player.getLocation()).decide(RegionFlag.FLY, player);
+        if (RegionFlight.enforce(player, decision, config, true)) event.setCancelled(true);
     }
 
     @EventHandler
@@ -451,7 +449,10 @@ public final class RegionProtectionListener implements Listener {
     }
 
     public void enforceFlight(Player player) {
-        if (player.isFlying() && isDenied(player.getLocation(), RegionFlag.FLY, player)) player.setFlying(false);
+        if (player.isFlying()) {
+            var decision = manager.rulesAt(player.getLocation()).decide(RegionFlag.FLY, player);
+            RegionFlight.enforce(player, decision, config, false);
+        }
     }
 
     // ─── 挂物破坏（画/物品框，归 BLOCK_BREAK）───

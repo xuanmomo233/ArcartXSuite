@@ -31,6 +31,7 @@ import org.bukkit.event.player.PlayerBucketEmptyEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerPortalEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
+import org.bukkit.event.player.PlayerToggleFlightEvent;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.scheduler.BukkitScheduler;
 import org.bukkit.scheduler.BukkitTask;
@@ -93,6 +94,42 @@ class RegionProtectionTest {
         RegionManager reloaded = new RegionManager(new RegionsRepository(dataFile), config, logger, Runnable::run, Runnable::run);
         reloaded.loadAll();
         assertEquals(State.DENY, reloaded.queryFlag("world", 1, 1, 1, RegionFlag.BLOCK_BREAK));
+    }
+
+    @Test
+    void worldFlightDeniedUsesOverrideAndHonorsExplicitLocalAllow() throws Exception {
+        var global = region("__global__", Region.Kind.GLOBAL, 0, 0, RegionFlag.FLY, State.DENY);
+        var arena = region("arena", Region.Kind.MANAGED, 30, 40, RegionFlag.FLY, State.ALLOW);
+        seed(global, arena);
+        var yaml = new YamlConfiguration();
+        yaml.set("notifications.flight-denied.default", "默认禁飞");
+        yaml.set("notifications.flight-denied.worlds.world", "&c{world} 世界禁止飞行");
+        yaml.set("notifications.flight-denied.worlds.event.final", "活动禁飞");
+        var config = RegionsConfiguration.load(yaml, new YamlConfiguration(), logger);
+        assertEquals("默认禁飞", config.notifications().flightDenied("other"));
+        assertEquals("活动禁飞", config.notifications().flightDenied("event.final"));
+        var listener = new RegionProtectionListener(manager, config);
+        Player player = player();
+        when(player.getLocation()).thenReturn(new Location(world, 10, 1, 0));
+        var denied = new PlayerToggleFlightEvent(player, true);
+        listener.onToggleFlight(denied);
+        assertTrue(denied.isCancelled());
+        verify(player).sendMessage(config.messages().format("&cworld 世界禁止飞行"));
+        verify(player).setFlying(false);
+
+        when(player.getLocation()).thenReturn(new Location(world, 35, 1, 0));
+        var allowed = new PlayerToggleFlightEvent(player, true);
+        listener.onToggleFlight(allowed);
+        assertFalse(allowed.isCancelled());
+        verify(player, times(1)).setFlying(false);
+
+        yaml.set("notifications.flight-denied.worlds.world", "");
+        var muted = RegionsConfiguration.load(yaml, new YamlConfiguration(), logger);
+        when(player.getLocation()).thenReturn(new Location(world, 10, 1, 0));
+        when(player.isFlying()).thenReturn(true);
+        new RegionProtectionListener(manager, muted).enforceFlight(player);
+        verify(player, times(2)).setFlying(false);
+        verify(player, times(1)).sendMessage(anyString());
     }
 
     @Test

@@ -11,10 +11,12 @@ import java.util.UUID;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.LongAdder;
+import java.util.function.BiPredicate;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import org.bukkit.plugin.IllegalPluginAccessException;
 import xuanmo.arcartxsuite.api.auth.AuthSnapshot;
+import xuanmo.arcartxsuite.api.condition.ScriptConditionKind;
 import xuanmo.arcartxsuite.api.scheduler.ScheduledTask;
 
 /** Only offer() runs on publishers. Generation changes and draining run on the server thread. */
@@ -48,9 +50,24 @@ final class RealtimeRules {
             for (var rule : rules) {
                 unconditional &= rule.conditions().isEmpty();
                 fields.addAll(rule.conditions().keySet());
-                rule.actions().forEach(action -> fields.addAll(action.value().fields()));
+                rule.actions().forEach(action -> {
+                    fields.addAll(action.value().fields());
+                    action.data().values().forEach(template -> fields.addAll(template.fields()));
+                });
+                for (var check : rule.checks()) {
+                    if (check.kind() == ScriptConditionKind.CONTEXT) {
+                        addReference(fields, check.placeholder());
+                        addReference(fields, check.value());
+                    }
+                }
             }
             return new TopicRules(rules, Set.copyOf(fields), unconditional);
+        }
+
+        private static void addReference(Set<String> fields, String expression) {
+            if (expression != null && expression.length() > 2 && expression.startsWith("{") && expression.endsWith("}")) {
+                fields.add(expression.substring(1, expression.length() - 1));
+            }
         }
 
         private Map<String, String> copyFields(Object payload) {
@@ -83,16 +100,19 @@ final class RealtimeRules {
         private final Map<String, LongAdder> droppedByTopic;
         private final Function<Runnable, ScheduledTask> schedule;
         private final Consumer<Execution> execute;
+        private final BiPredicate<RuleConfiguration.LiveRule, Snapshot> prepare;
         private TickLoop loop;
         private Pending current;
         private int ruleIndex;
         private int actionIndex;
+        private boolean rulePrepared;
 
         private Generation(RuleConfiguration configuration, Function<Runnable, ScheduledTask> schedule,
-                           Consumer<Execution> execute) {
+                           BiPredicate<RuleConfiguration.LiveRule, Snapshot> prepare, Consumer<Execution> execute) {
             this.configuration = configuration;
             this.queue = new ArrayDeque<>(configuration.queueCapacity());
             this.schedule = schedule;
+            this.prepare = prepare;
             this.execute = execute;
             var counts = new HashMap<String, LongAdder>();
             var prepared = new HashMap<String, TopicRules>();
@@ -115,7 +135,12 @@ final class RealtimeRules {
 
     void install(RuleConfiguration configuration, Function<Runnable, ScheduledTask> schedule,
                  Consumer<Execution> execute) {
-        replace(configuration.topics().isEmpty() ? null : new Generation(configuration, schedule, execute));
+        install(configuration, schedule, (rule, event) -> true, execute);
+    }
+
+    void install(RuleConfiguration configuration, Function<Runnable, ScheduledTask> schedule,
+                 BiPredicate<RuleConfiguration.LiveRule, Snapshot> prepare, Consumer<Execution> execute) {
+        replace(configuration.topics().isEmpty() ? null : new Generation(configuration, schedule, prepare, execute));
     }
 
     void stop() {
@@ -215,10 +240,16 @@ final class RealtimeRules {
                 if (generation.current == null) break;
                 generation.ruleIndex = 0;
                 generation.actionIndex = 0;
+                generation.rulePrepared = false;
             }
             var current = generation.current;
             var rule = current.rules().get(generation.ruleIndex);
             work++;
+            if (!generation.rulePrepared && !rule.checks().isEmpty()) {
+                if (generation.prepare.test(rule, current.snapshot())) generation.rulePrepared = true;
+                else advanceRule(generation);
+                continue;
+            }
             var action = rule.actions().get(generation.actionIndex++);
             if (generation.actionIndex == rule.actions().size()) advanceRule(generation);
             generation.execute.accept(new Execution(rule, action, current.snapshot()));
@@ -229,6 +260,7 @@ final class RealtimeRules {
 
     private static void advanceRule(Generation generation) {
         generation.actionIndex = 0;
+        generation.rulePrepared = false;
         if (++generation.ruleIndex == generation.current.rules().size()) generation.current = null;
     }
 

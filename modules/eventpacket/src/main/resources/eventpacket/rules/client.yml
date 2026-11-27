@@ -1,0 +1,10 @@
+config-version: 1
+
+rules:
+  ui-notice:
+    enabled: false
+    trigger: client-packet
+    permission: example.eventpacket.notice
+    actions:
+      - type: message
+        text: "收到界面操作。"

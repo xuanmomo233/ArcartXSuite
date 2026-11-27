@@ -7,5 +7,5 @@ api-version: 3.9
 depends: []
 softdepends: []
 external-depends: []
-external-softdepends: []
+external-softdepends: [PlaceholderAPI, Vault, LuckPerms]
 

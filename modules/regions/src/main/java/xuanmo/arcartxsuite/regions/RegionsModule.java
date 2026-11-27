@@ -87,6 +87,7 @@ public final class RegionsModule extends AbstractAXSModule implements ModuleComm
                     .obsoletePath("world-rules")
                     .obsoletePath("storage")
                     .opaqueSection("templates")
+                    .opaqueSection("notifications.flight-denied.worlds")
                 .build())
             .currentVersion(4)
             .migrationFolder("")

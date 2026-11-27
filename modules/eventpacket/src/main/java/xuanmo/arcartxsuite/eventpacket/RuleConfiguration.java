@@ -1,8 +1,10 @@
 package xuanmo.arcartxsuite.eventpacket;
 
 import java.io.File;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -17,9 +19,10 @@ import org.yaml.snakeyaml.constructor.SafeConstructor;
 import xuanmo.arcartxsuite.api.capability.AbyssRunResultAccess;
 import xuanmo.arcartxsuite.api.capability.EventBusCapability;
 import xuanmo.arcartxsuite.api.command.CommandSanitizer;
+import xuanmo.arcartxsuite.api.condition.ScriptCondition;
 import xuanmo.arcartxsuite.api.scheduler.ScheduleSpec;
 
-record RuleConfiguration(Map<String, List<LiveRule>> topics, List<TimerRule> timers,
+record RuleConfiguration(Map<String, List<LiveRule>> topics, List<TimerRule> timers, LocalTriggerSettings local,
                          List<MailRule> abyss, List<MailRule> firstAdmission, List<MailRule> auctionPurchased,
                          int queueCapacity, int workPerTick, long nanosPerTick) {
     static final String FIRST_ADMITTED = "axs.auth.profile_first_admitted";
@@ -28,6 +31,7 @@ record RuleConfiguration(Map<String, List<LiveRule>> topics, List<TimerRule> tim
     private static final Pattern ID = Pattern.compile("[a-z0-9][a-z0-9_-]{0,63}");
     private static final Pattern FIELD = Pattern.compile("[a-z][a-z0-9_]{0,63}");
     private static final Pattern TOPIC = Pattern.compile("axs(?:\\.[a-z][a-z0-9_-]*){2,8}");
+    private static final int MAX_CONFIG_BYTES = 131_072;
     private static final Set<String> ABYSS_FIELDS = Set.of("result_id", "run_id", "owner", "dungeon", "plan",
         "difficulty", "outcome", "member_state", "deaths");
     private static final Set<String> AUTH_FIELDS = Set.of("event_id", "profile_id", "account_id", "provider",
@@ -36,28 +40,124 @@ record RuleConfiguration(Map<String, List<LiveRule>> topics, List<TimerRule> tim
         "currency", "tax", "seller_uuid", "buyer_uuid", "buyer");
 
 
-    enum ActionKind { SUBTITLE, QUEST_OFFER, QUEST_TRACK, MESSAGE, COMMAND }
+    enum ActionKind {
+        SUBTITLE, QUEST_OFFER, QUEST_TRACK, QUEST_ACCEPT, QUEST_OPEN, MESSAGE, COMMAND, UI_PACKET, CHAT_CARD,
+        TITLE, COMBAT_EFFECT, QQ_MESSAGE, MAIL, MAIL_PRESET
+    }
 
-    record LiveAction(ActionKind kind, Template value, boolean openMenu, boolean console) {}
-    record LiveRule(String id, Map<String, String> conditions, List<LiveAction> actions) {}
+    enum UiAudience { SELF, ALL_ONLINE, OTHERS }
+
+    record LiveAction(ActionKind kind, Template value, boolean openMenu, boolean console,
+                      String extra, Map<String, Template> data, UiAudience audience) {
+        LiveAction(ActionKind kind, Template value, boolean openMenu, boolean console) {
+            this(kind, value, openMenu, console, "", Map.of());
+        }
+
+        LiveAction(ActionKind kind, Template value, boolean openMenu, boolean console,
+                   String extra, Map<String, Template> data) {
+            this(kind, value, openMenu, console, extra, data, UiAudience.SELF);
+        }
+    }
+    record LiveRule(String id, Map<String, String> conditions, List<LiveAction> actions,
+                    List<ScriptCondition> checks, boolean quit) {}
     record TimerRule(String id, ScheduleSpec spec) {}
     record MailAction(String id, Template title, Template content, String currency, double amount) {}
     record MailRule(String id, String owner, Long startSequence, Map<String, String> conditions,
                     List<MailAction> actions) {}
+    private record Document(YamlConfiguration yaml, int bytes) {}
 
     static RuleConfiguration load(File file) throws Exception {
-        var path = file.toPath();
-        check(Files.size(path) <= 131_072, "config.yml", "配置文件不能超过 128 KiB");
-        String text = Files.readString(path, StandardCharsets.UTF_8);
+        Path path = file.toPath().toAbsolutePath();
+        Path directory = path.getParent();
+        var config = new YamlConfiguration();
+        var main = read(path, MAX_CONFIG_BYTES);
+        for (String field : List.of("runtime", "sampling")) {
+            var section = main.yaml().getConfigurationSection(field);
+            check(section != null || !main.yaml().contains(field), "config.yml", field + " 需要配置映射");
+            if (section != null) copyRule(section, config.createSection(field));
+        }
+        int bytes = main.bytes();
+        Path cleanup = directory.resolve("cleanup.yml");
+        if (Files.exists(cleanup)) {
+            var document = read(cleanup, MAX_CONFIG_BYTES - bytes);
+            copyRule(document.yaml(), config.createSection("cleanup"));
+            bytes += document.bytes();
+        }
+
+        var origins = new HashMap<String, String>();
+        var target = config.createSection("rules");
+        Path rulesPath = directory.resolve("rules");
+        if (Files.exists(rulesPath)) {
+            try (var entries = Files.list(rulesPath)) {
+                var files = entries.filter(entry -> {
+                    String name = entry.getFileName().toString();
+                    return (name.endsWith(".yml") || name.endsWith(".yaml")) && Files.isRegularFile(entry);
+                }).limit(33).sorted().toList();
+                check(files.size() <= 32, "rules/", "最多加载 32 个规则文件");
+                for (Path ruleFile : files) {
+                    var document = read(ruleFile, MAX_CONFIG_BYTES - bytes);
+                    bytes += document.bytes();
+                    String source = "rules/" + ruleFile.getFileName();
+                    var rules = document.yaml().getConfigurationSection("rules");
+                    check(rules != null && Set.of("rules", "config-version").containsAll(document.yaml().getKeys(false)),
+                        source, "文件需要 rules 配置节");
+                    for (String id : rules.getKeys(false)) {
+                        String prior = origins.putIfAbsent(id, source);
+                        check(prior == null, source, "规则 " + id + " 已在 " + prior + " 中定义");
+                        var rule = rules.getConfigurationSection(id);
+                        check(rule != null, source, "规则 " + id + " 需要映射");
+                        var section = target.createSection(id);
+                        copyRule(rule, section);
+                    }
+                }
+            }
+        }
+        try {
+            return parse(config);
+        } catch (IllegalArgumentException failure) {
+            String message = failure.getMessage();
+            if (message != null) {
+                int end = message.indexOf(" · ");
+                String origin = end < 0 ? null : origins.get(message.substring(0, end));
+                if (origin != null) throw new IllegalArgumentException(origin + " · " + message, failure);
+            }
+            throw failure;
+        }
+    }
+
+    private static void copyRule(ConfigurationSection source, ConfigurationSection target) {
+        for (var entry : source.getValues(false).entrySet()) {
+            if (entry.getValue() instanceof ConfigurationSection nested) {
+                copyRule(nested, target.createSection(entry.getKey()));
+            } else {
+                target.set(entry.getKey(), entry.getValue());
+            }
+        }
+    }
+
+    private static Document read(Path path, int remaining) throws Exception {
+        String fileName = path.getFileName().toString();
+        byte[] contents;
+        try (var input = Files.newInputStream(path)) {
+            contents = input.readNBytes(remaining + 1);
+        }
+        check(contents.length <= remaining, fileName, "全部 EventPacket 配置不能超过 128 KiB");
+        String text = StandardCharsets.UTF_8.newDecoder().decode(ByteBuffer.wrap(contents)).toString();
         var options = new LoaderOptions();
         options.setAllowDuplicateKeys(false);
         options.setMaxAliasesForCollections(0);
-        options.setCodePointLimit(131_072);
-        Object raw = new Yaml(new SafeConstructor(options)).load(text);
-        check(raw == null || raw instanceof Map<?, ?>, "config.yml", "需要配置映射");
+        options.setCodePointLimit(MAX_CONFIG_BYTES);
+        options.setNestingDepthLimit(20);
+        Object raw;
+        try {
+            raw = new Yaml(new SafeConstructor(options)).load(text);
+        } catch (RuntimeException failure) {
+            throw new IllegalArgumentException(fileName + " · " + failure.getMessage(), failure);
+        }
+        check(raw == null || raw instanceof Map<?, ?>, fileName, "需要配置映射");
         var config = new YamlConfiguration();
         if (raw instanceof Map<?, ?> mapping) copySection(config, mapping);
-        return parse(config);
+        return new Document(config, contents.length);
     }
 
     private static void copySection(ConfigurationSection section, Map<?, ?> mapping) {
@@ -79,6 +179,7 @@ record RuleConfiguration(Map<String, List<LiveRule>> topics, List<TimerRule> tim
         var abyss = new ArrayList<MailRule>();
         var auth = new ArrayList<MailRule>();
         var auction = new ArrayList<MailRule>();
+        var local = new LocalTriggerSettings.Builder(config);
         ConfigurationSection rules = config.getConfigurationSection("rules");
         if (config.contains("rules") && rules == null) throw invalid("rules", "需要映射");
         if (rules != null) {
@@ -95,6 +196,7 @@ record RuleConfiguration(Map<String, List<LiveRule>> topics, List<TimerRule> tim
                     && !actions.isEmpty() && actions.size() <= 8, id, "需要 1 到 8 个动作映射");
                 switch (trigger) {
                     case "abyss-result" -> {
+                        check(!rule.contains("checks"), id, "持久邮件只接受 when 字段");
                         check(ABYSS_FIELDS.containsAll(conditions.keySet()), id, "副本条件包含未知字段");
                         check(conditions.containsKey("dungeon"), id, "副本邮件规则必须限定 when.dungeon");
                         String owner = rule.getString("owner", "abyss");
@@ -104,14 +206,16 @@ record RuleConfiguration(Map<String, List<LiveRule>> topics, List<TimerRule> tim
                         abyss.add(new MailRule(id, owner, start, conditions, mailActions(actions, ABYSS_FIELDS, id)));
                     }
                     case "first-admitted" -> {
+                        check(!rule.contains("checks"), id, "持久邮件只接受 when 字段");
                         check(AUTH_FIELDS.containsAll(conditions.keySet()), id, "首次准入条件包含未知字段");
                         auth.add(new MailRule(id, "", null, conditions, mailActions(actions, AUTH_FIELDS, id)));
                     }
                     case "auction-purchased" -> {
+                        check(!rule.contains("checks"), id, "持久邮件只接受 when 字段");
                         check(AUCTION_FIELDS.containsAll(conditions.keySet()), id, "拍卖成交条件包含未知字段");
                         auction.add(new MailRule(id, "", null, conditions, mailActions(actions, AUCTION_FIELDS, id)));
                     }
-                    case "event-bus", "signal", "schedule" -> {
+                    default -> {
                         String topic;
                         if (trigger.equals("event-bus")) {
                             topic = required(rule, "topic", id);
@@ -121,24 +225,37 @@ record RuleConfiguration(Map<String, List<LiveRule>> topics, List<TimerRule> tim
                             String signal = required(rule, "signal", id);
                             check(ID.matcher(signal).matches(), id, "信号名无效");
                             topic = SIGNAL_PREFIX + signal;
-                        } else {
+                        } else if (trigger.equals("schedule")) {
                             var schedule = rule.getConfigurationSection("schedule");
                             check(schedule != null, id, "缺少 schedule");
-                            check(conditions.isEmpty(), id, "定时规则没有事件字段");
+                            check(conditions.isEmpty() && !rule.contains("checks"), id, "定时规则没有玩家或事件字段");
                             check(!rule.getBoolean("leader-only"), id, "定时规则仅在本节点运行");
-                            timers.add(new TimerRule(id, ScheduleSpec.load(schedule)));
+                            try {
+                                timers.add(new TimerRule(id, ScheduleSpec.load(schedule)));
+                            } catch (IllegalArgumentException failure) {
+                                throw invalid(id, failure.getMessage());
+                            }
                             topic = timerTopic(id);
+                        } else {
+                            topic = local.add(trigger, id, rule);
                         }
                         var group = topics.computeIfAbsent(topic, ignored -> new ArrayList<>());
                         check(group.size() < 32, id, "每个主题最多 32 条规则");
-                        group.add(new LiveRule(id, conditions, liveActions(actions, trigger.equals("schedule"), id)));
+                        boolean quit = trigger.equals("player-quit");
+                        check(!quit || !rule.contains("checks"), id, "退出规则只接受 when 字段");
+                        var compiled = liveActions(actions, trigger.equals("schedule"), id);
+                        for (var action : compiled) {
+                            check(!quit || action.console() || action.kind() == ActionKind.MAIL
+                                || action.kind() == ActionKind.MAIL_PRESET, id, "退出规则只接受控制台命令和邮件");
+                        }
+                        group.add(new LiveRule(id, conditions, compiled, checks(rule, id), quit));
                     }
-                    default -> throw invalid(id, "未知触发器 " + trigger);
                 }
             }
         }
         topics.replaceAll((topic, group) -> List.copyOf(group));
-        return new RuleConfiguration(Map.copyOf(topics), List.copyOf(timers), List.copyOf(abyss), List.copyOf(auth), List.copyOf(auction),
+        return new RuleConfiguration(Map.copyOf(topics), List.copyOf(timers), local.build(),
+            List.copyOf(abyss), List.copyOf(auth), List.copyOf(auction),
             number(config, "runtime.queue-capacity", 1024, 16, 8192),
             number(config, "runtime.work-per-tick", 64, 1, 512),
             number(config, "runtime.budget-micros", 750, 100, 5000) * 1000L);
@@ -171,14 +288,87 @@ record RuleConfiguration(Map<String, List<LiveRule>> topics, List<TimerRule> tim
                 case "quest.offer" -> new LiveAction(ActionKind.QUEST_OFFER, template(action, "quest", id),
                     !Boolean.FALSE.equals(action.get("open-menu")), false);
                 case "quest.track" -> new LiveAction(ActionKind.QUEST_TRACK, template(action, "quest", id), false, false);
+                case "quest.accept" -> new LiveAction(ActionKind.QUEST_ACCEPT, template(action, "quest", id), false, false);
+                case "quest.open" -> new LiveAction(ActionKind.QUEST_OPEN, Template.literal("menu"), false, false);
                 case "message" -> new LiveAction(ActionKind.MESSAGE, template(action, "text", id), false, false);
                 case "command" -> command(action, id);
+                case "ui.packet" -> new LiveAction(ActionKind.UI_PACKET, Template.literal(target(action, "ui", id)),
+                    false, false, target(action, "handler", id), actionData(action, id), uiAudience(action, id));
+                case "chat.card" -> new LiveAction(ActionKind.CHAT_CARD, Template.literal(target(action, "card", id)),
+                    false, false, "", actionData(action, id));
+                case "title.give" -> new LiveAction(ActionKind.TITLE, Template.literal(target(action, "title", id)),
+                    false, false, action.containsKey("duration") ? value(action, "duration", id) : "permanent", Map.of());
+                case "combat-effect.play" -> new LiveAction(ActionKind.COMBAT_EFFECT,
+                    Template.literal(target(action, "effect", id)), false, false, "", actionData(action, id));
+                case "qq.message" -> new LiveAction(ActionKind.QQ_MESSAGE, template(action, "text", id), false, false,
+                    qqGroup(action, id), Map.of());
+                case "mail.send" -> new LiveAction(ActionKind.MAIL, template(action, "title", id), false, false, "",
+                    action.containsKey("content") ? Map.of("content", template(action, "content", id)) : Map.of());
+                case "mail.preset" -> new LiveAction(ActionKind.MAIL_PRESET, Template.literal(target(action, "preset", id)),
+                    false, false);
                 default -> throw invalid(id, "未知实时动作 " + type);
             };
             check(!timer || parsed.console(), id, "定时规则需要控制台命令动作");
             result.add(parsed);
         }
         return List.copyOf(result);
+    }
+
+    private static String target(Map<?, ?> action, String field, String id) {
+        String value = value(action, field, id);
+        check(value.matches("[A-Za-z0-9_./:-]{1,128}"), id, "无效固定目标 " + field);
+        return value;
+    }
+
+    private static UiAudience uiAudience(Map<?, ?> action, String id) {
+        String audience = action.containsKey("audience") ? value(action, "audience", id) : "self";
+        return switch (audience) {
+            case "self" -> UiAudience.SELF;
+            case "all-online" -> UiAudience.ALL_ONLINE;
+            case "others" -> UiAudience.OTHERS;
+            default -> throw invalid(id, "ui.packet 的 audience 仅接受 self、all-online 或 others");
+        };
+    }
+
+    private static String qqGroup(Map<?, ?> action, String id) {
+        Object group = action.get("group");
+        if (group == null || group.equals("all")) return "all";
+        String text = String.valueOf(group);
+        try {
+            if (Long.parseLong(text) > 0) return text;
+        } catch (NumberFormatException ignored) {
+            // Invalid or outside the range of the QQBot API.
+        }
+        throw invalid(id, "group 必须是群号或 all");
+    }
+
+    private static Map<String, Template> actionData(Map<?, ?> action, String id) {
+        if (!action.containsKey("data")) return Map.of();
+        if (!(action.get("data") instanceof Map<?, ?> entries) || entries.size() > 16) {
+            throw invalid(id, "data 需要不超过 16 个字段的映射");
+        }
+        var data = new HashMap<String, Template>();
+        for (var entry : entries.entrySet()) {
+            if (!(entry.getKey() instanceof String key) || !FIELD.matcher(key).matches()) {
+                throw invalid(id, "无效的 data 字段名");
+            }
+            data.put(key, template(entries, key, id));
+        }
+        return Map.copyOf(data);
+    }
+
+    private static List<ScriptCondition> checks(ConfigurationSection section, String id) {
+        if (!section.contains("checks")) return List.of();
+        var lines = section.getList("checks");
+        check(lines != null && lines.size() <= 8, id, "checks 必须是不超过 8 项的表达式列表");
+        var conditions = new ArrayList<ScriptCondition>();
+        for (Object line : lines) {
+            if (!(line instanceof String text) || text.length() > 2048) throw invalid(id, "无效的 checks 表达式");
+            var condition = ScriptCondition.parseInline(text);
+            check(condition != null, id, "无法解析 checks 表达式");
+            conditions.add(condition);
+        }
+        return List.copyOf(conditions);
     }
 
     private static LiveAction command(Map<?, ?> action, String id) {
@@ -222,23 +412,23 @@ record RuleConfiguration(Map<String, List<LiveRule>> topics, List<TimerRule> tim
         return text;
     }
 
-    private static String required(ConfigurationSection section, String field, String id) {
+    static String required(ConfigurationSection section, String field, String id) {
         if (!section.isString(field) || section.getString(field, "").isBlank()) throw invalid(id, "缺少 " + field);
         return section.getString(field);
     }
 
-    private static int number(ConfigurationSection section, String field, int fallback, int min, int max) {
+    static int number(ConfigurationSection section, String field, int fallback, int min, int max) {
         int value = section.getInt(field, fallback);
         check((!section.contains(field) || section.isInt(field)) && value >= min && value <= max, field,
             "需要 " + min + " 到 " + max + " 的整数");
         return value;
     }
 
-    private static void check(boolean pass, String id, String message) {
+    static void check(boolean pass, String id, String message) {
         if (!pass) throw invalid(id, message);
     }
 
-    private static IllegalArgumentException invalid(String id, String message) {
+    static IllegalArgumentException invalid(String id, String message) {
         return new IllegalArgumentException(id + " · " + message);
     }
 }

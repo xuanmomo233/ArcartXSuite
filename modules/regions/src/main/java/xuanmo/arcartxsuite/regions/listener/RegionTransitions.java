@@ -132,10 +132,6 @@ public final class RegionTransitions implements Listener {
             || from != to && to.travel(specific, player).state() == RegionFlag.State.DENY;
     }
 
-    private static boolean denied(LocationRules at, RegionFlag flag, Player player) {
-        return at.decide(flag, player).state() == RegionFlag.State.DENY;
-    }
-
     private static boolean crossesDeniedBoundary(LocationRules restricted, LocationRules other, RegionFlag flag, Player player) {
         RegionManager.Decision decision = restricted.decide(flag, player);
         if (decision.state() != RegionFlag.State.DENY) return false;
@@ -196,7 +192,9 @@ public final class RegionTransitions implements Listener {
                 Location to = movement.event.getTo();
                 if (changedBlock(saved.from, to)) {
                     Endpoints at = saved.matches(saved.from, to) ? saved : new Endpoints(saved.from, to);
-                    if (player.isFlying() && denied(at.destination, RegionFlag.FLY, player)) player.setFlying(false);
+                    if (player.isFlying()) {
+                        RegionFlight.enforce(player, at.destination.decide(RegionFlag.FLY, player), config, false);
+                    }
                     publishCrossing(player, at.origin, at.destination, movement.cause);
                 }
             } finally {

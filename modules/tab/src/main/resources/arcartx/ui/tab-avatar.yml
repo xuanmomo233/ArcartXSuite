@@ -1,32 +1,79 @@
-# Suite 原版在线名单 HUD（头像版）。
+# Suite 在线名单 HUD（头像版）。
 ui:
   isHud: true
   hide:
     - player_list
   defaultOpen: true
   escClose: false
+  packetHandler:
+    tab-players: |-
+      if (var.名单显示 && packet['custom'] != none) {
+        if (packet['custom'] == true) {
+          var.自定义名单 = true
+          var.在线名单 = packet['rows'] != none ? packet['rows'] : []
+          var.在线人数 = var.在线名单.filter(-> { return args[0]['header'] != true }).size()
+          var.名单已收到 = true
+        } elif (packet['custom'] == false) {
+          var.自定义名单 = false
+          var.本服名单许可 = packet['allowed']
+          var.读取原版名单()
+          var.名单已收到 = true
+        }
+      }
   action:
     load: |-
       var.名单显示 = false
+      var.名单已收到 = false
+      var.自定义名单 = false
+      var.本服名单许可 = none
       var.在线名单 = []
+      var.在线人数 = 0
+      var.读取原版名单 = -> {
+        原版名单 = Player.getTabPlayers()
+        if (var.本服名单许可 != none) {
+          原版名单 = 原版名单.filter(-> { return var.本服名单许可.contains(args[0]['uuid']) })
+        }
+        var.在线名单 = 原版名单
+        var.在线人数 = 原版名单.size()
+      }
+      var.延迟档位 = -> {
+        延迟毫秒 = args[0]
+        if (!type.isNumber(延迟毫秒) || 延迟毫秒 < 0) { return 0 }
+        if (延迟毫秒 < 150) { return 5 }
+        if (延迟毫秒 < 300) { return 4 }
+        if (延迟毫秒 < 600) { return 3 }
+        if (延迟毫秒 < 1000) { return 2 }
+        return 1
+      }
     keyPress: |-
-      if (self.currentKeyPress() == "TAB") {
+      if (self.currentKeyPress() == "TAB" && !var.名单显示 && !Screen.isOpen()) {
         var.名单显示 = true
-        var.在线名单 = Player.getTabPlayers()
+        Packet.send('AXS_TabPlayersRequest', 'open')
       }
     keyRelease: |-
       if (self.currentKeyReleased() == "TAB") {
         var.名单显示 = false
+        var.名单已收到 = false
+        var.在线名单 = []
+        var.在线人数 = 0
       }
 
 tasks:
+  request-player-list:
+    type: loop
+    time: 1600
+    cycle: 1600
+    run: |-
+      if (var.名单显示 && !Screen.isOpen()) {
+        Packet.send('AXS_TabPlayersRequest', 'refresh')
+      }
   refresh-player-list:
     type: loop
     time: 250
     cycle: 250
     run: |-
-      if (var.名单显示 && !Screen.isOpen()) {
-        var.在线名单 = Player.getTabPlayers()
+      if (var.名单显示 && var.名单已收到 && !var.自定义名单 && !Screen.isOpen()) {
+        var.读取原版名单()
       }
 
 controls:
@@ -42,25 +89,29 @@ controls:
         attribute:
           point: ~top_center
           y: 40
-          width: 44 + 320 * Math.max(1, Math.ceil(var.在线名单.size() / 16))
-          height: 63 + 34 * Math.min(16, var.在线名单.size())
-          normal: ~14,22,28,226
+          width: 40 + 320 * Math.max(1, Math.ceil(var.在线名单.size() / 16))
+          height: 73 + 39 * Math.min(16, var.在线名单.size())
+          normal: ~Frosted:30;0,0,0,255
           shape: ~round_rect
-          radius: 14
-          visible: var.名单显示 && !Screen.isOpen()
+          radius: 20
+          visible: var.名单显示 && var.名单已收到 && !Screen.isOpen()
+        effect:
+          stroke:
+            width: 3
+            color: ~0,0,0,255
         children:
           标题:
             type: Text
             attribute:
               x: 22
               y: 15
-              fontSize: 28
-              texts: "'§#CFEAF0在线玩家  ' + var.在线名单.size().round(0)"
+              fontSize: 32
+              texts: "'§a在线玩家：' + var.在线人数.round(0)"
           玩家名单:
             type: RepeatGrid
             attribute:
               x: 22
-              y: 51
+              y: 54
               items: var.在线名单
               key: ~uuid
               flow: ~column
@@ -70,33 +121,101 @@ controls:
               spaceBetweenY: 3
             children:
               玩家行:
-                type: Texture
+                type: Canvas
                 attribute:
                   width: 316
-                  height: 31
-                  shape: ~round_rect
-                  radius: 6
-                  normal: ~39,57,65,224
+                  height: 36
                 children:
+                  行底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      shape: ~round_rect
+                      radius: 10
+                      normal: "(var.自定义名单 && self.parent().item['header'] == true) ? '64,64,64,255' : '95,95,95,255'"
+                  分组标题:
+                    type: Text
+                    attribute:
+                      point: ~middle_left
+                      x: 8
+                      fontSize: 24
+                      visible: "var.自定义名单 && self.parent().item['header'] == true"
+                      texts: "'§a' + self.parent().item['displayName']"
                   头像:
                     type: Texture
                     attribute:
-                      x: 5
-                      y: 3
+                      point: ~middle_left
+                      x: 8
                       width: 25
                       height: 25
-                      normal: "'PlayerSkin:' + self.parent().item['uuid']"
+                      visible: "!var.自定义名单 || self.parent().item['header'] != true"
+                      normal: "(var.自定义名单 && self.parent().item['header'] == true) ? '0,0,0,0' : 'PlayerSkin:' + self.parent().item['uuid']"
                   名称:
                     type: Text
                     attribute:
-                      x: 37
-                      y: 4
+                      point: ~middle_left
+                      x: 40
                       fontSize: 24
+                      visible: "!var.自定义名单 || self.parent().item['header'] != true"
                       texts: "(self.parent().item['spectator'] ? '§7' : '§f') + self.parent().item['displayName']"
                   延迟:
-                    type: Text
+                    type: Canvas
                     attribute:
-                      x: 240
-                      y: 5
-                      fontSize: 22
-                      texts: "self.parent().item['latency'] < 0 ? '§7—' : '§#9BDEE5' + self.parent().item['latency'].round(0) + ' ms'"
+                      point: ~middle_right
+                      x: -10
+                      width: 33
+                      height: 20
+                      signalLevel: "var.延迟档位(self.parent().item['latency'])"
+                      visible: "!var.自定义名单 || self.parent().item['header'] != true"
+                    children:
+                      一格:
+                        type: Texture
+                        attribute:
+                          point: ~bottom_left
+                          width: 5
+                          height: 4
+                          visible: self.parent().signalLevel > 0
+                          normal: "self.parent().signalLevel >= 1 ? '108,224,127,255' : '137,137,137,255'"
+                      二格:
+                        type: Texture
+                        attribute:
+                          point: ~bottom_left
+                          x: 7
+                          width: 5
+                          height: 8
+                          visible: self.parent().signalLevel > 0
+                          normal: "self.parent().signalLevel >= 2 ? '108,224,127,255' : '137,137,137,255'"
+                      三格:
+                        type: Texture
+                        attribute:
+                          point: ~bottom_left
+                          x: 14
+                          width: 5
+                          height: 12
+                          visible: self.parent().signalLevel > 0
+                          normal: "self.parent().signalLevel >= 3 ? '108,224,127,255' : '137,137,137,255'"
+                      四格:
+                        type: Texture
+                        attribute:
+                          point: ~bottom_left
+                          x: 21
+                          width: 5
+                          height: 16
+                          visible: self.parent().signalLevel > 0
+                          normal: "self.parent().signalLevel >= 4 ? '108,224,127,255' : '137,137,137,255'"
+                      五格:
+                        type: Texture
+                        attribute:
+                          point: ~bottom_left
+                          x: 28
+                          width: 5
+                          height: 20
+                          visible: self.parent().signalLevel > 0
+                          normal: "self.parent().signalLevel >= 5 ? '108,224,127,255' : '137,137,137,255'"
+                      未知:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          fontSize: 22
+                          visible: self.parent().signalLevel == 0
+                          texts: ~§#D5D5D5×

@@ -26,8 +26,8 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class TabProxyEntitlementTest {
-    @Test void localHudRegistersEvenWhenProxyRosterIsConfiguredOnAFreeHost(@TempDir Path folder) throws Exception {
-        Files.writeString(folder.resolve("config.yml"), "settings:\n  layout: simple\n  proxy-roster: true\n");
+    @Test void localHudRegistersWhenCrossServerListIsConfiguredOnAFreeHost(@TempDir Path folder) throws Exception {
+        Files.writeString(folder.resolve("config.yml"), "settings:\n  layout: simple\n  cross-server-list: true\n");
         var context = mock(ModuleContext.class);
         var bridge = mock(PacketBridgeAPI.class);
         var plugin = mock(JavaPlugin.class);
@@ -59,7 +59,7 @@ class TabProxyEntitlementTest {
         }
     }
 
-    @Test void pausedProxyRosterRejectsRequestsAndDropsPreviouslyQueuedRefresh() {
+    @Test void pausedCrossServerListRejectsRequestsAndDropsPreviouslyQueuedRefresh() {
         var permitted = new AtomicBoolean(true);
         var plugin = mock(JavaPlugin.class);
         var player = mock(Player.class);
@@ -76,22 +76,22 @@ class TabProxyEntitlementTest {
             bukkit.when(Bukkit::isPrimaryThread).thenReturn(true);
             bukkit.when(Bukkit::getOnlinePlayers).thenReturn(List.of(player));
             auth.when(() -> AuthAccess.admitted(playerId)).thenReturn(true);
-            try (var roster = new TabVisibilityPublisher(plugin, permitted::get)) {
+            try (var publisher = new TabVisibilityPublisher(plugin, permitted::get, null)) {
                 byte[] query = {ProxyTabVisibility.QUERY};
-                roster.onPluginMessageReceived(ProxyTabVisibility.CHANNEL, player, query);
+                publisher.onPluginMessageReceived(ProxyTabVisibility.CHANNEL, player, query);
                 verify(player).sendPluginMessage(eq(plugin), eq(ProxyTabVisibility.CHANNEL),
                     argThat(frame -> frame.length == ProxyTabVisibility.STATE_MESSAGE_LENGTH
                         && frame[0] == ProxyTabVisibility.VISIBLE));
                 clearInvocations(player);
 
-                roster.requestGlobalRefresh("queued while licensed");
+                publisher.requestGlobalRefresh("queued while licensed");
                 var refresh = ArgumentCaptor.forClass(Runnable.class);
                 verify(scheduler).runTask(eq(plugin), refresh.capture());
                 permitted.set(false);
                 refresh.getValue().run();
-                roster.onPluginMessageReceived(ProxyTabVisibility.CHANNEL, player, query);
-                roster.requestViewerRefresh(player, "state change after revocation");
-                assertFalse(roster.requestVanish(player).toCompletableFuture().join());
+                publisher.onPluginMessageReceived(ProxyTabVisibility.CHANNEL, player, query);
+                publisher.requestViewerRefresh(player, "state change after revocation");
+                assertFalse(publisher.requestVanish(player).toCompletableFuture().join());
                 verify(player, never()).sendPluginMessage(any(), anyString(), any(byte[].class));
             }
         }

@@ -11,7 +11,7 @@ kick-offline-message: "&c本服务器仅支持正版/LittleSkin 账号登录"
 auto-assign-uuid: true
 
 # Velocity：将参与同步的其他子服玩家加入原版 Tab。重启代理后生效。
-# 子服 Tab 模块启用 settings.proxy-roster；未确认准入和隐身状态的条目不公开。
+# 子服 Tab 模块启用 settings.cross-server-list；名单只包含已确认准入且可见的玩家。
 # 隐身交接需要所有参与子服启用 Paper 的 Velocity modern forwarding 并运行 Suite Essentials 和 Tab。
 tab-list:
   enabled: false
