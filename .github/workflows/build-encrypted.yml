@@ -1114,6 +1114,7 @@ jobs:
         id: delivery
         env:
           GH_TOKEN: ${{ github.token }}
+          AXS_EXPORT_ACCOUNT: ${{ inputs.export_account }}
         run: python scripts/customer-delivery-artifacts.py prepare --output customer-delivery
 
       - name: Upload customer delivery

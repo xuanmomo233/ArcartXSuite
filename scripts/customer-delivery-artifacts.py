@@ -67,7 +67,7 @@ def artifacts(repo, run):
     return [artifact for page in json.loads(result.stdout) for artifact in page["artifacts"]]
 
 
-def prepare(repo, run, output):
+def prepare(repo, run, output, account):
     name, sources = select_delivery(artifacts(repo, run))
     if sources:
         with TemporaryDirectory() as work:
@@ -81,7 +81,7 @@ def prepare(repo, run, output):
             subprocess.run(
                 [sys.executable, "-X", "utf8", str(builder), "--installers", str(directories[0]),
                  "--registration", str(directories[1] / "register-module-variants.json"),
-                 "--proxies", str(directories[2]), "--output", str(output)],
+                 "--proxies", str(directories[2]), "--output", str(output), "--account", account],
                 check=True,
             )
     with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as step_output:
@@ -107,7 +107,7 @@ def main():
     if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repo) or not re.fullmatch(r"[0-9]+", run):
         raise ValueError("Expected the current GitHub repository and run ID")
     if args.command == "prepare":
-        prepare(repo, run, args.output)
+        prepare(repo, run, args.output, os.environ["AXS_EXPORT_ACCOUNT"])
     else:
         clean(repo, run, args.delivery)
 

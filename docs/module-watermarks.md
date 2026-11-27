@@ -23,8 +23,8 @@ python -X utf8 scripts/watermark-module.py keygen --private-key 'D:\AXS-Private\
 
    - `export_delivery_id` 可自填交付编号。留空时按 GitHub Actions 运行编号生成 `delivery-${GITHUB_RUN_ID}`，重跑同一次运行会沿用该编号。一个交付编号可对应多个席位。
    - `export_modules` 留空时导出全部正式模块，排除 Debug。只交付部分模块时，填写以逗号分隔的模块 ID，并包含所选模块的硬依赖。
-3. 客户导出成功后下载 `axs-customer-delivery-attempt-N`。主云后台打开「授权管理 → 登记客户水印包」，导入交付包内的 `admin-only/register-module-variants.json`。核对显示的账号、模块和水印 ID。再次提交同一登记文件可查看备云同步状态。
-4. 从 `customer/installers/` 取客户操作系统对应的安装 ZIP。客户需要代理端插件时，从 `customer/optional-proxy/` 取对应的 JAR。整份管理员交付包和登记文件由管理员保存。
+3. 客户导出成功后下载 `axs-customer-delivery-attempt-N`。管理员交付目录仅包含 `register-module-variants.json` 和以客户 QQ 号命名的 ZIP。主云后台打开「授权管理 → 登记客户水印包」，导入同目录的登记文件。核对显示的账号、模块和水印 ID。再次提交同一登记文件可查看备云同步状态。
+4. 将以客户 QQ 号命名的 ZIP 交给客户。ZIP 内有 Windows 与 Linux 的安装包，以及 Velocity 与 BungeeCord 的代理 JAR。登记文件由管理员保存。
 5. 登记时填写整份授权允许绑定的服务器数量。客户在各后端填写自己的云端账号和 API 密钥。后端自行生成服务器码，首次在线验证通过时占用一个名额。客户可以在「我的授权」查看或解绑服务器。
 
 首次使用需连接云端验证并取钥。验证成功后，同一安装在主备云均超时时可以使用有效的缓存授权，最长七天。云端明确拒绝授权时，模块停止使用缓存授权。

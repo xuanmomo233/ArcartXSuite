@@ -14,14 +14,6 @@ INSTALLERS = ("ArcartX-Suite-windows-x86_64.zip", "ArcartX-Suite-linux-x86_64.zi
 REGISTRATION = "register-module-variants.json"
 MODULE_PATH = re.compile(r"plugins/ArcartX-Suite/modules/([a-z][a-z0-9_-]{0,63})\.axb")
 LIBRARY_PATH = re.compile(r"plugins/ArcartX-Suite/runtime-libraries/[0-9a-f]{64}\.jar")
-INSTRUCTIONS = """客户水印包交付说明
-
-这个压缩包供管理员使用。
-1. 在云端后台「授权管理 → 登记客户水印包」导入 admin-only/register-module-variants.json，核对收件账号和模块。
-2. 从 customer/installers 取与客户后端操作系统对应的安装 ZIP。需要跨服代理时，可再从 customer/optional-proxy 取对应的 Velocity 或 BungeeCord JAR。
-3. 客户填写自己的云端账号和验证密匙，启动宿主完成服务器绑定。管理员为交付所需的服务器发放授权。
-请只把需要的客户安装包和代理 JAR 发给客户。整份管理员交付包和登记文件留在管理员侧。
-"""
 
 
 def inspect_installer(installer):
@@ -55,8 +47,6 @@ def check_registration(registration, modules):
 
 
 def proxy_files(source):
-    if source is None:
-        return []
     proxies = []
     for platform in ("Bungee", "Velocity"):
         name = re.compile(rf"ArcartXSuite-Proxy-{platform}-[A-Za-z0-9][A-Za-z0-9._+-]*\.jar")
@@ -67,7 +57,9 @@ def proxy_files(source):
     return proxies
 
 
-def bundle(installers, registration, proxies, output):
+def bundle(installers, registration, proxies, output, account):
+    if re.fullmatch(r"[0-9]{5,20}", account) is None:
+        raise ValueError("Expected a numeric QQ account of 5 to 20 digits")
     if output.exists():
         raise FileExistsError(output)
     packages = [installers / name for name in INSTALLERS]
@@ -75,18 +67,16 @@ def bundle(installers, registration, proxies, output):
     if windows != linux:
         raise ValueError("Windows and Linux installers contain different modules")
     check_registration(registration, windows)
-    files = [(file, f"customer/installers/{file.name}") for file in packages]
-    files += [(file, f"customer/optional-proxy/{file.name}") for file in proxy_files(proxies)]
-    files.append((registration, f"admin-only/{REGISTRATION}"))
+    files = packages + proxy_files(proxies)
 
     output.parent.mkdir(parents=True, exist_ok=True)
     with TemporaryDirectory(prefix=".customer-delivery-", dir=output.parent) as work:
         staged = Path(work) / "bundle"
-        for source, name in files:
-            target = staged / name
-            target.parent.mkdir(parents=True, exist_ok=True)
-            copyfile(source, target)
-        (staged / "README.txt").write_text(INSTRUCTIONS, encoding="utf-8")
+        staged.mkdir()
+        with ZipFile(staged / f"{account}.zip", "x") as archive:
+            for file in files:
+                archive.write(file, file.name)
+        copyfile(registration, staged / REGISTRATION)
         staged.rename(output)
 
 
@@ -94,10 +84,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--installers", type=Path, required=True)
     parser.add_argument("--registration", type=Path, required=True)
-    parser.add_argument("--proxies", type=Path)
+    parser.add_argument("--proxies", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--account", required=True)
     args = parser.parse_args()
-    bundle(args.installers, args.registration, args.proxies, args.output)
+    bundle(args.installers, args.registration, args.proxies, args.output, args.account)
 
 
 if __name__ == "__main__":

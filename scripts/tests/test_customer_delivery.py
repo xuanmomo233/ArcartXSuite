@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
+from unittest.mock import patch
 from zipfile import ZipFile
 
 
@@ -43,6 +44,7 @@ class CustomerDeliveryTest(unittest.TestCase):
             with ZipFile(path, "w") as jar:
                 jar.writestr("Plugin.class", b"proxy")
         self.output = self.root / "delivery"
+        self.account = "123456789"
 
     def write_installer(self, name, module, extra=None):
         with ZipFile(self.installers / name, "w") as archive:
@@ -54,41 +56,62 @@ class CustomerDeliveryTest(unittest.TestCase):
 
     def test_delivers_unchanged_files_with_the_registration_separate(self):
         (self.installers / "release-private.pem").write_text("excluded key", encoding="utf-8")
-        bundle.bundle(self.installers, self.registration, self.proxies, self.output)
+        bundle.bundle(self.installers, self.registration, self.proxies, self.output, self.account)
+        buyer_zip = self.output / f"{self.account}.zip"
         self.assertEqual(
-            {"README.txt", "admin-only/register-module-variants.json",
-             *{f"customer/installers/{name}" for name in bundle.INSTALLERS},
-             *{f"customer/optional-proxy/{jar.name}" for jar in self.proxies.rglob("*.jar")}},
-            {member.relative_to(self.output).as_posix() for member in self.output.rglob("*") if member.is_file()},
+            {buyer_zip, self.output / bundle.REGISTRATION},
+            set(self.output.iterdir()),
         )
-        for name in bundle.INSTALLERS:
-            self.assertEqual((self.installers / name).read_bytes(),
-                             (self.output / "customer" / "installers" / name).read_bytes())
+        files = [self.installers / name for name in bundle.INSTALLERS] + list(self.proxies.rglob("*.jar"))
+        with ZipFile(buyer_zip) as archive:
+            self.assertCountEqual(archive.namelist(), [file.name for file in files])
+            for file in files:
+                self.assertEqual(file.read_bytes(), archive.read(file.name))
         self.assertEqual(self.registration.read_bytes(),
-                         (self.output / "admin-only" / bundle.REGISTRATION).read_bytes())
+                         (self.output / bundle.REGISTRATION).read_bytes())
 
-    def test_proxy_is_optional_when_packaging_from_existing_files(self):
-        bundle.bundle(self.installers, self.registration, None, self.output)
-        self.assertFalse((self.output / "customer" / "optional-proxy").exists())
+    def test_requires_both_proxy_jars(self):
+        with self.assertRaisesRegex(ValueError, "Expected one Velocity proxy JAR"):
+            bundle.bundle(self.installers, self.registration, self.proxies / "Bungee", self.output, self.account)
+        self.assertFalse(self.output.exists())
+
+    def test_rejects_an_invalid_account_in_the_zip_name(self):
+        for account in ("../12345", "1234", "12345\n", "１２３４５"):
+            with self.subTest(account=account), self.assertRaisesRegex(ValueError, "numeric QQ account"):
+                bundle.bundle(self.installers, self.registration, self.proxies, self.output, account)
+        self.assertFalse(self.output.exists())
 
     def test_mismatched_installers_and_unexpected_files_are_rejected(self):
         self.write_installer(bundle.INSTALLERS[1], "chat")
         with self.assertRaisesRegex(ValueError, "different modules"):
-            bundle.bundle(self.installers, self.registration, self.proxies, self.output)
+            bundle.bundle(self.installers, self.registration, self.proxies, self.output, self.account)
         self.write_installer(bundle.INSTALLERS[1], "market", "plugins/ArcartX-Suite/config.yml")
         with self.assertRaisesRegex(ValueError, "Unexpected file"):
-            bundle.bundle(self.installers, self.registration, self.proxies, self.output)
+            bundle.bundle(self.installers, self.registration, self.proxies, self.output, self.account)
         self.assertFalse(self.output.exists())
 
     def test_registration_must_match_module_count_and_have_only_sealed_records(self):
         self.record["records"].append(self.record["records"][0])
         self.registration.write_text(json.dumps(self.record), encoding="utf-8")
         with self.assertRaisesRegex(ValueError, "module count"):
-            bundle.bundle(self.installers, self.registration, self.proxies, self.output)
+            bundle.bundle(self.installers, self.registration, self.proxies, self.output, self.account)
         self.record["records"] = ["not an encrypted record"]
         self.registration.write_text(json.dumps(self.record), encoding="utf-8")
         with self.assertRaises(ValueError):
-            bundle.bundle(self.installers, self.registration, self.proxies, self.output)
+            bundle.bundle(self.installers, self.registration, self.proxies, self.output, self.account)
+
+    def test_prepare_forwards_the_workflow_account_to_the_bundler(self):
+        candidates = CustomerArtifactSelectionTest.artifacts(
+            "axs-customer-installers-attempt-1", "axs-customer-registration-attempt-1",
+            "axs-customer-proxy-attempt-1",
+        )
+        with (
+            patch.object(artifacts, "artifacts", return_value=candidates),
+            patch.object(artifacts.subprocess, "run") as run,
+            patch.dict("os.environ", {"GITHUB_OUTPUT": str(self.root / "github-output")}),
+        ):
+            artifacts.prepare("suite/repo", "1", self.output, self.account)
+        self.assertEqual(run.call_args.args[0][-2:], ["--account", self.account])
 
 
 class CustomerArtifactSelectionTest(unittest.TestCase):
