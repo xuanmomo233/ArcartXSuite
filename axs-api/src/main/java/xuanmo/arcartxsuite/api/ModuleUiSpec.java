@@ -6,7 +6,7 @@ import org.jetbrains.annotations.NotNull;
 /**
  * 模块 UI 资源规约，合并原 {@code AbstractAXSModule} 的 2 个 UI 钩子为单一对象。
  *
- * @param resourceMappings  模块 Jar 内资源路径 → 宿主数据目录相对输出路径
+ * @param resourceMappings  模块 Jar 内资源路径 → 宿主数据目录相对输出路径（如 {@code ui/menu/menu_panel.yml}）
  * @param overwrite         是否覆盖已有 UI 文件（默认 false，保留用户自定义）
  * @since 1.5.0
  */

@@ -2,7 +2,7 @@
 # 用途: Map 模块默认小地图 HUD。
 # 前置依赖: ArcartX + ArcartX-Suite-Map 客户端 mod；Map 模块启用后会自动注册或导出。
 # 启用开关: config.yml -> modules.map.enabled + modules.map.password
-# 关联文件: ArcartXMap.yml、ui/map_menu.yml
+# 关联文件: ArcartXMap.yml、ui/map/map_menu.yml
 # 重载命令: /axs map reload
 #
 # 小地图渲染由 ArcartX-Suite-Map 客户端 mod 完全接管：
