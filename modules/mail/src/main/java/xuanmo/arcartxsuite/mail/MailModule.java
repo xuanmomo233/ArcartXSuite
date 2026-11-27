@@ -98,10 +98,10 @@ public final class MailModule extends AbstractAXSModule implements ModuleCommand
     @Override
     protected @NotNull ModuleUiSpec uiSpec() {
         Map<String, String> mappings = new LinkedHashMap<>();
-        mappings.put("arcartx/ui/mail_inbox.yml", "ui/mail_inbox.yml");
-        mappings.put("arcartx/ui/mail_compose.yml", "ui/mail_compose.yml");
-        mappings.put("arcartx/ui/mail_logs.yml", "ui/mail_logs.yml");
-        mappings.put("arcartx/ui/mail_admin.yml", "ui/mail_admin.yml");
+        mappings.put("arcartx/ui/mail_inbox.yml", "ui/mail/mail_inbox.yml");
+        mappings.put("arcartx/ui/mail_compose.yml", "ui/mail/mail_compose.yml");
+        mappings.put("arcartx/ui/mail_logs.yml", "ui/mail/mail_logs.yml");
+        mappings.put("arcartx/ui/mail_admin.yml", "ui/mail/mail_admin.yml");
         return new ModuleUiSpec(mappings, configuration != null && configuration.ui().overwriteUiFiles());
     }
 

@@ -6,7 +6,7 @@ config-version: 2
 # PAPI 输出: 无独立 PlaceholderAPI 输出。
 # 可解析的 PAPI: entries.<id>.text / subtitle.groups-directory 下字幕文本 会按接收玩家解析。
 # 内置变量: click-command 中的 {player} 会替换为点击玩家名。
-# 关联资源: ui/announcer_hud.yml、ui/subtitle_hud.yml、subtitle/groups/*.yml
+# 关联资源: ui/announcer/announcer_hud.yml、ui/announcer/subtitle_hud.yml、subtitle/groups/*.yml
 
 # 统一 UI 配置节：公告 HUD 与字幕 HUD 的 UI 注册/覆盖开关集中在此。
 ui:
@@ -79,7 +79,7 @@ cross-server:
 # 依赖: ArcartX；PlaceholderAPI 可选。
 # 重载: /axs announcer reload（随 Announcer 一起重载）
 # 可解析的 PAPI: subtitle.groups-directory 下 *.yml 中的字幕文本会按目标玩家解析，例如 %player_name%。
-# 关联资源: subtitle/groups/*.yml、ui/subtitle_hud.yml
+# 关联资源: subtitle/groups/*.yml、ui/announcer/subtitle_hud.yml
 # ─────────────────────────────────────────────────────────────────────────────
 subtitle:
   settings:

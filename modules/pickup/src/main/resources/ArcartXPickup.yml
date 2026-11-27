@@ -5,7 +5,7 @@ config-version: 4
 # 重载: /axs pickup reload
 # PAPI 输出: 无独立 PlaceholderAPI 输出。
 # 可解析的 PAPI: 无；提示内容来自拾取事件和 ItemStack 序列化。
-# 关联资源: ui/pickup_hud.yml, arcartx/ui/loot_panel.yml
+# 关联资源: ui/pickup/pickup_hud.yml, arcartx/ui/loot_panel.yml
 
 settings:
   # 是否输出调试日志

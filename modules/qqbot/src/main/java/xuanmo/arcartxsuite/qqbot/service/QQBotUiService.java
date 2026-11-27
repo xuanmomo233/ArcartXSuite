@@ -34,11 +34,11 @@ import xuanmo.arcartxsuite.qqbot.storage.QQBotRepository.QQBotBinding;
 /** Session-bound UI actions. Repository work runs off the server thread. */
 public final class QQBotUiService {
     public static final String BIND_UI_RESOURCE = "arcartx/ui/qqbot_bind.yml";
-    public static final String BIND_UI_FILE = "ui/qqbot_v2/qqbot_bind.yml";
+    public static final String BIND_UI_FILE = "ui/qqbot/qqbot_bind.yml";
     public static final String NOTIFY_UI_RESOURCE = "arcartx/ui/qqbot_notify.yml";
-    public static final String NOTIFY_UI_FILE = "ui/qqbot_v2/qqbot_notify.yml";
+    public static final String NOTIFY_UI_FILE = "ui/qqbot/qqbot_notify.yml";
     public static final String ADMIN_UI_RESOURCE = "arcartx/ui/qqbot_admin.yml";
-    public static final String ADMIN_UI_FILE = "ui/qqbot_v2/qqbot_admin.yml";
+    public static final String ADMIN_UI_FILE = "ui/qqbot/qqbot_admin.yml";
     private static final String BIND_PACKET_ID = "AXS_qqbot";
     private static final String ADMIN_PACKET_ID = "AXS_qqbot_admin";
     private static final int PAGE_SIZE = 10;

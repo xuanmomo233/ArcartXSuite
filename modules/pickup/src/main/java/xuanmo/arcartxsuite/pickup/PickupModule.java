@@ -42,9 +42,9 @@ import xuanmo.arcartxsuite.pickup.ui.PickupHudTemplateWriter;
 public final class PickupModule extends AbstractAXSModule {
 
     private static final String LOOT_PANEL_RESOURCE_PATH = "arcartx/ui/loot_panel.yml";
-    private static final String LOOT_PANEL_FILE_PATH = "ui/loot_panel.yml";
+    private static final String LOOT_PANEL_FILE_PATH = "ui/pickup/loot_panel.yml";
     private static final String LOOT_INTERACT_RESOURCE_PATH = "arcartx/ui/loot_interact.yml";
-    private static final String LOOT_INTERACT_FILE_PATH = "ui/loot_interact.yml";
+    private static final String LOOT_INTERACT_FILE_PATH = "ui/pickup/loot_interact.yml";
 
     private PickupModuleConfiguration configuration;
     private PickupService notificationService;
@@ -140,7 +140,7 @@ public final class PickupModule extends AbstractAXSModule {
             throw new IOException("Pickup 通知模式 UI 注册失败: " + reg.message());
         }
         UiBinding uiBinding = new UiBinding(reg.runtimeUiId(), reg.registeredUiId());
-        recordUiBinding("ui/pickup_hud.yml", uiBinding);
+        recordUiBinding("ui/pickup/pickup_hud.yml", uiBinding);
 
         notificationService = new PickupService(
             plugin, logger, configuration, packetBridge, itemStackBridge,
@@ -276,7 +276,7 @@ public final class PickupModule extends AbstractAXSModule {
     }
 
     private File exportPickupUiFile(PickupModuleConfiguration config) throws IOException {
-        File target = new File(pluginDataFolder, "ui/pickup_hud.yml");
+        File target = new File(pluginDataFolder, "ui/pickup/pickup_hud.yml");
         File parent = target.getParentFile();
         if (parent != null && !parent.exists()) {
             parent.mkdirs();

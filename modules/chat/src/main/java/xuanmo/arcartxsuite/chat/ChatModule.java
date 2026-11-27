@@ -47,7 +47,7 @@ import xuanmo.arcartxsuite.chat.storage.JdbcChatRepository;
 public final class ChatModule extends AbstractAXSModule implements ModuleCommandHandler {
 
     private static final String COMPLETION_UI_RESOURCE_PATH = "chat/ui/axs_chat_completion.yml";
-    private static final String COMPLETION_UI_FILE_PATH = "ui/axs_chat_completion.yml";
+    private static final String COMPLETION_UI_FILE_PATH = "ui/chat/axs_chat_completion.yml";
 
     private ChatAdminCommand adminCommand;
 

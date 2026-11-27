@@ -60,19 +60,19 @@ import xuanmo.arcartxsuite.fishing.task.TaskLoader;
 public final class FishingModule extends AbstractAXSModule implements ModuleCommandHandler {
 
     private static final String MAIN_UI_RESOURCE = "arcartx/ui/fishing_main.yml";
-    private static final String MAIN_UI_FILE = "ui/fishing_main.yml";
+    private static final String MAIN_UI_FILE = "ui/fishing/fishing_main.yml";
     private static final String MINIGAME_UI_RESOURCE = "arcartx/ui/fishing_minigame.yml";
-    private static final String MINIGAME_UI_FILE = "ui/fishing_minigame.yml";
+    private static final String MINIGAME_UI_FILE = "ui/fishing/fishing_minigame.yml";
     private static final String COLLECTION_UI_RESOURCE = "arcartx/ui/fishing_collection.yml";
-    private static final String COLLECTION_UI_FILE = "ui/fishing_collection.yml";
+    private static final String COLLECTION_UI_FILE = "ui/fishing/fishing_collection.yml";
     private static final String TALENTS_UI_RESOURCE = "arcartx/ui/fishing_talents.yml";
-    private static final String TALENTS_UI_FILE = "ui/fishing_talents.yml";
+    private static final String TALENTS_UI_FILE = "ui/fishing/fishing_talents.yml";
     private static final String REWARDS_UI_RESOURCE = "arcartx/ui/fishing_rewards.yml";
-    private static final String REWARDS_UI_FILE = "ui/fishing_rewards.yml";
+    private static final String REWARDS_UI_FILE = "ui/fishing/fishing_rewards.yml";
     private static final String TASKS_UI_RESOURCE = "arcartx/ui/fishing_tasks.yml";
-    private static final String TASKS_UI_FILE = "ui/fishing_tasks.yml";
+    private static final String TASKS_UI_FILE = "ui/fishing/fishing_tasks.yml";
     private static final String BAITS_UI_RESOURCE = "arcartx/ui/fishing_baits.yml";
-    private static final String BAITS_UI_FILE = "ui/fishing_baits.yml";
+    private static final String BAITS_UI_FILE = "ui/fishing/fishing_baits.yml";
 
     private FishingModuleConfiguration configuration;
     private volatile FishingService service;

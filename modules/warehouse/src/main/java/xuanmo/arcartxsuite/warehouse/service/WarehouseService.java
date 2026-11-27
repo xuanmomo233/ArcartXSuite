@@ -167,11 +167,11 @@ public final class WarehouseService implements Listener, WarehouseAccess {
     static final String OWNER_PERSONAL = "personal";
     static final String OWNER_SHARED = "shared";
     private static final String STORAGE_UI_RESOURCE_PATH = "arcartx/ui/warehouse_storage.yml";
-    private static final String STORAGE_UI_FILE_PATH = "ui/warehouse_storage.yml";
+    private static final String STORAGE_UI_FILE_PATH = "ui/warehouse/warehouse_storage.yml";
     private static final String MANAGE_UI_RESOURCE_PATH = "arcartx/ui/warehouse_manage.yml";
-    private static final String MANAGE_UI_FILE_PATH = "ui/warehouse_manage.yml";
+    private static final String MANAGE_UI_FILE_PATH = "ui/warehouse/warehouse_manage.yml";
     private static final String BANK_UI_RESOURCE_PATH = "arcartx/ui/warehouse_bank.yml";
-    private static final String BANK_UI_FILE_PATH = "ui/warehouse_bank.yml";
+    private static final String BANK_UI_FILE_PATH = "ui/warehouse/warehouse_bank.yml";
     static final int SLOT_COUNT = 54;
     static final long MAX_AGGREGATED_AMOUNT = Integer.MAX_VALUE;
     static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(ZoneId.systemDefault());

@@ -23,7 +23,7 @@ public final class EssentialsAdminPacketHandler extends EssentialsPanel {
 
     public static final String PACKET_ID = "AXS_ESS_ADMIN";
     public static final String UI_RESOURCE_PATH = "arcartx/ui/essentials_admin.yml";
-    public static final String UI_FILE_PATH = "ui/essentials_admin.yml";
+    public static final String UI_FILE_PATH = "ui/essentials/essentials_admin.yml";
     private final PlayerManagementService players;
     private final EssentialsRepository repository;
     private final Supplier<ChatMutable> chatMutableSupplier;

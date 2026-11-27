@@ -38,11 +38,11 @@ import xuanmo.arcartxsuite.api.PacketHandlerSpec;
 public final class ConversationModule extends AbstractAXSModule implements ModuleCommandHandler {
 
     private static final String DIALOG_UI_RESOURCE_PATH = "arcartx/ui/conversation_dialog.yml";
-    private static final String DIALOG_UI_FILE_PATH = "ui/conversation_dialog.yml";
+    private static final String DIALOG_UI_FILE_PATH = "ui/conversation/conversation_dialog.yml";
     private static final String SELECTOR_UI_RESOURCE_PATH = "arcartx/ui/conversation_selector.yml";
-    private static final String SELECTOR_UI_FILE_PATH = "ui/conversation_selector.yml";
+    private static final String SELECTOR_UI_FILE_PATH = "ui/conversation/conversation_selector.yml";
     private static final String LETTERBOX_UI_RESOURCE_PATH = "arcartx/ui/conversation_letterbox.yml";
-    private static final String LETTERBOX_UI_FILE_PATH = "ui/conversation_letterbox.yml";
+    private static final String LETTERBOX_UI_FILE_PATH = "ui/conversation/conversation_letterbox.yml";
 
     private ConversationModuleConfiguration configuration;
     private ConversationService service;

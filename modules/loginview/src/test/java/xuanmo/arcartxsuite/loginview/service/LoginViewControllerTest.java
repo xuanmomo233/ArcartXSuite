@@ -25,7 +25,7 @@ import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.capability.AuthRuntimeCapability;
 
 class LoginViewControllerTest {
-    private static final String UI = "AXS:auth_v1";
+    private static final String UI = "AXS:auth";
 
     @Test
     void thePulseUsesJoinAndQuitMembershipWithoutRescanningOnlinePlayers() {

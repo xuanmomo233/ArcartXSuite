@@ -21,7 +21,7 @@ public final class EssentialsMenuPacketHandler extends EssentialsPanel {
 
     public static final String PACKET_ID = "AXS_ESS_MENU";
     public static final String UI_RESOURCE_PATH = "arcartx/ui/essentials_menu.yml";
-    public static final String UI_FILE_PATH = "ui/essentials_menu.yml";
+    public static final String UI_FILE_PATH = "ui/essentials/essentials_menu.yml";
     private final PlayerManagementService players;
     private final EssentialsRepository repository;
     private final InventoryActionsService inventory;

@@ -20,8 +20,8 @@ title: "&f&l服务器菜单"
 
 # 布局模式（可选，默认读 ArcartXMenu.yml 的 settings.default-layout）
 # 可选值（仅两种，填写其他值一律回落为 panel）：
-#   panel  — 居中弹出面板（使用 ui/menu_panel.yml，纵向功能列表 + 右侧详情）
-#   esc    — 左侧滑出面板（使用 ui/menu_esc.yml，4 列网格，专用于替代 ESC 暂停界面）
+#   panel  — 居中弹出面板（使用 ui/menu/menu_panel.yml，纵向功能列表 + 右侧详情）
+#   esc    — 左侧滑出面板（使用 ui/menu/menu_esc.yml，4 列网格，专用于替代 ESC 暂停界面）
 layout: panel
 
 # 每行按钮列数（可选，默认读 ArcartXMenu.yml 的 settings.columns）
@@ -50,9 +50,9 @@ buttons-per-page: 64
 #
 # 自定义 UI 的数据包字段与内置菜单 UI 完全一致（buttonRows / footerRows /
 # action_token / summary / detailRows / columns 等），不写 packet-handler 时
-# 默认走 init / update 生命周期 —— 直接复制 ui/menu_panel.yml、
-# ui/menu_esc.yml、ui/menu_esc_grid.yml（浮岛网格版 ESC 布局）或
-# ui/menu_panel_grid.yml（网格版 panel 布局，真正消费 columns）的
+# 默认走 init / update 生命周期 —— 直接复制 ui/menu/menu_panel.yml、
+# ui/menu/menu_esc.yml、ui/menu/menu_esc_grid.yml（浮岛网格版 ESC 布局）或
+# ui/menu/menu_panel_grid.yml（网格版 panel 布局，真正消费 columns）的
 # packetHandler 和 action 写法再改布局即可。
 #
 # 网格版面板（按钮按 columns 列网格排列，本菜单当前 columns: 4）：

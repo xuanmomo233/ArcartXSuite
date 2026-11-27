@@ -92,9 +92,9 @@ import java.util.logging.Logger;
 public final class MapService implements Listener, MapUiPacketHandler.ActionTarget {
 
     public static final String MENU_UI_RESOURCE_PATH = "arcartx/ui/map_menu.yml";
-    public static final String MENU_UI_FILE_PATH = "ui/map_menu.yml";
+    public static final String MENU_UI_FILE_PATH = "ui/map/map_menu.yml";
     public static final String HUD_UI_RESOURCE_PATH = "arcartx/ui/map_hud.yml";
-    public static final String HUD_UI_FILE_PATH = "ui/map_hud.yml";
+    public static final String HUD_UI_FILE_PATH = "ui/map/map_hud.yml";
 
     private static final String PREFIX = ChatColor.DARK_AQUA + "◆ " + ChatColor.GOLD + "ArcartXSuite " + ChatColor.GRAY + "| " + ChatColor.RESET;
 

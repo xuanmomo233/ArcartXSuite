@@ -139,6 +139,6 @@ storage:
 
 # HUD 配置
 ui:
-  ui-id: "AXS:afk_reward_hud"  # HUD 界面 ID（对应 ui/afk_reward_hud.yml）
+  ui-id: "AXS:afk_reward_hud"  # HUD 界面 ID（对应 ui/afkreward/afk_reward_hud.yml）
   register-ui-on-enable: true       # 模块启用时是否自动注册 HUD
   overwrite-ui-files: false       # 是否在每次启用时覆盖用户已修改的 UI 文件

@@ -188,7 +188,7 @@ public final class MenuModule extends AbstractAXSModule implements ModuleCommand
         builtin.add(panelRuntimeUiId);
         builtin.add(escRuntimeUiId);
         java.util.Set<String> handled = new java.util.HashSet<>();
-        File uiDirectory = new File(pluginDataFolder, "ui");
+        File uiDirectory = new File(pluginDataFolder, "ui/menu");
         for (xuanmo.arcartxsuite.menu.config.MenuDefinition definition : service.menus()) {
             for (xuanmo.arcartxsuite.menu.config.MenuUiTarget target : definition.uiTargets()) {
                 String uiId = target.uiId();
@@ -197,7 +197,7 @@ public final class MenuModule extends AbstractAXSModule implements ModuleCommand
                 }
                 File uiFile = new File(uiDirectory, uiId + ".yml");
                 if (!uiFile.isFile()) {
-                    logger.warning("菜单 " + definition.id() + " 引用的自定义 UI 文件不存在，已跳过: ui/" + uiId + ".yml");
+                    logger.warning("菜单 " + definition.id() + " 引用的自定义 UI 文件不存在，已跳过: ui/menu/" + uiId + ".yml");
                     continue;
                 }
                 PacketBridgeAPI.UiRegistrationResult result = packetBridge.registerOrReloadUi(uiId, uiFile);

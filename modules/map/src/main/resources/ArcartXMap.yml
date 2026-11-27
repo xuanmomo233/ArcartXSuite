@@ -6,7 +6,7 @@ config-version: 6
 # 重载: /axs map reload
 # PAPI 输出: 无独立 PlaceholderAPI 输出。
 # 可解析的 PAPI: 无；地图数据来自配置、玩家位置、世界坐标、锚点和运行时临时路径点。
-# 关联资源: ui/map_menu.yml、ui/map_hud.yml
+# 关联资源: ui/map/map_menu.yml、ui/map/map_hud.yml
 
 debug: false
 

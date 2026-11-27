@@ -33,7 +33,7 @@ class TabProxyEntitlementTest {
         var plugin = mock(JavaPlugin.class);
         var server = mock(Server.class);
         var messenger = mock(Messenger.class);
-        var hud = folder.resolve("ui/tab-simple.yml").toFile();
+        var hud = folder.resolve("ui/tab/tab-simple.yml").toFile();
         when(plugin.getServer()).thenReturn(server);
         when(server.getMessenger()).thenReturn(messenger);
         when(context.plugin()).thenReturn(plugin);

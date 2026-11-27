@@ -44,7 +44,7 @@ import xuanmo.arcartxsuite.afkreward.storage.AfkRewardRepository;
 public final class AfkRewardModule extends AbstractAXSModule implements ModuleCommandHandler {
 
     private static final String HUD_UI_RESOURCE_PATH = "arcartx/ui/afk_reward_hud.yml";
-    private static final String HUD_UI_FILE_PATH = "ui/afk_reward_hud.yml";
+    private static final String HUD_UI_FILE_PATH = "ui/afkreward/afk_reward_hud.yml";
 
     private AfkRewardConfiguration configuration;
     private AfkRewardRepository repository;

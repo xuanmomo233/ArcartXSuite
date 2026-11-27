@@ -7,7 +7,7 @@ config-version: 2
 # PAPI 输出: 无独立 PlaceholderAPI 输出。
 # 可解析的 PAPI: 本模块不主动解析 %...%；对话文本通常由 Chemdah 或任务系统生成。
 # 发包字段: dialog sync 使用 speakerName、messageLines、replyRows；selector sync 使用 npcRows、distanceText、selected 状态。
-# 关联资源: ui/conversation_menu.yml、ui/conversation_selector_hud.yml
+# 关联资源: ui/conversation/conversation_menu.yml、ui/conversation/conversation_selector_hud.yml
 
 debug:
   # 是否输出对话桥接调试日志。

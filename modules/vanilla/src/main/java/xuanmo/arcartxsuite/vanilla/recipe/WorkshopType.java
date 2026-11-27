@@ -38,7 +38,7 @@ public enum WorkshopType {
     public String title() { return title; }
     public String uiId() { return "AXS:vanilla_" + key; }
     public String resource() { return "arcartx/ui/vanilla_" + key + ".yml"; }
-    public String file() { return "ui/vanilla_" + key + "_v2.yml"; }
+    public String file() { return "ui/vanilla/vanilla_" + key + ".yml"; }
     public int size() { return size; }
     public int resultSlot() { return resultSlot; }
     public int inputCount() { return inputCount; }

@@ -52,11 +52,11 @@ public final class LotteryModule extends AbstractAXSModule implements ModuleComm
     private JdbcLotteryRepository repository;
 
     private static final String GACHA_UI_RESOURCE = "arcartx/ui/lottery_gacha.yml";
-    private static final String GACHA_UI_FILE = "ui/lottery_gacha.yml";
+    private static final String GACHA_UI_FILE = "ui/lottery/lottery_gacha.yml";
     private static final String WISH_UI_RESOURCE = "arcartx/ui/lottery_wish.yml";
-    private static final String WISH_UI_FILE = "ui/lottery_wish.yml";
+    private static final String WISH_UI_FILE = "ui/lottery/lottery_wish.yml";
     private static final String CASE_UI_RESOURCE = "arcartx/ui/lottery_case.yml";
-    private static final String CASE_UI_FILE = "ui/lottery_case.yml";
+    private static final String CASE_UI_FILE = "ui/lottery/lottery_case.yml";
 
     private LotteryModuleConfiguration configuration;
     private volatile LotteryService service;

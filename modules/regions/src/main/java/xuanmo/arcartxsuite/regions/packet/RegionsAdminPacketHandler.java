@@ -29,7 +29,7 @@ import xuanmo.arcartxsuite.regions.service.RegionProfiles;
 public final class RegionsAdminPacketHandler implements ClientPacketHandler {
     public static final String PACKET_ID = "AXS_REGIONS_ADMIN";
     public static final String UI_RESOURCE_PATH = "arcartx/ui/regions_admin.yml";
-    public static final String UI_FILE_PATH = "ui/regions_control.yml";
+    public static final String UI_FILE_PATH = "ui/regions/regions_control.yml";
 
     private static final int PAGE_SIZE = 8;
     private final JavaPlugin plugin;

@@ -110,7 +110,7 @@ final class DefaultModuleContext implements ModuleContext {
         this.moduleId = moduleId;
         this.logger = new PluginConsoleLogger("AXS-" + moduleId, moduleId);
         this.dataFolder = new File(plugin.getDataFolder(), "data/" + moduleId);
-        this.uiFolder = new File(plugin.getDataFolder(), "ui");
+        this.uiFolder = new File(plugin.getDataFolder(), "ui/" + moduleId);
         this.packetBridge = packetBridge;
         this.clientBridge = clientBridge;
         this.itemStackBridge = itemStackBridge;
@@ -671,11 +671,12 @@ final class DefaultModuleContext implements ModuleContext {
 
     @Override
     public File exportUiResource(String resourcePath, String relativeUiPath, boolean overwrite, ClassLoader loader) throws IOException {
-        File target = new File(plugin.getDataFolder(), relativeUiPath);
-        File parent = target.getParentFile();
-        if (parent != null && !parent.exists()) {
-            Files.createDirectories(parent.toPath());
+        String fileName = relativeUiPath.substring(relativeUiPath.replace('\\', '/').lastIndexOf('/') + 1);
+        if (fileName.isBlank() || fileName.equals(".") || fileName.equals("..") || fileName.indexOf(':') >= 0) {
+            throw new IOException("无效的 UI 文件名: " + relativeUiPath);
         }
+        File target = new File(uiFolder, fileName);
+        Files.createDirectories(uiFolder.toPath());
         if (target.exists() && !overwrite) {
             return target;
         }

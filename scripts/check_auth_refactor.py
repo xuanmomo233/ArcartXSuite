@@ -106,7 +106,7 @@ yaml_paths = (
     "auth-center/config/node.example.yml",
     "modules/loginview/src/main/resources/LoginView.yml",
     "modules/loginview/src/main/resources/module.yml",
-    "modules/loginview/src/main/resources/arcartx/ui/auth_v1.yml",
+    "modules/loginview/src/main/resources/arcartx/ui/auth.yml",
     "src/main/resources/config.yml",
     "proxy/common/src/main/resources/proxy-config.yml",
     "modules/battlepass/src/main/resources/tasks/daily.yml",

@@ -50,9 +50,9 @@ import java.util.logging.Logger;
 public final class QuestGpsService implements Listener {
 
     public static final String MENU_UI_RESOURCE_PATH = "arcartx/ui/questgps_menu.yml";
-    public static final String MENU_UI_FILE_PATH = "ui/questgps_menu.yml";
+    public static final String MENU_UI_FILE_PATH = "ui/questgps/questgps_menu.yml";
     public static final String GUIDE_UI_RESOURCE_PATH = "arcartx/ui/questgps_guide.yml";
-    public static final String GUIDE_UI_FILE_PATH = "ui/questgps_guide.yml";
+    public static final String GUIDE_UI_FILE_PATH = "ui/questgps/questgps_guide.yml";
 
     private static final String PREFIX = ChatColor.DARK_AQUA + "◆ " + ChatColor.GOLD + "ArcartXSuite " + ChatColor.GRAY + "| " + ChatColor.RESET;
     private static final String MAP_SOURCE = "questgps";

@@ -13,7 +13,7 @@ layout: esc
 # 自定义渲染 UI：留空或删除此行则使用默认的 menu_esc.yml（左侧滑出布局）
 # 可选 menu_esc_grid.yml 渲染（浮岛网格布局）
 # 注意：两套 UI 都声明了 match: 暂停界面，同时启用时只应保留一套绑定，
-# 切换菜单时建议将 ui/menu_esc.yml 的 match 段修改
+# 切换菜单时建议将 ui/menu/menu_esc.yml 的 match 段修改
 ui-id: menu_esc
 
 # 每行按钮列数 —— 注意：menu_esc.yml 固定 4 列网格、menu_esc_grid.yml 固定 2+2 布局，

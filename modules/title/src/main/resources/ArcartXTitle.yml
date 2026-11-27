@@ -30,7 +30,7 @@ config-version: 2
 #   %axstitle_collection_attr_<key>% 输出当前收藏属性值。
 #   %axstitle_total_attr_<key>% 输出展示属性和收藏属性合计值。
 # 可消费的 PAPI: 本模块配置不主动解析外部 PAPI；输出常被 Chat、Tab 或计分板引用。
-# 关联资源: ui/title_menu.yml
+# 关联资源: ui/title/title_menu.yml
 
 settings:
   # 是否输出称号模块调试日志。

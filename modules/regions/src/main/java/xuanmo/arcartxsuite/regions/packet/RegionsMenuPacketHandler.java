@@ -23,7 +23,7 @@ import xuanmo.arcartxsuite.regions.service.RegionMemberships;
 public final class RegionsMenuPacketHandler implements ClientPacketHandler {
     public static final String PACKET_ID = "AXS_REGIONS_MENU";
     public static final String UI_RESOURCE_PATH = "arcartx/ui/regions_menu.yml";
-    public static final String UI_FILE_PATH = "ui/regions_view.yml";
+    public static final String UI_FILE_PATH = "ui/regions/regions_view.yml";
 
     private final JavaPlugin plugin;
     private final PacketBridgeAPI packets;

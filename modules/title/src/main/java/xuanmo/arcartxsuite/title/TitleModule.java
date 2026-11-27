@@ -41,7 +41,7 @@ public final class TitleModule extends AbstractAXSModule implements ModuleComman
     private TitleAdminCommand adminCommand;
 
     private static final String TITLE_MENU_RESOURCE_PATH = "arcartx/ui/title_menu.yml";
-    private static final String TITLE_MENU_FILE_PATH = "ui/title_menu.yml";
+    private static final String TITLE_MENU_FILE_PATH = "ui/title/title_menu.yml";
 
     private TitleModuleConfiguration configuration;
     private TitleService service;

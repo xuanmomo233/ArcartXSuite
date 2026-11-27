@@ -4,7 +4,7 @@ config-version: 2
 # 依赖: ArcartX；PlaceholderAPI 可选（条件表达式）。
 # 重载: /axs menu reload
 # 玩家命令: /menu open <菜单ID> | /menu list
-# 关联资源: ui/menu_panel.yml, ui/menu_esc.yml
+# 关联资源: ui/menu/menu_panel.yml, ui/menu/menu_esc.yml
 
 debug:
   enabled: false  # 是否输出调试日志

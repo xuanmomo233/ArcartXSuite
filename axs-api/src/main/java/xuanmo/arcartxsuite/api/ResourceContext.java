@@ -20,6 +20,7 @@ public interface ResourceContext {
 
     boolean hasPlugin(String pluginName);
 
+    /** 导出到宿主数据目录下的 {@code ui/<moduleId>/<filename>}。 */
     File exportUiResource(String resourcePath, String relativeUiPath, boolean overwrite, ClassLoader loader) throws IOException;
 
     File exportConfigResource(String resourcePath, String targetRelativePath, boolean overwrite, ClassLoader loader);

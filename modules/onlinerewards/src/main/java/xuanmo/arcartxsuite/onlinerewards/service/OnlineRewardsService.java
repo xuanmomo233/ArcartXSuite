@@ -150,7 +150,7 @@ public class OnlineRewardsService implements Listener {
         });
 
     public static final String MENU_UI_RESOURCE_PATH = "arcartx/ui/online_rewards_menu.yml";
-    public static final String MENU_UI_FILE_PATH = "ui/online_rewards_menu.yml";
+    public static final String MENU_UI_FILE_PATH = "ui/onlinerewards/online_rewards_menu.yml";
 
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE;
     private static final DateTimeFormatter MONTH_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM");

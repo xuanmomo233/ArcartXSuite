@@ -80,7 +80,7 @@ public final class ExtraBackpackService implements Listener, VanillaBackpackAcce
     private final xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge;
 
     private static final String UI_RESOURCE_PATH = "arcartx/ui/vanilla_backpack.yml";
-    private static final String UI_FILE_PATH = "ui/vanilla_backpack.yml";
+    private static final String UI_FILE_PATH = "ui/vanilla/vanilla_backpack.yml";
     private static final Pattern LAYOUT_BOOTSTRAP = Pattern.compile(
         "(?m)^([\\t ]*)var\\.whLayoutEnabled = (?:true|false)[\\t ]*$");
     private static final Pattern PRESENTATION_BOOTSTRAP = Pattern.compile(

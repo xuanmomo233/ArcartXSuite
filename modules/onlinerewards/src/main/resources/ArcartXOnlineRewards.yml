@@ -35,7 +35,7 @@ config-version: 3
 #   %axsonlinerewards_top_total_<rank>_minutes% 总榜 Top1-10 分钟数。
 #   %axsonlinerewards_top_total_<rank>_time% 总榜 Top1-10 格式化时长。
 # 可消费的 PAPI: 无直接 PAPI 条件；倍率和额外签到奖励通过权限节点匹配。
-# 关联资源: ui/online_rewards_menu.yml；可联动 Mail 的 mail/presets/*.yml。
+# 关联资源: ui/onlinerewards/online_rewards_menu.yml；可联动 Mail 的 mail/presets/*.yml。
 
 settings:
   # 是否输出详细调试日志

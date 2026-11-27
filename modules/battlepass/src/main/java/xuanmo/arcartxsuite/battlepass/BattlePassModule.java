@@ -44,13 +44,13 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
     private static final String MODULE_VERSION = "3.3.7";
 
     private static final String MAIN_UI_RESOURCE_PATH = "arcartx/ui/battlepass_main.yml";
-    private static final String MAIN_UI_FILE_PATH = "ui/battlepass_main.yml";
+    private static final String MAIN_UI_FILE_PATH = "ui/battlepass/battlepass_main.yml";
     private static final String TASKS_UI_RESOURCE_PATH = "arcartx/ui/battlepass_tasks.yml";
-    private static final String TASKS_UI_FILE_PATH = "ui/battlepass_tasks.yml";
+    private static final String TASKS_UI_FILE_PATH = "ui/battlepass/battlepass_tasks.yml";
     private static final String REWARDS_UI_RESOURCE_PATH = "arcartx/ui/battlepass_rewards.yml";
-    private static final String REWARDS_UI_FILE_PATH = "ui/battlepass_rewards.yml";
+    private static final String REWARDS_UI_FILE_PATH = "ui/battlepass/battlepass_rewards.yml";
     private static final String SETTLEMENT_UI_RESOURCE_PATH = "arcartx/ui/battlepass_settlement.yml";
-    private static final String SETTLEMENT_UI_FILE_PATH = "ui/battlepass_settlement.yml";
+    private static final String SETTLEMENT_UI_FILE_PATH = "ui/battlepass/battlepass_settlement.yml";
 
     private BattlePassModuleConfiguration configuration;
     private BattlePassService service;

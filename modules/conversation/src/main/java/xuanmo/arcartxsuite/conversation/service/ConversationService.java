@@ -50,9 +50,9 @@ import java.util.logging.Logger;
 public final class ConversationService implements Listener {
 
     public static final String UI_RESOURCE_PATH = "arcartx/ui/conversation_dialog.yml";
-    public static final String UI_FILE_PATH = "ui/conversation_dialog.yml";
+    public static final String UI_FILE_PATH = "ui/conversation/conversation_dialog.yml";
     public static final String SELECTOR_UI_RESOURCE_PATH = "arcartx/ui/conversation_selector.yml";
-    public static final String SELECTOR_UI_FILE_PATH = "ui/conversation_selector.yml";
+    public static final String SELECTOR_UI_FILE_PATH = "ui/conversation/conversation_selector.yml";
 
     private static final AtomicLong GENERATION_SEQUENCE = new AtomicLong(System.currentTimeMillis());
     private static final DateTimeFormatter DEBUG_TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm:ss");

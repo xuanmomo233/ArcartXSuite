@@ -109,10 +109,10 @@ public final class MailService implements Listener {
     private static final String COMPOSE_UI_RESOURCE_PATH = "arcartx/ui/mail_compose.yml";
     private static final String LOGS_UI_RESOURCE_PATH = "arcartx/ui/mail_logs.yml";
     private static final String ADMIN_UI_RESOURCE_PATH = "arcartx/ui/mail_admin.yml";
-    private static final String INBOX_UI_FILE_PATH = "ui/mail_inbox.yml";
-    private static final String COMPOSE_UI_FILE_PATH = "ui/mail_compose.yml";
-    private static final String LOGS_UI_FILE_PATH = "ui/mail_logs.yml";
-    private static final String ADMIN_UI_FILE_PATH = "ui/mail_admin.yml";
+    private static final String INBOX_UI_FILE_PATH = "ui/mail/mail_inbox.yml";
+    private static final String COMPOSE_UI_FILE_PATH = "ui/mail/mail_compose.yml";
+    private static final String LOGS_UI_FILE_PATH = "ui/mail/mail_logs.yml";
+    private static final String ADMIN_UI_FILE_PATH = "ui/mail/mail_admin.yml";
     private static final int ADMIN_ATTACHMENT_SLOTS_DEFAULT = 18;
     private static final String STARTER_PRESET_RESOURCE_PATH = "mail/presets/starter.yml";
     private static final int INBOX_PAGE_SIZE = 6;

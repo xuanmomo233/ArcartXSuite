@@ -368,7 +368,7 @@ storage:
     table-prefix: "axs_qqbot_"
 
 # ─── UI 界面配置 ───────────────────────────────────────
-# 新版文件导出到模块目录 ui/qqbot_v2/（qqbot_bind.yml 等），旧 ui/ 自定义文件保留。
+# 新版文件导出到模块目录 ui/qqbot/（qqbot_bind.yml 等）。
 ui:
   # 绑定中心 UI ID
   bind-ui-id: "AXS:qqbot_bind"

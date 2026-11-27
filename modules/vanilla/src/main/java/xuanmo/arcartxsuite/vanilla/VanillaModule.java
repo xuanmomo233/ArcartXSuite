@@ -182,7 +182,7 @@ public final class VanillaModule extends AbstractAXSModule implements Listener,x
             logger.warning("自定义配方未发布，修正 recipes.yml 后执行 /axs vanilla recipes reload。"
                 + exception.getMessage());
         }
-        UiBinding editor = registerModuleUi("arcartx/ui/vanilla_recipe_editor.yml", "ui/vanilla_recipe_editor.yml",
+        UiBinding editor = registerModuleUi("arcartx/ui/vanilla_recipe_editor.yml", "ui/vanilla/vanilla_recipe_editor.yml",
             RecipeEditor.UI, true);
         recipeEditor = new RecipeEditor(plugin, recipes, noticeBridge, new ItemPresentation(itemStackBridge, vanillaItemNameBridge), itemStackBridge,
             editor.runtimeUiId());

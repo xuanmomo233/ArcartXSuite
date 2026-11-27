@@ -54,21 +54,21 @@ import org.bukkit.Bukkit;
 public final class MarketModule extends AbstractAXSModule implements ModuleCommandHandler, Listener {
 
     private static final String SHOP_UI_RESOURCE_PATH = "arcartx/ui/market_shop.yml";
-    private static final String SHOP_UI_FILE_PATH = "ui/market_shop.yml";
+    private static final String SHOP_UI_FILE_PATH = "ui/market/market_shop.yml";
     private static final String AUCTION_ROOM_RESOURCE_PATH = "arcartx/ui/market_auction_room.yml";
-    private static final String AUCTION_ROOM_FILE_PATH = "ui/market_auction_room.yml";
+    private static final String AUCTION_ROOM_FILE_PATH = "ui/market/market_auction_room.yml";
     private static final String AUCTION_UI_RESOURCE_PATH = "arcartx/ui/market_auction.yml";
-    private static final String AUCTION_UI_FILE_PATH = "ui/market_auction.yml";
+    private static final String AUCTION_UI_FILE_PATH = "ui/market/market_auction.yml";
     private static final String AUCTION_SELL_UI_RESOURCE_PATH = "arcartx/ui/market_sell.yml";
-    private static final String AUCTION_SELL_UI_FILE_PATH = "ui/market_sell.yml";
+    private static final String AUCTION_SELL_UI_FILE_PATH = "ui/market/market_sell.yml";
     private static final String PLAYER_SHOP_UI_RESOURCE_PATH = "arcartx/ui/market_player_shop.yml";
-    private static final String PLAYER_SHOP_UI_FILE_PATH = "ui/market_player_shop.yml";
+    private static final String PLAYER_SHOP_UI_FILE_PATH = "ui/market/market_player_shop.yml";
     private static final String RECYCLE_UI_RESOURCE_PATH = "arcartx/ui/market_recycle.yml";
-    private static final String RECYCLE_UI_FILE_PATH = "ui/market_recycle.yml";
+    private static final String RECYCLE_UI_FILE_PATH = "ui/market/market_recycle.yml";
     private static final String HISTORY_UI_RESOURCE_PATH = "arcartx/ui/market_history.yml";
-    private static final String HISTORY_UI_FILE_PATH = "ui/market_history.yml";
+    private static final String HISTORY_UI_FILE_PATH = "ui/market/market_history.yml";
     private static final String SHOP_EDIT_UI_RESOURCE_PATH = "arcartx/ui/market_shop_edit.yml";
-    private static final String SHOP_EDIT_UI_FILE_PATH = "ui/market_shop_edit.yml";
+    private static final String SHOP_EDIT_UI_FILE_PATH = "ui/market/market_shop_edit.yml";
 
     private MarketModuleConfiguration configuration;
     private MarketService service;
@@ -151,11 +151,11 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
         mappings.put(configuration!=null?configuration.ui().auctionRoomFile():AUCTION_ROOM_RESOURCE_PATH, AUCTION_ROOM_FILE_PATH);
         mappings.put(AUCTION_SELL_UI_RESOURCE_PATH, AUCTION_SELL_UI_FILE_PATH);
         mappings.put(PLAYER_SHOP_UI_RESOURCE_PATH, PLAYER_SHOP_UI_FILE_PATH);
-        mappings.put("arcartx/ui/market_player_shops.yml","ui/market_player_shops.yml");
-        mappings.put("arcartx/ui/market_player_store.yml","ui/market_player_store.yml");
-        mappings.put("arcartx/ui/market_player_store_edit.yml","ui/market_player_store_edit.yml");
-        mappings.put("arcartx/ui/market_recycle_protection.yml","ui/market_recycle_protection.yml");
-        mappings.put("arcartx/ui/market_admin_trades.yml","ui/market_admin_trades.yml");
+        mappings.put("arcartx/ui/market_player_shops.yml","ui/market/market_player_shops.yml");
+        mappings.put("arcartx/ui/market_player_store.yml","ui/market/market_player_store.yml");
+        mappings.put("arcartx/ui/market_player_store_edit.yml","ui/market/market_player_store_edit.yml");
+        mappings.put("arcartx/ui/market_recycle_protection.yml","ui/market/market_recycle_protection.yml");
+        mappings.put("arcartx/ui/market_admin_trades.yml","ui/market/market_admin_trades.yml");
         mappings.put(RECYCLE_UI_RESOURCE_PATH, RECYCLE_UI_FILE_PATH);
         mappings.put(HISTORY_UI_RESOURCE_PATH, HISTORY_UI_FILE_PATH);
         mappings.put(SHOP_EDIT_UI_RESOURCE_PATH, SHOP_EDIT_UI_FILE_PATH);
@@ -308,11 +308,11 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
         bindMarketUi("AXS:market_auction_sell", AUCTION_SELL_UI_FILE_PATH);
         bindMarketUi(configuration.ui().sellId(), AUCTION_SELL_UI_FILE_PATH);
         bindMarketUi(configuration.ui().playerShopId(), PLAYER_SHOP_UI_FILE_PATH);
-        bindMarketUi(configuration.ui().playerShopsId(),"ui/market_player_shops.yml");
-        bindMarketUi(configuration.ui().playerStoreId(),"ui/market_player_store.yml");
-        bindMarketUi(configuration.ui().playerStoreEditId(),"ui/market_player_store_edit.yml");
-        bindMarketUi(configuration.ui().recycleProtectionId(),"ui/market_recycle_protection.yml");
-        bindMarketUi(configuration.ui().adminTradesId(),"ui/market_admin_trades.yml");
+        bindMarketUi(configuration.ui().playerShopsId(),"ui/market/market_player_shops.yml");
+        bindMarketUi(configuration.ui().playerStoreId(),"ui/market/market_player_store.yml");
+        bindMarketUi(configuration.ui().playerStoreEditId(),"ui/market/market_player_store_edit.yml");
+        bindMarketUi(configuration.ui().recycleProtectionId(),"ui/market/market_recycle_protection.yml");
+        bindMarketUi(configuration.ui().adminTradesId(),"ui/market/market_admin_trades.yml");
         bindMarketUi(configuration.ui().recycleId(), RECYCLE_UI_FILE_PATH);
         bindMarketUi(configuration.ui().historyId(), HISTORY_UI_FILE_PATH);
         bindMarketUi(configuration.ui().shopEditId(), SHOP_EDIT_UI_FILE_PATH);
@@ -475,8 +475,8 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
     }
 
     private void startExchange(NpcTradeRepository repository, java.nio.file.Path playerData) throws Exception {
-        var buyer = registerModuleUi("arcartx/ui/market_exchange.yml", "ui/market_exchange.yml", "AXS:market_exchange", true);
-        var editor = registerModuleUi("arcartx/ui/market_exchange_editor.yml", "ui/market_exchange_editor.yml", "AXS:market_exchange_editor", true);
+        var buyer = registerModuleUi("arcartx/ui/market_exchange.yml", "ui/market/market_exchange.yml", "AXS:market_exchange", true);
+        var editor = registerModuleUi("arcartx/ui/market_exchange_editor.yml", "ui/market/market_exchange_editor.yml", "AXS:market_exchange_editor", true);
         PacketBridgeAPI notices = xuanmo.arcartxsuite.api.message.UiNoticeBridge.wrap(packetBridge, messages(), dataFolder);
         exchange = new NpcTradingService(plugin, dataFolder, notices, currencyManager, itemSourceRegistry,
             itemStackBridge, vanillaItemNameBridge, createAdyeshachNpcBridge(),

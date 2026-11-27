@@ -50,8 +50,8 @@ public final class TabModule extends AbstractAXSModule {
     @Override
     protected @NotNull ModuleUiSpec uiSpec() {
         return ModuleUiSpec.of(Map.of(
-            "arcartx/ui/tab-simple.yml", "ui/tab-simple.yml",
-            "arcartx/ui/tab-avatar.yml", "ui/tab-avatar.yml"
+            "arcartx/ui/tab-simple.yml", "ui/tab/tab-simple.yml",
+            "arcartx/ui/tab-avatar.yml", "ui/tab/tab-avatar.yml"
         ));
     }
 
@@ -72,7 +72,7 @@ public final class TabModule extends AbstractAXSModule {
 
     @Override
     protected void startService() {
-        String path = "ui/" + layout.fileName + ".yml";
+        String path = "ui/tab/" + layout.fileName + ".yml";
         String id = "AXS:" + layout.fileName;
         var registration = packetBridge.registerOrReloadUi(id, new File(pluginDataFolder, path));
         if (!registration.success()) {

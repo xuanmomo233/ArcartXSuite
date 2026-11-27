@@ -781,7 +781,7 @@ public abstract class AbstractAXSModule implements AXSModule {
      * 自动导出资源文件并使用 {@link PacketBridgeAPI#registerOrReloadUi} 注册/热重载，
      * 解决 reload 时手动修改的 UI 文件不生效的问题。
      *
-     * @param relativeUiPath   UI 文件相对路径（如 {@code "ui/menu_panel.yml"}）
+     * @param relativeUiPath   UI 文件相对路径（如 {@code "ui/menu/menu_panel.yml"}）
      * @param configuredUiId   配置中的 UI ID（可为 null，自动从文件名推导）
      * @param registerOnEnable 是否注册到 ArcartX 引擎
      * @return UI 绑定结果

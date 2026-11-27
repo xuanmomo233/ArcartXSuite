@@ -8,7 +8,7 @@ config-version: 4  # 配置文件版本号，用于迁移脚本判断升级路�
 # 依赖: ArcartX、MythicMobs/MythicBukkit；PlaceholderAPI 可选，仅用于对外输出 PAPI 和解析显示文本。
 # 重载: /axs entitytracker reload
 # PAPI 输出: %axsentitytracker_*%
-# 关联资源: ui/boss_tracker.yml、ui/attack_target_hud.yml
+# 关联资源: ui/entitytracker/boss_tracker.yml、ui/entitytracker/attack_target_hud.yml
 # 福利模块: 消费额度满¥150获得授权
 
 ui:                            # UI 统一配置（boss 追踪与攻击目标 HUD 共用）

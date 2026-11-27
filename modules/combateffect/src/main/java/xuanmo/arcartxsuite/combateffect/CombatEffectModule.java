@@ -55,8 +55,8 @@ public final class CombatEffectModule extends AbstractAXSModule implements Modul
 
     private static final String CONFIG_FILE_NAME = "ArcartXCombatEffect.yml";
     private static final String MESSAGES_FILE_NAME = "messages.yml";
-    private static final String COMBO_HUD_FILE = "ui/combo_effect.yml";
-    private static final String COMBO_HUD_RESOURCE = "arcartx/" + COMBO_HUD_FILE;
+    private static final String COMBO_HUD_FILE = "ui/combateffect/combo_effect.yml";
+    private static final String COMBO_HUD_RESOURCE = "arcartx/ui/combo_effect.yml";
 
     private FileConfiguration rawConfiguration;
     private CombatEffectPacketConfiguration packetConfiguration;
@@ -104,9 +104,9 @@ public final class CombatEffectModule extends AbstractAXSModule implements Modul
     @Override
     protected @NotNull ModuleUiSpec uiSpec() {
         Map<String, String> mappings = new LinkedHashMap<>();
-        mappings.put("arcartx/ui/combat_kill_effect.yml", "ui/combat_kill_effect.yml");
-        mappings.put("arcartx/ui/death_buffer.yml", "ui/death_buffer.yml");
-        mappings.put("arcartx/ui/skill_effect_hud.yml", "ui/skill_effect_hud.yml");
+        mappings.put("arcartx/ui/combat_kill_effect.yml", "ui/combateffect/combat_kill_effect.yml");
+        mappings.put("arcartx/ui/death_buffer.yml", "ui/combateffect/death_buffer.yml");
+        mappings.put("arcartx/ui/skill_effect_hud.yml", "ui/combateffect/skill_effect_hud.yml");
         return new ModuleUiSpec(mappings, rawConfiguration != null && rawConfiguration.getBoolean("ui.overwrite-ui-files", false));
     }
 
@@ -145,11 +145,11 @@ public final class CombatEffectModule extends AbstractAXSModule implements Modul
     protected void startService() throws Exception {
 
         // 注册 UI（由基类根据 uiSpec() 自动导出并注册）
-        registerModuleUi("ui/combat_kill_effect.yml", "AXS:combat_kill_effect", true);
+        registerModuleUi("ui/combateffect/combat_kill_effect.yml", "AXS:combat_kill_effect", true);
         registerModuleUi(COMBO_HUD_RESOURCE, COMBO_HUD_FILE, ComboTrackerService.HUD_ID, true);
-        registerModuleUi("ui/death_buffer.yml", DeathBufferService.BUFFER_UI_ID, true);
+        registerModuleUi("ui/combateffect/death_buffer.yml", DeathBufferService.BUFFER_UI_ID, true);
         if (rawConfiguration.getBoolean("skill-effects.enabled", false)) {
-            registerModuleUi("ui/skill_effect_hud.yml", SkillEffectService.HUD_ID, true);
+            registerModuleUi("ui/combateffect/skill_effect_hud.yml", SkillEffectService.HUD_ID, true);
         }
 
         // 导出 damage_display 资源到 ArcartX damage_display/ 目录

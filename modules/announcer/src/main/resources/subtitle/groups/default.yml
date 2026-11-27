@@ -2,7 +2,7 @@
 # 用途: Subtitle 模块默认字幕组示例，演示按顺序播放多条字幕帧。
 # 前置依赖: ArcartX；Subtitle 模块启用后生效。
 # 启用开关: config.yml -> modules.subtitle.enabled + modules.subtitle.password
-# 关联文件: ArcartXSubtitle.yml、ui/subtitle_hud.yml
+# 关联文件: ArcartXSubtitle.yml、ui/announcer/subtitle_hud.yml
 # 重载命令: /axs subtitle reload
 # 最小使用路径: 顶层数字节点 + text + time + keep
 

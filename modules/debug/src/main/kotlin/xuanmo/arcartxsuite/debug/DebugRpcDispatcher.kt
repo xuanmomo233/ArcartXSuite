@@ -59,14 +59,12 @@ class DebugRpcDispatcher(
     //  UI 只读查询
     // ════════════════════════════════════════════════════════════
 
-    /** 列出 ui/ 目录所有 .yml 文件 */
+    /** 列出 ui/<模块> 下的 YAML 文件。 */
     private fun uiList(): Any {
         val uiDir = File(module.pluginDataFolder(), "ui")
-        val files = uiDir.listFiles { f -> f.isFile && (f.name.endsWith(".yml") || f.name.endsWith(".yaml")) }
-            ?: emptyArray()
         val arr = JsonArray()
-        for (f in files.sortedBy { it.name }) {
-            arr.add(f.name)
+        for (file in uiFiles()) {
+            arr.add(file.relativeTo(uiDir).invariantSeparatorsPath)
         }
         return ok("uiFiles" to arr)
     }
@@ -75,12 +73,27 @@ class DebugRpcDispatcher(
     private fun uiRead(params: JsonObject): Any {
         val uiId = requireParam(params, "uiId")
         val base = stripNamespace(uiId)
-        val file = File(module.pluginDataFolder(), "ui/$base.yml")
-        if (!file.isFile) {
-            throw IllegalArgumentException("UI 文件不存在: ui/$base.yml")
+        val uiDir = File(module.pluginDataFolder(), "ui")
+        val path = base.removeSuffix(".yaml").removeSuffix(".yml")
+        val matching = uiFiles().filter { file ->
+            val relative = file.relativeTo(uiDir).invariantSeparatorsPath
+            relative.substringBeforeLast('.') == path || file.nameWithoutExtension == path
         }
+        require(matching.size <= 1) { "UI 名称重复，请使用模块名/文件名: $base" }
+        val file = matching.singleOrNull() ?: throw IllegalArgumentException("UI 文件不存在: $base")
         val content = Files.readString(file.toPath())
         return ok("uiId" to base, "content" to content)
+    }
+
+    private fun uiFiles(): List<File> {
+        val uiDir = File(module.pluginDataFolder(), "ui")
+        return uiDir.listFiles { folder -> folder.isDirectory && !Files.isSymbolicLink(folder.toPath()) }
+            .orEmpty()
+            .flatMap { folder -> folder.listFiles { file ->
+                (file.extension == "yml" || file.extension == "yaml")
+                    && Files.isRegularFile(file.toPath(), java.nio.file.LinkOption.NOFOLLOW_LINKS)
+            }.orEmpty().toList() }
+            .sortedWith(compareBy({ it.parentFile.name }, { it.name }))
     }
 
     /** 查询 UI 是否打开 (params: player, uiId) */

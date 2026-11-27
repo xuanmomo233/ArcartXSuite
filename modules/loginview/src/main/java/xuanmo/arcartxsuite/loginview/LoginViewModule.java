@@ -36,12 +36,12 @@ public final class LoginViewModule extends AbstractAXSModule implements ModuleCo
         if(delay<0 || delay>600) throw new IllegalArgumentException("open-delay-ticks 范围为 0 至 600");
     }
     @Override protected @NotNull ModuleUiSpec uiSpec() {
-        return new ModuleUiSpec(Map.of("arcartx/ui/auth_v1.yml","ui/auth_v1.yml"),true);
+        return new ModuleUiSpec(Map.of("arcartx/ui/auth.yml","ui/loginview/auth.yml"),true);
     }
     @Override protected void startService() {
         var runtime=getCapability(AuthRuntimeCapability.class);
         if(runtime==null) throw new IllegalStateException("宿主认证运行时未就绪");
-        var binding=registerModuleUi("ui/auth_v1.yml","AXS:auth_v1",true);
+        var binding=registerModuleUi("ui/loginview/auth.yml","AXS:auth",true);
         if(binding.registeredUiId()==null) throw new IllegalStateException("认证界面注册失败");
         controller=new LoginViewController(plugin,packetBridge,runtime,binding.runtimeUiId(),delay);
         controller.start();

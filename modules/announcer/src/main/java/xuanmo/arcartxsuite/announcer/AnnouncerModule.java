@@ -79,8 +79,8 @@ public final class AnnouncerModule extends AbstractAXSModule implements ModuleCo
     @Override
     protected @NotNull ModuleUiSpec uiSpec() {
         Map<String, String> mappings = new LinkedHashMap<>();
-        mappings.put("arcartx/ui/announcer_hud.yml", "ui/announcer_hud.yml");
-        mappings.put("arcartx/ui/subtitle_hud.yml", "ui/subtitle_hud.yml");
+        mappings.put("arcartx/ui/announcer_hud.yml", "ui/announcer/announcer_hud.yml");
+        mappings.put("arcartx/ui/subtitle_hud.yml", "ui/announcer/subtitle_hud.yml");
         return new ModuleUiSpec(mappings, configuration.overwriteUiFile());
     }
 
@@ -139,7 +139,7 @@ public final class AnnouncerModule extends AbstractAXSModule implements ModuleCo
         for (String candidateUiId : configuration.uiIds()) {
             UiBinding uiBinding = registerModuleUi(
                 "arcartx/ui/announcer_hud.yml",
-                "ui/announcer_hud.yml",
+                "ui/announcer/announcer_hud.yml",
                 candidateUiId,
                 configuration.registerUiOnEnable()
             );
@@ -157,7 +157,7 @@ public final class AnnouncerModule extends AbstractAXSModule implements ModuleCo
         for (String candidateUiId : subtitleCfg.uiIds()) {
             UiBinding subtitleUiBinding = registerModuleUi(
                 "arcartx/ui/subtitle_hud.yml",
-                "ui/subtitle_hud.yml",
+                "ui/announcer/subtitle_hud.yml",
                 candidateUiId,
                 configuration.registerUiOnEnable()
             );

@@ -43,7 +43,7 @@ import java.util.Map;
 public final class TooltipModule extends AbstractAXSModule implements ModuleCommandHandler {
 
     private static final String GUN_LIST_UI_RESOURCE_PATH = "arcartx/ui/gun_list.yml";
-    private static final String GUN_LIST_UI_FILE_PATH = "ui/gun_list.yml";
+    private static final String GUN_LIST_UI_FILE_PATH = "ui/tooltip/gun_list.yml";
 
     private TooltipDataCache cache;
     private BukkitTask cacheCleanup;

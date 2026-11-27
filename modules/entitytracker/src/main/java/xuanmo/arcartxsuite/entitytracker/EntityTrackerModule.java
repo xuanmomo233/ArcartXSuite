@@ -55,13 +55,13 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
     private RankingRewardCommand rewardCommand;
 
     private static final String BOSS_UI_RESOURCE_PATH = "arcartx/ui/boss_tracker.yml";
-    private static final String BOSS_UI_FILE_PATH = "ui/boss_tracker.yml";
+    private static final String BOSS_UI_FILE_PATH = "ui/entitytracker/boss_tracker.yml";
     private static final String TARGET_UI_RESOURCE_PATH = "arcartx/ui/attack_target_hud.yml";
-    private static final String TARGET_UI_FILE_PATH = "ui/attack_target_hud.yml";
+    private static final String TARGET_UI_FILE_PATH = "ui/entitytracker/attack_target_hud.yml";
     private static final String REWARD_MANAGER_UI_RESOURCE_PATH = "arcartx/ui/ranking_rewards.yml";
-    private static final String REWARD_MANAGER_UI_FILE_PATH = "ui/ranking_rewards.yml";
+    private static final String REWARD_MANAGER_UI_FILE_PATH = "ui/entitytracker/ranking_rewards.yml";
     private static final String REWARD_HISTORY_UI_RESOURCE_PATH = "arcartx/ui/reward_history.yml";
-    private static final String REWARD_HISTORY_UI_FILE_PATH = "ui/reward_history.yml";
+    private static final String REWARD_HISTORY_UI_FILE_PATH = "ui/entitytracker/reward_history.yml";
 
     private PluginConfiguration configuration;
     private File bossesDirectory;

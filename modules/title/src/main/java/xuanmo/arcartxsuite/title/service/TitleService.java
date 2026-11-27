@@ -57,7 +57,7 @@ public class TitleService {
 
     public static final String CLIENT_PACKET_ID = "AXS_TITLE_MENU";
     private static final String TITLE_MENU_RESOURCE_PATH = "arcartx/ui/title_menu.yml";
-    private static final String TITLE_MENU_FILE_PATH = "ui/title_menu.yml";
+    private static final String TITLE_MENU_FILE_PATH = "ui/title/title_menu.yml";
     private static final int MAX_PENDING_DATABASE_TASKS = 256;
 
     /**

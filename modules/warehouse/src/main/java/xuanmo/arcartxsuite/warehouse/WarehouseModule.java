@@ -58,11 +58,11 @@ public final class WarehouseModule extends AbstractAXSModule implements ModuleCo
     private xuanmo.arcartxsuite.warehouse.service.WarehouseMaterials materialService;
 
     private static final String STORAGE_UI_RESOURCE_PATH = "arcartx/ui/warehouse_storage.yml";
-    private static final String STORAGE_UI_FILE_PATH = "ui/warehouse_storage.yml";
+    private static final String STORAGE_UI_FILE_PATH = "ui/warehouse/warehouse_storage.yml";
     private static final String MANAGE_UI_RESOURCE_PATH = "arcartx/ui/warehouse_manage.yml";
-    private static final String MANAGE_UI_FILE_PATH = "ui/warehouse_manage.yml";
+    private static final String MANAGE_UI_FILE_PATH = "ui/warehouse/warehouse_manage.yml";
     private static final String BANK_UI_RESOURCE_PATH = "arcartx/ui/warehouse_bank.yml";
-    private static final String BANK_UI_FILE_PATH = "ui/warehouse_bank.yml";
+    private static final String BANK_UI_FILE_PATH = "ui/warehouse/warehouse_bank.yml";
 
     private WarehouseModuleConfiguration configuration;
     private CrossServerChannelConfig crossServerChannelConfig = CrossServerChannelConfig.disabled();
