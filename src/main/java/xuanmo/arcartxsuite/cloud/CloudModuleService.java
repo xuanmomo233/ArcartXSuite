@@ -31,6 +31,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 
 import org.bukkit.Bukkit;
@@ -135,6 +136,15 @@ public final class CloudModuleService {
     private final ResponseSignatureVerifier responseSignatureVerifier = new ResponseSignatureVerifier();
     private final String suiteRelease;
     private final String customerRelease;
+    private final LocalModuleFiles localModuleFiles;
+    private final CustomerOfflineGrace customerOfflineGrace;
+    private final Object offlineGraceLock = new Object();
+    private final AtomicBoolean customerTimeoutReported = new AtomicBoolean();
+    private final AtomicBoolean customerRetryScheduled = new AtomicBoolean();
+    private volatile CustomerOfflineGrace.Session offlineGraceSession;
+    private boolean offlineGraceRevoked;
+    private long offlineGraceEpoch;
+    private long offlineGraceDecision;
     private final boolean localModuleSource;
     private final RuntimeAuthorization runtimeAuthorization = new RuntimeAuthorization();
     private CompletableFuture<Void> pendingRuntimeLease;
@@ -164,12 +174,14 @@ public final class CloudModuleService {
         this.apiKey = config.getString("cloud.apiKey", "").trim();
         this.serverName = config.getString("cloud.server-name", plugin.getServer().getName());
         this.serverCode = config.getString("cloud.server-code", "").trim();
+        this.localModuleFiles = new LocalModuleFiles(plugin.getDataFolder().toPath().resolve("modules"));
         this.keyPair = loadOrGenerateKeyPair();
         this.serverPublicKeyB64 = encodeRawEd25519PublicKey(keyPair);
         String source = config.getString("cloud.module-source", "cloud");
         if (!java.util.Set.of("cloud", "local").contains(source))
             throw new IllegalArgumentException("cloud.module-source must be cloud or local");
         this.localModuleSource = "local".equals(source) || RuntimeAuthorization.isCustomerRelease(suiteRelease);
+        this.customerOfflineGrace = customerRelease == null ? null : new CustomerOfflineGrace(plugin.getDataFolder().toPath());
         registry.setProtectedModuleAuthorization(this::moduleRuntimeAuthorized);
 
         this.apiBaseUrl = API_BASE_URLS.get(0);
@@ -201,8 +213,12 @@ public final class CloudModuleService {
 
     /** moduleId 为 null 时校验宿主功能；模块功能需要同一客户批次的有效模块席位。 */
     public boolean customerFeaturesAllowed(String moduleId) {
-        return !tasks.isClosed()
-            && runtimeAuthorization.permitsCustomerFeatures(customerRelease, moduleId, System.nanoTime());
+        if (tasks.isClosed() || customerRelease == null) return false;
+        if (runtimeAuthorization.permitsCustomerFeatures(customerRelease, moduleId, System.nanoTime())) return true;
+        CustomerOfflineGrace.Session grace = offlineGraceSession;
+        if (grace == null) return false;
+        var modules = grace.moduleIds();
+        return moduleId == null ? !modules.isEmpty() : modules.contains(moduleId);
     }
 
     private boolean moduleRuntimeAuthorized(String moduleId) {
@@ -214,8 +230,51 @@ public final class CloudModuleService {
     }
 
     private java.util.Set<String> runtimeModuleIds() {
-        return customerRelease == null ? runtimeAuthorization.permittedModules()
-            : runtimeAuthorization.permittedCustomerModules(customerRelease);
+        if (customerRelease == null) return runtimeAuthorization.permittedModules();
+        var online = runtimeAuthorization.permittedCustomerModules(customerRelease);
+        CustomerOfflineGrace.Session grace = offlineGraceSession;
+        if (grace == null) return online;
+        var available = new java.util.HashSet<>(online);
+        available.addAll(grace.moduleIds());
+        return java.util.Set.copyOf(available);
+    }
+
+    private CustomerOfflineGrace.Identity offlineGraceIdentity() {
+        return new CustomerOfflineGrace.Identity(qq, serverCode, serverPublicKeyB64, customerRelease);
+    }
+
+    private long offlineGraceEpoch() {
+        synchronized (offlineGraceLock) {
+            return offlineGraceEpoch;
+        }
+    }
+
+    private void rejectCustomerCloudAuthority() {
+        revokeCustomerGrace(true);
+    }
+
+    private void revokeCustomerGrace(boolean revokeOnlineLease) {
+        if (customerOfflineGrace == null) return;
+        synchronized (offlineGraceLock) {
+            if (revokeOnlineLease) runtimeAuthorization.invalidate();
+            offlineGraceEpoch++;
+            offlineGraceDecision++;
+            clearCustomerOfflineGrace();
+        }
+        tasks.main(() -> {
+            reconcileRuntimeModules();
+            return null;
+        });
+    }
+
+    private void clearCustomerOfflineGrace() {
+        offlineGraceSession = null;
+        offlineGraceRevoked = true;
+        try {
+            customerOfflineGrace.clear();
+        } catch (java.io.IOException failure) {
+            debugLog("[Cloud] 无法清除本地授权缓存。");
+        }
     }
 
     void acceptPublicModuleList(String responseBody) {
@@ -225,6 +284,7 @@ public final class CloudModuleService {
     private enum CloudStatus {
         OK,
         TRANSIENT,
+        TIMEOUT,
         REJECTED
     }
 
@@ -234,7 +294,7 @@ public final class CloudModuleService {
         }
 
         boolean isTransient() {
-            return status == CloudStatus.TRANSIENT;
+            return status == CloudStatus.TRANSIENT || status == CloudStatus.TIMEOUT;
         }
 
         boolean isRejected() {
@@ -257,7 +317,7 @@ public final class CloudModuleService {
         }
 
         boolean isTransient() {
-            return status == CloudStatus.TRANSIENT;
+            return status == CloudStatus.TRANSIENT || status == CloudStatus.TIMEOUT;
         }
 
         boolean isRejected() {
@@ -266,6 +326,31 @@ public final class CloudModuleService {
     }
 
     private record PreparedModule(byte[] jarBytes, byte[] moduleSeed) {
+    }
+
+    private static final class CustomerCloudTimeout extends IllegalStateException {
+        CustomerCloudTimeout() { super("云端响应超时"); }
+    }
+
+    private boolean reportCustomerTimeout(CloudStatus status) {
+        if (status != CloudStatus.TIMEOUT) return false;
+        if (customerTimeoutReported.compareAndSet(false, true)) {
+            plugin.consoleInfo("[Cloud] 云端响应超时，继续启动。");
+        }
+        return true;
+    }
+
+    private <T> CompletableFuture<T> customerTimeout() {
+        reportCustomerTimeout(CloudStatus.TIMEOUT);
+        return CompletableFuture.failedFuture(new CustomerCloudTimeout());
+    }
+
+    private void retryCustomerSyncAfterTimeout() {
+        if (tasks.isClosed() || !customerRetryScheduled.compareAndSet(false, true)) return;
+        tasks.delay(30L * 20L).thenCompose(ignored -> {
+            customerRetryScheduled.set(false);
+            return tasks.request(this::syncModulesRequest);
+        });
     }
 
     private List<String> orderedApiBaseUrls() {
@@ -303,6 +388,10 @@ public final class CloudModuleService {
             || cause instanceof java.io.IOException;
     }
 
+    private boolean isCustomerTimeout(Throwable cause) {
+        return customerRelease != null && CloudRefreshPolicy.isConnectionUnavailable(cause);
+    }
+
     private static boolean isTransientStatus(int statusCode) {
         return statusCode == 429 || statusCode >= 500;
     }
@@ -324,6 +413,9 @@ public final class CloudModuleService {
 
         if (throwable != null) {
             Throwable cause = unwrap(throwable);
+            if (isCustomerTimeout(cause)) {
+                return new CloudResponse<>(CloudStatus.TIMEOUT, null, 0, endpoint, cause.getMessage(), null);
+            }
             if (isTransientException(cause)) {
                 return new CloudResponse<>(CloudStatus.TRANSIENT, null, 0, endpoint, cause.getMessage(), null);
             }
@@ -406,7 +498,8 @@ public final class CloudModuleService {
         java.util.function.Function<String, HttpRequest> requestFactory,
         java.util.function.Function<SignedCloudResponse, SignedCloudResponse> responseProcessor
     ) {
-        return sendSignedWithFailover(operation, requestFactory, responseProcessor, orderedApiBaseUrls(), 0, 0, false);
+        return sendSignedWithFailover(operation, requestFactory, responseProcessor, orderedApiBaseUrls(), 0, 0,
+            false, false, false);
     }
 
     private CompletableFuture<SignedCloudResponse> sendSignedWithFailover(
@@ -416,7 +509,9 @@ public final class CloudModuleService {
         List<String> endpoints,
         int index,
         int attempt,
-        boolean sawTransient
+        boolean sawTransient,
+        boolean sawTimeout,
+        boolean sawCloudResponse
     ) {
         if (tasks.isClosed()) return CompletableFuture.failedFuture(new java.util.concurrent.CancellationException("云端模块服务正在停止"));
         if (endpoints == null || index >= endpoints.size()) {
@@ -430,14 +525,20 @@ public final class CloudModuleService {
             .thenCompose(result -> {
                 if (tasks.isClosed()) return CompletableFuture.failedFuture(new java.util.concurrent.CancellationException("云端模块服务正在停止"));
                 SignedCloudResponse processed = responseProcessor.apply(result);
+                boolean timedOut = sawTimeout || processed.status() == CloudStatus.TIMEOUT;
+                boolean standbyDisabled = CloudRefreshPolicy.isStandbyDisabled(processed.httpStatus(), processed.rawBody())
+                    && java.util.Objects.equals(processed.message(), processed.rawBody());
+                boolean reachedCloud = sawCloudResponse || (processed.httpStatus() > 0 && !standbyDisabled);
                 if (processed.isTransient() || ("key".equals(operation)
                     && (processed.httpStatus() == 404 || processed.httpStatus() == 409))) {
                     if (processed.httpStatus() == 0 && attempt < 1) {
                         return retryDelay().thenCompose(v ->
-                            sendSignedWithFailover(operation, requestFactory, responseProcessor, endpoints, index, attempt + 1, true));
+                            sendSignedWithFailover(operation, requestFactory, responseProcessor, endpoints,
+                                index, attempt + 1, true, timedOut, reachedCloud));
                     }
                     if (index + 1 < endpoints.size()) {
-                        return sendSignedWithFailover(operation, requestFactory, responseProcessor, endpoints, index + 1, 0, true);
+                        return sendSignedWithFailover(operation, requestFactory, responseProcessor, endpoints,
+                            index + 1, 0, true, timedOut, reachedCloud);
                     }
                 }
                 // 主备库可能尚未同步；先寻找认识此服务器码的端点，不能直接重绑生成新码。
@@ -445,8 +546,10 @@ public final class CloudModuleService {
                     && CloudRefreshPolicy.isMissingServer(processed.httpStatus(), processed.rawBody())) {
                     if (index + 1 < endpoints.size()) {
                         plugin.consoleWarn("[Cloud] 当前端点未找到服务器记录，尝试备用端点: " + endpoint);
-                        return sendSignedWithFailover(operation, requestFactory, responseProcessor, endpoints, index + 1, 0, sawTransient)
+                        return sendSignedWithFailover(operation, requestFactory, responseProcessor, endpoints,
+                            index + 1, 0, sawTransient, timedOut, reachedCloud)
                             .thenApply(alternative -> {
+                                if (customerRelease != null && alternative.isTransient()) return processed;
                                 // 备用端在主站健康时默认关闭；明确的维护响应不能阻止主站修复失效码。
                                 if (!sawTransient && alternative.isTransient()
                                     && CloudRefreshPolicy.isStandbyDisabled(alternative.httpStatus(), alternative.rawBody())
@@ -456,10 +559,17 @@ public final class CloudModuleService {
                                 return alternative;
                             });
                     }
-                    if (sawTransient) {
+                    if (sawTransient && customerRelease == null) {
                         return CompletableFuture.completedFuture(transientSignedResponse(processed,
                             "部分端点不可用，无法确认服务器记录缺失，保留原绑定"));
                     }
+                }
+                if (processed.status() == CloudStatus.TIMEOUT && reachedCloud) {
+                    return CompletableFuture.completedFuture(transientSignedResponse(processed, "授权服务暂时不可用"));
+                }
+                if (timedOut && !reachedCloud && processed.isTransient() && processed.status() != CloudStatus.TIMEOUT) {
+                    return CompletableFuture.completedFuture(new SignedCloudResponse(CloudStatus.TIMEOUT, null, 0,
+                        processed.endpoint(), "云端响应超时", null, null, null));
                 }
                 return CompletableFuture.completedFuture(processed);
             });
@@ -468,6 +578,9 @@ public final class CloudModuleService {
     private SignedCloudResponse classifySignedResponse(String endpoint, HttpResponse<byte[]> response, Throwable throwable) {
         if (throwable != null) {
             Throwable cause = unwrap(throwable);
+            if (isCustomerTimeout(cause)) {
+                return new SignedCloudResponse(CloudStatus.TIMEOUT, null, 0, endpoint, cause.getMessage(), null, null, null);
+            }
             if (isTransientException(cause)) {
                 return new SignedCloudResponse(CloudStatus.TRANSIENT, null, 0, endpoint, cause.getMessage(), null, null, null);
             }
@@ -494,6 +607,7 @@ public final class CloudModuleService {
     }
 
     private SignedCloudResponse validateSignedResponse(String endpointKey, String label, SignedCloudResponse resp) {
+        if (resp != null && resp.status() == CloudStatus.TIMEOUT) return resp;
         if (!responseSignatureVerifier.isActive()) {
             // 验签不可用 = 明文信任。默认 fail-open 兼容开发构建；
             // require-native-verify=true 时改 fail-closed，防验签失效被静默降级
@@ -614,8 +728,11 @@ public final class CloudModuleService {
             resp -> validateSignedResponse("bind", "[Cloud] 服务器绑定响应", resp)
         ).thenApply(resp -> {
             if (!resp.isOk()) {
-                plugin.consoleWarn((resp.isTransient() ? "[Cloud] 服务器绑定暂时失败，HTTP " : "[Cloud] 服务器绑定失败，HTTP ")
-                    + resp.httpStatus());
+                if (resp.isRejected()) rejectCustomerCloudAuthority();
+                if (!reportCustomerTimeout(resp.status())) {
+                    plugin.consoleWarn((resp.isTransient() ? "[Cloud] 服务器绑定暂时失败，HTTP " : "[Cloud] 服务器绑定失败，HTTP ")
+                        + resp.httpStatus());
+                }
                 return new CloudResponse<>(resp.status(), null, resp.httpStatus(), resp.endpoint(), resp.message(), resp.rawBody());
             }
             rememberSuccessfulEndpoint(resp.endpoint());
@@ -624,7 +741,10 @@ public final class CloudModuleService {
             String token = extractJsonField(body, "token");
             String responseApiKey = extractJsonField(body, "apiKey");
             if (code != null && !code.isEmpty()) {
-                if (!code.equals(this.serverCode)) runtimeAuthorization.invalidate();
+                if (!code.equals(this.serverCode)) {
+                    runtimeAuthorization.invalidate();
+                    offlineGraceSession = null;
+                }
                 this.serverCode = code;
                 acceptPublicModuleList(body);
                 if (token != null) {
@@ -704,7 +824,7 @@ public final class CloudModuleService {
         if (customerRelease == null) return CompletableFuture.completedFuture(null);
         // A newly bound customer server may have a cached bearer token but no public equipment or lease yet.
         startHeartbeat();
-        return ensureRuntimeLease(forceRenewal);
+        return ensureRuntimeLease(forceRenewal || offlineGraceSession != null);
     }
 
     private CompletableFuture<CloudResponse<Void>> refreshTokenGate(boolean forceRefresh) {
@@ -728,10 +848,11 @@ public final class CloudModuleService {
 
         String signature = sign(signMessage);
 
-        String refreshPayload = "{"
-            + "\"apiKey\":\"" + escapeJson(apiKey) + "\""
-            + ",\"keyAnchor\":\"" + escapeJson(serverSecretB64()) + "\""
-            + "}";
+        var refresh = new com.google.gson.JsonObject();
+        refresh.addProperty("apiKey", apiKey);
+        refresh.addProperty("keyAnchor", serverSecretB64());
+        if (customerRelease != null) refresh.addProperty("qq", qq);
+        String refreshPayload = refresh.toString();
         return sendSignedWithFailover(
             "refresh",
             endpoint -> HttpRequest.newBuilder()
@@ -746,9 +867,10 @@ public final class CloudModuleService {
         ).thenCompose(resp -> {
             if (!resp.isOk()) {
                 String body = resp.rawBody();
+                if (resp.isRejected()) rejectCustomerCloudAuthority();
                 boolean missingServer = CloudRefreshPolicy.isMissingServer(resp.httpStatus(), body);
-                if (resp.isRejected() && !recoveryAttempted
-                    && (missingServer || CloudRefreshPolicy.isSignatureMismatch(resp.httpStatus(), body))) {
+                if (resp.isRejected() && CloudRefreshPolicy.canRepairBinding(customerRelease != null,
+                    recoveryAttempted, resp.httpStatus(), body)) {
 
                     plugin.consoleWarn(missingServer
                         ? "[Cloud] 云端服务器记录不存在且备用端无可用记录，使用现有密钥尝试重新绑定一次..."
@@ -767,8 +889,10 @@ public final class CloudModuleService {
                         return CompletableFuture.completedFuture(bound);
                     });
                 }
-                plugin.consoleWarn((resp.isTransient() ? "[Cloud] 刷新令牌暂时失败，HTTP " : "[Cloud] 刷新令牌失败，HTTP ")
-                    + resp.httpStatus());
+                if (!reportCustomerTimeout(resp.status())) {
+                    plugin.consoleWarn((resp.isTransient() ? "[Cloud] 刷新令牌暂时失败，HTTP " : "[Cloud] 刷新令牌失败，HTTP ")
+                        + resp.httpStatus());
+                }
                 return CompletableFuture.completedFuture(new CloudResponse<>(resp.status(), null, resp.httpStatus(), resp.endpoint(), resp.message(), body));
             }
             rememberSuccessfulEndpoint(resp.endpoint());
@@ -798,7 +922,48 @@ public final class CloudModuleService {
     }
 
     private CompletableFuture<Void> syncModulesRequest() {
-        return syncModules(null);
+        return syncModules(null).exceptionallyCompose(failure -> {
+            Throwable cause = unwrap(failure);
+            if (cause instanceof CustomerCloudTimeout timeout && !tasks.isClosed()) {
+                retryCustomerSyncAfterTimeout();
+                return restoreCustomerOfflineGrace(timeout).thenCompose(ignored -> CompletableFuture.failedFuture(timeout));
+            }
+            if (customerRelease != null && !tasks.isClosed()
+                && !(cause instanceof java.util.concurrent.CancellationException)) {
+                plugin.consoleWarn("[Cloud] 客户包授权未确认: " + cause.getMessage());
+            }
+            return CompletableFuture.failedFuture(cause);
+        });
+    }
+
+    private CompletableFuture<Void> restoreCustomerOfflineGrace(CustomerCloudTimeout timeout) {
+        if (customerOfflineGrace == null || !hasServerCode() || qq.isEmpty() || apiKey.isEmpty()) {
+            return CompletableFuture.failedFuture(timeout);
+        }
+        long decision;
+        synchronized (offlineGraceLock) {
+            if (offlineGraceRevoked || tasks.isClosed()) return CompletableFuture.failedFuture(timeout);
+            if (offlineGraceSession != null) {
+                return offlineGraceSession.moduleIds().isEmpty()
+                    ? CompletableFuture.failedFuture(timeout) : CompletableFuture.completedFuture(null);
+            }
+            decision = offlineGraceDecision;
+        }
+        return CompletableFuture.supplyAsync(() -> {
+            synchronized (offlineGraceLock) {
+                if (offlineGraceRevoked || tasks.isClosed() || offlineGraceDecision != decision) return false;
+                try {
+                    offlineGraceSession = customerOfflineGrace.restore(offlineGraceIdentity(), NativeBridge::verifyResponseSig);
+                    return offlineGraceSession != null && !offlineGraceSession.moduleIds().isEmpty();
+                } catch (java.io.IOException | LinkageError unavailable) {
+                    return false;
+                }
+            }
+        }).thenCompose(restored -> {
+            if (!restored) return CompletableFuture.failedFuture(timeout);
+            startRuntimeWatchdog();
+            return syncPermittedModules(null);
+        });
     }
 
     public CompletableFuture<Void> syncConfiguredModules(java.util.Set<String> moduleIds) {
@@ -806,7 +971,9 @@ public final class CloudModuleService {
     }
 
     private CompletableFuture<Void> syncConfiguredModulesRequest(java.util.Set<String> moduleIds) {
-        if (!hasServerCode() || moduleIds.isEmpty()) return CompletableFuture.completedFuture(null);
+        if (moduleIds.isEmpty()) return CompletableFuture.completedFuture(null);
+        if (offlineGraceSession != null) return syncPermittedModules(java.util.Set.copyOf(moduleIds));
+        if (!hasServerCode()) return CompletableFuture.completedFuture(null);
         return syncModules(java.util.Set.copyOf(moduleIds));
     }
 
@@ -821,6 +988,7 @@ public final class CloudModuleService {
             : bindServerGate();
 
         return ready.thenCompose(bound -> {
+            if (bound.status() == CloudStatus.TIMEOUT) return this.<Void>customerTimeout();
             if (bound.isTransient()) {
 
                 plugin.consoleWarn("[Cloud] 未能绑定服务器（暂时故障），保留现有云模块并等待下次同步。");
@@ -837,6 +1005,7 @@ public final class CloudModuleService {
             plugin.consoleInfo("[Cloud] 服务器已绑定: " + serverCode);
 
             return refreshTokenGate(false).thenCompose(refresh -> {
+                if (refresh.status() == CloudStatus.TIMEOUT) return this.<Void>customerTimeout();
                 if (refresh.isTransient()) {
 
                     plugin.consoleWarn("[Cloud] 刷新模块令牌暂时失败，保留现有云模块。");
@@ -855,20 +1024,22 @@ public final class CloudModuleService {
     }
 
     CompletableFuture<Void> syncAuthorizedModules(java.util.Set<String> requested) {
-        return prepareCustomerModuleAccess(false).thenCompose(ignored -> {
-            List<String> mods = authorizedModuleIds();
-            if (mods.isEmpty()) {
-                plugin.consoleInfo("[Cloud] 该服务器未装备任何适用于当前发行批次的模块。");
-                return CompletableFuture.completedFuture(null);
-            }
-            plugin.consoleInfo("[Cloud] 本次需同步 " + mods.size() + " 个授权模块: " + mods);
-            CompletableFuture<Void> chain = CompletableFuture.completedFuture(null);
-            for (String id : mods) {
-                if (id == null || id.isEmpty() || (requested != null && !requested.contains(id))) continue;
-                chain = chain.thenCompose(v -> syncModuleFile(id));
-            }
-            return chain;
-        });
+        return prepareCustomerModuleAccess(false).thenCompose(ignored -> syncPermittedModules(requested));
+    }
+
+    private CompletableFuture<Void> syncPermittedModules(java.util.Set<String> requested) {
+        List<String> mods = authorizedModuleIds();
+        if (mods.isEmpty()) {
+            plugin.consoleInfo("[Cloud] 该服务器未装备任何适用于当前发行批次的模块。");
+            return CompletableFuture.completedFuture(null);
+        }
+        plugin.consoleInfo("[Cloud] 本次需同步 " + mods.size() + " 个授权模块: " + mods);
+        CompletableFuture<Void> chain = CompletableFuture.completedFuture(null);
+        for (String id : mods) {
+            if (id == null || id.isEmpty() || (requested != null && !requested.contains(id))) continue;
+            chain = chain.thenCompose(v -> syncModuleFile(id));
+        }
+        return chain;
     }
 
 
@@ -1165,6 +1336,7 @@ public final class CloudModuleService {
         if (!localModuleSource) return work;
         return work.exceptionally(failure -> {
             Throwable cause = unwrap(failure);
+            if (cause instanceof CustomerCloudTimeout timeout) throw timeout;
             if (cause instanceof java.util.concurrent.CancellationException) throw (java.util.concurrent.CancellationException) cause;
             plugin.consoleWarn("[Cloud] 本地模块 " + moduleId + " 加载失败: " + failure.getMessage());
             return null;
@@ -1246,6 +1418,19 @@ public final class CloudModuleService {
         if (tasks.isClosed()) return CompletableFuture.failedFuture(new java.util.concurrent.CancellationException("云端模块服务正在停止"));
         var payload = new CloudPayload();
         return tasks.withCleanup(() -> decryptAndLoadBody(moduleId, axb, isRetry, payload), payload::close);
+    }
+
+    private CompletableFuture<Void> installDecryptedModule(String moduleId, CloudPayload payload) {
+        payload.seed = payload.key.clone();
+        return tasks.main(() -> {
+            if (!moduleRuntimeAuthorized(moduleId) || registry.isModuleLoaded(moduleId)) {
+                return CompletableFuture.<Void>completedFuture(null);
+            }
+            return registry.loadCloudModule(moduleId, payload.jar, payload.seed).thenAccept(loaded -> {
+                if (loaded) plugin.consoleInfo("[Cloud] 模块 " + moduleId + " 已加载");
+                else plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 加载失败，请核对依赖与模块开关。");
+            });
+        }).thenCompose(stage -> stage);
     }
 
     private CompletableFuture<Void> decryptAndLoadBody(String moduleId, byte[] axb, boolean isRetry, CloudPayload payload) {
@@ -1341,7 +1526,7 @@ public final class CloudModuleService {
 
                 // 重新绑定一次（服务端按 userQq+pubkey 命中既有 serverCode 并刷新指纹）后重试，isRetry 防循环。
 
-                if (!isRetry && "fp-hkdf-v1".equals(keyBind)) {
+                if (customerRelease == null && !isRetry && "fp-hkdf-v1".equals(keyBind)) {
 
                     plugin.consoleWarn("[Cloud] 模块 " + moduleId + " native 解密失败，疑似本机指纹已变化，自动重新绑定并重试一次...");
 
@@ -1377,17 +1562,7 @@ public final class CloudModuleService {
 
             plugin.consoleInfo("[Cloud] 模块 " + moduleId + " 解密成功: " + jarBytes.length + " 字节");
 
-            payload.seed = key.clone();
-            return tasks.main(() -> {
-                if (registry.isModuleLoaded(moduleId)) {
-                    plugin.consoleInfo("[Cloud] 模块 " + moduleId + " 已加载，跳过重复加载");
-                    return CompletableFuture.<Void>completedFuture(null);
-                }
-                return registry.loadCloudModule(moduleId, payload.jar, payload.seed).thenAccept(loaded -> {
-                    if (loaded) plugin.consoleInfo("[Cloud] 模块 " + moduleId + " 已加载");
-                    else plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 加载失败，请核对依赖与模块开关。");
-                });
-            }).thenCompose(stage -> stage);
+            return installDecryptedModule(moduleId, payload);
         });
     }
 
@@ -1395,7 +1570,7 @@ public final class CloudModuleService {
         if (localModuleSource) {
             return CompletableFuture.supplyAsync(() -> {
                 try {
-                    return new LocalModuleFiles(plugin.getDataFolder().toPath().resolve("modules")).read(moduleId);
+                    return localModuleFiles.read(moduleId);
                 } catch (java.io.IOException failure) {
                     throw new java.util.concurrent.CompletionException("本地受保护模块不可用，请安装同批次的 " + moduleId + ".axb；不会回退下载", failure);
                 }
@@ -1480,12 +1655,17 @@ public final class CloudModuleService {
         } catch (LinkageError unavailable) {
             return CompletableFuture.failedFuture(unavailable);
         }
+        long expectedGraceEpoch = offlineGraceEpoch();
         return sendSignedWithFailover("runtime-challenge",
             endpoint -> authenticatedRuntimeRequest(endpoint, "/v1/servers/runtime-challenge", "GET", null),
             response -> validateSignedResponse("runtime-challenge:" + response.endpoint(), "[Cloud] 运行实例挑战", response))
             .thenCompose(challenge -> {
                 if (!challenge.isOk()) {
-                    if (challenge.isRejected()) runtimeAuthorization.invalidate();
+                    if (challenge.status() == CloudStatus.TIMEOUT) return this.<Void>customerTimeout();
+                    if (challenge.isRejected()) {
+                        runtimeAuthorization.invalidate();
+                        rejectCustomerCloudAuthority();
+                    }
                     return CompletableFuture.failedFuture(new IllegalStateException("无法取得运行授权挑战"));
                 }
                 String nonce = extractJsonField(challenge.rawBody(), "nonce");
@@ -1494,10 +1674,24 @@ public final class CloudModuleService {
                 rememberSuccessfulEndpoint(challenge.endpoint());
                 long at = runtimeAuthorization.timestamp();
                 String id = java.util.UUID.randomUUID().toString();
-                String message = runtimeAuthorization.leaseRequestMessage(serverCode, nonce, at, id, customerRelease);
+                List<String> checksums;
+                try {
+                    checksums = customerRelease == null ? List.of() : localModuleFiles.customerChecksums();
+                } catch (java.io.IOException failure) {
+                    return CompletableFuture.failedFuture(new IllegalStateException("无法读取客户包模块", failure));
+                }
+                if (customerRelease != null && checksums.isEmpty()) {
+                    return CompletableFuture.failedFuture(new IllegalStateException("请放入客户安装包中的 .axb 模块后再同步授权"));
+                }
+                String message = runtimeAuthorization.leaseRequestMessage(serverCode, nonce, at, id, customerRelease, checksums);
                 var body = new com.google.gson.JsonObject();
                 body.addProperty("instancePublicKey", runtimeAuthorization.instancePublicKey());
-                if (customerRelease != null) body.addProperty("customerRelease", customerRelease);
+                if (customerRelease != null) {
+                    body.addProperty("customerRelease", customerRelease);
+                    var packageChecksums = new com.google.gson.JsonArray();
+                    checksums.forEach(packageChecksums::add);
+                    body.add("customerChecksums", packageChecksums);
+                }
                 body.addProperty("apiKey", apiKey);
                 body.addProperty("nonce", nonce);
                 body.addProperty("proofAt", at);
@@ -1510,17 +1704,23 @@ public final class CloudModuleService {
                 return sendSignedWithFailover("runtime-lease",
                     endpoint -> authenticatedRuntimeRequest(endpoint, "/v1/servers/runtime-lease", "POST", body.toString()),
                     response -> validateSignedResponse("runtime-lease:" + response.endpoint(), "[Cloud] 运行实例授权", response))
-                    .thenApply(response -> {
+                    .thenCompose(response -> {
                         if (!response.isOk()) {
-                            if (response.isRejected()) runtimeAuthorization.invalidate();
+                            if (response.status() == CloudStatus.TIMEOUT) {
+                                reportCustomerTimeout(response.status());
+                                throw new CustomerCloudTimeout();
+                            }
+                            if (response.isRejected()) {
+                                runtimeAuthorization.invalidate();
+                                rejectCustomerCloudAuthority();
+                            }
                             String denialCode = extractJsonField(response.rawBody(), "error");
                             if (denialCode == null || !denialCode.matches("[A-Z_]{1,64}")) denialCode = "UNKNOWN_AUTH_ERROR";
                             throw new IllegalStateException("运行授权未确认: " + denialCode + "，HTTP " + response.httpStatus());
                         }
                         String envelope = extractJsonField(response.rawBody(), "runtimeLease");
                         List<String> previous = authorizedModuleIds();
-                        runtimeAuthorization.accept(envelope, serverCode, serverPublicKeyB64, NativeBridge::verifyResponseSig,
-                            System.currentTimeMillis(), System.nanoTime(), requestStarted);
+                        acceptRuntimeAuthorization(envelope, response.rawBody(), expectedGraceEpoch, requestStarted);
                         rememberSuccessfulEndpoint(response.endpoint());
                         java.util.Set<String> permitted = runtimeModuleIds();
                         if (customerRelease == null) {
@@ -1533,25 +1733,58 @@ public final class CloudModuleService {
                         protectedModulesSuspended = false;
                         if (resume || !java.util.Set.copyOf(previous).equals(permitted)) syncModuleChanges();
                         startRuntimeWatchdog();
-                        return (Void) null;
+                        return CompletableFuture.<Void>completedFuture(null);
                     });
             });
+    }
+
+    private void acceptRuntimeAuthorization(String envelope, String responseBody, long expectedGraceEpoch,
+                                            long requestStarted) {
+        synchronized (offlineGraceLock) {
+            if (customerOfflineGrace != null && expectedGraceEpoch != offlineGraceEpoch) {
+                throw new IllegalStateException("运行授权请求已失效");
+            }
+            runtimeAuthorization.accept(envelope, serverCode, serverPublicKeyB64, NativeBridge::verifyResponseSig,
+                System.currentTimeMillis(), System.nanoTime(), requestStarted);
+            if (customerOfflineGrace == null) return;
+
+            offlineGraceSession = null;
+            offlineGraceDecision++;
+            if (!runtimeAuthorization.issuedByPrimary()) return;
+            String offlineGrant = extractJsonField(responseBody, "customerOfflineGrant");
+            if (offlineGrant == null) {
+                clearCustomerOfflineGrace();
+                return;
+            }
+            try {
+                customerOfflineGrace.saveGrant(offlineGrant, offlineGraceIdentity(), NativeBridge::verifyResponseSig);
+                offlineGraceRevoked = false;
+            } catch (java.io.IOException failure) {
+                clearCustomerOfflineGrace();
+                debugLog("[Cloud] 无法保存本地授权缓存。");
+            }
+        }
     }
 
     private void startRuntimeWatchdog() {
         tasks.main(() -> {
             if (runtimeLeaseWatchdog == null && !tasks.isClosed() && plugin.host().isEnabled()) {
                 runtimeLeaseWatchdog = plugin.getServer().getScheduler().runTaskTimer(plugin.host(), () -> {
-                    List<String> stopped = registry.revokeProtectedModulesNotIn(runtimeModuleIds());
-                    if (!stopped.isEmpty()) {
-                        protectedModulesSuspended = true;
-                        stopped.forEach(cachedAxb::remove);
-                        plugin.consoleWarn("[Cloud] 运行授权已失效或撤销，已停止相关模块及其依赖: " + stopped);
-                    }
+                    reconcileRuntimeModules();
                 }, 20L, 20L);
             }
             return null;
         });
+    }
+
+    private void reconcileRuntimeModules() {
+        java.util.Set<String> permitted = runtimeModuleIds();
+        List<String> stopped = registry.revokeProtectedModulesNotIn(permitted);
+        if (!stopped.isEmpty()) {
+            protectedModulesSuspended = true;
+            stopped.forEach(cachedAxb::remove);
+            plugin.consoleWarn("[Cloud] 运行授权已失效或撤销，已停止相关模块及其依赖: " + stopped);
+        }
     }
 
     private CompletableFuture<String> requestModuleKey(String moduleId, byte[] axb) {
@@ -1559,12 +1792,18 @@ public final class CloudModuleService {
     }
 
     private CompletableFuture<String> requestModuleKey(String moduleId, byte[] axb, boolean recoverToken) {
+        CustomerOfflineGrace.Session grace = offlineGraceSession;
+        if (grace != null) {
+            String cached = grace.keyResponse(moduleId, axb);
+            if (cached != null) return CompletableFuture.completedFuture(cached);
+        }
         return ensureRuntimeLease(false).thenCompose(ignored -> {
             if (customerRelease != null && !moduleRuntimeAuthorized(moduleId)) {
                 return CompletableFuture.failedFuture(new IllegalStateException("客户模块发行批次或席位未授权"));
             }
             // Retries get distinct proofs. A consumed request must never be replayed to a cloud.
             Map<String, RuntimeAuthorization.KeyProof> attempts = new ConcurrentHashMap<>();
+            long expectedGraceEpoch = offlineGraceEpoch();
             return sendSignedWithFailover("key",
                 endpoint -> {
                     RuntimeAuthorization.KeyProof proof = runtimeAuthorization.keyProof(serverCode, moduleId, suiteRelease, axb);
@@ -1592,13 +1831,20 @@ public final class CloudModuleService {
                             return refreshTokenGate(true).thenCompose(refreshed -> {
                                 if (refreshed.isOk()) return requestModuleKey(moduleId, axb, false);
                                 if (refreshed.isRejected()) runtimeAuthorization.invalidate();
+                                if (refreshed.status() == CloudStatus.TIMEOUT) return this.<String>customerTimeout();
                                 if (refreshed.isTransient()) return CompletableFuture.<String>failedFuture(
                                     new java.io.IOException("跨云模块令牌刷新暂时失败"));
                                 return CompletableFuture.<String>completedFuture(null);
                             });
                         }
+                        if (response.status() == CloudStatus.TIMEOUT) return this.<String>customerTimeout();
                         if (response.isTransient()) return CompletableFuture.<String>failedFuture(
                             new java.io.IOException("模块取钥暂时失败，HTTP " + response.httpStatus()));
+                        if (response.isRejected()) {
+                            String denial = extractJsonField(response.rawBody(), "error");
+                            revokeCustomerGrace(response.httpStatus() == 401 || "SERVER_REVOKED".equals(denial)
+                                || "USER_DISABLED".equals(denial));
+                        }
                         return CompletableFuture.<String>completedFuture(null);
                     }
                     String raw = response.rawBody();
@@ -1609,10 +1855,24 @@ public final class CloudModuleService {
                         throw new IllegalArgumentException("本地模块发行批次、摘要或取钥请求不匹配");
                     String key = extractJsonField(raw, "key");
                     if (key == null || key.isEmpty()) throw new IllegalArgumentException("授权响应缺少密钥");
+                    cacheWrappedModuleKey(moduleId, response, expectedGraceEpoch);
                     rememberSuccessfulEndpoint(response.endpoint());
                     return CompletableFuture.completedFuture(raw);
                 });
         });
+    }
+
+    private void cacheWrappedModuleKey(String moduleId, SignedCloudResponse response, long expectedGraceEpoch) {
+        if (customerOfflineGrace == null || !response.rawBody().contains("\"offlineBinding\"")) return;
+        synchronized (offlineGraceLock) {
+            if (offlineGraceRevoked || expectedGraceEpoch != offlineGraceEpoch) return;
+            try {
+                customerOfflineGrace.saveKeyResponse(moduleId, response.body(), response.signatureB64(),
+                    response.signatureTs(), offlineGraceIdentity(), NativeBridge::verifyResponseSig);
+            } catch (java.io.IOException failure) {
+                debugLog("[Cloud] 无法保存本地模块授权缓存。");
+            }
+        }
     }
 
     private synchronized void startHeartbeat() {
@@ -1628,6 +1888,7 @@ public final class CloudModuleService {
         try { stopHeartbeat(); }
         catch (Throwable failure) { heartbeatFailure = failure; }
         var exited = tasks.shutdown();
+        CustomerOfflineGrace.Session grace = detachOfflineGrace();
         if (heartbeatFailure != null) {
             Throwable original = heartbeatFailure;
             exited = exited.handle((ignored, failure) -> {
@@ -1636,6 +1897,13 @@ public final class CloudModuleService {
             });
         }
         return exited.thenCompose(ignored -> releaseRuntimeLease()).whenComplete((ignored, failure) -> {
+            if (grace != null) {
+                try {
+                    customerOfflineGrace.checkpoint(grace);
+                } catch (java.io.IOException unavailable) {
+                    debugLog("[Cloud] 无法更新本地授权缓存。");
+                }
+            }
             cachedAxb.clear();
             downloading.clear();
             byte[] secret = serverSecret;
@@ -1644,6 +1912,15 @@ public final class CloudModuleService {
             moduleToken = null;
             if (runtimeAuthorization != null) runtimeAuthorization.invalidate();
         });
+    }
+
+    private CustomerOfflineGrace.Session detachOfflineGrace() {
+        if (customerOfflineGrace == null) return null;
+        synchronized (offlineGraceLock) {
+            CustomerOfflineGrace.Session grace = offlineGraceSession;
+            offlineGraceSession = null;
+            return grace;
+        }
     }
 
     public void stopHeartbeat() {
@@ -1681,11 +1958,15 @@ public final class CloudModuleService {
 
     private CompletableFuture<Void> sendHeartbeat() {
         CompletableFuture<Void> renewal = customerRelease != null || runtimeAuthorization.hasLease() || protectedModulesSuspended
-            ? ensureRuntimeLease(false) : CompletableFuture.completedFuture(null);
+            ? ensureRuntimeLease(offlineGraceSession != null) : CompletableFuture.completedFuture(null);
         return renewal.handle((ignored, failure) -> {
+            if (failure != null && unwrap(failure) instanceof CustomerCloudTimeout timeout) {
+                retryCustomerSyncAfterTimeout();
+                return restoreCustomerOfflineGrace(timeout).exceptionally(unavailable -> null);
+            }
             if (failure != null) plugin.consoleWarn("[Cloud] 运行授权续租暂未完成，期限由本地监控独立执行");
-            return (Void) null;
-        }).thenCompose(ignored -> sendHeartbeatReport());
+            return sendHeartbeatReport();
+        }).thenCompose(stage -> stage);
     }
 
     private CompletableFuture<Void> sendHeartbeatReport() {
@@ -1747,8 +2028,9 @@ public final class CloudModuleService {
                 debugLog("[Cloud] 心跳上报成功，HTTP " + resp.httpStatus());
 
             } else if (resp.isTransient()) {
-
-                plugin.consoleWarn("[Cloud] 心跳暂时失败，HTTP " + resp.httpStatus());
+                if (!reportCustomerTimeout(resp.status())) {
+                    plugin.consoleWarn("[Cloud] 心跳暂时失败，HTTP " + resp.httpStatus());
+                }
 
             } else {
 

@@ -101,8 +101,9 @@ def installer(output, platform, release, modules):
         archive.writestr("INSTALL.txt",
             f"Suite release: {release}\n"
             "Copy the plugins tree into each game backend. Keep each backend's own installation identity.\n"
-            "Enter your own cloud credentials in the generated config and equip your modules on each server code.\n"
-            "The distributor must register this export before the modules can run.\n")
+            "The distributor must register this export before you can load the protected modules.\n"
+            "Enter your cloud credentials in the generated config and start online to bind an authorized server.\n"
+            "Once authorized, the same installation can use cached authorization for up to seven days when the cloud times out.\n")
 
 
 def export(args):

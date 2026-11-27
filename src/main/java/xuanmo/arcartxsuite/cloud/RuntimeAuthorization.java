@@ -9,6 +9,7 @@ import java.security.MessageDigest;
 import java.security.Signature;
 import java.util.Base64;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.regex.Pattern;
@@ -48,9 +49,15 @@ final class RuntimeAuthorization {
         return leaseRequestMessage(serverCode, nonce, at, id, null);
     }
     String leaseRequestMessage(String serverCode, String nonce, long at, String id, String customerRelease) {
+        return leaseRequestMessage(serverCode, nonce, at, id, customerRelease, List.of());
+    }
+    String leaseRequestMessage(String serverCode, String nonce, long at, String id, String customerRelease,
+                               List<String> customerChecksums) {
         String message = String.join("\n", "ArcartXSuite/runtime-lease-request/v1", serverCode,
             instancePublicKey, nonce, Long.toString(at), id);
-        return customerRelease == null ? message : message + "\n" + customerRelease;
+        if (customerRelease == null) return message;
+        message += "\n" + customerRelease;
+        return customerChecksums.isEmpty() ? message : message + "\n" + String.join(",", customerChecksums);
     }
     static boolean isCustomerRelease(String release) {
         if (release == null) return false;
@@ -142,6 +149,10 @@ final class RuntimeAuthorization {
     boolean valid() { return valid(System.nanoTime()); }
     boolean valid(long nanos) { Lease current = lease; return current != null && current.deadlineNanos() - nanos > 0; }
     boolean hasLease() { return lease != null; }
+    boolean issuedByPrimary() {
+        Lease current = lease;
+        return current != null && "axs-primary".equals(current.issuer());
+    }
     String currentEnvelope() { Lease current = lease; return current != null && valid() ? current.envelope() : null; }
     boolean permits(String moduleId) {
         Lease current = lease;

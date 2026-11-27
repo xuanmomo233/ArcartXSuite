@@ -127,6 +127,9 @@ class RuntimeAuthorizationTest {
         String old = authorization.leaseRequestMessage("SERVER_A", "nonce", 1L, "request-id");
         assertEquals(old, authorization.leaseRequestMessage("SERVER_A", "nonce", 1L, "request-id", null));
         assertEquals(old + "\n" + release, authorization.leaseRequestMessage("SERVER_A", "nonce", 1L, "request-id", release));
+        String first = "0".repeat(64), second = "a".repeat(64);
+        assertEquals(old + "\n" + release + "\n" + first + "," + second,
+            authorization.leaseRequestMessage("SERVER_A", "nonce", 1L, "request-id", release, java.util.List.of(first, second)));
         long now = System.currentTimeMillis();
         var body = claims(now);
         body.addProperty("customerRelease", release.replace("ci.aaaaaaa", "ci.bbbbbbb"));

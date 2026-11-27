@@ -25,7 +25,9 @@ python -X utf8 scripts/watermark-module.py keygen --private-key 'D:\AXS-Private\
    - `export_modules` 留空时导出全部正式模块，排除 Debug。只交付部分模块时，填写以逗号分隔的模块 ID，并包含所选模块的硬依赖。
 3. 客户导出成功后下载 `axs-customer-delivery-attempt-N`。主云后台打开「授权管理 → 登记客户水印包」，导入交付包内的 `admin-only/register-module-variants.json`。核对显示的账号、模块和水印 ID。再次提交同一登记文件可查看备云同步状态。
 4. 从 `customer/installers/` 取客户操作系统对应的安装 ZIP。客户需要代理端插件时，从 `customer/optional-proxy/` 取对应的 JAR。整份管理员交付包和登记文件由管理员保存。
-5. 在「发放授权」中按实际装备的后端数量分配席位。如果同一客户两台后端都装 Market，就共需两份 Market 授权。客户在两台后端各自生成安装身份，并在两个服务器码上分别装备。两台后端可以各安装同一个客户的同一份 `.axb`。
+5. 登记时填写整份授权允许绑定的服务器数量。客户在各后端填写自己的云端账号和 API 密钥。后端自行生成服务器码，首次在线验证通过时占用一个名额。客户可以在「我的授权」查看或解绑服务器。
+
+首次使用需连接云端验证并取钥。验证成功后，同一安装在主备云均超时时可以使用有效的缓存授权，最长七天。云端明确拒绝授权时，模块停止使用缓存授权。
 
 导出模式使用现有正式签名和加密 Secrets，即使仓库暂停 AXS 云端发布也可运行。`skip_upload` 用于验证构建，与 `export_only` 互斥。正式导出在构建前检查所需的 Secrets。管理员交付包上传成功后，工作流清理该次运行的构建中间产物。管理员登记文件后，客户通过安装包放置模块文件，宿主启动时向云端验权取钥。
 
@@ -36,7 +38,7 @@ python -X utf8 scripts/watermark-module.py keygen --private-key 'D:\AXS-Private\
 - `AXS_CUSTOMER_EXPORT_SEED_PARTS_B64` 是客户正式导出的独立 32 字节 Base64 构建种子。客户安装包中的宿主与 Native 使用同一份导出种子，发行签名继续使用现有正式签名密钥。
 - 在 GitHub Secrets 中配置 `AXS_WATERMARK_PRIVATE_PEM`，值为水印签名私钥 PEM。查验用公钥单独保管。
 - 为登记元数据配置独立的 32 字节随机密钥，将标准 Base64 值作为 `AXS_VARIANT_REGISTRATION_KEY_B64`，在 GitHub Secrets、主云和备云使用同一值。已登记的旧包仍依赖这把密钥，轮换时需先安排旧包数据迁移或重新发行。
-- 启用前完成[本地模块授权的配套升级](local-module-authorization.md#配套升级)，并按顺序应用主云的 `0023_module_variants.sql`、`0024_module_variant_replication_status.sql`，以及备云的 `0014_module_variants.sql`。备云接收加密登记记录，安装 ZIP 由管理员交付。
+- 启用前完成[本地模块授权的配套升级](local-module-authorization.md#配套升级)。主云按迁移日志应用至 `0027_customer_package_authorizations.sql`，备云应用至 `0017_customer_package_seats.sql`。已有交付需要登记整包授权并重新在线绑定。备云接收加密登记记录，安装 ZIP 由管理员交付。
 
 ### 单独给已有中间 JAR 打水印
 

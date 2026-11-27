@@ -4,6 +4,17 @@ package xuanmo.arcartxsuite.cloud;
 final class CloudRefreshPolicy {
     private CloudRefreshPolicy() {}
 
+    static boolean canRepairBinding(boolean customerPackage, boolean recoveryAttempted, int status, String body) {
+        return !customerPackage && !recoveryAttempted && (isMissingServer(status, body) || isSignatureMismatch(status, body));
+    }
+
+    static boolean isConnectionUnavailable(Throwable cause) {
+        return cause instanceof java.net.http.HttpTimeoutException
+            || cause instanceof java.net.SocketTimeoutException || cause instanceof java.util.concurrent.TimeoutException
+            || cause instanceof java.net.ConnectException || cause instanceof java.net.NoRouteToHostException
+            || cause instanceof java.net.UnknownHostException;
+    }
+
     static boolean isMissingServer(int status, String body) {
         String error = errorCode(body);
         return (status == 404 && "SERVER_NOT_FOUND".equals(error))

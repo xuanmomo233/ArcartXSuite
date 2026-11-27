@@ -7,6 +7,22 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 final class CloudRefreshPolicyTest {
     @Test
+    void customerPackageNeverReplacesASelectedServerCodeAfterOnlineRejection() {
+        String missingServer = "{\"error\":\"SERVER_NOT_FOUND\"}";
+        assertFalse(CloudRefreshPolicy.canRepairBinding(true, false, 404, missingServer));
+        assertTrue(CloudRefreshPolicy.canRepairBinding(false, false, 404, missingServer));
+        assertFalse(CloudRefreshPolicy.canRepairBinding(false, true, 404, missingServer));
+    }
+
+    @Test
+    void connectionUnavailabilityDoesNotIncludePeerCertificateFailure() {
+        assertTrue(CloudRefreshPolicy.isConnectionUnavailable(new java.net.http.HttpTimeoutException("timeout")));
+        assertTrue(CloudRefreshPolicy.isConnectionUnavailable(new java.net.NoRouteToHostException("disconnected")));
+        assertFalse(CloudRefreshPolicy.isConnectionUnavailable(new javax.net.ssl.SSLHandshakeException("peer certificate")));
+        assertFalse(CloudRefreshPolicy.isConnectionUnavailable(new java.io.IOException("unclassified response error")));
+    }
+
+    @Test
     void recognizesBothCloudsMissingServerContracts() {
         assertTrue(CloudRefreshPolicy.isMissingServer(404, "{\"ok\":false,\"error\":\"SERVER_NOT_FOUND\"}"));
         assertTrue(CloudRefreshPolicy.isMissingServer(403, "{\"error\":\"SERVER_NOT_REGISTERED\"}"));
