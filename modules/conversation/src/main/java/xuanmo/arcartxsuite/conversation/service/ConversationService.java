@@ -11,6 +11,7 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Collection;
 import java.util.LinkedHashMap;
@@ -18,6 +19,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -88,8 +90,9 @@ public final class ConversationService implements Listener {
     private final Set<UUID> selectorOpenedPlayers = ConcurrentHashMap.newKeySet();
     private final AtomicLong conversationRevision = new AtomicLong();
     private DisplayConversations displayConversations = new DisplayConversations(new NpcConversationIndex(List.of()),
-        List.of(), -1, -1, 0);
+        Map.of(), List.of(), -1, -1, 0);
     private DisplayConversations scanConversations = displayConversations;
+    private boolean warnedUnverifiableWorldBinding;
 
     private volatile long generation = GENERATION_SEQUENCE.incrementAndGet();
     private volatile DebugSnapshot latestDebugSnapshot = DebugSnapshot.empty();
@@ -807,7 +810,7 @@ public final class ConversationService implements Listener {
         for (AdyeshachNearbyNpc npc : nearbyNpcs) {
             try {
                 if (!Double.isFinite(npc.distanceSquared()) || !encounteredIds.add(npc.npcId())
-                    || !conversations.contains(npc.npcId(), world)) {
+                    || !conversations.contains(npc.npcId(), world, player)) {
                     continue;
                 }
                 result.add(
@@ -843,11 +846,26 @@ public final class ConversationService implements Listener {
     private boolean hasLiveConversation(Player player, String npcId) {
         try {
             for (Conversation conversation : ChemdahAPI.INSTANCE.getConversation().values()) {
-                if (conversation != null && (conversation.getClass() == Conversation.class
-                        ? conversation.isNPC(NPC_SOURCE, npcId, player) : conversation.isNPC(NPC_SOURCE, npcId))) return true;
+                if (conversation == null) continue;
+                if (conversation.getClass() != Conversation.class) {
+                    if (conversation.isNPC(NPC_SOURCE, npcId)) return true;
+                } else if (ChemdahNpcAccess.hasPlayerMatcher(conversation)) {
+                    if (ChemdahNpcAccess.matchesPlayer(conversation, NPC_SOURCE, npcId, player)) return true;
+                } else if (matchesReadableBinding(conversation, npcId, player.getWorld().getName())) {
+                    return true;
+                }
             }
-        } catch (RuntimeException failure) {
+        } catch (RuntimeException | LinkageError failure) {
             logger.fine("复核 NPC 对话绑定暂缓: " + failure.getMessage());
+        }
+        return false;
+    }
+
+    private static boolean matchesReadableBinding(Conversation conversation, String npcId, String world) {
+        for (var binding : conversation.getNpcId().getId()) {
+            if (!NPC_SOURCE.equalsIgnoreCase(binding.getNamespace()) || !npcId.equalsIgnoreCase(binding.getValue())) continue;
+            var worlds = ChemdahNpcAccess.worlds(binding);
+            if (worlds != null && (worlds.isEmpty() || worlds.contains(world))) return true;
         }
         return false;
     }
@@ -861,6 +879,7 @@ public final class ConversationService implements Listener {
             if (displayConversations.revision() == revision && displayConversations.count() == count
                     && now - displayConversations.refreshAt() < 0) return displayConversations;
             var list = new ArrayList<NpcConversationIndex.Binding>();
+            var runtimeBindings = new TreeMap<String, List<Conversation>>(String.CASE_INSENSITIVE_ORDER);
             var custom = new ArrayList<Conversation>();
             for (Conversation conversation : live.values()) {
                 if (conversation == null) continue;
@@ -869,31 +888,44 @@ public final class ConversationService implements Listener {
                     continue;
                 }
                 for (var binding : conversation.getNpcId().getId()) {
-                    if (NPC_SOURCE.equalsIgnoreCase(binding.getNamespace())) {
-                        list.add(new NpcConversationIndex.Binding(binding.getValue(), binding.getWorlds()));
+                    if (!NPC_SOURCE.equalsIgnoreCase(binding.getNamespace())) continue;
+                    var worlds = ChemdahNpcAccess.worlds(binding);
+                    if (worlds != null) {
+                        list.add(new NpcConversationIndex.Binding(binding.getValue(), worlds));
+                    } else if (ChemdahNpcAccess.hasPlayerMatcher(conversation)) {
+                        runtimeBindings.computeIfAbsent(binding.getValue(), id -> new ArrayList<>()).add(conversation);
+                    } else if (!warnedUnverifiableWorldBinding) {
+                        warnedUnverifiableWorldBinding = true;
+                        logger.warning("Chemdah 的 NPC 世界限制接口不可用，已跳过无法验证适用世界的对话绑定。");
                     }
                 }
             }
             if (count == live.size() && revision == conversationRevision.get()) {
-                displayConversations = new DisplayConversations(new NpcConversationIndex(list), List.copyOf(custom),
-                    revision, count, now + CONVERSATION_INDEX_REFRESH);
+                runtimeBindings.replaceAll((id, conversations) -> List.copyOf(conversations));
+                displayConversations = new DisplayConversations(new NpcConversationIndex(list),
+                    Collections.unmodifiableMap(runtimeBindings), List.copyOf(custom), revision, count,
+                    now + CONVERSATION_INDEX_REFRESH);
             }
-        } catch (RuntimeException failure) {
+        } catch (RuntimeException | LinkageError failure) {
             logger.fine("Chemdah 对话索引暂不可刷新: " + failure.getMessage());
         }
         return displayConversations;
     }
 
-    private record DisplayConversations(NpcConversationIndex nativeBindings, List<Conversation> custom,
+    private record DisplayConversations(NpcConversationIndex nativeBindings, Map<String, List<Conversation>> runtimeBindings,
+                                        List<Conversation> custom,
                                         long revision, int count, long refreshAt) {
-        boolean isEmpty() { return nativeBindings.isEmpty() && custom.isEmpty(); }
+        boolean isEmpty() { return nativeBindings.isEmpty() && runtimeBindings.isEmpty() && custom.isEmpty(); }
 
         boolean mightContain(String npc, String world) {
-            return !custom.isEmpty() || nativeBindings.contains(npc, world);
+            return !custom.isEmpty() || nativeBindings.contains(npc, world) || runtimeBindings.containsKey(npc);
         }
 
-        boolean contains(String npc, String world) {
+        boolean contains(String npc, String world, Player player) {
             if (nativeBindings.contains(npc, world)) return true;
+            for (var conversation : runtimeBindings.getOrDefault(npc, List.of())) {
+                if (ChemdahNpcAccess.matchesPlayer(conversation, NPC_SOURCE, npc, player)) return true;
+            }
             for (var conversation : custom) {
                 if (conversation.isNPC(NPC_SOURCE, npc)) return true;
             }
