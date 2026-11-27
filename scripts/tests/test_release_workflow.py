@@ -371,6 +371,32 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertEqual("env.AXS_EXPORT_ONLY == 'true'", registration["if"])
         self.assertNotIn("AXS_CUSTOMER_EXPORT_SEED_PARTS_B64", registration["env"])
 
+    def test_customer_export_creates_and_removes_its_own_watermark_key(self):
+        steps = self.workflow["jobs"]["publish-suite"]["steps"]
+        assemble = next(step for step in steps if step.get("name") == "Assemble signed customer export")
+        self.assertEqual("${{ secrets.AXS_WATERMARK_PRIVATE_PEM }}", assemble["env"]["WATERMARK_PRIVATE_PEM"])
+        fixture = "fixture watermark PEM"
+        stub = """python() {
+          while [[ "$1" != --watermark-key ]]; do shift; done
+          test "$(cat "$2")" = "$EXPECTED_KEY"
+          test -z "${WATERMARK_PRIVATE_PEM:-}"
+          printf '%s\n' "$2" > "$RUNNER_TEMP/seen-path"
+          return "$STUB_STATUS"
+        }
+        """
+        for exit_code in (0, 1):
+            with self.subTest(export_exit_code=exit_code):
+                env = dict(os.environ, RUNNER_TEMP=self.repo.as_posix(), GITHUB_SHA=self.baseline,
+                           EXPORT_MODULES='["market"]', WATERMARK_PRIVATE_PEM=fixture,
+                           EXPECTED_KEY=fixture, STUB_STATUS=str(exit_code))
+                run = subprocess.run([os.environ.get("AXS_TEST_BASH", "bash"), "-s"], input=stub + assemble["run"],
+                                     env=env, encoding="utf-8", capture_output=True, timeout=20)
+                self.assertEqual(exit_code, run.returncode, run.stdout + run.stderr)
+                used_file = Path((self.repo / "seen-path").read_text(encoding="utf-8").strip())
+                self.assertEqual(self.repo.resolve(), used_file.resolve().parent)
+                self.assertFalse(used_file.exists())
+                self.assertNotIn(fixture, run.stdout + run.stderr)
+
     def test_encrypted_builds_only_run_artifact_checks(self):
         self.assertNotIn("verify-abyss", self.workflow["jobs"])
         for job in self.workflow["jobs"].values():

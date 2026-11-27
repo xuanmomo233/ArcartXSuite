@@ -982,11 +982,18 @@ jobs:
           AXS_EXPORT_DELIVERY_ID: ${{ needs.detect-changes.outputs.export_delivery_id }}
           AXB_SIGN_SEED_B64: ${{ secrets.AXB_SIGN_SEED_B64 }}
           AXS_VARIANT_REGISTRATION_KEY_B64: ${{ secrets.AXS_VARIANT_REGISTRATION_KEY_B64 }}
+          WATERMARK_PRIVATE_PEM: ${{ secrets.AXS_WATERMARK_PRIVATE_PEM }}
           EXPORT_MODULES: ${{ needs.detect-changes.outputs.changed_modules }}
         run: |
           set -euo pipefail
+          umask 077
+          test -n "$WATERMARK_PRIVATE_PEM"
+          watermark_key=$(mktemp "$RUNNER_TEMP/axs-watermark.XXXXXX")
+          trap 'rm -f -- "$watermark_key"' EXIT
+          printf '%s\n' "$WATERMARK_PRIVATE_PEM" > "$watermark_key"
+          unset WATERMARK_PRIVATE_PEM
           python scripts/export-customer-release.py export --commit "$GITHUB_SHA" --modules "$EXPORT_MODULES" \
-            --watermark-key "$RUNNER_TEMP/axs-watermark.pem" --output customer-export
+            --watermark-key "$watermark_key" --output customer-export
 
       - name: Export customer installers
         if: env.AXS_EXPORT_ONLY == 'true'
